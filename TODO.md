@@ -6,7 +6,7 @@
         - [x] minimal svelte app
         - [x] netlify deploy
           - https://houseofmoran-keks.netlify.app
-        - [ ] available at `keks.houseofmoran.io`
+        - [x] available at `keks.houseofmoran.io`
         - [ ] plausible analytics setup
       - [ ] `api`
         - [ ] minimal axum service
@@ -21,9 +21,6 @@
     - [x] simple vanilla html website
     - [x] netlify deploy
       - https://houseofmoran-geo.netlify.app
-    - [ ] available at `geo.houseofmoran.io`
+    - [x] available at `geo.houseofmoran.io`
     - [x] just contains a link to `keks.houseofmoran.io`
     - [ ] plausible analytics setup
-
-- [ ] top-level defaults:
-  - [x] .nvmrc
