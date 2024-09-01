@@ -1,0 +1,24 @@
+- [ ] set up initial structure:
+  - [ ] `apps`:
+    - [ ] `keks`:
+      - [ ] `web`
+        - [x] minimal svelte app
+        - [ ] netlify deploy
+        - [ ] available at `keks.houseofmoran.io`
+        - [ ] plausible analytics setup
+      - [ ] `api`
+        - [ ] minimal axum service
+        - [ ] deploy to fly.io
+        - [ ] available at `keks-api.houseofmoran.io`
+  - [ ] `api`: shared api across all projects, intended to be publicly visible
+    - [ ] minimal axum service
+    - [ ] deploy to fly.io
+    - [ ] available at `geo-api.houseofmoran.io`
+  - [ ] `web`
+    - [x] simple vanilla html website
+    - [ ] netlify deploy
+    - [ ] available at `geo.houseofmoran.io`
+    - [x] just contains a link to `keks.houseofmoran.io`
+    - [ ] plausible analytics setup
+- [ ] top-level defaults:
+  - [x] .nvmrc
