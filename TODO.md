@@ -1,0 +1,15 @@
+- [ ] set up initial structure:
+  - [ ] `apps`:
+    - [ ] `keks`:
+      - [ ] `web`
+        - deploys to `keks.houseofmoran.io`
+        - minimal svelte app
+      - [ ] `api`
+        - minimal axum service
+        - deploys to `keks-api.houseofmoran.io`
+  - [ ] `api`: shared api across all projects, intended to be publicly visible
+    - minimal axum service
+    - [ ] deploys to `geo-api.houseofmoran.io`
+  - [ ] `web`: simple vanilla html website
+    - [ ] deploys to `geo.houseofmoran.io`
+    - [ ] just contains a link to `keks.houseofmoran.io`
