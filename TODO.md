@@ -1,18 +1,18 @@
-- [ ] set up initial structure:
+- [x] set up initial structure:
 
-  - [ ] `apps`:
-    - [ ] `keks`:
+  - [x] `apps`:
+    - [x] `keks`:
       - [x] `web`
         - [x] minimal svelte app
         - [x] netlify deploy
           - https://houseofmoran-keks.netlify.app
         - [x] available at `keks.houseofmoran.io`
         - [x] plausible analytics setup
-      - [ ] `backend` cargo workspace
-        - [ ] minimal axum service
-        - [ ] deploy to fly.io
-        - [ ] available at `keks-api.houseofmoran.io`
-          - [ ] prove by doing a call back to root of API from `keks.houseofmoran.io`
+      - [x] `backend` cargo workspace
+        - [x] minimal axum service
+        - [x] deploy to fly.io
+        - [x] available at `keks-api.houseofmoran.io`
+          - [x] prove by doing a call back to root of API from `keks.houseofmoran.io`
   - [x] `backend` cargo workspace
 
     - shared across all projects, intended to be for common parts

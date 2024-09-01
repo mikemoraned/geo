@@ -4,6 +4,8 @@
 	onMount(async () => {
 		const geo = await fetch('https://geo-api.houseofmoran.io/');
 		console.log('geo', geo);
+		const keks = await fetch('https://keks-api.houseofmoran.io/');
+		console.log('keks', keks);
 	});
 </script>
 
