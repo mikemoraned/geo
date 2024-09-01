@@ -3,7 +3,8 @@
     - [ ] `keks`:
       - [ ] `web`
         - [x] minimal svelte app
-        - [ ] netlify deploy
+        - [x] netlify deploy
+          - https://houseofmoran-geo.netlify.app
         - [ ] available at `keks.houseofmoran.io`
         - [ ] plausible analytics setup
       - [ ] `api`
