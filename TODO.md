@@ -2,14 +2,19 @@
   - [ ] `apps`:
     - [ ] `keks`:
       - [ ] `web`
-        - deploys to `keks.houseofmoran.io`
-        - minimal svelte app
+        - [ ] minimal svelte app
+        - [ ] netlify deploy
+        - [ ] deploys to `keks.houseofmoran.io`
+        - [ ] plausible analytics setup
       - [ ] `api`
         - minimal axum service
         - deploys to `keks-api.houseofmoran.io`
   - [ ] `api`: shared api across all projects, intended to be publicly visible
     - minimal axum service
     - [ ] deploys to `geo-api.houseofmoran.io`
-  - [ ] `web`: simple vanilla html website
+  - [ ] `web`
+    - [x] simple vanilla html website
+    - [ ] netlify deploy
     - [ ] deploys to `geo.houseofmoran.io`
-    - [ ] just contains a link to `keks.houseofmoran.io`
+    - [x] just contains a link to `keks.houseofmoran.io`
+    - [ ] plausible analytics setup
