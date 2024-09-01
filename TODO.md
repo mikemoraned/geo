@@ -8,14 +8,19 @@
           - https://houseofmoran-keks.netlify.app
         - [x] available at `keks.houseofmoran.io`
         - [x] plausible analytics setup
-      - [ ] `api`
+      - [ ] `backend` cargo workspace
         - [ ] minimal axum service
         - [ ] deploy to fly.io
         - [ ] available at `keks-api.houseofmoran.io`
-  - [ ] `api`: shared api across all projects, intended to be publicly visible
+          - [ ] prove by doing a call back to root of API from `keks.houseofmoran.io`
+  - [ ] `backend` cargo workspace
+
+    - shared across all projects, intended to be for common parts
     - [ ] minimal axum service
     - [ ] deploy to fly.io
     - [ ] available at `geo-api.houseofmoran.io`
+      - [ ] prove by doing a call back to root of API from `keks.houseofmoran.io`
+
   - [x] `web`
 
     - [x] simple vanilla html website
