@@ -31,9 +31,9 @@
     - [x] just contains a link to `keks.houseofmoran.io`
     - [x] plausible analytics setup
 
-- [ ] prod checks
-  - check that root of each website or api contains some expected content, using updown.io:
-    - [ ] keks.houseofmoran.io
-    - [ ] keks-api.houseofmoran.io
-    - [ ] geo.houseofmoran.io
-    - [ ] geo-api.houseofmoran.io
+- [x] prod checks
+  - check that each website is uk, using updown.io:
+    - [x] keks.houseofmoran.io
+    - [x] keks-api.houseofmoran.io
+    - [x] geo.houseofmoran.io
+    - [x] geo-api.houseofmoran.io
