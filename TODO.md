@@ -19,8 +19,8 @@
     - [x] minimal axum service
     - [x] deploy to fly.io
       - https://houseofmoran-geo.fly.dev/
-    - [ ] available at `geo-api.houseofmoran.io`
-      - [ ] prove by doing a call back to root of API from `keks.houseofmoran.io`
+    - [x] available at `geo-api.houseofmoran.io`
+      - [x] prove by doing a call back to root of API from `keks.houseofmoran.io`
 
   - [x] `web`
 
