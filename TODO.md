@@ -1,10 +1,11 @@
 - [ ] set up initial structure:
+
   - [ ] `apps`:
     - [ ] `keks`:
       - [ ] `web`
         - [x] minimal svelte app
         - [x] netlify deploy
-          - https://houseofmoran-geo.netlify.app
+          - https://houseofmoran-keks.netlify.app
         - [ ] available at `keks.houseofmoran.io`
         - [ ] plausible analytics setup
       - [ ] `api`
@@ -16,10 +17,13 @@
     - [ ] deploy to fly.io
     - [ ] available at `geo-api.houseofmoran.io`
   - [ ] `web`
+
     - [x] simple vanilla html website
-    - [ ] netlify deploy
+    - [x] netlify deploy
+      - https://houseofmoran-geo.netlify.app
     - [ ] available at `geo.houseofmoran.io`
     - [x] just contains a link to `keks.houseofmoran.io`
     - [ ] plausible analytics setup
+
 - [ ] top-level defaults:
   - [x] .nvmrc
