@@ -16,7 +16,7 @@
   - [ ] `backend` cargo workspace
 
     - shared across all projects, intended to be for common parts
-    - [ ] minimal axum service
+    - [x] minimal axum service
     - [ ] deploy to fly.io
     - [ ] available at `geo-api.houseofmoran.io`
       - [ ] prove by doing a call back to root of API from `keks.houseofmoran.io`
