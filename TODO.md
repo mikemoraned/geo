@@ -13,7 +13,7 @@
         - [ ] deploy to fly.io
         - [ ] available at `keks-api.houseofmoran.io`
           - [ ] prove by doing a call back to root of API from `keks.houseofmoran.io`
-  - [ ] `backend` cargo workspace
+  - [x] `backend` cargo workspace
 
     - shared across all projects, intended to be for common parts
     - [x] minimal axum service
