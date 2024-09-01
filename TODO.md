@@ -2,12 +2,12 @@
 
   - [ ] `apps`:
     - [ ] `keks`:
-      - [ ] `web`
+      - [x] `web`
         - [x] minimal svelte app
         - [x] netlify deploy
           - https://houseofmoran-keks.netlify.app
         - [x] available at `keks.houseofmoran.io`
-        - [ ] plausible analytics setup
+        - [x] plausible analytics setup
       - [ ] `api`
         - [ ] minimal axum service
         - [ ] deploy to fly.io
@@ -16,11 +16,11 @@
     - [ ] minimal axum service
     - [ ] deploy to fly.io
     - [ ] available at `geo-api.houseofmoran.io`
-  - [ ] `web`
+  - [x] `web`
 
     - [x] simple vanilla html website
     - [x] netlify deploy
       - https://houseofmoran-geo.netlify.app
     - [x] available at `geo.houseofmoran.io`
     - [x] just contains a link to `keks.houseofmoran.io`
-    - [ ] plausible analytics setup
+    - [x] plausible analytics setup
