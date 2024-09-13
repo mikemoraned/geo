@@ -1,0 +1,25 @@
+- [ ] minimal component parts:
+    - [ ] "biscuits" i.e. the parts of a city
+        - ideas:
+            - route-based
+                1. Define a boundary
+                2. Sample N locations within that boundary
+                3. Find all routes between all pairs
+                4. Restrict route lines by boundary
+                5. Convert lines into pieces by converting to an image with lines and coalesce the pixels back into boundaries (re-purpose the garibaldi code)
+                6. Project those boundaries back into geo shapes
+            - road/way based
+                1. Define a boundary
+                2. Find all OS Ways (e.g. representing roads)
+                3. Invert ...
+                4. ... 
+    - [ ] layout:
+        - ideas:
+            - binpacking
+                - maybe re-use library from speculaas-biscuits
+    - [ ] display:
+        - ideas:
+            - simple transition:
+             - project pieces onto map as an overlay
+             - show layout as an image
+             - transition via transparency
