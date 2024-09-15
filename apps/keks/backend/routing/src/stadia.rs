@@ -19,6 +19,18 @@ impl Server {
     }
 }
 
+pub enum Profile {
+    Pedestrian
+}
+
+impl Into<String> for Profile {
+    fn into(self) -> String {
+        match self {
+            Profile::Pedestrian => "pedestrian".into(),
+        }
+    }
+}
+
 pub struct StandardRouting {
     route_url: Url,
 }
@@ -39,11 +51,12 @@ impl StandardRouting {
         &self,
         start: &Coord,
         end: &Coord,
+        profile: Profile,
     ) -> Result<LineString, Box<dyn std::error::Error>> {
 
         let generator = ValhallaHttpRequestGenerator::new(
             self.route_url.to_string().clone(),
-            "pedestrian".into(),
+            profile.into(),
             None,
         );
 
