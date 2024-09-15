@@ -20,12 +20,14 @@ impl Server {
 }
 
 pub enum Profile {
-    Pedestrian
+    Auto,
+    Pedestrian,
 }
 
 impl Into<String> for Profile {
     fn into(self) -> String {
         match self {
+            Profile::Auto => "auto".into(),
             Profile::Pedestrian => "pedestrian".into(),
         }
     }

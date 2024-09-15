@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let edinburgh = coord! { x: -3.188267, y: 55.953251 };
     let queensferry = coord! { x: -3.409195, y: 55.992622 };
 
-    let route = routing.find_route(&edinburgh, &queensferry, Profile::Pedestrian).await?;
+    let route = routing.find_route(&edinburgh, &queensferry, Profile::Auto).await?;
 
     let fout = BufWriter::new(File::create(args.geojson)?);
     let mut gout = GeoJsonWriter::new(fout);
