@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufWriter, path::PathBuf};
 
 use clap::{command, Parser};
-use geo::{coord, GeometryCollection};
+use geo::coord;
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use routing::stadia::StandardRouting;
 use startup::env::load_secret;
@@ -30,15 +30,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let route = routing.find_route(&edinburgh, &queensferry).await?;
 
-    let collection = GeometryCollection::new_from(vec![geo::geometry::Geometry::LineString(route)]);
-    let mut geoms = vec![];
-    geoms.push(geo::geometry::Geometry::GeometryCollection(collection));
-
     let fout = BufWriter::new(File::create(args.geojson)?);
     let mut gout = GeoJsonWriter::new(fout);
-    for geom in geoms.iter() {
-        geom.process_geom(&mut gout)?;
-    }
-
+    geo::geometry::Geometry::LineString(route).process_geom(&mut gout)?;
+    
     Ok(())
 }
