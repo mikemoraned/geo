@@ -3,13 +3,21 @@ use std::{fs::File, io::BufWriter, path::PathBuf};
 use clap::{command, Parser};
 use geo::coord;
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
-use routing::stadia::{Profile, StandardRouting};
+use routing::stadia::{Profile, Server, StandardRouting};
 use startup::env::load_secret;
 
 /// Find routes in an area
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    /// stadiamaps server kind that we should talk to
+    #[arg(short, long)]
+    server: Server,
+
+    /// profile
+    #[arg(short, long)]
+    profile: Profile,
+
     /// output GeoJSON `.geojson` file
     #[arg(short, long)]
     geojson: PathBuf,
@@ -28,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let edinburgh = coord! { x: -3.188267, y: 55.953251 };
     let queensferry = coord! { x: -3.409195, y: 55.992622 };
 
-    let route = routing.find_route(&edinburgh, &queensferry, Profile::Auto).await?;
+    let route = routing.find_route(&edinburgh, &queensferry, args.profile).await?;
 
     let fout = BufWriter::new(File::create(args.geojson)?);
     let mut gout = GeoJsonWriter::new(fout);

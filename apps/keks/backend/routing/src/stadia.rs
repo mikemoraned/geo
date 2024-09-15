@@ -5,6 +5,7 @@ use geo::{coord, Coord, LineString};
 use reqwest::header::HeaderMap;
 use url::Url;
 
+#[derive(clap:: ValueEnum, Clone, Debug)]
 pub enum Server {
     Default,
     EU
@@ -19,6 +20,7 @@ impl Server {
     }
 }
 
+#[derive(clap:: ValueEnum, Clone, Debug)]
 pub enum Profile {
     Auto,
     Pedestrian,
