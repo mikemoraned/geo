@@ -12,7 +12,16 @@
                 1. Define a boundary
                 2. Find all OS Ways (e.g. representing roads)
                 3. Invert ...
-                4. ... 
+                4. ...
+        - impl:
+            * [x] setup `houseofmoran-keks` property on stadiamaps
+            * [x] get API key for `houseofmoran-keks`
+            * [x] fetch route for a fixed pair of points and save as geojson
+            * [ ] vary routes by mode e.g. walking / cycling / driving
+            * [ ] fetch routes for N random pairs of points within a boundary and save as geojson
+            * [ ] sample random pairs fairly
+                - e.g. sample random pairs of points over a grid
+            * [ ] ...
     - [ ] layout:
         - ideas:
             - binpacking
@@ -22,4 +31,4 @@
             - simple transition:
              - project pieces onto map as an overlay
              - show layout as an image
-             - transition via transparency
+             - transition via transparencye.nv
