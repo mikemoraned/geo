@@ -33,3 +33,7 @@
              - project pieces onto map as an overlay
              - show layout as an image
              - transition via transparencye.nv
+
+
+- ideas:
+    - turn the speed at which a route is travelled into a boundary property of the resulting shape e.g. if a route is travelled at a fast speed then shorten the length proportionally. this perhaps could be represented as the "springiness" of a bunch of line-segments. intent is to somehow represent the more transient nature of the experience of the area as a shortening or tension in the shape.
