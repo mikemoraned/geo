@@ -11,15 +11,19 @@ use startup::env::load_secret;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// stadiamaps server kind that we should talk to
-    #[arg(short, long)]
+    #[arg(long)]
     server: Server,
 
     /// profile
-    #[arg(short, long)]
+    #[arg(long)]
     profile: Profile,
 
+    /// number of paths to generate
+    #[arg(long)]
+    paths: usize,
+
     /// output GeoJSON `.geojson` file
-    #[arg(short, long)]
+    #[arg(long)]
     geojson: PathBuf,
 }
 
@@ -40,9 +44,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let max = bounds.max();
     let width = bounds.width();
     let height = bounds.height();
-    let n = 10;
     let mut routes = vec![];
-    for _ in 0..n {
+    for _ in 0..args.paths {
         let mut start = coord! {
             x: rand::random::<f64>() * width + min.x,
             y: rand::random::<f64>() * height + min.y,
