@@ -33,10 +33,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &stadia_maps_api_key, routing::stadia::Server::Default
     )?;
 
-    let edinburgh = coord! { x: -3.188267, y: 55.953251 };
     let queensferry = coord! { x: -3.409195, y: 55.992622 };
+    let dalkeith = coord! { x: -3.066667, y: 55.866667 };
 
-    let route = routing.find_route(&edinburgh, &queensferry, args.profile).await?;
+    let route = routing.find_route(&queensferry, &dalkeith, args.profile).await?;
 
     let fout = BufWriter::new(File::create(args.geojson)?);
     let mut gout = GeoJsonWriter::new(fout);
