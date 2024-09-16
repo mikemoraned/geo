@@ -19,6 +19,7 @@
             * [x] fetch route for a fixed pair of points and save as geojson
             * [x] vary routes by mode e.g. walking / cycling / driving
             * [x] fetch routes for N random pairs of points within a boundary and save as geojson
+            * [x] make pairs have start/end points on the boundary (this ensures that paths always enclose an area)
             * [ ] sample random pairs fairly
                 - e.g. sample random pairs of points over a grid
             * [ ] ...
