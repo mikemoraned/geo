@@ -1,6 +1,7 @@
 use std::{fs::File, io::BufWriter, path::PathBuf};
 
 use clap::{command, Parser};
+use cli::progress::progress_bar;
 use geo::{coord, GeometryCollection, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use routing::stadia::{Profile, Server, StandardRouting};
@@ -45,6 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let width = bounds.width();
     let height = bounds.height();
     let mut routes = vec![];
+    let progress = progress_bar(args.paths as u64);
     for _ in 0..args.paths {
         let mut start = coord! {
             x: rand::random::<f64>() * width + min.x,
@@ -66,6 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let route = routing.find_route(&start, &end, &args.profile).await?;
         routes.push(geo::geometry::Geometry::LineString(route));
+        progress.inc(1);
     }
     let collection = GeometryCollection::new_from(routes);
 

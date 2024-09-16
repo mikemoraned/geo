@@ -1,5 +1,5 @@
 [workspace]
-members = ["api", "routing", "startup"]
+members = ["api", "cli", "routing", "startup"]
 resolver = "2"
 
 [workspace.dependencies]

@@ -10,6 +10,7 @@ clap = { workspace = true }
 url = { workspace = true }
 
 startup = { path = "../startup" }
+cli = { path = "../cli" }
 
 reqwest = "0.12.7"
 geo = "0.28.0"
