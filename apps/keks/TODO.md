@@ -18,7 +18,7 @@
             * [x] get API key for `houseofmoran-keks`
             * [x] fetch route for a fixed pair of points and save as geojson
             * [x] vary routes by mode e.g. walking / cycling / driving
-            * [ ] fetch routes for N random pairs of points within a boundary and save as geojson
+            * [x] fetch routes for N random pairs of points within a boundary and save as geojson
             * [ ] sample random pairs fairly
                 - e.g. sample random pairs of points over a grid
             * [ ] ...

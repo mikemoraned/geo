@@ -15,3 +15,4 @@ reqwest = "0.12.7"
 geo = "0.28.0"
 geojson = { version = "0.24", features = ["geo-types"] }
 geozero = "0.13.0"
+rand = "0.8.5"

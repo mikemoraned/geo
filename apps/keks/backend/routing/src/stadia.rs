@@ -28,6 +28,12 @@ pub enum Profile {
 
 impl Into<String> for Profile {
     fn into(self) -> String {
+        (&self as &Profile).into()
+    }
+}
+
+impl Into<String> for &Profile {
+    fn into(self) -> String {
         match self {
             Profile::Auto => "auto".into(),
             Profile::Pedestrian => "pedestrian".into(),
@@ -55,7 +61,7 @@ impl StandardRouting {
         &self,
         start: &Coord,
         end: &Coord,
-        profile: Profile,
+        profile: &Profile,
     ) -> Result<LineString, Box<dyn std::error::Error>> {
 
         let generator = ValhallaHttpRequestGenerator::new(
