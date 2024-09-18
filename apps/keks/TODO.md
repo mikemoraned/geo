@@ -20,8 +20,9 @@
             * [x] vary routes by mode e.g. walking / cycling / driving
             * [x] fetch routes for N random pairs of points within a boundary and save as geojson
             * [x] make pairs have start/end points on the boundary (this ensures that paths always enclose an area)
-            * [ ] sample random pairs fairly
+            * [ ] sample random pairs fairly across the area
                 - e.g. sample random pairs of points over a grid
+                - or https://www.jasondavies.com/poisson-disc/, https://docs.rs/fast_poisson/latest/fast_poisson/
             * [ ] ...
     - [ ] layout:
         - ideas:
