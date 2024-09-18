@@ -23,6 +23,10 @@
             * [x] sample random pairs fairly across the area
                 - e.g. sample random pairs of points over a grid
                 - or https://www.jasondavies.com/poisson-disc/, https://docs.rs/fast_poisson/latest/fast_poisson/
+            * [ ] convert routes into pieces
+                * [ ] convert into black/white Luma image
+                * [ ] find regions in image
+                * [ ] convert back into geojson
             * [ ] ...
     - [ ] layout:
         - ideas:
