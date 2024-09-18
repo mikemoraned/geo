@@ -2,6 +2,7 @@ use std::{fs::File, io::BufWriter, path::PathBuf};
 
 use clap::{command, Parser};
 use cli::progress::progress_bar;
+use fast_poisson::Poisson2D;
 use geo::{coord, Coord, GeometryCollection, Point, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use routing::stadia::{Profile, Server, StandardRouting};
@@ -68,10 +69,16 @@ fn random_coords(bounds: &Rect, n: usize) -> Vec<Coord> {
     let min = bounds.min();
     let width = bounds.width();
     let height = bounds.height();
-    (0..n)
-        .map(|_| coord! {
-            x: rand::random::<f64>() * width + min.x,
-            y: rand::random::<f64>() * height + min.y,
+    let radius = (width * height / n as f64).sqrt();
+    let points : Vec<_> = Poisson2D::new()
+        .with_dimensions([width, height], radius)
+        .iter().take(n).collect();
+
+    points
+        .iter()
+        .map(|[x_offset, y_offset]| coord! {
+            x: x_offset + min.x,
+            y: y_offset + min.y,
         })
         .collect()
 }
