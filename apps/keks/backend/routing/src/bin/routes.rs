@@ -28,6 +28,10 @@ struct Args {
     #[arg(long, default_value_t = false)]
     save_points: bool,
 
+    /// whether to save the bounds of the area
+    #[arg(long, default_value_t = false)]
+    save_bounds: bool,
+
     /// output GeoJSON `.geojson` file
     #[arg(long)]
     geojson: PathBuf,
@@ -43,14 +47,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &stadia_maps_api_key, routing::stadia::Server::Default
     )?;
 
+    let mut geo = vec![];
+    
     let queensferry = coord! { x: -3.409195, y: 55.992622 };
     let dalkeith = coord! { x: -3.066667, y: 55.866667 };
     let bounds = Rect::new(queensferry, dalkeith);
+    if args.save_bounds {
+        geo.push(geo::geometry::Geometry::Rect(bounds));
+    }
+
     let progress = progress_bar(args.paths as u64);
     let starts = random_coords(&bounds, args.paths);
     let ends = random_coords(&bounds, args.paths);
     let paired : Vec<(Coord, Coord)> = starts.clone().into_iter().zip(ends.clone().into_iter()).collect();
-    let mut geo = vec![];
     for (start, end) in paired {
         if args.save_points {
             geo.push(geo::geometry::Geometry::Point(Point::from(start.clone())));
