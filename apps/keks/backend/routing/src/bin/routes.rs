@@ -2,7 +2,7 @@ use std::{fs::File, io::BufWriter, path::PathBuf};
 
 use clap::{command, Parser};
 use cli::progress::progress_bar;
-use geo::{coord, Coord, GeometryCollection, Rect};
+use geo::{coord, Coord, GeometryCollection, Point, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use routing::stadia::{Profile, Server, StandardRouting};
 use startup::env::load_secret;
@@ -41,21 +41,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let queensferry = coord! { x: -3.409195, y: 55.992622 };
     let dalkeith = coord! { x: -3.066667, y: 55.866667 };
     let bounds = Rect::new(queensferry, dalkeith);
-    let mut routes = vec![];
     let progress = progress_bar(args.paths as u64);
     let starts = random_coords(&bounds, args.paths);
     let ends = random_coords(&bounds, args.paths);
-    let paired = starts.into_iter().zip(ends.into_iter());
+    let paired : Vec<(Coord, Coord)> = starts.clone().into_iter().zip(ends.clone().into_iter()).collect();
+    let mut geo = vec![];
     for (start, end) in paired {
+        geo.push(geo::geometry::Geometry::Point(Point::from(start.clone())));
+        geo.push(geo::geometry::Geometry::Point(Point::from(end.clone())));
+
         let route = routing.find_route(&start, &end, &args.profile).await?;
-        routes.push(geo::geometry::Geometry::LineString(route));
+        geo.push(geo::geometry::Geometry::LineString(route));
+
         progress.inc(1);
     }
-    let collection = GeometryCollection::new_from(routes);
+    let geo_collection = GeometryCollection::new_from(geo);
 
     let fout = BufWriter::new(File::create(args.geojson)?);
     let mut gout = GeoJsonWriter::new(fout);
-    geo::geometry::Geometry::GeometryCollection(collection).process_geom(&mut gout)?;
+    geo::geometry::Geometry::GeometryCollection(geo_collection).process_geom(&mut gout)?;
     
     Ok(())
 }
