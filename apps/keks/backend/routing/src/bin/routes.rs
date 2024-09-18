@@ -24,6 +24,10 @@ struct Args {
     #[arg(long)]
     paths: usize,
 
+    /// whether to save the points used as start and end
+    #[arg(long, default_value_t = false)]
+    save_points: bool,
+
     /// output GeoJSON `.geojson` file
     #[arg(long)]
     geojson: PathBuf,
@@ -48,8 +52,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let paired : Vec<(Coord, Coord)> = starts.clone().into_iter().zip(ends.clone().into_iter()).collect();
     let mut geo = vec![];
     for (start, end) in paired {
-        geo.push(geo::geometry::Geometry::Point(Point::from(start.clone())));
-        geo.push(geo::geometry::Geometry::Point(Point::from(end.clone())));
+        if args.save_points {
+            geo.push(geo::geometry::Geometry::Point(Point::from(start.clone())));
+            geo.push(geo::geometry::Geometry::Point(Point::from(end.clone())));
+        }
 
         let route = routing.find_route(&start, &end, &args.profile).await?;
         geo.push(geo::geometry::Geometry::LineString(route));
