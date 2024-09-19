@@ -1,8 +1,9 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
 use clap::{command, Parser};
-use geo::{geometry, BoundingRect, Geometry};
+use geo::{BoundingRect, Geometry};
 use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
+use image::GrayImage;
 
 /// find regions in an area
 #[derive(Parser, Debug)]
@@ -11,6 +12,10 @@ struct Args {
     /// input GeoJSON `.geojson` file
     #[arg(long)]
     geojson: PathBuf,
+
+    /// output png image file
+    #[arg(long)]
+    png: PathBuf,
 }
 
 #[tokio::main]
@@ -33,6 +38,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!("Width: {} Height: {}", width, height);
         println!("Width px: {} Height px: {}", width_px, height_px);
+
+        let image = GrayImage::new(width_px, height_px);
+        image.save(args.png)?;
     }
 
     Ok(())

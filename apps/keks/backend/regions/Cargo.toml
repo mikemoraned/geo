@@ -12,4 +12,6 @@ geozero = { workspace = true }
 
 startup = { path = "../startup" }
 cli = { path = "../cli" }
+image = "0.25.2"
+imageproc = "0.25.0"
 
