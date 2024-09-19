@@ -1,13 +1,11 @@
 [package]
-name = "routing"
+name = "regions"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 tokio = { workspace = true }
-ferrostar = { workspace = true }
 clap = { workspace = true }
-url = { workspace = true }
 geo = { workspace = true }
 geojson = { workspace = true }
 geozero = { workspace = true }
@@ -15,6 +13,3 @@ geozero = { workspace = true }
 startup = { path = "../startup" }
 cli = { path = "../cli" }
 
-reqwest = "0.12.7"
-rand = "0.8.5"
-fast_poisson = "1.0.0"

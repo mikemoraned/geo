@@ -1,5 +1,5 @@
 [workspace]
-members = ["api", "cli", "routing", "startup"]
+members = ["api", "cli", "regions", "routing", "startup"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -13,3 +13,7 @@ url = "2.5.2"
 clap = { version = "4.5.17", features = ["derive"] }
 dotenvy = "0.15.7"
 tracing = "0.1.40"
+
+geo = "0.28.0"
+geojson = { version = "0.24", features = ["geo-types"] }
+geozero = "0.13.0"
