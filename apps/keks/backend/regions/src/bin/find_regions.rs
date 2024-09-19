@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
 use clap::{command, Parser};
-use geo::{geometry, Geometry};
+use geo::{geometry, BoundingRect, Geometry};
 use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
 
 /// find regions in an area
@@ -24,12 +24,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Geometry::GeometryCollection(geoms) = writer.take_geometry().unwrap() {
         println!("Found {} geometries", geoms.len());
+        let bounds = geoms.bounding_rect().unwrap();
+        println!("Bounding rect: {:?}", bounds);
+        let width = bounds.width();
+        let height = bounds.height();
+        let width_px = (width * 10000.0).ceil() as u32;
+        let height_px = (height * 10000.0).ceil() as u32;
 
-        for geom in geoms {
-            if let geometry::Geometry::LineString(ls) = geom {
-                println!("Found LineString with {} points", ls.0.len());
-            }
-        }
+        println!("Width: {} Height: {}", width, height);
+        println!("Width px: {} Height px: {}", width_px, height_px);
     }
 
     Ok(())
