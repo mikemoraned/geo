@@ -14,4 +14,8 @@ startup = { path = "../startup" }
 cli = { path = "../cli" }
 image = "0.25.2"
 imageproc = "0.25.0"
+flo_draw = "0.3.1"
+flo_canvas = "0.3.1"
+flo_render_canvas = "0.3.1"
+futures = "0.3.30"
 
