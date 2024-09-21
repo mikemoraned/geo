@@ -24,10 +24,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Transform::identity(), 
         None);
 
-    let min_x = -50.0;
-    let min_y = -50.0;
-    let max_x = 200.0;
-    let max_y = 100.0;
+    // Bounding rect: Rect { min: Coord { x: -3.530138, y: 55.854295 }, max: Coord { x: -3.001677, y: 55.995439 } }
+
+    let min_x = -3.530138;
+    let min_y = 55.854295;
+    let max_x = -3.001677;
+    let max_y = 55.995439;
+
+    // let min_x = -50.0;
+    // let min_y = -50.0;
+    // let max_x = 200.0;
+    // let max_y = 100.0;
 
     let scale_x = width_px as f32 / (max_x - min_x);
     let scale_y = height_px as f32 / (max_y - min_y);
