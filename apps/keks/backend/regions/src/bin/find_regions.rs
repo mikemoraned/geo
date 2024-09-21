@@ -1,7 +1,7 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
 use clap::{command, Parser};
-use geo::{BoundingRect, Geometry};
+use geo::{BoundingRect, Geometry, Rect};
 use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
 use image::RgbaImage;
 
@@ -39,46 +39,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Width: {} Height: {}", width, height);
         println!("Width px: {} Height px: {}", width_px, height_px);
 
-        let image = draw(width_px, height_px).await?;
+        let image = draw(&bounds, width_px, height_px).await?;
         image.save(args.png)?;
     }
 
     Ok(())
 }
 
-async fn draw(width_px: usize, height_px: usize) -> Result<RgbaImage, Box<dyn std::error::Error>> {
+async fn draw(bounds: &Rect, width_px: usize, height_px: usize) -> Result<RgbaImage, Box<dyn std::error::Error>> {
     use flo_canvas::*;
     use flo_render_canvas::*;
     use futures::stream;
 
     let mut context = initialize_offscreen_rendering().map_err(|e| format!("failed to get context: {:?}", e))?;
 
+    let width = bounds.width() as f32;
+    let height = bounds.height() as f32;
+    let min_x = bounds.min().x as f32;
+    let min_y = bounds.min().y as f32;
+    let max_x = bounds.max().x as f32;
+    let max_y = bounds.max().y as f32;
+
     let mut drawing = vec![];
     drawing.clear_canvas(Color::Rgba(0.0, 0.0, 0.0, 0.0));
-    drawing.canvas_height(height_px as f32);
-    drawing.center_region(0.0, 0.0, width_px as f32, height_px as f32);
+    // drawing.canvas_height(height);
+    drawing.center_region(min_x, min_y, max_x, max_y);
 
     drawing.new_path();
-    drawing.move_to(0.0, 0.0);
-    drawing.line_to(width_px as f32, 0.0);
-    drawing.line_to(width_px as f32, height_px as f32);
-    drawing.line_to(0.0, height_px as f32);
+    drawing.move_to(min_x, min_y);
+    drawing.line_to(max_x, min_y);
+    drawing.line_to(max_x, max_y);
+    drawing.line_to(min_x, max_y);
     drawing.close_path();
 
     drawing.fill_color(Color::Rgba(0.0, 0.0, 0.0, 1.0));
     drawing.fill();
 
-    drawing.new_path();
-    drawing.move_to(0.0, 0.0);
-    drawing.line_to(width_px as f32 / 4.0, 0.0);
-    drawing.line_to(width_px as f32 / 4.0, height_px as f32 / 4.0);
-    drawing.line_to(0.0, height_px as f32 / 4.0);
-    drawing.close_path();
-
-    drawing.fill_color(Color::Rgba(1.0, 1.0, 1.0, 1.0));
-    drawing.fill();
-
-    let rendered = render_canvas_offscreen(&mut context, width_px, height_px, 1.0, stream::iter(drawing)).await;
+    let rendered = render_canvas_offscreen(&mut context, width_px, height_px, width_px as f32 / width, stream::iter(drawing)).await;
 
     let image = RgbaImage::from_vec(width_px as u32, height_px as u32, rendered).ok_or("failed to create image from canvas")?;
 
