@@ -50,6 +50,13 @@ fn draw(collection: &GeometryCollection) -> Result<RgbaImage, Box<dyn std::error
     let max_y = bounds.max().y as f32;
 
     let scale = 10000.0 as f32;
+
+    let scale_x = scale;
+    let scale_y = scale;
+
+    let offset_x = -1.0 * min_x;
+    let offset_y = -1.0 * min_y;
+
     let width_px = (width * scale).ceil() as u32;
     let height_px = (height * scale).ceil() as u32;
 
@@ -57,9 +64,7 @@ fn draw(collection: &GeometryCollection) -> Result<RgbaImage, Box<dyn std::error
     println!("Width px: {} Height px: {}", width_px, height_px);
     let mut pixmap = Pixmap::new(width_px, height_px).ok_or("Failed to create pixmap")?;
 
-    // let transform = Transform::from_translate(min_x, min_y).post_scale(scale, scale);
-    // let transform = Transform::from_scale(scale, scale).post_translate(min_x, min_y);
-    let transform = Transform::from_scale(scale, scale).post_translate(min_x * scale, min_y * scale);
+    let transform = Transform::from_translate(offset_x, offset_y).post_scale(scale_x, scale_y);
 
     let mut paint = Paint::default();
     paint.set_color_rgba8(255, 255, 255, 255);
@@ -78,8 +83,8 @@ fn draw(collection: &GeometryCollection) -> Result<RgbaImage, Box<dyn std::error
         pb.finish().ok_or("Failed to finish path")?
     };
     println!("Path: {:?}", path);
-    // pixmap.stroke_path(&path, &paint, &stroke, transform, None);
-    pixmap.fill_path(&path, &paint, FillRule::EvenOdd, transform, None);
+    pixmap.stroke_path(&path, &paint, &stroke, transform, None);
+    // pixmap.fill_path(&path, &paint, FillRule::EvenOdd, transform, None);
 
     let png_bytes = pixmap.encode_png()?;
     let mut reader = ImageReader::new(Cursor::new(png_bytes));
