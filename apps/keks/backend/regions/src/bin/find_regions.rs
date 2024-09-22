@@ -3,7 +3,7 @@ use std::{fs::File, io::{BufReader, Cursor}, path::PathBuf};
 use clap::{command, Parser};
 use geo::{BoundingRect, Geometry, GeometryCollection};
 use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
-use image::{ImageReader, RgbaImage};
+use image::{GrayImage, ImageReader, RgbaImage};
 
 /// find regions in an area
 #[derive(Parser, Debug)]
@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn draw(collection: &GeometryCollection) -> Result<RgbaImage, Box<dyn std::error::Error>> {
+fn draw(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std::error::Error>> {
     use tiny_skia::*;
 
     let bounds = collection.bounding_rect().unwrap();
@@ -91,6 +91,6 @@ fn draw(collection: &GeometryCollection) -> Result<RgbaImage, Box<dyn std::error
     reader.set_format(image::ImageFormat::Png);
     let decoded = reader.decode()?;
 
-    Ok(decoded.into_rgba8())
+    Ok(decoded.into_luma8())
 }
 
