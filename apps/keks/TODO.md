@@ -25,6 +25,7 @@
                 - or https://www.jasondavies.com/poisson-disc/, https://docs.rs/fast_poisson/latest/fast_poisson/
             * [ ] convert routes into pieces
                 * [x] convert into black/white Luma image
+                * [x] create a Justfile for repeatable recreation of everything
                 * [ ] find regions in image
                 * [ ] convert back into geojson
             * [ ] ...

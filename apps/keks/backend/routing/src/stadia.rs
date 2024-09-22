@@ -11,6 +11,21 @@ pub enum Server {
     EU
 }
 
+impl Default for Server {
+    fn default() -> Self {
+        Server::Default
+    }
+}
+
+impl ToString for Server {
+    fn to_string(&self) -> String {
+        match self {
+            Server::Default => "default".into(),
+            Server::EU => "eu".into(),
+        }
+    }
+}
+
 impl Server {
     fn endpoint_base(&self) -> Url {
         match self {

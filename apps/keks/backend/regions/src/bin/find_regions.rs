@@ -21,6 +21,7 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
+    println!("{:?}", args);
 
     let mut file = BufReader::new(File::open(args.geojson)?);
     let mut reader = GeoJsonReader(&mut file);

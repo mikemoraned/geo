@@ -13,7 +13,7 @@ use startup::env::load_secret;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// stadiamaps server kind that we should talk to
-    #[arg(long)]
+    #[arg(long, default_value_t = Server::default())]
     server: Server,
 
     /// profile
