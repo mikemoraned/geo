@@ -13,9 +13,9 @@ struct Args {
     #[arg(long)]
     geojson: PathBuf,
 
-    /// output png image file
+    /// template file name for the stages; muct contain STAGE_NAME
     #[arg(long)]
-    png: PathBuf,
+    stage_template: PathBuf,
 }
 
 #[tokio::main]
@@ -28,11 +28,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut writer = GeoWriter::new();
     reader.process_geom(&mut writer)?;
 
+    let draw_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "draw");
+
     if let Geometry::GeometryCollection(geoms) = writer.take_geometry().unwrap() {
         println!("Found {} geometries", geoms.len());
 
         let image = draw(&geoms)?;
-        image.save(args.png)?;
+        image.save(draw_stage_png)?;
     }
 
     Ok(())

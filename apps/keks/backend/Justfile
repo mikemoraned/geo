@@ -7,9 +7,9 @@ routes:
     cargo run --release --bin routes -- --geojson edinburgh_routes_ped.1000.geojson --profile pedestrian --paths 1000
 
 regions:
-    cargo run --release --bin find_regions -- --geojson edinburgh_routes_auto.10.geojson --png edinburgh_routes_auto.10.png
-    cargo run --release --bin find_regions -- --geojson edinburgh_routes_auto.100.geojson --png edinburgh_routes_auto.100.png
-    cargo run --release --bin find_regions -- --geojson edinburgh_routes_auto.1000.geojson --png edinburgh_routes_auto.1000.png
-    cargo run --release --bin find_regions -- --geojson edinburgh_routes_ped.10.geojson --png edinburgh_routes_ped.10.png
-    cargo run --release --bin find_regions -- --geojson edinburgh_routes_ped.100.geojson --png edinburgh_routes_ped.100.png
-    cargo run --release --bin find_regions -- --geojson edinburgh_routes_ped.1000.geojson --png edinburgh_routes_ped.1000.png
+    cargo run --release --bin find_regions -- --geojson edinburgh_routes_auto.10.geojson --stage-template edinburgh_routes_auto.10.STAGE_NAME.png
+    cargo run --release --bin find_regions -- --geojson edinburgh_routes_auto.100.geojson --stage-template edinburgh_routes_auto.100.STAGE_NAME.png
+    cargo run --release --bin find_regions -- --geojson edinburgh_routes_auto.1000.geojson --stage-template edinburgh_routes_auto.1000.STAGE_NAME.png
+    cargo run --release --bin find_regions -- --geojson edinburgh_routes_ped.10.geojson --stage-template edinburgh_routes_ped.10.STAGE_NAME.png
+    cargo run --release --bin find_regions -- --geojson edinburgh_routes_ped.100.geojson --stage-template edinburgh_routes_ped.100.STAGE_NAME.png
+    cargo run --release --bin find_regions -- --geojson edinburgh_routes_ped.1000.geojson --stage-template edinburgh_routes_ped.1000.STAGE_NAME.png
