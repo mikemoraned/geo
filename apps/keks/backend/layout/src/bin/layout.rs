@@ -1,7 +1,9 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
+use binpack2d::Dimension;
 use clap::{command, Parser};
-use geo::Geometry;
+use conversion::projection::Projection;
+use geo::{Geometry, GeometryCollection};
 use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
 
 /// find regions in an area
@@ -26,8 +28,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Geometry::GeometryCollection(geoms) = writer.take_geometry().unwrap() {
         println!("Found {} geometries", geoms.len());
 
-        
+        let (dimensions, projection) = create_dimensions(&geoms);
     }
 
     Ok(())
+}
+
+fn create_dimensions(geoms: &GeometryCollection) -> (Vec<Dimension>, Projection) {
+    todo!()
 }

@@ -12,5 +12,6 @@ geozero = { workspace = true }
 
 startup = { path = "../startup" }
 cli = { path = "../cli" }
+conversion = { path = "../conversion" }
 
 binpack2d = "1.0.1"

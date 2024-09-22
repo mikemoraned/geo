@@ -1,0 +1,9 @@
+[package]
+name = "conversion"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+geo = { workspace = true }
+tiny-skia = { workspace = true }
+
