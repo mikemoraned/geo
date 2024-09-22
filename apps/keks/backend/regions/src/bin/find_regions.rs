@@ -72,7 +72,7 @@ fn draw(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std::error
     white.set_color_rgba8(255, 255, 255, 255);
 
     let mut stroke = Stroke::default();
-    stroke.width = 0.005 * width.min(height);
+    stroke.width = 0.0005 * width.min(height);
 
     // anything that is white is a border and anything that is black is a region
 
