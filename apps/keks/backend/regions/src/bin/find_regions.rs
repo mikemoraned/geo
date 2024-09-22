@@ -1,10 +1,11 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::BufReader, path::PathBuf};
+use std::{collections::{HashMap, HashSet}, fs::File, io::{BufReader, Cursor}, path::PathBuf};
 
 use clap::{command, Parser};
 use geo::{BoundingRect, Geometry, GeometryCollection};
 use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
-use image::{GrayImage, Luma, Rgba, RgbaImage};
+use image::{GrayImage, ImageReader, Luma, Rgba, RgbaImage};
 use imageproc::{definitions::Image, region_labelling::{connected_components, Connectivity}};
+use regions::contours::find_contours_in_luma;
 
 /// find regions in an area
 #[derive(Parser, Debug)]
@@ -33,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Geometry::GeometryCollection(geoms) = writer.take_geometry().unwrap() {
         println!("Found {} geometries", geoms.len());
 
-        let draw_image = draw(&geoms)?;
+        let draw_image = draw_routes(&geoms)?;
 
         let draw_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "draw");
         draw_image.save(draw_stage_png)?;
@@ -46,6 +47,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let labelled_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "labelled");
         labelled_colored_image.save(labelled_stage_png)?;
+
+        let contours = find_contours_in_luma(Luma([0u32; 1]), &labelled_image);
+        println!("Found {} contours", contours.len());
+        let contours_image = draw_contours(&contours, labelled_image.width(), labelled_image.height())?;
+        let contours_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "contours");
+        contours_image.save(contours_stage_png)?;
     }
 
     Ok(())
@@ -65,7 +72,7 @@ fn assign_random_colors(labelled_image: &Image<Luma<u32>>) -> RgbaImage {
     image
 }
 
-fn draw(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std::error::Error>> {
+fn draw_routes(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std::error::Error>> {
     use tiny_skia::*;
 
     let bounds = collection.bounding_rect().unwrap();
@@ -159,3 +166,49 @@ fn draw(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std::error
     Ok(image)
 }
 
+fn draw_contours(contours: &Vec<Vec<regions::contours::Point<u32>>>, width_px: u32, height_px: u32) -> Result<RgbaImage, Box<dyn std::error::Error>> {
+    use tiny_skia::*;
+
+    let mut pixmap = Pixmap::new(width_px, height_px).ok_or("Failed to create pixmap")?;
+
+    let mut black = Paint::default();
+    black.set_color(Color::BLACK);
+    black.anti_alias = true;
+
+    let mut white = Paint::default();
+    white.set_color(Color::WHITE);
+    white.anti_alias = true;
+
+    let mut stroke = Stroke::default();
+    stroke.width = 1.0;
+
+    pixmap.fill_rect(
+        Rect::from_xywh(0.0, 0.0, width_px as f32, height_px as f32).ok_or("Failed to create rect")?,
+        &black,
+        Transform::identity(),
+        None
+    );
+
+    for contour in contours {
+        if contour.len() < 2 {
+            continue;
+        }
+        let mut pb = PathBuilder::new();
+        for (i, point) in contour.iter().enumerate() {
+            if i == 0 {
+                pb.move_to(point.x as f32, point.y as f32);
+            } else {
+                pb.line_to(point.x as f32, point.y as f32);
+            }
+        }
+        let path = pb.finish().ok_or("Failed to finish path")?;
+        pixmap.stroke_path(&path, &white, &stroke, Transform::identity(), None);
+    }
+
+    let png_bytes = pixmap.encode_png()?;
+    let mut reader = ImageReader::new(Cursor::new(png_bytes));
+    reader.set_format(image::ImageFormat::Png);
+    let decoded = reader.decode()?;
+
+    Ok(decoded.into_rgba8())
+}
