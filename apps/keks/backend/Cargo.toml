@@ -1,8 +1,21 @@
 [workspace]
-members = ["api"]
+members = ["api", "cli", "regions", "routing", "startup"]
 resolver = "2"
 
 [workspace.dependencies]
 tokio = { version = "1.0", features = ["full"] }
 axum = "0.7.5"
 tower-http = { version = "0.5.2", features = ["cors"] }
+
+ferrostar = "0.10.1"
+url = "2.5.2"
+
+clap = { version = "4.5.17", features = ["derive"] }
+dotenvy = "0.15.7"
+tracing = "0.1.40"
+
+geo = "0.28.0"
+geojson = { version = "0.24", features = ["geo-types"] }
+geozero = "0.13.0"
+
+rand = "0.8.5"

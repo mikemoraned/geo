@@ -1,0 +1,21 @@
+[package]
+name = "regions"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+clap = { workspace = true }
+geo = { workspace = true }
+geojson = { workspace = true }
+geozero = { workspace = true }
+rand = { workspace = true }
+
+startup = { path = "../startup" }
+cli = { path = "../cli" }
+
+image = "0.25.2"
+imageproc = "0.25.0"
+tiny-skia = "0.11.4"
+bit-set = "0.8.0"
+
