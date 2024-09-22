@@ -1,5 +1,5 @@
 - [ ] minimal component parts:
-    - [ ] "biscuits" i.e. the parts of a city
+    - [x] "biscuits" i.e. the parts of a city
         - ideas:
             - route-based
                 1. Define a boundary
@@ -28,7 +28,6 @@
                 * [x] create a Justfile for repeatable recreation of everything
                 * [x] find regions in image
                 * [x] convert back into geojson
-            * [ ] ...
     - [ ] layout:
         - ideas:
             - binpacking
