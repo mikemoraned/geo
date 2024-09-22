@@ -71,7 +71,7 @@ fn draw(collection: &GeometryCollection) -> Result<RgbaImage, Box<dyn std::error
     paint.anti_alias = true;
 
     let mut stroke = Stroke::default();
-    stroke.width = 1.0;
+    stroke.width = 0.05 * width.min(height);
 
     let path = {
         let mut pb = PathBuilder::new();

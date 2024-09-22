@@ -12,9 +12,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     after.set_color_rgba8(127, 0, 0, 200);
     after.anti_alias = true;
 
-    let mut stroke = Stroke::default();
-    stroke.width = 6.0;
-
     let width_px = 500u32;
     let height_px = 500u32;
     let mut pixmap = Pixmap::new(width_px, height_px).unwrap();
@@ -36,14 +33,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let max_x = 200.0;
     // let max_y = 100.0;
 
-    let scale_x = width_px as f32 / (max_x - min_x);
-    let scale_y = height_px as f32 / (max_y - min_y);
+    // let min_x = -300.0;
+    // let min_y = -50.0;
+    // let max_x = -50.0;
+    // let max_y = 100.0;
+
+    println!("max_x {} > min_x {}: {}", max_x, min_x, max_x > min_x);
+    println!("max_y {} > min_y {}: {}", max_y, min_y, max_y > min_y);
+
+    let width = ((max_x - min_x) as f32).abs();
+    let height = ((max_y - min_y) as f32).abs();
+    println!("Width: {} Height: {}", width, height);
+
+    let scale_x = width_px as f32 / width;
+    let scale_y = height_px as f32 / height;
+    println!("scale_x: {} scale_y: {}", scale_x, scale_y);
 
     let offset_x = -1.0 * min_x;
     let offset_y = -1.0 * min_y;
+    println!("offset_x: {} offset_y: {}", offset_x, offset_y);
 
     let transform = Transform::from_translate(offset_x, offset_y).post_scale(scale_x, scale_y);
+    // let transform = Transform::from_translate(offset_x, offset_y);
     println!("transform: {:?}", transform);
+
+    let mut stroke = Stroke::default();
+    stroke.width = 0.05 * width.min(height);
 
     let path = {
         let mut pb = PathBuilder::new();
