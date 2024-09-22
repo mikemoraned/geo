@@ -32,6 +32,7 @@
         - ideas:
             - binpacking
                 - maybe re-use library from speculaas-biscuits
+                - or try https://lib.rs/crates/binpack2d
     - [ ] display:
         - ideas:
             - simple transition:
