@@ -46,8 +46,6 @@ fn draw(collection: &GeometryCollection) -> Result<RgbaImage, Box<dyn std::error
     let height = bounds.height() as f32;
     let min_x = bounds.min().x as f32;
     let min_y = bounds.min().y as f32;
-    let max_x = bounds.max().x as f32;
-    let max_y = bounds.max().y as f32;
 
     let scale = 10000.0 as f32;
 
@@ -71,20 +69,22 @@ fn draw(collection: &GeometryCollection) -> Result<RgbaImage, Box<dyn std::error
     paint.anti_alias = true;
 
     let mut stroke = Stroke::default();
-    stroke.width = 0.05 * width.min(height);
+    stroke.width = 0.005 * width.min(height);
 
-    let path = {
-        let mut pb = PathBuilder::new();
-        pb.move_to(min_x, min_y);
-        pb.line_to(max_x, min_y);
-        pb.line_to(max_x, max_y);
-        pb.line_to(min_x, max_y);
-        pb.close();
-        pb.finish().ok_or("Failed to finish path")?
-    };
-    println!("Path: {:?}", path);
-    pixmap.stroke_path(&path, &paint, &stroke, transform, None);
-    // pixmap.fill_path(&path, &paint, FillRule::EvenOdd, transform, None);
+    for geom in collection.iter() {
+        if let Geometry::LineString(line) = geom {
+            let mut pb = PathBuilder::new();
+            line.points().for_each(|p| {
+                if pb.is_empty() {
+                    pb.move_to(p.x() as f32, p.y() as f32);
+                } else {
+                    pb.line_to(p.x() as f32, p.y() as f32);
+                }
+            });
+            let path = pb.finish().ok_or("Failed to finish path")?;
+            pixmap.stroke_path(&path, &paint, &stroke, transform, None);
+        }
+    }
 
     let png_bytes = pixmap.encode_png()?;
     let mut reader = ImageReader::new(Cursor::new(png_bytes));
