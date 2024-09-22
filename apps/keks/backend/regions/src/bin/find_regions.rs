@@ -3,7 +3,7 @@ use std::{fs::File, io::{BufReader, Cursor}, path::PathBuf};
 use clap::{command, Parser};
 use geo::{BoundingRect, Geometry, GeometryCollection};
 use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
-use image::{GrayImage, ImageReader, RgbaImage};
+use image::{GrayImage, ImageReader};
 
 /// find regions in an area
 #[derive(Parser, Debug)]
@@ -64,13 +64,43 @@ fn draw(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std::error
 
     let transform = Transform::from_translate(offset_x, offset_y).post_scale(scale_x, scale_y);
 
-    let mut paint = Paint::default();
-    paint.set_color_rgba8(255, 255, 255, 255);
-    paint.anti_alias = true;
+    let mut black = Paint::default();
+    black.set_color_rgba8(0, 0, 0, 255);
+
+    let mut white = Paint::default();
+    white.set_color_rgba8(255, 255, 255, 255);
 
     let mut stroke = Stroke::default();
     stroke.width = 0.005 * width.min(height);
 
+    // anything that is white is a border and anything that is black is a region
+
+    // so, first make everything white by default
+    pixmap.fill_rect(
+        Rect::from_xywh(0.0, 0.0, width_px as f32, height_px as f32).ok_or("Failed to create rect")?,
+        &white,
+        Transform::identity(),
+        None
+    );
+
+    // then draw any polygons in black as backgrounds for regions
+    for geom in collection.iter() {
+        if let Geometry::Polygon(poly) = geom {
+            let mut pb = PathBuilder::new();
+            poly.exterior().points().for_each(|p| {
+                if pb.is_empty() {
+                    pb.move_to(p.x() as f32, p.y() as f32);
+                } else {
+                    pb.line_to(p.x() as f32, p.y() as f32);
+                }
+            });
+            pb.close();
+            let path = pb.finish().ok_or("Failed to finish path")?;
+            pixmap.fill_path(&path, &black, FillRule::EvenOdd, transform, None);
+        }
+    }
+
+    // then draw linestrings as candidate borders
     for geom in collection.iter() {
         if let Geometry::LineString(line) = geom {
             let mut pb = PathBuilder::new();
@@ -82,7 +112,7 @@ fn draw(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std::error
                 }
             });
             let path = pb.finish().ok_or("Failed to finish path")?;
-            pixmap.stroke_path(&path, &paint, &stroke, transform, None);
+            pixmap.stroke_path(&path, &white, &stroke, transform, None);
         }
     }
 

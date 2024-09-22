@@ -29,7 +29,7 @@ struct Args {
     save_points: bool,
 
     /// whether to save the bounds of the area
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = true)]
     save_bounds: bool,
 
     /// output GeoJSON `.geojson` file
@@ -40,6 +40,7 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
+    println!("{:?}", args);
 
     let stadia_maps_api_key = load_secret("STADIA_MAPS_API_KEY")?;
 
