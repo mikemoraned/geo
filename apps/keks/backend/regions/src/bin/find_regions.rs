@@ -5,6 +5,7 @@ use geo::{BoundingRect, Geometry, GeometryCollection};
 use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
 use image::{GrayImage, ImageReader, Luma, Rgba, RgbaImage};
 use imageproc::{definitions::Image, region_labelling::{connected_components, Connectivity}};
+use rand::Rng;
 use regions::contours::find_contours_in_luma;
 
 /// find regions in an area
@@ -189,6 +190,7 @@ fn draw_contours(contours: &Vec<Vec<regions::contours::Point<u32>>>, width_px: u
         None
     );
 
+    let mut rng = rand::thread_rng();
     for contour in contours {
         if contour.len() < 2 {
             continue;
@@ -203,6 +205,10 @@ fn draw_contours(contours: &Vec<Vec<regions::contours::Point<u32>>>, width_px: u
         }
         let path = pb.finish().ok_or("Failed to finish path")?;
         pixmap.stroke_path(&path, &white, &stroke, Transform::identity(), None);
+        let mut paint = Paint::default();
+        paint.set_color_rgba8(rng.gen_range(0 .. 255), rng.gen_range(0 .. 255), rng.gen_range(0 .. 255), 255);
+        paint.anti_alias = true;
+        pixmap.fill_path(&path, &paint, FillRule::EvenOdd, Transform::identity(), None);
     }
 
     let png_bytes = pixmap.encode_png()?;
