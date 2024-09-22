@@ -1,9 +1,10 @@
-use std::{fs::File, io::{BufReader, Cursor}, path::PathBuf};
+use std::{collections::{HashMap, HashSet}, fs::File, io::BufReader, path::PathBuf};
 
 use clap::{command, Parser};
 use geo::{BoundingRect, Geometry, GeometryCollection};
 use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
-use image::{GrayImage, ImageReader};
+use image::{GrayImage, Luma, Rgba, RgbaImage};
+use imageproc::{definitions::Image, region_labelling::{connected_components, Connectivity}};
 
 /// find regions in an area
 #[derive(Parser, Debug)]
@@ -28,16 +29,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut writer = GeoWriter::new();
     reader.process_geom(&mut writer)?;
 
-    let draw_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "draw");
 
     if let Geometry::GeometryCollection(geoms) = writer.take_geometry().unwrap() {
         println!("Found {} geometries", geoms.len());
 
-        let image = draw(&geoms)?;
-        image.save(draw_stage_png)?;
+        let draw_image = draw(&geoms)?;
+
+        let draw_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "draw");
+        draw_image.save(draw_stage_png)?;
+
+        let background_color = Luma([255u8]);
+        let labelled_image : Image<Luma<u32>> =
+            connected_components(&draw_image, Connectivity::Four, background_color);
+
+        let labelled_colored_image : RgbaImage = assign_random_colors(&labelled_image);
+
+        let labelled_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "labelled");
+        labelled_colored_image.save(labelled_stage_png)?;
     }
 
     Ok(())
+}
+
+fn assign_random_colors(labelled_image: &Image<Luma<u32>>) -> RgbaImage {
+    let unique_ids = labelled_image.pixels().map(|p| p[0]).collect::<HashSet<u32>>();
+    let mut color_map = HashMap::new();
+    for id in unique_ids {
+        let color = Rgba([rand::random(), rand::random(), rand::random(), 255]);
+        color_map.insert(id, color);
+    }
+    let image = RgbaImage::from_fn(labelled_image.width(), labelled_image.height(), |x, y| {
+        let label = labelled_image.get_pixel(x, y)[0];
+        *color_map.get(&label).unwrap()
+    });
+    image
 }
 
 fn draw(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std::error::Error>> {
@@ -68,10 +93,12 @@ fn draw(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std::error
     let transform = Transform::from_translate(offset_x, offset_y).post_scale(scale_x, scale_y);
 
     let mut black = Paint::default();
-    black.set_color_rgba8(0, 0, 0, 255);
+    black.set_color(Color::BLACK);
+    black.anti_alias = true;
 
     let mut white = Paint::default();
-    white.set_color_rgba8(255, 255, 255, 255);
+    white.set_color(Color::WHITE);
+    white.anti_alias = true;
 
     let mut stroke = Stroke::default();
     stroke.width = 0.0005 * width.min(height);
@@ -119,11 +146,16 @@ fn draw(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std::error
         }
     }
 
-    let png_bytes = pixmap.encode_png()?;
-    let mut reader = ImageReader::new(Cursor::new(png_bytes));
-    reader.set_format(image::ImageFormat::Png);
-    let decoded = reader.decode()?;
+    // apply threshold to get a binary image, where black is candidate regions and white is ignorable border
+    let image = GrayImage::from_fn(width_px, height_px, |x, y| {
+        let pixmap_color = pixmap.pixel(x, y).unwrap();
+        if pixmap_color == Color::BLACK.to_color_u8().premultiply() {
+            Luma([0u8])
+        } else {
+            Luma([255u8])
+        }
+    });
 
-    Ok(decoded.into_luma8())
+    Ok(image)
 }
 
