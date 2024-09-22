@@ -1,8 +1,8 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::{BufReader, Cursor}, path::PathBuf};
+use std::{collections::{HashMap, HashSet}, fs::File, io::{BufReader, BufWriter, Cursor}, path::PathBuf};
 
 use clap::{command, Parser};
-use geo::{BoundingRect, Geometry, GeometryCollection};
-use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
+use geo::{coord, BoundingRect, Coord, Geometry, GeometryCollection};
+use geozero::{geo_types::GeoWriter, geojson::{GeoJsonReader, GeoJsonWriter}, GeozeroDatasource, GeozeroGeometry};
 use image::{GrayImage, ImageReader, Luma, Rgba, RgbaImage};
 use imageproc::{definitions::Image, region_labelling::{connected_components, Connectivity}};
 use rand::Rng;
@@ -12,13 +12,17 @@ use regions::contours::find_contours_in_luma;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// input GeoJSON `.geojson` file
+    /// input GeoJSON `.geojson` file representing the routes
     #[arg(long)]
-    geojson: PathBuf,
+    routes: PathBuf,
 
     /// template file name for the stages; muct contain STAGE_NAME
     #[arg(long)]
     stage_template: PathBuf,
+
+    /// output GeoJSON `.geojson` file representing the regions found
+    #[arg(long)]
+    regions: PathBuf,
 }
 
 #[tokio::main]
@@ -26,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("{:?}", args);
 
-    let mut file = BufReader::new(File::open(args.geojson)?);
+    let mut file = BufReader::new(File::open(args.routes)?);
     let mut reader = GeoJsonReader(&mut file);
     let mut writer = GeoWriter::new();
     reader.process_geom(&mut writer)?;
@@ -35,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Geometry::GeometryCollection(geoms) = writer.take_geometry().unwrap() {
         println!("Found {} geometries", geoms.len());
 
-        let draw_image = draw_routes(&geoms)?;
+        let (draw_image , projection) = draw_routes(&geoms)?;
 
         let draw_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "draw");
         draw_image.save(draw_stage_png)?;
@@ -54,6 +58,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let contours_image = draw_contours(&contours, labelled_image.width(), labelled_image.height())?;
         let contours_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "contours");
         contours_image.save(contours_stage_png)?;
+
+        let contour_collection = GeometryCollection::from(contours.iter().map(|contour| {
+            let coords : Vec<Coord> = contour.iter().map(|point| {
+                let (x, y) = projection.invert(point.x as f64, point.y as f64);
+                coord!(x: x, y: y)
+            }).collect();
+            let exterior = geo::LineString::new(coords);
+            let poly = geo::Polygon::new(exterior, vec![]);
+            Geometry::Polygon(poly)
+        }).collect::<Vec<Geometry>>());
+
+        let regions_file = BufWriter::new(File::create(args.regions)?);
+        let mut regions_writer = GeoJsonWriter::new(regions_file);
+        Geometry::GeometryCollection(contour_collection).process_geom(&mut regions_writer)?;
     }
 
     Ok(())
@@ -73,7 +91,22 @@ fn assign_random_colors(labelled_image: &Image<Luma<u32>>) -> RgbaImage {
     image
 }
 
-fn draw_routes(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std::error::Error>> {
+struct InverseProjection {
+    scale_x: f64,
+    scale_y: f64,
+    offset_x: f64,
+    offset_y: f64,
+}
+
+impl InverseProjection {
+    pub fn invert(&self, x: f64, y: f64) -> (f64, f64) {
+        let x = x / self.scale_x - self.offset_x;
+        let y = y / self.scale_y - self.offset_y;
+        (x, y)
+    }
+}
+
+fn draw_routes(collection: &GeometryCollection) -> Result<(GrayImage, InverseProjection), Box<dyn std::error::Error>> {
     use tiny_skia::*;
 
     let bounds = collection.bounding_rect().unwrap();
@@ -164,7 +197,14 @@ fn draw_routes(collection: &GeometryCollection) -> Result<GrayImage, Box<dyn std
         }
     });
 
-    Ok(image)
+    let projection = InverseProjection {
+        scale_x: scale_x as f64,
+        scale_y: scale_y as f64,
+        offset_x: offset_x as f64,
+        offset_y: offset_y as f64,
+    };
+
+    Ok((image, projection))
 }
 
 fn draw_contours(contours: &Vec<Vec<regions::contours::Point<u32>>>, width_px: u32, height_px: u32) -> Result<RgbaImage, Box<dyn std::error::Error>> {
