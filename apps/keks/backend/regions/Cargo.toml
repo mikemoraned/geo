@@ -11,12 +11,12 @@ geojson = { workspace = true }
 geozero = { workspace = true }
 rand = { workspace = true }
 tiny-skia = { workspace = true }
+image = { workspace = true }
+imageproc = { workspace = true }
 
 startup = { path = "../startup" }
 cli = { path = "../cli" }
 conversion = { path = "../conversion" }
 
-image = "0.25.2"
-imageproc = "0.25.0"
 bit-set = "0.8.0"
 
