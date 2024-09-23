@@ -15,5 +15,5 @@ regions:
     cargo run --release --bin find_regions -- --routes edinburgh_routes_ped.1000.geojson --stage-template edinburgh_routes_ped.1000.STAGE_NAME.png --regions edinburgh_regions_ped.1000.geojson
 
 layout:
-    cargo run --release --bin layout -- --regions edinburgh_regions_auto.10.geojson --bin-type guillotine
-    cargo run --release --bin layout -- --regions edinburgh_regions_auto.10.geojson --bin-type max-rects
+    cargo run --release --bin layout -- --regions edinburgh_regions_auto.10.geojson --bin-type guillotine --layout edinburgh_layout_auto.10.guillotine.png
+    cargo run --release --bin layout -- --regions edinburgh_regions_auto.10.geojson --bin-type max-rects --layout edinburgh_layout_auto.10.max-rects.png

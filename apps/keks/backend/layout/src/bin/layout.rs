@@ -1,10 +1,11 @@
 use std::{fs::File, io::BufReader, path::PathBuf};
 
-use binpack2d::{bin_new, Dimension};
+use binpack2d::{bin_new, Dimension, Rectangle};
 use clap::{command, Parser};
 use conversion::projection::Projection;
 use geo::{BoundingRect, Geometry, GeometryCollection};
 use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
+use tiny_skia::Pixmap;
 
 #[derive(clap:: ValueEnum, Clone, Debug)]
 enum BinType {
@@ -34,6 +35,10 @@ struct Args {
     /// type of bin packing algorithm to use
     #[arg(long)]
     bin_type: BinType,
+
+    /// output image file representing the layout
+    #[arg(long)]
+    layout: PathBuf,
 }
 
 #[tokio::main]
@@ -52,13 +57,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (dimensions, projection) = create_dimensions(&collection);
 
         let bounds = collection.bounding_rect().unwrap();
-        let (max_x, max_y) = (
-            (bounds.width() * projection.scale_x) as i32, 
-            (bounds.height() * projection.scale_y) as i32
+        let (width, height) = (
+            (bounds.width() * projection.scale_x) as i32 * 2, 
+            (bounds.height() * projection.scale_y) as i32 * 2
         );
-        let mut bin = bin_new(args.bin_type.into(), max_x * 2, max_y * 2);
+        let mut bin = bin_new(args.bin_type.into(), width, height);
         let (inserted, rejected) = bin.insert_list(&dimensions);
         println!("Inserted: {} Rejected: {}", inserted.len(), rejected.len());
+
+        let pixmap = draw_layout(&inserted, width as u32, height as u32)?;
+        pixmap.save_png(args.layout)?;
     }
 
     Ok(())
@@ -81,4 +89,41 @@ fn create_dimensions(collection: &GeometryCollection) -> (Vec<Dimension>, Projec
         }
     }
     (dimensions, projection)
+}
+
+fn draw_layout(rects: &Vec<Rectangle>, width: u32, height: u32) -> Result<Pixmap, Box<dyn std::error::Error>> {
+    use tiny_skia::*;
+
+    let mut pixmap = Pixmap::new(width, height).ok_or("Failed to create pixmap")?;
+
+    let mut black = Paint::default();
+    black.set_color(Color::BLACK);
+    black.anti_alias = true;
+
+    let mut white = Paint::default();
+    white.set_color(Color::WHITE);
+    white.anti_alias = true;
+
+    let mut stroke = Stroke::default();
+    stroke.width = 0.005 * (width as f32).min(height as f32);
+
+    pixmap.fill_rect(
+        Rect::from_xywh(0.0, 0.0, width as f32, height as f32).ok_or("Failed to create rect")?,
+        &black,
+        Transform::identity(),
+        None
+    );
+
+    for rect in rects.iter() {
+        let mut pb = PathBuilder::new();
+        pb.move_to(rect.x() as f32, rect.y() as f32);
+        pb.line_to(rect.x() as f32 + rect.width() as f32, rect.y() as f32);
+        pb.line_to(rect.x() as f32 + rect.width() as f32, rect.y() as f32 + rect.height() as f32);
+        pb.line_to(rect.x() as f32, rect.y() as f32 + rect.height() as f32);
+        pb.close();
+        let path = pb.finish().ok_or("Failed to finish path")?;
+        pixmap.stroke_path(&path, &white, &stroke, Transform::identity(), None);
+    }
+
+    Ok(pixmap)
 }

@@ -9,6 +9,7 @@ clap = { workspace = true }
 geo = { workspace = true }
 geojson = { workspace = true }
 geozero = { workspace = true }
+tiny-skia = { workspace = true }
 
 startup = { path = "../startup" }
 cli = { path = "../cli" }
