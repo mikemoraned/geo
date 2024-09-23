@@ -1,5 +1,5 @@
 [workspace]
-members = ["api", "cli", "regions", "routing", "startup"]
+members = ["api", "cli", "conversion", "layout", "regions", "routing", "startup"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -19,3 +19,7 @@ geojson = { version = "0.24", features = ["geo-types"] }
 geozero = "0.13.0"
 
 rand = "0.8.5"
+
+tiny-skia = "0.11.4"
+image = "0.25.2"
+imageproc = "0.25.0"

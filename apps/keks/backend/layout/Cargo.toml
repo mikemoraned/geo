@@ -1,0 +1,20 @@
+[package]
+name = "layout"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+clap = { workspace = true }
+geo = { workspace = true }
+geojson = { workspace = true }
+geozero = { workspace = true }
+tiny-skia = { workspace = true }
+image = { workspace = true }
+imageproc = { workspace = true }
+
+startup = { path = "../startup" }
+cli = { path = "../cli" }
+conversion = { path = "../conversion" }
+
+binpack2d = "1.0.1"

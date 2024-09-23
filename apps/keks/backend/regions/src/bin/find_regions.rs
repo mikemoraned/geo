@@ -1,6 +1,7 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{BufReader, BufWriter, Cursor}, path::PathBuf};
 
 use clap::{command, Parser};
+use conversion::projection::Projection;
 use geo::{coord, BoundingRect, Coord, Geometry, GeometryCollection};
 use geozero::{geo_types::GeoWriter, geojson::{GeoJsonReader, GeoJsonWriter}, GeozeroDatasource, GeozeroGeometry};
 use image::{GrayImage, ImageReader, Luma, Rgba, RgbaImage};
@@ -91,38 +92,18 @@ fn assign_random_colors(labelled_image: &Image<Luma<u32>>) -> RgbaImage {
     image
 }
 
-struct InverseProjection {
-    scale_x: f64,
-    scale_y: f64,
-    offset_x: f64,
-    offset_y: f64,
-}
 
-impl InverseProjection {
-    pub fn invert(&self, x: f64, y: f64) -> (f64, f64) {
-        let x = x / self.scale_x - self.offset_x;
-        let y = y / self.scale_y - self.offset_y;
-        (x, y)
-    }
-}
-
-fn draw_routes(collection: &GeometryCollection) -> Result<(GrayImage, InverseProjection), Box<dyn std::error::Error>> {
+fn draw_routes(collection: &GeometryCollection) -> Result<(GrayImage, Projection), Box<dyn std::error::Error>> {
     use tiny_skia::*;
 
     let bounds = collection.bounding_rect().unwrap();
     println!("Bounding rect: {:?}", bounds);
+
+    let scale = 10000.0;
+    let projection = Projection::from_geo_bounding_box_to_scaled_space(bounds, scale);
+
     let width = bounds.width() as f32;
     let height = bounds.height() as f32;
-    let min_x = bounds.min().x as f32;
-    let min_y = bounds.min().y as f32;
-
-    let scale = 10000.0 as f32;
-
-    let scale_x = scale;
-    let scale_y = scale;
-
-    let offset_x = -1.0 * min_x;
-    let offset_y = -1.0 * min_y;
 
     let width_px = (width * scale).ceil() as u32;
     let height_px = (height * scale).ceil() as u32;
@@ -131,7 +112,7 @@ fn draw_routes(collection: &GeometryCollection) -> Result<(GrayImage, InversePro
     println!("Width px: {} Height px: {}", width_px, height_px);
     let mut pixmap = Pixmap::new(width_px, height_px).ok_or("Failed to create pixmap")?;
 
-    let transform = Transform::from_translate(offset_x, offset_y).post_scale(scale_x, scale_y);
+    let transform = projection.as_transform();
 
     let mut black = Paint::default();
     black.set_color(Color::BLACK);
@@ -196,13 +177,6 @@ fn draw_routes(collection: &GeometryCollection) -> Result<(GrayImage, InversePro
             Luma([255u8])
         }
     });
-
-    let projection = InverseProjection {
-        scale_x: scale_x as f64,
-        scale_y: scale_y as f64,
-        offset_x: offset_x as f64,
-        offset_y: offset_y as f64,
-    };
 
     Ok((image, projection))
 }
