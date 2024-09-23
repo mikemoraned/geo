@@ -138,11 +138,21 @@ fn draw_layout(rects: &Vec<Rectangle>, projection: &Projection, identified: &Has
         let polygon = identified.get(&id).ok_or(format!("Failed to find geometry for id {}", id))?;
         let mut pb = PathBuilder::new();
         let bounds = polygon.bounding_rect().unwrap();
+        let rect_is_landscape = rect.width() > rect.height();
+        let polygon_is_landscape = bounds.width() > bounds.height();
         polygon.exterior().points().for_each(|p| {
-            let (x, y) = (
-                (p.x() - bounds.min().x) * projection.scale_x + rect.x() as f64,
-                (p.y() - bounds.min().y) * projection.scale_y + rect.y() as f64
+            let (normalised_x, normalised_y) = (
+                (p.x() - bounds.min().x) * projection.scale_x,
+                (p.y() - bounds.min().y) * projection.scale_y
             );
+            let (x, y) = 
+                if rect_is_landscape == polygon_is_landscape {
+                    (normalised_x + rect.x() as f64, normalised_y + rect.y() as f64)
+                }
+                else {
+                    // rotate 90 degrees
+                    (normalised_y + rect.x() as f64, normalised_x + rect.y() as f64)
+                };
             if pb.is_empty() {
                 pb.move_to(x as f32, y as f32);
             } else {
