@@ -17,3 +17,5 @@ regions:
 layout:
     cargo run --release --bin layout -- --regions edinburgh_regions_auto.10.geojson --bin-type guillotine --layout edinburgh_layout_auto.10.guillotine.png
     cargo run --release --bin layout -- --regions edinburgh_regions_auto.10.geojson --bin-type max-rects --layout edinburgh_layout_auto.10.max-rects.png
+    cargo run --release --bin layout -- --regions edinburgh_regions_auto.1000.geojson --bin-type guillotine --layout edinburgh_layout_auto.1000.guillotine.png
+    cargo run --release --bin layout -- --regions edinburgh_regions_auto.1000.geojson --bin-type max-rects --layout edinburgh_layout_auto.1000.max-rects.png

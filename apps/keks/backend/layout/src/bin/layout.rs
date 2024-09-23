@@ -94,7 +94,10 @@ fn create_dimensions(collection: &GeometryCollection) -> (Vec<Dimension>, Projec
 fn draw_layout(rects: &Vec<Rectangle>, width: u32, height: u32) -> Result<Pixmap, Box<dyn std::error::Error>> {
     use tiny_skia::*;
 
-    let mut pixmap = Pixmap::new(width, height).ok_or("Failed to create pixmap")?;
+    let max_x = rects.iter().map(|rect| rect.x() + rect.width()).max().unwrap() as u32;
+    let max_y = rects.iter().map(|rect| rect.y() + rect.height()).max().unwrap() as u32;
+
+    let mut pixmap = Pixmap::new(max_x, max_y).ok_or("Failed to create pixmap")?;
 
     let mut black = Paint::default();
     black.set_color(Color::BLACK);
