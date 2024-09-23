@@ -28,11 +28,9 @@
                 * [x] create a Justfile for repeatable recreation of everything
                 * [x] find regions in image
                 * [x] convert back into geojson
-    - [ ] layout:
+    - [x] layout:
         - ideas:
-            - binpacking
-                - maybe re-use library from speculaas-biscuits
-                - or try https://lib.rs/crates/binpack2d
+            - [x] binpacking using https://lib.rs/crates/binpack2d
     - [ ] display:
         - ideas:
             - simple transition:
