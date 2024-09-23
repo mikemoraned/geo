@@ -1,8 +1,8 @@
 pub struct Projection {
-    scale_x: f64,
-    scale_y: f64,
-    offset_x: f64,
-    offset_y: f64,
+    pub scale_x: f64,
+    pub scale_y: f64,
+    pub offset_x: f64,
+    pub offset_y: f64,
 }
 
 impl Projection {
