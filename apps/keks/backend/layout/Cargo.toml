@@ -16,5 +16,6 @@ imageproc = { workspace = true }
 startup = { path = "../startup" }
 cli = { path = "../cli" }
 conversion = { path = "../conversion" }
+display = { path = "../display" }
 
 binpack2d = "1.0.1"
