@@ -22,7 +22,7 @@ struct Args {
     exclude_border: bool,
 
     /// only allow regions whos proportions of width, height, or area are less than this value
-    #[arg(long, default_value_t = 0.1)]
+    #[arg(long, default_value_t = 0.2)]
     exclude_by_proportion: f32,
 
     /// template file name for the stages; must contain STAGE_NAME
@@ -81,12 +81,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             contour_collection = exclude_border(&contour_collection);
         }
 
+        contour_collection = exclude_by_proportion(&contour_collection, args.exclude_by_proportion);
+
         let regions_file = BufWriter::new(File::create(args.regions)?);
         let mut regions_writer = GeoJsonWriter::new(regions_file);
         Geometry::GeometryCollection(contour_collection).process_geom(&mut regions_writer)?;
     }
 
     Ok(())
+}
+
+fn exclude_by_proportion(collection: &GeometryCollection, proportion: f32) -> GeometryCollection {
+    let bounds = collection.bounding_rect().unwrap();
+    let max_width = bounds.width() as f32 * proportion;
+    let max_height = bounds.height() as f32 * proportion;
+    let max_area = (bounds.width() * bounds.height()) as f32 * proportion;
+    let filtered : Vec<Geometry> = collection.clone().into_iter().filter(|geom| {
+        if let Geometry::Polygon(poly) = geom {
+            let poly_bounds = poly.bounding_rect().unwrap();
+            let width = poly_bounds.width() as f32;
+            let height = poly_bounds.height() as f32;
+            let area = width * height;
+            width < max_width && height < max_height && area < max_area
+        } else {
+            false
+        }
+    }).collect();
+    GeometryCollection::from(filtered)
 }
 
 fn exclude_border(collection: &GeometryCollection) -> GeometryCollection {

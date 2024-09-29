@@ -45,6 +45,7 @@
             - [x] jerusalem
     - [x] regions:
         - [x] exclude boundary regions i.e. bits on the borders. these make the layouts typically very unbalanced
+        - [x] exclude regions whose width, height, or area is > 20% of the respective width, height or area of whole bounding box
     - [ ] make `geo.houseofmoran.io` a minimal static site with a blog post pointing to slides
     - [ ] rename `keks` to `linzer`
 - things to fix later:
