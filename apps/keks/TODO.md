@@ -38,7 +38,7 @@
         - [x] make extraction of point sample grid a separate cli or sub-cli
         - [x] make sampling repeatable e.g. by taking an explicit seed
         - [x] make bounds of area cli args
-        - [ ] run for some sample cities
+        - [x] run for some sample cities
             - [x] edinburgh
             - [x] paris
             - [x] new york
