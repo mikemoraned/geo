@@ -3,21 +3,13 @@ samples:
     cargo run --release --bin sample -- --starts edinburgh_sample.100.starts.geojson --ends edinburgh_sample.100.ends.geojson --paths 100 --seed 1
     cargo run --release --bin sample -- --starts edinburgh_sample.1000.starts.geojson --ends edinburgh_sample.1000.ends.geojson --paths 1000 --seed 1
 
-routes2:
+routes:
     cargo run --release --bin routes2 -- --starts edinburgh_sample.10.starts.geojson --ends edinburgh_sample.10.ends.geojson --geojson edinburgh_routes_auto.10.geojson --profile auto
     cargo run --release --bin routes2 -- --starts edinburgh_sample.10.starts.geojson --ends edinburgh_sample.10.ends.geojson --geojson edinburgh_routes_ped.10.geojson --profile pedestrian
     cargo run --release --bin routes2 -- --starts edinburgh_sample.100.starts.geojson --ends edinburgh_sample.100.ends.geojson --geojson edinburgh_routes_auto.100.geojson --profile auto
     cargo run --release --bin routes2 -- --starts edinburgh_sample.100.starts.geojson --ends edinburgh_sample.100.ends.geojson --geojson edinburgh_routes_ped.100.geojson --profile pedestrian
     cargo run --release --bin routes2 -- --starts edinburgh_sample.1000.starts.geojson --ends edinburgh_sample.1000.ends.geojson --geojson edinburgh_routes_auto.1000.geojson --profile auto
     cargo run --release --bin routes2 -- --starts edinburgh_sample.1000.starts.geojson --ends edinburgh_sample.1000.ends.geojson --geojson edinburgh_routes_ped.1000.geojson --profile pedestrian
-
-routes:
-    cargo run --release --bin routes -- --geojson edinburgh_routes_auto.10.geojson --profile auto --paths 10
-    cargo run --release --bin routes -- --geojson edinburgh_routes_auto.100.geojson --profile auto --paths 100
-    cargo run --release --bin routes -- --geojson edinburgh_routes_auto.1000.geojson --profile auto --paths 1000
-    cargo run --release --bin routes -- --geojson edinburgh_routes_ped.10.geojson --profile pedestrian --paths 10
-    cargo run --release --bin routes -- --geojson edinburgh_routes_ped.100.geojson --profile pedestrian --paths 100
-    cargo run --release --bin routes -- --geojson edinburgh_routes_ped.1000.geojson --profile pedestrian --paths 1000
 
 regions:
     cargo run --release --bin find_regions -- --routes edinburgh_routes_auto.10.geojson --stage-template edinburgh_routes_auto.10.STAGE_NAME.png --regions edinburgh_regions_auto.10.geojson
@@ -37,3 +29,5 @@ layout:
     cargo run --release --bin layout -- --regions edinburgh_regions_ped.10.geojson --bin-type max-rects --layout edinburgh_layout_ped.10.max-rects.png
     cargo run --release --bin layout -- --regions edinburgh_regions_ped.1000.geojson --bin-type guillotine --layout edinburgh_layout_ped.1000.guillotine.png
     cargo run --release --bin layout -- --regions edinburgh_regions_ped.1000.geojson --bin-type max-rects --layout edinburgh_layout_ped.1000.max-rects.png
+
+all: samples routes regions layout
