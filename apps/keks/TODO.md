@@ -36,7 +36,7 @@
 - things to add ahead of geomob presentation:
     - [ ] extend to cover a subset of the cities in the original http://www.armellecaron.fr/works/les-villes-rangees/
         - [x] make extraction of point sample grid a separate cli or sub-cli
-        - [ ] make sampling repeatable e.g. by taking an explicit seed
+        - [x] make sampling repeatable e.g. by taking an explicit seed
         - [ ] make bounds of area cli args
         - [ ] run for some sample cities
     - [ ] flip images i.e. so `y` is up and not down

@@ -15,7 +15,7 @@ struct Args {
     paths: usize,
 
     /// seed for random number generator
-    #[arg(long, default_value = "1")]
+    #[arg(long)]
     seed: u64,
 
     /// output GeoJSON `.geojson` file for starting points
