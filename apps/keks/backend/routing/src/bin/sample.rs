@@ -4,6 +4,7 @@ use clap::{command, Parser};
 use fast_poisson::Poisson2D;
 use geo::{coord, GeometryCollection, Point, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
+use rand::{RngCore, SeedableRng};
 
 /// Create sample points in area
 #[derive(Parser, Debug)]
@@ -12,6 +13,10 @@ struct Args {
     /// number of points to generate
     #[arg(long)]
     paths: usize,
+
+    /// seed for random number generator
+    #[arg(long, default_value = "1")]
+    seed: u64,
 
     /// output GeoJSON `.geojson` file for starting points
     #[arg(long)]
@@ -31,8 +36,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dalkeith = coord! { x: -3.066667, y: 55.866667 };
     let bounds = Rect::new(queensferry, dalkeith);
 
-    let starts = random_points(&bounds, args.paths)?;
-    let ends = random_points(&bounds, args.paths)?;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(args.seed);
+
+    let starts = random_points(&bounds, args.paths, rng.next_u64())?;
+    let ends = random_points(&bounds, args.paths, rng.next_u64())?;
 
     save(&starts, &args.starts)?;
     save(&ends, &args.ends)?;
@@ -50,12 +57,13 @@ fn save(geo: &Vec<geo::geometry::Geometry>, path: &PathBuf) -> Result<(), Box<dy
     Ok(())
 }
 
-fn random_points(bounds: &Rect, n: usize) -> Result<Vec<geo::geometry::Geometry>, Box<dyn std::error::Error>> {
+fn random_points(bounds: &Rect, n: usize, seed: u64) -> Result<Vec<geo::geometry::Geometry>, Box<dyn std::error::Error>> {
     let min = bounds.min();
     let width = bounds.width();
     let height = bounds.height();
     let radius = (width * height / (n as f64)).sqrt() / 1.5;
     let points : Vec<_> = Poisson2D::new()
+        .with_seed(seed)
         .with_dimensions([width, height], radius)
         .iter().take(n).collect();
 
