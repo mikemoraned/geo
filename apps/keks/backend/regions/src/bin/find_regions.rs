@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, fs::File, io::{BufReader, BufWriter, 
 
 use clap::{command, Parser};
 use conversion::projection::Projection;
-use geo::{coord, BoundingRect, Coord, Geometry, GeometryCollection, Within};
+use geo::{coord, Area, BoundingRect, Coord, Geometry, GeometryCollection, Within};
 use geozero::{geo_types::GeoWriter, geojson::{GeoJsonReader, GeoJsonWriter}, GeozeroDatasource, GeozeroGeometry};
 use image::{GrayImage, ImageReader, Luma, Rgba, RgbaImage};
 use imageproc::{definitions::Image, region_labelling::{connected_components, Connectivity}};
@@ -22,7 +22,7 @@ struct Args {
     exclude_border: bool,
 
     /// only allow regions whos proportions of width, height, or area are less than this value
-    #[arg(long, default_value_t = 0.2)]
+    #[arg(long, default_value_t = 0.25)]
     exclude_by_proportion: f32,
 
     /// template file name for the stages; must contain STAGE_NAME
@@ -95,13 +95,13 @@ fn exclude_by_proportion(collection: &GeometryCollection, proportion: f32) -> Ge
     let bounds = collection.bounding_rect().unwrap();
     let max_width = bounds.width() as f32 * proportion;
     let max_height = bounds.height() as f32 * proportion;
-    let max_area = (bounds.width() * bounds.height()) as f32 * proportion;
+    let max_area = (collection.signed_area()) as f32 * proportion;
     let filtered : Vec<Geometry> = collection.clone().into_iter().filter(|geom| {
         if let Geometry::Polygon(poly) = geom {
             let poly_bounds = poly.bounding_rect().unwrap();
             let width = poly_bounds.width() as f32;
             let height = poly_bounds.height() as f32;
-            let area = width * height;
+            let area = poly.signed_area() as f32;
             width < max_width && height < max_height && area < max_area
         } else {
             false
