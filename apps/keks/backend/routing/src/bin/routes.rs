@@ -1,10 +1,9 @@
-use std::{fs::File, io::BufWriter, path::PathBuf};
+use std::{fs::File, io::{BufReader, BufWriter}, path::PathBuf};
 
 use clap::{command, Parser};
 use cli::progress::progress_bar;
-use fast_poisson::Poisson2D;
-use geo::{coord, Coord, GeometryCollection, Point, Rect};
-use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
+use geo::{BoundingRect, Coord, Geometry, GeometryCollection, LineString, Point, Rect};
+use geozero::{geo_types::GeoWriter, geojson::{GeoJsonReader, GeoJsonWriter}, GeozeroDatasource, GeozeroGeometry};
 use routing::stadia::{Profile, Server, StandardRouting};
 use startup::env::load_secret;
 
@@ -16,18 +15,22 @@ struct Args {
     #[arg(long, default_value_t = Server::default())]
     server: Server,
 
+    /// how many times it should retry a routing request before giving up
+    #[arg(long, default_value = "10")]
+    max_retries: u32,
+
     /// profile
     #[arg(long)]
     profile: Profile,
 
-    /// number of paths to generate
+    /// GeoJSON `.geojson` file for starting points
     #[arg(long)]
-    paths: usize,
+    starts: PathBuf,
 
-    /// whether to save the points used as start and end
-    #[arg(long, default_value_t = false)]
-    save_points: bool,
-
+    /// GeoJSON `.geojson` file for ending points
+    #[arg(long)]
+    ends: PathBuf,
+    
     /// whether to save the bounds of the area
     #[arg(long, default_value_t = true)]
     save_bounds: bool,
@@ -50,24 +53,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut geo = vec![];
     
-    let queensferry = coord! { x: -3.409195, y: 55.992622 };
-    let dalkeith = coord! { x: -3.066667, y: 55.866667 };
-    let bounds = Rect::new(queensferry, dalkeith);
+    let starts = read_points(&args.starts)?;
+    let ends = read_points(&args.ends)?;
+    if starts.len() != ends.len() {
+        return Err(
+            format!("number of starting points must match number of ending points, {} != {}",
+                    starts.len(), ends.len()).into());
+    }
+    if starts.is_empty() {
+        return Err("no starting points found".into());
+    }
+
+    let bounds = bounds(&starts, &ends)?;
     if args.save_bounds {
         geo.push(geo::geometry::Geometry::Rect(bounds));
     }
 
-    let progress = progress_bar(args.paths as u64);
-    let starts = random_coords(&bounds, args.paths);
-    let ends = random_coords(&bounds, args.paths);
-    let paired : Vec<(Coord, Coord)> = starts.clone().into_iter().zip(ends.clone().into_iter()).collect();
-    for (start, end) in paired {
-        if args.save_points {
-            geo.push(geo::geometry::Geometry::Point(Point::from(start.clone())));
-            geo.push(geo::geometry::Geometry::Point(Point::from(end.clone())));
-        }
+    let paired : Vec<(Point, Point)> = starts.clone().into_iter().zip(ends.clone().into_iter()).collect();
+    let progress = progress_bar(paired.len() as u64);
 
-        let route = routing.find_route(&start, &end, &args.profile).await?;
+    for (Point(start), Point(end)) in paired {
+        let route = find_route(&routing, &start, &end, &args.profile, args.max_retries).await?;
         geo.push(geo::geometry::Geometry::LineString(route));
 
         progress.inc(1);
@@ -81,20 +87,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn random_coords(bounds: &Rect, n: usize) -> Vec<Coord> {
-    let min = bounds.min();
-    let width = bounds.width();
-    let height = bounds.height();
-    let radius = (width * height / n as f64).sqrt();
-    let points : Vec<_> = Poisson2D::new()
-        .with_dimensions([width, height], radius)
-        .iter().take(n).collect();
+async fn find_route(
+    routing: &StandardRouting,
+    start: &Coord,
+    end: &Coord,
+    profile: &Profile,
+    max_retries: u32
+) -> Result<LineString, Box<dyn std::error::Error>> {
+    let mut retries_remaining = max_retries;
+    while retries_remaining > 0 {
+        retries_remaining -= 1;
+        match routing.find_route(&start, &end, &profile).await {
+            Ok(route) => return Ok(route),
+            Err(e) => {
+                println!("Error whilst getting route: {:?}", e);
+            }
+        }
+    }
+    return Err(format!("Failed to find route after {} retries", max_retries).into());
+}
 
-    points
-        .iter()
-        .map(|[x_offset, y_offset]| coord! {
-            x: x_offset + min.x,
-            y: y_offset + min.y,
-        })
-        .collect()
+fn bounds(starts: &Vec<geo::Point>, ends: &Vec<geo::Point>) -> Result<Rect, Box<dyn std::error::Error>> {
+    let points : Vec<_> = starts.iter().chain(ends.iter()).map(|p| Geometry::Point(p.clone())).collect();
+    let combined = GeometryCollection::new_from(points.clone());
+    combined.bounding_rect().ok_or("failed to calculate bounds".into())
+}
+
+fn read_points(path: &PathBuf) -> Result<Vec<geo::Point>, Box<dyn std::error::Error>> {
+    let mut file = BufReader::new(File::open(path)?);
+    let mut reader = GeoJsonReader(&mut file);
+    let mut writer = GeoWriter::new();
+    reader.process_geom(&mut writer)?;
+
+    let geometry = writer.take_geometry().ok_or(format!("failed read points from {:?}", path))?;
+
+    if let Geometry::GeometryCollection(collection) = geometry {
+        let mut points = vec![];
+        for geometry in collection.iter() {
+            if let Geometry::Point(point) = geometry {
+                points.push(point.clone());
+            }
+        }
+        Ok(points)
+    } else {
+        Ok(vec![])
+    }
 }
