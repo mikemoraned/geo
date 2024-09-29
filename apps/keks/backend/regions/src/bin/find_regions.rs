@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, fs::File, io::{BufReader, BufWriter, 
 
 use clap::{command, Parser};
 use conversion::projection::Projection;
-use geo::{coord, BoundingRect, Coord, Geometry, GeometryCollection};
+use geo::{coord, BoundingRect, Coord, Geometry, GeometryCollection, Within};
 use geozero::{geo_types::GeoWriter, geojson::{GeoJsonReader, GeoJsonWriter}, GeozeroDatasource, GeozeroGeometry};
 use image::{GrayImage, ImageReader, Luma, Rgba, RgbaImage};
 use imageproc::{definitions::Image, region_labelling::{connected_components, Connectivity}};
@@ -17,7 +17,11 @@ struct Args {
     #[arg(long)]
     routes: PathBuf,
 
-    /// template file name for the stages; muct contain STAGE_NAME
+    /// whether to exclude regions that are on the border
+    #[arg(long, default_value_t = true)]
+    exclude_border: bool,
+
+    /// template file name for the stages; must contain STAGE_NAME
     #[arg(long)]
     stage_template: PathBuf,
 
@@ -35,7 +39,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = GeoJsonReader(&mut file);
     let mut writer = GeoWriter::new();
     reader.process_geom(&mut writer)?;
-
 
     if let Geometry::GeometryCollection(geoms) = writer.take_geometry().unwrap() {
         println!("Found {} geometries", geoms.len());
@@ -60,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let contours_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "contours");
         contours_image.save(contours_stage_png)?;
 
-        let contour_collection = GeometryCollection::from(contours.iter().map(|contour| {
+        let mut contour_collection = GeometryCollection::from(contours.iter().map(|contour| {
             let coords : Vec<Coord> = contour.iter().map(|point| {
                 let (x, y) = projection.invert(point.x as f64, point.y as f64);
                 coord!(x: x, y: y)
@@ -69,6 +72,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let poly = geo::Polygon::new(exterior, vec![]);
             Geometry::Polygon(poly)
         }).collect::<Vec<Geometry>>());
+
+        if args.exclude_border {
+            let current_bounds = contour_collection.bounding_rect().unwrap();
+
+            // exclude regions that sit on the border by only including those that are fully contained within a slightly smaller bounding box
+            let shrink_factor = 0.01;
+            let shrink_amount_x = shrink_factor * current_bounds.width();
+            let shrink_amount_y = shrink_factor * current_bounds.height();
+            let min = coord!(x: current_bounds.min().x + shrink_amount_x, y: current_bounds.min().y + shrink_amount_y);
+            let max = coord!(x: current_bounds.max().x - shrink_amount_x, y: current_bounds.max().y - shrink_amount_y);
+            let smaller_bounds = geo::Rect::new(min, max);
+            let filtered : Vec<Geometry> = contour_collection.into_iter().filter(|geom| {
+                if let Geometry::Polygon(poly) = geom {
+                    let bounds = poly.bounding_rect().unwrap();
+                    bounds.is_within(&smaller_bounds)
+                } else {
+                    false
+                }
+            }).collect();
+            contour_collection = GeometryCollection::from(filtered);
+        }
 
         let regions_file = BufWriter::new(File::create(args.regions)?);
         let mut regions_writer = GeoJsonWriter::new(regions_file);
