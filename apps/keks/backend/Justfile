@@ -1,7 +1,7 @@
 samples:
-    cargo run --release --bin sample -- --starts data/edinburgh/edinburgh_sample.10.starts.geojson --ends data/edinburgh/edinburgh_sample.10.ends.geojson --paths 10 --seed 1
-    cargo run --release --bin sample -- --starts data/edinburgh/edinburgh_sample.100.starts.geojson --ends data/edinburgh/edinburgh_sample.100.ends.geojson --paths 100 --seed 1
-    cargo run --release --bin sample -- --starts data/edinburgh/edinburgh_sample.1000.starts.geojson --ends data/edinburgh/edinburgh_sample.1000.ends.geojson --paths 1000 --seed 1
+    cargo run --release --bin sample -- --area data/edinburgh/area.toml --starts data/edinburgh/edinburgh_sample.10.starts.geojson --ends data/edinburgh/edinburgh_sample.10.ends.geojson --paths 10 --seed 1
+    cargo run --release --bin sample -- --area data/edinburgh/area.toml --starts data/edinburgh/edinburgh_sample.100.starts.geojson --ends data/edinburgh/edinburgh_sample.100.ends.geojson --paths 100 --seed 1
+    cargo run --release --bin sample -- --area data/edinburgh/area.toml --starts data/edinburgh/edinburgh_sample.1000.starts.geojson --ends data/edinburgh/edinburgh_sample.1000.ends.geojson --paths 1000 --seed 1
 
 routes:
     cargo run --release --bin routes -- --starts data/edinburgh/edinburgh_sample.10.starts.geojson --ends data/edinburgh/edinburgh_sample.10.ends.geojson --geojson data/edinburgh/edinburgh_routes_auto.10.geojson --profile auto

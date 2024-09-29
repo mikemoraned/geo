@@ -2,14 +2,19 @@ use std::{fs::File, io::BufWriter, path::PathBuf};
 
 use clap::{command, Parser};
 use fast_poisson::Poisson2D;
-use geo::{coord, GeometryCollection, Point, Rect};
+use geo::{coord, Coord, GeometryCollection, Point, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use rand::{RngCore, SeedableRng};
+use serde::Deserialize;
 
 /// Create sample points in area
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    /// config file defining the area
+    #[arg(long)]
+    area: PathBuf,
+
     /// number of points to generate
     #[arg(long)]
     paths: usize,
@@ -27,14 +32,28 @@ struct Args {
     ends: PathBuf,
 }
 
+#[derive(Deserialize, Debug)]
+struct Config {
+   bounds: Bounds
+}
+
+#[derive(Deserialize, Debug)]
+struct Bounds {
+    point1: Coord,
+    point2: Coord,
+    name: String
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("{:?}", args);
+
+    let config_str = std::fs::read_to_string(&args.area)?;
+    let config : Config = toml::from_str(&config_str)?;
+    println!("Name: {}", config.bounds.name);
     
-    let queensferry = coord! { x: -3.409195, y: 55.992622 };
-    let dalkeith = coord! { x: -3.066667, y: 55.866667 };
-    let bounds = Rect::new(queensferry, dalkeith);
+    let bounds = Rect::new(config.bounds.point1, config.bounds.point2); 
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(args.seed);
 

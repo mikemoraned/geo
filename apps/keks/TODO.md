@@ -37,7 +37,7 @@
     - [ ] extend to cover a subset of the cities in the original http://www.armellecaron.fr/works/les-villes-rangees/
         - [x] make extraction of point sample grid a separate cli or sub-cli
         - [x] make sampling repeatable e.g. by taking an explicit seed
-        - [ ] make bounds of area cli args
+        - [x] make bounds of area cli args
         - [ ] run for some sample cities
     - [x] regions:
         - [x] exclude boundary regions i.e. bits on the borders. these make the layouts typically very unbalanced
