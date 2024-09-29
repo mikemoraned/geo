@@ -1,24 +1,23 @@
-samples:
-    cargo run --release --bin sample -- --area data/edinburgh/area.toml --starts data/edinburgh/sample.100.starts.geojson --ends data/edinburgh/sample.100.ends.geojson --paths 100 --seed 1
-    cargo run --release --bin sample -- --area data/edinburgh/area.toml --starts data/edinburgh/sample.1000.starts.geojson --ends data/edinburgh/sample.1000.ends.geojson --paths 1000 --seed 1
+samples area:
+    cargo run --release --bin sample -- --area data/{{area}}/area.toml --starts data/{{area}}/sample.100.starts.geojson --ends data/{{area}}/sample.100.ends.geojson --paths 100 --seed 1
+    cargo run --release --bin sample -- --area data/{{area}}/area.toml --starts data/{{area}}/sample.1000.starts.geojson --ends data/{{area}}/sample.1000.ends.geojson --paths 1000 --seed 1
 
-routes:
-    cargo run --release --bin routes -- --starts data/edinburgh/sample.100.starts.geojson --ends data/edinburgh/sample.100.ends.geojson --geojson data/edinburgh/routes_auto.100.geojson --profile auto
-    cargo run --release --bin routes -- --starts data/edinburgh/sample.100.starts.geojson --ends data/edinburgh/sample.100.ends.geojson --geojson data/edinburgh/routes_ped.100.geojson --profile pedestrian
-    cargo run --release --bin routes -- --starts data/edinburgh/sample.1000.starts.geojson --ends data/edinburgh/sample.1000.ends.geojson --geojson data/edinburgh/routes_auto.1000.geojson --profile auto
-    cargo run --release --bin routes -- --starts data/edinburgh/sample.1000.starts.geojson --ends data/edinburgh/sample.1000.ends.geojson --geojson data/edinburgh/routes_ped.1000.geojson --profile pedestrian
+routes area:
+    cargo run --release --bin routes -- --starts data/{{area}}/sample.100.starts.geojson --ends data/{{area}}/sample.100.ends.geojson --geojson data/{{area}}/routes_auto.100.geojson --profile auto
+    cargo run --release --bin routes -- --starts data/{{area}}/sample.100.starts.geojson --ends data/{{area}}/sample.100.ends.geojson --geojson data/{{area}}/routes_ped.100.geojson --profile pedestrian
+    cargo run --release --bin routes -- --starts data/{{area}}/sample.1000.starts.geojson --ends data/{{area}}/sample.1000.ends.geojson --geojson data/{{area}}/routes_auto.1000.geojson --profile auto
+    cargo run --release --bin routes -- --starts data/{{area}}/sample.1000.starts.geojson --ends data/{{area}}/sample.1000.ends.geojson --geojson data/{{area}}/routes_ped.1000.geojson --profile pedestrian
 
-regions:
-    cargo run --release --bin find_regions -- --routes data/edinburgh/routes_auto.100.geojson --stage-template data/edinburgh/routes_auto.100.STAGE_NAME.png --regions data/edinburgh/regions_auto.100.geojson
-    cargo run --release --bin find_regions -- --routes data/edinburgh/routes_auto.1000.geojson --stage-template data/edinburgh/routes_auto.1000.STAGE_NAME.png --regions data/edinburgh/regions_auto.1000.geojson
-    cargo run --release --bin find_regions -- --routes data/edinburgh/routes_ped.100.geojson --stage-template data/edinburgh/routes_ped.100.STAGE_NAME.png --regions data/edinburgh/regions_ped.100.geojson
-    cargo run --release --bin find_regions -- --routes data/edinburgh/routes_ped.1000.geojson --stage-template data/edinburgh/routes_ped.1000.STAGE_NAME.png --regions data/edinburgh/regions_ped.1000.geojson
+regions area:
+    cargo run --release --bin find_regions -- --routes data/{{area}}/routes_auto.100.geojson --stage-template data/{{area}}/routes_auto.100.STAGE_NAME.png --regions data/{{area}}/regions_auto.100.geojson
+    cargo run --release --bin find_regions -- --routes data/{{area}}/routes_auto.1000.geojson --stage-template data/{{area}}/routes_auto.1000.STAGE_NAME.png --regions data/{{area}}/regions_auto.1000.geojson
+    cargo run --release --bin find_regions -- --routes data/{{area}}/routes_ped.100.geojson --stage-template data/{{area}}/routes_ped.100.STAGE_NAME.png --regions data/{{area}}/regions_ped.100.geojson
+    cargo run --release --bin find_regions -- --routes data/{{area}}/routes_ped.1000.geojson --stage-template data/{{area}}/routes_ped.1000.STAGE_NAME.png --regions data/{{area}}/regions_ped.1000.geojson
 
-layout:
-    cargo run --release --bin layout -- --regions data/edinburgh/regions_auto.1000.geojson --bin-type guillotine --layout data/edinburgh/layout_auto.1000.guillotine.png
-    cargo run --release --bin layout -- --regions data/edinburgh/regions_auto.1000.geojson --bin-type max-rects --layout data/edinburgh/layout_auto.1000.max-rects.png
+layout area:
+    cargo run --release --bin layout -- --regions data/{{area}}/regions_auto.1000.geojson --bin-type guillotine --layout data/{{area}}/layout_auto.1000.guillotine.png
+    cargo run --release --bin layout -- --regions data/{{area}}/regions_auto.1000.geojson --bin-type max-rects --layout data/{{area}}/layout_auto.1000.max-rects.png
 
-    cargo run --release --bin layout -- --regions data/edinburgh/regions_ped.1000.geojson --bin-type guillotine --layout data/edinburgh/layout_ped.1000.guillotine.png
-    cargo run --release --bin layout -- --regions data/edinburgh/regions_ped.1000.geojson --bin-type max-rects --layout data/edinburgh/layout_ped.1000.max-rects.png
+    cargo run --release --bin layout -- --regions data/{{area}}/regions_ped.1000.geojson --bin-type guillotine --layout data/{{area}}/layout_ped.1000.guillotine.png
+    cargo run --release --bin layout -- --regions data/{{area}}/regions_ped.1000.geojson --bin-type max-rects --layout data/{{area}}/layout_ped.1000.max-rects.png
 
-all: samples routes regions layout
