@@ -41,8 +41,6 @@
         - [ ] run for some sample cities
     - [x] regions:
         - [x] exclude boundary regions i.e. bits on the borders. these make the layouts typically very unbalanced
-    - [ ] layout:
-        - [ ] flip images i.e. so `y` is up and not down
     - [ ] make `geo.houseofmoran.io` a minimal static site with a blog post pointing to slides
     - [ ] rename `keks` to `linzer`
 - things to fix later:
