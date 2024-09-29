@@ -19,3 +19,4 @@ conversion = { path = "../conversion" }
 display = { path = "../display" }
 
 binpack2d = "1.0.1"
+nalgebra = "0.33.0"

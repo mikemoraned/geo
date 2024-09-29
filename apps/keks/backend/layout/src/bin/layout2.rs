@@ -7,6 +7,8 @@ use display::PixmapLayout;
 use geo::{BoundingRect, Geometry, GeometryCollection, Polygon};
 use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
 use image::{ImageReader, RgbaImage};
+use layout::{Region, Regions};
+use nalgebra::Point2;
 
 #[derive(clap:: ValueEnum, Clone, Debug)]
 enum BinType {
@@ -55,56 +57,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Geometry::GeometryCollection(collection) = writer.take_geometry().unwrap() {
         println!("Found {} geometries", collection.len());
 
-        let (dimensions, projection, identified) = create_dimensions(&collection);
-
-        let bounds = collection.bounding_rect().unwrap();
-        let (width, height) = (
-            (bounds.width() * projection.scale_x) as i32 * 2, 
-            (bounds.height() * projection.scale_y) as i32 * 2
-        );
-        let mut bin = bin_new(args.bin_type.into(), width, height);
-        let (inserted, rejected) = bin.insert_list(&dimensions);
-        println!("Inserted: {} Rejected: {}", inserted.len(), rejected.len());
-
-        let image = draw_layout(&inserted, &projection, &identified)?;
-        image.save(args.layout)?;
+        let regions = create_regions(&collection);
+        let dimensions = create_dimensions(&regions);
     }
 
     Ok(())
 }
 
-fn create_dimensions(collection: &GeometryCollection) -> (Vec<Dimension>, Projection, HashMap<isize, &Polygon>) {
-    let scale = 10000.0;
-    let projection = Projection::from_geo_bounding_box_to_scaled_space(collection.bounding_rect().unwrap(), scale);
-    let mut identified = HashMap::new();
-
+fn create_dimensions(regions: &Regions<f32>) -> Vec<Dimension> {
     let mut dimensions = vec![];
-    for (index, geometry) in collection.iter().enumerate() {
-        if let Geometry::Polygon(polygon) = geometry {
-            let bounds = polygon.bounding_rect().unwrap();
-            let id = index as isize;
-            let dimension = Dimension::with_id(
-                id, 
-                (bounds.width() * projection.scale_x) as i32, 
-                (bounds.height() * projection.scale_y) as i32, 
-                0);
-            dimensions.push(dimension);
-            identified.insert(id, polygon);
-        }
+    for (id,region) in regions.iter() {
+        // dimensions.push(Dimension::with_id(*id as isize, region.width(), region.height(), 0))
     }
-    (dimensions, projection, identified)
+    dimensions
 }
 
-fn draw_layout(rects: &Vec<Rectangle>, projection: &Projection, identified: &HashMap<isize, &Polygon>) -> Result<RgbaImage, Box<dyn std::error::Error>> {
-    let max_x = rects.iter().map(|rect| rect.x() + rect.width()).max().unwrap();
-    let max_y = rects.iter().map(|rect| rect.y() + rect.height()).max().unwrap();
+fn create_regions(collection: &GeometryCollection) -> Regions<f32> {
+    let scale = 10000.0;
+    let projection = Projection::from_geo_bounding_box_to_scaled_space(collection.bounding_rect().unwrap(), scale);
+    let mut regions = HashMap::new();
 
-    let pixmap_builder = PixmapLayout::new(max_x as u32, max_y as u32)?;
+    for (index, geometry) in collection.iter().enumerate() {
+        if let Geometry::Polygon(polygon) = geometry {
+            let mut points = vec![];
+            let bounds = polygon.bounding_rect().unwrap();
+            polygon.exterior().points().for_each(|p| {
+                let (normalised_x, normalised_y) = (
+                    (p.x() - bounds.min().x) * projection.scale_x,
+                    (p.y() - bounds.min().y) * projection.scale_y
+                );
+                points.push(Point2::new(normalised_x as f32, normalised_y as f32));
+            });
+            regions.insert(index, Region::new(points));
+        }
+    }
 
-    let png_bytes = pixmap_builder.encode_png()?;
-    let mut reader = ImageReader::new(Cursor::new(png_bytes));
-    reader.set_format(image::ImageFormat::Png);
-    let decoded = reader.decode()?;
-
-    Ok(decoded.into_rgba8())
+    Regions::new(regions)
 }
