@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::collections::{hash_map::Iter, HashMap};
 
 use nalgebra::{Point2, Scalar, Vector2};

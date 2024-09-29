@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use tiny_skia::*;
 
 trait RegionStage {
