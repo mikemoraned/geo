@@ -35,13 +35,15 @@
 
 - things to add ahead of geomob presentation:
     - [ ] extend to cover a subset of the cities in the original http://www.armellecaron.fr/works/les-villes-rangees/
-        - [ ] make extraction of point sample grid a separate cli or sub-cli
+        - [x] make extraction of point sample grid a separate cli or sub-cli
         - [ ] make sampling repeatable e.g. by taking an explicit seed
         - [ ] make bounds of area cli args
         - [ ] run for some sample cities
     - [ ] flip images i.e. so `y` is up and not down
     - [ ] make `geo.houseofmoran.io` a minimal static site with a blog post pointing to slides
     - [ ] rename `keks` to `linzer`
+- things to fix later:
+    - [ ] the random points created by a sample, using `Poisson2D`, are not always uniformly distributed across the rectangle (at least in the way I am using the library)
 
 - ideas:
     - turn the speed at which a route is travelled into a boundary property of the resulting shape e.g. if a route is travelled at a fast speed then shorten the length proportionally. this perhaps could be represented as the "springiness" of a bunch of line-segments. intent is to somehow represent the more transient nature of the experience of the area as a shortening or tension in the shape.

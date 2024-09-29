@@ -1,6 +1,7 @@
 use std::time::SystemTime;
 
-use ferrostar::{models::{GeographicCoordinate, UserLocation, Waypoint, WaypointKind}, routing_adapters::{osrm::OsrmResponseParser, valhalla::ValhallaHttpRequestGenerator, RouteRequest, RouteRequestGenerator, RouteResponseParser}};
+use bytes::Bytes;
+use ferrostar::{models::{GeographicCoordinate, Route, UserLocation, Waypoint, WaypointKind}, routing_adapters::{osrm::OsrmResponseParser, valhalla::ValhallaHttpRequestGenerator, RouteRequest, RouteRequestGenerator, RouteResponseParser}};
 use geo::{coord, Coord, LineString};
 use reqwest::header::HeaderMap;
 use url::Url;
@@ -113,11 +114,12 @@ impl StandardRouting {
             .body(body)
             .headers(HeaderMap::try_from(&headers)?)
             .send()
-            .await?;
+            .await
+            .map_err(|e| format!("Error whilst getting Response: {:?}", e))?;
 
-        let content = response.bytes().await?;
-        let polyline_precision = 6;
-        let routes = OsrmResponseParser::new(polyline_precision).parse_response(content.to_vec())?;
+        let content = response.bytes().await
+            .map_err(|e| format!("Error whilst getting bytes: {:?}", e))?;
+        let routes = parse_route(content)?;
 
         let route = routes.first().unwrap();
         let route_line = LineString::new(
@@ -129,5 +131,14 @@ impl StandardRouting {
         );
 
         Ok(route_line)
+    }
+}
+
+fn parse_route(content: Bytes) -> Result<Vec<Route>, Box<dyn std::error::Error>> {
+    let polyline_precision = 6;
+    let as_vec = content.to_vec();
+    match OsrmResponseParser::new(polyline_precision).parse_response(as_vec.clone()) {
+        Ok(routes) => Ok(routes),
+        Err(e) => Err(format!("Error whilst parsing response: {:?}", e).into()),
     }
 }

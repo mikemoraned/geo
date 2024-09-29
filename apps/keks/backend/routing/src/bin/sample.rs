@@ -31,8 +31,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dalkeith = coord! { x: -3.066667, y: 55.866667 };
     let bounds = Rect::new(queensferry, dalkeith);
 
-    let starts = random_points(&bounds, args.paths);
-    let ends = random_points(&bounds, args.paths);
+    let starts = random_points(&bounds, args.paths)?;
+    let ends = random_points(&bounds, args.paths)?;
 
     save(&starts, &args.starts)?;
     save(&ends, &args.ends)?;
@@ -50,16 +50,20 @@ fn save(geo: &Vec<geo::geometry::Geometry>, path: &PathBuf) -> Result<(), Box<dy
     Ok(())
 }
 
-fn random_points(bounds: &Rect, n: usize) -> Vec<geo::geometry::Geometry> {
+fn random_points(bounds: &Rect, n: usize) -> Result<Vec<geo::geometry::Geometry>, Box<dyn std::error::Error>> {
     let min = bounds.min();
     let width = bounds.width();
     let height = bounds.height();
-    let radius = (width * height / n as f64).sqrt();
+    let radius = (width * height / (n as f64)).sqrt() / 1.5;
     let points : Vec<_> = Poisson2D::new()
         .with_dimensions([width, height], radius)
         .iter().take(n).collect();
 
-    points
+    if points.len() != n {
+        return Err(format!("expected {} points, got {}", n, points.len()).into());
+    }
+
+    Ok(points
         .iter()
         .map(|[x_offset, y_offset]| { 
             let coord = coord! {
@@ -68,5 +72,5 @@ fn random_points(bounds: &Rect, n: usize) -> Vec<geo::geometry::Geometry> {
             };
             geo::geometry::Geometry::Point(Point::from(coord))
         })
-        .collect()
+        .collect())
 }
