@@ -1,3 +1,6 @@
+samples:
+    cargo run --release --bin sample -- --starts edinburgh_sample.1000.starts.geojson --ends edinburgh_sample.1000.ends.geojson --paths 1000
+
 routes:
     cargo run --release --bin routes -- --geojson edinburgh_routes_auto.10.geojson --profile auto --paths 10
     cargo run --release --bin routes -- --geojson edinburgh_routes_auto.100.geojson --profile auto --paths 100
