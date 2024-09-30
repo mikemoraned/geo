@@ -47,7 +47,7 @@
         - [x] exclude boundary regions i.e. bits on the borders. these make the layouts typically very unbalanced
         - [x] exclude regions whose width, height, or area is > 20% of the respective width, height or area of whole bounding box
     - [x] make `geo.houseofmoran.io` a minimal static site with a blog post (or similar) pointing to slides
-    - [ ] rename `keks` to `linzer`
+    - [x] rename `keks` to `linzer`
 - things to fix later:
     - [ ] the random points created by a sample, using `Poisson2D`, are not always uniformly distributed across the rectangle (at least in the way I am using the library)
     - [ ] filter out water bodies as regions
