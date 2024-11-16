@@ -1,3 +1,16 @@
+# Live TODO's
+
+* [ ] update libs
+    * [x] rustc version
+    * [ ] libs
+        * [ ] change all dependencies to be minor-only versions
+        * [ ] run `cargo update`
+        * [ ] run `cargo upgrade --compatible`
+
+# Geomob 2024
+
+Things that I did for Geomob 2024 presentation
+
 - [ ] minimal component parts:
     - [x] "biscuits" i.e. the parts of a city
         - ideas:
