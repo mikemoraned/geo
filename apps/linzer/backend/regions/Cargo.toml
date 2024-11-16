@@ -18,5 +18,5 @@ startup = { path = "../startup" }
 cli = { path = "../cli" }
 conversion = { path = "../conversion" }
 
-bit-set = "0.8.0"
+bit-set = "0.8"
 

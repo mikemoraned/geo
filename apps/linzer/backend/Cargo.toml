@@ -4,22 +4,22 @@ resolver = "2"
 
 [workspace.dependencies]
 tokio = { version = "1.0", features = ["full"] }
-axum = "0.7.5"
-tower-http = { version = "0.5.2", features = ["cors"] }
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors"] }
 
-ferrostar = "0.10.1"
-url = "2.5.2"
+ferrostar = "0.10"
+url = "2.5"
 
-clap = { version = "4.5.17", features = ["derive"] }
-dotenvy = "0.15.7"
-tracing = "0.1.40"
+clap = { version = "4.5", features = ["derive"] }
+dotenvy = "0.15"
+tracing = "0.1"
 
-geo = "0.28.0"
+geo = "0.28"
 geojson = { version = "0.24", features = ["geo-types"] }
-geozero = "0.13.0"
+geozero = "0.13"
 
-rand = "0.8.5"
+rand = "0.8"
 
-tiny-skia = "0.11.4"
-image = "0.25.2"
-imageproc = "0.25.0"
+tiny-skia = "0.11"
+image = "0.25"
+imageproc = "0.25"
