@@ -8,6 +8,7 @@
         * [x] run `cargo upgrade --compatible`
 * [ ] add hamburg
     * [x] make Justfile more generic
+    * [x] separate `data` into `config` and `output` dirs
 
 # Geomob 2024
 
