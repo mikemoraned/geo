@@ -1,4 +1,4 @@
-# Live TODO's
+# Winter 2024 TODO's
 
 * [x] update libs
     * [x] rustc version
@@ -6,7 +6,11 @@
         * [x] change all dependencies to be minor-only versions
         * [x] run `cargo update`
         * [x] run `cargo upgrade --compatible`
-
+* [ ] add hamburg
+    * [x] make Justfile more generic
+    * [x] separate `data` into `config` and `output` dirs
+    * [ ] outstanding problem with running `just --set area hamburg --set profile auto all` (will solve later)
+    
 # Geomob 2024
 
 Things that I did for Geomob 2024 presentation

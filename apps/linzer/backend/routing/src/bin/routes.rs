@@ -100,7 +100,7 @@ async fn find_route(
         match routing.find_route(&start, &end, &profile).await {
             Ok(route) => return Ok(route),
             Err(e) => {
-                println!("Error whilst getting route: {:?}", e);
+                println!("Error whilst getting route: {:?}, start: {:?}, end: {:?}, profile: {:?}", e, start, end, profile);
             }
         }
     }

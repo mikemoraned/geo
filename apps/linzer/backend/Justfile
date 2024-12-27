@@ -1,28 +1,57 @@
-area := "edinburgh" # by default, but can be overridden
+area := "edinburgh"
+paths := "1000"
+seed := "1"
+profile := "pedestrian" # or "auto"
 
 samples:
-    cargo run --release --bin sample -- --area data/{{area}}/area.toml --starts data/{{area}}/sample.100.starts.geojson --ends data/{{area}}/sample.100.ends.geojson --paths 100 --seed 1
-    cargo run --release --bin sample -- --area data/{{area}}/area.toml --starts data/{{area}}/sample.1000.starts.geojson --ends data/{{area}}/sample.1000.ends.geojson --paths 1000 --seed 1
+    mkdir -p output/{{area}}
+    cargo run --release --bin sample -- \
+        --area config/{{area}}.toml \
+        --starts output/{{area}}/sample.{{paths}}.starts.geojson \
+        --ends output/{{area}}/sample.{{paths}}.ends.geojson \
+        --paths {{paths}} \
+        --seed {{seed}}
 
 routes:
-    cargo run --release --bin routes -- --starts data/{{area}}/sample.100.starts.geojson --ends data/{{area}}/sample.100.ends.geojson --geojson data/{{area}}/routes_auto.100.geojson --profile auto
-    cargo run --release --bin routes -- --starts data/{{area}}/sample.100.starts.geojson --ends data/{{area}}/sample.100.ends.geojson --geojson data/{{area}}/routes_ped.100.geojson --profile pedestrian
-    cargo run --release --bin routes -- --starts data/{{area}}/sample.1000.starts.geojson --ends data/{{area}}/sample.1000.ends.geojson --geojson data/{{area}}/routes_auto.1000.geojson --profile auto
-    cargo run --release --bin routes -- --starts data/{{area}}/sample.1000.starts.geojson --ends data/{{area}}/sample.1000.ends.geojson --geojson data/{{area}}/routes_ped.1000.geojson --profile pedestrian
+    cargo run --release --bin routes -- \
+        --starts output/{{area}}/sample.{{paths}}.starts.geojson \
+        --ends output/{{area}}/sample.{{paths}}.ends.geojson \
+        --geojson output/{{area}}/routes_{{profile}}.{{paths}}.geojson \
+        --profile {{profile}}
 
 regions:
-    cargo run --release --bin find_regions -- --routes data/{{area}}/routes_auto.100.geojson --stage-template data/{{area}}/routes_auto.100.STAGE_NAME.png --regions data/{{area}}/regions_auto.100.geojson
-    cargo run --release --bin find_regions -- --routes data/{{area}}/routes_auto.1000.geojson --stage-template data/{{area}}/routes_auto.1000.STAGE_NAME.png --regions data/{{area}}/regions_auto.1000.geojson
-    cargo run --release --bin find_regions -- --routes data/{{area}}/routes_ped.100.geojson --stage-template data/{{area}}/routes_ped.100.STAGE_NAME.png --regions data/{{area}}/regions_ped.100.geojson
-    cargo run --release --bin find_regions -- --routes data/{{area}}/routes_ped.1000.geojson --stage-template data/{{area}}/routes_ped.1000.STAGE_NAME.png --regions data/{{area}}/regions_ped.1000.geojson
+    cargo run --release --bin find_regions -- \
+        --routes output/{{area}}/routes_{{profile}}.{{paths}}.geojson \
+        --stage-template output/{{area}}/routes_{{profile}}.{{paths}}.STAGE_NAME.png \
+        --regions output/{{area}}/regions_{{profile}}.{{paths}}.geojson
 
 layout:
-    cargo run --release --bin layout -- --regions data/{{area}}/regions_auto.1000.geojson --bin-type guillotine --layout data/{{area}}/layout_auto.1000.guillotine.png
-    cargo run --release --bin layout -- --regions data/{{area}}/regions_auto.1000.geojson --bin-type max-rects --layout data/{{area}}/layout_auto.1000.max-rects.png
+    cargo run --release --bin layout -- \
+        --regions output/{{area}}/regions_{{profile}}.{{paths}}.geojson \
+        --bin-type guillotine \
+        --layout output/{{area}}/layout_{{profile}}.{{paths}}.guillotine.png
 
-    cargo run --release --bin layout -- --regions data/{{area}}/regions_ped.1000.geojson --bin-type guillotine --layout data/{{area}}/layout_ped.1000.guillotine.png
-    cargo run --release --bin layout -- --regions data/{{area}}/regions_ped.1000.geojson --bin-type max-rects --layout data/{{area}}/layout_ped.1000.max-rects.png
+    cargo run --release --bin layout -- \
+        --regions output/{{area}}/regions_{{profile}}.{{paths}}.geojson \
+        --bin-type max-rects \
+        --layout output/{{area}}/layout_{{profile}}.{{paths}}.max-rects.png
 
 regions_layout: regions layout
     
 all: samples routes regions_layout
+
+generate_all:
+    just --set area hamburg --set profile pedestrian all
+    just --set area hamburg --set profile auto all
+
+    just --set area edinburgh --set profile pedestrian all
+    just --set area edinburgh --set profile auto all
+
+    just --set area jerusalem --set profile pedestrian all
+    just --set area jerusalem --set profile auto all
+
+    just --set area new_york --set profile pedestrian all
+    just --set area new_york --set profile auto all
+
+    just --set area paris --set profile pedestrian all
+    just --set area paris --set profile auto all

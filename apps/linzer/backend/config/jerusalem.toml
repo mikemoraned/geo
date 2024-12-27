@@ -1,0 +1,6 @@
+
+[bounds]
+name = "Jerusalem"
+# found via https://boundingbox.klokantech.com
+point1 = { x = 35.135933, y = 31.699354 }
+point2 = { x = 35.315775, y = 31.872417 }
