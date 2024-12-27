@@ -22,8 +22,9 @@
         console.log("Wasm initialized");
 
         const edinburgh = [-3.188267, 55.953251];
+        const hamburg = [9.993682, 53.551086];
         const starting_position = {
-            center: edinburgh,
+            center: hamburg,
             zoom: 12
         };
 
@@ -37,6 +38,21 @@
 
         map.on('load', () => {
             console.log("Map loaded");
+
+            map.addSource('hamburg', {
+                type: 'geojson',
+                data: '/data/hamburg/regions_pedestrian.1000.geojson'
+            });
+
+            map.addLayer({
+                id: 'hamburg',
+                type: 'line',
+                source: 'hamburg',
+                layout: {},
+                paint: {
+                    'line-color': 'black'
+                }
+            });
         });
     </script>
   </body>
