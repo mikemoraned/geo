@@ -1,14 +1,14 @@
 {
-  "name": "hello",
+  "name": "geo",
   "type": "module",
   "version": "0.1.0",
   "files": [
-    "hello_bg.wasm",
-    "hello.js",
-    "hello.d.ts"
+    "geo_bg.wasm",
+    "geo.js",
+    "geo.d.ts"
   ],
-  "main": "hello.js",
-  "types": "hello.d.ts",
+  "main": "geo.js",
+  "types": "geo.d.ts",
   "sideEffects": [
     "./snippets/*"
   ]

@@ -1,12 +1,12 @@
 /* tslint:disable */
 /* eslint-disable */
-export function greet(): void;
+export function annotate(): void;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly greet: () => void;
+  readonly annotate: () => void;
   readonly __wbindgen_export_0: WebAssembly.Table;
   readonly __wbindgen_start: () => void;
 }
