@@ -1,5 +1,6 @@
 build:
     cd hello && wasm-pack build --target web --out-dir ../web/dist
+    rm ./web/dist/.gitignore
 
 webapp:
     serve -dir web

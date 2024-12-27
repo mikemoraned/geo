@@ -23,6 +23,7 @@
             cargo install wasm-pack
             ```
         * [ ] build / deploy on netlify
+            - build locally and just check in the wasm
         * [ ] ...
     * [ ] ...
 
