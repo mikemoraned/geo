@@ -3,13 +3,42 @@
   <head>
     <meta charset="utf-8" />
     <title>Hello</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.tiles.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet" />
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    </style>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.js"></script>
   </head>
   <body>
+    <div id="map"></div>
     <script type="module">
         import init, { greet } from "./dist/hello.js";
+        import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
 
         await init();
-        greet();
+        console.log("Wasm initialized");
+
+        const edinburgh = [-3.188267, 55.953251];
+        const starting_position = {
+            center: edinburgh,
+            zoom: 12
+        };
+
+        const map = new mapboxgl.Map({
+			container: 'map',
+			accessToken: PUBLIC_MAPBOX_TOKEN,
+			style: `mapbox://styles/mapbox/outdoors-v11`,
+			...starting_position
+		});
+        console.log("Map created");
+
+        map.on('load', () => {
+            console.log("Map loaded");
+            greet();
+        });
     </script>
   </body>
 </html>

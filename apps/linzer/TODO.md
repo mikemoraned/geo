@@ -27,6 +27,15 @@
             - deployed current branch `shape-experiment` to `https://linzer.netlify.app`
     * [ ] show mapbox and georust working together:
         * [ ] simple mapbox map in browser
+            * [x] create a public mapbox key for use in netlify
+                - restrict to use on https://linzer.netlify.app
+                - called `geo-linzer-netlify`
+            * [x] create a secret key for this app
+                - will only be used locally
+                - called `geo-linzer-local`
+            * [x] create a `setting.js` module which defines `PUBLIC_MAPBOX_TOKEN` and maps to the secret key; this is not checked in
+            * [x] define `PUBLIC_MAPBOX_TOKEN` in netlify
+            * [ ] update build so that takes a `setting.js.template` file and replaces `PUBLIC_MAPBOX_TOKEN` in it and saves in `setting.js`
         * [ ] load a geojson source into map and show it
         * [ ] load same geojson source from rust
         * [ ] calculate centroids of each shape, using georust
