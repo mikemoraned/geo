@@ -24,8 +24,13 @@
             ```
         * [x] deploy on netlify
             - build locally and just check in the wasm
-            - deployed current branch `shape-experiment` to `https://linzer.netlify.app` 
-        * [ ] ...
+            - deployed current branch `shape-experiment` to `https://linzer.netlify.app`
+    * [ ] show mapbox and georust working together:
+        * [ ] simple mapbox map in browser
+        * [ ] load a geojson source into map and show it
+        * [ ] load same geojson source from rust
+        * [ ] calculate centroids of each shape, using georust
+        * [ ] draw centroids in mapbox using a Canvas source
     * [ ] ...
 
 ## Geo
