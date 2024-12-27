@@ -15,14 +15,14 @@
     * [ ] refactor: make `routing` crate repeatable and stable
         * [ ] ...
 * [ ] experiment: try different ways to summarise a shape in a normalised way which allows comparison across to similar shapes
-    * [ ] convert linzer web into a simple rust wasm app website
+    * [x] convert linzer web into a simple rust wasm app website
         * [x] create a basic Rust wasm monolithic module (not components) that says "hello world"
             - following https://dzfrias.dev/blog/rust-wasm-minimal-setup/#fn1
             * [x] install tools:
             ```
             cargo install wasm-pack
             ```
-        * [ ] deploy on netlify
+        * [x] deploy on netlify
             - build locally and just check in the wasm
             - deployed current branch `shape-experiment` to `https://linzer.netlify.app` 
         * [ ] ...
