@@ -15,6 +15,9 @@
     * [ ] refactor: make `routing` crate repeatable and stable
         * [ ] ...
 * [ ] experiment: try different ways to summarise a shape in a normalised way which allows comparison across to similar shapes
+    * [ ] convert linzer web into a simple rust wasm app website
+        * [ ] 
+        * [ ] ...
     * [ ] ...
 
 ## Geo
