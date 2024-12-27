@@ -37,7 +37,7 @@
             * [x] define `PUBLIC_MAPBOX_TOKEN` in netlify
             * [x] update build so that takes a `setting.js.template` file and replaces `PUBLIC_MAPBOX_TOKEN` in it and saves in `setting.js`
         * [x] load a geojson source into map and show it
-        * [ ] load same geojson source from rust
+        * [x] load same geojson source from rust
         * [ ] calculate centroids of each shape, using georust
         * [ ] draw centroids in mapbox using a Canvas source
     * [ ] ...

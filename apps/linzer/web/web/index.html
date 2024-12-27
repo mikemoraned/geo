@@ -36,12 +36,14 @@
 		});
         console.log("Map created");
 
-        map.on('load', () => {
+        map.on('load', async () => {
             console.log("Map loaded");
+
+            const sourceDataUrl = new URL('/data/hamburg/regions_pedestrian.1000.geojson', window.location.origin).toString();
 
             map.addSource('hamburg', {
                 type: 'geojson',
-                data: '/data/hamburg/regions_pedestrian.1000.geojson'
+                data: sourceDataUrl
             });
 
             map.addLayer({
@@ -54,7 +56,7 @@
                 }
             });
 
-            annotate();
+            await annotate(sourceDataUrl);
         });
     </script>
   </body>
