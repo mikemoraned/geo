@@ -4,6 +4,7 @@ seed := "1"
 profile := "pedestrian" # or "auto"
 
 samples:
+    mkdir -p output/{{area}}
     cargo run --release --bin sample -- \
         --area config/{{area}}.toml \
         --starts output/{{area}}/sample.{{paths}}.starts.geojson \
@@ -38,3 +39,19 @@ layout:
 regions_layout: regions layout
     
 all: samples routes regions_layout
+
+generate_all:
+    just --set area hamburg --set profile pedestrian all
+    just --set area hamburg --set profile auto all
+
+    just --set area edinburgh --set profile pedestrian all
+    just --set area edinburgh --set profile auto all
+
+    just --set area jerusalem --set profile pedestrian all
+    just --set area jerusalem --set profile auto all
+
+    just --set area new_york --set profile pedestrian all
+    just --set area new_york --set profile auto all
+
+    just --set area paris --set profile pedestrian all
+    just --set area paris --set profile auto all
