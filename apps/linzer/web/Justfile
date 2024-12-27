@@ -1,0 +1,5 @@
+build:
+    cd hello && wasm-pack build --target web --out-dir ../web/dist
+
+webapp:
+    serve -dir web

@@ -16,6 +16,13 @@
         * [ ] ...
 * [ ] experiment: try different ways to summarise a shape in a normalised way which allows comparison across to similar shapes
     * [ ] convert linzer web into a simple rust wasm app website
+        * [x] create a basic Rust wasm monolithic module (not components) that says "hello world"
+            - following https://dzfrias.dev/blog/rust-wasm-minimal-setup/#fn1
+            * [x] install tools:
+            ```
+            cargo install wasm-pack
+            ```
+        * [ ] build / deploy on netlify
         * [ ] ...
     * [ ] ...
 
