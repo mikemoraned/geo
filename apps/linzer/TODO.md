@@ -22,8 +22,9 @@
             ```
             cargo install wasm-pack
             ```
-        * [ ] build / deploy on netlify
+        * [ ] deploy on netlify
             - build locally and just check in the wasm
+            - deployed current branch `shape-experiment` to `https://linzer.netlify.app` 
         * [ ] ...
     * [ ] ...
 
