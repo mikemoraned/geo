@@ -16,11 +16,6 @@
         * [ ] ...
 * [ ] experiment: try different ways to summarise a shape in a normalised way which allows comparison across to similar shapes
     * [ ] convert linzer web into a simple rust wasm app website
-        * [ ] set up for cargo wasm components
-        ```
-        brew install cargo-binstall
-        cargo binstall cargo-component
-        ```
         * [ ] ...
     * [ ] ...
 
