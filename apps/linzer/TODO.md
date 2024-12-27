@@ -26,7 +26,7 @@
             - build locally and just check in the wasm
             - deployed current branch `shape-experiment` to `https://linzer.netlify.app`
     * [ ] show mapbox and georust working together:
-        * [ ] simple mapbox map in browser
+        * [x] simple mapbox map in browser
             * [x] create a public mapbox key for use in netlify
                 - restrict to use on https://linzer.netlify.app
                 - called `geo-linzer-netlify`
