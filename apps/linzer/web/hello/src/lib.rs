@@ -9,5 +9,5 @@ extern "C" {
 // Export `greet`
 #[wasm_bindgen]
 pub fn greet() {
-    alert("Hello, world!");
+    alert("Hello, Netlify world!");
 }
