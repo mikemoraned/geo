@@ -1,5 +1,7 @@
 # Winter 2024 TODO's
 
+## Linzer
+
 * [x] update libs
     * [x] rustc version
     * [x] libs
@@ -10,6 +12,14 @@
     * [x] make Justfile more generic
     * [x] separate `data` into `config` and `output` dirs
     * [ ] outstanding problem with running `just --set area hamburg --set profile auto all` (will solve later)
+    * [ ] refactor: make `routing` crate repeatable and stable
+        * [ ] ...
+* [ ] experiment: try different ways to summarise a shape in a normalised way which allows comparison across to similar shapes
+    * [ ] ...
+
+## Geo
+
+* [ ] convert top-level geo.houseofmoran.io site into a Zola blog
     
 # Geomob 2024
 
