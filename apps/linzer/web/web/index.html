@@ -8,12 +8,20 @@
     <style>
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        #layers { position: absolute; top: 0; right: 0; margin: 10px; z-index: 1; }
     </style>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.js"></script>
   </head>
   <body>
     <div id="map"></div>
+    <div id="layers" class="box">
+        <div class="buttons has-addons">
+            <button id="regions-layer" class="button" disabled>Regions</button>
+            <button id="centroids-layer" class="button" disabled>Centroids</button>
+        </div>
+    </div>
     <script type="module">
         import init, { annotate } from "./dist/centroids.js";
         import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
@@ -36,6 +44,46 @@
 		});
         console.log("Map created");
 
+        function bindLayerControl(layerId, map) {
+            const buttonId = `${layerId}-layer`;
+            const button = document.getElementById(buttonId);
+            if (!button) {
+                console.error(`Button ${buttonId} not found`);
+                return;
+            }
+
+            const layer = map.getLayer(layerId);
+            if (!layer) {
+                button.disabled = true;
+                console.error(`Layer ${layerId} not found`);
+                return
+            }
+
+            function updateStateBasedOnVisibility() {
+                const visibility = map.getLayoutProperty(layerId, 'visibility');
+                if (visibility === 'visible') {
+                    button.classList.add('is-success');
+                }
+                else {
+                    button.classList.remove('is-success');
+                }
+            }
+
+            button.addEventListener('click', () => {    
+                const visibility = map.getLayoutProperty(layerId, 'visibility');
+                if (visibility === 'visible') {
+                    map.setLayoutProperty(layerId, 'visibility', 'none');
+                }
+                else {
+                    map.setLayoutProperty(layerId, 'visibility', 'visible');
+                }
+                updateStateBasedOnVisibility();
+            });
+            
+            updateStateBasedOnVisibility();
+            button.disabled = false;
+        }
+
         map.on('load', async () => {
             console.log("Map loaded");
 
@@ -47,14 +95,18 @@
             });
 
             map.addLayer({
-                id: 'hamburg',
+                id: 'regions',
                 type: 'line',
                 source: 'hamburg',
-                layout: {},
+                layout: {
+                    visibility: 'visible'
+                },
                 paint: {
                     'line-color': 'black'
                 }
             });
+
+            bindLayerControl('regions', map);
 
             let centroids = await annotate(sourceDataUrl);
 
@@ -78,11 +130,15 @@
                 id: 'centroids',
                 type: 'circle',
                 source: 'centroids',
-                layout: {},
+                layout: {
+                    visibility: 'visible'
+                },
                 paint: {
                     'circle-color': 'blue'
                 }
             });
+
+            bindLayerControl('centroids', map);
         });
     </script>
   </body>
