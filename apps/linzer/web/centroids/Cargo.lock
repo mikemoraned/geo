@@ -111,6 +111,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "centroids"
+version = "0.1.0"
+dependencies = [
+ "geo",
+ "geo-types",
+ "geojson",
+ "reqwest",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -288,19 +301,6 @@ dependencies = [
  "futures-task",
  "pin-project-lite",
  "pin-utils",
-]
-
-[[package]]
-name = "geo"
-version = "0.1.0"
-dependencies = [
- "geo 0.29.3",
- "geo-types",
- "geojson",
- "reqwest",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]

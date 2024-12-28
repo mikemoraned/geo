@@ -460,7 +460,7 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper251 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper248 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 97, __wbg_adapter_26);
         return ret;
     };
@@ -570,7 +570,7 @@ async function __wbg_init(module_or_path) {
     }
 
     if (typeof module_or_path === 'undefined') {
-        module_or_path = new URL('geo_bg.wasm', import.meta.url);
+        module_or_path = new URL('centroids_bg.wasm', import.meta.url);
     }
     const imports = __wbg_get_imports();
 
