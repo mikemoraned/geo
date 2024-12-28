@@ -1,6 +1,7 @@
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
 use geojson::{quick_collection, GeoJson};
+use geo::Centroid;
 
 #[wasm_bindgen]
 pub async fn annotate(source_url: String) -> Result<(), JsValue> {
@@ -17,16 +18,14 @@ pub async fn annotate(source_url: String) -> Result<(), JsValue> {
             if let Ok(geojson) = text.parse::<GeoJson>() {
                 console::log_1(&"Parsed geojson".into());
                 let collection: GeometryCollection<f64> = quick_collection(&geojson).unwrap();
-                let size = collection.0.len();
                 if let Some(Geometry::GeometryCollection(entries)) = collection.0.get(0) {
                     let size = entries.len();
-                    console::log_1(&format!("size: {size}").into());
-                    // let mut centroids = [];
+                    console::log_1(&format!("calculating centroids for {size} geometries").into());
+                    let mut centroids = vec![];
                     for entry in entries {
-                        if let Geometry::Polygon(p) = entry {
-                            
-                        }
+                        centroids.push(entry.centroid());
                     }
+                    console::log_1(&"calculated centroids".into());
                 }
             }
             else {
