@@ -9,6 +9,7 @@
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
         #layers { position: absolute; top: 0; right: 0; margin: 10px; z-index: 1; }
+        #layers.box { --bulma-box-padding: 0.5rem; }
     </style>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
@@ -18,8 +19,8 @@
     <div id="map"></div>
     <div id="layers" class="box">
         <div class="buttons has-addons">
-            <button id="regions-layer" class="button" disabled>Regions</button>
-            <button id="centroids-layer" class="button" disabled>Centroids</button>
+            <button id="regions-layer" class="button is-medium is-responsive" disabled>Regions</button>
+            <button id="centroids-layer" class="button is-medium is-responsive" disabled>Centroids</button>
         </div>
     </div>
     <script type="module">
@@ -79,7 +80,7 @@
                 }
                 updateStateBasedOnVisibility();
             });
-            
+
             updateStateBasedOnVisibility();
             button.disabled = false;
         }
