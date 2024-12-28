@@ -57,7 +57,32 @@
             });
 
             let centroids = await annotate(sourceDataUrl);
-            console.log("Centroids", centroids);
+
+            let geojsonCentroids = {
+                type: 'FeatureCollection',
+                features: centroids.map(({ x, y }) => ({
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [ x, y ]
+                    }
+                }))
+            };
+
+            map.addSource('centroids', {
+                type: 'geojson',
+                data: geojsonCentroids
+            });
+
+            map.addLayer({
+                id: 'centroids',
+                type: 'circle',
+                source: 'centroids',
+                layout: {},
+                paint: {
+                    'circle-color': 'blue'
+                }
+            });
         });
     </script>
   </body>

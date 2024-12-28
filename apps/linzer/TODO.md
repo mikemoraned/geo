@@ -25,7 +25,7 @@
         * [x] deploy on netlify
             - build locally and just check in the wasm
             - deployed current branch `shape-experiment` to `https://linzer.netlify.app`
-    * [ ] show mapbox and georust working together:
+    * [x] show mapbox and georust working together:
         * [x] simple mapbox map in browser
             * [x] create a public mapbox key for use in netlify
                 - restrict to use on https://linzer.netlify.app
@@ -38,8 +38,8 @@
             * [x] update build so that takes a `setting.js.template` file and replaces `PUBLIC_MAPBOX_TOKEN` in it and saves in `setting.js`
         * [x] load a geojson source into map and show it
         * [x] load same geojson source from rust
-        * [ ] calculate centroids of each shape, using georust
-        * [ ] draw centroids in mapbox using a Canvas source
+        * [x] calculate centroids of each shape, using georust
+        * [x] draw centroids in mapbox as a source
     * [ ] ...
 
 ## Geo
