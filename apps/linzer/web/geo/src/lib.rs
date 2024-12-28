@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-use geo_types::GeometryCollection;
+use geo_types::{Geometry, GeometryCollection};
 use geojson::{quick_collection, GeoJson};
 
 #[wasm_bindgen]
@@ -18,7 +18,10 @@ pub async fn annotate(source_url: String) -> Result<(), JsValue> {
                 console::log_1(&"Parsed geojson".into());
                 let collection: GeometryCollection<f64> = quick_collection(&geojson).unwrap();
                 let size = collection.0.len();
-                console::log_1(&format!("Size: {size}").into());
+                if let Some(Geometry::GeometryCollection(entries)) = collection.0.get(0) {
+                    let size = entries.len();
+                    console::log_1(&format!("size: {size}").into());
+                }
             }
             else {
                 console::log_1(&"Failed to parse geojson".into());
