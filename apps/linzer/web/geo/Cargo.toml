@@ -9,6 +9,7 @@ wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = ['console'] }
 reqwest = { version = "0.12" }
 geojson = "0.24"
+geo-types = "0.7"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
