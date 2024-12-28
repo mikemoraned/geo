@@ -1,5 +1,9 @@
-build:
-    cd geo && wasm-pack build --target web --out-dir ../web/dist
+dev:
+    cd geo && wasm-pack build --dev --target web --out-dir ../web/dist
+    rm ./web/dist/.gitignore
+
+release:
+    cd geo && wasm-pack build --release --target web --out-dir ../web/dist
     rm ./web/dist/.gitignore
 
 webapp:
