@@ -21,6 +21,12 @@ pub async fn annotate(source_url: String) -> Result<(), JsValue> {
                 if let Some(Geometry::GeometryCollection(entries)) = collection.0.get(0) {
                     let size = entries.len();
                     console::log_1(&format!("size: {size}").into());
+                    let mut centroids = [];
+                    for entry in entries {
+                        if let Geometry::Polygon(p) = entry {
+                            
+                        }
+                    }
                 }
             }
             else {
