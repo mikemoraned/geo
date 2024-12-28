@@ -2,9 +2,10 @@ use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
 use geojson::{quick_collection, GeoJson};
 use geo::Centroid;
+use gloo_utils::format::JsValueSerdeExt;
 
 #[wasm_bindgen]
-pub async fn annotate(source_url: String) -> Result<(), JsValue> {
+pub async fn annotate(source_url: String) -> Result<JsValue, JsValue> {
     use web_sys::console;
     console::log_1(&format!("Fetching geojson from '{source_url}' ...").into());
 
@@ -26,13 +27,18 @@ pub async fn annotate(source_url: String) -> Result<(), JsValue> {
                         centroids.push(entry.centroid());
                     }
                     console::log_1(&"calculated centroids".into());
+                    
+                    Ok(JsValue::from_serde(&centroids).unwrap())      
+                }
+                else {
+                    console::log_1(&"Failed to extract geometries".into());
+                    Err("failed to extract geometries".into())
                 }
             }
             else {
                 console::log_1(&"Failed to parse geojson".into());
-                return Err("failed to parse geojson".into());
-            }
-            Ok(())        
+                Err("failed to parse geojson".into())
+            }  
         },
         status => {
             let message = format!("Response status: NOT OK: {status}");

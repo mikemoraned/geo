@@ -56,7 +56,8 @@
                 }
             });
 
-            await annotate(sourceDataUrl);
+            let centroids = await annotate(sourceDataUrl);
+            console.log("Centroids", centroids);
         });
     </script>
   </body>

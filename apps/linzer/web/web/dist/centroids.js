@@ -199,7 +199,7 @@ function debugString(val) {
 }
 /**
  * @param {string} source_url
- * @returns {Promise<void>}
+ * @returns {Promise<any>}
  */
 export function annotate(source_url) {
     const ptr0 = passStringToWasm0(source_url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -209,11 +209,11 @@ export function annotate(source_url) {
 }
 
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure96_externref_shim(arg0, arg1, arg2);
+    wasm.closure98_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_92(arg0, arg1, arg2, arg3) {
-    wasm.closure198_externref_shim(arg0, arg1, arg2, arg3);
+    wasm.closure200_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
@@ -371,6 +371,10 @@ function __wbg_get_imports() {
         const ret = arg0.next;
         return ret;
     };
+    imports.wbg.__wbg_parse_161c68378e086ae1 = function() { return handleError(function (arg0, arg1) {
+        const ret = JSON.parse(getStringFromWasm0(arg0, arg1));
+        return ret;
+    }, arguments) };
     imports.wbg.__wbg_queueMicrotask_2181040e064c0dc8 = function(arg0) {
         queueMicrotask(arg0);
     };
@@ -460,8 +464,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper259 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 97, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper262 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 99, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {
