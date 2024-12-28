@@ -13,6 +13,7 @@ pub async fn annotate(source_url: String) -> Result<(), JsValue> {
             console::log_1(&"Response status: OK".into());
 
             let text = response.text().await?;
+            console::log_1(&"Fetched geojson".into());
             if let Ok(geojson) = text.parse::<GeoJson>() {
                 console::log_1(&"Parsed geojson".into());
                 let collection: GeometryCollection<f64> = quick_collection(&geojson).unwrap();
