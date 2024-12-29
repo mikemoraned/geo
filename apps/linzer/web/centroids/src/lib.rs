@@ -5,7 +5,7 @@ use geo::Centroid;
 use gloo_utils::format::JsValueSerdeExt;
 use web_sys::console;
 
-pub async fn fetch_text(source_url: String) -> Result<String, Box<dyn std::error::Error>> {
+async fn fetch_text(source_url: String) -> Result<String, Box<dyn std::error::Error>> {
     console::log_1(&format!("Fetching text from '{source_url}' ...").into());
 
     let response = reqwest::get(source_url).await?;
@@ -25,29 +25,40 @@ pub async fn fetch_text(source_url: String) -> Result<String, Box<dyn std::error
     }
 }
 
+fn parse_geojson_to_geometry_collection(text: String) -> Result<GeometryCollection<f64>, Box<dyn std::error::Error>> {
+    if let Ok(geojson) = text.parse::<GeoJson>() {
+        console::log_1(&"Parsed geojson".into());
+        let collection: GeometryCollection<f64> = quick_collection(&geojson).unwrap();
+        if let Some(Geometry::GeometryCollection(collection)) = collection.0.get(0) {
+            console::log_1(&"Extracted geometries".into());
+            Ok(collection.clone())
+        }
+        else {
+            console::log_1(&"Failed to extract geometries".into());
+            Err("failed to extract geometries".into())
+        }
+    }
+    else {
+        console::log_1(&"Failed to parse geojson".into());
+        Err("failed to parse geojson".into())
+    }
+}
+
 #[wasm_bindgen]
 pub async fn annotate(source_url: String) -> Result<JsValue, JsValue> {
     console::log_1(&format!("Fetching geojson from '{source_url}' ...").into());
 
     if let Ok(text) = fetch_text(source_url).await {
-        if let Ok(geojson) = text.parse::<GeoJson>() {
-            console::log_1(&"Parsed geojson".into());
-            let collection: GeometryCollection<f64> = quick_collection(&geojson).unwrap();
-            if let Some(Geometry::GeometryCollection(entries)) = collection.0.get(0) {
-                let size = entries.len();
-                console::log_1(&format!("calculating centroids for {size} geometries").into());
-                let mut centroids = vec![];
-                for entry in entries {
-                    centroids.push(entry.centroid());
-                }
-                console::log_1(&"calculated centroids".into());
-                
-                Ok(JsValue::from_serde(&centroids).unwrap())      
+        if let Ok(collection) = parse_geojson_to_geometry_collection(text) {
+            let size = collection.len();
+            console::log_1(&format!("calculating centroids for {size} geometries").into());
+            let mut centroids = vec![];
+            for entry in collection {
+                centroids.push(entry.centroid());
             }
-            else {
-                console::log_1(&"Failed to extract geometries".into());
-                Err("failed to extract geometries".into())
-            }
+            console::log_1(&"calculated centroids".into());
+            
+            Ok(JsValue::from_serde(&centroids).unwrap())
         }
         else {
             console::log_1(&"Failed to parse geojson".into());
