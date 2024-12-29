@@ -207,11 +207,23 @@
             });
 
             const canvas = document.getElementById('canvas');
-            const boundsHeight = bounds.max.y - bounds.min.y;
-            const boundsWidth = bounds.max.x - bounds.min.x;
-            const boundsHeightToWidthRatio = boundsHeight / boundsWidth;
-            console.log("Desired height to width ratio", boundsHeight, "/", boundsWidth, "=", boundsHeightToWidthRatio);
-            const scaledHeight = canvas.width / boundsHeightToWidthRatio;
+
+            const topLeft = mapboxgl.MercatorCoordinate.fromLngLat({
+                lng: bounds.min.x,
+                lat: bounds.max.y
+            });
+            const bottomRight = mapboxgl.MercatorCoordinate.fromLngLat({
+                lng: bounds.max.x,
+                lat: bounds.min.y
+            });
+            console.log("Top left", topLeft, "Bottom right", bottomRight);
+            const mercatorWidth = bottomRight.x - topLeft.x;
+            const mercatorHeight = bottomRight.y - topLeft.y;
+            console.log("Mercator width", mercatorWidth, "Mercator height", mercatorHeight);
+            const mercatorHeightToWidthRatio = mercatorHeight / mercatorWidth;
+            console.log("Mercator height to width ratio", mercatorHeight, "/", mercatorWidth, "=", mercatorHeightToWidthRatio);
+
+            const scaledHeight = canvas.width * mercatorHeightToWidthRatio;
             console.log("Height scaled: ", canvas.height, "->", scaledHeight);
             canvas.height = scaledHeight;
 
