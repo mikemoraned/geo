@@ -1,5 +1,6 @@
 use std::{iter::zip, vec};
 
+use tiny_skia::{Color, Paint, Pixmap, Rect, Transform};
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
 use geo::{Area, BoundingRect, Centroid, Coord, LineString, MultiLineString, Point};
@@ -64,6 +65,49 @@ fn log_area_statistics(collection: &GeometryCollection<f64>) {
 }
 
 #[wasm_bindgen]
+pub struct CanvasSummaryRenderer {
+    width: u32, 
+    height: u32,
+    annotated: Annotated
+}
+
+#[wasm_bindgen]
+impl CanvasSummaryRenderer {
+    pub fn render(&self) -> Result<Vec<u8>, JsValue> {
+        let mut pixmap = Pixmap::new(self.width, self.height).ok_or("Failed to create pixmap")?;
+
+        let mut white = Paint::default();
+        white.set_color(Color::WHITE);
+
+        let mut red = Paint::default();
+        red.set_color_rgba8(255, 0, 0, 255);
+
+        pixmap.fill_rect(
+            Rect::from_xywh(0.0, 0.0, self.width as f32, self.height as f32).ok_or("Failed to create rect")?,
+            &white,
+            Transform::identity(),
+            None
+        );
+
+        pixmap.fill_rect(
+            Rect::from_xywh(0.0, 0.0, (self.width / 2) as f32, (self.height / 4) as f32).ok_or("Failed to create rect")?,
+            &red,
+            Transform::identity(),
+            None
+        );
+
+        Ok(pixmap.data().into())
+    }
+}
+
+impl CanvasSummaryRenderer {
+    pub fn new(width: u32, height: u32, annotated: Annotated) -> CanvasSummaryRenderer {
+        CanvasSummaryRenderer { width, height, annotated }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
 pub struct Annotated {
     collection: GeometryCollection<f64>,
     centroids: Option<Vec<geo::Point<f64>>>,
@@ -97,6 +141,10 @@ impl Annotated {
         }
 
         return JsValue::from_serde(&rays).unwrap();
+    }
+
+    pub fn summary_renderer(&self, width: u32, height: u32) -> CanvasSummaryRenderer {
+        CanvasSummaryRenderer::new(width, height, self.clone())
     }
 }
 

@@ -12,7 +12,7 @@ geo-types = { version = "0.7", features = ['serde'] }
 geo = "0.29"
 geozero = "0.14"
 gloo-utils = { version = "0.2", features = ["serde"] }
-
+tiny-skia = "0.11"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

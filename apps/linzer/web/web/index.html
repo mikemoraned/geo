@@ -210,6 +210,12 @@
             context.fillStyle = '#000000';
             context.fillRect(0, 0, canvas.width, canvas.height);
 
+            const renderer = annotated.summary_renderer(canvas.width, canvas.height);
+            const rendererData = new Uint8ClampedArray(renderer.render());
+            console.log("Renderer data", rendererData);
+            const imageData = new ImageData(rendererData, canvas.width, canvas.height);
+            context.putImageData(imageData, 0, 0);
+
             bindLayerControl('summaries', map);
         });
     </script>
