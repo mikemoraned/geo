@@ -52,8 +52,8 @@
     * [ ] show a summary for each region
         - summary is the length of each ray as a fraction of max size of all rays for region
         * [ ] visualise as a spiky shape per region in a CanvasSource
-            * [ ] add a canvas source covering area, displaying a test rectangle
-            * [ ] to confirm projection is working, draw centroids again on canvas
+            * [x] add a canvas source covering area, displaying a test black rectangle covering entire area
+            * [ ] to confirm projection is working, draw centroids again on canvas as circles
             * [ ] show spikes as a series of arcs
     * [ ] ...
 
