@@ -1,6 +1,6 @@
 use std::{iter::zip, vec};
 
-use tiny_skia::{Color, Paint, Pixmap, Rect, Transform};
+use tiny_skia::{Color, Paint, PathBuilder, Pixmap, Rect, Stroke, Transform};
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
 use geo::{Area, BoundingRect, Centroid, Coord, LineString, MultiLineString, Point};
@@ -82,6 +82,9 @@ impl CanvasSummaryRenderer {
         let mut red = Paint::default();
         red.set_color_rgba8(255, 0, 0, 255);
 
+        let mut stroke = Stroke::default();
+        stroke.width = 1.0;
+
         pixmap.fill_rect(
             Rect::from_xywh(0.0, 0.0, self.width as f32, self.height as f32).ok_or("Failed to create rect")?,
             &white,
@@ -95,6 +98,11 @@ impl CanvasSummaryRenderer {
             Transform::identity(),
             None
         );
+
+        let mut pb = PathBuilder::new();
+        pb.push_circle((self.width / 2) as f32, (self.height / 2) as f32, 10.0);
+        let path = pb.finish().ok_or("Failed to finish path")?;
+        pixmap.stroke_path(&path, &red, &stroke, Transform::identity(), None);
 
         Ok(pixmap.data().into())
     }
@@ -119,7 +127,8 @@ impl Annotated {
         return JsValue::from_serde(&self.lazy_centroids()).unwrap();
     }
 
-    pub fn bounds(&self) -> JsValue {
+    #[wasm_bindgen(js_name = bounds)]
+    pub fn bounds_js(&self) -> JsValue {
         let bounds = self.collection.bounding_rect().unwrap();
         return JsValue::from_serde(&bounds).unwrap();
     }
@@ -151,6 +160,14 @@ impl Annotated {
 impl Annotated {
     fn new(collection: GeometryCollection<f64>) -> Annotated {
         Annotated { collection, centroids: None }
+    }
+
+    pub fn bounds(&self) -> geo_types::Rect<f64> {
+        self.collection.bounding_rect().unwrap()
+    }
+
+    pub fn collection(&self) -> &GeometryCollection<f64> {
+        &self.collection
     }
 
     pub fn lazy_centroids(&mut self) -> Vec<Point<f64>> {
