@@ -17,7 +17,7 @@
   </head>
   <body>
     <div id="map"></div>
-    <canvas id="canvas" width="500" height="500" style="display: none;"></canvas>
+    <canvas id="canvas" width="1000" height="1000" style="display: none;"></canvas>
     <div id="layers" class="box">
         <div class="buttons has-addons">
             <button id="regions-layer" class="button is-medium is-responsive is-loading" disabled>Regions</button>
@@ -44,6 +44,7 @@
 			container: 'map',
 			accessToken: PUBLIC_MAPBOX_TOKEN,
 			style: `mapbox://styles/mapbox/outdoors-v11`,
+            projection: 'mercator',
 			...starting_position
 		});
         console.log("Map created");
@@ -206,6 +207,14 @@
             });
 
             const canvas = document.getElementById('canvas');
+            const boundsHeight = bounds.max.y - bounds.min.y;
+            const boundsWidth = bounds.max.x - bounds.min.x;
+            const boundsHeightToWidthRatio = boundsHeight / boundsWidth;
+            console.log("Desired height to width ratio", boundsHeight, "/", boundsWidth, "=", boundsHeightToWidthRatio);
+            const scaledHeight = canvas.width / boundsHeightToWidthRatio;
+            console.log("Height scaled: ", canvas.height, "->", scaledHeight);
+            canvas.height = scaledHeight;
+
             const context = canvas.getContext('2d');
             context.fillStyle = '#000000';
             context.fillRect(0, 0, canvas.width, canvas.height);
