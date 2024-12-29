@@ -47,7 +47,7 @@
         * [x] show spinner icon on layer buttons whilst waiting on layer to load
     * [ ] show a 'skeleton' for each region
         - a skeleton is a set of linestrings for each region going from the centroid to each border-point
-        * [ ] refactor wasm into returning an `Annotations` object with a method for `centroids` and `skeletons`
+        * [x] refactor wasm into returning an `Annotated` object with a method for `centroids`
         * [ ] add `skeletons` layer
     * [ ] ...
 

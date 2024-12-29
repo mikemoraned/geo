@@ -1,11 +1,20 @@
 /* tslint:disable */
 /* eslint-disable */
+export function annotate2(source_url: string): Promise<Annotated>;
 export function annotate(source_url: string): Promise<any>;
+export class Annotated {
+  private constructor();
+  free(): void;
+  centroids(): any;
+}
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly __wbg_annotated_free: (a: number, b: number) => void;
+  readonly annotated_centroids: (a: number) => any;
+  readonly annotate2: (a: number, b: number) => any;
   readonly annotate: (a: number, b: number) => any;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
@@ -13,8 +22,8 @@ export interface InitOutput {
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export_5: WebAssembly.Table;
-  readonly closure78_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure213_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure82_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure217_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

@@ -199,6 +199,17 @@ function debugString(val) {
 }
 /**
  * @param {string} source_url
+ * @returns {Promise<Annotated>}
+ */
+export function annotate2(source_url) {
+    const ptr0 = passStringToWasm0(source_url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.annotate2(ptr0, len0);
+    return ret;
+}
+
+/**
+ * @param {string} source_url
  * @returns {Promise<any>}
  */
 export function annotate(source_url) {
@@ -209,16 +220,50 @@ export function annotate(source_url) {
 }
 
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure78_externref_shim(arg0, arg1, arg2);
+    wasm.closure82_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_90(arg0, arg1, arg2, arg3) {
-    wasm.closure213_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_94(arg0, arg1, arg2, arg3) {
+    wasm.closure217_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
 
 const __wbindgen_enum_RequestMode = ["same-origin", "no-cors", "cors", "navigate"];
+
+const AnnotatedFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_annotated_free(ptr >>> 0, 1));
+
+export class Annotated {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(Annotated.prototype);
+        obj.__wbg_ptr = ptr;
+        AnnotatedFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        AnnotatedFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_annotated_free(ptr, 0);
+    }
+    /**
+     * @returns {any}
+     */
+    centroids() {
+        const ret = wasm.annotated_centroids(this.__wbg_ptr);
+        return ret;
+    }
+}
 
 async function __wbg_load(module, imports) {
     if (typeof Response === 'function' && module instanceof Response) {
@@ -256,6 +301,10 @@ function __wbg_get_imports() {
     imports.wbg = {};
     imports.wbg.__wbg_abort_05026c983d86824c = function(arg0) {
         arg0.abort();
+    };
+    imports.wbg.__wbg_annotated_new = function(arg0) {
+        const ret = Annotated.__wrap(arg0);
+        return ret;
     };
     imports.wbg.__wbg_append_72d1635ad8643998 = function() { return handleError(function (arg0, arg1, arg2, arg3, arg4) {
         arg0.append(getStringFromWasm0(arg1, arg2), getStringFromWasm0(arg3, arg4));
@@ -324,7 +373,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_90(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_94(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -460,8 +509,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper228 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 79, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper239 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 83, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

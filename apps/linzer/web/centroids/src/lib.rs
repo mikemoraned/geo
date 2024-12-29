@@ -62,6 +62,62 @@ fn log_area_statistics(collection: &GeometryCollection<f64>) {
 }
 
 #[wasm_bindgen]
+pub struct Annotated {
+    collection: GeometryCollection<f64>
+}
+
+impl Annotated {
+    fn new(collection: GeometryCollection<f64>) -> Annotated {
+        Annotated { collection }
+    }
+}
+
+#[wasm_bindgen]
+impl Annotated {
+    pub fn centroids(&self) -> JsValue {
+        let size = self.collection.len();
+        console::log_1(&format!("calculating centroids for {size} geometries").into());
+        let mut centroids = vec![];
+        for entry in self.collection.iter() {
+            centroids.push(entry.centroid());
+        }
+        console::log_1(&"calculated centroids".into());
+        
+        JsValue::from_serde(&centroids).unwrap()
+    }
+}
+
+#[wasm_bindgen]
+pub async fn annotate2(source_url: String) -> Result<Annotated, JsValue> {
+    console::log_1(&format!("Fetching geojson from '{source_url}' ...").into());
+
+    if let Ok(text) = fetch_text(source_url).await {
+        if let Ok(collection) = parse_geojson_to_geometry_collection(text) {
+            let size = collection.len();
+            console::log_1(&format!("parsed {size} geometries").into());
+
+            log_area_statistics(&collection);
+            let minimum_size = 0.000001;
+            let filtered = filter_out_by_area(&collection, minimum_size);
+            let filtered_size = filtered.len();
+            let filtered_out = size - filtered_size;
+            console::log_1(&format!("filtered out {filtered_out} geometries with area <= {minimum_size}").into());
+
+            Ok(Annotated::new(filtered))
+        }
+        else {
+            console::log_1(&"Failed to parse geojson".into());
+            Err("failed to parse geojson".into())
+        }
+    }
+    else {
+        console::log_1(&"Failed to fetch geojson".into());
+        Err("failed to fetch geojson".into())
+    }
+}
+
+
+#[wasm_bindgen]
 pub async fn annotate(source_url: String) -> Result<JsValue, JsValue> {
     console::log_1(&format!("Fetching geojson from '{source_url}' ...").into());
 

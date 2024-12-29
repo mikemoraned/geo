@@ -24,7 +24,7 @@
         </div>
     </div>
     <script type="module">
-        import init, { annotate } from "./dist/centroids.js";
+        import init, { annotate2 } from "./dist/centroids.js";
         import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
 
         await init();
@@ -110,7 +110,8 @@
 
             bindLayerControl('regions', map);
 
-            let centroids = await annotate(sourceDataUrl);
+            let annotated = await annotate2(sourceDataUrl);
+            let centroids = annotated.centroids();
 
             let geojsonCentroids = {
                 type: 'FeatureCollection',
