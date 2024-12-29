@@ -76,8 +76,8 @@ impl CanvasSummaryRenderer {
     pub fn render(&self) -> Result<Vec<u8>, JsValue> {
         let mut pixmap = Pixmap::new(self.width, self.height).ok_or("Failed to create pixmap")?;
 
-        let mut white = Paint::default();
-        white.set_color(Color::WHITE);
+        let mut off_white = Paint::default();
+        off_white.set_color_rgba8(255, 255, 255, 100);
 
         let mut red = Paint::default();
         red.set_color_rgba8(255, 0, 0, 255);
@@ -87,14 +87,7 @@ impl CanvasSummaryRenderer {
 
         pixmap.fill_rect(
             Rect::from_xywh(0.0, 0.0, self.width as f32, self.height as f32).ok_or("Failed to create rect")?,
-            &white,
-            Transform::identity(),
-            None
-        );
-
-        pixmap.fill_rect(
-            Rect::from_xywh(0.0, 0.0, (self.width / 2) as f32, (self.height / 4) as f32).ok_or("Failed to create rect")?,
-            &red,
+            &off_white,
             Transform::identity(),
             None
         );
@@ -153,6 +146,7 @@ impl Annotated {
     }
 
     pub fn summary_renderer(&self, width: u32, height: u32) -> CanvasSummaryRenderer {
+        console::log_1(&format!("width: {width}, height: {height}").into());
         CanvasSummaryRenderer::new(width, height, self.clone())
     }
 }
