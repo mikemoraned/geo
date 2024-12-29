@@ -23,6 +23,7 @@
             <button id="regions-layer" class="button is-medium is-responsive is-loading" disabled>Regions</button>
             <button id="centroids-layer" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
             <button id="rays-layer" class="button is-medium is-responsive is-loading" disabled>Rays</button>
+            <button id="summaries-layer" class="button is-medium is-responsive is-loading" disabled>Summaries</button>
         </div>
     </div>
     <script type="module">
@@ -208,6 +209,8 @@
             const context = canvas.getContext('2d');
             context.fillStyle = '#000000';
             context.fillRect(0, 0, canvas.width, canvas.height);
+
+            bindLayerControl('summaries', map);
         });
     </script>
   </body>
