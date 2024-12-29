@@ -2,7 +2,7 @@ use std::{iter::zip, vec};
 
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
-use geo::{Area, Centroid, Coord, LineString, MultiLineString, Point};
+use geo::{Area, BoundingRect, Centroid, Coord, LineString, MultiLineString, Point};
 use gloo_utils::format::JsValueSerdeExt;
 use web_sys::console;
 
@@ -73,6 +73,11 @@ pub struct Annotated {
 impl Annotated {
     pub fn centroids(&mut self) -> JsValue {
         return JsValue::from_serde(&self.lazy_centroids()).unwrap();
+    }
+
+    pub fn bounds(&self) -> JsValue {
+        let bounds = self.collection.bounding_rect().unwrap();
+        return JsValue::from_serde(&bounds).unwrap();
     }
 
     pub fn rays(&mut self) -> JsValue {

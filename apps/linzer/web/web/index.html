@@ -17,6 +17,7 @@
   </head>
   <body>
     <div id="map"></div>
+    <canvas id="canvas" width="500" height="500" style="display: none;"></canvas>
     <div id="layers" class="box">
         <div class="buttons has-addons">
             <button id="regions-layer" class="button is-medium is-responsive is-loading" disabled>Regions</button>
@@ -146,33 +147,6 @@
             bindLayerControl('centroids', map);
 
             let rays = annotated.rays();
-            // console.log(rays);
-
-            /*
-            {
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "MultiLineString",
-        "coordinates": [
-          [
-            [100.0, 0.0],
-            [101.0, 1.0]
-          ],
-          [
-            [102.0, 2.0],
-            [103.0, 3.0]
-          ]
-        ]
-      },
-      "properties": {}
-    }
-  ]
-}
-            */
-
             let geojsonRays = {
                 type: 'FeatureCollection',
                 features: rays.map((polygon_rays) => ({
@@ -186,8 +160,6 @@
                     }
                 }))
             };
-            // console.log(geojsonRays);
-            // console.log(JSON.stringify(geojsonRays));
             
             map.addSource('rays', {
                 type: 'geojson',
@@ -207,6 +179,35 @@
             });
 
             bindLayerControl('rays', map);
+
+            const bounds = annotated.bounds();
+            console.log("Bounds", bounds);
+
+            map.addSource('summaries', {
+                type: 'canvas',
+                canvas: 'canvas',
+                animate: true,
+                coordinates: [
+                    [bounds.min.x, bounds.max.y],
+                    [bounds.max.x, bounds.max.y],
+                    [bounds.max.x, bounds.min.y],
+                    [bounds.min.x, bounds.min.y]
+                ]
+            });
+
+            map.addLayer({
+                id: 'summaries',
+                type: 'raster',
+                source: 'summaries',
+                layout: {
+                    visibility: 'visible'
+                },
+            });
+
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#000000';
+            context.fillRect(0, 0, canvas.width, canvas.height);
         });
     </script>
   </body>

@@ -5,6 +5,7 @@ export class Annotated {
   private constructor();
   free(): void;
   centroids(): any;
+  bounds(): any;
   rays(): any;
 }
 
@@ -14,6 +15,7 @@ export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly __wbg_annotated_free: (a: number, b: number) => void;
   readonly annotated_centroids: (a: number) => any;
+  readonly annotated_bounds: (a: number) => any;
   readonly annotated_rays: (a: number) => any;
   readonly annotate: (a: number, b: number) => any;
   readonly __wbindgen_exn_store: (a: number) => void;
@@ -22,8 +24,8 @@ export interface InitOutput {
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export_5: WebAssembly.Table;
-  readonly closure78_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure213_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure76_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure211_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 
