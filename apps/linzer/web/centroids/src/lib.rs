@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
-use geo::{Area, Centroid};
+use geo::{Area, Centroid, Point};
 use gloo_utils::format::JsValueSerdeExt;
 use web_sys::console;
 
@@ -63,27 +63,44 @@ fn log_area_statistics(collection: &GeometryCollection<f64>) {
 
 #[wasm_bindgen]
 pub struct Annotated {
-    collection: GeometryCollection<f64>
-}
-
-impl Annotated {
-    fn new(collection: GeometryCollection<f64>) -> Annotated {
-        Annotated { collection }
-    }
+    collection: GeometryCollection<f64>,
+    centroids: Option<Vec<geo::Point<f64>>>,
 }
 
 #[wasm_bindgen]
 impl Annotated {
-    pub fn centroids(&self) -> JsValue {
+    pub fn centroids(&mut self) -> JsValue {
+        return JsValue::from_serde(&self.lazy_centroids()).unwrap();
+    }
+}
+
+impl Annotated {
+    fn new(collection: GeometryCollection<f64>) -> Annotated {
+        Annotated { collection, centroids: None }
+    }
+
+    pub fn lazy_centroids(&mut self) -> Vec<Point<f64>> {
+        if let Some(ref centroids) = self.centroids {
+            centroids.clone()
+        }
+        else {
+            let centroids = self.calculate_centroids();
+            self.centroids = Some(centroids.clone());
+            centroids
+        }
+    }
+
+    fn calculate_centroids(&self) -> Vec<Point<f64>> {
         let size = self.collection.len();
         console::log_1(&format!("calculating centroids for {size} geometries").into());
         let mut centroids = vec![];
         for entry in self.collection.iter() {
-            centroids.push(entry.centroid());
+            if let Some(centroid) = entry.centroid() {
+                centroids.push(centroid);
+            }
         }
         console::log_1(&"calculated centroids".into());
-        
-        JsValue::from_serde(&centroids).unwrap()
+        centroids
     }
 }
 
