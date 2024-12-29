@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
-use geo::Centroid;
+use geo::{Area, Centroid};
 use gloo_utils::format::JsValueSerdeExt;
 use web_sys::console;
 
@@ -39,6 +39,28 @@ fn parse_geojson_to_geometry_collection(text: String) -> Result<GeometryCollecti
     }
 }
 
+fn filter_out_by_area(collection: &GeometryCollection<f64>, minimum_size: f64) -> GeometryCollection<f64> {
+    let mut filtered = vec![];
+    for entry in collection {
+        if entry.unsigned_area() > minimum_size {
+            filtered.push(entry.clone());
+        }
+    }
+    GeometryCollection::from(filtered)
+}
+
+fn log_area_statistics(collection: &GeometryCollection<f64>) {
+    let mut areas = vec![];
+    for entry in collection {
+        areas.push(entry.unsigned_area());
+    }
+    let min = areas.iter().min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+    let max = areas.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+    let sum: f64 = areas.iter().sum();
+    let avg = sum / areas.len() as f64;
+    console::log_1(&format!("min area: {min}, max area: {max}, avg area: {avg}").into());
+}
+
 #[wasm_bindgen]
 pub async fn annotate(source_url: String) -> Result<JsValue, JsValue> {
     console::log_1(&format!("Fetching geojson from '{source_url}' ...").into());
@@ -46,9 +68,18 @@ pub async fn annotate(source_url: String) -> Result<JsValue, JsValue> {
     if let Ok(text) = fetch_text(source_url).await {
         if let Ok(collection) = parse_geojson_to_geometry_collection(text) {
             let size = collection.len();
-            console::log_1(&format!("calculating centroids for {size} geometries").into());
+            console::log_1(&format!("parsed {size} geometries").into());
+
+            log_area_statistics(&collection);
+            let minimum_size = 0.000001;
+            let filtered = filter_out_by_area(&collection, minimum_size);
+            let filtered_size = filtered.len();
+            let filtered_out = size - filtered_size;
+            console::log_1(&format!("filtered out {filtered_out} geometries with area <= {minimum_size}").into());
+
+            console::log_1(&format!("calculating centroids for {filtered_size} geometries").into());
             let mut centroids = vec![];
-            for entry in collection {
+            for entry in filtered {
                 centroids.push(entry.centroid());
             }
             console::log_1(&"calculated centroids".into());

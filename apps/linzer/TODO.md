@@ -40,10 +40,10 @@
         * [x] load same geojson source from rust
         * [x] calculate centroids of each shape, using georust
         * [x] draw centroids in mapbox as a source
-    * [ ] usable UI for centroids
+    * [x] usable UI for centroids
         * [x] ease of use: make each layer in mapbox toggleable on and off
         * [x] speed up / clean up: parse directly into geo-types, without using geojson intermediate step
-        * [ ] fix geometries: there appear to be a lot of 'degenerate' regions (very small). This really needs to be properly fixed upstream in the region generator, but for now we can probably filter these by size
+        * [x] fix geometries: there appear to be a lot of 'degenerate' regions (very small). This really needs to be properly fixed upstream in the region generator, but for now we can probably filter these by size
         * [x] show spinner icon on layer buttons whilst waiting on layer to load
     * [ ]
     * [ ] ...
