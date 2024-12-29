@@ -1,6 +1,5 @@
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
-use geojson::{quick_collection, GeoJson};
 use geo::Centroid;
 use gloo_utils::format::JsValueSerdeExt;
 use web_sys::console;
@@ -26,21 +25,17 @@ async fn fetch_text(source_url: String) -> Result<String, Box<dyn std::error::Er
 }
 
 fn parse_geojson_to_geometry_collection(text: String) -> Result<GeometryCollection<f64>, Box<dyn std::error::Error>> {
-    if let Ok(geojson) = text.parse::<GeoJson>() {
-        console::log_1(&"Parsed geojson".into());
-        let collection: GeometryCollection<f64> = quick_collection(&geojson).unwrap();
-        if let Some(Geometry::GeometryCollection(collection)) = collection.0.get(0) {
-            console::log_1(&"Extracted geometries".into());
-            Ok(collection.clone())
-        }
-        else {
-            console::log_1(&"Failed to extract geometries".into());
-            Err("failed to extract geometries".into())
-        }
+    use geozero::geojson::*;
+    use geozero::ToGeo;
+
+    let geojson = GeoJsonString(text);
+    if let Ok(Geometry::GeometryCollection(collection)) = geojson.to_geo() {
+        console::log_1(&"Extracted geometries".into());
+        Ok(collection.clone())
     }
     else {
-        console::log_1(&"Failed to parse geojson".into());
-        Err("failed to parse geojson".into())
+        console::log_1(&"Failed to extract geometries".into());
+        Err("failed to extract geometries".into())
     }
 }
 

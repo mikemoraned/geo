@@ -8,10 +8,11 @@ wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = ['console'] }
 reqwest = { version = "0.12" }
-geojson = "0.24"
-geo-types = "0.7"
+geo-types = { version = "0.7", features = ['serde'] }
 geo = "0.29"
+geozero = "0.14"
 gloo-utils = { version = "0.2", features = ["serde"] }
+
 
 [lib]
 crate-type = ["cdylib", "rlib"]
