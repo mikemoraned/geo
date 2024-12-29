@@ -49,6 +49,12 @@
         - 'rays' are a set of linestrings for each region going from the centroid to each border-point
         * [x] refactor wasm into returning an `Annotated` object with a method for `centroids`
         * [x] add `rays` layer
+    * [ ] show a summary for each region
+        - summary is the length of each ray as a fraction of max size of all rays for region
+        * [ ] visualise as a spiky shape per region in a CanvasSource
+            * [ ] add a canvas source covering area, displaying a test rectangle
+            * [ ] to confirm projection is working, draw centroids again on canvas
+            * [ ] show spikes as a series of arcs
     * [ ] ...
 
 ## Geo
