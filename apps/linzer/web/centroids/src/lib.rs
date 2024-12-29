@@ -1,6 +1,8 @@
+use std::{iter::zip, vec};
+
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
-use geo::{Area, Centroid, Point};
+use geo::{Area, Centroid, Coord, LineString, MultiLineString, Point};
 use gloo_utils::format::JsValueSerdeExt;
 use web_sys::console;
 
@@ -72,6 +74,25 @@ impl Annotated {
     pub fn centroids(&mut self) -> JsValue {
         return JsValue::from_serde(&self.lazy_centroids()).unwrap();
     }
+
+    pub fn rays(&mut self) -> JsValue {
+        let mut rays: Vec<MultiLineString> = vec![];
+        let centroids = self.lazy_centroids();
+
+        for (geometry, centroid) in zip(self.collection.iter(),centroids.iter()) {
+            let centroid_coord: Coord = centroid.clone().into();
+            if let Geometry::Polygon(polygon) = geometry {
+                let mut polygon_rays = vec![];
+                for point in polygon.exterior().points() {
+                    let polygon_ray = LineString::new(vec![centroid_coord.clone(), point.into()]);
+                    polygon_rays.push(polygon_ray);
+                }
+                rays.push(MultiLineString::new(polygon_rays));
+            }
+        }
+
+        return JsValue::from_serde(&rays).unwrap();
+    }
 }
 
 impl Annotated {
@@ -105,7 +126,7 @@ impl Annotated {
 }
 
 #[wasm_bindgen]
-pub async fn annotate2(source_url: String) -> Result<Annotated, JsValue> {
+pub async fn annotate(source_url: String) -> Result<Annotated, JsValue> {
     console::log_1(&format!("Fetching geojson from '{source_url}' ...").into());
 
     if let Ok(text) = fetch_text(source_url).await {
@@ -121,43 +142,6 @@ pub async fn annotate2(source_url: String) -> Result<Annotated, JsValue> {
             console::log_1(&format!("filtered out {filtered_out} geometries with area <= {minimum_size}").into());
 
             Ok(Annotated::new(filtered))
-        }
-        else {
-            console::log_1(&"Failed to parse geojson".into());
-            Err("failed to parse geojson".into())
-        }
-    }
-    else {
-        console::log_1(&"Failed to fetch geojson".into());
-        Err("failed to fetch geojson".into())
-    }
-}
-
-
-#[wasm_bindgen]
-pub async fn annotate(source_url: String) -> Result<JsValue, JsValue> {
-    console::log_1(&format!("Fetching geojson from '{source_url}' ...").into());
-
-    if let Ok(text) = fetch_text(source_url).await {
-        if let Ok(collection) = parse_geojson_to_geometry_collection(text) {
-            let size = collection.len();
-            console::log_1(&format!("parsed {size} geometries").into());
-
-            log_area_statistics(&collection);
-            let minimum_size = 0.000001;
-            let filtered = filter_out_by_area(&collection, minimum_size);
-            let filtered_size = filtered.len();
-            let filtered_out = size - filtered_size;
-            console::log_1(&format!("filtered out {filtered_out} geometries with area <= {minimum_size}").into());
-
-            console::log_1(&format!("calculating centroids for {filtered_size} geometries").into());
-            let mut centroids = vec![];
-            for entry in filtered {
-                centroids.push(entry.centroid());
-            }
-            console::log_1(&"calculated centroids".into());
-            
-            Ok(JsValue::from_serde(&centroids).unwrap())
         }
         else {
             console::log_1(&"Failed to parse geojson".into());

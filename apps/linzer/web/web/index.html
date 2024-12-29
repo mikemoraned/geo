@@ -21,10 +21,11 @@
         <div class="buttons has-addons">
             <button id="regions-layer" class="button is-medium is-responsive is-loading" disabled>Regions</button>
             <button id="centroids-layer" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
+            <button id="rays-layer" class="button is-medium is-responsive is-loading" disabled>Rays</button>
         </div>
     </div>
     <script type="module">
-        import init, { annotate2 } from "./dist/centroids.js";
+        import init, { annotate } from "./dist/centroids.js";
         import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
 
         await init();
@@ -110,7 +111,7 @@
 
             bindLayerControl('regions', map);
 
-            let annotated = await annotate2(sourceDataUrl);
+            let annotated = await annotate(sourceDataUrl);
             let centroids = annotated.centroids();
 
             let geojsonCentroids = {
@@ -143,6 +144,69 @@
             });
 
             bindLayerControl('centroids', map);
+
+            let rays = annotated.rays();
+            // console.log(rays);
+
+            /*
+            {
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "MultiLineString",
+        "coordinates": [
+          [
+            [100.0, 0.0],
+            [101.0, 1.0]
+          ],
+          [
+            [102.0, 2.0],
+            [103.0, 3.0]
+          ]
+        ]
+      },
+      "properties": {}
+    }
+  ]
+}
+            */
+
+            let geojsonRays = {
+                type: 'FeatureCollection',
+                features: rays.map((polygon_rays) => ({
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'MultiLineString',
+                        coordinates: polygon_rays.map((ray) => 
+                            ray.map(({ x, y }) => [ x, y ])
+                        )
+                    }
+                }))
+            };
+            // console.log(geojsonRays);
+            // console.log(JSON.stringify(geojsonRays));
+            
+            map.addSource('rays', {
+                type: 'geojson',
+                data: geojsonRays
+            });
+
+            map.addLayer({
+                id: 'rays',
+                type: 'line',
+                source: 'rays',
+                layout: {
+                    visibility: 'visible'
+                },
+                paint: {
+                    'line-color': 'red'
+                }
+            });
+
+            bindLayerControl('rays', map);
         });
     </script>
   </body>

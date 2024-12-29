@@ -201,17 +201,6 @@ function debugString(val) {
  * @param {string} source_url
  * @returns {Promise<Annotated>}
  */
-export function annotate2(source_url) {
-    const ptr0 = passStringToWasm0(source_url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.annotate2(ptr0, len0);
-    return ret;
-}
-
-/**
- * @param {string} source_url
- * @returns {Promise<any>}
- */
 export function annotate(source_url) {
     const ptr0 = passStringToWasm0(source_url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
@@ -220,11 +209,11 @@ export function annotate(source_url) {
 }
 
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure82_externref_shim(arg0, arg1, arg2);
+    wasm.closure78_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_94(arg0, arg1, arg2, arg3) {
-    wasm.closure217_externref_shim(arg0, arg1, arg2, arg3);
+    wasm.closure213_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
@@ -261,6 +250,13 @@ export class Annotated {
      */
     centroids() {
         const ret = wasm.annotated_centroids(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    rays() {
+        const ret = wasm.annotated_rays(this.__wbg_ptr);
         return ret;
     }
 }
@@ -509,8 +505,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper242 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 83, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper241 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 79, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

@@ -45,10 +45,10 @@
         * [x] speed up / clean up: parse directly into geo-types, without using geojson intermediate step
         * [x] fix geometries: there appear to be a lot of 'degenerate' regions (very small). This really needs to be properly fixed upstream in the region generator, but for now we can probably filter these by size
         * [x] show spinner icon on layer buttons whilst waiting on layer to load
-    * [ ] show a 'skeleton' for each region
-        - a skeleton is a set of linestrings for each region going from the centroid to each border-point
+    * [x] show a set of 'rays' for each region
+        - 'rays' are a set of linestrings for each region going from the centroid to each border-point
         * [x] refactor wasm into returning an `Annotated` object with a method for `centroids`
-        * [ ] add `skeletons` layer
+        * [x] add `rays` layer
     * [ ] ...
 
 ## Geo
