@@ -1,7 +1,7 @@
 /* tslint:disable */
 /* eslint-disable */
-export function annotate(source_url: string): Promise<Annotated>;
-export class Annotated {
+export function annotate(source_url: string): Promise<AnnotatedJS>;
+export class AnnotatedJS {
   private constructor();
   free(): void;
   centroids(): any;
@@ -13,10 +13,10 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly __wbg_annotated_free: (a: number, b: number) => void;
-  readonly annotated_centroids: (a: number) => any;
-  readonly annotated_bounds: (a: number) => any;
-  readonly annotated_rays: (a: number) => any;
+  readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
+  readonly annotatedjs_centroids: (a: number) => any;
+  readonly annotatedjs_bounds: (a: number) => any;
+  readonly annotatedjs_rays: (a: number) => any;
   readonly annotate: (a: number, b: number) => any;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;

@@ -10,28 +10,33 @@ mod load;
 mod geometry;
 
 #[wasm_bindgen]
-pub struct Annotated {
-    collection: GeometryCollection<f64>,
-    centroids: Option<Vec<geo::Point<f64>>>,
+pub struct AnnotatedJS {
+    annotated: Annotated
+}
+
+impl AnnotatedJS {
+    pub fn new(collection: GeometryCollection<f64>) -> AnnotatedJS {
+        AnnotatedJS { annotated: Annotated::new(collection) }
+    }
 }
 
 #[wasm_bindgen]
-impl Annotated {
+impl AnnotatedJS {
     pub fn centroids(&mut self) -> JsValue {
-        return JsValue::from_serde(&self.lazy_centroids()).unwrap();
+        return JsValue::from_serde(&self.annotated.lazy_centroids()).unwrap();
     }
 
     #[wasm_bindgen(js_name = bounds)]
     pub fn bounds_js(&self) -> JsValue {
-        let bounds = self.collection.bounding_rect().unwrap();
+        let bounds = self.annotated.collection.bounding_rect().unwrap();
         return JsValue::from_serde(&bounds).unwrap();
     }
 
     pub fn rays(&mut self) -> JsValue {
         let mut rays: Vec<MultiLineString> = vec![];
-        let centroids = self.lazy_centroids();
+        let centroids = self.annotated.lazy_centroids();
 
-        for (geometry, centroid) in zip(self.collection.iter(),centroids.iter()) {
+        for (geometry, centroid) in zip(self.annotated.collection.iter(),centroids.iter()) {
             let centroid_coord: Coord = centroid.clone().into();
             if let Geometry::Polygon(polygon) = geometry {
                 let mut polygon_rays = vec![];
@@ -45,6 +50,11 @@ impl Annotated {
 
         return JsValue::from_serde(&rays).unwrap();
     }
+}
+
+pub struct Annotated {
+    collection: GeometryCollection<f64>,
+    centroids: Option<Vec<geo::Point<f64>>>,
 }
 
 impl Annotated {
@@ -86,7 +96,7 @@ impl Annotated {
 }
 
 #[wasm_bindgen]
-pub async fn annotate(source_url: String) -> Result<Annotated, JsValue> {
+pub async fn annotate(source_url: String) -> Result<AnnotatedJS, JsValue> {
     console::log_1(&format!("Fetching geojson from '{source_url}' ...").into());
 
     if let Ok(text) = load::fetch_text(source_url).await {
@@ -101,7 +111,7 @@ pub async fn annotate(source_url: String) -> Result<Annotated, JsValue> {
             let filtered_out = size - filtered_size;
             console::log_1(&format!("filtered out {filtered_out} geometries with area <= {minimum_size}").into());
 
-            Ok(Annotated::new(filtered))
+            Ok(AnnotatedJS::new(filtered))
         }
         else {
             console::log_1(&"Failed to parse geojson".into());

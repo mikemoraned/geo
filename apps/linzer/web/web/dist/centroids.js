@@ -199,7 +199,7 @@ function debugString(val) {
 }
 /**
  * @param {string} source_url
- * @returns {Promise<Annotated>}
+ * @returns {Promise<AnnotatedJS>}
  */
 export function annotate(source_url) {
     const ptr0 = passStringToWasm0(source_url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -220,50 +220,50 @@ const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
 
 const __wbindgen_enum_RequestMode = ["same-origin", "no-cors", "cors", "navigate"];
 
-const AnnotatedFinalization = (typeof FinalizationRegistry === 'undefined')
+const AnnotatedJSFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_annotated_free(ptr >>> 0, 1));
+    : new FinalizationRegistry(ptr => wasm.__wbg_annotatedjs_free(ptr >>> 0, 1));
 
-export class Annotated {
+export class AnnotatedJS {
 
     static __wrap(ptr) {
         ptr = ptr >>> 0;
-        const obj = Object.create(Annotated.prototype);
+        const obj = Object.create(AnnotatedJS.prototype);
         obj.__wbg_ptr = ptr;
-        AnnotatedFinalization.register(obj, obj.__wbg_ptr, obj);
+        AnnotatedJSFinalization.register(obj, obj.__wbg_ptr, obj);
         return obj;
     }
 
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
-        AnnotatedFinalization.unregister(this);
+        AnnotatedJSFinalization.unregister(this);
         return ptr;
     }
 
     free() {
         const ptr = this.__destroy_into_raw();
-        wasm.__wbg_annotated_free(ptr, 0);
+        wasm.__wbg_annotatedjs_free(ptr, 0);
     }
     /**
      * @returns {any}
      */
     centroids() {
-        const ret = wasm.annotated_centroids(this.__wbg_ptr);
+        const ret = wasm.annotatedjs_centroids(this.__wbg_ptr);
         return ret;
     }
     /**
      * @returns {any}
      */
     bounds() {
-        const ret = wasm.annotated_bounds(this.__wbg_ptr);
+        const ret = wasm.annotatedjs_bounds(this.__wbg_ptr);
         return ret;
     }
     /**
      * @returns {any}
      */
     rays() {
-        const ret = wasm.annotated_rays(this.__wbg_ptr);
+        const ret = wasm.annotatedjs_rays(this.__wbg_ptr);
         return ret;
     }
 }
@@ -305,8 +305,8 @@ function __wbg_get_imports() {
     imports.wbg.__wbg_abort_05026c983d86824c = function(arg0) {
         arg0.abort();
     };
-    imports.wbg.__wbg_annotated_new = function(arg0) {
-        const ret = Annotated.__wrap(arg0);
+    imports.wbg.__wbg_annotatedjs_new = function(arg0) {
+        const ret = AnnotatedJS.__wrap(arg0);
         return ret;
     };
     imports.wbg.__wbg_append_72d1635ad8643998 = function() { return handleError(function (arg0, arg1, arg2, arg3, arg4) {
@@ -512,7 +512,7 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper246 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper247 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 77, __wbg_adapter_26);
         return ret;
     };

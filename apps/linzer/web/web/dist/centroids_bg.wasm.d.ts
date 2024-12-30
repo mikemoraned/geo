@@ -1,10 +1,10 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
-export const __wbg_annotated_free: (a: number, b: number) => void;
-export const annotated_centroids: (a: number) => any;
-export const annotated_bounds: (a: number) => any;
-export const annotated_rays: (a: number) => any;
+export const __wbg_annotatedjs_free: (a: number, b: number) => void;
+export const annotatedjs_centroids: (a: number) => any;
+export const annotatedjs_bounds: (a: number) => any;
+export const annotatedjs_rays: (a: number) => any;
 export const annotate: (a: number, b: number) => any;
 export const __wbindgen_exn_store: (a: number) => void;
 export const __externref_table_alloc: () => number;
