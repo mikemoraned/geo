@@ -21,8 +21,8 @@
     <div id="layers" class="box">
         <div class="buttons has-addons">
             <button id="regions-layer" class="button is-medium is-responsive is-loading" disabled>Regions</button>
-            <button id="centroids-layer" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
             <button id="rays-layer" class="button is-medium is-responsive is-loading" disabled>Rays</button>
+            <button id="centroids-layer" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
         </div>
     </div>
     <script type="module">
@@ -89,11 +89,7 @@
             button.disabled = false;
         }
 
-        map.on('load', async () => {
-            console.log("Map loaded");
-
-            const sourceDataUrl = new URL('/data/hamburg/regions_pedestrian.1000.geojson', window.location.origin).toString();
-
+        function addRegionsLayer(map, sourceDataUrl) {
             map.addSource('hamburg', {
                 type: 'geojson',
                 data: sourceDataUrl
@@ -112,8 +108,9 @@
             });
 
             bindLayerControl('regions', map);
+        }
 
-            let annotated = await annotate(sourceDataUrl);
+        function addCentroidsLayer(map, annotated) {
             let centroids = annotated.centroids();
 
             let geojsonCentroids = {
@@ -146,8 +143,11 @@
             });
 
             bindLayerControl('centroids', map);
+        }
 
+        function addRaysLayer(map, annotated) {
             let rays = annotated.rays();
+
             let geojsonRays = {
                 type: 'FeatureCollection',
                 features: rays.map((polygon_rays) => ({
@@ -180,6 +180,18 @@
             });
 
             bindLayerControl('rays', map);
+        }
+
+        map.on('load', async () => {
+            console.log("Map loaded");
+
+            const sourceDataUrl = new URL('/data/hamburg/regions_pedestrian.1000.geojson', window.location.origin).toString();
+
+            addRegionsLayer(map, sourceDataUrl);
+
+            let annotated = await annotate(sourceDataUrl);
+            addCentroidsLayer(map, annotated);
+            addRaysLayer(map, annotated);
         });
     </script>
   </body>
