@@ -6,40 +6,7 @@ use geo::{Area, BoundingRect, Centroid, Coord, LineString, MultiLineString, Poin
 use gloo_utils::format::JsValueSerdeExt;
 use web_sys::console;
 
-async fn fetch_text(source_url: String) -> Result<String, Box<dyn std::error::Error>> {
-    console::log_1(&format!("Fetching text from '{source_url}' ...").into());
-
-    let response = reqwest::get(source_url).await?;
-    match response.status() {
-        reqwest::StatusCode::OK => {
-            console::log_1(&"Response status: OK".into());
-
-            let text = response.text().await?;
-            console::log_1(&"Fetched text".into());
-            Ok(text)
-        },
-        status => {
-            let message = format!("Response status: NOT OK: {status}");
-            console::log_1(&message.into());
-            Err("failed to fetch geojson".into())
-        }
-    }
-}
-
-fn parse_geojson_to_geometry_collection(text: String) -> Result<GeometryCollection<f64>, Box<dyn std::error::Error>> {
-    use geozero::geojson::*;
-    use geozero::ToGeo;
-
-    let geojson = GeoJsonString(text);
-    if let Ok(Geometry::GeometryCollection(collection)) = geojson.to_geo() {
-        console::log_1(&"Extracted geometries".into());
-        Ok(collection.clone())
-    }
-    else {
-        console::log_1(&"Failed to extract geometries".into());
-        Err("failed to extract geometries".into())
-    }
-}
+mod load;
 
 fn filter_out_by_area(collection: &GeometryCollection<f64>, minimum_size: f64) -> GeometryCollection<f64> {
     let mut filtered = vec![];
@@ -143,8 +110,8 @@ impl Annotated {
 pub async fn annotate(source_url: String) -> Result<Annotated, JsValue> {
     console::log_1(&format!("Fetching geojson from '{source_url}' ...").into());
 
-    if let Ok(text) = fetch_text(source_url).await {
-        if let Ok(collection) = parse_geojson_to_geometry_collection(text) {
+    if let Ok(text) = load::fetch_text(source_url).await {
+        if let Ok(collection) = load::parse_geojson_to_geometry_collection(text) {
             let size = collection.len();
             console::log_1(&format!("parsed {size} geometries").into());
 

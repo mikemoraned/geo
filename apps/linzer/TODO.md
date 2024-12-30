@@ -61,6 +61,8 @@
             * [x] load D3 and get it showing something minimal
             * [x] draw centroids using D3
             * [x] control display of centroids via top-control
+        * [ ] calculate summary
+        * [ ] show summary
         * [ ] ...
     * [ ] ...
 
