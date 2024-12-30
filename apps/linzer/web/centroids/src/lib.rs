@@ -96,7 +96,7 @@ impl CanvasSummaryRenderer {
         let x_scale = self.width as f64 / bounds.width();
         let y_scale = self.height as f64 / bounds.height();
 
-        let circle_radius = 10.0f32;
+        let circle_radius = 0.001 * ((self.width + self.height) / 2) as f32;
         let mut pb = PathBuilder::new();
         for centroid in self.annotated.lazy_centroids() {
             let x = (centroid.x() - bounds.min().x) * x_scale;
