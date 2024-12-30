@@ -26,28 +26,13 @@ impl AnnotatedJS {
         return JsValue::from_serde(&self.annotated.lazy_centroids()).unwrap();
     }
 
-    #[wasm_bindgen(js_name = bounds)]
-    pub fn bounds_js(&self) -> JsValue {
-        let bounds = self.annotated.collection.bounding_rect().unwrap();
+    pub fn bounds(&self) -> JsValue {
+        let bounds = self.annotated.bounds();
         return JsValue::from_serde(&bounds).unwrap();
     }
 
     pub fn rays(&mut self) -> JsValue {
-        let mut rays: Vec<MultiLineString> = vec![];
-        let centroids = self.annotated.lazy_centroids();
-
-        for (geometry, centroid) in zip(self.annotated.collection.iter(),centroids.iter()) {
-            let centroid_coord: Coord = centroid.clone().into();
-            if let Geometry::Polygon(polygon) = geometry {
-                let mut polygon_rays = vec![];
-                for point in polygon.exterior().points() {
-                    let polygon_ray = LineString::new(vec![centroid_coord.clone(), point.into()]);
-                    polygon_rays.push(polygon_ray);
-                }
-                rays.push(MultiLineString::new(polygon_rays));
-            }
-        }
-
+        let rays = self.annotated.rays();
         return JsValue::from_serde(&rays).unwrap();
     }
 }
@@ -92,6 +77,25 @@ impl Annotated {
         }
         console::log_1(&"calculated centroids".into());
         centroids
+    }
+
+    pub fn rays(&mut self) -> Vec<MultiLineString> {
+        let mut rays: Vec<MultiLineString> = vec![];
+        let centroids = self.lazy_centroids();
+
+        for (geometry, centroid) in zip(self.collection.iter(),centroids.iter()) {
+            let centroid_coord: Coord = centroid.clone().into();
+            if let Geometry::Polygon(polygon) = geometry {
+                let mut polygon_rays = vec![];
+                for point in polygon.exterior().points() {
+                    let polygon_ray = LineString::new(vec![centroid_coord.clone(), point.into()]);
+                    polygon_rays.push(polygon_ray);
+                }
+                rays.push(MultiLineString::new(polygon_rays));
+            }
+        }
+
+        return rays;
     }
 }
 
