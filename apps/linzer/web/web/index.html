@@ -190,8 +190,8 @@
             addRegionsLayer(map, sourceDataUrl);
 
             let annotated = await annotate(sourceDataUrl);
-            addCentroidsLayer(map, annotated);
             addRaysLayer(map, annotated);
+            addCentroidsLayer(map, annotated);
         });
     </script>
   </body>
