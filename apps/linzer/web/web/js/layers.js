@@ -1,6 +1,6 @@
 export function addLayers(map, sourceDataUrl, annotated) {
     addRegionsLayer(map, sourceDataUrl);
-    // addRaysLayer(map, annotated);
+    addRaysLayer(map, annotated);
     addCentroidsLayer(map, annotated);
 }
 

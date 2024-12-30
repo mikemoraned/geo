@@ -52,15 +52,15 @@ impl Annotated {
             let centroid_coord: Coord = centroid.clone().into();
             if let Geometry::Polygon(polygon) = geometry {
                 let mut polygon_rays = vec![];
-                for point in polygon.exterior().points() {
-                    let polygon_ray = LineString::new(vec![centroid_coord.clone(), point.into()]);
+                for coord in polygon.exterior_coords_iter().take(10) {
+                    let polygon_ray = LineString::new(vec![centroid_coord.clone(), coord]);
                     polygon_rays.push(polygon_ray);
                 }
                 rays.push(MultiLineString::new(polygon_rays));
             }
         }
 
-        return rays;
+        rays
     }
 
     pub fn summaries(&mut self) -> Vec<RegionSummary> {
@@ -72,12 +72,13 @@ impl Annotated {
             let centroid_coord: Coord = centroid.clone().into();
             if let Geometry::Polygon(polygon) = geometry {
                 let mut angle_length_pairs = vec![];
-                for coord in polygon.exterior_coords_iter() {
+                for coord in polygon.exterior_coords_iter().take(10) {
                     let line = Line::new(centroid_coord, coord);
                     let slope = line.slope();
-                    let radians_from_north = PI - slope.tan();
+                    let radians = slope.sin();
+                    // let radians = PI / 2.0;
                     let length = line.length::<Euclidean>();
-                    angle_length_pairs.push((radians_from_north, length));
+                    angle_length_pairs.push((radians, length));
                 }
                 let max_length = angle_length_pairs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().1;
 

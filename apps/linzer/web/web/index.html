@@ -22,7 +22,7 @@
     <div id="layers" class="box">
         <div class="buttons has-addons">
             <button id="regions-layer-button" class="button is-medium is-responsive is-loading" disabled>Regions</button>
-            <!-- <button id="rays-layer" class="button is-medium is-responsive is-loading" disabled>Rays</button> -->
+            <button id="rays-layer-button" class="button is-medium is-responsive is-loading" disabled>Rays</button>
             <button id="centroids-layer-button" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
             <button id="summaries-layer-button" class="button is-medium is-responsive is-loading" disabled>Summaries</button>
         </div>
@@ -106,6 +106,8 @@
             // const centroids = annotated.centroids();
             const summaries = annotated.summaries().slice(1, 2);
             const centroids = summaries.map(s => s.centroid);
+            console.log(centroids);
+            console.log(summaries);
 
             const summaryGroup = svg.append("g").attr("id", "summaries-layer");
 
@@ -119,13 +121,13 @@
                 .style("fill-opacity", "0%")
                 .style("stroke", "#ff0000");
 
-            const summaryRadius = 100;
+            const summaryRadius = 300;
             const linesData = summaries.flatMap(s => {
                 return s.rays.map(r => {
                     return {
                         centroid: [ s.centroid.x, s.centroid.y ],
-                        x_offset: Math.cos(r.angle) * r.length * summaryRadius,
-                        y_offset: Math.sin(r.angle) * r.length * summaryRadius
+                        x_offset: Math.cos(r.angle - (0.75 * 2.0 * Math.PI)) * r.length * summaryRadius,
+                        y_offset: Math.sin(r.angle - (0.75 * 2.0 * Math.PI)) * r.length * summaryRadius
                     };
                 });
             })
