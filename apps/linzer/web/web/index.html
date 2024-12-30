@@ -21,9 +21,10 @@
     <div id="mapbox"></div>
     <div id="layers" class="box">
         <div class="buttons has-addons">
-            <button id="regions-layer" class="button is-medium is-responsive is-loading" disabled>Regions</button>
+            <button id="regions-layer-button" class="button is-medium is-responsive is-loading" disabled>Regions</button>
             <!-- <button id="rays-layer" class="button is-medium is-responsive is-loading" disabled>Rays</button> -->
-            <button id="centroids-layer" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
+            <button id="centroids-layer-button" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
+            <button id="summaries-layer-button" class="button is-medium is-responsive is-loading" disabled>Summaries</button>
         </div>
     </div>
     <script type="module">
@@ -50,6 +51,41 @@
 		});
         console.log("Map created");
 
+        function bindLayerControl(layerId, svg) {
+            const buttonId = `${layerId}-layer-button`;
+            const button = document.getElementById(buttonId);
+            if (!button) {
+                console.error(`Button ${buttonId} not found`);
+                return;
+            }
+
+            function updateStateBasedOnVisibility() {
+                const visibility = svg.select(`g#${layerId}-layer`).style('visibility');
+                if (visibility === 'visible') {
+                    button.classList.add('is-success');
+                }
+                else {
+                    button.classList.remove('is-success');
+                }
+            }
+
+            button.addEventListener('click', () => {
+                const group = svg.select(`g#${layerId}-layer`);
+                const visibility = group.style('visibility');
+                if (visibility === 'visible') {
+                    group.style('visibility', 'hidden');
+                }
+                else {
+                    group.style('visibility', 'visible');
+                }
+                updateStateBasedOnVisibility();
+            });
+
+            updateStateBasedOnVisibility();
+            button.classList.remove('is-loading');
+            button.disabled = false;
+        }
+
         map.on('load', async () => {
             console.log("Map loaded");
 
@@ -59,7 +95,6 @@
             addLayers(map, sourceDataUrl, annotated);
 
             let container = map.getCanvasContainer();
-            console.log("Container", container);
             let svg = d3
               .select(container)
               .append("svg");
@@ -69,7 +104,10 @@
             }
 
             const centroids = annotated.centroids();
-            const dots = svg
+
+            const summaryGroup = svg.append("g").attr("id", "summaries-layer");
+
+            const dots = summaryGroup
                 .selectAll("circle")
                 .data(centroids.map(c => [ c.x, c.y ]))
                 .enter()
@@ -92,6 +130,8 @@
             map.on("move", render);
             map.on("moveend", render);
             render();
+
+            bindLayerControl("summaries", svg);
         });
     </script>
   </body>

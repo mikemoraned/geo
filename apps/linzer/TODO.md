@@ -56,10 +56,12 @@
             * [x] to confirm projection is working, draw centroids again on canvas as circles
                 - this is sorta-maybe working but is fuzzy (as is a raster) and mapping seems still slightly-off
             * [-] show spikes as a series of arcs
-        * [ ] switch to layering D3 on top of the map, as in https://franksh.com/posts/d3-mapboxgl/, https://docs.os.uk/more-than-maps/tutorials/apis/d3-overlays-and-mapbox-gl
+        * [x] switch to layering D3 on top of the map, as in https://franksh.com/posts/d3-mapboxgl/, https://docs.os.uk/more-than-maps/tutorials/apis/d3-overlays-and-mapbox-gl
             * [x] remove previous canvas implementation
-            * [ ] load D3 and get it showing something minimal
-            * [ ] ...
+            * [x] load D3 and get it showing something minimal
+            * [x] draw centroids using D3
+            * [x] control display of centroids via top-control
+        * [ ] ...
     * [ ] ...
 
 ## Geo

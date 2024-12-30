@@ -5,7 +5,7 @@ export function addLayers(map, sourceDataUrl, annotated) {
 }
 
 function bindLayerControl(layerId, map) {
-    const buttonId = `${layerId}-layer`;
+    const buttonId = `${layerId}-layer-button`;
     const button = document.getElementById(buttonId);
     if (!button) {
         console.error(`Button ${buttonId} not found`);
