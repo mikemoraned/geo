@@ -2,33 +2,12 @@ use std::{iter::zip, vec};
 
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
-use geo::{Area, BoundingRect, Centroid, Coord, LineString, MultiLineString, Point};
+use geo::{BoundingRect, Centroid, Coord, LineString, MultiLineString, Point};
 use gloo_utils::format::JsValueSerdeExt;
 use web_sys::console;
 
 mod load;
-
-fn filter_out_by_area(collection: &GeometryCollection<f64>, minimum_size: f64) -> GeometryCollection<f64> {
-    let mut filtered = vec![];
-    for entry in collection {
-        if entry.unsigned_area() > minimum_size {
-            filtered.push(entry.clone());
-        }
-    }
-    GeometryCollection::from(filtered)
-}
-
-fn log_area_statistics(collection: &GeometryCollection<f64>) {
-    let mut areas = vec![];
-    for entry in collection {
-        areas.push(entry.unsigned_area());
-    }
-    let min = areas.iter().min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-    let max = areas.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-    let sum: f64 = areas.iter().sum();
-    let avg = sum / areas.len() as f64;
-    console::log_1(&format!("min area: {min}, max area: {max}, avg area: {avg}").into());
-}
+mod geometry;
 
 #[wasm_bindgen]
 pub struct Annotated {
@@ -115,9 +94,9 @@ pub async fn annotate(source_url: String) -> Result<Annotated, JsValue> {
             let size = collection.len();
             console::log_1(&format!("parsed {size} geometries").into());
 
-            log_area_statistics(&collection);
+            geometry::log_area_statistics(&collection);
             let minimum_size = 0.000001;
-            let filtered = filter_out_by_area(&collection, minimum_size);
+            let filtered = geometry::filter_out_by_area(&collection, minimum_size);
             let filtered_size = filtered.len();
             let filtered_out = size - filtered_size;
             console::log_1(&format!("filtered out {filtered_out} geometries with area <= {minimum_size}").into());
