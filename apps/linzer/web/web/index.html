@@ -103,18 +103,42 @@
               return map.project(new mapboxgl.LngLat(d[0], d[1]));
             }
 
-            const centroids = annotated.centroids();
+            // const centroids = annotated.centroids();
+            const summaries = annotated.summaries().slice(1, 2);
+            const centroids = summaries.map(s => s.centroid);
 
             const summaryGroup = svg.append("g").attr("id", "summaries-layer");
 
             const dots = summaryGroup
                 .selectAll("circle")
                 .data(centroids.map(c => [ c.x, c.y ]))
+                // .data([])
                 .enter()
                 .append("circle")
                 .attr("r", 5)
                 .style("fill-opacity", "0%")
                 .style("stroke", "#ff0000");
+
+            const summaryRadius = 100;
+            const linesData = summaries.flatMap(s => {
+                return s.rays.map(r => {
+                    return {
+                        centroid: [ s.centroid.x, s.centroid.y ],
+                        x_offset: Math.cos(r.angle) * r.length * summaryRadius,
+                        y_offset: Math.sin(r.angle) * r.length * summaryRadius
+                    };
+                });
+            })
+            // .filter(d => project(d.centroid).x > 0 && project(d.centroid).y > 0)
+            // .slice(0, 100)
+            ;
+            console.log(linesData);
+            const lines = summaryGroup
+                .selectAll("line")
+                .data(linesData)
+                .enter()
+                .append("line")
+                .attr("stroke", "black");
 
             function render() {
                 dots
@@ -123,6 +147,19 @@
                     })
                     .attr("cy", function (d) {
                         return project(d).y;
+                    });
+                lines
+                    .attr("x1", function (d) {
+                        return project(d.centroid).x;
+                    })
+                    .attr("y1", function (d) {
+                        return project(d.centroid).y;
+                    })
+                    .attr("x2", function (d) {
+                        return project(d.centroid).x + d.x_offset;
+                    })
+                    .attr("y2", function (d) {
+                        return project(d.centroid).y + d.y_offset;
                     });
             }
 

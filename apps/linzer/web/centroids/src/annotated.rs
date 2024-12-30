@@ -1,7 +1,9 @@
-use std::{iter::zip, vec};
+use std::{f64::consts::PI, iter::zip, vec};
 
 use geo_types::{Geometry, GeometryCollection};
-use geo::{BoundingRect, Centroid, Coord, LineString, MultiLineString, Point};
+use geo::{BoundingRect, Centroid, Coord, CoordsIter, Euclidean, Length, Line, LineString, MultiLineString, Point};
+use serde::Serialize;
+use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::console;
 
 pub struct Annotated {
@@ -17,7 +19,7 @@ impl Annotated {
     pub fn bounds(&self) -> geo_types::Rect<f64> {
         self.collection.bounding_rect().unwrap()
     }
-    
+
     pub fn lazy_centroids(&mut self) -> Vec<Point<f64>> {
         if let Some(ref centroids) = self.centroids {
             centroids.clone()
@@ -60,4 +62,49 @@ impl Annotated {
 
         return rays;
     }
+
+    pub fn summaries(&mut self) -> Vec<RegionSummary> {
+        console::log_1(&"calculating summaries".into());
+        let mut summaries: Vec<RegionSummary> = vec![];
+        let centroids = self.lazy_centroids();
+
+        for (geometry, centroid) in zip(self.collection.iter(),centroids.iter()) {
+            let centroid_coord: Coord = centroid.clone().into();
+            if let Geometry::Polygon(polygon) = geometry {
+                let mut angle_length_pairs = vec![];
+                for coord in polygon.exterior_coords_iter() {
+                    let line = Line::new(centroid_coord, coord);
+                    let slope = line.slope();
+                    let radians_from_north = PI - slope.tan();
+                    let length = line.length::<Euclidean>();
+                    angle_length_pairs.push((radians_from_north, length));
+                }
+                let max_length = angle_length_pairs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().1;
+
+                let rays = angle_length_pairs.into_iter().map(|(angle, length)| {
+                    Ray { angle, length: length / max_length }
+                }).collect();
+
+                let summary = RegionSummary { centroid: centroid.clone(), rays };
+                summaries.push(summary);
+            }
+        }
+
+        console::log_1(&"calculated summaries".into());
+        summaries
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Serialize)]
+pub struct Ray {
+    angle: f64,
+    length: f64,
+}
+
+#[wasm_bindgen]
+#[derive(Serialize)]
+pub struct RegionSummary {
+    centroid: Point<f64>,
+    rays: Vec<Ray>,
 }

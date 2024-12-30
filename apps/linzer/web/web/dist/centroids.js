@@ -209,11 +209,11 @@ export function annotate(source_url) {
 }
 
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure76_externref_shim(arg0, arg1, arg2);
+    wasm.closure79_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_95(arg0, arg1, arg2, arg3) {
-    wasm.closure211_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_96(arg0, arg1, arg2, arg3) {
+    wasm.closure214_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
@@ -265,6 +265,51 @@ export class AnnotatedJS {
     rays() {
         const ret = wasm.annotatedjs_rays(this.__wbg_ptr);
         return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    summaries() {
+        const ret = wasm.annotatedjs_summaries(this.__wbg_ptr);
+        return ret;
+    }
+}
+
+const RayFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_ray_free(ptr >>> 0, 1));
+
+export class Ray {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        RayFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_ray_free(ptr, 0);
+    }
+}
+
+const RegionSummaryFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_regionsummary_free(ptr >>> 0, 1));
+
+export class RegionSummary {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        RegionSummaryFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_regionsummary_free(ptr, 0);
     }
 }
 
@@ -376,7 +421,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_95(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_96(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -512,8 +557,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper248 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 77, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper261 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 80, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

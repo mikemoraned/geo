@@ -119,6 +119,7 @@ dependencies = [
  "geozero",
  "gloo-utils",
  "reqwest",
+ "serde",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

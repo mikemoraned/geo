@@ -35,6 +35,11 @@ impl AnnotatedJS {
         let rays = self.annotated.rays();
         return JsValue::from_serde(&rays).unwrap();
     }
+
+    pub fn summaries(&mut self) -> JsValue {
+        let summaries = self.annotated.summaries();
+        return JsValue::from_serde(&summaries).unwrap();
+    }
 }
 
 #[wasm_bindgen]

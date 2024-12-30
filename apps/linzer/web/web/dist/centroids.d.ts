@@ -7,16 +7,28 @@ export class AnnotatedJS {
   centroids(): any;
   bounds(): any;
   rays(): any;
+  summaries(): any;
+}
+export class Ray {
+  private constructor();
+  free(): void;
+}
+export class RegionSummary {
+  private constructor();
+  free(): void;
 }
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly __wbg_ray_free: (a: number, b: number) => void;
+  readonly __wbg_regionsummary_free: (a: number, b: number) => void;
   readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
   readonly annotatedjs_centroids: (a: number) => any;
   readonly annotatedjs_bounds: (a: number) => any;
   readonly annotatedjs_rays: (a: number) => any;
+  readonly annotatedjs_summaries: (a: number) => any;
   readonly annotate: (a: number, b: number) => any;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
@@ -24,8 +36,8 @@ export interface InitOutput {
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export_5: WebAssembly.Table;
-  readonly closure76_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure211_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure79_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure214_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 
