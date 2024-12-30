@@ -197,17 +197,6 @@ function debugString(val) {
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
 }
-
-function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_export_2.get(idx);
-    wasm.__externref_table_dealloc(idx);
-    return value;
-}
-
-function getArrayU8FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
-}
 /**
  * @param {string} source_url
  * @returns {Promise<Annotated>}
@@ -223,7 +212,7 @@ function __wbg_adapter_26(arg0, arg1, arg2) {
     wasm.closure76_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_97(arg0, arg1, arg2, arg3) {
+function __wbg_adapter_95(arg0, arg1, arg2, arg3) {
     wasm.closure211_externref_shim(arg0, arg1, arg2, arg3);
 }
 
@@ -276,54 +265,6 @@ export class Annotated {
     rays() {
         const ret = wasm.annotated_rays(this.__wbg_ptr);
         return ret;
-    }
-    /**
-     * @param {number} width
-     * @param {number} height
-     * @returns {CanvasSummaryRenderer}
-     */
-    summary_renderer(width, height) {
-        const ret = wasm.annotated_summary_renderer(this.__wbg_ptr, width, height);
-        return CanvasSummaryRenderer.__wrap(ret);
-    }
-}
-
-const CanvasSummaryRendererFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_canvassummaryrenderer_free(ptr >>> 0, 1));
-
-export class CanvasSummaryRenderer {
-
-    static __wrap(ptr) {
-        ptr = ptr >>> 0;
-        const obj = Object.create(CanvasSummaryRenderer.prototype);
-        obj.__wbg_ptr = ptr;
-        CanvasSummaryRendererFinalization.register(obj, obj.__wbg_ptr, obj);
-        return obj;
-    }
-
-    __destroy_into_raw() {
-        const ptr = this.__wbg_ptr;
-        this.__wbg_ptr = 0;
-        CanvasSummaryRendererFinalization.unregister(this);
-        return ptr;
-    }
-
-    free() {
-        const ptr = this.__destroy_into_raw();
-        wasm.__wbg_canvassummaryrenderer_free(ptr, 0);
-    }
-    /**
-     * @returns {Uint8Array}
-     */
-    render() {
-        const ret = wasm.canvassummaryrenderer_render(this.__wbg_ptr);
-        if (ret[3]) {
-            throw takeFromExternrefTable0(ret[2]);
-        }
-        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-        return v1;
     }
 }
 
@@ -435,7 +376,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_97(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_95(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -571,7 +512,7 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper256 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper247 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 77, __wbg_adapter_26);
         return ret;
     };

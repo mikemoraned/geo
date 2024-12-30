@@ -23,7 +23,6 @@
             <button id="regions-layer" class="button is-medium is-responsive is-loading" disabled>Regions</button>
             <button id="centroids-layer" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
             <button id="rays-layer" class="button is-medium is-responsive is-loading" disabled>Rays</button>
-            <button id="summaries-layer" class="button is-medium is-responsive is-loading" disabled>Summaries</button>
         </div>
     </div>
     <script type="module">
@@ -181,63 +180,6 @@
             });
 
             bindLayerControl('rays', map);
-
-            const bounds = annotated.bounds();
-            console.log("Bounds", bounds);
-
-            map.addSource('summaries', {
-                type: 'canvas',
-                canvas: 'canvas',
-                animate: true,
-                coordinates: [
-                    [bounds.min.x, bounds.max.y],
-                    [bounds.max.x, bounds.max.y],
-                    [bounds.max.x, bounds.min.y],
-                    [bounds.min.x, bounds.min.y]
-                ]
-            });
-
-            map.addLayer({
-                id: 'summaries',
-                type: 'raster',
-                source: 'summaries',
-                layout: {
-                    visibility: 'visible'
-                },
-            });
-
-            const canvas = document.getElementById('canvas');
-
-            const topLeft = mapboxgl.MercatorCoordinate.fromLngLat({
-                lng: bounds.min.x,
-                lat: bounds.max.y
-            });
-            const bottomRight = mapboxgl.MercatorCoordinate.fromLngLat({
-                lng: bounds.max.x,
-                lat: bounds.min.y
-            });
-            console.log("Top left", topLeft, "Bottom right", bottomRight);
-            const mercatorWidth = bottomRight.x - topLeft.x;
-            const mercatorHeight = bottomRight.y - topLeft.y;
-            console.log("Mercator width", mercatorWidth, "Mercator height", mercatorHeight);
-            const mercatorHeightToWidthRatio = mercatorHeight / mercatorWidth;
-            console.log("Mercator height to width ratio", mercatorHeight, "/", mercatorWidth, "=", mercatorHeightToWidthRatio);
-
-            const scaledHeight = canvas.width * mercatorHeightToWidthRatio;
-            console.log("Height scaled: ", canvas.height, "->", scaledHeight);
-            canvas.height = scaledHeight;
-
-            const context = canvas.getContext('2d');
-            context.fillStyle = '#000000';
-            context.fillRect(0, 0, canvas.width, canvas.height);
-
-            const renderer = annotated.summary_renderer(canvas.width, canvas.height);
-            const rendererData = new Uint8ClampedArray(renderer.render());
-            console.log("Renderer data", rendererData);
-            const imageData = new ImageData(rendererData, canvas.width, canvas.height);
-            context.putImageData(imageData, 0, 0);
-
-            bindLayerControl('summaries', map);
         });
     </script>
   </body>

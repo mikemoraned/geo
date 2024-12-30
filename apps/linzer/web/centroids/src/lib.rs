@@ -1,6 +1,5 @@
 use std::{iter::zip, vec};
 
-use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Stroke, Transform};
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
 use geo::{Area, BoundingRect, Centroid, Coord, LineString, MultiLineString, Point};
@@ -65,49 +64,6 @@ fn log_area_statistics(collection: &GeometryCollection<f64>) {
 }
 
 #[wasm_bindgen]
-pub struct CanvasSummaryRenderer {
-    width: u32, 
-    height: u32,
-    annotated: Annotated
-}
-
-#[wasm_bindgen]
-impl CanvasSummaryRenderer {
-    pub fn render(&mut self) -> Result<Vec<u8>, JsValue> {
-        let mut pixmap = Pixmap::new(self.width, self.height).ok_or("Failed to create pixmap")?;
-
-        let mut red = Paint::default();
-        red.set_color_rgba8(255, 0, 0, 255);
-
-        let mut stroke = Stroke::default();
-        stroke.width = 1.0;
-
-        let bounds = self.annotated.bounds();
-        let x_scale = self.width as f64 / bounds.width();
-        let y_scale = self.height as f64 / bounds.height();
-
-        let circle_radius = 0.001 * ((self.width + self.height) / 2) as f32;
-        let mut pb = PathBuilder::new();
-        for centroid in self.annotated.lazy_centroids() {
-            let x = (centroid.x() - bounds.min().x) * x_scale;
-            let y = (bounds.max().y - centroid.y()) * y_scale;
-            pb.push_circle(x as f32, y as f32, circle_radius);
-        }
-        let path = pb.finish().ok_or("Failed to finish path")?;
-        pixmap.fill_path(&path, &red, FillRule::Winding, Transform::identity(), None);
-
-        Ok(pixmap.data().into())
-    }
-}
-
-impl CanvasSummaryRenderer {
-    pub fn new(width: u32, height: u32, annotated: Annotated) -> CanvasSummaryRenderer {
-        CanvasSummaryRenderer { width, height, annotated }
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Clone)]
 pub struct Annotated {
     collection: GeometryCollection<f64>,
     centroids: Option<Vec<geo::Point<f64>>>,
@@ -142,11 +98,6 @@ impl Annotated {
         }
 
         return JsValue::from_serde(&rays).unwrap();
-    }
-
-    pub fn summary_renderer(&self, width: u32, height: u32) -> CanvasSummaryRenderer {
-        console::log_1(&format!("width: {width}, height: {height}").into());
-        CanvasSummaryRenderer::new(width, height, self.clone())
     }
 }
 
