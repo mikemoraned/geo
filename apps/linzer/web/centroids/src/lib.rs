@@ -1,6 +1,6 @@
 use std::{iter::zip, vec};
 
-use tiny_skia::{Color, Paint, PathBuilder, Pixmap, Rect, Stroke, Transform};
+use tiny_skia::{Paint, PathBuilder, Pixmap, Rect, Stroke, Transform};
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
 use geo::{Area, BoundingRect, Centroid, Coord, LineString, MultiLineString, Point};
@@ -73,7 +73,7 @@ pub struct CanvasSummaryRenderer {
 
 #[wasm_bindgen]
 impl CanvasSummaryRenderer {
-    pub fn render(&self) -> Result<Vec<u8>, JsValue> {
+    pub fn render(&mut self) -> Result<Vec<u8>, JsValue> {
         let mut pixmap = Pixmap::new(self.width, self.height).ok_or("Failed to create pixmap")?;
 
         let mut off_white = Paint::default();
@@ -92,8 +92,17 @@ impl CanvasSummaryRenderer {
             None
         );
 
+        let bounds = self.annotated.bounds();
+        let x_scale = self.width as f64 / bounds.width();
+        let y_scale = self.height as f64 / bounds.height();
+
+        let circle_radius = 10.0f32;
         let mut pb = PathBuilder::new();
-        pb.push_circle((self.width / 2) as f32, (self.height / 2) as f32, 10.0);
+        for centroid in self.annotated.lazy_centroids() {
+            let x = (centroid.x() - bounds.min().x) * x_scale;
+            let y = (bounds.max().y - centroid.y()) * y_scale;
+            pb.push_circle(x as f32, y as f32, circle_radius);
+        }
         let path = pb.finish().ok_or("Failed to finish path")?;
         pixmap.stroke_path(&path, &red, &stroke, Transform::identity(), None);
 
