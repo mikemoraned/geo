@@ -1,6 +1,6 @@
 use std::{iter::zip, vec};
 
-use tiny_skia::{Paint, PathBuilder, Pixmap, Rect, Stroke, Transform};
+use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Stroke, Transform};
 use wasm_bindgen::prelude::*;
 use geo_types::{Geometry, GeometryCollection};
 use geo::{Area, BoundingRect, Centroid, Coord, LineString, MultiLineString, Point};
@@ -76,21 +76,11 @@ impl CanvasSummaryRenderer {
     pub fn render(&mut self) -> Result<Vec<u8>, JsValue> {
         let mut pixmap = Pixmap::new(self.width, self.height).ok_or("Failed to create pixmap")?;
 
-        let mut off_white = Paint::default();
-        off_white.set_color_rgba8(255, 255, 255, 100);
-
         let mut red = Paint::default();
         red.set_color_rgba8(255, 0, 0, 255);
 
         let mut stroke = Stroke::default();
         stroke.width = 1.0;
-
-        pixmap.fill_rect(
-            Rect::from_xywh(0.0, 0.0, self.width as f32, self.height as f32).ok_or("Failed to create rect")?,
-            &off_white,
-            Transform::identity(),
-            None
-        );
 
         let bounds = self.annotated.bounds();
         let x_scale = self.width as f64 / bounds.width();
@@ -104,7 +94,7 @@ impl CanvasSummaryRenderer {
             pb.push_circle(x as f32, y as f32, circle_radius);
         }
         let path = pb.finish().ok_or("Failed to finish path")?;
-        pixmap.stroke_path(&path, &red, &stroke, Transform::identity(), None);
+        pixmap.fill_path(&path, &red, FillRule::Winding, Transform::identity(), None);
 
         Ok(pixmap.data().into())
     }
