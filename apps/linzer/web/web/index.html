@@ -11,13 +11,13 @@
         #mapbox svg { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 100%;}
         #layers { position: absolute; top: 0; right: 0; margin: 10px; z-index: 1; }
         #layers.box { --bulma-box-padding: 0.5rem; }
-        svg .summary { 
+        svg g .summary { 
             visibility: hidden;
         }
-        svg .summary.selected {
+        svg g.visible .summary.selected {
             visibility: visible;
         }
-        svg .summary.selected path {
+        svg g.visible .summary.selected path {
             stroke-width: 3; 
         }
     </style>
@@ -69,8 +69,9 @@
             }
 
             function updateStateBasedOnVisibility() {
-                const visibility = svg.select(`g#${layerId}-layer`).style('visibility');
-                if (visibility === 'visible') {
+                const group = svg.select(`g#${layerId}-layer`);
+                const visible = group && group.classed('visible');
+                if (visible) {
                     button.classList.add('is-success');
                 }
                 else {
@@ -80,12 +81,12 @@
 
             button.addEventListener('click', () => {
                 const group = svg.select(`g#${layerId}-layer`);
-                const visibility = group.style('visibility');
-                if (visibility === 'visible') {
-                    group.style('visibility', 'hidden');
+                const visible = group && group.classed('visible');
+                if (visible) {
+                    group.attr("class", "");
                 }
                 else {
-                    group.style('visibility', 'visible');
+                    group.attr("class", "visible")
                 }
                 updateStateBasedOnVisibility();
             });
@@ -119,7 +120,9 @@
                 .range( [0 * radian, 90 * radian, 180 * radian, 270 * radian, 360 * radian])
                 ;
 
-            const summariesLayer = svg.append("g").attr("id", "summaries-layer");
+            const summariesLayer = svg.append("g")
+                .attr("id", "summaries-layer")
+                .attr("class", "visible");
 
             const summaryGroups = summariesLayer
                 .selectAll("g")
