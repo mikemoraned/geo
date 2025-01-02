@@ -105,10 +105,8 @@
 
             const summaries = annotated.summaries()
             // .slice(1, 2)
-            .slice(0, 2)
+            // .slice(0, 2)
             ;
-            // const centroids = summaries.map(s => s.centroid);
-
             const summariesLayer = svg.append("g").attr("id", "summaries-layer");
 
             const summaryGroups = summariesLayer
