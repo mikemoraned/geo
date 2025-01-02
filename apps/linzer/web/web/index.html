@@ -105,7 +105,8 @@
 
             // const centroids = annotated.centroids();
             const summaries = annotated.summaries()
-            .slice(1, 2)
+            // .slice(1, 2)
+            .slice(0, 2)
             ;
             const centroids = summaries.map(s => s.centroid);
             // console.log(centroids);
@@ -142,7 +143,7 @@
                 // .range( [0 * radian,                90 * radian,                180 * radian,                270 * radian,                360 * radian])
                 ;
 
-            const summaryRadius = 300;
+            const summaryRadius = 100;
             const linesData = summaries.flatMap(s => {
                 return s.rays.map(r => {
                     const svgRadians = bearingToSVGRadians(r.bearing);
