@@ -212,7 +212,7 @@ function __wbg_adapter_26(arg0, arg1, arg2) {
     wasm.closure79_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_96(arg0, arg1, arg2, arg3) {
+function __wbg_adapter_97(arg0, arg1, arg2, arg3) {
     wasm.closure214_externref_shim(arg0, arg1, arg2, arg3);
 }
 
@@ -271,6 +271,15 @@ export class AnnotatedJS {
      */
     summaries() {
         const ret = wasm.annotatedjs_summaries(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} x
+     * @param {number} y
+     * @returns {any}
+     */
+    id_of_closest_centroid(x, y) {
+        const ret = wasm.annotatedjs_id_of_closest_centroid(this.__wbg_ptr, x, y);
         return ret;
     }
 }
@@ -421,7 +430,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_96(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_97(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -557,7 +566,7 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper262 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper266 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 80, __wbg_adapter_26);
         return ret;
     };

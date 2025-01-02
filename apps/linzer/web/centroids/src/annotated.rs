@@ -1,7 +1,7 @@
 use std::{iter::zip, vec};
 
 use geo_types::{Geometry, GeometryCollection};
-use geo::{Bearing, BoundingRect, Centroid, Coord, CoordsIter, Haversine, Length, Line, LineString, MultiLineString, Point};
+use geo::{Bearing, BoundingRect, Centroid, Coord, CoordsIter, Distance, Haversine, Length, Line, LineString, MultiLineString, Point};
 use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::console;
@@ -61,6 +61,27 @@ impl Annotated {
         }
 
         rays
+    }
+
+    pub fn id_of_closest_centroid(&mut self, coord: &Coord) -> Option<usize> {
+        let mut closest = None;
+        for (id, centroid) in self.lazy_centroids().iter().enumerate() {
+            let distance = Haversine::distance(coord.clone().into(), centroid.clone().into());
+            if let Some((_, closest_distance)) = closest {
+                if distance < closest_distance {
+                    closest = Some((id, distance));
+                }
+            }
+            else {
+                closest = Some((id, distance));
+            }
+        }
+        if let Some((id, _)) = closest {
+            Some(id)
+        }
+        else {
+            None
+        }
     }
 
     pub fn summaries(&mut self) -> Vec<RegionSummary> {

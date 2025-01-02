@@ -40,6 +40,11 @@ impl AnnotatedJS {
         let summaries = self.annotated.summaries();
         return JsValue::from_serde(&summaries).unwrap();
     }
+
+    pub fn id_of_closest_centroid(&mut self, x: f64, y: f64) -> JsValue {
+        let id = self.annotated.id_of_closest_centroid(&(x, y).into());
+        return JsValue::from_serde(&id).unwrap();
+    }
 }
 
 #[wasm_bindgen]

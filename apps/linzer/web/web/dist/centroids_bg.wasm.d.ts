@@ -8,6 +8,7 @@ export const annotatedjs_centroids: (a: number) => any;
 export const annotatedjs_bounds: (a: number) => any;
 export const annotatedjs_rays: (a: number) => any;
 export const annotatedjs_summaries: (a: number) => any;
+export const annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
 export const annotate: (a: number, b: number) => any;
 export const __wbindgen_exn_store: (a: number) => void;
 export const __externref_table_alloc: () => number;
