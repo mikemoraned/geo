@@ -1,7 +1,7 @@
-use std::{f64::consts::PI, iter::zip, vec};
+use std::{iter::zip, vec};
 
 use geo_types::{Geometry, GeometryCollection};
-use geo::{BoundingRect, Centroid, Coord, CoordsIter, LineString, MultiLineString, Point};
+use geo::{Bearing, BoundingRect, Centroid, Coord, CoordsIter, Haversine, Length, Line, LineString, MultiLineString, Point};
 use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::console;
@@ -52,7 +52,7 @@ impl Annotated {
             let centroid_coord: Coord = centroid.clone().into();
             if let Geometry::Polygon(polygon) = geometry {
                 let mut polygon_rays = vec![];
-                for coord in polygon.exterior_coords_iter().take(10) {
+                for coord in polygon.exterior_coords_iter() {
                     let polygon_ray = LineString::new(vec![centroid_coord.clone(), coord]);
                     polygon_rays.push(polygon_ray);
                 }
@@ -69,19 +69,18 @@ impl Annotated {
         let centroids = self.lazy_centroids();
 
         for (geometry, centroid) in zip(self.collection.iter(),centroids.iter()) {
-            let _centroid_coord: Coord = centroid.clone().into();
-            if let Geometry::Polygon(_polygon) = geometry {
-                let mut angle_length_pairs = vec![];
+            if let Geometry::Polygon(polygon) = geometry {
+                let mut bearing_length_pairs = vec![];
                 // for testing, create 4 rays, one each at 0, 90, 180, and 270 degrees
-                const QUARTER_OF_A_CIRCLE : f64 = 90.0;
-                const MINIMUM_LENGTH : f64 = 0.1;
-                const LENGTH_STRIDE : f64 = (1.0 - MINIMUM_LENGTH) / 4.;
-                for i in 0..4 {
-                    let multiplier = i as f64;
-                    let radians = multiplier * QUARTER_OF_A_CIRCLE;
-                    let length = MINIMUM_LENGTH + (multiplier * LENGTH_STRIDE);
-                    angle_length_pairs.push((radians, length));
-                }
+                // const QUARTER_OF_A_CIRCLE : f64 = 90.0;
+                // const MINIMUM_LENGTH : f64 = 0.1;
+                // const LENGTH_STRIDE : f64 = (1.0 - MINIMUM_LENGTH) / 4.;
+                // for i in 0..4 {
+                //     let multiplier = i as f64;
+                //     let radians = multiplier * QUARTER_OF_A_CIRCLE;
+                //     let length = MINIMUM_LENGTH + (multiplier * LENGTH_STRIDE);
+                //     angle_length_pairs.push((radians, length));
+                // }
                 // for coord in polygon.exterior_coords_iter().take(10) {
                 //     let line = Line::new(centroid_coord, coord);
                 //     let slope = line.slope();
@@ -90,10 +89,16 @@ impl Annotated {
                 //     let length = line.length::<Euclidean>();
                 //     angle_length_pairs.push((radians, length));
                 // }
-                let max_length = angle_length_pairs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().1;
+                for point in polygon.exterior().points() {
+                    let line = Line::new(centroid.clone(), point.clone());
+                    let length = line.length::<Haversine>();
+                    let bearing = Haversine::bearing(centroid.clone(), point.clone());
+                    bearing_length_pairs.push((bearing, length));
+                }
+                let max_length = bearing_length_pairs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().1;
 
-                let rays = angle_length_pairs.into_iter().map(|(angle, length)| {
-                    Ray { angle, length: length / max_length }
+                let rays = bearing_length_pairs.into_iter().map(|(bearing, length)| {
+                    Ray { bearing, length: length / max_length }
                 }).collect();
 
                 let summary = RegionSummary { centroid: centroid.clone(), rays };
@@ -109,7 +114,7 @@ impl Annotated {
 #[wasm_bindgen]
 #[derive(Serialize)]
 pub struct Ray {
-    angle: f64,
+    bearing: f64,
     length: f64,
 }
 

@@ -125,7 +125,7 @@
             // converts:
             // - a map bearing (where north is at 0 degrees) to a standard angle (where east is at 0 degrees)
             // - from Map coordinates space where y is up to SVG coordinates where y is down
-            // - from degrees to radians
+            // - from degrees to radianss
             // function bearingToSVGRadians(bearing) {
             //     // const standardAngle = (360 + (bearing - 90)) % 360;
             //     // const svgAngle = -1 * standardAngle;
@@ -136,15 +136,16 @@
             const radian = Math.PI / 180;
             const bearingToSVGRadians = d3.scaleLinear()
                 .domain([0,                         90,                         180,                         270,                         360])
-                .range( [((360 - 0) - 90) * radian, ((360 - 90) - 90) * radian, ((360 - 180) - 90) * radian, ((360 - 270) - 90) * radian, ((360 - 360) - 90) * radian])
+                // .range( [((360 - 0) - 90) * radian, ((360 - 90) - 90) * radian, ((360 - 180) - 90) * radian, ((360 - 270) - 90) * radian, ((360 - 360) - 90) * radian])
                 // .range( [(360 - 0) * radian, (360 - 90) * radian, (360 - 180) * radian, (360 - 270) * radian, (360 - 360) * radian])
-                // .range( [270 * radian, 180 * radian,    90 * radian,  0 * radian,   270 * radian])
+                .range( [(0 - 90) * radian,            (90 - 90) * radian,      (180 - 90) * radian,         (270 - 90) * radian,         (360 - 90) * radian])
+                // .range( [0 * radian,                90 * radian,                180 * radian,                270 * radian,                360 * radian])
                 ;
 
             const summaryRadius = 300;
             const linesData = summaries.flatMap(s => {
                 return s.rays.map(r => {
-                    const svgRadians = bearingToSVGRadians(r.angle);
+                    const svgRadians = bearingToSVGRadians(r.bearing);
                     return {
                         centroid: [ s.centroid.x, s.centroid.y ],
                         x_offset: Math.cos(svgRadians) * r.length * summaryRadius,
