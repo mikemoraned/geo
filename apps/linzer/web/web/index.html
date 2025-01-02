@@ -145,10 +145,12 @@
                 });
 
             function render() {
+                const zoom = map.getZoom();
+                const scale = (1.0 / 10000.0) * Math.pow(2, zoom);
                 summaryGroups
                     .attr("transform", function (d) {
                         const projected = project([ d.centroid.x, d.centroid.y ]);
-                        return `translate(${projected.x}, ${projected.y})`;
+                        return `translate(${projected.x}, ${projected.y}) scale(${scale})`;
                     });
             }
 
