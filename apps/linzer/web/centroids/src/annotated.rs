@@ -73,7 +73,7 @@ impl Annotated {
             if let Geometry::Polygon(_polygon) = geometry {
                 let mut angle_length_pairs = vec![];
                 // for testing, create 4 rays, one each at 0, 90, 180, and 270 degrees
-                const QUARTER_OF_A_CIRCLE : f64 = PI / 2.0;
+                const QUARTER_OF_A_CIRCLE : f64 = 90.0;
                 const MINIMUM_LENGTH : f64 = 0.1;
                 const LENGTH_STRIDE : f64 = (1.0 - MINIMUM_LENGTH) / 4.;
                 for i in 0..4 {
