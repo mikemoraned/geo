@@ -79,8 +79,8 @@ impl Annotated {
                 }
                 let max_length = bearing_length_pairs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().1;
 
-                let rays = bearing_length_pairs.into_iter().map(|(bearing, length)| {
-                    Ray { bearing, length: length / max_length }
+                let rays = bearing_length_pairs.into_iter().enumerate().map(|(id, (bearing, length))| {
+                    Ray { id, bearing, length: length / max_length }
                 }).collect();
 
                 let summary = RegionSummary { centroid: centroid.clone(), rays };
@@ -96,6 +96,7 @@ impl Annotated {
 #[wasm_bindgen]
 #[derive(Serialize)]
 pub struct Ray {
+    id: usize,
     bearing: f64,
     length: f64,
 }

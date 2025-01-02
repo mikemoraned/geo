@@ -111,7 +111,7 @@
 
             const summaryGroups = summariesLayer
                 .selectAll("g")
-                .data(summaries)
+                .data(summaries, d => d.id)
                 .enter()
                 .append("g");
 
@@ -145,6 +145,7 @@
                 });
 
             function render() {
+                // summaryGroups.data([summaries[0]]);
                 const zoom = map.getZoom();
                 const scale = (1.0 / 10000.0) * Math.pow(2, zoom);
                 summaryGroups
