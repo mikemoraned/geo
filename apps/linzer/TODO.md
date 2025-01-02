@@ -63,6 +63,11 @@
             * [x] control display of centroids via top-control
         * [x] calculate summary
         * [x] show summary
+    * [ ] show a normalised summary for each region
+        - a normalised summary is one where it has a fixed number of degrees and the length per a degree is a single number
+        * [ ] try:
+            - degrees: 360
+            - length: max length of all rays for each degree
     * [ ] ...
 
 ## Geo
