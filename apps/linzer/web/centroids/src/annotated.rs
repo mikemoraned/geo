@@ -68,7 +68,7 @@ impl Annotated {
         let mut summaries: Vec<RegionSummary> = vec![];
         let centroids = self.lazy_centroids();
 
-        for (geometry, centroid) in zip(self.collection.iter(),centroids.iter()) {
+        for (id, (geometry, centroid)) in zip(self.collection.iter(),centroids.iter()).enumerate() {
             if let Geometry::Polygon(polygon) = geometry {
                 let mut bearing_length_pairs = vec![];
                 for point in polygon.exterior().points() {
@@ -79,11 +79,11 @@ impl Annotated {
                 }
                 let max_length = bearing_length_pairs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().1;
 
-                let rays = bearing_length_pairs.into_iter().enumerate().map(|(id, (bearing, length))| {
-                    Ray { id, bearing, length: length / max_length }
+                let rays = bearing_length_pairs.into_iter().map(|(bearing, length)| {
+                    Ray { bearing, length: length / max_length }
                 }).collect();
 
-                let summary = RegionSummary { centroid: centroid.clone(), rays };
+                let summary = RegionSummary { id, centroid: centroid.clone(), rays };
                 summaries.push(summary);
             }
         }
@@ -96,7 +96,6 @@ impl Annotated {
 #[wasm_bindgen]
 #[derive(Serialize)]
 pub struct Ray {
-    id: usize,
     bearing: f64,
     length: f64,
 }
@@ -104,6 +103,7 @@ pub struct Ray {
 #[wasm_bindgen]
 #[derive(Serialize)]
 pub struct RegionSummary {
+    id: usize,
     centroid: Point<f64>,
     rays: Vec<Ray>,
 }

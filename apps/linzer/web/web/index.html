@@ -11,6 +11,9 @@
         #mapbox svg { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 100%;}
         #layers { position: absolute; top: 0; right: 0; margin: 10px; z-index: 1; }
         #layers.box { --bulma-box-padding: 0.5rem; }
+        svg .summary.selected { 
+            stroke-width: 10; 
+        }
     </style>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
@@ -93,6 +96,7 @@
             let annotated = await annotate(sourceDataUrl);
 
             addLayers(map, sourceDataUrl, annotated);
+            const summaries = annotated.summaries();
 
             let container = map.getCanvasContainer();
             let svg = d3
@@ -103,29 +107,27 @@
               return map.project(new mapboxgl.LngLat(d[0], d[1]));
             }
 
-            const summaries = annotated.summaries()
-            // .slice(1, 2)
-            // .slice(0, 2)
-            ;
+            const radian = Math.PI / 180;
+            const bearingToSVGRadians = d3.scaleLinear()
+                .domain([0,          90,          180,          270,          360])
+                .range( [0 * radian, 90 * radian, 180 * radian, 270 * radian, 360 * radian])
+                ;
+
             const summariesLayer = svg.append("g").attr("id", "summaries-layer");
 
             const summaryGroups = summariesLayer
                 .selectAll("g")
-                .data(summaries, d => d.id)
+                .data(summaries)
                 .enter()
-                .append("g");
+                .append("g")
+                .attr("class", "summary")
+                .attr("id", d => `summary-${d.id}`);
 
             const dots = summaryGroups
                 .append("circle")
                 .attr("r", 5)
                 .style("fill-opacity", "0%")
                 .style("stroke", "blue");
-
-            const radian = Math.PI / 180;
-            const bearingToSVGRadians = d3.scaleLinear()
-                .domain([0,          90,          180,          270,          360])
-                .range( [0 * radian, 90 * radian, 180 * radian, 270 * radian, 360 * radian])
-                ;
 
             const summaryRadius = 100;
             const line = d3.lineRadial();
@@ -145,7 +147,16 @@
                 });
 
             function render() {
-                // summaryGroups.data([summaries[0]]);
+                const previouslySelected = document.querySelectorAll(".selected");
+                if (previouslySelected) {
+                    previouslySelected.forEach(d => d.classList.remove("selected"));
+                }
+                const selectedId = "summary-100";
+                const selected = document.getElementById(selectedId);
+                if (selected) {
+                    selected.classList.add("selected");
+                }
+
                 const zoom = map.getZoom();
                 const scale = (1.0 / 10000.0) * Math.pow(2, zoom);
                 summaryGroups
