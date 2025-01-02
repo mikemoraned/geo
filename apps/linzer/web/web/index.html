@@ -104,9 +104,11 @@
             }
 
             // const centroids = annotated.centroids();
-            const summaries = annotated.summaries().slice(1, 2);
+            const summaries = annotated.summaries()
+            .slice(1, 2)
+            ;
             const centroids = summaries.map(s => s.centroid);
-            console.log(centroids);
+            // console.log(centroids);
             console.log(summaries);
 
             const summaryGroup = svg.append("g").attr("id", "summaries-layer");
@@ -114,7 +116,6 @@
             const dots = summaryGroup
                 .selectAll("circle")
                 .data(centroids.map(c => [ c.x, c.y ]))
-                // .data([])
                 .enter()
                 .append("circle")
                 .attr("r", 5)
@@ -126,8 +127,8 @@
                 return s.rays.map(r => {
                     return {
                         centroid: [ s.centroid.x, s.centroid.y ],
-                        x_offset: Math.cos(r.angle - (0.75 * 2.0 * Math.PI)) * r.length * summaryRadius,
-                        y_offset: Math.sin(r.angle - (0.75 * 2.0 * Math.PI)) * r.length * summaryRadius
+                        x_offset: Math.cos(-1 * r.angle) * r.length * summaryRadius,
+                        y_offset: Math.sin(-1 * r.angle) * r.length * summaryRadius
                     };
                 });
             })

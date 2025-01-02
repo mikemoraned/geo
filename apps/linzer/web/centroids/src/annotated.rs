@@ -1,7 +1,7 @@
 use std::{f64::consts::PI, iter::zip, vec};
 
 use geo_types::{Geometry, GeometryCollection};
-use geo::{BoundingRect, Centroid, Coord, CoordsIter, Euclidean, Length, Line, LineString, MultiLineString, Point};
+use geo::{BoundingRect, Centroid, Coord, CoordsIter, LineString, MultiLineString, Point};
 use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::console;
@@ -69,17 +69,27 @@ impl Annotated {
         let centroids = self.lazy_centroids();
 
         for (geometry, centroid) in zip(self.collection.iter(),centroids.iter()) {
-            let centroid_coord: Coord = centroid.clone().into();
-            if let Geometry::Polygon(polygon) = geometry {
+            let _centroid_coord: Coord = centroid.clone().into();
+            if let Geometry::Polygon(_polygon) = geometry {
                 let mut angle_length_pairs = vec![];
-                for coord in polygon.exterior_coords_iter().take(10) {
-                    let line = Line::new(centroid_coord, coord);
-                    let slope = line.slope();
-                    let radians = slope.sin();
-                    // let radians = PI / 2.0;
-                    let length = line.length::<Euclidean>();
+                // for testing, create 4 rays, one each at 0, 90, 180, and 270 degrees
+                const QUARTER_OF_A_CIRCLE : f64 = PI / 2.0;
+                const MINIMUM_LENGTH : f64 = 0.1;
+                const LENGTH_STRIDE : f64 = (1.0 - MINIMUM_LENGTH) / 4.;
+                for i in 0..4 {
+                    let multiplier = i as f64;
+                    let radians = multiplier * QUARTER_OF_A_CIRCLE;
+                    let length = MINIMUM_LENGTH + (multiplier * LENGTH_STRIDE);
                     angle_length_pairs.push((radians, length));
                 }
+                // for coord in polygon.exterior_coords_iter().take(10) {
+                //     let line = Line::new(centroid_coord, coord);
+                //     let slope = line.slope();
+                //     let radians = slope.sin();
+                //     // let radians = PI / 2.0;
+                //     let length = line.length::<Euclidean>();
+                //     angle_length_pairs.push((radians, length));
+                // }
                 let max_length = angle_length_pairs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().1;
 
                 let rays = angle_length_pairs.into_iter().map(|(angle, length)| {
