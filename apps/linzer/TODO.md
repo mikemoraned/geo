@@ -49,7 +49,7 @@
         - 'rays' are a set of linestrings for each region going from the centroid to each border-point
         * [x] refactor wasm into returning an `Annotated` object with a method for `centroids`
         * [x] add `rays` layer
-    * [ ] show a summary for each region
+    * [x] show a summary for each region
         - summary is the length of each ray as a fraction of max size of all rays for region
         * [-] visualise as a spiky shape per region in a CanvasSource
             * [x] add a canvas source covering area, displaying a test black rectangle covering entire area
@@ -61,9 +61,8 @@
             * [x] load D3 and get it showing something minimal
             * [x] draw centroids using D3
             * [x] control display of centroids via top-control
-        * [ ] calculate summary
-        * [ ] show summary
-        * [ ] ...
+        * [x] calculate summary
+        * [x] show summary
     * [ ] ...
 
 ## Geo
