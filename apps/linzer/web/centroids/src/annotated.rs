@@ -71,24 +71,6 @@ impl Annotated {
         for (geometry, centroid) in zip(self.collection.iter(),centroids.iter()) {
             if let Geometry::Polygon(polygon) = geometry {
                 let mut bearing_length_pairs = vec![];
-                // for testing, create 4 rays, one each at 0, 90, 180, and 270 degrees
-                // const QUARTER_OF_A_CIRCLE : f64 = 90.0;
-                // const MINIMUM_LENGTH : f64 = 0.1;
-                // const LENGTH_STRIDE : f64 = (1.0 - MINIMUM_LENGTH) / 4.;
-                // for i in 0..4 {
-                //     let multiplier = i as f64;
-                //     let radians = multiplier * QUARTER_OF_A_CIRCLE;
-                //     let length = MINIMUM_LENGTH + (multiplier * LENGTH_STRIDE);
-                //     angle_length_pairs.push((radians, length));
-                // }
-                // for coord in polygon.exterior_coords_iter().take(10) {
-                //     let line = Line::new(centroid_coord, coord);
-                //     let slope = line.slope();
-                //     let radians = slope.sin();
-                //     // let radians = PI / 2.0;
-                //     let length = line.length::<Euclidean>();
-                //     angle_length_pairs.push((radians, length));
-                // }
                 for point in polygon.exterior().points() {
                     let line = Line::new(centroid.clone(), point.clone());
                     let length = line.length::<Haversine>();
