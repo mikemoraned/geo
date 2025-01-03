@@ -18,7 +18,7 @@
             visibility: visible;
         }
         svg g.visible .summary.selected path {
-            stroke-width: 3; 
+            stroke-width: 1; 
         }
     </style>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
@@ -140,7 +140,7 @@
 
             const summaryRadius = 100;
             const line = d3.lineRadial();
-            const lines = summaryGroups
+            summaryGroups
                 .append("path")
                 .attr("stroke", "blue")
                 .style("fill-opacity", "0%")
@@ -151,6 +151,28 @@
                             r.length * summaryRadius
                         ]
                     });
+                    const path = line(data);
+                    return path;
+                });
+            summaryGroups
+                .append("path")
+                .attr("stroke", "green")
+                .style("fill-opacity", "0%")
+                .attr("d", function (d) {
+                    const data = d.normalised
+                        .map((length, bearing) => {
+                            return {
+                                radians: bearingToSVGRadians(bearing),
+                                length: length
+                            }
+                        })
+                        .filter((r) => r.length > 0)
+                        .map(r => {
+                            return [
+                                r.radians,
+                                r.length * summaryRadius,
+                            ]
+                        });
                     const path = line(data);
                     return path;
                 });

@@ -100,11 +100,29 @@ impl Annotated {
                 }
                 let max_length = bearing_length_pairs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().1;
 
-                let rays = bearing_length_pairs.into_iter().map(|(bearing, length)| {
+                let rays : Vec<Ray> = bearing_length_pairs.into_iter().map(|(bearing, length)| {
                     Ray { bearing, length: length / max_length }
                 }).collect();
+                let mut bucketed_by_degree: Vec<Option<f64>> = vec![None; 360];
+                for Ray { bearing, length } in rays.iter() {
+                    let degree = bearing.floor() as usize;
+                    if let Some(bucket) = bucketed_by_degree[degree] {
+                        bucketed_by_degree[degree] = Some(bucket.max(*length));
+                    }
+                    else {
+                        bucketed_by_degree[degree] = Some(*length);
+                    }
+                }
+                let normalised = bucketed_by_degree.into_iter().map(|bucket| {
+                    if let Some(bucket) = bucket {
+                        bucket
+                    }
+                    else {
+                        0.0
+                    }
+                }).collect();
 
-                let summary = RegionSummary { id, centroid: centroid.clone(), rays };
+                let summary = RegionSummary { id, centroid: centroid.clone(), rays, normalised };
                 summaries.push(summary);
             }
         }
@@ -127,4 +145,5 @@ pub struct RegionSummary {
     id: usize,
     centroid: Point<f64>,
     rays: Vec<Ray>,
+    normalised: Vec<f64>
 }

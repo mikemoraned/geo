@@ -68,6 +68,8 @@
         * [ ] try:
             - degrees: 360
             - length: max length of all rays for each degree
+            * [ ] initially, don't worry about interpolating for degrees missing
+            * [ ] ...
     * [ ] ...
 
 ## Geo
