@@ -20,6 +20,9 @@
         svg g.visible .summary.selected path {
             stroke-width: 0.5; 
         }
+        svg g.visible .summary.selected line {
+            stroke-width: 1; 
+        }
     </style>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
@@ -178,6 +181,19 @@
                     const path = line(data);
                     return path;
                 });
+            summaryGroups
+                .append("line")
+                .attr("stroke", "green")
+                .attr("class", "dominant")
+                .attr("x1", 0)
+                .attr("y1", 0)
+                .attr("x2", function(d) {
+                    return Math.cos(bearingToSVGRadians(d.dominant_degree)) * d.dominant_length * summaryRadius;
+                })
+                .attr("y2", function(d) {
+                    return Math.sin(bearingToSVGRadians(d.dominant_degree)) * d.dominant_length * summaryRadius;
+                })
+                ;
 
             function render() {
                 const center = map.getCenter();

@@ -7,7 +7,7 @@ export class AnnotatedJS {
   centroids(): any;
   bounds(): any;
   rays(): any;
-  summaries(): any;
+  summaries(): (RegionSummary)[];
   id_of_closest_centroid(x: number, y: number): any;
 }
 export class Ray {
@@ -17,6 +17,13 @@ export class Ray {
 export class RegionSummary {
   private constructor();
   free(): void;
+  readonly id: number;
+  readonly centroid: any;
+  readonly rays: any;
+  readonly bucket_width: number;
+  readonly normalised: any;
+  readonly dominant_degree: any;
+  readonly dominant_length: any;
 }
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -25,11 +32,18 @@ export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly __wbg_ray_free: (a: number, b: number) => void;
   readonly __wbg_regionsummary_free: (a: number, b: number) => void;
+  readonly regionsummary_id: (a: number) => number;
+  readonly regionsummary_centroid: (a: number) => any;
+  readonly regionsummary_rays: (a: number) => any;
+  readonly regionsummary_bucket_width: (a: number) => number;
+  readonly regionsummary_normalised: (a: number) => any;
+  readonly regionsummary_dominant_degree: (a: number) => any;
+  readonly regionsummary_dominant_length: (a: number) => any;
   readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
   readonly annotatedjs_centroids: (a: number) => any;
   readonly annotatedjs_bounds: (a: number) => any;
   readonly annotatedjs_rays: (a: number) => any;
-  readonly annotatedjs_summaries: (a: number) => any;
+  readonly annotatedjs_summaries: (a: number) => [number, number];
   readonly annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
   readonly annotate: (a: number, b: number) => any;
   readonly __wbindgen_exn_store: (a: number) => void;
@@ -38,8 +52,10 @@ export interface InitOutput {
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export_5: WebAssembly.Table;
-  readonly closure79_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure214_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly __externref_drop_slice: (a: number, b: number) => void;
+  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+  readonly closure80_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure215_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

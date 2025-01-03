@@ -2,8 +2,9 @@ use std::{iter::zip, vec};
 
 use geo_types::{Geometry, GeometryCollection};
 use geo::{Bearing, BoundingRect, Centroid, Coord, CoordsIter, Distance, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
+use gloo_utils::format::JsValueSerdeExt;
 use serde::Serialize;
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 use web_sys::console;
 
 pub struct Annotated {
@@ -167,11 +168,48 @@ pub struct Ray {
 }
 
 #[wasm_bindgen]
-#[derive(Serialize)]
 pub struct RegionSummary {
     id: usize,
     centroid: Point<f64>,
     rays: Vec<Ray>,
     bucket_width: f64,
     normalised: Vec<f64>
+}
+
+impl RegionSummary {
+    pub fn dominant(&self) -> (usize, f64) {
+        (0, 1.0)
+    }
+}
+
+#[wasm_bindgen]
+impl RegionSummary {
+    #[wasm_bindgen(getter)]
+    pub fn id(&self) -> usize {
+        self.id
+    }
+    #[wasm_bindgen(getter)]
+    pub fn centroid(&self) -> JsValue {
+        JsValue::from_serde(&self.centroid).unwrap()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn rays(&self) -> JsValue {
+        JsValue::from_serde(&self.rays).unwrap()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn bucket_width(&self) -> f64 {
+        self.bucket_width
+    }
+    #[wasm_bindgen(getter)]
+    pub fn normalised(&self) -> JsValue {
+        JsValue::from_serde(&self.normalised).unwrap()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn dominant_degree(&self) -> JsValue {
+        JsValue::from_serde(&self.dominant().0).unwrap()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn dominant_length(&self) -> JsValue {
+        JsValue::from_serde(&self.dominant().1).unwrap()
+    }
 }

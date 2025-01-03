@@ -1,5 +1,5 @@
 
-use annotated::Annotated;
+use annotated::{Annotated, RegionSummary};
 use wasm_bindgen::prelude::*;
 use geo_types::GeometryCollection;
 use gloo_utils::format::JsValueSerdeExt;
@@ -36,9 +36,10 @@ impl AnnotatedJS {
         return JsValue::from_serde(&rays).unwrap();
     }
 
-    pub fn summaries(&mut self) -> JsValue {
-        let summaries = self.annotated.summaries();
-        return JsValue::from_serde(&summaries).unwrap();
+    pub fn summaries(&mut self) -> Vec<RegionSummary> {
+        // let summaries = self.annotated.summaries();
+        // return JsValue::from_serde(&summaries).unwrap();
+        return self.annotated.summaries();
     }
 
     pub fn id_of_closest_centroid(&mut self, x: f64, y: f64) -> JsValue {
