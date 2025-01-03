@@ -18,7 +18,7 @@
             visibility: visible;
         }
         svg g.visible .summary.selected path {
-            stroke-width: 1; 
+            stroke-width: 0.5; 
         }
     </style>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
@@ -162,7 +162,7 @@
                     const data = d.normalised
                         .map((length, bearing) => {
                             return {
-                                radians: bearingToSVGRadians(bearing),
+                                radians: bearingToSVGRadians(bearing + (d.bucket_width / 2.0)),
                                 length: length
                             }
                         })

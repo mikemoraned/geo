@@ -122,7 +122,8 @@ impl Annotated {
                     }
                 }).collect();
 
-                let summary = RegionSummary { id, centroid: centroid.clone(), rays, normalised };
+                let bucket_width = 1.0;
+                let summary = RegionSummary { id, centroid: centroid.clone(), rays, bucket_width, normalised };
                 summaries.push(summary);
             }
         }
@@ -145,5 +146,6 @@ pub struct RegionSummary {
     id: usize,
     centroid: Point<f64>,
     rays: Vec<Ray>,
+    bucket_width: f64,
     normalised: Vec<f64>
 }
