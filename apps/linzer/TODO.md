@@ -68,7 +68,7 @@
         * [ ] try:
             - degrees: 360
             - length: max length of all rays for each degree
-            * [ ] initially, don't worry about interpolating for degrees missing
+            * [x] initially, don't worry about interpolating for degrees missing
             * [ ] interpolation idea: as we iterate over pounts, ever time bearing changes by more than bucket size, 
             use `InterpolatePoint::point_at_ratio_between` to manufacture a series of points to fill the gaps
             * [ ] ...

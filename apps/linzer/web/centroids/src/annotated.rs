@@ -1,7 +1,7 @@
 use std::{iter::zip, vec};
 
 use geo_types::{Geometry, GeometryCollection};
-use geo::{Bearing, BoundingRect, Centroid, Coord, CoordsIter, Distance, Haversine, Length, Line, LineString, MultiLineString, Point};
+use geo::{Bearing, BoundingRect, Centroid, Coord, CoordsIter, Distance, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
 use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::console;
@@ -123,6 +123,86 @@ impl Annotated {
                 }).collect();
 
                 let bucket_width = 1.0;
+                let summary = RegionSummary { id, centroid: centroid.clone(), rays, bucket_width, normalised };
+                summaries.push(summary);
+            }
+        }
+
+        console::log_1(&"calculated summaries".into());
+        summaries
+    }
+
+    pub fn summaries2(&mut self) -> Vec<RegionSummary> {
+        console::log_1(&"calculating summaries".into());
+        let mut summaries: Vec<RegionSummary> = vec![];
+        let centroids = self.lazy_centroids();
+
+        let bucket_width = 1.0;
+        for (id, (geometry, centroid)) in zip(self.collection.iter(),centroids.iter()).enumerate() {
+            if let Geometry::Polygon(polygon) = geometry {
+                let mut bearing_length_pairs = vec![];
+                let mut bucketed_degree_length_pairs = vec![];
+                
+                let points : Vec<Point<f64>> = polygon.exterior().points().collect();
+                for i in 0..points.len() {
+                    let current = points[i].clone();
+                    let current_bearing = Haversine::bearing(centroid.clone(), current.clone());
+                    let current_length = Line::new(centroid.clone(), current.clone()).length::<Haversine>();
+                    bearing_length_pairs.push((current_bearing, current_length));
+                    
+                    let prev = points[(i + points.len() - 1) % points.len()].clone();
+                    let prev_bearing = Haversine::bearing(centroid.clone(), prev.clone());
+
+                    let current_degree = current_bearing.floor() as usize;
+                    let prev_degree = prev_bearing.floor() as usize;
+                    let degree_diff = if current_degree >= prev_degree {
+                        current_degree - prev_degree
+                    }
+                    else {
+                        // TODO: handle wrap around later
+                        0
+                    };
+                    if degree_diff != 0 {
+                        // interpolate between prev and current to fill in the gaps
+                        let step = 1.0 / degree_diff as f64;
+                        for i in 0..degree_diff {
+                            let ratio = step * i as f64;
+                            let point = Haversine::point_at_ratio_between(prev.clone(), current.clone(), ratio);
+                            let bearing = Haversine::bearing(centroid.clone(), point.clone());
+                            let degree = bearing.floor() as usize;
+                            let length = Line::new(centroid.clone(), point.clone()).length::<Haversine>();
+                            bucketed_degree_length_pairs.push((degree, length));
+                        }
+                    };
+                    bucketed_degree_length_pairs.push((current_degree, current_length));
+                }
+                
+                let max_length = bearing_length_pairs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().1;
+
+                let rays : Vec<Ray> = bearing_length_pairs.into_iter().map(|(bearing, length)| {
+                    Ray { bearing, length: length / max_length }
+                }).collect();
+
+                let mut bucketed_by_degree: Vec<Option<f64>> = vec![None; 360];
+                for ( degree, length ) in bucketed_degree_length_pairs.into_iter() {
+                    let normalised_length = length / max_length;
+                    if let Some(bucket) = bucketed_by_degree[degree] {
+                        bucketed_by_degree[degree] = Some(bucket.max(normalised_length));
+                    }
+                    else {
+                        bucketed_by_degree[degree] = Some(normalised_length);
+                    }
+                }
+
+                let normalised = bucketed_by_degree.into_iter().map(|bucket| {
+                    if let Some(bucket) = bucket {
+                        bucket
+                    }
+                    else {
+                        0.0
+                    }
+                }).collect();
+
                 let summary = RegionSummary { id, centroid: centroid.clone(), rays, bucket_width, normalised };
                 summaries.push(summary);
             }
