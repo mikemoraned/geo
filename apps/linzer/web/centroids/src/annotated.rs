@@ -153,19 +153,18 @@ impl Annotated {
                     let prev = points[(i + points.len() - 1) % points.len()].clone();
                     let prev_bearing = Haversine::bearing(centroid.clone(), prev.clone());
 
-                    let current_degree = current_bearing.floor() as usize;
-                    let prev_degree = prev_bearing.floor() as usize;
-                    let degree_diff = if current_degree >= prev_degree {
-                        current_degree - prev_degree
+                    let bearing_diff = if current_bearing >= prev_bearing {
+                        current_bearing - prev_bearing
                     }
                     else {
                         // TODO: handle wrap around later
-                        0
+                        0.0
                     };
-                    if degree_diff != 0 {
+                    if bearing_diff >= 0.5 {
                         // interpolate between prev and current to fill in the gaps
-                        let step = 1.0 / degree_diff as f64;
-                        for i in 0..degree_diff {
+                        let num_samples = (bearing_diff / 0.5).ceil() as usize;
+                        let step = 1.0 / num_samples as f64;
+                        for i in 1..=num_samples {
                             let ratio = step * i as f64;
                             let point = Haversine::point_at_ratio_between(prev.clone(), current.clone(), ratio);
                             let bearing = Haversine::bearing(centroid.clone(), point.clone());
@@ -174,6 +173,7 @@ impl Annotated {
                             bucketed_degree_length_pairs.push((degree, length));
                         }
                     };
+                    let current_degree = current_bearing.floor() as usize;
                     bucketed_degree_length_pairs.push((current_degree, current_length));
                 }
                 
