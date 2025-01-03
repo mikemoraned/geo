@@ -153,13 +153,7 @@ impl Annotated {
                     let prev = points[(i + points.len() - 1) % points.len()].clone();
                     let prev_bearing = Haversine::bearing(centroid.clone(), prev.clone());
 
-                    let bearing_diff = if current_bearing >= prev_bearing {
-                        current_bearing - prev_bearing
-                    }
-                    else {
-                        // TODO: handle wrap around later
-                        0.0
-                    };
+                    let bearing_diff = (current_bearing - prev_bearing).abs();
                     if bearing_diff >= 0.5 {
                         // interpolate between prev and current to fill in the gaps
                         let num_samples = (bearing_diff / 0.5).ceil() as usize;
