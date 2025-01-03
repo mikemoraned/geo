@@ -178,7 +178,25 @@ pub struct RegionSummary {
 
 impl RegionSummary {
     pub fn dominant(&self) -> (usize, f64) {
-        (0, 1.0)
+        let mut max = None;
+        for (degree, length) in self.normalised.iter().enumerate() {
+            let total = *length 
+            + self.normalised[(degree + 90) % 360] 
+            + self.normalised[(degree + 180) % 360] 
+            + self.normalised[(degree + 270) % 360];
+            if let Some((_, max_length, max_total)) = max {
+                if total > max_total {
+                    max = Some((degree, length, total));
+                }
+                else if total == max_total && length > max_length {
+                    max = Some((degree, length, total));
+                }
+            }
+            else {
+                max = Some((degree, length, total));
+            }
+        }
+        max.map(|(degree, length, _)| (degree, *length)).unwrap()
     }
 }
 
