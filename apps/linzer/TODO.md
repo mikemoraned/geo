@@ -63,15 +63,14 @@
             * [x] control display of centroids via top-control
         * [x] calculate summary
         * [x] show summary
-    * [ ] show a normalised summary for each region
+    * [x] show a normalised summary for each region
         - a normalised summary is one where it has a fixed number of degrees and the length per a degree is a single number
-        * [ ] try:
+        * [x] try:
             - degrees: 360
             - length: max length of all rays for each degree
             * [x] initially, don't worry about interpolating for degrees missing
-            * [ ] interpolation idea: as we iterate over pounts, ever time bearing changes by more than bucket size, 
+            * [x] interpolation idea: as we iterate over pounts, ever time bearing changes by more than bucket size, 
             use `InterpolatePoint::point_at_ratio_between` to manufacture a series of points to fill the gaps
-            * [ ] ...
     * [ ] ...
 
 ## Geo

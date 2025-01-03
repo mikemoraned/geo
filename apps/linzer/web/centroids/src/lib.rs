@@ -37,7 +37,7 @@ impl AnnotatedJS {
     }
 
     pub fn summaries(&mut self) -> JsValue {
-        let summaries = self.annotated.summaries2();
+        let summaries = self.annotated.summaries();
         return JsValue::from_serde(&summaries).unwrap();
     }
 

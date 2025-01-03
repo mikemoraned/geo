@@ -89,54 +89,6 @@ impl Annotated {
         let mut summaries: Vec<RegionSummary> = vec![];
         let centroids = self.lazy_centroids();
 
-        for (id, (geometry, centroid)) in zip(self.collection.iter(),centroids.iter()).enumerate() {
-            if let Geometry::Polygon(polygon) = geometry {
-                let mut bearing_length_pairs = vec![];
-                for point in polygon.exterior().points() {
-                    let line = Line::new(centroid.clone(), point.clone());
-                    let length = line.length::<Haversine>();
-                    let bearing = Haversine::bearing(centroid.clone(), point.clone());
-                    bearing_length_pairs.push((bearing, length));
-                }
-                let max_length = bearing_length_pairs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().1;
-
-                let rays : Vec<Ray> = bearing_length_pairs.into_iter().map(|(bearing, length)| {
-                    Ray { bearing, length: length / max_length }
-                }).collect();
-                let mut bucketed_by_degree: Vec<Option<f64>> = vec![None; 360];
-                for Ray { bearing, length } in rays.iter() {
-                    let degree = bearing.floor() as usize;
-                    if let Some(bucket) = bucketed_by_degree[degree] {
-                        bucketed_by_degree[degree] = Some(bucket.max(*length));
-                    }
-                    else {
-                        bucketed_by_degree[degree] = Some(*length);
-                    }
-                }
-                let normalised = bucketed_by_degree.into_iter().map(|bucket| {
-                    if let Some(bucket) = bucket {
-                        bucket
-                    }
-                    else {
-                        0.0
-                    }
-                }).collect();
-
-                let bucket_width = 1.0;
-                let summary = RegionSummary { id, centroid: centroid.clone(), rays, bucket_width, normalised };
-                summaries.push(summary);
-            }
-        }
-
-        console::log_1(&"calculated summaries".into());
-        summaries
-    }
-
-    pub fn summaries2(&mut self) -> Vec<RegionSummary> {
-        console::log_1(&"calculating summaries".into());
-        let mut summaries: Vec<RegionSummary> = vec![];
-        let centroids = self.lazy_centroids();
-
         let bucket_width = 1.0;
         for (id, (geometry, centroid)) in zip(self.collection.iter(),centroids.iter()).enumerate() {
             if let Geometry::Polygon(polygon) = geometry {
