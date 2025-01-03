@@ -181,6 +181,7 @@
                     const path = line(data);
                     return path;
                 });
+            const FUDGE = -90;
             summaryGroups
                 .append("line")
                 .attr("stroke", "green")
@@ -188,10 +189,10 @@
                 .attr("x1", 0)
                 .attr("y1", 0)
                 .attr("x2", function(d) {
-                    return Math.cos(bearingToSVGRadians(d.dominant_degree)) * d.dominant_length * summaryRadius;
+                    return Math.cos(bearingToSVGRadians(d.dominant_degree + FUDGE)) * d.dominant_length * summaryRadius;
                 })
                 .attr("y2", function(d) {
-                    return Math.sin(bearingToSVGRadians(d.dominant_degree)) * d.dominant_length * summaryRadius;
+                    return Math.sin(bearingToSVGRadians(d.dominant_degree + FUDGE)) * d.dominant_length * summaryRadius;
                 })
                 ;
 
