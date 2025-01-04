@@ -126,14 +126,14 @@
 
             function bearingToSVGRadians(bearing) {
                 const radian = Math.PI / 180;
-                return (bearing - 90) * radian;
+                return bearing * radian;
             }
 
             function bearingToSVGVector(bearing) {
                 const radians = bearingToSVGRadians(bearing);
                 return {
-                    x: Math.cos(radians),
-                    y: Math.sin(radians)
+                    x: Math.sin(radians),
+                    y: - Math.cos(radians)
                 }
             }
 
