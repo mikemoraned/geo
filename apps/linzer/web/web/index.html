@@ -1,6 +1,6 @@
 <!doctype html>
 <html>
-  <head>
+  <head class="theme-light">
     <meta charset="utf-8" />
     <title>Linzer</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
@@ -36,13 +36,22 @@
   </head>
   <body>
     <div id="mapbox"></div>
-    <div id="layers" class="box">
+    <div id="layers" class="box" data-theme="light">
         <div class="buttons has-addons">
             <button id="regions-layer-button" class="button is-medium is-responsive is-loading" disabled>Regions</button>
             <button id="centroids-layer-button" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
             <button id="summaries-layer-button" class="button is-medium is-responsive is-loading" disabled>Summaries</button>
         </div>
     </div>
+    <template id="item-template">
+        <div class="card" data-theme="light">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="id-slot"></span>
+                </p>
+            </header>
+        </div>
+    </template>
     <script type="module">
         import init, { annotate, testcard_at } from "./dist/centroids.js";
         import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
@@ -88,18 +97,22 @@
               .append("div")
               .attr("class", "mini");
 
+            const template = document.getElementById('item-template')
             function renderMini() {
                 const center = map.getCenter();
                 const closestId = annotated.id_of_closest_centroid(center.lng, center.lat);
                 const similarIds = annotated.most_similar_ids(closestId);
                 const selectedIds = [ closestId ].concat(similarIds);
 
-                mini.selectAll("span").remove();
-                mini.selectAll("span")
+                mini.selectAll("div").remove();
+                mini.selectAll("div")
                     .data(selectedIds)
                     .enter()
-                    .append("span")
-                    .text(id => id);
+                    .append(d => {
+                        const clone = template.content.cloneNode(true);
+                        clone.querySelector('.id-slot').textContent = d;
+                        return clone;
+                    });
             }
             map.on("viewreset", renderMini);
             map.on("move", renderMini);
