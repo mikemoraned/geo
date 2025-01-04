@@ -53,8 +53,8 @@
         <div class="box" data-theme="light">
             <span class="id-slot"></span>
             <figure class="image is-128x128">
-                <img class="is-rounded" src="https://bulma.io/assets/images/placeholders/128x128.png" />
-              </figure>
+                <img class="is-rounded img-slot" src="https://bulma.io/assets/images/placeholders/128x128.png" />
+            </figure>
         </div>
     </template>
     <script type="module">
@@ -106,16 +106,15 @@
             function renderMini() {
                 const center = map.getCenter();
                 const closestId = annotated.id_of_closest_centroid(center.lng, center.lat);
-                const similarIds = annotated.most_similar_ids(closestId);
-                const selectedIds = [ closestId ].concat(similarIds);
+                const similarRegions = annotated.most_similar_regions(closestId);
 
                 mini.selectAll("div").remove();
                 mini.selectAll("div")
-                    .data(selectedIds)
+                    .data(similarRegions)
                     .enter()
                     .append(d => {
                         const clone = template.content.cloneNode(true);
-                        clone.querySelector('.id-slot').textContent = d;
+                        clone.querySelector('.id-slot').textContent = d.id;
                         return clone;
                     });
             }

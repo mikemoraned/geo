@@ -38,6 +38,10 @@ impl AnnotatedJS {
         return JsValue::from_serde(&ids).unwrap();
     }
 
+    pub fn most_similar_regions(&mut self, id: usize) -> Vec<RegionSummaryJS> {
+        self.annotated.most_similar_regions(id).iter().map(|summary| RegionSummaryJS::new(summary.clone())).collect()
+    }
+
     pub fn id_of_closest_centroid(&mut self, x: f64, y: f64) -> JsValue {
         let id = self.annotated.id_of_closest_centroid(&(x, y).into());
         return JsValue::from_serde(&id).unwrap();

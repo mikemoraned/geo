@@ -24,17 +24,21 @@ impl Annotated {
     }
 
     pub fn most_similar_ids(&self, id: usize) -> Vec<usize> {
+        self.most_similar_regions(id).into_iter().map(|summary| summary.id).collect()
+    }
+
+    pub fn most_similar_regions(&self, id: usize) -> Vec<RegionSummary> {
         let summaries = &self.summaries;
         let target_summary = summaries.get(id).unwrap();
 
-        let mut distances = summaries.iter()
+        let mut distances : Vec<(RegionSummary, f64)> = summaries.clone().into_iter()
             .filter(|summary| summary.id != id)
             .map(|summary| {
-                (summary.id, target_summary.distance_from(summary))
-            }).collect::<Vec<(usize, f64)>>();
+                (summary.clone(), target_summary.distance_from(&summary))
+            }).collect();
         distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
-        distances.into_iter().map(|(id,_)| id).take(10).collect()
+        distances.into_iter().map(|(summary,_)| summary).take(10).collect()
     }
 
     pub fn id_of_closest_centroid(&self, coord: &Coord) -> Option<usize> {

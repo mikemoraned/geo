@@ -197,17 +197,6 @@ function debugString(val) {
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
 }
-
-function getArrayJsValueFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    const mem = getDataViewMemory0();
-    const result = [];
-    for (let i = ptr; i < ptr + 4 * len; i += 4) {
-        result.push(wasm.__wbindgen_export_2.get(mem.getUint32(i, true)));
-    }
-    wasm.__externref_drop_slice(ptr, len);
-    return result;
-}
 /**
  * @param {number} x
  * @param {number} y
@@ -229,11 +218,21 @@ export function annotate(source_url) {
     return ret;
 }
 
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(wasm.__wbindgen_export_2.get(mem.getUint32(i, true)));
+    }
+    wasm.__externref_drop_slice(ptr, len);
+    return result;
+}
 function __wbg_adapter_26(arg0, arg1, arg2) {
     wasm.closure81_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_111(arg0, arg1, arg2, arg3) {
+function __wbg_adapter_112(arg0, arg1, arg2, arg3) {
     wasm.closure225_externref_shim(arg0, arg1, arg2, arg3);
 }
 
@@ -296,6 +295,16 @@ export class AnnotatedJS {
     most_similar_ids(id) {
         const ret = wasm.annotatedjs_most_similar_ids(this.__wbg_ptr, id);
         return ret;
+    }
+    /**
+     * @param {number} id
+     * @returns {(RegionSummaryJS)[]}
+     */
+    most_similar_regions(id) {
+        const ret = wasm.annotatedjs_most_similar_regions(this.__wbg_ptr, id);
+        var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
     }
     /**
      * @param {number} x
@@ -547,7 +556,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_111(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_112(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -687,7 +696,7 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper298 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper303 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 82, __wbg_adapter_26);
         return ret;
     };
