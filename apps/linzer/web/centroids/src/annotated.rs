@@ -33,7 +33,7 @@ impl Annotated {
             }).collect::<Vec<(usize, f64)>>();
         distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
-        distances.into_iter().map(|(id,_)| id).take(5).collect()
+        distances.into_iter().map(|(id,_)| id).take(10).collect()
     }
 
     pub fn id_of_closest_centroid(&self, coord: &Coord) -> Option<usize> {

@@ -8,20 +8,25 @@
     <style>
         body { margin: 0; padding: 0; }
         #mapbox { position: absolute; top: 0; bottom: 0; z-index: 0; width: 100%; }
-        #mapbox svg { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 100%;}
+        #mapbox svg.main { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 100%;}
+        #mapbox div.mini { position: absolute; bottom: 5%; z-index: 3; width: 100%; height: 25%; }
         #layers { position: absolute; top: 0; right: 0; margin: 10px; z-index: 1; }
         #layers.box { --bulma-box-padding: 0.5rem; }
-        svg g .summary { 
+        
+        #mapbox svg.main g .summary { 
             visibility: hidden;
         }
-        svg g.visible .summary.selected {
+        #mapbox svg.main g.visible .summary.selected {
             visibility: visible;
         }
-        svg g.visible .summary.selected path {
+        #mapbox svg.main g.visible .summary.selected path {
             stroke-width: 3;
         }
-        svg g.visible .summary.selected line {
+        #mapbox svg.main g.visible .summary.selected line {
             stroke-width: 2; 
+        }
+        #mapbox div.mini {
+            background-color: rgba(255,255,255,0.8);
         }
     </style>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
@@ -73,12 +78,36 @@
             addLayers(map, sourceDataUrl, annotated);
 
             let container = map.getCanvasContainer();
-            let svg = d3
+            let main = d3
               .select(container)
-              .append("svg");
+              .append("svg")
+              .attr("class", "main");
 
-            addTestCardLayer("testcard", map, svg, testcard_at);
-            addSummaryLayer("summaries", map, svg, annotated);
+            let mini = d3
+              .select(container)
+              .append("div")
+              .attr("class", "mini");
+
+            function renderMini() {
+                const center = map.getCenter();
+                const closestId = annotated.id_of_closest_centroid(center.lng, center.lat);
+                const similarIds = annotated.most_similar_ids(closestId);
+                const selectedIds = [ closestId ].concat(similarIds);
+
+                mini.selectAll("span").remove();
+                mini.selectAll("span")
+                    .data(selectedIds)
+                    .enter()
+                    .append("span")
+                    .text(id => id);
+            }
+            map.on("viewreset", renderMini);
+            map.on("move", renderMini);
+            map.on("moveend", renderMini);
+            renderMini();
+
+            addTestCardLayer("testcard", map, main, testcard_at);
+            addSummaryLayer("summaries", map, main, annotated);
         });
     </script>
   </body>

@@ -66,7 +66,7 @@ export function addSummaryLayer(layerId, map, svg, annotated) {
         .attr("class", "normalised")
         .style("fill-opacity", "0%")
         .attr("d", function (d) {
-            const data = d.normalised
+            const data = d.lengths
                 .map((length, bearing) => {
                     return {
                         radians: bearingToSVGRadians(bearing + (d.bucket_width / 2.0)),

@@ -32,8 +32,8 @@ impl RegionSummaryJS {
         self.summary.bucket_width
     }
     #[wasm_bindgen(getter)]
-    pub fn normalised(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.normalised).unwrap()
+    pub fn lengths(&self) -> JsValue {
+        JsValue::from_serde(&self.summary.lengths).unwrap()
     }
     #[wasm_bindgen(getter)]
     pub fn dominant_degree(&self) -> JsValue {
