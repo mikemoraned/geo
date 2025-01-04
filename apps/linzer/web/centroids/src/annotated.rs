@@ -6,43 +6,20 @@ use web_sys::console;
 
 pub struct Annotated {
     collection: GeometryCollection<f64>,
-    centroids: Option<Vec<geo::Point<f64>>>,
+    pub centroids: Vec<Point<f64>>
 }
 
 impl Annotated {
     pub fn new(collection: GeometryCollection<f64>) -> Annotated {
-        Annotated { collection, centroids: None }
+        let centroids = centroids(collection.clone());
+        Annotated { collection, centroids }
     }
 
     pub fn bounds(&self) -> geo_types::Rect<f64> {
         self.collection.bounding_rect().unwrap()
     }
 
-    pub fn lazy_centroids(&mut self) -> Vec<Point<f64>> {
-        if let Some(ref centroids) = self.centroids {
-            centroids.clone()
-        }
-        else {
-            let centroids = self.calculate_centroids();
-            self.centroids = Some(centroids.clone());
-            centroids
-        }
-    }
-
-    fn calculate_centroids(&self) -> Vec<Point<f64>> {
-        let size = self.collection.len();
-        console::log_1(&format!("calculating centroids for {size} geometries").into());
-        let mut centroids = vec![];
-        for entry in self.collection.iter() {
-            if let Some(centroid) = entry.centroid() {
-                centroids.push(centroid);
-            }
-        }
-        console::log_1(&"calculated centroids".into());
-        centroids
-    }
-
-    pub fn most_similar_ids(&mut self, id: usize) -> Vec<usize> {
+    pub fn most_similar_ids(&self, id: usize) -> Vec<usize> {
         let summaries = self.summaries();
         let target_summary = summaries.get(id).unwrap();
 
@@ -55,9 +32,9 @@ impl Annotated {
         distances.into_iter().map(|(id,_)| id).take(5).collect()
     }
 
-    pub fn id_of_closest_centroid(&mut self, coord: &Coord) -> Option<usize> {
+    pub fn id_of_closest_centroid(&self, coord: &Coord) -> Option<usize> {
         let mut closest = None;
-        for (id, centroid) in self.lazy_centroids().iter().enumerate() {
+        for (id, centroid) in self.centroids.iter().enumerate() {
             let distance = Haversine::distance(coord.clone().into(), centroid.clone().into());
             if let Some((_, closest_distance)) = closest {
                 if distance < closest_distance {
@@ -76,9 +53,9 @@ impl Annotated {
         }
     }
 
-    pub fn summaries(&mut self) -> Vec<RegionSummary> {
+    pub fn summaries(&self) -> Vec<RegionSummary> {
         let mut summaries: Vec<RegionSummary> = vec![];
-        let centroids = self.lazy_centroids();
+        let centroids = &self.centroids;
 
         let bucket_width = 1.0;
         for (id, (geometry, centroid)) in zip(self.collection.iter(),centroids.iter()).enumerate() {
@@ -144,6 +121,20 @@ impl Annotated {
         summaries
     }
 }
+
+pub fn centroids(collection: GeometryCollection<f64>) -> Vec<Point<f64>> {
+    let size = collection.len();
+    console::log_1(&format!("calculating centroids for {size} geometries").into());
+    let mut centroids = vec![];
+    for entry in collection.iter() {
+        if let Some(centroid) = entry.centroid() {
+            centroids.push(centroid);
+        }
+    }
+    console::log_1(&"calculated centroids".into());
+    centroids
+}
+
 
 #[derive(Clone)]
 pub struct RegionSummary {

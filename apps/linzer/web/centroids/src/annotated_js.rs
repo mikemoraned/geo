@@ -18,7 +18,7 @@ impl AnnotatedJS {
 #[wasm_bindgen]
 impl AnnotatedJS {
     pub fn centroids(&mut self) -> JsValue {
-        return JsValue::from_serde(&self.annotated.lazy_centroids()).unwrap();
+        return JsValue::from_serde(&self.annotated.centroids).unwrap();
     }
 
     pub fn bounds(&self) -> JsValue {
