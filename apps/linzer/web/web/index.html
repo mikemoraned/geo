@@ -34,7 +34,6 @@
     <div id="layers" class="box">
         <div class="buttons has-addons">
             <button id="regions-layer-button" class="button is-medium is-responsive is-loading" disabled>Regions</button>
-            <!-- <button id="rays-layer-button" class="button is-medium is-responsive is-loading" disabled>Rays</button> -->
             <button id="centroids-layer-button" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
             <button id="summaries-layer-button" class="button is-medium is-responsive is-loading" disabled>Summaries</button>
         </div>
@@ -139,21 +138,6 @@
 
             const summaryRadius = 100;
             const line = d3.lineRadial();
-            // summaryGroups
-            //     .append("path")
-            //     .attr("stroke", "blue")
-            //     .attr("class", "rays")
-            //     .style("fill-opacity", "0%")
-            //     .attr("d", function (d) {
-            //         const data = d.rays.map(r => {
-            //             return [
-            //                 bearingToSVGRadians(r.bearing),
-            //                 r.length * summaryRadius
-            //             ]
-            //         });
-            //         const path = line(data);
-            //         return path;
-            //     });
             summaryGroups
                 .append("path")
                 .attr("stroke", "green")
@@ -177,19 +161,12 @@
                     const path = line(data);
                     return path;
                 });
-            // const FUDGE = -90;
             summaryGroups
                 .append("line")
                 .attr("stroke", "green")
                 .attr("class", "dominant")
                 .attr("x1", 0)
                 .attr("y1", 0)
-                // .attr("x2", function(d) {
-                //     return Math.cos(bearingToSVGRadians(d.dominant_degree + FUDGE)) * d.dominant_length * summaryRadius;
-                // })
-                // .attr("y2", function(d) {
-                //     return Math.sin(bearingToSVGRadians(d.dominant_degree + FUDGE)) * d.dominant_length * summaryRadius;
-                // })
                 .attr("x2", function(d) {
                     return bearingToSVGVector(d.dominant_degree).x * d.dominant_length * summaryRadius;
                 })
@@ -200,7 +177,6 @@
 
             function render() {
 
-                // console.log(`Closest centroid: ${closestId}`);
                 const previouslySelected = document.querySelectorAll(".selected");
                 if (previouslySelected) {
                     previouslySelected.forEach(d => d.classList.remove("selected"));
@@ -210,20 +186,14 @@
                 const closestId = annotated.id_of_closest_centroid(center.lng, center.lat);
                 // const similarIds = annotated.most_similar_ids(closestId);
                 const similarIds = [];
-                // console.log(`Closest centroid: ${closestId}, similar: ${similarIds}`);
                 const selectedIds = [ closestId ].concat(similarIds).map(id => `summary-${id}`);
 
-                // const selectedId = `summary-${closestId}`;
                 selectedIds.forEach(id => {
                     const selected = document.getElementById(id);
                     if (selected) {
                         selected.classList.add("selected");
                     }
                 });
-                // const selected = document.getElementById(selectedId);
-                // if (selected) {
-                //     selected.classList.add("selected");
-                // }
 
                 const zoom = map.getZoom();
                 const scale = (1.0 / 10000.0) * Math.pow(2, zoom);

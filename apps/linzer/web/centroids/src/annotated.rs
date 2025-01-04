@@ -1,9 +1,8 @@
 use std::{iter::zip, vec};
 
 use geo_types::{Geometry, GeometryCollection};
-use geo::{Bearing, BoundingRect, Centroid, Coord, CoordsIter, Distance, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
+use geo::{Bearing, BoundingRect, Centroid, Coord, Distance, Haversine, InterpolatePoint, Length, Line, Point};
 use gloo_utils::format::JsValueSerdeExt;
-use serde::Serialize;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 use web_sys::console;
 
@@ -45,25 +44,6 @@ impl Annotated {
         centroids
     }
 
-    pub fn rays(&mut self) -> Vec<MultiLineString> {
-        let mut rays: Vec<MultiLineString> = vec![];
-        let centroids = self.lazy_centroids();
-
-        for (geometry, centroid) in zip(self.collection.iter(),centroids.iter()) {
-            let centroid_coord: Coord = centroid.clone().into();
-            if let Geometry::Polygon(polygon) = geometry {
-                let mut polygon_rays = vec![];
-                for coord in polygon.exterior_coords_iter() {
-                    let polygon_ray = LineString::new(vec![centroid_coord.clone(), coord]);
-                    polygon_rays.push(polygon_ray);
-                }
-                rays.push(MultiLineString::new(polygon_rays));
-            }
-        }
-
-        rays
-    }
-
     pub fn most_similar_ids(&mut self, id: usize) -> Vec<usize> {
         let summaries = self.summaries();
         let target_summary = summaries.get(id).unwrap();
@@ -99,7 +79,6 @@ impl Annotated {
     }
 
     pub fn summaries(&mut self) -> Vec<RegionSummary> {
-        // console::log_1(&"calculating summaries".into());
         let mut summaries: Vec<RegionSummary> = vec![];
         let centroids = self.lazy_centroids();
 
@@ -139,10 +118,6 @@ impl Annotated {
                 
                 let max_length = bearing_length_pairs.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().1;
 
-                let rays : Vec<Ray> = bearing_length_pairs.into_iter().map(|(bearing, length)| {
-                    Ray { bearing, length: length / max_length }
-                }).collect();
-
                 let mut bucketed_by_degree: Vec<Option<f64>> = vec![None; 360];
                 for ( degree, length ) in bucketed_degree_length_pairs.into_iter() {
                     let normalised_length = length / max_length;
@@ -163,28 +138,19 @@ impl Annotated {
                     }
                 }).collect();
 
-                let summary = RegionSummary { id, centroid: centroid.clone(), rays, bucket_width, normalised };
+                let summary = RegionSummary { id, centroid: centroid.clone(), bucket_width, normalised };
                 summaries.push(summary);
             }
         }
 
-        // console::log_1(&"calculated summaries".into());
         summaries
     }
-}
-
-#[wasm_bindgen]
-#[derive(Serialize)]
-pub struct Ray {
-    bearing: f64,
-    length: f64,
 }
 
 #[wasm_bindgen]
 pub struct RegionSummary {
     id: usize,
     centroid: Point<f64>,
-    rays: Vec<Ray>,
     bucket_width: f64,
     normalised: Vec<f64>
 }
@@ -236,10 +202,6 @@ impl RegionSummary {
     #[wasm_bindgen(getter)]
     pub fn centroid(&self) -> JsValue {
         JsValue::from_serde(&self.centroid).unwrap()
-    }
-    #[wasm_bindgen(getter)]
-    pub fn rays(&self) -> JsValue {
-        JsValue::from_serde(&self.rays).unwrap()
     }
     #[wasm_bindgen(getter)]
     pub fn bucket_width(&self) -> f64 {

@@ -33,14 +33,7 @@ impl AnnotatedJS {
         return JsValue::from_serde(&bounds).unwrap();
     }
 
-    pub fn rays(&mut self) -> JsValue {
-        let rays = self.annotated.rays();
-        return JsValue::from_serde(&rays).unwrap();
-    }
-
     pub fn summaries(&mut self) -> Vec<RegionSummary> {
-        // let summaries = self.annotated.summaries();
-        // return JsValue::from_serde(&summaries).unwrap();
         return self.annotated.summaries();
     }
 

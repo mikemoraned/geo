@@ -233,7 +233,7 @@ function __wbg_adapter_26(arg0, arg1, arg2) {
     wasm.closure81_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_113(arg0, arg1, arg2, arg3) {
+function __wbg_adapter_111(arg0, arg1, arg2, arg3) {
     wasm.closure216_externref_shim(arg0, arg1, arg2, arg3);
 }
 
@@ -281,13 +281,6 @@ export class AnnotatedJS {
         return ret;
     }
     /**
-     * @returns {any}
-     */
-    rays() {
-        const ret = wasm.annotatedjs_rays(this.__wbg_ptr);
-        return ret;
-    }
-    /**
      * @returns {(RegionSummary)[]}
      */
     summaries() {
@@ -312,25 +305,6 @@ export class AnnotatedJS {
     id_of_closest_centroid(x, y) {
         const ret = wasm.annotatedjs_id_of_closest_centroid(this.__wbg_ptr, x, y);
         return ret;
-    }
-}
-
-const RayFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_ray_free(ptr >>> 0, 1));
-
-export class Ray {
-
-    __destroy_into_raw() {
-        const ptr = this.__wbg_ptr;
-        this.__wbg_ptr = 0;
-        RayFinalization.unregister(this);
-        return ptr;
-    }
-
-    free() {
-        const ptr = this.__destroy_into_raw();
-        wasm.__wbg_ray_free(ptr, 0);
     }
 }
 
@@ -371,13 +345,6 @@ export class RegionSummary {
      */
     get centroid() {
         const ret = wasm.regionsummary_centroid(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {any}
-     */
-    get rays() {
-        const ret = wasm.regionsummary_rays(this.__wbg_ptr);
         return ret;
     }
     /**
@@ -580,7 +547,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_113(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_111(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -720,7 +687,7 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper309 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper295 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 82, __wbg_adapter_26);
         return ret;
     };
