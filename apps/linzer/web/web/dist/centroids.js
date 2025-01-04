@@ -197,17 +197,6 @@ function debugString(val) {
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
 }
-
-function getArrayJsValueFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    const mem = getDataViewMemory0();
-    const result = [];
-    for (let i = ptr; i < ptr + 4 * len; i += 4) {
-        result.push(wasm.__wbindgen_export_2.get(mem.getUint32(i, true)));
-    }
-    wasm.__externref_drop_slice(ptr, len);
-    return result;
-}
 /**
  * @param {number} x
  * @param {number} y
@@ -229,12 +218,22 @@ export function annotate(source_url) {
     return ret;
 }
 
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(wasm.__wbindgen_export_2.get(mem.getUint32(i, true)));
+    }
+    wasm.__externref_drop_slice(ptr, len);
+    return result;
+}
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure81_externref_shim(arg0, arg1, arg2);
+    wasm.closure79_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_111(arg0, arg1, arg2, arg3) {
-    wasm.closure225_externref_shim(arg0, arg1, arg2, arg3);
+    wasm.closure223_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
@@ -281,7 +280,7 @@ export class AnnotatedJS {
         return ret;
     }
     /**
-     * @returns {(RegionSummary)[]}
+     * @returns {(RegionSummaryJS)[]}
      */
     summaries() {
         const ret = wasm.annotatedjs_summaries(this.__wbg_ptr);
@@ -308,71 +307,71 @@ export class AnnotatedJS {
     }
 }
 
-const RegionSummaryFinalization = (typeof FinalizationRegistry === 'undefined')
+const RegionSummaryJSFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_regionsummary_free(ptr >>> 0, 1));
+    : new FinalizationRegistry(ptr => wasm.__wbg_regionsummaryjs_free(ptr >>> 0, 1));
 
-export class RegionSummary {
+export class RegionSummaryJS {
 
     static __wrap(ptr) {
         ptr = ptr >>> 0;
-        const obj = Object.create(RegionSummary.prototype);
+        const obj = Object.create(RegionSummaryJS.prototype);
         obj.__wbg_ptr = ptr;
-        RegionSummaryFinalization.register(obj, obj.__wbg_ptr, obj);
+        RegionSummaryJSFinalization.register(obj, obj.__wbg_ptr, obj);
         return obj;
     }
 
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
-        RegionSummaryFinalization.unregister(this);
+        RegionSummaryJSFinalization.unregister(this);
         return ptr;
     }
 
     free() {
         const ptr = this.__destroy_into_raw();
-        wasm.__wbg_regionsummary_free(ptr, 0);
+        wasm.__wbg_regionsummaryjs_free(ptr, 0);
     }
     /**
      * @returns {number}
      */
     get id() {
-        const ret = wasm.regionsummary_id(this.__wbg_ptr);
+        const ret = wasm.regionsummaryjs_id(this.__wbg_ptr);
         return ret >>> 0;
     }
     /**
      * @returns {any}
      */
     get centroid() {
-        const ret = wasm.regionsummary_centroid(this.__wbg_ptr);
+        const ret = wasm.regionsummaryjs_centroid(this.__wbg_ptr);
         return ret;
     }
     /**
      * @returns {number}
      */
     get bucket_width() {
-        const ret = wasm.regionsummary_bucket_width(this.__wbg_ptr);
+        const ret = wasm.regionsummaryjs_bucket_width(this.__wbg_ptr);
         return ret;
     }
     /**
      * @returns {any}
      */
     get normalised() {
-        const ret = wasm.regionsummary_normalised(this.__wbg_ptr);
+        const ret = wasm.regionsummaryjs_normalised(this.__wbg_ptr);
         return ret;
     }
     /**
      * @returns {any}
      */
     get dominant_degree() {
-        const ret = wasm.regionsummary_dominant_degree(this.__wbg_ptr);
+        const ret = wasm.regionsummaryjs_dominant_degree(this.__wbg_ptr);
         return ret;
     }
     /**
      * @returns {any}
      */
     get dominant_length() {
-        const ret = wasm.regionsummary_dominant_length(this.__wbg_ptr);
+        const ret = wasm.regionsummaryjs_dominant_length(this.__wbg_ptr);
         return ret;
     }
 }
@@ -601,8 +600,8 @@ function __wbg_get_imports() {
         const ret = arg0.queueMicrotask;
         return ret;
     };
-    imports.wbg.__wbg_regionsummary_new = function(arg0) {
-        const ret = RegionSummary.__wrap(arg0);
+    imports.wbg.__wbg_regionsummaryjs_new = function(arg0) {
+        const ret = RegionSummaryJS.__wrap(arg0);
         return ret;
     };
     imports.wbg.__wbg_resolve_0bf7c44d641804f9 = function(arg0) {
@@ -687,8 +686,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper295 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 82, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper293 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 80, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {
