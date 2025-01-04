@@ -6,6 +6,7 @@ use crate::region_summary::RegionSummary;
 
 
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct RegionSummaryJS {
     summary: RegionSummary
 }

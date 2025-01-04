@@ -35,14 +35,14 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly testcard_at: (a: number, b: number) => number;
-  readonly annotate: (a: number, b: number) => any;
   readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
   readonly annotatedjs_centroids: (a: number) => any;
   readonly annotatedjs_bounds: (a: number) => any;
   readonly annotatedjs_summaries: (a: number) => [number, number];
   readonly annotatedjs_most_similar_ids: (a: number, b: number) => any;
   readonly annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
+  readonly testcard_at: (a: number, b: number) => number;
+  readonly annotate: (a: number, b: number) => any;
   readonly __wbg_regionsummaryjs_free: (a: number, b: number) => void;
   readonly regionsummaryjs_id: (a: number) => number;
   readonly regionsummaryjs_centroid: (a: number) => any;

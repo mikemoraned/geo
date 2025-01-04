@@ -197,6 +197,17 @@ function debugString(val) {
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
 }
+
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(wasm.__wbindgen_export_2.get(mem.getUint32(i, true)));
+    }
+    wasm.__externref_drop_slice(ptr, len);
+    return result;
+}
 /**
  * @param {number} x
  * @param {number} y
@@ -218,16 +229,6 @@ export function annotate(source_url) {
     return ret;
 }
 
-function getArrayJsValueFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    const mem = getDataViewMemory0();
-    const result = [];
-    for (let i = ptr; i < ptr + 4 * len; i += 4) {
-        result.push(wasm.__wbindgen_export_2.get(mem.getUint32(i, true)));
-    }
-    wasm.__externref_drop_slice(ptr, len);
-    return result;
-}
 function __wbg_adapter_26(arg0, arg1, arg2) {
     wasm.closure81_externref_shim(arg0, arg1, arg2);
 }
@@ -686,7 +687,7 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper294 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper297 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 82, __wbg_adapter_26);
         return ret;
     };
