@@ -137,7 +137,7 @@
                 .style("stroke", "blue");
 
             const summaryRadius = 100;
-            const line = d3.lineRadial();
+            const line = d3.lineRadial().curve(d3.curveLinearClosed);
             summaryGroups
                 .append("path")
                 .attr("stroke", "green")
@@ -151,7 +151,6 @@
                                 length: length
                             }
                         })
-                        .filter((r) => r.length > 0)
                         .map(r => {
                             return [
                                 r.radians,

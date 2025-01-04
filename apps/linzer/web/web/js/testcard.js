@@ -1,10 +1,10 @@
 import { mapboxProjection, bearingToSVGVector } from "./projections.js";
 
-export function addTestCardLayer(layerName, map, svg, testcard_at_fn) {
+export function addTestCardLayer(layerId, map, svg, testcard_at_fn) {
     const project = mapboxProjection(map);
 
     const testCardLayer = svg.append("g")
-    .attr("id", `${layerName}-layer`)
+    .attr("id", `${layerId}-layer`)
     .attr("class", "visible");
 
     const testCards = [];
