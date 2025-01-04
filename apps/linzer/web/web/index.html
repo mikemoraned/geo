@@ -198,18 +198,27 @@
                 ;
 
             function render() {
-                const center = map.getCenter();
-                const closestId = annotated.id_of_closest_centroid(center.lng, center.lat);
                 // console.log(`Closest centroid: ${closestId}`);
                 const previouslySelected = document.querySelectorAll(".selected");
                 if (previouslySelected) {
                     previouslySelected.forEach(d => d.classList.remove("selected"));
                 }
-                const selectedId = `summary-${closestId}`;
-                const selected = document.getElementById(selectedId);
-                if (selected) {
-                    selected.classList.add("selected");
-                }
+
+                const center = map.getCenter();
+                const closestId = annotated.id_of_closest_centroid(center.lng, center.lat);
+                const selectedIds = [ closestId ].map(id => `summary-${id}`);
+
+                // const selectedId = `summary-${closestId}`;
+                selectedIds.forEach(id => {
+                    const selected = document.getElementById(id);
+                    if (selected) {
+                        selected.classList.add("selected");
+                    }
+                });
+                // const selected = document.getElementById(selectedId);
+                // if (selected) {
+                //     selected.classList.add("selected");
+                // }
 
                 const zoom = map.getZoom();
                 const scale = (1.0 / 10000.0) * Math.pow(2, zoom);
