@@ -181,6 +181,22 @@
                         return project(d.coord).y + bearingToSVGVector(d.bearing_north_degrees).y * lineLength;
                     })
                     ;
+                testCardLayer.selectAll("text.north")
+                    .data(testCards)
+                    .enter()
+                    .append("text")
+                    .attr("class", "north")
+                    .text(d => `N: ${d.bearing_north_degrees.toFixed(2)}`)
+                    .style("fill", "red")
+                    .style("font-size", "12px")
+                    .style("font-family", "sans-serif")
+                    ;
+                testCardLayer.selectAll("text.north")
+                    .data(testCards)
+                    .attr("x", d => project(d.coord).x + bearingToSVGVector(d.bearing_north_degrees).x * lineLength)
+                    .attr("y", d => project(d.coord).y + bearingToSVGVector(d.bearing_north_degrees).y * lineLength)
+                    ;
+
                 testCardLayer.selectAll("line.east")
                     .data(testCards)
                     .enter()
@@ -198,6 +214,23 @@
                         return project(d.coord).y + bearingToSVGVector(d.bearing_east_degrees).y * lineLength;
                     })
                     ;
+
+                testCardLayer.selectAll("text.east")
+                    .data(testCards)
+                    .enter()
+                    .append("text")
+                    .attr("class", "east")
+                    .text(d => `E: ${d.bearing_east_degrees.toFixed(2)}`)
+                    .style("fill", "green")
+                    .style("font-size", "12px")
+                    .style("font-family", "sans-serif")
+                    ;
+                testCardLayer.selectAll("text.east")
+                    .data(testCards)
+                    .attr("x", d => project(d.coord).x + bearingToSVGVector(d.bearing_east_degrees).x * lineLength)
+                    .attr("y", d => project(d.coord).y + bearingToSVGVector(d.bearing_east_degrees).y * lineLength)
+                    ;
+
             }
 
             map.on("viewreset", renderTestCards);
