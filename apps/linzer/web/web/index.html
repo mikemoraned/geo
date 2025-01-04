@@ -43,6 +43,7 @@
         import init, { annotate, testcard_at } from "./dist/centroids.js";
         import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
         import { addLayers } from "./js/layers.js";
+        import { mapboxProjection, bearingToSVGVector, bearingToSVGRadians } from "./js/projections.js";
 
         await init();
         console.log("Wasm initialized");
@@ -51,7 +52,6 @@
         const hamburg = [9.993682, 53.551086];
         const starting_position = {
             center: hamburg,
-            // zoom: 12
             zoom: 14
         };
 
@@ -114,28 +114,7 @@
               .select(container)
               .append("svg");
 
-            function project(d) {
-              return map.project(new mapboxgl.LngLat(d[0], d[1]));
-            }
-
-            // const radian = Math.PI / 180;
-            // const bearingToSVGRadians = d3.scaleLinear()
-            //     .domain([0,          90,          180,          270,          360])
-            //     .range( [0 * radian, 90 * radian, 180 * radian, 270 * radian, 360 * radian])
-            //     ;
-
-            function bearingToSVGRadians(bearing) {
-                const radian = Math.PI / 180;
-                return bearing * radian;
-            }
-
-            function bearingToSVGVector(bearing) {
-                const radians = bearingToSVGRadians(bearing);
-                return {
-                    x: Math.sin(radians),
-                    y: - Math.cos(radians)
-                }
-            }
+            const project = mapboxProjection(map);
 
             const testCardLayer = svg.append("g")
                 .attr("id", "testcard-layer")
