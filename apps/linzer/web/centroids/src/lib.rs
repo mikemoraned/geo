@@ -8,6 +8,8 @@ mod load;
 mod geometry;
 mod annotated;
 mod annotated_js;
+mod region_summary;
+mod region_summary_js;
 mod testcard;
 
 #[wasm_bindgen]
