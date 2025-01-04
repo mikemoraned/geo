@@ -40,7 +40,7 @@
         </div>
     </div>
     <script type="module">
-        import init, { annotate } from "./dist/centroids.js";
+        import init, { annotate, testcard_at } from "./dist/centroids.js";
         import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
         import { addLayers } from "./js/layers.js";
 
@@ -124,6 +124,39 @@
                 .range( [0 * radian, 90 * radian, 180 * radian, 270 * radian, 360 * radian])
                 ;
 
+            const testCardLayer = svg.append("g")
+                .attr("id", "testcard-layer")
+                .attr("class", "visible");
+
+            const testCards = [];
+
+            map.on('click', function(e) {
+                const testCard = testcard_at(e.lngLat.lng, e.lngLat.lat);
+                testCards.push(testCard);
+                console.log(`x: ${e.lngLat.lng}, y: ${e.lngLat.lat}, testCard: ${testCard.coord}`);
+                renderTestCards();
+            });
+
+            function renderTestCards() {
+                testCardLayer.selectAll("circle")
+                    .data(testCards)
+                    .enter()
+                    .append("circle")
+                    .attr("r", 10)
+                    .style("fill-opacity", "0%")
+                    .style("stroke", "red")
+                    .attr("cx", d => project(d.coord).x)
+                    .attr("cy", d => project(d.coord).y);
+                testCardLayer.selectAll("circle")
+                    .data(testCards)
+                    .attr("cx", d => project(d.coord).x)
+                    .attr("cy", d => project(d.coord).y);
+            }
+
+            map.on("viewreset", renderTestCards);
+            map.on("move", renderTestCards);
+            map.on("moveend", renderTestCards);
+
             const summariesLayer = svg.append("g")
                 .attr("id", "summaries-layer")
                 .attr("class", "visible");
@@ -198,6 +231,7 @@
                 ;
 
             function render() {
+
                 // console.log(`Closest centroid: ${closestId}`);
                 const previouslySelected = document.querySelectorAll(".selected");
                 if (previouslySelected) {

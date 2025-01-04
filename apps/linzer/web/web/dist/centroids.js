@@ -209,6 +209,16 @@ function getArrayJsValueFromWasm0(ptr, len) {
     return result;
 }
 /**
+ * @param {number} x
+ * @param {number} y
+ * @returns {TestCard}
+ */
+export function testcard_at(x, y) {
+    const ret = wasm.testcard_at(x, y);
+    return TestCard.__wrap(ret);
+}
+
+/**
  * @param {string} source_url
  * @returns {Promise<AnnotatedJS>}
  */
@@ -220,11 +230,11 @@ export function annotate(source_url) {
 }
 
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure80_externref_shim(arg0, arg1, arg2);
+    wasm.closure81_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_107(arg0, arg1, arg2, arg3) {
-    wasm.closure215_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_112(arg0, arg1, arg2, arg3) {
+    wasm.closure216_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
@@ -400,6 +410,61 @@ export class RegionSummary {
     }
 }
 
+const TestCardFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_testcard_free(ptr >>> 0, 1));
+
+export class TestCard {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(TestCard.prototype);
+        obj.__wbg_ptr = ptr;
+        TestCardFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        TestCardFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_testcard_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    get x() {
+        const ret = wasm.testcard_x(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    get y() {
+        const ret = wasm.testcard_y(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    get coord() {
+        const ret = wasm.testcard_coord(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    get bearing_north_degrees() {
+        const ret = wasm.testcard_bearing_north_degrees(this.__wbg_ptr);
+        return ret;
+    }
+}
+
 async function __wbg_load(module, imports) {
     if (typeof Response === 'function' && module instanceof Response) {
         if (typeof WebAssembly.instantiateStreaming === 'function') {
@@ -508,7 +573,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_107(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_112(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -648,8 +713,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper296 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 81, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper308 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 82, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

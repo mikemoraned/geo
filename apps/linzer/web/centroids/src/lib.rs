@@ -1,5 +1,6 @@
 
 use annotated::{Annotated, RegionSummary};
+use testcard::TestCard;
 use wasm_bindgen::prelude::*;
 use geo_types::GeometryCollection;
 use gloo_utils::format::JsValueSerdeExt;
@@ -8,6 +9,7 @@ use web_sys::console;
 mod load;
 mod geometry;
 mod annotated;
+mod testcard;
 
 #[wasm_bindgen]
 pub struct AnnotatedJS {
@@ -51,6 +53,11 @@ impl AnnotatedJS {
         let id = self.annotated.id_of_closest_centroid(&(x, y).into());
         return JsValue::from_serde(&id).unwrap();
     }
+}
+
+#[wasm_bindgen]
+pub fn testcard_at(x: f64, y: f64) -> TestCard {
+    TestCard::new((x, y).into())
 }
 
 #[wasm_bindgen]

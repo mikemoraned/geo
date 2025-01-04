@@ -71,6 +71,7 @@
             * [x] initially, don't worry about interpolating for degrees missing
             * [x] interpolation idea: as we iterate over pounts, ever time bearing changes by more than bucket size, 
             use `InterpolatePoint::point_at_ratio_between` to manufacture a series of points to fill the gaps
+    * [ ] create a "test card" for verifying projections and display
     * [ ] find dominant directions of each shape based on summary
         * [ ] try finding degree which maximises the sum of length at 0, 90, 180, 270 degree offset
     * [ ] find similar shapes to current highlighted shape, based on summary
