@@ -13,7 +13,7 @@ pub struct AnnotatedJS {
 impl AnnotatedJS {
     pub fn new(collection: GeometryCollection<f64>) -> AnnotatedJS {
         let annotated = Annotated::new(collection);
-        let summaries = annotated.summaries().iter().map(|summary| RegionSummaryJS::new(summary.clone())).collect();
+        let summaries = annotated.summaries.iter().map(|summary| RegionSummaryJS::new(summary.clone())).collect();
         AnnotatedJS { annotated, summaries }
     }
 }
@@ -30,7 +30,7 @@ impl AnnotatedJS {
     }
 
     pub fn summaries(&mut self) -> Vec<RegionSummaryJS> {
-        return self.summaries.clone()
+        self.summaries.clone()
     }
 
     pub fn most_similar_ids(&mut self, id: usize) -> JsValue {
