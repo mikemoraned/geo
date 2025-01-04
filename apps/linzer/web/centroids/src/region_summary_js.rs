@@ -37,11 +37,11 @@ impl RegionSummaryJS {
     }
     #[wasm_bindgen(getter)]
     pub fn dominant_degree(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.dominant().0).unwrap()
+        JsValue::from_serde(&self.summary.dominant.0).unwrap()
     }
     #[wasm_bindgen(getter)]
     pub fn dominant_length(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.dominant().1).unwrap()
+        JsValue::from_serde(&self.summary.dominant.1).unwrap()
     }
 }
 

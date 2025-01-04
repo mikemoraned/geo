@@ -62,6 +62,8 @@ impl Annotated {
 
 fn summaries(collection: &GeometryCollection<f64>, centroids: &Vec<Point<f64>>) -> Vec<RegionSummary> {
     let mut summaries: Vec<RegionSummary> = vec![];
+    let size = collection.len();
+    console::log_1(&format!("calculating summaries for {size} geometries").into());
 
     let bucket_width = 1.0;
     for (id, (geometry, centroid)) in zip(collection.iter(),centroids.iter()).enumerate() {
@@ -119,11 +121,12 @@ fn summaries(collection: &GeometryCollection<f64>, centroids: &Vec<Point<f64>>) 
                 }
             }).collect();
 
-            let summary = RegionSummary { id, centroid: centroid.clone(), bucket_width, normalised };
+            let summary = RegionSummary::new(id, centroid.clone(), bucket_width, normalised);
             summaries.push(summary);
         }
     }
 
+    console::log_1(&"calculated summaries".into());
     summaries
 }
 

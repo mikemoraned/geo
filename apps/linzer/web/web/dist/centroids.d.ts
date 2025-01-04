@@ -35,20 +35,6 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
-  readonly annotatedjs_centroids: (a: number) => any;
-  readonly annotatedjs_bounds: (a: number) => any;
-  readonly annotatedjs_summaries: (a: number) => [number, number];
-  readonly annotatedjs_most_similar_ids: (a: number, b: number) => any;
-  readonly annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
-  readonly testcard_at: (a: number, b: number) => number;
-  readonly annotate: (a: number, b: number) => any;
-  readonly __wbg_testcard_free: (a: number, b: number) => void;
-  readonly testcard_x: (a: number) => number;
-  readonly testcard_y: (a: number) => number;
-  readonly testcard_coord: (a: number) => any;
-  readonly testcard_bearing_north_degrees: (a: number) => number;
-  readonly testcard_bearing_east_degrees: (a: number) => number;
   readonly __wbg_regionsummaryjs_free: (a: number, b: number) => void;
   readonly regionsummaryjs_id: (a: number) => number;
   readonly regionsummaryjs_centroid: (a: number) => any;
@@ -56,6 +42,20 @@ export interface InitOutput {
   readonly regionsummaryjs_normalised: (a: number) => any;
   readonly regionsummaryjs_dominant_degree: (a: number) => any;
   readonly regionsummaryjs_dominant_length: (a: number) => any;
+  readonly testcard_at: (a: number, b: number) => number;
+  readonly annotate: (a: number, b: number) => any;
+  readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
+  readonly annotatedjs_centroids: (a: number) => any;
+  readonly annotatedjs_bounds: (a: number) => any;
+  readonly annotatedjs_summaries: (a: number) => [number, number];
+  readonly annotatedjs_most_similar_ids: (a: number, b: number) => any;
+  readonly annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
+  readonly __wbg_testcard_free: (a: number, b: number) => void;
+  readonly testcard_x: (a: number) => number;
+  readonly testcard_y: (a: number) => number;
+  readonly testcard_coord: (a: number) => any;
+  readonly testcard_bearing_north_degrees: (a: number) => number;
+  readonly testcard_bearing_east_degrees: (a: number) => number;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;
