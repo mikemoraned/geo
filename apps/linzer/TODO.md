@@ -77,9 +77,11 @@
         - eagerly precalculate and store
         - remove dead code, including rays in the Rust RegionSummary
         - pull out JS into different modules
-    * [ ] find dominant directions of each shape based on summary
-        * [ ] try finding degree which maximises the sum of length at 0, 90, 180, 270 degree offset
-    * [ ] find similar shapes to current highlighted shape, based on summary
+    * [x] find dominant directions of each shape based on summary
+        * [x] try finding degree which maximises the sum of length at 0, 90, 180, 270 degree offset
+    * [x] find similar shapes to current highlighted shape, based on summary
+    * [ ] make it easier to see how similar shapes are
+        - try: visualise similar shapes as minimap or list at bottom 
     * [ ] ...
 
 ## Geo

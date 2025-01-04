@@ -105,8 +105,8 @@ export function addSummaryLayer(layerId, map, svg, annotated) {
 
         const center = map.getCenter();
         const closestId = annotated.id_of_closest_centroid(center.lng, center.lat);
-        // const similarIds = annotated.most_similar_ids(closestId);
-        const similarIds = [];
+        const similarIds = annotated.most_similar_ids(closestId);
+        // const similarIds = [];
         const selectedIds = [ closestId ].concat(similarIds).map(id => `summary-${id}`);
 
         selectedIds.forEach(id => {
