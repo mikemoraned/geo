@@ -72,9 +72,9 @@
             * [x] interpolation idea: as we iterate over pounts, ever time bearing changes by more than bucket size, 
             use `InterpolatePoint::point_at_ratio_between` to manufacture a series of points to fill the gaps
     * [x] create a "test card" for verifying projections and display
-    * [ ] refactor and optimise
-        - split into a FooJS and Foo layer where Foo layer does the computations and FooJS binds those to types usable in JS, but also stores the results
-        from computations
+    * [x] refactor and optimise
+        - split into a FooJS and Foo layer where Foo layer does the computations and FooJS binds those to types usable in JS
+        - eagerly precalculate and store
         - remove dead code, including rays in the Rust RegionSummary
         - pull out JS into different modules
     * [ ] find dominant directions of each shape based on summary
