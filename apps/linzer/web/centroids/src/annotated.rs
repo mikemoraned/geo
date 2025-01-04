@@ -64,6 +64,19 @@ impl Annotated {
         rays
     }
 
+    pub fn most_similar_ids(&mut self, id: usize) -> Vec<usize> {
+        let summaries = self.summaries();
+        let target_summary = summaries.get(id).unwrap();
+
+        let mut distances = summaries.iter()
+            .map(|summary| {
+                (summary.id, target_summary.distance_from(summary))
+            }).collect::<Vec<(usize, f64)>>();
+        distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+        distances.into_iter().map(|(id,_)| id).take(5).collect()
+    }
+
     pub fn id_of_closest_centroid(&mut self, coord: &Coord) -> Option<usize> {
         let mut closest = None;
         for (id, centroid) in self.lazy_centroids().iter().enumerate() {
@@ -86,7 +99,7 @@ impl Annotated {
     }
 
     pub fn summaries(&mut self) -> Vec<RegionSummary> {
-        console::log_1(&"calculating summaries".into());
+        // console::log_1(&"calculating summaries".into());
         let mut summaries: Vec<RegionSummary> = vec![];
         let centroids = self.lazy_centroids();
 
@@ -155,7 +168,7 @@ impl Annotated {
             }
         }
 
-        console::log_1(&"calculated summaries".into());
+        // console::log_1(&"calculated summaries".into());
         summaries
     }
 }
@@ -177,6 +190,20 @@ pub struct RegionSummary {
 }
 
 impl RegionSummary {
+    pub fn distance_from(&self, other: &RegionSummary) -> f64 {
+        let (offset, _) = self.dominant();
+        let (other_offset, _) = other.dominant();
+        let mut total_diff = 0.0;
+        for i in 0..360 {
+            let degree = (offset + i) % 360;
+            let other_degree = (other_offset + i) % 360;
+            let diff = (self.normalised[degree] - other.normalised[other_degree]).abs();
+            total_diff += diff;
+        }
+        let avg_diff = total_diff / 360.0;
+        return avg_diff;
+    }
+
     pub fn dominant(&self) -> (usize, f64) {
         let mut max = None;
         for (degree, length) in self.normalised.iter().enumerate() {

@@ -8,6 +8,7 @@ export class AnnotatedJS {
   bounds(): any;
   rays(): any;
   summaries(): (RegionSummary)[];
+  most_similar_ids(id: number): any;
   id_of_closest_centroid(x: number, y: number): any;
 }
 export class Ray {
@@ -44,6 +45,7 @@ export interface InitOutput {
   readonly annotatedjs_bounds: (a: number) => any;
   readonly annotatedjs_rays: (a: number) => any;
   readonly annotatedjs_summaries: (a: number) => [number, number];
+  readonly annotatedjs_most_similar_ids: (a: number, b: number) => any;
   readonly annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
   readonly annotate: (a: number, b: number) => any;
   readonly __wbindgen_exn_store: (a: number) => void;

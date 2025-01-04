@@ -51,8 +51,8 @@
         const hamburg = [9.993682, 53.551086];
         const starting_position = {
             center: hamburg,
-            // zoom: 12
-            zoom: 14
+            zoom: 12
+            // zoom: 14
         };
 
         const map = new mapboxgl.Map({
@@ -206,7 +206,9 @@
 
                 const center = map.getCenter();
                 const closestId = annotated.id_of_closest_centroid(center.lng, center.lat);
-                const selectedIds = [ closestId ].map(id => `summary-${id}`);
+                const similarIds = annotated.most_similar_ids(closestId);
+                // console.log(`Closest centroid: ${closestId}, similar: ${similarIds}`);
+                const selectedIds = [ closestId ].concat(similarIds).map(id => `summary-${id}`);
 
                 // const selectedId = `summary-${closestId}`;
                 selectedIds.forEach(id => {

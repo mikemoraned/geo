@@ -42,6 +42,11 @@ impl AnnotatedJS {
         return self.annotated.summaries();
     }
 
+    pub fn most_similar_ids(&mut self, id: usize) -> JsValue {
+        let ids = self.annotated.most_similar_ids(id);
+        return JsValue::from_serde(&ids).unwrap();
+    }
+
     pub fn id_of_closest_centroid(&mut self, x: f64, y: f64) -> JsValue {
         let id = self.annotated.id_of_closest_centroid(&(x, y).into());
         return JsValue::from_serde(&id).unwrap();

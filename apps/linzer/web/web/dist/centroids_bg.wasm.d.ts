@@ -15,6 +15,7 @@ export const annotatedjs_centroids: (a: number) => any;
 export const annotatedjs_bounds: (a: number) => any;
 export const annotatedjs_rays: (a: number) => any;
 export const annotatedjs_summaries: (a: number) => [number, number];
+export const annotatedjs_most_similar_ids: (a: number, b: number) => any;
 export const annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
 export const annotate: (a: number, b: number) => any;
 export const __wbindgen_exn_store: (a: number) => void;
