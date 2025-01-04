@@ -27,6 +27,12 @@
         }
         #mapbox div.mini {
             background-color: rgba(255,255,255,0.8);
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        #mapbox div.mini .box {
+            display: inline-block;
+            margin-right: 1rem;
         }
     </style>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
@@ -44,12 +50,11 @@
         </div>
     </div>
     <template id="item-template">
-        <div class="card" data-theme="light">
-            <header class="card-header">
-                <p class="card-header-title">
-                    <span class="id-slot"></span>
-                </p>
-            </header>
+        <div class="box" data-theme="light">
+            <span class="id-slot"></span>
+            <figure class="image is-128x128">
+                <img class="is-rounded" src="https://bulma.io/assets/images/placeholders/128x128.png" />
+              </figure>
         </div>
     </template>
     <script type="module">
@@ -95,7 +100,7 @@
             let mini = d3
               .select(container)
               .append("div")
-              .attr("class", "mini");
+              .attr("class", "mini is-flex");
 
             const template = document.getElementById('item-template')
             function renderMini() {
