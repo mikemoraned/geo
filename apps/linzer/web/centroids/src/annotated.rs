@@ -28,6 +28,7 @@ impl Annotated {
         let target_summary = summaries.get(id).unwrap();
 
         let mut distances = summaries.iter()
+            .filter(|summary| summary.id != id)
             .map(|summary| {
                 (summary.id, target_summary.distance_from(summary))
             }).collect::<Vec<(usize, f64)>>();
