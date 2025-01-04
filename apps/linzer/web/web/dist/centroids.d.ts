@@ -34,6 +34,7 @@ export class TestCard {
   readonly y: number;
   readonly coord: any;
   readonly bearing_north_degrees: number;
+  readonly bearing_east_degrees: number;
 }
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -54,6 +55,7 @@ export interface InitOutput {
   readonly testcard_y: (a: number) => number;
   readonly testcard_coord: (a: number) => any;
   readonly testcard_bearing_north_degrees: (a: number) => number;
+  readonly testcard_bearing_east_degrees: (a: number) => number;
   readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
   readonly annotatedjs_centroids: (a: number) => any;
   readonly annotatedjs_bounds: (a: number) => any;

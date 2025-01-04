@@ -118,11 +118,24 @@
               return map.project(new mapboxgl.LngLat(d[0], d[1]));
             }
 
-            const radian = Math.PI / 180;
-            const bearingToSVGRadians = d3.scaleLinear()
-                .domain([0,          90,          180,          270,          360])
-                .range( [0 * radian, 90 * radian, 180 * radian, 270 * radian, 360 * radian])
-                ;
+            // const radian = Math.PI / 180;
+            // const bearingToSVGRadians = d3.scaleLinear()
+            //     .domain([0,          90,          180,          270,          360])
+            //     .range( [0 * radian, 90 * radian, 180 * radian, 270 * radian, 360 * radian])
+            //     ;
+
+            function bearingToSVGRadians(bearing) {
+                const radian = Math.PI / 180;
+                return (bearing - 90) * radian;
+            }
+
+            function bearingToSVGVector(bearing) {
+                const radians = bearingToSVGRadians(bearing);
+                return {
+                    x: Math.cos(radians),
+                    y: Math.sin(radians)
+                }
+            }
 
             const testCardLayer = svg.append("g")
                 .attr("id", "testcard-layer")
@@ -133,7 +146,7 @@
             map.on('click', function(e) {
                 const testCard = testcard_at(e.lngLat.lng, e.lngLat.lat);
                 testCards.push(testCard);
-                console.log(`x: ${e.lngLat.lng}, y: ${e.lngLat.lat}, testCard: ${testCard.coord}`);
+                console.log(`x: ${e.lngLat.lng}, y: ${e.lngLat.lat}, testCard: ${testCard.coord}, ${testCard.bearing_north_degrees}, ${testCard.bearing_east_degrees}`);
                 renderTestCards();
             });
 
@@ -144,13 +157,47 @@
                     .append("circle")
                     .attr("r", 10)
                     .style("fill-opacity", "0%")
-                    .style("stroke", "red")
-                    .attr("cx", d => project(d.coord).x)
-                    .attr("cy", d => project(d.coord).y);
+                    .style("stroke", "red");
                 testCardLayer.selectAll("circle")
                     .data(testCards)
                     .attr("cx", d => project(d.coord).x)
                     .attr("cy", d => project(d.coord).y);
+
+                const lineLength = 100;
+                testCardLayer.selectAll("line.north")
+                    .data(testCards)
+                    .enter()
+                    .append("line")
+                    .attr("class", "north")
+                    .style("stroke", "red")
+                testCardLayer.selectAll("line.north")
+                    .data(testCards)
+                    .attr("x1", d => project(d.coord).x)
+                    .attr("y1", d => project(d.coord).y)
+                    .attr("x2", d => {
+                        return project(d.coord).x + bearingToSVGVector(d.bearing_north_degrees).x * lineLength;
+                    })
+                    .attr("y2",  d => {
+                        return project(d.coord).y + bearingToSVGVector(d.bearing_north_degrees).y * lineLength;
+                    })
+                    ;
+                testCardLayer.selectAll("line.east")
+                    .data(testCards)
+                    .enter()
+                    .append("line")
+                    .attr("class", "east")
+                    .style("stroke", "green")
+                testCardLayer.selectAll("line.east")
+                    .data(testCards)
+                    .attr("x1", d => project(d.coord).x)
+                    .attr("y1", d => project(d.coord).y)
+                    .attr("x2", d => {
+                        return project(d.coord).x + bearingToSVGVector(d.bearing_east_degrees).x * lineLength;
+                    })
+                    .attr("y2",  d => {
+                        return project(d.coord).y + bearingToSVGVector(d.bearing_east_degrees).y * lineLength;
+                    })
+                    ;
             }
 
             map.on("viewreset", renderTestCards);
@@ -215,18 +262,24 @@
                     const path = line(data);
                     return path;
                 });
-            const FUDGE = -90;
+            // const FUDGE = -90;
             summaryGroups
                 .append("line")
                 .attr("stroke", "green")
                 .attr("class", "dominant")
                 .attr("x1", 0)
                 .attr("y1", 0)
+                // .attr("x2", function(d) {
+                //     return Math.cos(bearingToSVGRadians(d.dominant_degree + FUDGE)) * d.dominant_length * summaryRadius;
+                // })
+                // .attr("y2", function(d) {
+                //     return Math.sin(bearingToSVGRadians(d.dominant_degree + FUDGE)) * d.dominant_length * summaryRadius;
+                // })
                 .attr("x2", function(d) {
-                    return Math.cos(bearingToSVGRadians(d.dominant_degree + FUDGE)) * d.dominant_length * summaryRadius;
+                    return bearingToSVGVector(d.dominant_degree).x * d.dominant_length * summaryRadius;
                 })
                 .attr("y2", function(d) {
-                    return Math.sin(bearingToSVGRadians(d.dominant_degree + FUDGE)) * d.dominant_length * summaryRadius;
+                    return bearingToSVGVector(d.dominant_degree).y * d.dominant_length * summaryRadius;
                 })
                 ;
 

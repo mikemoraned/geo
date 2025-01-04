@@ -233,7 +233,7 @@ function __wbg_adapter_26(arg0, arg1, arg2) {
     wasm.closure81_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_112(arg0, arg1, arg2, arg3) {
+function __wbg_adapter_113(arg0, arg1, arg2, arg3) {
     wasm.closure216_externref_shim(arg0, arg1, arg2, arg3);
 }
 
@@ -463,6 +463,13 @@ export class TestCard {
         const ret = wasm.testcard_bearing_north_degrees(this.__wbg_ptr);
         return ret;
     }
+    /**
+     * @returns {number}
+     */
+    get bearing_east_degrees() {
+        const ret = wasm.testcard_bearing_east_degrees(this.__wbg_ptr);
+        return ret;
+    }
 }
 
 async function __wbg_load(module, imports) {
@@ -573,7 +580,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_112(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_113(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -713,7 +720,7 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper308 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper309 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 82, __wbg_adapter_26);
         return ret;
     };

@@ -15,6 +15,7 @@ export const testcard_x: (a: number) => number;
 export const testcard_y: (a: number) => number;
 export const testcard_coord: (a: number) => any;
 export const testcard_bearing_north_degrees: (a: number) => number;
+export const testcard_bearing_east_degrees: (a: number) => number;
 export const __wbg_annotatedjs_free: (a: number, b: number) => void;
 export const annotatedjs_centroids: (a: number) => any;
 export const annotatedjs_bounds: (a: number) => any;
