@@ -88,8 +88,8 @@
     * [x] expose at linzer.houseofmoran.io
         * [x] register CNAME domain entry and point at netlify
         * [x] expand `geo-linzer-netlify` mapbox key to work on https://linzer.houseofmoran.io
-* [ ] try shapes with edinburgh and other towns
-    * [ ] enable netlify PR builds
+* [x] try shapes with edinburgh and other towns
+    * [x] enable netlify PR builds
 * [ ] add plausible.io tracking for linzer.houseofmoran.io
 
 ## Geo
