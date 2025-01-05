@@ -14,7 +14,7 @@
     * [ ] outstanding problem with running `just --set area hamburg --set profile auto all` (will solve later)
     * [ ] refactor: make `routing` crate repeatable and stable
         * [ ] ...
-* [ ] experiment: try different ways to summarise a shape in a normalised way which allows comparison across to similar shapes
+* [x] experiment: try different ways to summarise a shape in a normalised way which allows comparison across to similar shapes
     * [x] convert linzer web into a simple rust wasm app website
         * [x] create a basic Rust wasm monolithic module (not components) that says "hello world"
             - following https://dzfrias.dev/blog/rust-wasm-minimal-setup/#fn1
