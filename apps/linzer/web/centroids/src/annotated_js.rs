@@ -24,6 +24,11 @@ impl AnnotatedJS {
         return JsValue::from_serde(&self.annotated.centroids).unwrap();
     }
 
+    pub fn centroid(&self) -> JsValue {
+        let centroid = self.annotated.centroid();
+        return JsValue::from_serde(&[ centroid.x, centroid.y ]).unwrap();
+    }
+
     pub fn bounds(&self) -> JsValue {
         let bounds = self.annotated.bounds();
         return JsValue::from_serde(&bounds).unwrap();

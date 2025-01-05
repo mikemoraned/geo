@@ -19,6 +19,10 @@ impl Annotated {
         Annotated { collection, centroids, summaries }
     }
 
+    pub fn centroid(&self) -> geo_types::Coord {
+        self.collection.bounding_rect().unwrap().centroid().into()
+    }
+
     pub fn bounds(&self) -> geo_types::Rect<f64> {
         self.collection.bounding_rect().unwrap()
     }
