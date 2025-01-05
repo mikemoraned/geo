@@ -97,10 +97,13 @@
         await init();
         console.log("Wasm initialized");
 
-        const edinburgh = [-3.188267, 55.953251];
-        const hamburg = [9.993682, 53.551086];
+        const city = "edinburgh";
+        const sourceDataUrl = new URL(`/data/${city}/regions_pedestrian.1000.geojson`, window.location.origin).toString();
+        let annotated = await annotate(sourceDataUrl);
+        let centre = annotated.centroid();
+
         const starting_position = {
-            center: hamburg,
+            center: centre,
             zoom: 14
         };
 
@@ -116,8 +119,6 @@
         map.on('load', async () => {
             console.log("Map loaded");
 
-            const sourceDataUrl = new URL('/data/hamburg/regions_pedestrian.1000.geojson', window.location.origin).toString();
-            let annotated = await annotate(sourceDataUrl);
 
             addLayers(map, sourceDataUrl, annotated);
 
