@@ -1,8 +1,10 @@
 [build]
-command = "echo 'build'"
-publish = "dist"
+base    = "zola"
+publish = "zola/public"
+command = "zola build"
 
-[[redirects]]
-from = "/*"
-to = "/index.html"
-status = 200
+[build.environment]
+ZOLA_VERSION = "0.19.2"
+
+[context.deploy-preview]
+command = "zola build --base-url $DEPLOY_PRIME_URL"
