@@ -60,16 +60,16 @@ impl RegionSummaryJS {
         for (degree, length) in self.summary.arrange_lengths_by_dominant_degree().iter().enumerate() {
             let radians = (degree as f32).to_radians();
             let length = *length as f32;
-            let x = radians.cos() * length * (width as f32);
-            let y = radians.sin() * length * (height as f32);
+            let x = radians.cos() * length * (width as f32) / 2.0;
+            let y = radians.sin() * length * (height as f32) / 2.0;
             x_y_pairs.push((x, y));
         }
         let mut pb = PathBuilder::new();
         let (x, y) = x_y_pairs[0];
-        pb.move_to(x, y);
+        pb.move_to(x + (width as f32) / 2.0, y + (height as f32) / 2.0);
         for i in 1..x_y_pairs.len() {
             let (x, y) = x_y_pairs[i];
-            pb.line_to(x, y);
+            pb.line_to(x + (width as f32) / 2.0, y + (height as f32) / 2.0);
         }
         pb.close();
         let path = pb.finish().ok_or(format!("Failed to finish path"))?;
