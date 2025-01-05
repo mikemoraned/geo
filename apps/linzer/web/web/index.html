@@ -115,6 +115,7 @@
                     .append(d => {
                         const clone = template.content.cloneNode(true);
                         clone.querySelector('.id-slot').textContent = d.id;
+                        clone.querySelector('.img-slot').setAttribute('src', d.as_data_uri_image(128, 128));
                         return clone;
                     });
             }
