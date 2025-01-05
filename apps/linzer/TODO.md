@@ -1,5 +1,7 @@
 # Winter 2024 TODO's
 
+## Linzer
+
 * [x] update libs
     * [x] rustc version
     * [x] libs
@@ -10,6 +12,86 @@
     * [x] make Justfile more generic
     * [x] separate `data` into `config` and `output` dirs
     * [ ] outstanding problem with running `just --set area hamburg --set profile auto all` (will solve later)
+    * [ ] refactor: make `routing` crate repeatable and stable
+        * [ ] ...
+* [x] experiment: try different ways to summarise a shape in a normalised way which allows comparison across to similar shapes
+    * [x] convert linzer web into a simple rust wasm app website
+        * [x] create a basic Rust wasm monolithic module (not components) that says "hello world"
+            - following https://dzfrias.dev/blog/rust-wasm-minimal-setup/#fn1
+            * [x] install tools:
+            ```
+            cargo install wasm-pack
+            ```
+        * [x] deploy on netlify
+            - build locally and just check in the wasm
+            - deployed current branch `shape-experiment` to `https://linzer.netlify.app`
+    * [x] show mapbox and georust working together:
+        * [x] simple mapbox map in browser
+            * [x] create a public mapbox key for use in netlify
+                - restrict to use on https://linzer.netlify.app
+                - called `geo-linzer-netlify`
+            * [x] create a secret key for this app
+                - will only be used locally
+                - called `geo-linzer-local`
+            * [x] create a `setting.js` module which defines `PUBLIC_MAPBOX_TOKEN` and maps to the secret key; this is not checked in
+            * [x] define `PUBLIC_MAPBOX_TOKEN` in netlify
+            * [x] update build so that takes a `setting.js.template` file and replaces `PUBLIC_MAPBOX_TOKEN` in it and saves in `setting.js`
+        * [x] load a geojson source into map and show it
+        * [x] load same geojson source from rust
+        * [x] calculate centroids of each shape, using georust
+        * [x] draw centroids in mapbox as a source
+    * [x] usable UI for centroids
+        * [x] ease of use: make each layer in mapbox toggleable on and off
+        * [x] speed up / clean up: parse directly into geo-types, without using geojson intermediate step
+        * [x] fix geometries: there appear to be a lot of 'degenerate' regions (very small). This really needs to be properly fixed upstream in the region generator, but for now we can probably filter these by size
+        * [x] show spinner icon on layer buttons whilst waiting on layer to load
+    * [x] show a set of 'rays' for each region
+        - 'rays' are a set of linestrings for each region going from the centroid to each border-point
+        * [x] refactor wasm into returning an `Annotated` object with a method for `centroids`
+        * [x] add `rays` layer
+    * [x] show a summary for each region
+        - summary is the length of each ray as a fraction of max size of all rays for region
+        * [-] visualise as a spiky shape per region in a CanvasSource
+            * [x] add a canvas source covering area, displaying a test black rectangle covering entire area
+            * [x] to confirm projection is working, draw centroids again on canvas as circles
+                - this is sorta-maybe working but is fuzzy (as is a raster) and mapping seems still slightly-off
+            * [-] show spikes as a series of arcs
+        * [x] switch to layering D3 on top of the map, as in https://franksh.com/posts/d3-mapboxgl/, https://docs.os.uk/more-than-maps/tutorials/apis/d3-overlays-and-mapbox-gl
+            * [x] remove previous canvas implementation
+            * [x] load D3 and get it showing something minimal
+            * [x] draw centroids using D3
+            * [x] control display of centroids via top-control
+        * [x] calculate summary
+        * [x] show summary
+    * [x] show a normalised summary for each region
+        - a normalised summary is one where it has a fixed number of degrees and the length per a degree is a single number
+        * [x] try:
+            - degrees: 360
+            - length: max length of all rays for each degree
+            * [x] initially, don't worry about interpolating for degrees missing
+            * [x] interpolation idea: as we iterate over pounts, ever time bearing changes by more than bucket size, 
+            use `InterpolatePoint::point_at_ratio_between` to manufacture a series of points to fill the gaps
+    * [x] create a "test card" for verifying projections and display
+    * [x] refactor and optimise
+        - split into a FooJS and Foo layer where Foo layer does the computations and FooJS binds those to types usable in JS
+        - eagerly precalculate and store
+        - remove dead code, including rays in the Rust RegionSummary
+        - pull out JS into different modules
+    * [x] find dominant directions of each shape based on summary
+        * [x] try finding degree which maximises the sum of length at 0, 90, 180, 270 degree offset
+    * [x] find similar shapes to current highlighted shape, based on summary
+    * [x] make it easier to see how similar shapes are
+        - try: visualise similar shapes as minimap or list at bottom
+        * [x] fix up bugs in list
+            * make it properly scrollable
+            * don't let click on list propagate through
+    * [x] expose at linzer.houseofmoran.io
+        * [x] register CNAME domain entry and point at netlify
+        * [x] expand `geo-linzer-netlify` mapbox key to work on https://linzer.houseofmoran.io
+
+## Geo
+
+* [ ] convert top-level geo.houseofmoran.io site into a Zola blog
     
 # Geomob 2024
 

@@ -1,0 +1,15 @@
+{
+  "name": "centroids",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "centroids_bg.wasm",
+    "centroids.js",
+    "centroids.d.ts"
+  ],
+  "main": "centroids.js",
+  "types": "centroids.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

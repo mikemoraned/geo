@@ -1,0 +1,180 @@
+<!doctype html>
+<html>
+  <head class="theme-light">
+    <meta charset="utf-8" />
+    <title>Linzer</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.tiles.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet" />
+    <style>
+        body { margin: 0; padding: 0; }
+        #mapbox { position: absolute; top: 0; bottom: 0; z-index: 0; width: 100%; }
+        #mapbox svg.main { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 100%;}
+        div.mini { position: absolute; bottom: 5%; z-index: 3; width: 100%; height: 25%; }
+        #layers { position: absolute; top: 0; right: 0; margin: 10px; z-index: 1; }
+        #layers.box { --bulma-box-padding: 0.5rem; }
+        
+        #mapbox svg.main g .summary { 
+            visibility: hidden;
+        }
+        #mapbox svg.main g.visible .summary.selected {
+            visibility: visible;
+        }
+        #mapbox svg.main g.visible .summary.selected path {
+            stroke-width: 3;
+        }
+        #mapbox svg.main g.visible .summary.selected line {
+            stroke-width: 2; 
+        }
+        div.mini {
+            background-color: rgba(255,255,255,0.8);
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            justify-content: flex-start;
+            align-items: center;
+            column-gap: 20px;
+            overflow-x: scroll;
+        }
+        div.mini img {
+            padding: 5px;
+        }
+        @media only screen and (max-width: 768px) {
+            div.mini { position: absolute; bottom: 5%; z-index: 3; width: 100%; height: 25%; }
+            div.mini .mobile {
+                display: inherit;
+            }
+            div.mini .tablet {
+                display: none;
+            }
+        }
+        @media only screen and (min-width: 768px) {
+            div.mini { position: absolute; bottom: 5%; z-index: 3; width: 100%; height: 30%; }
+            div.mini .mobile {
+                display: none;
+            }
+            div.mini .tablet {
+                display: inherit;
+            }
+        }
+    </style>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  </head>
+  <body>
+    <div id="mapbox"></div>
+    <div id="layers" class="box" data-theme="light">
+        <div class="buttons has-addons">
+            <button id="regions-layer-button" class="button is-medium is-responsive is-loading" disabled>Regions</button>
+            <button id="centroids-layer-button" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
+            <button id="summaries-layer-button" class="button is-medium is-responsive is-loading" disabled>Summaries</button>
+        </div>
+    </div>
+    <div class="mini" data-theme="light"></div>
+    <template id="item-template">
+        <div class="card item">
+            <div class="card-image">
+                <figure class="image mobile is-64x64">
+                    <img class="img-mobile-slot" />
+                </figure>
+                <figure class="image tablet is-128x128">
+                    <img class="img-tablet-slot" />
+                </figure>
+            </div>
+            <div class="card-content">
+                <span class="id-slot"></span>
+            </div>
+        </div>
+    </template>
+    <script type="module">
+        import init, { annotate, testcard_at } from "./dist/centroids.js";
+        import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
+        import { addLayers } from "./js/layers.js";
+        import { addTestCardLayer } from "./js/testcard.js";
+        import { addSummaryLayer } from "./js/summaries.js";
+
+        await init();
+        console.log("Wasm initialized");
+
+        const edinburgh = [-3.188267, 55.953251];
+        const hamburg = [9.993682, 53.551086];
+        const starting_position = {
+            center: hamburg,
+            zoom: 14
+        };
+
+        const map = new mapboxgl.Map({
+			container: 'mapbox',
+			accessToken: PUBLIC_MAPBOX_TOKEN,
+			style: `mapbox://styles/mapbox/outdoors-v11`,
+            projection: 'mercator',
+			...starting_position
+		});
+        console.log("Map created");        
+
+        map.on('load', async () => {
+            console.log("Map loaded");
+
+            const sourceDataUrl = new URL('/data/hamburg/regions_pedestrian.1000.geojson', window.location.origin).toString();
+            let annotated = await annotate(sourceDataUrl);
+
+            addLayers(map, sourceDataUrl, annotated);
+
+            let container = map.getCanvasContainer();
+            let main = d3
+              .select(container)
+              .append("svg")
+              .attr("class", "main");
+
+            let mini = d3
+              .select("div.mini");
+
+            const minScore = 0.9;
+
+            function flyToRegion(centroid) {
+                mini.node().scrollLeft = 0;
+                map.flyTo({
+                    center: centroid,
+                    essential: true
+                });
+            }
+
+            const template = document.getElementById('item-template')
+            function renderMini() {
+                const center = map.getCenter();
+                const closestId = annotated.id_of_closest_centroid(center.lng, center.lat);
+                const similarRegions = annotated.most_similar_regions(closestId, minScore);
+
+                mini.selectAll("div").remove();
+                mini.selectAll("div")
+                    .data(similarRegions)
+                    .enter()
+                    .append(d => {
+                        const clone = template.content.cloneNode(true);
+                        clone.querySelector('.id-slot').textContent = d.score.toFixed(2);
+
+                        const smallImg = d.summary.as_data_uri_image(64);
+                        clone.querySelector('.img-mobile-slot').setAttribute('src', smallImg);
+                        const largeImg = d.summary.as_data_uri_image(128);
+                        clone.querySelector('.img-tablet-slot').setAttribute('src', largeImg);
+
+                        const centroid = [ d.summary.centroid.x, d.summary.centroid.y ];
+                        clone.querySelector('div.item').addEventListener('click', () => {
+                            console.log("Clicked on region", d.id);
+                            flyToRegion(centroid);
+                        });
+                        return clone;
+                    });
+            }
+            map.on("viewreset", renderMini);
+            map.on("move", renderMini);
+            map.on("moveend", renderMini);
+            renderMini();
+
+            addTestCardLayer("testcard", map, main, testcard_at);
+            addSummaryLayer("summaries", map, main, annotated, minScore);
+        });
+    </script>
+  </body>
+</html>
