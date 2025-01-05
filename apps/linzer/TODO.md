@@ -80,12 +80,14 @@
     * [x] find dominant directions of each shape based on summary
         * [x] try finding degree which maximises the sum of length at 0, 90, 180, 270 degree offset
     * [x] find similar shapes to current highlighted shape, based on summary
-    * [ ] make it easier to see how similar shapes are
+    * [x] make it easier to see how similar shapes are
         - try: visualise similar shapes as minimap or list at bottom
         * [x] fix up bugs in list
             * make it properly scrollable
             * don't let click on list propagate through
-    * [ ] ...
+    * [x] expose at linzer.houseofmoran.io
+        * [x] register CNAME domain entry and point at netlify
+        * [x] expand `geo-linzer-netlify` mapbox key to work on https://linzer.houseofmoran.io
 
 ## Geo
 
