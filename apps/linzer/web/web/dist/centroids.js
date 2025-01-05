@@ -198,6 +198,12 @@ function debugString(val) {
     return className;
 }
 
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_export_2.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
+}
+
 function getArrayJsValueFromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     const mem = getDataViewMemory0();
@@ -207,12 +213,6 @@ function getArrayJsValueFromWasm0(ptr, len) {
     }
     wasm.__externref_drop_slice(ptr, len);
     return result;
-}
-
-function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_export_2.get(idx);
-    wasm.__externref_table_dealloc(idx);
-    return value;
 }
 /**
  * @param {number} x
@@ -239,7 +239,7 @@ function __wbg_adapter_26(arg0, arg1, arg2) {
     wasm.closure99_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_113(arg0, arg1, arg2, arg3) {
+function __wbg_adapter_117(arg0, arg1, arg2, arg3) {
     wasm.closure426_externref_shim(arg0, arg1, arg2, arg3);
 }
 
@@ -297,18 +297,20 @@ export class AnnotatedJS {
     }
     /**
      * @param {number} id
+     * @param {number} min_score
      * @returns {any}
      */
-    most_similar_ids(id) {
-        const ret = wasm.annotatedjs_most_similar_ids(this.__wbg_ptr, id);
+    most_similar_ids(id, min_score) {
+        const ret = wasm.annotatedjs_most_similar_ids(this.__wbg_ptr, id, min_score);
         return ret;
     }
     /**
      * @param {number} id
-     * @returns {(RegionSummaryJS)[]}
+     * @param {number} min_score
+     * @returns {(SimilarRegionJS)[]}
      */
-    most_similar_regions(id) {
-        const ret = wasm.annotatedjs_most_similar_regions(this.__wbg_ptr, id);
+    most_similar_regions(id, min_score) {
+        const ret = wasm.annotatedjs_most_similar_regions(this.__wbg_ptr, id, min_score);
         var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
         return v1;
@@ -415,6 +417,47 @@ export class RegionSummaryJS {
     }
 }
 
+const SimilarRegionJSFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_similarregionjs_free(ptr >>> 0, 1));
+
+export class SimilarRegionJS {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(SimilarRegionJS.prototype);
+        obj.__wbg_ptr = ptr;
+        SimilarRegionJSFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        SimilarRegionJSFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_similarregionjs_free(ptr, 0);
+    }
+    /**
+     * @returns {RegionSummaryJS}
+     */
+    get summary() {
+        const ret = wasm.similarregionjs_summary(this.__wbg_ptr);
+        return RegionSummaryJS.__wrap(ret);
+    }
+    /**
+     * @returns {number}
+     */
+    get score() {
+        const ret = wasm.similarregionjs_score(this.__wbg_ptr);
+        return ret;
+    }
+}
+
 const TestCardFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_testcard_free(ptr >>> 0, 1));
@@ -444,7 +487,7 @@ export class TestCard {
      * @returns {number}
      */
     get x() {
-        const ret = wasm.testcard_x(this.__wbg_ptr);
+        const ret = wasm.similarregionjs_score(this.__wbg_ptr);
         return ret;
     }
     /**
@@ -585,7 +628,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_113(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_117(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -669,6 +712,10 @@ function __wbg_get_imports() {
         const ret = arg0.signal;
         return ret;
     };
+    imports.wbg.__wbg_similarregionjs_new = function(arg0) {
+        const ret = SimilarRegionJS.__wrap(arg0);
+        return ret;
+    };
     imports.wbg.__wbg_static_accessor_GLOBAL_0be7472e492ad3e3 = function() {
         const ret = typeof global === 'undefined' ? null : global;
         return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
@@ -725,7 +772,7 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper324 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper333 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 100, __wbg_adapter_26);
         return ret;
     };

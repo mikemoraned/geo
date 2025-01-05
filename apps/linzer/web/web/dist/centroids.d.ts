@@ -8,8 +8,8 @@ export class AnnotatedJS {
   centroids(): any;
   bounds(): any;
   summaries(): (RegionSummaryJS)[];
-  most_similar_ids(id: number): any;
-  most_similar_regions(id: number): (RegionSummaryJS)[];
+  most_similar_ids(id: number, min_score: number): any;
+  most_similar_regions(id: number, min_score: number): (SimilarRegionJS)[];
   id_of_closest_centroid(x: number, y: number): any;
 }
 export class RegionSummaryJS {
@@ -22,6 +22,12 @@ export class RegionSummaryJS {
   readonly lengths: any;
   readonly dominant_degree: any;
   readonly dominant_length: any;
+}
+export class SimilarRegionJS {
+  private constructor();
+  free(): void;
+  readonly summary: RegionSummaryJS;
+  readonly score: number;
 }
 export class TestCard {
   private constructor();
@@ -37,13 +43,6 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
-  readonly annotatedjs_centroids: (a: number) => any;
-  readonly annotatedjs_bounds: (a: number) => any;
-  readonly annotatedjs_summaries: (a: number) => [number, number];
-  readonly annotatedjs_most_similar_ids: (a: number, b: number) => any;
-  readonly annotatedjs_most_similar_regions: (a: number, b: number) => [number, number];
-  readonly annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
   readonly __wbg_regionsummaryjs_free: (a: number, b: number) => void;
   readonly regionsummaryjs_id: (a: number) => number;
   readonly regionsummaryjs_centroid: (a: number) => any;
@@ -52,12 +51,22 @@ export interface InitOutput {
   readonly regionsummaryjs_dominant_degree: (a: number) => any;
   readonly regionsummaryjs_dominant_length: (a: number) => any;
   readonly regionsummaryjs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
+  readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
+  readonly annotatedjs_centroids: (a: number) => any;
+  readonly annotatedjs_bounds: (a: number) => any;
+  readonly annotatedjs_summaries: (a: number) => [number, number];
+  readonly annotatedjs_most_similar_ids: (a: number, b: number, c: number) => any;
+  readonly annotatedjs_most_similar_regions: (a: number, b: number, c: number) => [number, number];
+  readonly annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
+  readonly __wbg_similarregionjs_free: (a: number, b: number) => void;
+  readonly similarregionjs_summary: (a: number) => number;
+  readonly similarregionjs_score: (a: number) => number;
   readonly __wbg_testcard_free: (a: number, b: number) => void;
-  readonly testcard_x: (a: number) => number;
   readonly testcard_y: (a: number) => number;
   readonly testcard_coord: (a: number) => any;
   readonly testcard_bearing_north_degrees: (a: number) => number;
   readonly testcard_bearing_east_degrees: (a: number) => number;
+  readonly testcard_x: (a: number) => number;
   readonly testcard_at: (a: number, b: number) => number;
   readonly annotate: (a: number, b: number) => any;
   readonly __wbindgen_exn_store: (a: number) => void;
@@ -66,9 +75,9 @@ export interface InitOutput {
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export_5: WebAssembly.Table;
-  readonly __externref_drop_slice: (a: number, b: number) => void;
-  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __externref_table_dealloc: (a: number) => void;
+  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+  readonly __externref_drop_slice: (a: number, b: number) => void;
   readonly closure99_externref_shim: (a: number, b: number, c: any) => void;
   readonly closure426_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;

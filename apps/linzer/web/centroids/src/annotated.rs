@@ -23,11 +23,11 @@ impl Annotated {
         self.collection.bounding_rect().unwrap()
     }
 
-    pub fn most_similar_ids(&self, id: usize) -> Vec<usize> {
-        self.most_similar_regions(id).into_iter().map(|summary| summary.id).collect()
+    pub fn most_similar_ids(&self, id: usize, min_score: f64) -> Vec<usize> {
+        self.most_similar_regions(id, min_score).into_iter().map(|(summary, _)| summary.id).collect()
     }
 
-    pub fn most_similar_regions(&self, id: usize) -> Vec<RegionSummary> {
+    pub fn most_similar_regions(&self, id: usize, min_score: f64) -> Vec<(RegionSummary,f64)> {
         let summaries = &self.summaries;
         let target_summary = summaries.get(id).unwrap();
 
@@ -38,7 +38,9 @@ impl Annotated {
             }).collect();
         distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
-        distances.into_iter().map(|(summary,_)| summary).take(10).collect()
+        let scores : Vec<(RegionSummary,f64)> = distances.into_iter().map(|(summary, score)| (summary, 1.0 - score)).collect();
+
+        scores.into_iter().filter(|(_, score)| *score >= min_score).collect()
     }
 
     pub fn id_of_closest_centroid(&self, coord: &Coord) -> Option<usize> {

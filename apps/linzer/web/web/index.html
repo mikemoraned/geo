@@ -130,6 +130,8 @@
             let mini = d3
               .select("div.mini");
 
+            const minScore = 0.9;
+
             function flyToRegion(centroid) {
                 mini.node().scrollLeft = 0;
                 map.flyTo({
@@ -142,7 +144,7 @@
             function renderMini() {
                 const center = map.getCenter();
                 const closestId = annotated.id_of_closest_centroid(center.lng, center.lat);
-                const similarRegions = annotated.most_similar_regions(closestId);
+                const similarRegions = annotated.most_similar_regions(closestId, minScore);
 
                 mini.selectAll("div").remove();
                 mini.selectAll("div")
@@ -150,14 +152,14 @@
                     .enter()
                     .append(d => {
                         const clone = template.content.cloneNode(true);
-                        clone.querySelector('.id-slot').textContent = d.id;
+                        clone.querySelector('.id-slot').textContent = d.score.toFixed(2);
 
-                        const smallImg = d.as_data_uri_image(64);
+                        const smallImg = d.summary.as_data_uri_image(64);
                         clone.querySelector('.img-mobile-slot').setAttribute('src', smallImg);
-                        const largeImg = d.as_data_uri_image(128);
+                        const largeImg = d.summary.as_data_uri_image(128);
                         clone.querySelector('.img-tablet-slot').setAttribute('src', largeImg);
 
-                        const centroid = [ d.centroid.x, d.centroid.y ];
+                        const centroid = [ d.summary.centroid.x, d.summary.centroid.y ];
                         clone.querySelector('div.item').addEventListener('click', () => {
                             console.log("Clicked on region", d.id);
                             flyToRegion(centroid);
@@ -171,7 +173,7 @@
             renderMini();
 
             addTestCardLayer("testcard", map, main, testcard_at);
-            addSummaryLayer("summaries", map, main, annotated);
+            addSummaryLayer("summaries", map, main, annotated, minScore);
         });
     </script>
   </body>

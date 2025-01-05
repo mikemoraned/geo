@@ -33,17 +33,44 @@ impl AnnotatedJS {
         self.summaries.clone()
     }
 
-    pub fn most_similar_ids(&mut self, id: usize) -> JsValue {
-        let ids = self.annotated.most_similar_ids(id);
+    pub fn most_similar_ids(&mut self, id: usize, min_score: f64) -> JsValue {
+        let ids = self.annotated.most_similar_ids(id, min_score);
         return JsValue::from_serde(&ids).unwrap();
     }
 
-    pub fn most_similar_regions(&mut self, id: usize) -> Vec<RegionSummaryJS> {
-        self.annotated.most_similar_regions(id).iter().map(|summary| RegionSummaryJS::new(summary.clone())).collect()
+    pub fn most_similar_regions(&mut self, id: usize, min_score: f64) -> Vec<SimilarRegionJS> {
+        self.annotated.most_similar_regions(id, min_score).iter().map(|(summary, score)| {
+            SimilarRegionJS::new(RegionSummaryJS::new(summary.clone()), *score)
+        }).collect()
     }
 
     pub fn id_of_closest_centroid(&mut self, x: f64, y: f64) -> JsValue {
         let id = self.annotated.id_of_closest_centroid(&(x, y).into());
         return JsValue::from_serde(&id).unwrap();
+    }
+}
+
+#[wasm_bindgen]
+pub struct SimilarRegionJS {
+    summary: RegionSummaryJS,
+    score: f64
+}
+
+impl SimilarRegionJS {
+    pub fn new(summary: RegionSummaryJS, score: f64) -> SimilarRegionJS {
+        SimilarRegionJS { summary, score }
+    }
+}
+
+#[wasm_bindgen]
+impl SimilarRegionJS {
+    #[wasm_bindgen(getter)]
+    pub fn summary(&self) -> RegionSummaryJS {
+        self.summary.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn score(&self) -> f64 {
+        self.score
     }
 }
