@@ -1,5 +1,4 @@
 [build]
-base    = "./zola"
 publish = "./zola/public"
 command = "zola build"
 
