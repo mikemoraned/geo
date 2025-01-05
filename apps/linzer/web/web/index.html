@@ -99,15 +99,11 @@
               .append("svg")
               .attr("class", "main");
 
-            // let mini = d3
-            //   .select(container)
-            //   .select("body")
-            //   .append("div")
-            //   .attr("class", "mini");
             let mini = d3
               .select("div.mini");
 
             function flyToRegion(centroid) {
+                mini.node().scrollLeft = 0;
                 map.flyTo({
                     center: centroid,
                     essential: true
