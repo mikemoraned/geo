@@ -9,7 +9,7 @@
         body { margin: 0; padding: 0; }
         #mapbox { position: absolute; top: 0; bottom: 0; z-index: 0; width: 100%; }
         #mapbox svg.main { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 100%;}
-        #mapbox div.mini { position: absolute; bottom: 5%; z-index: 3; width: 100%; height: 25%; }
+        div.mini { position: absolute; bottom: 5%; z-index: 3; width: 100%; height: 25%; }
         #layers { position: absolute; top: 0; right: 0; margin: 10px; z-index: 1; }
         #layers.box { --bulma-box-padding: 0.5rem; }
         
@@ -25,14 +25,15 @@
         #mapbox svg.main g.visible .summary.selected line {
             stroke-width: 2; 
         }
-        #mapbox div.mini {
+        div.mini {
             background-color: rgba(255,255,255,0.8);
-            overflow-x: auto;
-            white-space: nowrap;
-        }
-        #mapbox div.mini .box {
-            display: inline-block;
-            margin-right: 1rem;
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            justify-content: flex-start;
+            align-items: stretch;
+            column-gap: 20px;
+            overflow-x: scroll;
         }
     </style>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
@@ -49,6 +50,7 @@
             <button id="summaries-layer-button" class="button is-medium is-responsive is-loading" disabled>Summaries</button>
         </div>
     </div>
+    <div class="mini"></div>
     <template id="item-template">
         <div class="box" data-theme="light">
             <span class="id-slot"></span>
@@ -97,10 +99,13 @@
               .append("svg")
               .attr("class", "main");
 
+            // let mini = d3
+            //   .select(container)
+            //   .select("body")
+            //   .append("div")
+            //   .attr("class", "mini");
             let mini = d3
-              .select(container)
-              .append("div")
-              .attr("class", "mini is-flex");
+              .select("div.mini");
 
             function flyToRegion(centroid) {
                 map.flyTo({
