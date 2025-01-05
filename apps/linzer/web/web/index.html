@@ -152,9 +152,9 @@
                         const clone = template.content.cloneNode(true);
                         clone.querySelector('.id-slot').textContent = d.id;
 
-                        const smallImg = d.as_data_uri_image(64, 64);
+                        const smallImg = d.as_data_uri_image(64);
                         clone.querySelector('.img-mobile-slot').setAttribute('src', smallImg);
-                        const largeImg = d.as_data_uri_image(128, 128);
+                        const largeImg = d.as_data_uri_image(128);
                         clone.querySelector('.img-tablet-slot').setAttribute('src', largeImg);
 
                         const centroid = [ d.centroid.x, d.centroid.y ];

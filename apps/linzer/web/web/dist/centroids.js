@@ -197,6 +197,23 @@ function debugString(val) {
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
 }
+
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(wasm.__wbindgen_export_2.get(mem.getUint32(i, true)));
+    }
+    wasm.__externref_drop_slice(ptr, len);
+    return result;
+}
+
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_export_2.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
+}
 /**
  * @param {number} x
  * @param {number} y
@@ -218,22 +235,6 @@ export function annotate(source_url) {
     return ret;
 }
 
-function getArrayJsValueFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    const mem = getDataViewMemory0();
-    const result = [];
-    for (let i = ptr; i < ptr + 4 * len; i += 4) {
-        result.push(wasm.__wbindgen_export_2.get(mem.getUint32(i, true)));
-    }
-    wasm.__externref_drop_slice(ptr, len);
-    return result;
-}
-
-function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_export_2.get(idx);
-    wasm.__externref_table_dealloc(idx);
-    return value;
-}
 function __wbg_adapter_26(arg0, arg1, arg2) {
     wasm.closure99_externref_shim(arg0, arg1, arg2);
 }
@@ -391,15 +392,14 @@ export class RegionSummaryJS {
         return ret;
     }
     /**
-     * @param {number} width
-     * @param {number} height
+     * @param {number} side_length
      * @returns {string}
      */
-    as_data_uri_image(width, height) {
+    as_data_uri_image(side_length) {
         let deferred2_0;
         let deferred2_1;
         try {
-            const ret = wasm.regionsummaryjs_as_data_uri_image(this.__wbg_ptr, width, height);
+            const ret = wasm.regionsummaryjs_as_data_uri_image(this.__wbg_ptr, side_length);
             var ptr1 = ret[0];
             var len1 = ret[1];
             if (ret[3]) {
@@ -725,7 +725,7 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper326 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper324 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 100, __wbg_adapter_26);
         return ret;
     };

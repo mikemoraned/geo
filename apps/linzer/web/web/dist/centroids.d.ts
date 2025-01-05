@@ -15,7 +15,7 @@ export class AnnotatedJS {
 export class RegionSummaryJS {
   private constructor();
   free(): void;
-  as_data_uri_image(width: number, height: number): string;
+  as_data_uri_image(side_length: number): string;
   readonly id: number;
   readonly centroid: any;
   readonly bucket_width: number;
@@ -37,14 +37,6 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly __wbg_testcard_free: (a: number, b: number) => void;
-  readonly testcard_x: (a: number) => number;
-  readonly testcard_y: (a: number) => number;
-  readonly testcard_coord: (a: number) => any;
-  readonly testcard_bearing_north_degrees: (a: number) => number;
-  readonly testcard_bearing_east_degrees: (a: number) => number;
-  readonly testcard_at: (a: number, b: number) => number;
-  readonly annotate: (a: number, b: number) => any;
   readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
   readonly annotatedjs_centroids: (a: number) => any;
   readonly annotatedjs_bounds: (a: number) => any;
@@ -59,7 +51,15 @@ export interface InitOutput {
   readonly regionsummaryjs_lengths: (a: number) => any;
   readonly regionsummaryjs_dominant_degree: (a: number) => any;
   readonly regionsummaryjs_dominant_length: (a: number) => any;
-  readonly regionsummaryjs_as_data_uri_image: (a: number, b: number, c: number) => [number, number, number, number];
+  readonly regionsummaryjs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
+  readonly __wbg_testcard_free: (a: number, b: number) => void;
+  readonly testcard_x: (a: number) => number;
+  readonly testcard_y: (a: number) => number;
+  readonly testcard_coord: (a: number) => any;
+  readonly testcard_bearing_north_degrees: (a: number) => number;
+  readonly testcard_bearing_east_degrees: (a: number) => number;
+  readonly testcard_at: (a: number, b: number) => number;
+  readonly annotate: (a: number, b: number) => any;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;

@@ -1,14 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
-export const __wbg_testcard_free: (a: number, b: number) => void;
-export const testcard_x: (a: number) => number;
-export const testcard_y: (a: number) => number;
-export const testcard_coord: (a: number) => any;
-export const testcard_bearing_north_degrees: (a: number) => number;
-export const testcard_bearing_east_degrees: (a: number) => number;
-export const testcard_at: (a: number, b: number) => number;
-export const annotate: (a: number, b: number) => any;
 export const __wbg_annotatedjs_free: (a: number, b: number) => void;
 export const annotatedjs_centroids: (a: number) => any;
 export const annotatedjs_bounds: (a: number) => any;
@@ -23,7 +15,15 @@ export const regionsummaryjs_bucket_width: (a: number) => number;
 export const regionsummaryjs_lengths: (a: number) => any;
 export const regionsummaryjs_dominant_degree: (a: number) => any;
 export const regionsummaryjs_dominant_length: (a: number) => any;
-export const regionsummaryjs_as_data_uri_image: (a: number, b: number, c: number) => [number, number, number, number];
+export const regionsummaryjs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
+export const __wbg_testcard_free: (a: number, b: number) => void;
+export const testcard_x: (a: number) => number;
+export const testcard_y: (a: number) => number;
+export const testcard_coord: (a: number) => any;
+export const testcard_bearing_north_degrees: (a: number) => number;
+export const testcard_bearing_east_degrees: (a: number) => number;
+export const testcard_at: (a: number, b: number) => number;
+export const annotate: (a: number, b: number) => any;
 export const __wbindgen_exn_store: (a: number) => void;
 export const __externref_table_alloc: () => number;
 export const __wbindgen_export_2: WebAssembly.Table;
