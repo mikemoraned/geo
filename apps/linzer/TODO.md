@@ -81,7 +81,10 @@
         * [x] try finding degree which maximises the sum of length at 0, 90, 180, 270 degree offset
     * [x] find similar shapes to current highlighted shape, based on summary
     * [ ] make it easier to see how similar shapes are
-        - try: visualise similar shapes as minimap or list at bottom 
+        - try: visualise similar shapes as minimap or list at bottom
+        * [ ] fix up bugs in list
+            * make it properly scrollable
+            * don't let click on list propagate through
     * [ ] ...
 
 ## Geo
