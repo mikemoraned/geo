@@ -97,7 +97,7 @@
         await init();
         console.log("Wasm initialized");
 
-        const city = "new_york"
+        const city = "jerusalem";
         const sourceDataUrl = new URL(`/data/${city}/regions_pedestrian.1000.geojson`, window.location.origin).toString();
         let annotated = await annotate(sourceDataUrl);
         let centre = annotated.centroid();
