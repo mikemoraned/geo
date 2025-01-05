@@ -102,6 +102,13 @@
               .append("div")
               .attr("class", "mini is-flex");
 
+            function flyToRegion(centroid) {
+                map.flyTo({
+                    center: centroid,
+                    essential: true
+                });
+            }
+
             const template = document.getElementById('item-template')
             function renderMini() {
                 const center = map.getCenter();
@@ -115,7 +122,13 @@
                     .append(d => {
                         const clone = template.content.cloneNode(true);
                         clone.querySelector('.id-slot').textContent = d.id;
-                        clone.querySelector('.img-slot').setAttribute('src', d.as_data_uri_image(128, 128));
+                        const img = clone.querySelector('.img-slot');
+                        img.setAttribute('src', d.as_data_uri_image(128, 128));
+                        const centroid = [ d.centroid.x, d.centroid.y ];
+                        img.addEventListener('click', () => {
+                            console.log("Clicked on region", d.id);
+                            flyToRegion(centroid);
+                        });
                         return clone;
                     });
             }
