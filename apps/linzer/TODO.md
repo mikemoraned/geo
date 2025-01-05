@@ -82,7 +82,7 @@
     * [x] find similar shapes to current highlighted shape, based on summary
     * [ ] make it easier to see how similar shapes are
         - try: visualise similar shapes as minimap or list at bottom
-        * [ ] fix up bugs in list
+        * [x] fix up bugs in list
             * make it properly scrollable
             * don't let click on list propagate through
     * [ ] ...
