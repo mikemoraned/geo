@@ -35,6 +35,24 @@
             column-gap: 20px;
             overflow-x: scroll;
         }
+        @media only screen and (max-width: 768px) {
+            div.mini { position: absolute; bottom: 5%; z-index: 3; width: 100%; height: 20%; }
+            div.mini .mobile {
+                display: inherit;
+            }
+            div.mini .tablet {
+                display: none;
+            }
+        }
+        @media only screen and (min-width: 768px) {
+            div.mini { position: absolute; bottom: 5%; z-index: 3; width: 100%; height: 25%; }
+            div.mini .mobile {
+                display: none;
+            }
+            div.mini .tablet {
+                display: inherit;
+            }
+        }
     </style>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.1/mapbox-gl.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css">
@@ -54,8 +72,11 @@
     <template id="item-template">
         <div class="box" data-theme="light">
             <span class="id-slot"></span>
-            <figure class="image is-128x128">
-                <img class="is-rounded img-slot" src="https://bulma.io/assets/images/placeholders/128x128.png" />
+            <figure class="image mobile is-64x64">
+                <img class="img-mobile-slot" />
+            </figure>
+            <figure class="image tablet is-128x128">
+                <img class="img-tablet-slot" />
             </figure>
         </div>
     </template>
@@ -123,10 +144,14 @@
                     .append(d => {
                         const clone = template.content.cloneNode(true);
                         clone.querySelector('.id-slot').textContent = d.id;
-                        const img = clone.querySelector('.img-slot');
-                        img.setAttribute('src', d.as_data_uri_image(128, 128));
+
+                        const smallImg = d.as_data_uri_image(64, 64);
+                        clone.querySelector('.img-mobile-slot').setAttribute('src', smallImg);
+                        const largeImg = d.as_data_uri_image(128, 128);
+                        clone.querySelector('.img-tablet-slot').setAttribute('src', largeImg);
+
                         const centroid = [ d.centroid.x, d.centroid.y ];
-                        img.addEventListener('click', () => {
+                        clone.querySelector('div.box').addEventListener('click', () => {
                             console.log("Clicked on region", d.id);
                             flyToRegion(centroid);
                         });
