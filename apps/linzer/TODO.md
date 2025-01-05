@@ -90,7 +90,7 @@
         * [x] expand `geo-linzer-netlify` mapbox key to work on https://linzer.houseofmoran.io
 * [x] try shapes with edinburgh and other towns
     * [x] enable netlify PR builds
-* [ ] add plausible.io tracking for linzer.houseofmoran.io
+* [x] add plausible.io tracking for linzer.houseofmoran.io
 
 ## Geo
 
