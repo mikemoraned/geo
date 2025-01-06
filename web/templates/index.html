@@ -1,21 +1,13 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="utf-8">
-    <title>Geo</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="script.js"></script>
-    <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.js"></script>
-
-</head>
-
-<body>
-    <h1>Geo</h1>
-    <p>
-        As of 30/9/2024, this is just a very simple website that points to my <a href="/slides/2024_Geomob_Oct_Presentation.pdf">slides</a> 
-        from my talk at the <a href="https://thegeomob.com/post/oct-1st-2024-geomobedi-details">GeoMOB Edinburgh event on 1/10/2024</a>.
-    </p>
-</body>
-
-</html>
+{% block body %}
+<section class="section">
+    <h1 class="title is-2">Mike Moran's Geo Projects</h1>
+    <div class="content">
+        <p>
+            As of 30/9/2024, this is just a very simple website that points to my <a href="/slides/2024_Geomob_Oct_Presentation.pdf">slides</a> 
+            from my talk at the <a href="https://thegeomob.com/post/oct-1st-2024-geomobedi-details">GeoMOB Edinburgh event on 1/10/2024</a>.
+        </p>
+    </div>
+</section>
+{% endblock body %}
