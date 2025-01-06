@@ -95,6 +95,7 @@
 ## Geo
 
 * [ ] convert top-level geo.houseofmoran.io site into a Zola blog
+    * [ ] switch to being deployed as github pages
     
 # Geomob 2024
 
