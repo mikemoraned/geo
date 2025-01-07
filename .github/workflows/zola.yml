@@ -18,7 +18,7 @@ jobs:
       - name: Build only
         uses: shalzz/zola-deploy-action@v0.19.2
         env:
-          BUILD_DIR: web/zola
+          BUILD_DIR: web
           BUILD_ONLY: true
 
   build_and_deploy:
@@ -30,6 +30,6 @@ jobs:
       - name: Build and deploy
         uses: shalzz/zola-deploy-action@v0.19.2
         env:
-          BUILD_DIR: web/zola
+          BUILD_DIR: web
           PAGES_BRANCH: gh-pages
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

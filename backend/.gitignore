@@ -13,4 +13,7 @@ Cargo.lock
 !.env.example
 !.env.test
 
+# Mac
+.DS_Store
+
 

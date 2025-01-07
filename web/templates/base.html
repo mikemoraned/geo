@@ -1,0 +1,98 @@
+{% set domain = "geo.houseofmoran.io" %}
+{% set default_title = "Geo projects of Mike Moran" %}
+{% set description = "Geo projects of Mike Moran" %}
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- HTML Meta Tags -->
+    <title>{% block title %}{{ default_title }}{% endblock title %}</title>
+    <meta
+      name="description"
+      content="{{ description }}"
+    />
+
+    <!-- Facebook Meta Tags -->
+    <meta property="og:url" content="https://{{ domain }}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{{ default_title }}" />
+    <meta
+      property="og:description"
+      content="{{ description }}"
+    />
+    {# <meta
+      property="og:image"
+      content="https://rustandfriends.org/assets/images/hill_logo_meetup1.png"
+    /> #}
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="twitter:domain" content="rustandfriends.org" />
+    <meta property="twitter:url" content="https://rustandfriends.org" />
+    <meta name="twitter:title" content="{{ default_title }}" />
+    <meta
+      name="twitter:description"
+      content="{{ description }}"
+    />
+    {# <meta
+      name="twitter:image"
+      content="https://rustandfriends.org/images/hill_logo_meetup1.png"
+    /> #}
+
+    {% block atom %}
+      <link rel="alternate" type="application/atom+xml" title="Atom" href="{{ get_url(path="atom.xml", trailing_slash=false) }}">
+    {% endblock %}
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css"
+    >
+    <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.file-downloads.hash.outbound-links.js"></script>
+    <style>
+      aside {
+        font-size: smaller;
+        border: 1px solid lightgray;
+        border-radius: 5px;
+        padding: 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="columns">
+        <div class="column is-three-quarters">
+          {% block body %}
+          {% endblock body %}
+        </div>
+        <div class="column">
+          {% block sidebar %}
+          {% endblock sidebar %}
+        </div>
+      </div>
+    </div>
+    <footer class="footer">
+      <div class="content has-text-centered">
+        <p>
+          Last updated on {{ now() | date(format="%e %B %Y") }} at {{ now() | date(format="%l:%M%P") }}
+        </p>
+      </div>
+    </footer>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/+esm';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script defer>
+      const youtube_iframes = Array.from(
+        document.getElementsByClassName("youtube")
+      );
+      youtube_iframes.forEach((youtube_iframe) => {
+        const data_src = youtube_iframe.getAttribute("data-src");
+        if (data_src) {
+          youtube_iframe.setAttribute("src", data_src);
+        }
+      });
+    </script>
+  </body>
+</html>

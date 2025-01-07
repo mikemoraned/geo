@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% import "page_macros.html" as page_macros %}
+
+{% block body %}
+<section class="section">
+    <article>
+    {{ page_macros::post(page = page) }}
+    </article>
+</section>
+{% endblock body %}

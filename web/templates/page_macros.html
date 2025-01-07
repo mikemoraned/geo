@@ -1,0 +1,44 @@
+{% macro posts() %}
+{% set section = get_section(path="posts/_index.md") %}
+{% set pages = section.pages %}
+<section class="section">
+  {% for page in pages %}
+  {{ self::post(page = page) }}
+  {% endfor %}
+</section>
+{% endmacro meetups %}
+
+{% macro post(page) %}
+<div class="block">
+    <div class="card">
+      <header class="card-header">
+        <p class="card-header-title">{{ page.title }}</p>
+      </header>
+      {% if page.extra.youtube_id %}
+      <div class="card-image">
+        {{ youtube(id=page.extra.youtube_id) }}
+      </div>
+      {% endif %}
+      {% if page.extra.header_image_url %}
+      <div class="card-image">
+        <figure class="image is-4by3">
+          <img
+            src="{{ page.extra.header_image_url }}"
+            alt="{{ page.extra.header_image_description}}"
+          />
+        </figure>
+      </div>
+      {% endif %}
+      <div class="card-content">
+        <div class="content">
+            {{ page.content | safe }}
+            <a href="{{ page.path }}">
+              <time datetime="{{ page.date }}">
+                  <i class="fa-solid fa-calendar-day"></i> {{ page.date | date(format="%e %B %Y") }}
+              </time>
+            </a>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endmacro meetup %}
