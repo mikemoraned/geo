@@ -34,6 +34,10 @@ impl AnnotatedJS {
         return JsValue::from_serde(&bounds).unwrap();
     }
 
+    pub fn rays(&self) -> JsValue {
+        return JsValue::from_serde(&self.annotated.rays()).unwrap();
+    }
+
     pub fn summaries(&mut self) -> Vec<RegionSummaryJS> {
         self.summaries.clone()
     }
