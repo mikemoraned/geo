@@ -41,16 +41,28 @@
       content="https://rustandfriends.org/images/hill_logo_meetup1.png"
     /> #}
 
+    {% block atom %}
+      <link rel="alternate" type="application/atom+xml" title="Atom" href="{{ get_url(path="atom.xml", trailing_slash=false) }}">
+    {% endblock %}
+
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css"
     >
     <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.file-downloads.hash.outbound-links.js"></script>
+    <style>
+      aside {
+        font-size: smaller;
+        border: 1px solid lightgray;
+        border-radius: 5px;
+        padding: 0.5em;
+      }
+    </style>
   </head>
   <body>
     <div class="container">
       <div class="columns">
-        <div class="column is-two-thirds">
+        <div class="column is-three-quarters">
           {% block body %}
           {% endblock body %}
         </div>
