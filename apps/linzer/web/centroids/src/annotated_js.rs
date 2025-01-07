@@ -34,7 +34,6 @@ impl AnnotatedJS {
         return JsValue::from_serde(&bounds).unwrap();
     }
 
-    // rays
     pub fn rays(&self) -> JsValue {
         return JsValue::from_serde(&self.annotated.rays()).unwrap();
     }
