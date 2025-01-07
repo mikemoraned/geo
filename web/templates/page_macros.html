@@ -1,3 +1,19 @@
+{% macro youtube(id) %}
+<figure class="image is-2by1">
+  <iframe
+      class="youtube has-ratio"
+      width="560"
+      height="315"
+      src=""
+      data-src="https://www.youtube-nocookie.com/embed/{{ id }}"
+      title="YouTube video player"
+      frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen>s
+  </iframe>
+  </figure>
+{% endmacro meetups %}
+
 {% macro posts() %}
 {% set section = get_section(path="posts/_index.md") %}
 {% set pages = section.pages %}
@@ -16,7 +32,7 @@
       </header>
       {% if page.extra.youtube_id %}
       <div class="card-image">
-        {{ youtube(id=page.extra.youtube_id) }}
+        {{ self::youtube(id=page.extra.youtube_id) }}
       </div>
       {% endif %}
       {% if page.extra.header_image_url %}
