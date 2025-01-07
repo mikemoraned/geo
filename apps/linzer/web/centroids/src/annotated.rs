@@ -1,7 +1,7 @@
 use std::{iter::zip, vec};
 
 use geo_types::{Geometry, GeometryCollection};
-use geo::{Bearing, BoundingRect, Centroid, Coord, Distance, Haversine, InterpolatePoint, Length, Line, Point};
+use geo::{Bearing, BoundingRect, Centroid, Coord, CoordsIter, Distance, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
 use web_sys::console;
 
 use crate::region_summary::RegionSummary;
@@ -25,6 +25,25 @@ impl Annotated {
 
     pub fn bounds(&self) -> geo_types::Rect<f64> {
         self.collection.bounding_rect().unwrap()
+    }
+
+    pub fn rays(&self) -> Vec<MultiLineString> {
+        let mut rays: Vec<MultiLineString> = vec![];
+        let centroids = &self.centroids;
+
+        for (geometry, centroid) in zip(self.collection.iter(),centroids.iter()) {
+            let centroid_coord: Coord = centroid.clone().into();
+            if let Geometry::Polygon(polygon) = geometry {
+                let mut polygon_rays = vec![];
+                for coord in polygon.exterior_coords_iter() {
+                    let polygon_ray = LineString::new(vec![centroid_coord.clone(), coord]);
+                    polygon_rays.push(polygon_ray);
+                }
+                rays.push(MultiLineString::new(polygon_rays));
+            }
+        }
+
+        rays
     }
 
     pub fn most_similar_ids(&self, id: usize, min_score: f64) -> Vec<usize> {
@@ -67,8 +86,7 @@ impl Annotated {
             None
         }
     }
-
-    }
+}
 
 
 fn summaries(collection: &GeometryCollection<f64>, centroids: &Vec<Point<f64>>) -> Vec<RegionSummary> {
