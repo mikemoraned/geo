@@ -6,7 +6,6 @@ export class AnnotatedJS {
   private constructor();
   free(): void;
   centroids(): any;
-  bounds(): any;
   rays(): any;
   summaries(): (RegionSummaryJS)[];
   most_similar_ids(id: number, min_score: number): any;
@@ -28,6 +27,7 @@ export class RegionSummaryJS {
   free(): void;
   as_data_uri_image(side_length: number): string;
   readonly id: number;
+  readonly group_name: any;
   readonly centroid: any;
   readonly bucket_width: number;
   readonly lengths: any;
@@ -55,14 +55,6 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
-  readonly __wbg_regionsummaryjs_free: (a: number, b: number) => void;
-  readonly regionsummaryjs_id: (a: number) => number;
-  readonly regionsummaryjs_centroid: (a: number) => any;
-  readonly regionsummaryjs_bucket_width: (a: number) => number;
-  readonly regionsummaryjs_lengths: (a: number) => any;
-  readonly regionsummaryjs_dominant_degree: (a: number) => any;
-  readonly regionsummaryjs_dominant_length: (a: number) => any;
-  readonly regionsummaryjs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
   readonly __wbg_testcard_free: (a: number, b: number) => void;
   readonly testcard_x: (a: number) => number;
   readonly testcard_y: (a: number) => number;
@@ -76,7 +68,6 @@ export interface InitOutput {
   readonly create_builder: () => number;
   readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
   readonly annotatedjs_centroids: (a: number) => any;
-  readonly annotatedjs_bounds: (a: number) => any;
   readonly annotatedjs_rays: (a: number) => any;
   readonly annotatedjs_summaries: (a: number) => [number, number];
   readonly annotatedjs_most_similar_ids: (a: number, b: number, c: number) => any;
@@ -85,17 +76,26 @@ export interface InitOutput {
   readonly __wbg_similarregionjs_free: (a: number, b: number) => void;
   readonly similarregionjs_summary: (a: number) => number;
   readonly similarregionjs_score: (a: number) => number;
+  readonly __wbg_regionsummaryjs_free: (a: number, b: number) => void;
+  readonly regionsummaryjs_id: (a: number) => number;
+  readonly regionsummaryjs_group_name: (a: number) => any;
+  readonly regionsummaryjs_centroid: (a: number) => any;
+  readonly regionsummaryjs_bucket_width: (a: number) => number;
+  readonly regionsummaryjs_lengths: (a: number) => any;
+  readonly regionsummaryjs_dominant_degree: (a: number) => any;
+  readonly regionsummaryjs_dominant_length: (a: number) => any;
+  readonly regionsummaryjs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export_5: WebAssembly.Table;
-  readonly __externref_table_dealloc: (a: number) => void;
-  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __externref_drop_slice: (a: number, b: number) => void;
-  readonly closure99_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure417_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+  readonly __externref_table_dealloc: (a: number) => void;
+  readonly closure100_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure418_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

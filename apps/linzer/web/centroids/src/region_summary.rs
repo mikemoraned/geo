@@ -3,6 +3,7 @@ use geo::Point;
 #[derive(Clone)]
 pub struct RegionSummary {
     pub id: usize,
+    pub group_name: String,
     pub centroid: Point<f64>,
     pub bucket_width: f64,
     pub lengths: Vec<f64>,
@@ -11,13 +12,13 @@ pub struct RegionSummary {
 
 impl RegionSummary {
 
-    pub fn new(id: usize, centroid: Point<f64>, bucket_width: f64, lengths: Vec<f64>) -> RegionSummary {
+    pub fn new(id: usize, group_name: String, centroid: Point<f64>, bucket_width: f64, lengths: Vec<f64>) -> RegionSummary {
         let dominant = dominant(&lengths);
-        RegionSummary { id, centroid, bucket_width, lengths, dominant }
+        RegionSummary { id, group_name, centroid, bucket_width, lengths, dominant }
     }
 
     pub fn arrange_lengths_by_dominant_degree(&self) -> Vec<f64> {
-        let (offset, _) = self.dominant;
+        let (offset, _  ) = self.dominant;
         let mut arranged = vec![0.0; 360];
         for i in 0..360 {
             let degree = (offset + i) % 360;

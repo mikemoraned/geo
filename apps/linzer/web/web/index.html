@@ -94,6 +94,7 @@
             </div>
             <div class="card-content">
                 <span class="id-slot"></span>
+                <span class="group-slot"></span>
             </div>
         </div>
     </template>
@@ -168,6 +169,7 @@
                     .append(d => {
                         const clone = template.content.cloneNode(true);
                         clone.querySelector('.id-slot').textContent = d.score.toFixed(2);
+                        clone.querySelector('.group-slot').textContent = d.summary.group_name;
 
                         const smallImg = d.summary.as_data_uri_image(64);
                         clone.querySelector('.img-mobile-slot').setAttribute('src', smallImg);

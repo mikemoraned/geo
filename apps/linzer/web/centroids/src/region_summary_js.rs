@@ -24,6 +24,10 @@ impl RegionSummaryJS {
         self.summary.id
     }
     #[wasm_bindgen(getter)]
+    pub fn group_name(&self) -> JsValue {
+        JsValue::from_serde(&self.summary.group_name).unwrap()
+    }
+    #[wasm_bindgen(getter)]
     pub fn centroid(&self) -> JsValue {
         JsValue::from_serde(&self.summary.centroid).unwrap()
     }

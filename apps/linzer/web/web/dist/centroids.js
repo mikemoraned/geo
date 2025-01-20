@@ -197,12 +197,6 @@ function debugString(val) {
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
 }
-
-function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_export_2.get(idx);
-    wasm.__externref_table_dealloc(idx);
-    return value;
-}
 /**
  * @param {number} x
  * @param {number} y
@@ -231,12 +225,18 @@ function getArrayJsValueFromWasm0(ptr, len) {
     wasm.__externref_drop_slice(ptr, len);
     return result;
 }
+
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_export_2.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
+}
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure99_externref_shim(arg0, arg1, arg2);
+    wasm.closure100_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_120(arg0, arg1, arg2, arg3) {
-    wasm.closure417_externref_shim(arg0, arg1, arg2, arg3);
+    wasm.closure418_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
@@ -273,13 +273,6 @@ export class AnnotatedJS {
      */
     centroids() {
         const ret = wasm.annotatedjs_centroids(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {any}
-     */
-    bounds() {
-        const ret = wasm.annotatedjs_bounds(this.__wbg_ptr);
         return ret;
     }
     /**
@@ -424,6 +417,13 @@ export class RegionSummaryJS {
     get id() {
         const ret = wasm.regionsummaryjs_id(this.__wbg_ptr);
         return ret >>> 0;
+    }
+    /**
+     * @returns {any}
+     */
+    get group_name() {
+        const ret = wasm.regionsummaryjs_group_name(this.__wbg_ptr);
+        return ret;
     }
     /**
      * @returns {any}
@@ -839,8 +839,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper352 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 100, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper346 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 101, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {
