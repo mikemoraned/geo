@@ -98,7 +98,7 @@
         </div>
     </template>
     <script type="module">
-        import init, { create_source, annotate, testcard_at } from "./dist/centroids.js";
+        import init, { create_builder, testcard_at } from "./dist/centroids.js";
         import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
         import { addLayers } from "./js/layers.js";
         import { addTestCardLayer } from "./js/testcard.js";
@@ -107,14 +107,17 @@
         await init();
         console.log("Wasm initialized");
 
-        const city = "edinburgh";
-        const sourceDataUrl = new URL(`/data/${city}/regions_pedestrian.1000.geojson`, window.location.origin).toString();
-        let source = await create_source("edinburgh", sourceDataUrl);
-        let annotated = await annotate(source);
-        let centre = annotated.centroid();
+        const cities = [ "edinburgh", "hamburg", "jerusalem", "new_york", "paris" ];
+        let builder = create_builder();
+        let sources = cities.map(async (city) => {
+            const sourceDataUrl = new URL(`/data/${city}/regions_pedestrian.1000.geojson`, window.location.origin).toString();
+            builder.source(city, sourceDataUrl)
+        });
+        let annotated = await builder.annotate();
 
+        const edinburgh = [-3.188267, 55.953251];
         const starting_position = {
-            center: centre,
+            center: edinburgh,
             zoom: 14
         };
 
@@ -130,7 +133,7 @@
         map.on('load', async () => {
             console.log("Map loaded");
 
-
+            const sourceDataUrl = new URL(`/data/edinburgh/regions_pedestrian.1000.geojson`, window.location.origin).toString();
             addLayers(map, sourceDataUrl, annotated);
 
             let container = map.getCanvasContainer();

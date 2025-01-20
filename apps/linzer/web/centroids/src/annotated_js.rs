@@ -1,8 +1,7 @@
-use geo::GeometryCollection;
 use gloo_utils::format::JsValueSerdeExt;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
-use crate::{annotated::Annotated, region_summary_js::RegionSummaryJS};
+use crate::{annotated::Annotated, region_group::RegionGroup, region_summary_js::RegionSummaryJS};
 
 #[wasm_bindgen]
 pub struct AnnotatedJS {
@@ -11,8 +10,8 @@ pub struct AnnotatedJS {
 }
 
 impl AnnotatedJS {
-    pub fn new(collection: GeometryCollection<f64>) -> AnnotatedJS {
-        let annotated = Annotated::new(collection);
+    pub fn new(groups: Vec<RegionGroup>) -> AnnotatedJS {
+        let annotated = Annotated::new(groups);
         let summaries = annotated.summaries.iter().map(|summary| RegionSummaryJS::new(summary.clone())).collect();
         AnnotatedJS { annotated, summaries }
     }
@@ -22,11 +21,6 @@ impl AnnotatedJS {
 impl AnnotatedJS {
     pub fn centroids(&mut self) -> JsValue {
         return JsValue::from_serde(&self.annotated.centroids).unwrap();
-    }
-
-    pub fn centroid(&self) -> JsValue {
-        let centroid = self.annotated.centroid();
-        return JsValue::from_serde(&[ centroid.x, centroid.y ]).unwrap();
     }
 
     pub fn bounds(&self) -> JsValue {

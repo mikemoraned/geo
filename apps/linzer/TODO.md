@@ -2,10 +2,10 @@
 
 ## January
 
-* [ ] show multiple sources at once
+* [ ] show multiple sources at once (multiple cities)
     * [x] extract named `RegionSource` which has name of source and url, and `RegionGroup` which contains the resulting regions and an associated name
-    * [ ] switch to show centroid of first source by default
-    * [ ] accept multiple sources and extract Regions from all of them
+    * [x] switch to center map explicitly on a lat/lon as opposed to based on centroids (avoids having to choose one automatically)
+    * [x] accept multiple sources and extract Regions from all of them
     * [ ] display Regions which are union of Regions from all sources
 
 ## February

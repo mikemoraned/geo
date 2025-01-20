@@ -4,7 +4,7 @@ use geo_types::{Geometry, GeometryCollection};
 use geo::{Bearing, BoundingRect, Centroid, Coord, CoordsIter, Distance, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
 use web_sys::console;
 
-use crate::region_summary::RegionSummary;
+use crate::{region_group::RegionGroup, region_summary::RegionSummary};
 
 pub struct Annotated {
     collection: GeometryCollection<f64>,
@@ -13,14 +13,15 @@ pub struct Annotated {
 }
 
 impl Annotated {
-    pub fn new(collection: GeometryCollection<f64>) -> Annotated {
+    pub fn new(groups: Vec<RegionGroup>) -> Annotated {
+        let geometry: Vec<Geometry<f64>> = 
+            groups.into_iter()
+            .flat_map(|group| group.collection)
+            .collect();
+        let collection = GeometryCollection(geometry);    
         let centroids = centroids(&collection);
         let summaries = summaries(&collection, &centroids);
         Annotated { collection, centroids, summaries }
-    }
-
-    pub fn centroid(&self) -> geo_types::Coord {
-        self.collection.bounding_rect().unwrap().centroid().into()
     }
 
     pub fn bounds(&self) -> geo_types::Rect<f64> {

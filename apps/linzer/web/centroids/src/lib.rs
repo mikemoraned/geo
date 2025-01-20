@@ -20,16 +20,33 @@ pub fn testcard_at(x: f64, y: f64) -> TestCard {
 }
 
 #[wasm_bindgen]
-pub async fn create_source(name: String, url: String) -> Result<RegionSourceJS, JsValue> {
-    Ok(RegionSourceJS::new(name, url))
+pub struct BuilderJS {
+    sources: Vec<RegionSourceJS>
+}
+
+impl BuilderJS {
+    pub fn new() -> BuilderJS {
+        BuilderJS { sources: Vec::new() }
+    }
 }
 
 #[wasm_bindgen]
-pub async fn annotate(source: &RegionSourceJS) -> Result<AnnotatedJS, JsValue> {
-    if let Ok(regions) = source.fetch().await {
-        Ok(AnnotatedJS::new(regions.collection))
+impl BuilderJS {
+    pub fn source(&mut self, name: String, url: String) {
+        self.sources.push(RegionSourceJS::new(name, url));
     }
-    else {
-        Err("failed to fetch regions".into())
+
+    pub async fn annotate(&self) -> Result<AnnotatedJS, JsValue> {
+        let mut groups = vec![];
+        for source in &self.sources {
+            groups.push(source.fetch().await?);
+        }
+        Ok(AnnotatedJS::new(groups))
     }
 }
+
+#[wasm_bindgen]
+pub fn create_builder() -> BuilderJS {
+    BuilderJS::new()
+}
+
