@@ -7,6 +7,7 @@
     * [x] switch to center map explicitly on a lat/lon as opposed to based on centroids (avoids having to choose one automatically)
     * [x] accept multiple sources and extract Regions from all of them
     * [ ] display Regions which are union of Regions from all sources
+    * [x] disable fetching of similar regions whilst flying between areas
 
 ## February
 
