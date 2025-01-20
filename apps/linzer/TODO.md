@@ -1,3 +1,23 @@
+# 2025
+
+## January
+
+* [ ] show multiple sources at once
+    * [ ] extract named `Source` which has name of source and url
+    * [ ] switch to show centroid of first source by default
+    * [ ] accept multiple sources and extract Regions from all of them
+    * [ ] display Regions which are union of Regions from all sources
+
+## February
+
+* [ ] add hamburg
+    * [x] make Justfile more generic
+    * [x] separate `data` into `config` and `output` dirs
+    * [ ] refactor: make `routing` crate repeatable and stable
+        * [ ] ...
+    * [ ] outstanding problem with running `just --set area hamburg --set profile auto all` (will solve later)
+
+
 # Winter 2024 TODO's
 
 ## Linzer
@@ -8,12 +28,6 @@
         * [x] change all dependencies to be minor-only versions
         * [x] run `cargo update`
         * [x] run `cargo upgrade --compatible`
-* [ ] add hamburg
-    * [x] make Justfile more generic
-    * [x] separate `data` into `config` and `output` dirs
-    * [ ] refactor: make `routing` crate repeatable and stable
-        * [ ] ...
-    * [ ] outstanding problem with running `just --set area hamburg --set profile auto all` (will solve later)
 * [x] experiment: try different ways to summarise a shape in a normalised way which allows comparison across to similar shapes
     * [x] convert linzer web into a simple rust wasm app website
         * [x] create a basic Rust wasm monolithic module (not components) that says "hello world"
