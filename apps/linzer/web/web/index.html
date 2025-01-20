@@ -98,7 +98,7 @@
         </div>
     </template>
     <script type="module">
-        import init, { annotate, testcard_at } from "./dist/centroids.js";
+        import init, { create_source, annotate, testcard_at } from "./dist/centroids.js";
         import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
         import { addLayers } from "./js/layers.js";
         import { addTestCardLayer } from "./js/testcard.js";
@@ -109,7 +109,8 @@
 
         const city = "edinburgh";
         const sourceDataUrl = new URL(`/data/${city}/regions_pedestrian.1000.geojson`, window.location.origin).toString();
-        let annotated = await annotate(sourceDataUrl);
+        let source = await create_source("edinburgh", sourceDataUrl);
+        let annotated = await annotate(source);
         let centre = annotated.centroid();
 
         const starting_position = {

@@ -3,7 +3,7 @@
 ## January
 
 * [ ] show multiple sources at once
-    * [ ] extract named `Source` which has name of source and url
+    * [x] extract named `RegionSource` which has name of source and url, and `RegionGroup` which contains the resulting regions and an associated name
     * [ ] switch to show centroid of first source by default
     * [ ] accept multiple sources and extract Regions from all of them
     * [ ] display Regions which are union of Regions from all sources

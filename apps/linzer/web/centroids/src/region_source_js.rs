@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 use web_sys::console;
 
-use crate::{geometry, load, regions::Regions};
+use crate::{geometry, load, region_group::RegionGroup};
 
 #[wasm_bindgen]
 pub struct RegionSourceJS {
@@ -14,7 +14,7 @@ impl RegionSourceJS {
         RegionSourceJS { name, url }
     }
     
-    pub async fn fetch(&self) -> Result<Regions, JsValue> {
+    pub async fn fetch(&self) -> Result<RegionGroup, JsValue> {
         console::log_1(&format!("Fetching geojson from '{}' ...", self.url).into());
     
         if let Ok(text) = load::fetch_text(&self.url).await {
@@ -29,7 +29,7 @@ impl RegionSourceJS {
                 let filtered_out = size - filtered_size;
                 console::log_1(&format!("filtered out {filtered_out} geometries with area <= {minimum_size}").into());
     
-                Ok(Regions::new(self.name.clone(), filtered))
+                Ok(RegionGroup::new(self.name.clone(), filtered))
             }
             else {
                 console::log_1(&"Failed to parse geojson".into());

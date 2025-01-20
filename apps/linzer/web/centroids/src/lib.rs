@@ -12,7 +12,7 @@ mod region_summary;
 mod region_summary_js;
 mod testcard;
 mod region_source_js;
-mod regions;
+mod region_group;
 
 #[wasm_bindgen]
 pub fn testcard_at(x: f64, y: f64) -> TestCard {
@@ -20,8 +20,12 @@ pub fn testcard_at(x: f64, y: f64) -> TestCard {
 }
 
 #[wasm_bindgen]
-pub async fn annotate(source_url: String) -> Result<AnnotatedJS, JsValue> {
-    let source = RegionSourceJS::new("source".to_string(), source_url);
+pub async fn create_source(name: String, url: String) -> Result<RegionSourceJS, JsValue> {
+    Ok(RegionSourceJS::new(name, url))
+}
+
+#[wasm_bindgen]
+pub async fn annotate(source: &RegionSourceJS) -> Result<AnnotatedJS, JsValue> {
     if let Ok(regions) = source.fetch().await {
         Ok(AnnotatedJS::new(regions.collection))
     }

@@ -197,12 +197,6 @@ function debugString(val) {
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
 }
-
-function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_export_2.get(idx);
-    wasm.__externref_table_dealloc(idx);
-    return value;
-}
 /**
  * @param {number} x
  * @param {number} y
@@ -214,13 +208,31 @@ export function testcard_at(x, y) {
 }
 
 /**
- * @param {string} source_url
+ * @param {string} name
+ * @param {string} url
+ * @returns {Promise<RegionSourceJS>}
+ */
+export function create_source(name, url) {
+    const ptr0 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.create_source(ptr0, len0, ptr1, len1);
+    return ret;
+}
+
+function _assertClass(instance, klass) {
+    if (!(instance instanceof klass)) {
+        throw new Error(`expected instance of ${klass.name}`);
+    }
+}
+/**
+ * @param {RegionSourceJS} source
  * @returns {Promise<AnnotatedJS>}
  */
-export function annotate(source_url) {
-    const ptr0 = passStringToWasm0(source_url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.annotate(ptr0, len0);
+export function annotate(source) {
+    _assertClass(source, RegionSourceJS);
+    const ret = wasm.annotate(source.__wbg_ptr);
     return ret;
 }
 
@@ -234,12 +246,18 @@ function getArrayJsValueFromWasm0(ptr, len) {
     wasm.__externref_drop_slice(ptr, len);
     return result;
 }
+
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_export_2.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
+}
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure101_externref_shim(arg0, arg1, arg2);
+    wasm.closure105_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_119(arg0, arg1, arg2, arg3) {
-    wasm.closure419_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_122(arg0, arg1, arg2, arg3) {
+    wasm.closure423_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
@@ -344,6 +362,14 @@ const RegionSourceJSFinalization = (typeof FinalizationRegistry === 'undefined')
     : new FinalizationRegistry(ptr => wasm.__wbg_regionsourcejs_free(ptr >>> 0, 1));
 
 export class RegionSourceJS {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(RegionSourceJS.prototype);
+        obj.__wbg_ptr = ptr;
+        RegionSourceJSFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
 
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
@@ -660,7 +686,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_119(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_122(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -712,6 +738,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbg_queueMicrotask_ef9ac43769cbcc4f = function(arg0) {
         const ret = arg0.queueMicrotask;
+        return ret;
+    };
+    imports.wbg.__wbg_regionsourcejs_new = function(arg0) {
+        const ret = RegionSourceJS.__wrap(arg0);
         return ret;
     };
     imports.wbg.__wbg_regionsummaryjs_new = function(arg0) {
@@ -804,8 +834,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper345 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 102, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper353 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 106, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {
