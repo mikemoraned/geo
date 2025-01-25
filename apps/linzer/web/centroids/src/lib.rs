@@ -1,7 +1,6 @@
 
-use testcard::TestCard;
 use wasm_bindgen::prelude::*;
-use web::{annotated_js::AnnotatedJS, region_source_js::RegionSourceJS};
+use web::{annotated_js::AnnotatedJS, region_source_js::RegionSourceJS, testcard::TestCard};
 use web_sys::console;
 
 mod load;
@@ -9,7 +8,6 @@ mod geometry;
 mod annotated;
 mod web;
 mod region_summary;
-mod testcard;
 mod region_group;
 
 #[wasm_bindgen]
