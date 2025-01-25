@@ -215,6 +215,12 @@ export function create_builder() {
     return BuilderJS.__wrap(ret);
 }
 
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_export_2.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
+}
+
 function getArrayJsValueFromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     const mem = getDataViewMemory0();
@@ -225,18 +231,12 @@ function getArrayJsValueFromWasm0(ptr, len) {
     wasm.__externref_drop_slice(ptr, len);
     return result;
 }
-
-function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_export_2.get(idx);
-    wasm.__externref_table_dealloc(idx);
-    return value;
-}
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure107_externref_shim(arg0, arg1, arg2);
+    wasm.closure106_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_120(arg0, arg1, arg2, arg3) {
-    wasm.closure434_externref_shim(arg0, arg1, arg2, arg3);
+    wasm.closure433_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
@@ -292,24 +292,28 @@ export class AnnotatedJS {
         return v1;
     }
     /**
-     * @param {number} id
+     * @param {string} id
      * @param {number} min_score
      * @returns {any}
      */
     most_similar_ids(id, min_score) {
-        const ret = wasm.annotatedjs_most_similar_ids(this.__wbg_ptr, id, min_score);
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.annotatedjs_most_similar_ids(this.__wbg_ptr, ptr0, len0, min_score);
         return ret;
     }
     /**
-     * @param {number} id
+     * @param {string} id
      * @param {number} min_score
      * @returns {(SimilarRegionJS)[]}
      */
     most_similar_regions(id, min_score) {
-        const ret = wasm.annotatedjs_most_similar_regions(this.__wbg_ptr, id, min_score);
-        var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.annotatedjs_most_similar_regions(this.__wbg_ptr, ptr0, len0, min_score);
+        var v2 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
-        return v1;
+        return v2;
     }
     /**
      * @param {number} x
@@ -412,11 +416,19 @@ export class RegionSummaryJS {
         wasm.__wbg_regionsummaryjs_free(ptr, 0);
     }
     /**
-     * @returns {number}
+     * @returns {string}
      */
     get id() {
-        const ret = wasm.regionsummaryjs_id(this.__wbg_ptr);
-        return ret >>> 0;
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.regionsummaryjs_id(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
     }
     /**
      * @returns {any}
@@ -839,8 +851,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper354 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 108, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper358 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 107, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

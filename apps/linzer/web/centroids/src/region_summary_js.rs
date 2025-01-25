@@ -20,8 +20,8 @@ impl RegionSummaryJS {
 #[wasm_bindgen]
 impl RegionSummaryJS {
     #[wasm_bindgen(getter)]
-    pub fn id(&self) -> usize {
-        self.summary.id
+    pub fn id(&self) -> String {
+        self.summary.id.clone()
     }
     #[wasm_bindgen(getter)]
     pub fn group_name(&self) -> JsValue {

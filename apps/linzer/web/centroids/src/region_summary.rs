@@ -2,7 +2,7 @@ use geo::Point;
 
 #[derive(Clone)]
 pub struct RegionSummary {
-    pub id: usize,
+    pub id: String,
     pub group_name: String,
     pub centroid: Point<f64>,
     pub bucket_width: f64,
@@ -12,7 +12,7 @@ pub struct RegionSummary {
 
 impl RegionSummary {
 
-    pub fn new(id: usize, group_name: String, centroid: Point<f64>, bucket_width: f64, lengths: Vec<f64>) -> RegionSummary {
+    pub fn new(id: String, group_name: String, centroid: Point<f64>, bucket_width: f64, lengths: Vec<f64>) -> RegionSummary {
         let dominant = dominant(&lengths);
         RegionSummary { id, group_name, centroid, bucket_width, lengths, dominant }
     }

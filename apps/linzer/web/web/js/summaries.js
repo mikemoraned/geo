@@ -114,6 +114,9 @@ export function addSummaryLayer(layerId, map, svg, annotated, minSimilarityScore
             if (selected) {
                 selected.classList.add("selected");
             }
+            else {
+                console.error(`Element ${id} not found`);
+            }
         });
 
         const zoom = map.getZoom();

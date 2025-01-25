@@ -12,7 +12,10 @@ pub struct AnnotatedJS {
 impl AnnotatedJS {
     pub fn new(groups: Vec<RegionGroup>) -> AnnotatedJS {
         let annotated = Annotated::new(groups);
-        let summaries = annotated.summaries.iter().map(|summary| RegionSummaryJS::new(summary.clone())).collect();
+        let summaries = 
+            annotated.summaries.iter()
+            .map(|(_id, summary)| RegionSummaryJS::new(summary.clone()))
+            .collect();
         AnnotatedJS { annotated, summaries }
     }
 }
@@ -31,12 +34,12 @@ impl AnnotatedJS {
         self.summaries.clone()
     }
 
-    pub fn most_similar_ids(&mut self, id: usize, min_score: f64) -> JsValue {
+    pub fn most_similar_ids(&mut self, id: String, min_score: f64) -> JsValue {
         let ids = self.annotated.most_similar_ids(id, min_score);
         return JsValue::from_serde(&ids).unwrap();
     }
 
-    pub fn most_similar_regions(&mut self, id: usize, min_score: f64) -> Vec<SimilarRegionJS> {
+    pub fn most_similar_regions(&mut self, id: String, min_score: f64) -> Vec<SimilarRegionJS> {
         self.annotated.most_similar_regions(id, min_score).iter().map(|(summary, score)| {
             SimilarRegionJS::new(RegionSummaryJS::new(summary.clone()), *score)
         }).collect()
