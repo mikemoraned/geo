@@ -1,18 +1,15 @@
 
-use annotated_js::AnnotatedJS;
-use region_source_js::RegionSourceJS;
 use testcard::TestCard;
 use wasm_bindgen::prelude::*;
+use web::{annotated_js::AnnotatedJS, region_source_js::RegionSourceJS};
 use web_sys::console;
 
 mod load;
 mod geometry;
 mod annotated;
-mod annotated_js;
+mod web;
 mod region_summary;
-mod region_summary_js;
 mod testcard;
-mod region_source_js;
 mod region_group;
 
 #[wasm_bindgen]

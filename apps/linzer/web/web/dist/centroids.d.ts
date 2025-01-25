@@ -80,13 +80,13 @@ export interface InitOutput {
   readonly builderjs_source: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly builderjs_annotate: (a: number) => any;
   readonly create_builder: () => number;
+  readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
   readonly __wbg_testcard_free: (a: number, b: number) => void;
   readonly testcard_x: (a: number) => number;
   readonly testcard_y: (a: number) => number;
   readonly testcard_coord: (a: number) => any;
   readonly testcard_bearing_north_degrees: (a: number) => number;
   readonly testcard_bearing_east_degrees: (a: number) => number;
-  readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;
