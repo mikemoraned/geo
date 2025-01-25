@@ -3,6 +3,7 @@ use annotated_js::AnnotatedJS;
 use region_source_js::RegionSourceJS;
 use testcard::TestCard;
 use wasm_bindgen::prelude::*;
+use web_sys::console;
 
 mod load;
 mod geometry;
@@ -33,10 +34,12 @@ impl BuilderJS {
 #[wasm_bindgen]
 impl BuilderJS {
     pub fn source(&mut self, name: String, url: String) {
+        console::log_1(&format!("adding source for group '{name}' at {url}").into());
         self.sources.push(RegionSourceJS::new(name, url));
     }
 
     pub async fn annotate(&self) -> Result<AnnotatedJS, JsValue> {
+        console::log_1(&format!("generating annotations from sources: {:?}", self.sources).into());
         let mut groups = vec![];
         for source in &self.sources {
             groups.push(source.fetch().await?);

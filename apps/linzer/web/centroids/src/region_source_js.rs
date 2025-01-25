@@ -4,6 +4,7 @@ use web_sys::console;
 use crate::{geometry, load, region_group::RegionGroup};
 
 #[wasm_bindgen]
+#[derive(Debug)]
 pub struct RegionSourceJS {
     name: String,
     url: String

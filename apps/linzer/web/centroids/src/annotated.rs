@@ -1,7 +1,6 @@
-use std::{iter::zip, vec};
 
-use geo_types::{Geometry, GeometryCollection};
-use geo::{centroid, geometry, Bearing, BoundingRect, Centroid, Coord, CoordsIter, Distance, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
+use geo_types::Geometry;
+use geo::{Bearing, Centroid, Coord, CoordsIter, Distance, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
 use web_sys::console;
 
 use crate::{region_group::RegionGroup, region_summary::RegionSummary};
