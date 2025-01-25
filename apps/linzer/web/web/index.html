@@ -108,7 +108,8 @@
         await init();
         console.log("Wasm initialized");
 
-        const cities = [ "edinburgh", "hamburg", "jerusalem", "new_york", "paris" ];
+        // const cities = [ "edinburgh", "hamburg", "jerusalem", "new_york", "paris" ];
+        const cities = [ "edinburgh", "paris" ];
         let builder = create_builder();
         let sources = cities.map(async (city) => {
             const sourceDataUrl = new URL(`/data/${city}/regions_pedestrian.1000.geojson`, window.location.origin).toString();
