@@ -1,5 +1,5 @@
 export function addLayers(map, sourceDataUrl, annotated) {
-    addRegionsLayer(map, sourceDataUrl);
+    addRegionsLayer(map, annotated);
     // addRaysLayer(map, annotated);
     addCentroidsLayer(map, annotated);
 }
@@ -45,16 +45,20 @@ function bindLayerControl(layerId, map) {
     button.disabled = false;
 }
 
-function addRegionsLayer(map, sourceDataUrl) {
-    map.addSource('hamburg', {
+function addRegionsLayer(map, annotated) {
+    console.log('Adding regions layer');
+    let geojsonRegions = annotated.regions_geojson();
+    console.log('generated geojson');
+
+    map.addSource('regions', {
         type: 'geojson',
-        data: sourceDataUrl
+        data: geojsonRegions
     });
 
     map.addLayer({
         id: 'regions',
         type: 'line',
-        source: 'hamburg',
+        source: 'regions',
         layout: {
             visibility: 'visible'
         },
@@ -67,18 +71,7 @@ function addRegionsLayer(map, sourceDataUrl) {
 }
 
 function addCentroidsLayer(map, annotated) {
-    let centroids = annotated.centroids();
-
-    let geojsonCentroids = {
-        type: 'FeatureCollection',
-        features: centroids.map(({ x, y }) => ({
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [ x, y ]
-            }
-        }))
-    };
+    let geojsonCentroids = annotated.centroids_geojson();
 
     map.addSource('centroids', {
         type: 'geojson',

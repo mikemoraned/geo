@@ -2,7 +2,7 @@
 use geo_types::{Geometry, GeometryCollection};
 use web_sys::console;
 
-pub async fn fetch_text(source_url: String) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn fetch_text(source_url: &String) -> Result<String, Box<dyn std::error::Error>> {
     console::log_1(&format!("Fetching text from '{source_url}' ...").into());
 
     let response = reqwest::get(source_url).await?;

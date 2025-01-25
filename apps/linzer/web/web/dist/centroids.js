@@ -225,22 +225,19 @@ export function testcard_at(x, y) {
 }
 
 /**
- * @param {string} source_url
- * @returns {Promise<AnnotatedJS>}
+ * @returns {BuilderJS}
  */
-export function annotate(source_url) {
-    const ptr0 = passStringToWasm0(source_url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.annotate(ptr0, len0);
-    return ret;
+export function create_builder() {
+    const ret = wasm.create_builder();
+    return BuilderJS.__wrap(ret);
 }
 
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure99_externref_shim(arg0, arg1, arg2);
+    wasm.closure108_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_119(arg0, arg1, arg2, arg3) {
-    wasm.closure426_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_121(arg0, arg1, arg2, arg3) {
+    wasm.closure435_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
@@ -275,22 +272,15 @@ export class AnnotatedJS {
     /**
      * @returns {any}
      */
-    centroids() {
-        const ret = wasm.annotatedjs_centroids(this.__wbg_ptr);
+    centroids_geojson() {
+        const ret = wasm.annotatedjs_centroids_geojson(this.__wbg_ptr);
         return ret;
     }
     /**
      * @returns {any}
      */
-    centroid() {
-        const ret = wasm.annotatedjs_centroid(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {any}
-     */
-    bounds() {
-        const ret = wasm.annotatedjs_bounds(this.__wbg_ptr);
+    regions_geojson() {
+        const ret = wasm.annotatedjs_regions_geojson(this.__wbg_ptr);
         return ret;
     }
     /**
@@ -310,21 +300,23 @@ export class AnnotatedJS {
         return v1;
     }
     /**
-     * @param {number} id
+     * @param {string} id
      * @param {number} min_score
      * @returns {any}
      */
     most_similar_ids(id, min_score) {
-        const ret = wasm.annotatedjs_most_similar_ids(this.__wbg_ptr, id, min_score);
+        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.annotatedjs_most_similar_ids(this.__wbg_ptr, ptr0, len0, min_score);
         return ret;
     }
     /**
-     * @param {number} id
+     * @param {any} target_id
      * @param {number} min_score
      * @returns {(SimilarRegionJS)[]}
      */
-    most_similar_regions(id, min_score) {
-        const ret = wasm.annotatedjs_most_similar_regions(this.__wbg_ptr, id, min_score);
+    most_similar_regions(target_id, min_score) {
+        const ret = wasm.annotatedjs_most_similar_regions(this.__wbg_ptr, target_id, min_score);
         var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
         return v1;
@@ -337,6 +329,70 @@ export class AnnotatedJS {
     id_of_closest_centroid(x, y) {
         const ret = wasm.annotatedjs_id_of_closest_centroid(this.__wbg_ptr, x, y);
         return ret;
+    }
+}
+
+const BuilderJSFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_builderjs_free(ptr >>> 0, 1));
+
+export class BuilderJS {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(BuilderJS.prototype);
+        obj.__wbg_ptr = ptr;
+        BuilderJSFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        BuilderJSFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_builderjs_free(ptr, 0);
+    }
+    /**
+     * @param {string} name
+     * @param {string} url
+     */
+    source(name, url) {
+        const ptr0 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        wasm.builderjs_source(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+    }
+    /**
+     * @returns {Promise<AnnotatedJS>}
+     */
+    annotate() {
+        const ret = wasm.builderjs_annotate(this.__wbg_ptr);
+        return ret;
+    }
+}
+
+const RegionSourceJSFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_regionsourcejs_free(ptr >>> 0, 1));
+
+export class RegionSourceJS {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        RegionSourceJSFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_regionsourcejs_free(ptr, 0);
     }
 }
 
@@ -366,11 +422,26 @@ export class RegionSummaryJS {
         wasm.__wbg_regionsummaryjs_free(ptr, 0);
     }
     /**
-     * @returns {number}
+     * @returns {string}
      */
     get id() {
-        const ret = wasm.regionsummaryjs_id(this.__wbg_ptr);
-        return ret >>> 0;
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.regionsummaryjs_id(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {any}
+     */
+    get group_name() {
+        const ret = wasm.regionsummaryjs_group_name(this.__wbg_ptr);
+        return ret;
     }
     /**
      * @returns {any}
@@ -501,7 +572,7 @@ export class TestCard {
      * @returns {number}
      */
     get x() {
-        const ret = wasm.similarregionjs_score(this.__wbg_ptr);
+        const ret = wasm.testcard_x(this.__wbg_ptr);
         return ret;
     }
     /**
@@ -642,7 +713,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_119(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_121(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -786,8 +857,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper342 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 100, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper380 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 109, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

@@ -1,39 +1,48 @@
-use std::{iter::zip, vec};
 
-use geo_types::{Geometry, GeometryCollection};
-use geo::{Bearing, BoundingRect, Centroid, Coord, CoordsIter, Distance, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
+use std::collections::HashMap;
+
+use geo::{Bearing, Coord, CoordsIter, Distance, Geometry, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
 use web_sys::console;
 
-use crate::region_summary::RegionSummary;
+use crate::{region_group::RegionGroup, region_summary::RegionSummary};
 
 pub struct Annotated {
-    collection: GeometryCollection<f64>,
-    pub centroids: Vec<Point<f64>>,
-    pub summaries: Vec<RegionSummary>
+    groups: Vec<RegionGroup>,
+    pub summaries: HashMap<String,RegionSummary>
 }
 
 impl Annotated {
-    pub fn new(collection: GeometryCollection<f64>) -> Annotated {
-        let centroids = centroids(&collection);
-        let summaries = summaries(&collection, &centroids);
-        Annotated { collection, centroids, summaries }
+    pub fn new(groups: Vec<RegionGroup>) -> Annotated {
+        let summaries = summaries(&groups);
+        Annotated { groups, summaries }
     }
 
-    pub fn centroid(&self) -> geo_types::Coord {
-        self.collection.bounding_rect().unwrap().centroid().into()
+    pub fn centroids_geometry(&self) -> Vec<Geometry<f64>> {
+        let mut centroids = vec![];
+        for group in self.groups.iter() {  
+            for (_polygon, _id, centroid) in group.geometries() {
+                centroids.push(Geometry::Point(centroid.clone()));
+            }
+        }
+        centroids
     }
 
-    pub fn bounds(&self) -> geo_types::Rect<f64> {
-        self.collection.bounding_rect().unwrap()
+    pub fn regions_geometry(&self) -> Vec<Geometry<f64>> {
+        let mut polygons = vec![];
+        for group in self.groups.iter() {  
+            for (polygon, _id, _centroid) in group.geometries() {
+                polygons.push(Geometry::Polygon(polygon.clone()));
+            }
+        }
+        polygons
     }
 
     pub fn rays(&self) -> Vec<MultiLineString> {
         let mut rays: Vec<MultiLineString> = vec![];
-        let centroids = &self.centroids;
 
-        for (geometry, centroid) in zip(self.collection.iter(),centroids.iter()) {
-            let centroid_coord: Coord = centroid.clone().into();
-            if let Geometry::Polygon(polygon) = geometry {
+        for group in self.groups.iter() {   
+            for (polygon, _id, centroid) in group.geometries().iter() {
+                let centroid_coord: Coord = centroid.clone().into();
                 let mut polygon_rays = vec![];
                 for coord in polygon.exterior_coords_iter() {
                     let polygon_ray = LineString::new(vec![centroid_coord.clone(), coord]);
@@ -46,17 +55,17 @@ impl Annotated {
         rays
     }
 
-    pub fn most_similar_ids(&self, id: usize, min_score: f64) -> Vec<usize> {
+    pub fn most_similar_ids(&self, id: String, min_score: f64) -> Vec<String> {
         self.most_similar_regions(id, min_score).into_iter().map(|(summary, _)| summary.id).collect()
     }
 
-    pub fn most_similar_regions(&self, id: usize, min_score: f64) -> Vec<(RegionSummary,f64)> {
-        let summaries = &self.summaries;
-        let target_summary = summaries.get(id).unwrap();
+    pub fn most_similar_regions(&self, target_id: String, min_score: f64) -> Vec<(RegionSummary,f64)> {
+        let target_summary = self.summaries.get(&target_id).unwrap();
+        console::log_1(&format!("finding regions similar to {target_id}, with score >= {min_score}").into());
 
-        let mut distances : Vec<(RegionSummary, f64)> = summaries.clone().into_iter()
-            .filter(|summary| summary.id != id)
-            .map(|summary| {
+        let mut distances : Vec<(RegionSummary, f64)> = self.summaries.iter()
+            .filter(|(id, _summary)| target_id.as_str() != id.as_str())
+            .map(|(_id, summary)| {
                 (summary.clone(), target_summary.distance_from(&summary))
             }).collect();
         distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
@@ -66,19 +75,22 @@ impl Annotated {
         scores.into_iter().filter(|(_, score)| *score >= min_score).collect()
     }
 
-    pub fn id_of_closest_centroid(&self, coord: &Coord) -> Option<usize> {
+    pub fn id_of_closest_centroid(&self, coord: &Coord) -> Option<String> {
         let mut closest = None;
-        for (id, centroid) in self.centroids.iter().enumerate() {
-            let distance = Haversine::distance(coord.clone().into(), centroid.clone().into());
-            if let Some((_, closest_distance)) = closest {
-                if distance < closest_distance {
+        for group in self.groups.iter() {  
+            for (_polygon, id, centroid) in group.geometries() {
+                let distance = Haversine::distance(coord.clone().into(), centroid.clone().into());
+                if let Some((_, closest_distance)) = closest {
+                    if distance < closest_distance {
+                        closest = Some((id, distance));
+                    }
+                }
+                else {
                     closest = Some((id, distance));
                 }
             }
-            else {
-                closest = Some((id, distance));
-            }
         }
+
         if let Some((id, _)) = closest {
             Some(id)
         }
@@ -89,14 +101,15 @@ impl Annotated {
 }
 
 
-fn summaries(collection: &GeometryCollection<f64>, centroids: &Vec<Point<f64>>) -> Vec<RegionSummary> {
-    let mut summaries: Vec<RegionSummary> = vec![];
-    let size = collection.len();
-    console::log_1(&format!("calculating summaries for {size} geometries").into());
+fn summaries(groups: &[RegionGroup]) -> HashMap<String, RegionSummary> {
+    let mut summaries= HashMap::new();
+    for group in groups.iter() {        
 
-    let bucket_width = 1.0;
-    for (id, (geometry, centroid)) in zip(collection.iter(),centroids.iter()).enumerate() {
-        if let Geometry::Polygon(polygon) = geometry {
+        let size = group.geometries().len();
+        console::log_1(&format!("group '{}': calculating summaries for {} geometries", group.name, size).into());
+
+        let bucket_width = 1.0;
+        for (polygon, id, centroid) in group.geometries().iter() {
             let mut bearing_length_pairs = vec![];
             let mut bucketed_degree_length_pairs = vec![];
             
@@ -150,24 +163,13 @@ fn summaries(collection: &GeometryCollection<f64>, centroids: &Vec<Point<f64>>) 
                 }
             }).collect();
 
-            let summary = RegionSummary::new(id, centroid.clone(), bucket_width, normalised);
-            summaries.push(summary);
+            let summary = RegionSummary::new(id.clone(), group.name.clone(), centroid.clone(), bucket_width, normalised);
+            summaries.insert(id.clone(), summary);
+            
         }
-    }
 
-    console::log_1(&"calculated summaries".into());
+        console::log_1(&"calculated summaries".into());
+    }
     summaries
 }
 
-pub fn centroids(collection: &GeometryCollection<f64>) -> Vec<Point<f64>> {
-    let size = collection.len();
-    console::log_1(&format!("calculating centroids for {size} geometries").into());
-    let mut centroids = vec![];
-    for entry in collection.iter() {
-        if let Some(centroid) = entry.centroid() {
-            centroids.push(centroid);
-        }
-    }
-    console::log_1(&"calculated centroids".into());
-    centroids
-}
