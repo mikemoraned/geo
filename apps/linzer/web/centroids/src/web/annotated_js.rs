@@ -1,3 +1,8 @@
+use std::io::{BufWriter, Cursor};
+
+use geo::Geometry;
+use geozero::geojson::GeoJsonWriter;
+use geozero::{geo_types::GeoWriter, geojson::{GeoJsonReader}, GeozeroDatasource, GeozeroGeometry};
 use gloo_utils::format::JsValueSerdeExt;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 use web_sys::console;
@@ -33,12 +38,38 @@ impl AnnotatedJS {
         return JsValue::from_serde(&geojson).unwrap();
     }
 
+    pub fn centroids_geojson_string(&mut self) -> JsValue {
+        let centroids = self.annotated.centroids_geometry().clone();
+        let geo_geometry = geo_types::GeometryCollection::from(centroids);
+
+        let mut buf = Cursor::new(Vec::new());
+        let mut geo_writer = GeoJsonWriter::new(&mut buf);
+        Geometry::GeometryCollection(geo_geometry).process_geom(&mut geo_writer).unwrap();
+
+        let bytes = buf.into_inner();
+        let string = String::from_utf8(bytes).unwrap();
+        return JsValue::from_str(&string);
+    }
+
     pub fn regions_geojson(&mut self) -> JsValue {
         let centroids = self.annotated.regions_geometry().clone();
         let geo_geometry = geo_types::GeometryCollection::from(centroids);
 
         let geojson = geojson::FeatureCollection::from(&geo_geometry);
         return JsValue::from_serde(&geojson).unwrap();
+    }
+
+    pub fn regions_geojson_string(&mut self) -> JsValue {
+        let centroids = self.annotated.regions_geometry().clone();
+        let geo_geometry = geo_types::GeometryCollection::from(centroids);
+
+        let mut buf = Cursor::new(Vec::new());
+        let mut geo_writer = GeoJsonWriter::new(&mut buf);
+        Geometry::GeometryCollection(geo_geometry).process_geom(&mut geo_writer).unwrap();
+
+        let bytes = buf.into_inner();
+        let string = String::from_utf8(bytes).unwrap();
+        return JsValue::from_str(&string);
     }
 
     pub fn rays(&self) -> JsValue {

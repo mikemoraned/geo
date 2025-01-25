@@ -47,7 +47,9 @@ function bindLayerControl(layerId, map) {
 
 function addRegionsLayer(map, annotated) {
     console.log('Adding regions layer');
-    let geojsonRegions = annotated.regions_geojson();
+    let geojsonRegionsString = annotated.regions_geojson_string();
+    console.log('parsing');
+    let geojsonRegions = JSON.parse(geojsonRegionsString);
     console.log('generated geojson');
 
     map.addSource('regions', {
@@ -71,7 +73,8 @@ function addRegionsLayer(map, annotated) {
 }
 
 function addCentroidsLayer(map, annotated) {
-    let geojsonCentroids = annotated.centroids_geojson();
+    let geojsonCentroidsString = annotated.centroids_geojson_string();
+    let geojsonCentroids = JSON.parse(geojsonCentroidsString);
 
     map.addSource('centroids', {
         type: 'geojson',
