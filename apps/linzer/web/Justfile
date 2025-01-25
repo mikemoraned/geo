@@ -8,3 +8,9 @@ release:
 
 webapp:
     serve -dir web
+
+doc:
+    cd centroids && cargo doc --open
+
+test:
+    cd centroids && cargo test
