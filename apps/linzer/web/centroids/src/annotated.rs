@@ -8,15 +8,23 @@ use crate::{region_group::RegionGroup, region_summary::RegionSummary};
 
 pub struct Annotated {
     groups: Vec<RegionGroup>,
-    pub centroids: Vec<Point<f64>>,
     pub summaries: HashMap<String,RegionSummary>
 }
 
 impl Annotated {
     pub fn new(groups: Vec<RegionGroup>) -> Annotated {
-        let centroids = centroids(&groups);
         let summaries = summaries(&groups);
-        Annotated { groups, centroids, summaries }
+        Annotated { groups, summaries }
+    }
+
+    pub fn centroids(&self) -> Vec<Point<f64>> {
+        let mut centroids = vec![];
+        for group in self.groups.iter() {  
+            for (_polygon, _id, centroid) in group.geometries() {
+                centroids.push(centroid.clone());
+            }
+        }
+        centroids
     }
 
     pub fn rays(&self) -> Vec<MultiLineString> {
@@ -43,6 +51,7 @@ impl Annotated {
 
     pub fn most_similar_regions(&self, target_id: String, min_score: f64) -> Vec<(RegionSummary,f64)> {
         let target_summary = self.summaries.get(&target_id).unwrap();
+        console::log_1(&format!("finding regions similar to {target_id}, with score >= {min_score}").into());
 
         let mut distances : Vec<(RegionSummary, f64)> = self.summaries.iter()
             .filter(|(id, _summary)| target_id.as_str() != id.as_str())
@@ -56,19 +65,22 @@ impl Annotated {
         scores.into_iter().filter(|(_, score)| *score >= min_score).collect()
     }
 
-    pub fn id_of_closest_centroid(&self, coord: &Coord) -> Option<usize> {
+    pub fn id_of_closest_centroid(&self, coord: &Coord) -> Option<String> {
         let mut closest = None;
-        for (id, centroid) in self.centroids.iter().enumerate() {
-            let distance = Haversine::distance(coord.clone().into(), centroid.clone().into());
-            if let Some((_, closest_distance)) = closest {
-                if distance < closest_distance {
+        for group in self.groups.iter() {  
+            for (_polygon, id, centroid) in group.geometries() {
+                let distance = Haversine::distance(coord.clone().into(), centroid.clone().into());
+                if let Some((_, closest_distance)) = closest {
+                    if distance < closest_distance {
+                        closest = Some((id, distance));
+                    }
+                }
+                else {
                     closest = Some((id, distance));
                 }
             }
-            else {
-                closest = Some((id, distance));
-            }
         }
+
         if let Some((id, _)) = closest {
             Some(id)
         }
@@ -151,12 +163,3 @@ fn summaries(groups: &[RegionGroup]) -> HashMap<String, RegionSummary> {
     summaries
 }
 
-pub fn centroids(groups: &[RegionGroup]) -> Vec<Point<f64>> {
-    let mut centroids = vec![];
-    for group in groups.iter() {        
-        for (_polygon, _id, centroid)  in group.geometries().iter() {
-            centroids.push(centroid.clone());
-        }
-    }
-    centroids   
-}

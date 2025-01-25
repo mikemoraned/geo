@@ -197,6 +197,12 @@ function debugString(val) {
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
 }
+
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_export_2.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
+}
 /**
  * @param {number} x
  * @param {number} y
@@ -213,12 +219,6 @@ export function testcard_at(x, y) {
 export function create_builder() {
     const ret = wasm.create_builder();
     return BuilderJS.__wrap(ret);
-}
-
-function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_export_2.get(idx);
-    wasm.__externref_table_dealloc(idx);
-    return value;
 }
 
 function getArrayJsValueFromWasm0(ptr, len) {
@@ -303,17 +303,15 @@ export class AnnotatedJS {
         return ret;
     }
     /**
-     * @param {string} id
+     * @param {any} target_id
      * @param {number} min_score
      * @returns {(SimilarRegionJS)[]}
      */
-    most_similar_regions(id, min_score) {
-        const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.annotatedjs_most_similar_regions(this.__wbg_ptr, ptr0, len0, min_score);
-        var v2 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
+    most_similar_regions(target_id, min_score) {
+        const ret = wasm.annotatedjs_most_similar_regions(this.__wbg_ptr, target_id, min_score);
+        var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
-        return v2;
+        return v1;
     }
     /**
      * @param {number} x
@@ -851,7 +849,7 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper358 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper363 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 107, __wbg_adapter_26);
         return ret;
     };

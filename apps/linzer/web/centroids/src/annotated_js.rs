@@ -1,5 +1,6 @@
 use gloo_utils::format::JsValueSerdeExt;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+use web_sys::console;
 
 use crate::{annotated::Annotated, region_group::RegionGroup, region_summary_js::RegionSummaryJS};
 
@@ -23,7 +24,7 @@ impl AnnotatedJS {
 #[wasm_bindgen]
 impl AnnotatedJS {
     pub fn centroids(&mut self) -> JsValue {
-        return JsValue::from_serde(&self.annotated.centroids).unwrap();
+        return JsValue::from_serde(&self.annotated.centroids()).unwrap();
     }
 
     pub fn rays(&self) -> JsValue {
@@ -39,15 +40,16 @@ impl AnnotatedJS {
         return JsValue::from_serde(&ids).unwrap();
     }
 
-    pub fn most_similar_regions(&mut self, id: String, min_score: f64) -> Vec<SimilarRegionJS> {
-        self.annotated.most_similar_regions(id, min_score).iter().map(|(summary, score)| {
+    pub fn most_similar_regions(&mut self, target_id: JsValue, min_score: f64) -> Vec<SimilarRegionJS> {
+        console::log_1(&format!("finding regions similar to {target_id:?}, with score >= {min_score}").into());
+        self.annotated.most_similar_regions(target_id.as_string().unwrap(), min_score).iter().map(|(summary, score)| {
             SimilarRegionJS::new(RegionSummaryJS::new(summary.clone()), *score)
         }).collect()
     }
 
     pub fn id_of_closest_centroid(&mut self, x: f64, y: f64) -> JsValue {
-        let id = self.annotated.id_of_closest_centroid(&(x, y).into());
-        return JsValue::from_serde(&id).unwrap();
+        let id = self.annotated.id_of_closest_centroid(&(x, y).into()).unwrap();
+        return JsValue::from_str(&id);
     }
 }
 
