@@ -31,6 +31,14 @@ impl AnnotatedJS {
         return JsValue::from_serde(&geojson).unwrap();
     }
 
+    pub fn regions_geojson(&mut self) -> JsValue {
+        let centroids = self.annotated.regions_geometry().clone();
+        let geo_geometry = geo_types::GeometryCollection::from(centroids);
+
+        let geojson = geojson::FeatureCollection::from(&geo_geometry);
+        return JsValue::from_serde(&geojson).unwrap();
+    }
+
     pub fn rays(&self) -> JsValue {
         return JsValue::from_serde(&self.annotated.rays()).unwrap();
     }

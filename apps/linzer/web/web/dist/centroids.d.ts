@@ -6,6 +6,7 @@ export class AnnotatedJS {
   private constructor();
   free(): void;
   centroids_geojson(): any;
+  regions_geojson(): any;
   rays(): any;
   summaries(): (RegionSummaryJS)[];
   most_similar_ids(id: string, min_score: number): any;
@@ -54,23 +55,6 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
-  readonly annotatedjs_centroids_geojson: (a: number) => any;
-  readonly annotatedjs_rays: (a: number) => any;
-  readonly annotatedjs_summaries: (a: number) => [number, number];
-  readonly annotatedjs_most_similar_ids: (a: number, b: number, c: number, d: number) => any;
-  readonly annotatedjs_most_similar_regions: (a: number, b: any, c: number) => [number, number];
-  readonly annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
-  readonly __wbg_similarregionjs_free: (a: number, b: number) => void;
-  readonly similarregionjs_summary: (a: number) => number;
-  readonly similarregionjs_score: (a: number) => number;
-  readonly __wbg_testcard_free: (a: number, b: number) => void;
-  readonly testcard_x: (a: number) => number;
-  readonly testcard_y: (a: number) => number;
-  readonly testcard_coord: (a: number) => any;
-  readonly testcard_bearing_north_degrees: (a: number) => number;
-  readonly testcard_bearing_east_degrees: (a: number) => number;
-  readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
   readonly __wbg_regionsummaryjs_free: (a: number, b: number) => void;
   readonly regionsummaryjs_id: (a: number) => [number, number];
   readonly regionsummaryjs_group_name: (a: number) => any;
@@ -80,22 +64,40 @@ export interface InitOutput {
   readonly regionsummaryjs_dominant_degree: (a: number) => any;
   readonly regionsummaryjs_dominant_length: (a: number) => any;
   readonly regionsummaryjs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
+  readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
+  readonly annotatedjs_centroids_geojson: (a: number) => any;
+  readonly annotatedjs_regions_geojson: (a: number) => any;
+  readonly annotatedjs_rays: (a: number) => any;
+  readonly annotatedjs_summaries: (a: number) => [number, number];
+  readonly annotatedjs_most_similar_ids: (a: number, b: number, c: number, d: number) => any;
+  readonly annotatedjs_most_similar_regions: (a: number, b: any, c: number) => [number, number];
+  readonly annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
+  readonly __wbg_similarregionjs_free: (a: number, b: number) => void;
+  readonly similarregionjs_summary: (a: number) => number;
+  readonly similarregionjs_score: (a: number) => number;
   readonly testcard_at: (a: number, b: number) => number;
   readonly __wbg_builderjs_free: (a: number, b: number) => void;
   readonly builderjs_source: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly builderjs_annotate: (a: number) => any;
   readonly create_builder: () => number;
+  readonly __wbg_testcard_free: (a: number, b: number) => void;
+  readonly testcard_x: (a: number) => number;
+  readonly testcard_y: (a: number) => number;
+  readonly testcard_coord: (a: number) => any;
+  readonly testcard_bearing_north_degrees: (a: number) => number;
+  readonly testcard_bearing_east_degrees: (a: number) => number;
+  readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export_5: WebAssembly.Table;
-  readonly __externref_drop_slice: (a: number, b: number) => void;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __externref_table_dealloc: (a: number) => void;
-  readonly closure107_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure434_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly __externref_drop_slice: (a: number, b: number) => void;
+  readonly closure108_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure435_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

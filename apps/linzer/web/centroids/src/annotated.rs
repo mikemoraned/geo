@@ -27,6 +27,16 @@ impl Annotated {
         centroids
     }
 
+    pub fn regions_geometry(&self) -> Vec<Geometry<f64>> {
+        let mut polygons = vec![];
+        for group in self.groups.iter() {  
+            for (polygon, _id, _centroid) in group.geometries() {
+                polygons.push(Geometry::Polygon(polygon.clone()));
+            }
+        }
+        polygons
+    }
+
     pub fn rays(&self) -> Vec<MultiLineString> {
         let mut rays: Vec<MultiLineString> = vec![];
 
