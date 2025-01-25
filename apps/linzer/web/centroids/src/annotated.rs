@@ -92,7 +92,7 @@ impl Annotated {
         }
 
         if let Some((id, _)) = closest {
-            Some(id)
+            Some(id.clone())
         }
         else {
             None

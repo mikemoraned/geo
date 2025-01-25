@@ -14,3 +14,6 @@ doc:
 
 test:
     cd centroids && cargo test
+
+clean:
+    cd centroids && cargo clean
