@@ -8,7 +8,7 @@ export class AnnotatedJS {
   centroids_geojson(): any;
   regions_geojson(): any;
   rays(): any;
-  summaries(): (RegionSummaryJS)[];
+  signatures(): (RegionSignatureJS)[];
   most_similar_ids(id: string, min_score: number): any;
   most_similar_regions(target_id: any, min_score: number): (SimilarRegionJS)[];
   id_of_closest_centroid(x: number, y: number): any;
@@ -19,11 +19,7 @@ export class BuilderJS {
   source(name: string, url: string): void;
   annotate(): Promise<AnnotatedJS>;
 }
-export class RegionSourceJS {
-  private constructor();
-  free(): void;
-}
-export class RegionSummaryJS {
+export class RegionSignatureJS {
   private constructor();
   free(): void;
   as_data_uri_image(side_length: number): string;
@@ -35,10 +31,14 @@ export class RegionSummaryJS {
   readonly dominant_degree: any;
   readonly dominant_length: any;
 }
+export class RegionSourceJS {
+  private constructor();
+  free(): void;
+}
 export class SimilarRegionJS {
   private constructor();
   free(): void;
-  readonly summary: RegionSummaryJS;
+  readonly signature: RegionSignatureJS;
   readonly score: number;
 }
 export class TestCard {
@@ -55,31 +55,31 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly __wbg_regionsummaryjs_free: (a: number, b: number) => void;
-  readonly regionsummaryjs_id: (a: number) => [number, number];
-  readonly regionsummaryjs_group_name: (a: number) => any;
-  readonly regionsummaryjs_centroid: (a: number) => any;
-  readonly regionsummaryjs_bucket_width: (a: number) => number;
-  readonly regionsummaryjs_lengths: (a: number) => any;
-  readonly regionsummaryjs_dominant_degree: (a: number) => any;
-  readonly regionsummaryjs_dominant_length: (a: number) => any;
-  readonly regionsummaryjs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
-  readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
-  readonly annotatedjs_centroids_geojson: (a: number) => any;
-  readonly annotatedjs_regions_geojson: (a: number) => any;
-  readonly annotatedjs_rays: (a: number) => any;
-  readonly annotatedjs_summaries: (a: number) => [number, number];
-  readonly annotatedjs_most_similar_ids: (a: number, b: number, c: number, d: number) => any;
-  readonly annotatedjs_most_similar_regions: (a: number, b: any, c: number) => [number, number];
-  readonly annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
-  readonly __wbg_similarregionjs_free: (a: number, b: number) => void;
-  readonly similarregionjs_summary: (a: number) => number;
-  readonly similarregionjs_score: (a: number) => number;
+  readonly __wbg_regionsignaturejs_free: (a: number, b: number) => void;
+  readonly regionsignaturejs_id: (a: number) => [number, number];
+  readonly regionsignaturejs_group_name: (a: number) => any;
+  readonly regionsignaturejs_centroid: (a: number) => any;
+  readonly regionsignaturejs_bucket_width: (a: number) => number;
+  readonly regionsignaturejs_lengths: (a: number) => any;
+  readonly regionsignaturejs_dominant_degree: (a: number) => any;
+  readonly regionsignaturejs_dominant_length: (a: number) => any;
+  readonly regionsignaturejs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
   readonly testcard_at: (a: number, b: number) => number;
   readonly __wbg_builderjs_free: (a: number, b: number) => void;
   readonly builderjs_source: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly builderjs_annotate: (a: number) => any;
   readonly create_builder: () => number;
+  readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
+  readonly annotatedjs_centroids_geojson: (a: number) => any;
+  readonly annotatedjs_regions_geojson: (a: number) => any;
+  readonly annotatedjs_rays: (a: number) => any;
+  readonly annotatedjs_signatures: (a: number) => [number, number];
+  readonly annotatedjs_most_similar_ids: (a: number, b: number, c: number, d: number) => any;
+  readonly annotatedjs_most_similar_regions: (a: number, b: any, c: number) => [number, number];
+  readonly annotatedjs_id_of_closest_centroid: (a: number, b: number, c: number) => any;
+  readonly __wbg_similarregionjs_free: (a: number, b: number) => void;
+  readonly similarregionjs_signature: (a: number) => number;
+  readonly similarregionjs_score: (a: number) => number;
   readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
   readonly __wbg_testcard_free: (a: number, b: number) => void;
   readonly testcard_x: (a: number) => number;
@@ -96,8 +96,8 @@ export interface InitOutput {
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __externref_table_dealloc: (a: number) => void;
   readonly __externref_drop_slice: (a: number, b: number) => void;
-  readonly closure108_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure435_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure107_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure434_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

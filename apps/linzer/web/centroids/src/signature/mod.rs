@@ -1,1 +1,1 @@
-pub mod region_summary;
+pub mod region_signature;

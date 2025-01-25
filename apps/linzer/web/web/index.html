@@ -15,16 +15,16 @@
         #info { position: absolute; top: 0; left: 0; margin: 10px; z-index: 1; }
         #info.box { --bulma-box-padding: 0.5rem; }
         
-        #mapbox svg.main g .summary { 
+        #mapbox svg.main g .signature { 
             visibility: hidden;
         }
-        #mapbox svg.main g.visible .summary.selected {
+        #mapbox svg.main g.visible .signature.selected {
             visibility: visible;
         }
-        #mapbox svg.main g.visible .summary.selected path {
+        #mapbox svg.main g.visible .signature.selected path {
             stroke-width: 3;
         }
-        #mapbox svg.main g.visible .summary.selected line {
+        #mapbox svg.main g.visible .signature.selected line {
             stroke-width: 2; 
         }
         div.mini {
@@ -78,7 +78,7 @@
             <button id="regions-layer-button" class="button is-medium is-responsive is-loading" disabled>Regions</button>
             <button id="centroids-layer-button" class="button is-medium is-responsive is-loading" disabled>Centroids</button>
             <!-- <button id="rays-layer-button" class="button is-medium is-responsive is-loading" disabled>Rays</button> -->
-            <button id="summaries-layer-button" class="button is-medium is-responsive is-loading" disabled>Summaries</button>
+            <button id="signatures-layer-button" class="button is-medium is-responsive is-loading" disabled>Signatures</button>
         </div>
     </div>
     <div class="mini" data-theme="light"></div>
@@ -103,7 +103,7 @@
         import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
         import { addLayers } from "./js/layers.js";
         import { addTestCardLayer } from "./js/testcard.js";
-        import { addSummaryLayer } from "./js/summaries.js";
+        import { addSummaryLayer } from "./js/signatures.js";
 
         await init();
         console.log("Wasm initialized");
@@ -171,14 +171,14 @@
                     .append(d => {
                         const clone = template.content.cloneNode(true);
                         clone.querySelector('.id-slot').textContent = d.score.toFixed(2);
-                        clone.querySelector('.group-slot').textContent = d.summary.group_name;
+                        clone.querySelector('.group-slot').textContent = d.signature.group_name;
 
-                        const smallImg = d.summary.as_data_uri_image(64);
+                        const smallImg = d.signature.as_data_uri_image(64);
                         clone.querySelector('.img-mobile-slot').setAttribute('src', smallImg);
-                        const largeImg = d.summary.as_data_uri_image(128);
+                        const largeImg = d.signature.as_data_uri_image(128);
                         clone.querySelector('.img-tablet-slot').setAttribute('src', largeImg);
 
-                        const centroid = [ d.summary.centroid.x, d.summary.centroid.y ];
+                        const centroid = [ d.signature.centroid.x, d.signature.centroid.y ];
                         clone.querySelector('div.item').addEventListener('click', () => {
                             console.log("Clicked on region", d.id);
                             flyToRegion(centroid);
@@ -191,7 +191,7 @@
             renderMini();
 
             addTestCardLayer("testcard", map, main, testcard_at);
-            addSummaryLayer("summaries", map, main, annotated, minScore);
+            addSummaryLayer("signatures", map, main, annotated, minScore);
         });
     </script>
   </body>

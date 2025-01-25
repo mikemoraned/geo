@@ -1,49 +1,49 @@
 use gloo_utils::format::JsValueSerdeExt;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
-use crate::signature::region_summary::RegionSummary;
+use crate::signature::region_signature::RegionSignature;
 
 #[wasm_bindgen]
 #[derive(Clone)]
-pub struct RegionSummaryJS {
-    summary: RegionSummary
+pub struct RegionSignatureJS {
+    signature: RegionSignature
 }
 
-impl RegionSummaryJS {
-    pub fn new(summary: RegionSummary) -> RegionSummaryJS {
-        RegionSummaryJS { summary }
+impl RegionSignatureJS {
+    pub fn new(signature: RegionSignature) -> RegionSignatureJS {
+        RegionSignatureJS { signature }
     }
 }
 
 #[wasm_bindgen]
-impl RegionSummaryJS {
+impl RegionSignatureJS {
     #[wasm_bindgen(getter)]
     pub fn id(&self) -> String {
-        self.summary.id.clone()
+        self.signature.id.clone()
     }
     #[wasm_bindgen(getter)]
     pub fn group_name(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.group_name).unwrap()
+        JsValue::from_serde(&self.signature.group_name).unwrap()
     }
     #[wasm_bindgen(getter)]
     pub fn centroid(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.centroid).unwrap()
+        JsValue::from_serde(&self.signature.centroid).unwrap()
     }
     #[wasm_bindgen(getter)]
     pub fn bucket_width(&self) -> f64 {
-        self.summary.bucket_width
+        self.signature.bucket_width
     }
     #[wasm_bindgen(getter)]
     pub fn lengths(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.lengths).unwrap()
+        JsValue::from_serde(&self.signature.lengths).unwrap()
     }
     #[wasm_bindgen(getter)]
     pub fn dominant_degree(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.dominant.0).unwrap()
+        JsValue::from_serde(&self.signature.dominant.0).unwrap()
     }
     #[wasm_bindgen(getter)]
     pub fn dominant_length(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.dominant.1).unwrap()
+        JsValue::from_serde(&self.signature.dominant.1).unwrap()
     }
     pub fn as_data_uri_image(&self, side_length: u32) -> Result<String, JsValue> {
         use tiny_skia::*;
@@ -67,7 +67,7 @@ impl RegionSummaryJS {
         pixmap.fill_path(&circle, &gray, FillRule::EvenOdd, Transform::identity(), None);
 
         let mut x_y_pairs = vec![];
-        for (degree, length) in self.summary.arrange_lengths_by_dominant_degree().iter().enumerate() {
+        for (degree, length) in self.signature.arrange_lengths_by_dominant_degree().iter().enumerate() {
             let radians = (degree as f32).to_radians();
             let length = *length as f32;
             let x = radians.cos() * length * radius;
@@ -93,7 +93,7 @@ impl RegionSummaryJS {
         
         Ok(data_uri)
 
-        // JsValue::from_serde(&self.summary.dominant.1).unwrap()
+        // JsValue::from_serde(&self.signature.dominant.1).unwrap()
     }
 }
 

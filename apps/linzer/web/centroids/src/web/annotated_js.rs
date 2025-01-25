@@ -4,22 +4,22 @@ use web_sys::console;
 
 use crate::{annotated::Annotated, region::region_group::RegionGroup};
 
-use super::region_summary_js::RegionSummaryJS;
+use super::region_signature_js::RegionSignatureJS;
 
 #[wasm_bindgen]
 pub struct AnnotatedJS {
     annotated: Annotated,
-    summaries: Vec<RegionSummaryJS>
+    signatures: Vec<RegionSignatureJS>
 }
 
 impl AnnotatedJS {
     pub fn new(groups: Vec<RegionGroup>) -> AnnotatedJS {
         let annotated = Annotated::new(groups);
-        let summaries = 
-            annotated.summaries.iter()
-            .map(|(_id, summary)| RegionSummaryJS::new(summary.clone()))
+        let signatures = 
+            annotated.signatures.iter()
+            .map(|(_id, signature)| RegionSignatureJS::new(signature.clone()))
             .collect();
-        AnnotatedJS { annotated, summaries }
+        AnnotatedJS { annotated, signatures }
     }
 }
 
@@ -45,8 +45,8 @@ impl AnnotatedJS {
         return JsValue::from_serde(&self.annotated.rays()).unwrap();
     }
 
-    pub fn summaries(&mut self) -> Vec<RegionSummaryJS> {
-        self.summaries.clone()
+    pub fn signatures(&mut self) -> Vec<RegionSignatureJS> {
+        self.signatures.clone()
     }
 
     pub fn most_similar_ids(&mut self, id: String, min_score: f64) -> JsValue {
@@ -56,8 +56,8 @@ impl AnnotatedJS {
 
     pub fn most_similar_regions(&mut self, target_id: JsValue, min_score: f64) -> Vec<SimilarRegionJS> {
         console::log_1(&format!("finding regions similar to {target_id:?}, with score >= {min_score}").into());
-        self.annotated.most_similar_regions(target_id.as_string().unwrap(), min_score).iter().map(|(summary, score)| {
-            SimilarRegionJS::new(RegionSummaryJS::new(summary.clone()), *score)
+        self.annotated.most_similar_regions(target_id.as_string().unwrap(), min_score).iter().map(|(signature, score)| {
+            SimilarRegionJS::new(RegionSignatureJS::new(signature.clone()), *score)
         }).collect()
     }
 
@@ -69,21 +69,21 @@ impl AnnotatedJS {
 
 #[wasm_bindgen]
 pub struct SimilarRegionJS {
-    summary: RegionSummaryJS,
+    signature: RegionSignatureJS,
     score: f64
 }
 
 impl SimilarRegionJS {
-    pub fn new(summary: RegionSummaryJS, score: f64) -> SimilarRegionJS {
-        SimilarRegionJS { summary, score }
+    pub fn new(signature: RegionSignatureJS, score: f64) -> SimilarRegionJS {
+        SimilarRegionJS { signature, score }
     }
 }
 
 #[wasm_bindgen]
 impl SimilarRegionJS {
     #[wasm_bindgen(getter)]
-    pub fn summary(&self) -> RegionSummaryJS {
-        self.summary.clone()
+    pub fn signature(&self) -> RegionSignatureJS {
+        self.signature.clone()
     }
 
     #[wasm_bindgen(getter)]

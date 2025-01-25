@@ -203,17 +203,6 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
-
-function getArrayJsValueFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    const mem = getDataViewMemory0();
-    const result = [];
-    for (let i = ptr; i < ptr + 4 * len; i += 4) {
-        result.push(wasm.__wbindgen_export_2.get(mem.getUint32(i, true)));
-    }
-    wasm.__externref_drop_slice(ptr, len);
-    return result;
-}
 /**
  * @param {number} x
  * @param {number} y
@@ -232,12 +221,22 @@ export function create_builder() {
     return BuilderJS.__wrap(ret);
 }
 
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(wasm.__wbindgen_export_2.get(mem.getUint32(i, true)));
+    }
+    wasm.__externref_drop_slice(ptr, len);
+    return result;
+}
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure108_externref_shim(arg0, arg1, arg2);
+    wasm.closure107_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_121(arg0, arg1, arg2, arg3) {
-    wasm.closure435_externref_shim(arg0, arg1, arg2, arg3);
+    wasm.closure434_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
@@ -291,10 +290,10 @@ export class AnnotatedJS {
         return ret;
     }
     /**
-     * @returns {(RegionSummaryJS)[]}
+     * @returns {(RegionSignatureJS)[]}
      */
-    summaries() {
-        const ret = wasm.annotatedjs_summaries(this.__wbg_ptr);
+    signatures() {
+        const ret = wasm.annotatedjs_signatures(this.__wbg_ptr);
         var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
         return v1;
@@ -377,6 +376,112 @@ export class BuilderJS {
     }
 }
 
+const RegionSignatureJSFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_regionsignaturejs_free(ptr >>> 0, 1));
+
+export class RegionSignatureJS {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(RegionSignatureJS.prototype);
+        obj.__wbg_ptr = ptr;
+        RegionSignatureJSFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        RegionSignatureJSFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_regionsignaturejs_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    get id() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.regionsignaturejs_id(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {any}
+     */
+    get group_name() {
+        const ret = wasm.regionsignaturejs_group_name(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    get centroid() {
+        const ret = wasm.regionsignaturejs_centroid(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    get bucket_width() {
+        const ret = wasm.regionsignaturejs_bucket_width(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    get lengths() {
+        const ret = wasm.regionsignaturejs_lengths(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    get dominant_degree() {
+        const ret = wasm.regionsignaturejs_dominant_degree(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    get dominant_length() {
+        const ret = wasm.regionsignaturejs_dominant_length(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} side_length
+     * @returns {string}
+     */
+    as_data_uri_image(side_length) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.regionsignaturejs_as_data_uri_image(this.__wbg_ptr, side_length);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+
 const RegionSourceJSFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_regionsourcejs_free(ptr >>> 0, 1));
@@ -393,112 +498,6 @@ export class RegionSourceJS {
     free() {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_regionsourcejs_free(ptr, 0);
-    }
-}
-
-const RegionSummaryJSFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_regionsummaryjs_free(ptr >>> 0, 1));
-
-export class RegionSummaryJS {
-
-    static __wrap(ptr) {
-        ptr = ptr >>> 0;
-        const obj = Object.create(RegionSummaryJS.prototype);
-        obj.__wbg_ptr = ptr;
-        RegionSummaryJSFinalization.register(obj, obj.__wbg_ptr, obj);
-        return obj;
-    }
-
-    __destroy_into_raw() {
-        const ptr = this.__wbg_ptr;
-        this.__wbg_ptr = 0;
-        RegionSummaryJSFinalization.unregister(this);
-        return ptr;
-    }
-
-    free() {
-        const ptr = this.__destroy_into_raw();
-        wasm.__wbg_regionsummaryjs_free(ptr, 0);
-    }
-    /**
-     * @returns {string}
-     */
-    get id() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const ret = wasm.regionsummaryjs_id(this.__wbg_ptr);
-            deferred1_0 = ret[0];
-            deferred1_1 = ret[1];
-            return getStringFromWasm0(ret[0], ret[1]);
-        } finally {
-            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
-        }
-    }
-    /**
-     * @returns {any}
-     */
-    get group_name() {
-        const ret = wasm.regionsummaryjs_group_name(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {any}
-     */
-    get centroid() {
-        const ret = wasm.regionsummaryjs_centroid(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {number}
-     */
-    get bucket_width() {
-        const ret = wasm.regionsummaryjs_bucket_width(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {any}
-     */
-    get lengths() {
-        const ret = wasm.regionsummaryjs_lengths(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {any}
-     */
-    get dominant_degree() {
-        const ret = wasm.regionsummaryjs_dominant_degree(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @returns {any}
-     */
-    get dominant_length() {
-        const ret = wasm.regionsummaryjs_dominant_length(this.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * @param {number} side_length
-     * @returns {string}
-     */
-    as_data_uri_image(side_length) {
-        let deferred2_0;
-        let deferred2_1;
-        try {
-            const ret = wasm.regionsummaryjs_as_data_uri_image(this.__wbg_ptr, side_length);
-            var ptr1 = ret[0];
-            var len1 = ret[1];
-            if (ret[3]) {
-                ptr1 = 0; len1 = 0;
-                throw takeFromExternrefTable0(ret[2]);
-            }
-            deferred2_0 = ptr1;
-            deferred2_1 = len1;
-            return getStringFromWasm0(ptr1, len1);
-        } finally {
-            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
-        }
     }
 }
 
@@ -528,11 +527,11 @@ export class SimilarRegionJS {
         wasm.__wbg_similarregionjs_free(ptr, 0);
     }
     /**
-     * @returns {RegionSummaryJS}
+     * @returns {RegionSignatureJS}
      */
-    get summary() {
-        const ret = wasm.similarregionjs_summary(this.__wbg_ptr);
-        return RegionSummaryJS.__wrap(ret);
+    get signature() {
+        const ret = wasm.similarregionjs_signature(this.__wbg_ptr);
+        return RegionSignatureJS.__wrap(ret);
     }
     /**
      * @returns {number}
@@ -767,8 +766,8 @@ function __wbg_get_imports() {
         const ret = arg0.queueMicrotask;
         return ret;
     };
-    imports.wbg.__wbg_regionsummaryjs_new = function(arg0) {
-        const ret = RegionSummaryJS.__wrap(arg0);
+    imports.wbg.__wbg_regionsignaturejs_new = function(arg0) {
+        const ret = RegionSignatureJS.__wrap(arg0);
         return ret;
     };
     imports.wbg.__wbg_resolve_0bf7c44d641804f9 = function(arg0) {
@@ -857,8 +856,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper380 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 109, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper378 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 108, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

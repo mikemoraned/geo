@@ -1,7 +1,7 @@
 use geo::Point;
 
 #[derive(Clone)]
-pub struct RegionSummary {
+pub struct RegionSignature {
     pub id: String,
     pub group_name: String,
     pub centroid: Point<f64>,
@@ -10,11 +10,11 @@ pub struct RegionSummary {
     pub dominant: (usize, f64)
 }
 
-impl RegionSummary {
+impl RegionSignature {
 
-    pub fn new(id: String, group_name: String, centroid: Point<f64>, bucket_width: f64, lengths: Vec<f64>) -> RegionSummary {
+    pub fn new(id: String, group_name: String, centroid: Point<f64>, bucket_width: f64, lengths: Vec<f64>) -> RegionSignature {
         let dominant = dominant(&lengths);
-        RegionSummary { id, group_name, centroid, bucket_width, lengths, dominant }
+        RegionSignature { id, group_name, centroid, bucket_width, lengths, dominant }
     }
 
     pub fn arrange_lengths_by_dominant_degree(&self) -> Vec<f64> {
@@ -27,7 +27,7 @@ impl RegionSummary {
         arranged
     }
 
-    pub fn distance_from(&self, other: &RegionSummary) -> f64 {
+    pub fn distance_from(&self, other: &RegionSignature) -> f64 {
         let lengths = self.arrange_lengths_by_dominant_degree();
         let other_lengths = other.arrange_lengths_by_dominant_degree();
         let mut total_diff = 0.0;

@@ -4,17 +4,17 @@ use std::collections::HashMap;
 use geo::{Bearing, Coord, CoordsIter, Distance, Geometry, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
 use web_sys::console;
 
-use crate::{region::region_group::RegionGroup, signature::region_summary::RegionSummary};
+use crate::{region::region_group::RegionGroup, signature::region_signature::RegionSignature};
 
 pub struct Annotated {
     groups: Vec<RegionGroup>,
-    pub summaries: HashMap<String,RegionSummary>
+    pub signatures: HashMap<String,RegionSignature>
 }
 
 impl Annotated {
     pub fn new(groups: Vec<RegionGroup>) -> Annotated {
-        let summaries = summaries(&groups);
-        Annotated { groups, summaries }
+        let signatures = signatures(&groups);
+        Annotated { groups, signatures }
     }
 
     pub fn centroids_geometry(&self) -> Vec<Geometry<f64>> {
@@ -56,21 +56,21 @@ impl Annotated {
     }
 
     pub fn most_similar_ids(&self, id: String, min_score: f64) -> Vec<String> {
-        self.most_similar_regions(id, min_score).into_iter().map(|(summary, _)| summary.id).collect()
+        self.most_similar_regions(id, min_score).into_iter().map(|(signature, _)| signature.id).collect()
     }
 
-    pub fn most_similar_regions(&self, target_id: String, min_score: f64) -> Vec<(RegionSummary,f64)> {
-        let target_summary = self.summaries.get(&target_id).unwrap();
+    pub fn most_similar_regions(&self, target_id: String, min_score: f64) -> Vec<(RegionSignature,f64)> {
+        let target_summary = self.signatures.get(&target_id).unwrap();
         console::log_1(&format!("finding regions similar to {target_id}, with score >= {min_score}").into());
 
-        let mut distances : Vec<(RegionSummary, f64)> = self.summaries.iter()
+        let mut distances : Vec<(RegionSignature, f64)> = self.signatures.iter()
             .filter(|(id, _summary)| target_id.as_str() != id.as_str())
-            .map(|(_id, summary)| {
-                (summary.clone(), target_summary.distance_from(&summary))
+            .map(|(_id, signature)| {
+                (signature.clone(), target_summary.distance_from(&signature))
             }).collect();
         distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
-        let scores : Vec<(RegionSummary,f64)> = distances.into_iter().map(|(summary, score)| (summary, 1.0 - score)).collect();
+        let scores : Vec<(RegionSignature,f64)> = distances.into_iter().map(|(signature, score)| (signature, 1.0 - score)).collect();
 
         scores.into_iter().filter(|(_, score)| *score >= min_score).collect()
     }
@@ -101,12 +101,12 @@ impl Annotated {
 }
 
 
-fn summaries(groups: &[RegionGroup]) -> HashMap<String, RegionSummary> {
-    let mut summaries= HashMap::new();
+fn signatures(groups: &[RegionGroup]) -> HashMap<String, RegionSignature> {
+    let mut signatures= HashMap::new();
     for group in groups.iter() {        
 
         let size = group.geometries().len();
-        console::log_1(&format!("group '{}': calculating summaries for {} geometries", group.name, size).into());
+        console::log_1(&format!("group '{}': calculating signatures for {} geometries", group.name, size).into());
 
         let bucket_width = 1.0;
         for (polygon, id, centroid) in group.geometries().iter() {
@@ -163,13 +163,13 @@ fn summaries(groups: &[RegionGroup]) -> HashMap<String, RegionSummary> {
                 }
             }).collect();
 
-            let summary = RegionSummary::new(id.clone(), group.name.clone(), centroid.clone(), bucket_width, normalised);
-            summaries.insert(id.clone(), summary);
+            let signature = RegionSignature::new(id.clone(), group.name.clone(), centroid.clone(), bucket_width, normalised);
+            signatures.insert(id.clone(), signature);
             
         }
 
-        console::log_1(&"calculated summaries".into());
+        console::log_1(&"calculated signatures".into());
     }
-    summaries
+    signatures
 }
 
