@@ -1,9 +1,7 @@
 use gloo_utils::format::JsValueSerdeExt;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
-use crate::region_summary::RegionSummary;
-
-
+use crate::signature::region_summary::RegionSummary;
 
 #[wasm_bindgen]
 #[derive(Clone)]

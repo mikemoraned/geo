@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use geo::{Bearing, Coord, CoordsIter, Distance, Geometry, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
 use web_sys::console;
 
-use crate::{region::region_group::RegionGroup, region_summary::RegionSummary};
+use crate::{region::region_group::RegionGroup, signature::region_summary::RegionSummary};
 
 pub struct Annotated {
     groups: Vec<RegionGroup>,
