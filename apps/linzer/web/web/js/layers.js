@@ -67,18 +67,7 @@ function addRegionsLayer(map, sourceDataUrl) {
 }
 
 function addCentroidsLayer(map, annotated) {
-    let centroids = annotated.centroids();
-
-    let geojsonCentroids = {
-        type: 'FeatureCollection',
-        features: centroids.map(({ x, y }) => ({
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [ x, y ]
-            }
-        }))
-    };
+    let geojsonCentroids = annotated.centroids_geojson();
 
     map.addSource('centroids', {
         type: 'geojson',

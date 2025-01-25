@@ -1,7 +1,7 @@
 
 use std::collections::HashMap;
 
-use geo::{Bearing, Coord, CoordsIter, Distance, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
+use geo::{Bearing, Coord, CoordsIter, Distance, Geometry, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
 use web_sys::console;
 
 use crate::{region_group::RegionGroup, region_summary::RegionSummary};
@@ -17,11 +17,11 @@ impl Annotated {
         Annotated { groups, summaries }
     }
 
-    pub fn centroids(&self) -> Vec<Point<f64>> {
+    pub fn centroids_geometry(&self) -> Vec<Geometry<f64>> {
         let mut centroids = vec![];
         for group in self.groups.iter() {  
             for (_polygon, _id, centroid) in group.geometries() {
-                centroids.push(centroid.clone());
+                centroids.push(Geometry::Point(centroid.clone()));
             }
         }
         centroids

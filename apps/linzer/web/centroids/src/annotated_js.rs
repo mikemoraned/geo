@@ -23,8 +23,12 @@ impl AnnotatedJS {
 
 #[wasm_bindgen]
 impl AnnotatedJS {
-    pub fn centroids(&mut self) -> JsValue {
-        return JsValue::from_serde(&self.annotated.centroids()).unwrap();
+    pub fn centroids_geojson(&mut self) -> JsValue {
+        let centroids = self.annotated.centroids_geometry().clone();
+        let geo_geometry = geo_types::GeometryCollection::from(centroids);
+
+        let geojson = geojson::FeatureCollection::from(&geo_geometry);
+        return JsValue::from_serde(&geojson).unwrap();
     }
 
     pub fn rays(&self) -> JsValue {

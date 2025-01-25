@@ -6,6 +6,7 @@
     * [x] extract named `RegionSource` which has name of source and url, and `RegionGroup` which contains the resulting regions and an associated name
     * [x] switch to center map explicitly on a lat/lon as opposed to based on centroids (avoids having to choose one automatically)
     * [x] accept multiple sources and extract Regions from all of them
+    * [x] switch the generation of GeoJSON for centroids to be done in Rust rather than JS (this is a pre-amble to doing same thing for Regions)
     * [ ] display Regions which are union of Regions from all sources
     * [x] disable fetching of similar regions whilst flying between areas
 
