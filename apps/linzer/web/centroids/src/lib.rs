@@ -8,7 +8,7 @@ mod geometry;
 mod annotated;
 mod web;
 mod region_summary;
-mod region_group;
+mod region;
 
 #[wasm_bindgen]
 pub fn testcard_at(x: f64, y: f64) -> TestCard {

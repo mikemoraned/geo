@@ -2,7 +2,7 @@ use gloo_utils::format::JsValueSerdeExt;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 use web_sys::console;
 
-use crate::{annotated::Annotated, region_group::RegionGroup};
+use crate::{annotated::Annotated, region::region_group::RegionGroup};
 
 use super::region_summary_js::RegionSummaryJS;
 

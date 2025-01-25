@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 use web_sys::console;
 
-use crate::{geometry, load, region_group::RegionGroup};
+use crate::{geometry, load, region::region_group::RegionGroup};
 
 #[wasm_bindgen]
 #[derive(Debug)]
