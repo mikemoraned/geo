@@ -1,8 +1,14 @@
 
+use annotated_js::AnnotatedJS;
+use region_source_js::RegionSourceJS;
+use testcard::TestCard;
 use wasm_bindgen::prelude::*;
-use web::{annotated_js::AnnotatedJS, region_source_js::RegionSourceJS, testcard::TestCard};
 
-mod web;
+mod annotated_js;
+mod region_signature_js;
+mod region_source_js;
+mod testcard;
+
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
