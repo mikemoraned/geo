@@ -2,3 +2,6 @@
 members = [ "domain","web"]
 resolver = "2"
 
+[workspace.dependencies]
+geo-types = { version = "0.7", features = ['serde'] }
+geo = "0.29"

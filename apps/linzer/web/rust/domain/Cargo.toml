@@ -5,10 +5,11 @@ edition = "2021"
 
 [dependencies]
 reqwest = { version = "0.12" }
-geo-types = { version = "0.7", features = ['serde'] }
-geo = "0.29"
 geozero = "0.14"
 tracing = "0.1"
+
+geo-types = { workspace = true }
+geo = { workspace = true }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
