@@ -50,7 +50,7 @@ impl RegionSignatureJS {
         use tiny_skia::*;
 
         let mut pixmap =
-            Pixmap::new(side_length, side_length).ok_or(format!("Failed to create Pixmap"))?;
+            Pixmap::new(side_length, side_length).ok_or("Failed to create Pixmap".to_string())?;
 
         let mut green = Paint::default();
         green.set_color_rgba8(0, 255, 0, 255);
@@ -60,12 +60,14 @@ impl RegionSignatureJS {
         gray.set_color_rgba8(150, 150, 150, 255);
         gray.anti_alias = true;
 
-        let mut stroke = Stroke::default();
-        stroke.width = 2.0;
+        let stroke = tiny_skia::Stroke {
+            width: 2.0,
+            ..Default::default()
+        };
 
         let radius = (side_length as f32) / 2.0;
         let circle = PathBuilder::from_circle(radius, radius, radius)
-            .ok_or(format!("Failed to create circle"))?;
+            .ok_or("Failed to create circle".to_string())?;
         pixmap.fill_path(
             &circle,
             &gray,
@@ -91,13 +93,12 @@ impl RegionSignatureJS {
         let (x, y) = x_y_pairs[0];
         pb.move_to(radius, radius);
         pb.line_to(radius + x, radius + y);
-        for i in 1..x_y_pairs.len() {
-            let (x, y) = x_y_pairs[i];
+        for (x, y) in x_y_pairs.iter().skip(1) {
             pb.line_to(radius + x, radius + y);
         }
         pb.move_to(radius, radius);
         pb.close();
-        let path = pb.finish().ok_or(format!("Failed to finish path"))?;
+        let path = pb.finish().ok_or("Failed to finish path".to_string())?;
         pixmap.stroke_path(&path, &green, &stroke, Transform::identity(), None);
 
         let png_bytes = pixmap

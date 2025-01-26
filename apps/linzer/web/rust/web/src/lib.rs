@@ -25,16 +25,9 @@ pub fn testcard_at(x: f64, y: f64) -> TestCard {
 }
 
 #[wasm_bindgen]
+#[derive(Default)]
 pub struct BuilderJS {
     sources: Vec<RegionSourceJS>,
-}
-
-impl BuilderJS {
-    pub fn new() -> BuilderJS {
-        BuilderJS {
-            sources: Vec::new(),
-        }
-    }
 }
 
 #[wasm_bindgen]
@@ -56,5 +49,5 @@ impl BuilderJS {
 
 #[wasm_bindgen]
 pub fn create_builder() -> BuilderJS {
-    BuilderJS::new()
+    BuilderJS::default()
 }

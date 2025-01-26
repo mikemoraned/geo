@@ -56,6 +56,19 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly __wbg_testcard_free: (a: number, b: number) => void;
+  readonly testcard_x: (a: number) => number;
+  readonly testcard_y: (a: number) => number;
+  readonly testcard_coord: (a: number) => any;
+  readonly testcard_bearing_north_degrees: (a: number) => number;
+  readonly testcard_bearing_east_degrees: (a: number) => number;
+  readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
+  readonly start: () => void;
+  readonly testcard_at: (a: number, b: number) => number;
+  readonly __wbg_builderjs_free: (a: number, b: number) => void;
+  readonly builderjs_source: (a: number, b: number, c: number, d: number, e: number) => void;
+  readonly builderjs_annotate: (a: number) => any;
+  readonly create_builder: () => number;
   readonly __wbg_regionsignaturejs_free: (a: number, b: number) => void;
   readonly regionsignaturejs_id: (a: number) => [number, number];
   readonly regionsignaturejs_group_name: (a: number) => any;
@@ -65,13 +78,6 @@ export interface InitOutput {
   readonly regionsignaturejs_dominant_degree: (a: number) => any;
   readonly regionsignaturejs_dominant_length: (a: number) => any;
   readonly regionsignaturejs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
-  readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
-  readonly start: () => void;
-  readonly testcard_at: (a: number, b: number) => number;
-  readonly __wbg_builderjs_free: (a: number, b: number) => void;
-  readonly builderjs_source: (a: number, b: number, c: number, d: number, e: number) => void;
-  readonly builderjs_annotate: (a: number) => any;
-  readonly create_builder: () => number;
   readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
   readonly annotatedjs_centroids_geojson_string: (a: number) => any;
   readonly annotatedjs_regions_geojson_string: (a: number) => any;
@@ -83,12 +89,6 @@ export interface InitOutput {
   readonly __wbg_similarregionjs_free: (a: number, b: number) => void;
   readonly similarregionjs_signature: (a: number) => number;
   readonly similarregionjs_score: (a: number) => number;
-  readonly __wbg_testcard_free: (a: number, b: number) => void;
-  readonly testcard_x: (a: number) => number;
-  readonly testcard_y: (a: number) => number;
-  readonly testcard_coord: (a: number) => any;
-  readonly testcard_bearing_north_degrees: (a: number) => number;
-  readonly testcard_bearing_east_degrees: (a: number) => number;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;

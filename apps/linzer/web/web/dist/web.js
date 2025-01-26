@@ -198,12 +198,6 @@ function debugString(val) {
     return className;
 }
 
-function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_export_2.get(idx);
-    wasm.__externref_table_dealloc(idx);
-    return value;
-}
-
 export function start() {
     wasm.start();
 }
@@ -224,6 +218,12 @@ export function testcard_at(x, y) {
 export function create_builder() {
     const ret = wasm.create_builder();
     return BuilderJS.__wrap(ret);
+}
+
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_export_2.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
 }
 
 function getArrayJsValueFromWasm0(ptr, len) {

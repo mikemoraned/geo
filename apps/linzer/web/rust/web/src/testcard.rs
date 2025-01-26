@@ -24,7 +24,7 @@ impl TestCard {
 
     #[wasm_bindgen(getter)]
     pub fn coord(&self) -> JsValue {
-        return JsValue::from_serde(&[self.coord.x, self.coord.y]).unwrap();
+        JsValue::from_serde(&[self.coord.x, self.coord.y]).unwrap()
     }
 
     #[wasm_bindgen(getter)]

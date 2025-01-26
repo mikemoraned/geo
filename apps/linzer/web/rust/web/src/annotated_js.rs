@@ -18,8 +18,8 @@ impl AnnotatedJS {
         let annotated = Annotated::new(groups);
         let signatures = annotated
             .signatures
-            .iter()
-            .map(|(_id, signature)| RegionSignatureJS::new(signature.clone()))
+            .values()
+            .map(|signature| RegionSignatureJS::new(signature.clone()))
             .collect();
         AnnotatedJS {
             annotated,
@@ -34,18 +34,18 @@ impl AnnotatedJS {
         let centroids = self.annotated.centroids_geometry().clone();
         let collection = geo_types::GeometryCollection::from(centroids);
 
-        return JsValue::from_str(&collection_to_geojson_string(collection));
+        JsValue::from_str(&collection_to_geojson_string(collection))
     }
 
     pub fn regions_geojson_string(&mut self) -> JsValue {
         let regions = self.annotated.regions_geometry().clone();
         let collection = geo_types::GeometryCollection::from(regions);
 
-        return JsValue::from_str(&collection_to_geojson_string(collection));
+        JsValue::from_str(&collection_to_geojson_string(collection))
     }
 
     pub fn rays(&self) -> JsValue {
-        return JsValue::from_serde(&self.annotated.rays()).unwrap();
+        JsValue::from_serde(&self.annotated.rays()).unwrap()
     }
 
     pub fn signatures(&mut self) -> Vec<RegionSignatureJS> {
@@ -54,7 +54,7 @@ impl AnnotatedJS {
 
     pub fn most_similar_ids(&mut self, id: String, min_score: f64) -> JsValue {
         let ids = self.annotated.most_similar_ids(id, min_score);
-        return JsValue::from_serde(&ids).unwrap();
+        JsValue::from_serde(&ids).unwrap()
     }
 
     pub fn most_similar_regions(
@@ -77,7 +77,7 @@ impl AnnotatedJS {
             .annotated
             .id_of_closest_centroid(&(x, y).into())
             .unwrap();
-        return JsValue::from_str(&id);
+        JsValue::from_str(&id)
     }
 }
 
