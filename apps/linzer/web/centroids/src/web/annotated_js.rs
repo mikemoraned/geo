@@ -1,8 +1,8 @@
-use std::io::{BufWriter, Cursor};
+use std::io::Cursor;
 
 use geo::Geometry;
 use geozero::geojson::GeoJsonWriter;
-use geozero::{geo_types::GeoWriter, geojson::{GeoJsonReader}, GeozeroDatasource, GeozeroGeometry};
+use geozero::GeozeroGeometry;
 use gloo_utils::format::JsValueSerdeExt;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 use web_sys::console;
@@ -30,14 +30,6 @@ impl AnnotatedJS {
 
 #[wasm_bindgen]
 impl AnnotatedJS {
-    pub fn centroids_geojson(&mut self) -> JsValue {
-        let centroids = self.annotated.centroids_geometry().clone();
-        let geo_geometry = geo_types::GeometryCollection::from(centroids);
-
-        let geojson = geojson::FeatureCollection::from(&geo_geometry);
-        return JsValue::from_serde(&geojson).unwrap();
-    }
-
     pub fn centroids_geojson_string(&mut self) -> JsValue {
         let centroids = self.annotated.centroids_geometry().clone();
         let geo_geometry = geo_types::GeometryCollection::from(centroids);
@@ -49,14 +41,6 @@ impl AnnotatedJS {
         let bytes = buf.into_inner();
         let string = String::from_utf8(bytes).unwrap();
         return JsValue::from_str(&string);
-    }
-
-    pub fn regions_geojson(&mut self) -> JsValue {
-        let centroids = self.annotated.regions_geometry().clone();
-        let geo_geometry = geo_types::GeometryCollection::from(centroids);
-
-        let geojson = geojson::FeatureCollection::from(&geo_geometry);
-        return JsValue::from_serde(&geojson).unwrap();
     }
 
     pub fn regions_geojson_string(&mut self) -> JsValue {
