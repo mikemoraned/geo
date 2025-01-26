@@ -9,9 +9,9 @@ export class AnnotatedJS {
   centroids_geojson_string(): any;
   regions_geojson_string(): any;
   rays(): any;
-  signatures(): (RegionSignatureJS)[];
+  signatures(): RegionSignatureJS[];
   most_similar_ids(id: string, min_score: number): any;
-  most_similar_regions(target_id: any, min_score: number): (SimilarRegionJS)[];
+  most_similar_regions(target_id: any, min_score: number): SimilarRegionJS[];
   id_of_closest_centroid(x: number, y: number): any;
 }
 export class BuilderJS {
@@ -99,7 +99,7 @@ export interface InitOutput {
   readonly __externref_table_dealloc: (a: number) => void;
   readonly __externref_drop_slice: (a: number, b: number) => void;
   readonly closure216_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure498_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure499_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

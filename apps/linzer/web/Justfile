@@ -1,15 +1,16 @@
 build:
-    cd centroids && wasm-pack build --release --target web --out-dir ../web/dist
+    cd rust/web && wasm-pack build --release --target web --out-dir ../../web/dist
     rm ./web/dist/.gitignore
 
 webapp:
     serve -dir web
 
 doc:
-    cd centroids && cargo doc --open
+    cd rust && cargo doc --open
 
 test:
-    cd centroids && cargo test
+    cd rust && cargo test
 
 clean:
-    cd centroids && cargo clean
+    cd rust && cargo clean
+    rm web/dist/*

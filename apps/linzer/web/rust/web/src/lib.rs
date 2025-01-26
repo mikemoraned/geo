@@ -15,6 +15,8 @@ pub fn start() -> Result<(), JsValue> {
 
     wasm_tracing::set_as_global_default();
 
+    tracing::info!("starting wasm module");
+
     Ok(())
 }
 

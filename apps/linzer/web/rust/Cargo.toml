@@ -1,0 +1,4 @@
+[workspace]
+members = [ "domain","web"]
+resolver = "2"
+
