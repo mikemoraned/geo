@@ -3,7 +3,7 @@ use std::{io::Cursor, vec};
 use geo_types::GeometryCollection;
 use geo::{Area, Geometry};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
-use tracing::info;
+use tracing::{info, warn};
 
 pub fn filter_out_by_area(collection: &GeometryCollection<f64>, minimum_size: f64) -> GeometryCollection<f64> {
     let mut filtered = vec![];
@@ -34,4 +34,19 @@ pub fn collection_to_geojson_string(collection: GeometryCollection) -> String {
 
     let bytes = buf.into_inner();
     String::from_utf8(bytes).unwrap()
+}
+
+pub fn geojson_string_to_collection(text: String) -> Result<GeometryCollection<f64>, Box<dyn std::error::Error>> {
+    use geozero::geojson::*;
+    use geozero::ToGeo;
+
+    let geojson = GeoJsonString(text);
+    if let Ok(Geometry::GeometryCollection(collection)) = geojson.to_geo() {
+        info!("Extracted geometries");
+        Ok(collection.clone())
+    }
+    else {
+        warn!("Failed to extract geometries");
+        Err("failed to extract geometries".into())
+    }
 }
