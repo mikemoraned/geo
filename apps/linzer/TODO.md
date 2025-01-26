@@ -19,6 +19,12 @@
         * [x] move any console logging to use generate tracing/logging which is bridged to wasm console logging
     * [x] apply clippy lints
 
+
+* [ ] blog post on recent changes
+    * [x] blog post
+    * [ ] add tags ability to blog
+    * [ ] update linzer app to link back to "linzer" tag on blog
+
 ## February
 
 * [ ] add hamburg
