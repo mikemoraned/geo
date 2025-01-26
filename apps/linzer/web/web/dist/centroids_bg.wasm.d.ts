@@ -1,6 +1,12 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const __wbg_testcard_free: (a: number, b: number) => void;
+export const testcard_x: (a: number) => number;
+export const testcard_y: (a: number) => number;
+export const testcard_coord: (a: number) => any;
+export const testcard_bearing_north_degrees: (a: number) => number;
+export const testcard_bearing_east_degrees: (a: number) => number;
 export const __wbg_regionsignaturejs_free: (a: number, b: number) => void;
 export const regionsignaturejs_id: (a: number) => [number, number];
 export const regionsignaturejs_group_name: (a: number) => any;
@@ -21,12 +27,6 @@ export const annotatedjs_id_of_closest_centroid: (a: number, b: number, c: numbe
 export const __wbg_similarregionjs_free: (a: number, b: number) => void;
 export const similarregionjs_signature: (a: number) => number;
 export const similarregionjs_score: (a: number) => number;
-export const __wbg_testcard_free: (a: number, b: number) => void;
-export const testcard_x: (a: number) => number;
-export const testcard_y: (a: number) => number;
-export const testcard_coord: (a: number) => any;
-export const testcard_bearing_north_degrees: (a: number) => number;
-export const testcard_bearing_east_degrees: (a: number) => number;
 export const start: () => void;
 export const testcard_at: (a: number, b: number) => number;
 export const __wbg_builderjs_free: (a: number, b: number) => void;
@@ -43,6 +43,6 @@ export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) =>
 export const __wbindgen_export_6: WebAssembly.Table;
 export const __externref_table_dealloc: (a: number) => void;
 export const __externref_drop_slice: (a: number, b: number) => void;
-export const closure206_externref_shim: (a: number, b: number, c: any) => void;
-export const closure560_externref_shim: (a: number, b: number, c: any, d: any) => void;
+export const closure216_externref_shim: (a: number, b: number, c: any) => void;
+export const closure498_externref_shim: (a: number, b: number, c: any, d: any) => void;
 export const __wbindgen_start: () => void;

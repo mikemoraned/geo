@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 
 use geo::{Bearing, Coord, CoordsIter, Distance, Geometry, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
-use web_sys::console;
+use tracing::info;
 
 use crate::{region::region_group::RegionGroup, signature::region_signature::RegionSignature};
 
@@ -61,7 +61,7 @@ impl Annotated {
 
     pub fn most_similar_regions(&self, target_id: String, min_score: f64) -> Vec<(RegionSignature,f64)> {
         let target_summary = self.signatures.get(&target_id).unwrap();
-        console::log_1(&format!("finding regions similar to {target_id}, with score >= {min_score}").into());
+        info!("finding regions similar to {target_id}, with score >= {min_score}");
 
         let mut distances : Vec<(RegionSignature, f64)> = self.signatures.iter()
             .filter(|(id, _summary)| target_id.as_str() != id.as_str())
@@ -106,7 +106,7 @@ fn signatures(groups: &[RegionGroup]) -> HashMap<String, RegionSignature> {
     for group in groups.iter() {        
 
         let size = group.geometries().len();
-        console::log_1(&format!("group '{}': calculating signatures for {} geometries", group.name, size).into());
+        info!("group '{}': calculating signatures for {} geometries", group.name, size);
 
         let bucket_width = 1.0;
         for (polygon, id, centroid) in group.geometries().iter() {
@@ -168,7 +168,7 @@ fn signatures(groups: &[RegionGroup]) -> HashMap<String, RegionSignature> {
             
         }
 
-        console::log_1(&"calculated signatures".into());
+        info!("calculated signatures");
     }
     signatures
 }

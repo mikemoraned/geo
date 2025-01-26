@@ -92,8 +92,6 @@ impl RegionSignatureJS {
         let data_uri = format!("data:image/png;base64,{}", encoded);
         
         Ok(data_uri)
-
-        // JsValue::from_serde(&self.signature.dominant.1).unwrap()
     }
 }
 

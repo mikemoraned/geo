@@ -1,7 +1,7 @@
 
 use gloo_utils::format::JsValueSerdeExt;
+use tracing::info;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-use web_sys::console;
 
 use crate::{annotated::Annotated, geometry::collection_to_geojson_string, region::region_group::RegionGroup};
 
@@ -54,7 +54,7 @@ impl AnnotatedJS {
     }
 
     pub fn most_similar_regions(&mut self, target_id: JsValue, min_score: f64) -> Vec<SimilarRegionJS> {
-        console::log_1(&format!("finding regions similar to {target_id:?}, with score >= {min_score}").into());
+        info!("finding regions similar to {target_id:?}, with score >= {min_score}");
         self.annotated.most_similar_regions(target_id.as_string().unwrap(), min_score).iter().map(|(signature, score)| {
             SimilarRegionJS::new(RegionSignatureJS::new(signature.clone()), *score)
         }).collect()

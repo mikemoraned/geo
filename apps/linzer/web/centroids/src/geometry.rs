@@ -3,7 +3,7 @@ use std::{io::Cursor, vec};
 use geo_types::GeometryCollection;
 use geo::{Area, Geometry};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
-use web_sys::console;
+use tracing::info;
 
 pub fn filter_out_by_area(collection: &GeometryCollection<f64>, minimum_size: f64) -> GeometryCollection<f64> {
     let mut filtered = vec![];
@@ -24,7 +24,7 @@ pub fn log_area_statistics(collection: &GeometryCollection<f64>) {
     let max = areas.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
     let sum: f64 = areas.iter().sum();
     let avg = sum / areas.len() as f64;
-    console::log_1(&format!("min area: {min}, max area: {max}, avg area: {avg}").into());
+    info!("min area: {min}, max area: {max}, avg area: {avg}");
 }
 
 pub fn collection_to_geojson_string(collection: GeometryCollection) -> String {

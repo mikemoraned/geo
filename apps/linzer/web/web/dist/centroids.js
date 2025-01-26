@@ -238,11 +238,11 @@ export function create_builder() {
 }
 
 function __wbg_adapter_26(arg0, arg1, arg2) {
-    wasm.closure206_externref_shim(arg0, arg1, arg2);
+    wasm.closure216_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_136(arg0, arg1, arg2, arg3) {
-    wasm.closure560_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_134(arg0, arg1, arg2, arg3) {
+    wasm.closure498_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const __wbindgen_enum_RequestCredentials = ["omit", "same-origin", "include"];
@@ -715,9 +715,6 @@ function __wbg_get_imports() {
         const ret = Symbol.iterator;
         return ret;
     };
-    imports.wbg.__wbg_log_464d1b2190ca1e04 = function(arg0) {
-        console.log(arg0);
-    };
     imports.wbg.__wbg_log_c6ef241383c92365 = function(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
         let deferred0_0;
         let deferred0_1;
@@ -770,7 +767,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_136(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_134(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -925,8 +922,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper578 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 207, __wbg_adapter_26);
+    imports.wbg.__wbindgen_closure_wrapper588 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 217, __wbg_adapter_26);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

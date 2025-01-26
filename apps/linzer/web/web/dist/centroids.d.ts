@@ -56,6 +56,12 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly __wbg_testcard_free: (a: number, b: number) => void;
+  readonly testcard_x: (a: number) => number;
+  readonly testcard_y: (a: number) => number;
+  readonly testcard_coord: (a: number) => any;
+  readonly testcard_bearing_north_degrees: (a: number) => number;
+  readonly testcard_bearing_east_degrees: (a: number) => number;
   readonly __wbg_regionsignaturejs_free: (a: number, b: number) => void;
   readonly regionsignaturejs_id: (a: number) => [number, number];
   readonly regionsignaturejs_group_name: (a: number) => any;
@@ -76,12 +82,6 @@ export interface InitOutput {
   readonly __wbg_similarregionjs_free: (a: number, b: number) => void;
   readonly similarregionjs_signature: (a: number) => number;
   readonly similarregionjs_score: (a: number) => number;
-  readonly __wbg_testcard_free: (a: number, b: number) => void;
-  readonly testcard_x: (a: number) => number;
-  readonly testcard_y: (a: number) => number;
-  readonly testcard_coord: (a: number) => any;
-  readonly testcard_bearing_north_degrees: (a: number) => number;
-  readonly testcard_bearing_east_degrees: (a: number) => number;
   readonly start: () => void;
   readonly testcard_at: (a: number, b: number) => number;
   readonly __wbg_builderjs_free: (a: number, b: number) => void;
@@ -98,8 +98,8 @@ export interface InitOutput {
   readonly __wbindgen_export_6: WebAssembly.Table;
   readonly __externref_table_dealloc: (a: number) => void;
   readonly __externref_drop_slice: (a: number, b: number) => void;
-  readonly closure206_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure560_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure216_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure498_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 
