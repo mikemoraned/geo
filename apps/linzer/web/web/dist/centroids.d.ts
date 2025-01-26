@@ -55,6 +55,15 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly __wbg_regionsignaturejs_free: (a: number, b: number) => void;
+  readonly regionsignaturejs_id: (a: number) => [number, number];
+  readonly regionsignaturejs_group_name: (a: number) => any;
+  readonly regionsignaturejs_centroid: (a: number) => any;
+  readonly regionsignaturejs_bucket_width: (a: number) => number;
+  readonly regionsignaturejs_lengths: (a: number) => any;
+  readonly regionsignaturejs_dominant_degree: (a: number) => any;
+  readonly regionsignaturejs_dominant_length: (a: number) => any;
+  readonly regionsignaturejs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
   readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
   readonly annotatedjs_centroids_geojson_string: (a: number) => any;
   readonly annotatedjs_regions_geojson_string: (a: number) => any;
@@ -66,15 +75,6 @@ export interface InitOutput {
   readonly __wbg_similarregionjs_free: (a: number, b: number) => void;
   readonly similarregionjs_signature: (a: number) => number;
   readonly similarregionjs_score: (a: number) => number;
-  readonly __wbg_regionsignaturejs_free: (a: number, b: number) => void;
-  readonly regionsignaturejs_id: (a: number) => [number, number];
-  readonly regionsignaturejs_group_name: (a: number) => any;
-  readonly regionsignaturejs_centroid: (a: number) => any;
-  readonly regionsignaturejs_bucket_width: (a: number) => number;
-  readonly regionsignaturejs_lengths: (a: number) => any;
-  readonly regionsignaturejs_dominant_degree: (a: number) => any;
-  readonly regionsignaturejs_dominant_length: (a: number) => any;
-  readonly regionsignaturejs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
   readonly testcard_at: (a: number, b: number) => number;
   readonly __wbg_builderjs_free: (a: number, b: number) => void;
   readonly builderjs_source: (a: number, b: number, c: number, d: number, e: number) => void;
@@ -93,11 +93,11 @@ export interface InitOutput {
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_export_5: WebAssembly.Table;
-  readonly __externref_drop_slice: (a: number, b: number) => void;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __externref_table_dealloc: (a: number) => void;
-  readonly closure114_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure441_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly __externref_drop_slice: (a: number, b: number) => void;
+  readonly closure113_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure440_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

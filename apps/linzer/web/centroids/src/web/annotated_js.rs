@@ -1,13 +1,9 @@
-use std::io::Cursor;
 
-use geo::Geometry;
-use geozero::geojson::GeoJsonWriter;
-use geozero::GeozeroGeometry;
 use gloo_utils::format::JsValueSerdeExt;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 use web_sys::console;
 
-use crate::{annotated::Annotated, region::region_group::RegionGroup};
+use crate::{annotated::Annotated, geometry::collection_to_geojson_string, region::region_group::RegionGroup};
 
 use super::region_signature_js::RegionSignatureJS;
 
@@ -32,28 +28,16 @@ impl AnnotatedJS {
 impl AnnotatedJS {
     pub fn centroids_geojson_string(&mut self) -> JsValue {
         let centroids = self.annotated.centroids_geometry().clone();
-        let geo_geometry = geo_types::GeometryCollection::from(centroids);
+        let collection = geo_types::GeometryCollection::from(centroids);
 
-        let mut buf = Cursor::new(Vec::new());
-        let mut geo_writer = GeoJsonWriter::new(&mut buf);
-        Geometry::GeometryCollection(geo_geometry).process_geom(&mut geo_writer).unwrap();
-
-        let bytes = buf.into_inner();
-        let string = String::from_utf8(bytes).unwrap();
-        return JsValue::from_str(&string);
+        return JsValue::from_str(&collection_to_geojson_string(collection));
     }
 
     pub fn regions_geojson_string(&mut self) -> JsValue {
-        let centroids = self.annotated.regions_geometry().clone();
-        let geo_geometry = geo_types::GeometryCollection::from(centroids);
+        let regions = self.annotated.regions_geometry().clone();
+        let collection = geo_types::GeometryCollection::from(regions);
 
-        let mut buf = Cursor::new(Vec::new());
-        let mut geo_writer = GeoJsonWriter::new(&mut buf);
-        Geometry::GeometryCollection(geo_geometry).process_geom(&mut geo_writer).unwrap();
-
-        let bytes = buf.into_inner();
-        let string = String::from_utf8(bytes).unwrap();
-        return JsValue::from_str(&string);
+        return JsValue::from_str(&collection_to_geojson_string(collection));
     }
 
     pub fn rays(&self) -> JsValue {

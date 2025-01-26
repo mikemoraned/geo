@@ -1,6 +1,15 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const __wbg_regionsignaturejs_free: (a: number, b: number) => void;
+export const regionsignaturejs_id: (a: number) => [number, number];
+export const regionsignaturejs_group_name: (a: number) => any;
+export const regionsignaturejs_centroid: (a: number) => any;
+export const regionsignaturejs_bucket_width: (a: number) => number;
+export const regionsignaturejs_lengths: (a: number) => any;
+export const regionsignaturejs_dominant_degree: (a: number) => any;
+export const regionsignaturejs_dominant_length: (a: number) => any;
+export const regionsignaturejs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
 export const __wbg_annotatedjs_free: (a: number, b: number) => void;
 export const annotatedjs_centroids_geojson_string: (a: number) => any;
 export const annotatedjs_regions_geojson_string: (a: number) => any;
@@ -12,15 +21,6 @@ export const annotatedjs_id_of_closest_centroid: (a: number, b: number, c: numbe
 export const __wbg_similarregionjs_free: (a: number, b: number) => void;
 export const similarregionjs_signature: (a: number) => number;
 export const similarregionjs_score: (a: number) => number;
-export const __wbg_regionsignaturejs_free: (a: number, b: number) => void;
-export const regionsignaturejs_id: (a: number) => [number, number];
-export const regionsignaturejs_group_name: (a: number) => any;
-export const regionsignaturejs_centroid: (a: number) => any;
-export const regionsignaturejs_bucket_width: (a: number) => number;
-export const regionsignaturejs_lengths: (a: number) => any;
-export const regionsignaturejs_dominant_degree: (a: number) => any;
-export const regionsignaturejs_dominant_length: (a: number) => any;
-export const regionsignaturejs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
 export const testcard_at: (a: number, b: number) => number;
 export const __wbg_builderjs_free: (a: number, b: number) => void;
 export const builderjs_source: (a: number, b: number, c: number, d: number, e: number) => void;
@@ -39,9 +39,9 @@ export const __wbindgen_export_2: WebAssembly.Table;
 export const __wbindgen_malloc: (a: number, b: number) => number;
 export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
 export const __wbindgen_export_5: WebAssembly.Table;
-export const __externref_drop_slice: (a: number, b: number) => void;
 export const __wbindgen_free: (a: number, b: number, c: number) => void;
 export const __externref_table_dealloc: (a: number) => void;
-export const closure114_externref_shim: (a: number, b: number, c: any) => void;
-export const closure441_externref_shim: (a: number, b: number, c: any, d: any) => void;
+export const __externref_drop_slice: (a: number, b: number) => void;
+export const closure113_externref_shim: (a: number, b: number, c: any) => void;
+export const closure440_externref_shim: (a: number, b: number, c: any, d: any) => void;
 export const __wbindgen_start: () => void;
