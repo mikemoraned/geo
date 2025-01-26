@@ -4,19 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ['console'] }
 reqwest = { version = "0.12" }
 geo-types = { version = "0.7", features = ['serde'] }
 geo = "0.29"
 geozero = "0.14"
-gloo-utils = { version = "0.2", features = ["serde"] }
 serde = "1.0"
-tiny-skia = "0.11"
 base64 = "0.22"
-wasm-tracing = "1.0"
-console_error_panic_hook = "0.1"
 tracing = "0.1"
 
 [lib]

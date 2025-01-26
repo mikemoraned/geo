@@ -71,6 +71,7 @@ export interface InitOutput {
   readonly regionsignaturejs_dominant_degree: (a: number) => any;
   readonly regionsignaturejs_dominant_length: (a: number) => any;
   readonly regionsignaturejs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
+  readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
   readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
   readonly annotatedjs_centroids_geojson_string: (a: number) => any;
   readonly annotatedjs_regions_geojson_string: (a: number) => any;
@@ -88,7 +89,6 @@ export interface InitOutput {
   readonly builderjs_source: (a: number, b: number, c: number, d: number, e: number) => void;
   readonly builderjs_annotate: (a: number) => any;
   readonly create_builder: () => number;
-  readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;
@@ -98,8 +98,8 @@ export interface InitOutput {
   readonly __wbindgen_export_6: WebAssembly.Table;
   readonly __externref_table_dealloc: (a: number) => void;
   readonly __externref_drop_slice: (a: number, b: number) => void;
-  readonly closure202_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure485_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure204_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure487_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_start: () => void;
 }
 

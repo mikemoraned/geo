@@ -5,7 +5,6 @@ use web::{annotated_js::AnnotatedJS, region_source_js::RegionSourceJS, testcard:
 mod load;
 mod annotated;
 mod web;
-mod region;
 mod signature;
 
 #[wasm_bindgen(start)]

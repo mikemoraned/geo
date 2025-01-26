@@ -1,8 +1,8 @@
-use domain::geometry::{filter_out_by_area, geojson_string_to_collection, log_area_statistics};
+use domain::{geometry::{filter_out_by_area, geojson_string_to_collection, log_area_statistics}, region::region_group::RegionGroup};
 use tracing::{info, warn};
 use wasm_bindgen::prelude::*;
 
-use crate::{load, region::region_group::RegionGroup};
+use crate::load;
 
 #[wasm_bindgen]
 #[derive(Debug)]

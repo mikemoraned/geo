@@ -216,19 +216,12 @@ name = "domain"
 version = "0.1.0"
 dependencies = [
  "base64",
- "console_error_panic_hook",
  "geo",
  "geo-types",
  "geozero",
- "gloo-utils",
  "reqwest",
  "serde",
- "tiny-skia",
  "tracing",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-tracing",
- "web-sys",
 ]
 
 [[package]]
