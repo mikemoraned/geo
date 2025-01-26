@@ -11,13 +11,13 @@
     * [x] disable fetching of similar regions whilst flying between areas
     * [x] whilst still a bit slow, only show a subset of cities (edinburgh, paris)
 
-* [ ] cleanups and speedups
+* [x] cleanups and speedups
     * [x] optimise by:
         * [x] pregenerating where possible in domain layers
         * [x] passing geojson to JS as string, which is then parsed on JS side, as docs for wasm serde imply that as a lot of back-and-forth across the JS/WASM layer
     * [x] make domain layers clean of wasm-specific annotations
         * [x] move any console logging to use generate tracing/logging which is bridged to wasm console logging
-    * [ ] apply clippy lints
+    * [x] apply clippy lints
 
 ## February
 
