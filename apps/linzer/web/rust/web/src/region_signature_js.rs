@@ -6,7 +6,7 @@ use domain::signature::region_signature::RegionSignature;
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct RegionSignatureJS {
-    signature: RegionSignature
+    signature: RegionSignature,
 }
 
 impl RegionSignatureJS {
@@ -46,10 +46,11 @@ impl RegionSignatureJS {
         JsValue::from_serde(&self.signature.dominant.1).unwrap()
     }
     pub fn as_data_uri_image(&self, side_length: u32) -> Result<String, JsValue> {
-        use tiny_skia::*;
         use base64::prelude::*;
+        use tiny_skia::*;
 
-        let mut pixmap = Pixmap::new(side_length, side_length).ok_or(format!("Failed to create Pixmap"))?;
+        let mut pixmap =
+            Pixmap::new(side_length, side_length).ok_or(format!("Failed to create Pixmap"))?;
 
         let mut green = Paint::default();
         green.set_color_rgba8(0, 255, 0, 255);
@@ -63,11 +64,23 @@ impl RegionSignatureJS {
         stroke.width = 2.0;
 
         let radius = (side_length as f32) / 2.0;
-        let circle = PathBuilder::from_circle(radius, radius, radius).ok_or(format!("Failed to create circle"))?;
-        pixmap.fill_path(&circle, &gray, FillRule::EvenOdd, Transform::identity(), None);
+        let circle = PathBuilder::from_circle(radius, radius, radius)
+            .ok_or(format!("Failed to create circle"))?;
+        pixmap.fill_path(
+            &circle,
+            &gray,
+            FillRule::EvenOdd,
+            Transform::identity(),
+            None,
+        );
 
         let mut x_y_pairs = vec![];
-        for (degree, length) in self.signature.arrange_lengths_by_dominant_degree().iter().enumerate() {
+        for (degree, length) in self
+            .signature
+            .arrange_lengths_by_dominant_degree()
+            .iter()
+            .enumerate()
+        {
             let radians = (degree as f32).to_radians();
             let length = *length as f32;
             let x = radians.cos() * length * radius;
@@ -87,11 +100,12 @@ impl RegionSignatureJS {
         let path = pb.finish().ok_or(format!("Failed to finish path"))?;
         pixmap.stroke_path(&path, &green, &stroke, Transform::identity(), None);
 
-        let png_bytes = pixmap.encode_png().map_err(|e| format!("Failed to create encode PNG: {e:?}"))?;
+        let png_bytes = pixmap
+            .encode_png()
+            .map_err(|e| format!("Failed to create encode PNG: {e:?}"))?;
         let encoded = BASE64_STANDARD.encode(&png_bytes);
         let data_uri = format!("data:image/png;base64,{}", encoded);
-        
+
         Ok(data_uri)
     }
 }
-

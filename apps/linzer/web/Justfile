@@ -2,6 +2,12 @@ build:
     cd rust/web && wasm-pack build --release --target web --out-dir ../../web/dist
     rm ./web/dist/.gitignore
 
+format:
+    cd rust && cargo fmt --all
+
+lint:
+    cd rust && cargo clippy --all-targets --all-features -- -D warnings
+
 webapp:
     serve -dir web
 

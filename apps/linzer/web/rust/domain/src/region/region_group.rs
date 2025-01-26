@@ -2,13 +2,13 @@ use geo::{Centroid, Geometry, GeometryCollection, Point, Polygon};
 
 pub struct RegionGroup {
     pub name: String,
-    geometries: Vec<(Polygon<f64>, String, Point<f64>)>
+    geometries: Vec<(Polygon<f64>, String, Point<f64>)>,
 }
 
 impl RegionGroup {
     pub fn new(name: String, collection: GeometryCollection<f64>) -> RegionGroup {
         let mut geometries = vec![];
-        for (i, geometry ) in collection.iter().enumerate() {
+        for (i, geometry) in collection.iter().enumerate() {
             if let Geometry::Polygon(polygon) = geometry {
                 let centroid = polygon.centroid().unwrap();
                 let id = format!("{}-{}", name, i);
@@ -45,13 +45,16 @@ mod test {
         assert_eq!(geometries.len(), 1);
         let (polygon, id, centroid) = &geometries[0];
         assert_eq!(id, "test-0");
-        assert_eq!(polygon.exterior(), &line_string![
-            (x: 0.0, y: 0.0),
-            (x: 1.0, y: 0.0),
-            (x: 1.0, y: 1.0),
-            (x: 0.0, y: 1.0),
-            (x: 0.0, y: 0.0)
-        ]);
+        assert_eq!(
+            polygon.exterior(),
+            &line_string![
+                (x: 0.0, y: 0.0),
+                (x: 1.0, y: 0.0),
+                (x: 1.0, y: 1.0),
+                (x: 0.0, y: 1.0),
+                (x: 0.0, y: 0.0)
+            ]
+        );
         assert_eq!(centroid, &Point::new(0.5, 0.5));
     }
 

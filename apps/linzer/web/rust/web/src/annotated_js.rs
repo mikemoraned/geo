@@ -1,4 +1,3 @@
-
 use domain::{geometry::collection_to_geojson_string, region::region_group::RegionGroup};
 use gloo_utils::format::JsValueSerdeExt;
 use tracing::info;
@@ -11,17 +10,21 @@ use super::region_signature_js::RegionSignatureJS;
 #[wasm_bindgen]
 pub struct AnnotatedJS {
     annotated: Annotated,
-    signatures: Vec<RegionSignatureJS>
+    signatures: Vec<RegionSignatureJS>,
 }
 
 impl AnnotatedJS {
     pub fn new(groups: Vec<RegionGroup>) -> AnnotatedJS {
         let annotated = Annotated::new(groups);
-        let signatures = 
-            annotated.signatures.iter()
+        let signatures = annotated
+            .signatures
+            .iter()
             .map(|(_id, signature)| RegionSignatureJS::new(signature.clone()))
             .collect();
-        AnnotatedJS { annotated, signatures }
+        AnnotatedJS {
+            annotated,
+            signatures,
+        }
     }
 }
 
@@ -54,15 +57,26 @@ impl AnnotatedJS {
         return JsValue::from_serde(&ids).unwrap();
     }
 
-    pub fn most_similar_regions(&mut self, target_id: JsValue, min_score: f64) -> Vec<SimilarRegionJS> {
+    pub fn most_similar_regions(
+        &mut self,
+        target_id: JsValue,
+        min_score: f64,
+    ) -> Vec<SimilarRegionJS> {
         info!("finding regions similar to {target_id:?}, with score >= {min_score}");
-        self.annotated.most_similar_regions(target_id.as_string().unwrap(), min_score).iter().map(|(signature, score)| {
-            SimilarRegionJS::new(RegionSignatureJS::new(signature.clone()), *score)
-        }).collect()
+        self.annotated
+            .most_similar_regions(target_id.as_string().unwrap(), min_score)
+            .iter()
+            .map(|(signature, score)| {
+                SimilarRegionJS::new(RegionSignatureJS::new(signature.clone()), *score)
+            })
+            .collect()
     }
 
     pub fn id_of_closest_centroid(&mut self, x: f64, y: f64) -> JsValue {
-        let id = self.annotated.id_of_closest_centroid(&(x, y).into()).unwrap();
+        let id = self
+            .annotated
+            .id_of_closest_centroid(&(x, y).into())
+            .unwrap();
         return JsValue::from_str(&id);
     }
 }
@@ -70,7 +84,7 @@ impl AnnotatedJS {
 #[wasm_bindgen]
 pub struct SimilarRegionJS {
     signature: RegionSignatureJS,
-    score: f64
+    score: f64,
 }
 
 impl SimilarRegionJS {

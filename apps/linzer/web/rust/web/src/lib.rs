@@ -1,4 +1,3 @@
-
 use annotated_js::AnnotatedJS;
 use region_source_js::RegionSourceJS;
 use testcard::TestCard;
@@ -8,7 +7,6 @@ mod annotated_js;
 mod region_signature_js;
 mod region_source_js;
 mod testcard;
-
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
@@ -28,12 +26,14 @@ pub fn testcard_at(x: f64, y: f64) -> TestCard {
 
 #[wasm_bindgen]
 pub struct BuilderJS {
-    sources: Vec<RegionSourceJS>
+    sources: Vec<RegionSourceJS>,
 }
 
 impl BuilderJS {
     pub fn new() -> BuilderJS {
-        BuilderJS { sources: Vec::new() }
+        BuilderJS {
+            sources: Vec::new(),
+        }
     }
 }
 
@@ -58,4 +58,3 @@ impl BuilderJS {
 pub fn create_builder() -> BuilderJS {
     BuilderJS::new()
 }
-

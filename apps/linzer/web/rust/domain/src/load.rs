@@ -1,4 +1,3 @@
-
 use tracing::{info, warn};
 
 pub async fn fetch_text(source_url: &String) -> Result<String, Box<dyn std::error::Error>> {
@@ -12,7 +11,7 @@ pub async fn fetch_text(source_url: &String) -> Result<String, Box<dyn std::erro
             let text = response.text().await?;
             info!("Fetched text");
             Ok(text)
-        },
+        }
         status => {
             warn!("Response status: NOT OK: {status}");
             Err("failed to fetch geojson".into())
