@@ -19,5 +19,7 @@ wasm-tracing = "1.0"
 console_error_panic_hook = "0.1"
 tracing = "0.1"
 
+domain = { path = "../domain" }
+
 [lib]
 crate-type = ["cdylib","rlib"]

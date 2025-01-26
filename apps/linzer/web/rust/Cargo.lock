@@ -1797,6 +1797,7 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "console_error_panic_hook",
+ "domain",
  "geo",
  "geo-types",
  "geozero",

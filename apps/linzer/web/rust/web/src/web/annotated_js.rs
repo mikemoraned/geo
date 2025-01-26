@@ -1,9 +1,10 @@
 
+use domain::geometry::collection_to_geojson_string;
 use gloo_utils::format::JsValueSerdeExt;
 use tracing::info;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
-use crate::{annotated::Annotated, geometry::collection_to_geojson_string, region::region_group::RegionGroup};
+use crate::{annotated::Annotated, region::region_group::RegionGroup};
 
 use super::region_signature_js::RegionSignatureJS;
 
