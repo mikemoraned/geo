@@ -1,8 +1,4 @@
-dev:
-    cd centroids && wasm-pack build --dev --target web --out-dir ../web/dist
-    rm ./web/dist/.gitignore
-
-release:
+build:
     cd centroids && wasm-pack build --release --target web --out-dir ../web/dist
     rm ./web/dist/.gitignore
 
