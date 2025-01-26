@@ -16,7 +16,7 @@
         * [x] pregenerating where possible in domain layers
         * [x] passing geojson to JS as string, which is then parsed on JS side, as docs for wasm serde imply that as a lot of back-and-forth across the JS/WASM layer
     * [ ] make domain layers clean of wasm-specific annotations
-        * [ ] move any console logging to use generate tracing/logging which is bridged to wasm console logging
+        * [x] move any console logging to use generate tracing/logging which is bridged to wasm console logging
     * [ ] ...
 
 ## February
