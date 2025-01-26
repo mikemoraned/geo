@@ -1,7 +1,6 @@
 
 use wasm_bindgen::prelude::*;
 use web::{annotated_js::AnnotatedJS, region_source_js::RegionSourceJS, testcard::TestCard};
-use web_sys::console;
 
 mod load;
 mod geometry;
@@ -9,6 +8,15 @@ mod annotated;
 mod web;
 mod region;
 mod signature;
+
+#[wasm_bindgen(start)]
+pub fn start() -> Result<(), JsValue> {
+    console_error_panic_hook::set_once();
+
+    wasm_tracing::set_as_global_default();
+
+    Ok(())
+}
 
 #[wasm_bindgen]
 pub fn testcard_at(x: f64, y: f64) -> TestCard {
@@ -29,12 +37,12 @@ impl BuilderJS {
 #[wasm_bindgen]
 impl BuilderJS {
     pub fn source(&mut self, name: String, url: String) {
-        console::log_1(&format!("adding source for group '{name}' at {url}").into());
+        tracing::info!("adding source for group '{}' at {}", name, url);
         self.sources.push(RegionSourceJS::new(name, url));
     }
 
     pub async fn annotate(&self) -> Result<AnnotatedJS, JsValue> {
-        console::log_1(&format!("generating annotations from sources: {:?}", self.sources).into());
+        tracing::info!("generating annotations from sources: {:?}", self.sources);
         let mut groups = vec![];
         for source in &self.sources {
             groups.push(source.fetch().await?);

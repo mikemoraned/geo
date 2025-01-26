@@ -15,6 +15,9 @@ gloo-utils = { version = "0.2", features = ["serde"] }
 serde = "1.0"
 tiny-skia = "0.11"
 base64 = "0.22"
+wasm-tracing = "1.0"
+console_error_panic_hook = "0.1"
+tracing = "0.1"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
