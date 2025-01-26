@@ -62,6 +62,7 @@ export interface InitOutput {
   readonly testcard_coord: (a: number) => any;
   readonly testcard_bearing_north_degrees: (a: number) => number;
   readonly testcard_bearing_east_degrees: (a: number) => number;
+  readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
   readonly __wbg_regionsignaturejs_free: (a: number, b: number) => void;
   readonly regionsignaturejs_id: (a: number) => [number, number];
   readonly regionsignaturejs_group_name: (a: number) => any;
@@ -71,7 +72,6 @@ export interface InitOutput {
   readonly regionsignaturejs_dominant_degree: (a: number) => any;
   readonly regionsignaturejs_dominant_length: (a: number) => any;
   readonly regionsignaturejs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
-  readonly __wbg_regionsourcejs_free: (a: number, b: number) => void;
   readonly __wbg_annotatedjs_free: (a: number, b: number) => void;
   readonly annotatedjs_centroids_geojson_string: (a: number) => any;
   readonly annotatedjs_regions_geojson_string: (a: number) => any;

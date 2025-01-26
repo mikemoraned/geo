@@ -5,7 +5,7 @@ use domain::region::region_group::RegionGroup;
 use geo::{Bearing, Coord, CoordsIter, Distance, Geometry, Haversine, InterpolatePoint, Length, Line, LineString, MultiLineString, Point};
 use tracing::info;
 
-use crate::signature::region_signature::RegionSignature;
+use domain::signature::region_signature::RegionSignature;
 
 pub struct Annotated {
     groups: Vec<RegionGroup>,

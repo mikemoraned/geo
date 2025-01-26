@@ -1,7 +1,7 @@
 use gloo_utils::format::JsValueSerdeExt;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
-use crate::signature::region_signature::RegionSignature;
+use domain::signature::region_signature::RegionSignature;
 
 #[wasm_bindgen]
 #[derive(Clone)]
