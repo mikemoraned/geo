@@ -215,12 +215,10 @@ dependencies = [
 name = "domain"
 version = "0.1.0"
 dependencies = [
- "base64",
  "geo",
  "geo-types",
  "geozero",
  "reqwest",
- "serde",
  "tracing",
 ]
 
@@ -1793,9 +1791,7 @@ dependencies = [
  "domain",
  "geo",
  "geo-types",
- "geozero",
  "gloo-utils",
- "reqwest",
  "serde",
  "tiny-skia",
  "tracing",

@@ -8,8 +8,6 @@ reqwest = { version = "0.12" }
 geo-types = { version = "0.7", features = ['serde'] }
 geo = "0.29"
 geozero = "0.14"
-serde = "1.0"
-base64 = "0.22"
 tracing = "0.1"
 
 [lib]
