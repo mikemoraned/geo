@@ -24,7 +24,7 @@ impl Annotated {
         let mut centroids = vec![];
         for group in self.groups.iter() {
             for (_polygon, _id, centroid) in group.geometries() {
-                centroids.push(Geometry::Point(centroid.clone()));
+                centroids.push(Geometry::Point(*centroid));
             }
         }
         centroids
@@ -45,10 +45,10 @@ impl Annotated {
 
         for group in self.groups.iter() {
             for (polygon, _id, centroid) in group.geometries().iter() {
-                let centroid_coord: Coord = centroid.clone().into();
+                let centroid_coord: Coord = (*centroid).into();
                 let mut polygon_rays = vec![];
                 for coord in polygon.exterior_coords_iter() {
-                    let polygon_ray = LineString::new(vec![centroid_coord.clone(), coord]);
+                    let polygon_ray = LineString::new(vec![centroid_coord, coord]);
                     polygon_rays.push(polygon_ray);
                 }
                 rays.push(MultiLineString::new(polygon_rays));
@@ -77,7 +77,7 @@ impl Annotated {
             .signatures
             .iter()
             .filter(|(id, _summary)| target_id.as_str() != id.as_str())
-            .map(|(_id, signature)| (signature.clone(), target_summary.distance_from(&signature)))
+            .map(|(_id, signature)| (signature.clone(), target_summary.distance_from(signature)))
             .collect();
         distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
@@ -96,7 +96,7 @@ impl Annotated {
         let mut closest = None;
         for group in self.groups.iter() {
             for (_polygon, id, centroid) in group.geometries() {
-                let distance = Haversine::distance(coord.clone().into(), centroid.clone().into());
+                let distance = Haversine::distance((*coord).into(), *centroid);
                 if let Some((_, closest_distance)) = closest {
                     if distance < closest_distance {
                         closest = Some((id, distance));
@@ -131,14 +131,13 @@ fn signatures(groups: &[RegionGroup]) -> HashMap<String, RegionSignature> {
 
             let points: Vec<Point<f64>> = polygon.exterior().points().collect();
             for i in 0..points.len() {
-                let current = points[i].clone();
-                let current_bearing = Haversine::bearing(centroid.clone(), current.clone());
-                let current_length =
-                    Line::new(centroid.clone(), current.clone()).length::<Haversine>();
+                let current = points[i];
+                let current_bearing = Haversine::bearing(*centroid, current);
+                let current_length = Line::new(*centroid, current).length::<Haversine>();
                 bearing_length_pairs.push((current_bearing, current_length));
 
-                let prev = points[(i + points.len() - 1) % points.len()].clone();
-                let prev_bearing = Haversine::bearing(centroid.clone(), prev.clone());
+                let prev = points[(i + points.len() - 1) % points.len()];
+                let prev_bearing = Haversine::bearing(*centroid, prev);
 
                 let bearing_diff = (current_bearing - prev_bearing).abs();
                 if bearing_diff >= 0.5 {
@@ -147,12 +146,10 @@ fn signatures(groups: &[RegionGroup]) -> HashMap<String, RegionSignature> {
                     let step = 1.0 / num_samples as f64;
                     for i in 1..=num_samples {
                         let ratio = step * i as f64;
-                        let point =
-                            Haversine::point_at_ratio_between(prev.clone(), current.clone(), ratio);
-                        let bearing = Haversine::bearing(centroid.clone(), point.clone());
+                        let point = Haversine::point_at_ratio_between(prev, current, ratio);
+                        let bearing = Haversine::bearing(*centroid, point);
                         let degree = bearing.floor() as usize;
-                        let length =
-                            Line::new(centroid.clone(), point.clone()).length::<Haversine>();
+                        let length = Line::new(*centroid, point).length::<Haversine>();
                         bucketed_degree_length_pairs.push((degree, length));
                     }
                 };
@@ -178,19 +175,13 @@ fn signatures(groups: &[RegionGroup]) -> HashMap<String, RegionSignature> {
 
             let normalised = bucketed_by_degree
                 .into_iter()
-                .map(|bucket| {
-                    if let Some(bucket) = bucket {
-                        bucket
-                    } else {
-                        0.0
-                    }
-                })
+                .map(|bucket| bucket.unwrap_or(0.0))
                 .collect();
 
             let signature = RegionSignature::new(
                 id.clone(),
                 group.name.clone(),
-                centroid.clone(),
+                *centroid,
                 bucket_width,
                 normalised,
             );
