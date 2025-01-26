@@ -1,14 +1,14 @@
 {
-  "name": "centroids",
+  "name": "web",
   "type": "module",
   "version": "0.1.0",
   "files": [
-    "centroids_bg.wasm",
-    "centroids.js",
-    "centroids.d.ts"
+    "web_bg.wasm",
+    "web.js",
+    "web.d.ts"
   ],
-  "main": "centroids.js",
-  "types": "centroids.d.ts",
+  "main": "web.js",
+  "types": "web.d.ts",
   "sideEffects": [
     "./snippets/*"
   ]

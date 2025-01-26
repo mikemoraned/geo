@@ -38,7 +38,7 @@ function bindLayerControl(layerId, svg) {
 
 export function addSummaryLayer(layerId, map, svg, annotated, minSimilarityScore) {
     const project = mapboxProjection(map);
-    const summaries = annotated.summaries();
+    const signatures = annotated.signatures();
 
     const summariesLayer = svg.append("g")
         .attr("id", `${layerId}-layer`)
@@ -46,11 +46,11 @@ export function addSummaryLayer(layerId, map, svg, annotated, minSimilarityScore
 
     const summaryGroups = summariesLayer
         .selectAll("g")
-        .data(summaries)
+        .data(signatures)
         .enter()
         .append("g")
-        .attr("class", "summary")
-        .attr("id", d => `summary-${d.id}`);
+        .attr("class", "signature")
+        .attr("id", d => `signature-${d.id}`);
 
     const dots = summaryGroups
         .append("circle")
@@ -106,7 +106,7 @@ export function addSummaryLayer(layerId, map, svg, annotated, minSimilarityScore
         const center = map.getCenter();
         const closestId = annotated.id_of_closest_centroid(center.lng, center.lat);
         const similarIds = annotated.most_similar_ids(closestId, minSimilarityScore);
-        const selectedIds = [ closestId ].concat(similarIds).map(id => `summary-${id}`);
+        const selectedIds = [ closestId ].concat(similarIds).map(id => `signature-${id}`);
         console.log(center, closestId, similarIds, selectedIds);
 
         selectedIds.forEach(id => {
@@ -133,5 +133,5 @@ export function addSummaryLayer(layerId, map, svg, annotated, minSimilarityScore
     map.on("moveend", render);
     render();
 
-    bindLayerControl("summaries", svg);
+    bindLayerControl("signatures", svg);
 }

@@ -1,57 +1,56 @@
 use gloo_utils::format::JsValueSerdeExt;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
-use crate::region_summary::RegionSummary;
-
-
+use domain::signature::region_signature::RegionSignature;
 
 #[wasm_bindgen]
 #[derive(Clone)]
-pub struct RegionSummaryJS {
-    summary: RegionSummary
+pub struct RegionSignatureJS {
+    signature: RegionSignature,
 }
 
-impl RegionSummaryJS {
-    pub fn new(summary: RegionSummary) -> RegionSummaryJS {
-        RegionSummaryJS { summary }
+impl RegionSignatureJS {
+    pub fn new(signature: RegionSignature) -> RegionSignatureJS {
+        RegionSignatureJS { signature }
     }
 }
 
 #[wasm_bindgen]
-impl RegionSummaryJS {
+impl RegionSignatureJS {
     #[wasm_bindgen(getter)]
     pub fn id(&self) -> String {
-        self.summary.id.clone()
+        self.signature.id.clone()
     }
     #[wasm_bindgen(getter)]
     pub fn group_name(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.group_name).unwrap()
+        JsValue::from_serde(&self.signature.group_name).unwrap()
     }
     #[wasm_bindgen(getter)]
     pub fn centroid(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.centroid).unwrap()
+        JsValue::from_serde(&self.signature.centroid).unwrap()
     }
     #[wasm_bindgen(getter)]
     pub fn bucket_width(&self) -> f64 {
-        self.summary.bucket_width
+        self.signature.bucket_width
     }
     #[wasm_bindgen(getter)]
     pub fn lengths(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.lengths).unwrap()
+        JsValue::from_serde(&self.signature.lengths).unwrap()
     }
     #[wasm_bindgen(getter)]
     pub fn dominant_degree(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.dominant.0).unwrap()
+        JsValue::from_serde(&self.signature.dominant.0).unwrap()
     }
     #[wasm_bindgen(getter)]
     pub fn dominant_length(&self) -> JsValue {
-        JsValue::from_serde(&self.summary.dominant.1).unwrap()
+        JsValue::from_serde(&self.signature.dominant.1).unwrap()
     }
     pub fn as_data_uri_image(&self, side_length: u32) -> Result<String, JsValue> {
-        use tiny_skia::*;
         use base64::prelude::*;
+        use tiny_skia::*;
 
-        let mut pixmap = Pixmap::new(side_length, side_length).ok_or(format!("Failed to create Pixmap"))?;
+        let mut pixmap =
+            Pixmap::new(side_length, side_length).ok_or("Failed to create Pixmap".to_string())?;
 
         let mut green = Paint::default();
         green.set_color_rgba8(0, 255, 0, 255);
@@ -61,15 +60,29 @@ impl RegionSummaryJS {
         gray.set_color_rgba8(150, 150, 150, 255);
         gray.anti_alias = true;
 
-        let mut stroke = Stroke::default();
-        stroke.width = 2.0;
+        let stroke = tiny_skia::Stroke {
+            width: 2.0,
+            ..Default::default()
+        };
 
         let radius = (side_length as f32) / 2.0;
-        let circle = PathBuilder::from_circle(radius, radius, radius).ok_or(format!("Failed to create circle"))?;
-        pixmap.fill_path(&circle, &gray, FillRule::EvenOdd, Transform::identity(), None);
+        let circle = PathBuilder::from_circle(radius, radius, radius)
+            .ok_or("Failed to create circle".to_string())?;
+        pixmap.fill_path(
+            &circle,
+            &gray,
+            FillRule::EvenOdd,
+            Transform::identity(),
+            None,
+        );
 
         let mut x_y_pairs = vec![];
-        for (degree, length) in self.summary.arrange_lengths_by_dominant_degree().iter().enumerate() {
+        for (degree, length) in self
+            .signature
+            .arrange_lengths_by_dominant_degree()
+            .iter()
+            .enumerate()
+        {
             let radians = (degree as f32).to_radians();
             let length = *length as f32;
             let x = radians.cos() * length * radius;
@@ -80,22 +93,20 @@ impl RegionSummaryJS {
         let (x, y) = x_y_pairs[0];
         pb.move_to(radius, radius);
         pb.line_to(radius + x, radius + y);
-        for i in 1..x_y_pairs.len() {
-            let (x, y) = x_y_pairs[i];
+        for (x, y) in x_y_pairs.iter().skip(1) {
             pb.line_to(radius + x, radius + y);
         }
         pb.move_to(radius, radius);
         pb.close();
-        let path = pb.finish().ok_or(format!("Failed to finish path"))?;
+        let path = pb.finish().ok_or("Failed to finish path".to_string())?;
         pixmap.stroke_path(&path, &green, &stroke, Transform::identity(), None);
 
-        let png_bytes = pixmap.encode_png().map_err(|e| format!("Failed to create encode PNG: {e:?}"))?;
+        let png_bytes = pixmap
+            .encode_png()
+            .map_err(|e| format!("Failed to create encode PNG: {e:?}"))?;
         let encoded = BASE64_STANDARD.encode(&png_bytes);
         let data_uri = format!("data:image/png;base64,{}", encoded);
-        
-        Ok(data_uri)
 
-        // JsValue::from_serde(&self.summary.dominant.1).unwrap()
+        Ok(data_uri)
     }
 }
-

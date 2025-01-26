@@ -24,7 +24,7 @@ impl TestCard {
 
     #[wasm_bindgen(getter)]
     pub fn coord(&self) -> JsValue {
-        return JsValue::from_serde(&[ self.coord.x, self.coord.y ]).unwrap();
+        JsValue::from_serde(&[self.coord.x, self.coord.y]).unwrap()
     }
 
     #[wasm_bindgen(getter)]
@@ -40,10 +40,15 @@ impl TestCard {
 
 impl TestCard {
     pub fn new(coord: Coord) -> TestCard {
-        let offset =  0.01;
+        let offset = 0.01;
         let center_point: Point = coord.into();
         let northern_point = Point::new(coord.x, coord.y + offset);
         let east_point = Point::new(coord.x + offset, coord.y);
-        TestCard { coord, center_point, northern_point, east_point }
+        TestCard {
+            coord,
+            center_point,
+            northern_point,
+            east_point,
+        }
     }
 }

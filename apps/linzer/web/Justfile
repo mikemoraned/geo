@@ -1,10 +1,22 @@
-dev:
-    cd centroids && wasm-pack build --dev --target web --out-dir ../web/dist
+build:
+    cd rust/web && wasm-pack build --release --target web --out-dir ../../web/dist
     rm ./web/dist/.gitignore
 
-release:
-    cd centroids && wasm-pack build --release --target web --out-dir ../web/dist
-    rm ./web/dist/.gitignore
+format:
+    cd rust && cargo fmt --all
+
+lint:
+    cd rust && cargo clippy --all-targets --all-features -- -D warnings
 
 webapp:
     serve -dir web
+
+doc:
+    cd rust && cargo doc --open
+
+test:
+    cd rust && cargo test
+
+clean:
+    cd rust && cargo clean
+    rm web/dist/*
