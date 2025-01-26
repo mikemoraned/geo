@@ -2,7 +2,7 @@ use domain::{geometry::{filter_out_by_area, geojson_string_to_collection, log_ar
 use tracing::{info, warn};
 use wasm_bindgen::prelude::*;
 
-use crate::load;
+use domain::load;
 
 #[wasm_bindgen]
 #[derive(Debug)]

@@ -2,8 +2,6 @@
 use wasm_bindgen::prelude::*;
 use web::{annotated_js::AnnotatedJS, region_source_js::RegionSourceJS, testcard::TestCard};
 
-mod load;
-mod annotated;
 mod web;
 
 #[wasm_bindgen(start)]

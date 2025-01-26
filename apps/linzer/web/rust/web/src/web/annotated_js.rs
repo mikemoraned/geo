@@ -4,7 +4,7 @@ use gloo_utils::format::JsValueSerdeExt;
 use tracing::info;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
-use crate::annotated::Annotated;
+use domain::annotated::Annotated;
 
 use super::region_signature_js::RegionSignatureJS;
 

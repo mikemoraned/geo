@@ -1,13 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
-export const __wbg_testcard_free: (a: number, b: number) => void;
-export const testcard_x: (a: number) => number;
-export const testcard_y: (a: number) => number;
-export const testcard_coord: (a: number) => any;
-export const testcard_bearing_north_degrees: (a: number) => number;
-export const testcard_bearing_east_degrees: (a: number) => number;
-export const __wbg_regionsourcejs_free: (a: number, b: number) => void;
 export const __wbg_regionsignaturejs_free: (a: number, b: number) => void;
 export const regionsignaturejs_id: (a: number) => [number, number];
 export const regionsignaturejs_group_name: (a: number) => any;
@@ -17,6 +10,13 @@ export const regionsignaturejs_lengths: (a: number) => any;
 export const regionsignaturejs_dominant_degree: (a: number) => any;
 export const regionsignaturejs_dominant_length: (a: number) => any;
 export const regionsignaturejs_as_data_uri_image: (a: number, b: number) => [number, number, number, number];
+export const __wbg_regionsourcejs_free: (a: number, b: number) => void;
+export const start: () => void;
+export const testcard_at: (a: number, b: number) => number;
+export const __wbg_builderjs_free: (a: number, b: number) => void;
+export const builderjs_source: (a: number, b: number, c: number, d: number, e: number) => void;
+export const builderjs_annotate: (a: number) => any;
+export const create_builder: () => number;
 export const __wbg_annotatedjs_free: (a: number, b: number) => void;
 export const annotatedjs_centroids_geojson_string: (a: number) => any;
 export const annotatedjs_regions_geojson_string: (a: number) => any;
@@ -28,12 +28,12 @@ export const annotatedjs_id_of_closest_centroid: (a: number, b: number, c: numbe
 export const __wbg_similarregionjs_free: (a: number, b: number) => void;
 export const similarregionjs_signature: (a: number) => number;
 export const similarregionjs_score: (a: number) => number;
-export const start: () => void;
-export const testcard_at: (a: number, b: number) => number;
-export const __wbg_builderjs_free: (a: number, b: number) => void;
-export const builderjs_source: (a: number, b: number, c: number, d: number, e: number) => void;
-export const builderjs_annotate: (a: number) => any;
-export const create_builder: () => number;
+export const __wbg_testcard_free: (a: number, b: number) => void;
+export const testcard_x: (a: number) => number;
+export const testcard_y: (a: number) => number;
+export const testcard_coord: (a: number) => any;
+export const testcard_bearing_north_degrees: (a: number) => number;
+export const testcard_bearing_east_degrees: (a: number) => number;
 export const __wbindgen_exn_store: (a: number) => void;
 export const __externref_table_alloc: () => number;
 export const __wbindgen_export_2: WebAssembly.Table;
@@ -43,6 +43,6 @@ export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) =>
 export const __wbindgen_export_6: WebAssembly.Table;
 export const __externref_table_dealloc: (a: number) => void;
 export const __externref_drop_slice: (a: number, b: number) => void;
-export const closure204_externref_shim: (a: number, b: number, c: any) => void;
-export const closure487_externref_shim: (a: number, b: number, c: any, d: any) => void;
+export const closure403_externref_shim: (a: number, b: number, c: any) => void;
+export const closure425_externref_shim: (a: number, b: number, c: any, d: any) => void;
 export const __wbindgen_start: () => void;
