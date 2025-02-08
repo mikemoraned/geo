@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Drag and Drop File Upload</title>
+    <style>
+        #drop_zone {
+            width: 300px;
+            height: 200px;
+            border: 2px dashed #007BFF;
+            border-radius: 5px;
+            text-align: center;
+            line-height: 200px;
+            color: #007BFF;
+            font-family: Arial, sans-serif;
+            margin: 50px auto;
+        }
+        #drop_zone.highlight {
+            background-color: #e9f5ff;
+        }
+        #file_list {
+            margin-top: 20px;
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+
+<div id="drop_zone">Drag and drop files here</div>
+<div id="file_list"></div>
+
+<script>
+    const dropZone = document.getElementById('drop_zone');
+    const fileList = document.getElementById('file_list');
+
+    // Prevent default behaviors for drag-and-drop events
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    // Highlight drop zone when file is dragged over it
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.add('highlight'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.remove('highlight'), false);
+    });
+
+    // Handle dropped files
+    dropZone.addEventListener('drop', handleDrop, false);
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        handleFiles(files);
+    }
+
+    function handleFiles(files) {
+        files = [...files];
+        files.forEach(displayFile);
+    }
+
+    function displayFile(file) {
+        const div = document.createElement('div');
+        div.textContent = `File: ${file.name} (${file.type || 'N/A'}) - ${file.size} bytes`;
+        fileList.appendChild(div);
+    }
+</script>
+
+</body>
+</html>
