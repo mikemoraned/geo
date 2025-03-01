@@ -5,6 +5,6 @@ primary_region = 'lhr'
 dockerfile = "Dockerfile"
 
 [[vm]]
-memory = '1gb'
-cpu_kind = 'shared'
-cpus = 1
+memory = '128GB'
+cpu_kind = 'performance'
+cpus = 16
