@@ -32,4 +32,5 @@ ENTRYPOINT []
 EXPOSE 8888
 
 # Run Jupyter Lab
-CMD jupyter lab --ip=$FLY_PRIVATE_IP --port=8888 --no-browser --allow-root
+CMD jupyter lab --ip=$FLY_PRIVATE_IP --port=8888 --no-browser --allow-root --JupyterApp.config_file=/app/jupyter_lab_config.py
+
