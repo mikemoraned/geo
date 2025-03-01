@@ -1,0 +1,6 @@
+lab:
+    uv run jupyter lab
+
+remote:
+    fly deploy --app overturemaps-notebook --remote-only
+    fly proxy --app overturemaps-notebook 8888:8888
