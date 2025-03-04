@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+    <title></title>
+    <link rel="self" type="application/atom+xml" href="https://geo.houseofmoran.io/atom.xml"/>
+    <link rel="alternate" type="text/html" href="https://geo.houseofmoran.io"/>
+    <generator uri="https://www.getzola.org/">Zola</generator>
+    <updated>2025-01-26T00:00:00+00:00</updated>
+    <id>https://geo.houseofmoran.io/atom.xml</id>
+    <entry xml:lang="en">
+        <title>Linzer: Similar Regions Across Multiple Cities</title>
+        <published>2025-01-26T00:00:00+00:00</published>
+        <updated>2025-01-26T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Mike Moran
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://geo.houseofmoran.io/posts/2025-01-26/"/>
+        <id>https://geo.houseofmoran.io/posts/2025-01-26/</id>
+        
+        <content type="html" xml:base="https://geo.houseofmoran.io/posts/2025-01-26/">&lt;p&gt;It was great to get along to my second &lt;a href=&quot;https:&#x2F;&#x2F;lu.ma&#x2F;0d99mx3r&quot;&gt;&quot;Makers gonna make&quot;&lt;&#x2F;a&gt; event at Codebase on Saturday, despite the Red Weather Warning on Friday. Many thanks to &lt;a href=&quot;https:&#x2F;&#x2F;www.linkedin.com&#x2F;in&#x2F;peter-trizuliak&#x2F;&quot;&gt;Peter Trizuliak&lt;&#x2F;a&gt; for organising.&lt;&#x2F;p&gt;
+&lt;p&gt;It&#x27;s a pretty laid-back environment with a nice mix of focus time, breaks for pizza and free coffee &#x2F; food (thanks to sponsors, &lt;a href=&quot;https:&#x2F;&#x2F;www.shopify.com&#x2F;uk&quot;&gt;Shopify&lt;&#x2F;a&gt;, &lt;a href=&quot;https:&#x2F;&#x2F;thisiscodebase.com&quot;&gt;Codebase&lt;&#x2F;a&gt; and &lt;a href=&quot;https:&#x2F;&#x2F;www.thesourcecoffee.co.uk&#x2F;brewd&quot;&gt;The Source Coffee roasters&lt;&#x2F;a&gt;). You can present what you&#x27;ve done and&#x2F;or head to pub later, but no pressure to do either. The &lt;a href=&quot;https:&#x2F;&#x2F;lu.ma&#x2F;c410sjxy&quot;&gt;next event is coming up in February&lt;&#x2F;a&gt;; I unfortunately can&#x27;t make this one, but maybe see you at another!&lt;&#x2F;p&gt;
+&lt;figure class=&quot;image is-2by1&quot;&gt;
+&lt;iframe
+    class=&quot;youtube has-ratio&quot;
+    width=&quot;560&quot;
+    height=&quot;315&quot;
+    src=&quot;&quot;
+    data-src=&quot;https:&#x2F;&#x2F;www.youtube-nocookie.com&#x2F;embed&#x2F;ebPuT4rWffc&quot;
+    title=&quot;YouTube video player&quot;
+    frameborder=&quot;0&quot;
+    allow=&quot;accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture&quot;
+    allowfullscreen&gt;s
+&lt;&#x2F;iframe&gt;
+&lt;&#x2F;figure&gt;
+&lt;p&gt;&lt;br&gt;&lt;&#x2F;br&gt;&lt;&#x2F;p&gt;
+&lt;p&gt;I worked on some extensions and performance tweaks to make my &lt;a href=&quot;https:&#x2F;&#x2F;linzer.houseofmoran.io&quot;&gt;Linzer&lt;&#x2F;a&gt; app work with multiple cities (see &lt;a href=&quot;https:&#x2F;&#x2F;geo.houseofmoran.io&#x2F;posts&#x2F;2025-01-07&#x2F;&quot;&gt;previous blog post&lt;&#x2F;a&gt; for some context). I mainly did this to continue providing examples that the Region &quot;Signatures&quot; made sense. Given unrelated stuff I need to work on in Q1 2025, it&#x27;ll be a while before I have something meaningfully that uses them but it&#x27;s good to see them making sense so far.&lt;&#x2F;p&gt;
+&lt;p&gt;Thanks to all the attendees for feedback, including links to the very interesting-looking &lt;a href=&quot;https:&#x2F;&#x2F;creatingwithdata.com&quot;&gt;Creating with Data&lt;&#x2F;a&gt; (subscribed!).&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>Linzer: Region Summaries and Similarities</title>
+        <published>2025-01-07T00:00:00+00:00</published>
+        <updated>2025-01-07T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Mike Moran
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://geo.houseofmoran.io/posts/2025-01-07/"/>
+        <id>https://geo.houseofmoran.io/posts/2025-01-07/</id>
+        
+        <content type="html" xml:base="https://geo.houseofmoran.io/posts/2025-01-07/">&lt;p&gt;Over the holidays I was thinking about where I am with the &lt;a href=&quot;https:&#x2F;&#x2F;geo.houseofmoran.io&#x2F;posts&#x2F;2024-10-01&#x2F;&quot;&gt;Biscuits&lt;&#x2F;a&gt; project. The &lt;a href=&quot;https:&#x2F;&#x2F;linzer.houseofmoran.io&quot;&gt;Linzer&lt;&#x2F;a&gt; version has gotten to the point where I have a lot of the core bits of technical knowledge required, and I &quot;merely&quot; need to understand the aesthetics, if I wanted to copy the original artist.&lt;&#x2F;p&gt;
+&lt;p&gt;Whilst it is good to attempt to copy to learn, I am now a bit uneasy with it as a goal. This is partly because the habit of &quot;Computing People&quot; copying &quot;Artistic people&quot; is becoming a bit rude in the current race-to-the-bottom of AI Art. However, it&#x27;s also because I have some other ideas I wanna explore. So, I&#x27;m gonna do that instead.&lt;&#x2F;p&gt;
+&lt;p&gt;This doesn&#x27;t change the need for good core parts. To that end I&#x27;ve been putting together something that I call a &quot;Region Summary&quot;. This is intended to be a lossy-but-simple summary of a Region, that still allows comparison between them.&lt;&#x2F;p&gt;
+&lt;div class=&quot;columns&quot;&gt;
+    &lt;div class=&quot;column is-one-third&quot;&gt;
+        &lt;p style=&quot;font-size: smaller&quot;&gt;
+        It is defined as:
+            &lt;ol style=&quot;font-size: smaller&quot;&gt;
+            &lt;li&gt;Find the Centroid&lt;&#x2F;li&gt;
+            &lt;li&gt;Draw a Line from each Point on the border to it&lt;&#x2F;li&gt;
+            &lt;li&gt;Find the Bearing and Distance of each of these&lt;&#x2F;li&gt;
+            &lt;li&gt;Accumulate the Distance against each Bearing and keep the maximum Distance&lt;&#x2F;li&gt;
+            &lt;li&gt;The Dominant Bearing is the one for which the sum of Distances at 0,90,180,270 relative to the Bearing is maximised&lt;&#x2F;li&gt;
+            &lt;li&gt;Normalise the (Bearing,Distance) pairs relative to the Dominant Bearing&lt;&#x2F;li&gt;
+            &lt;&#x2F;ol&gt;
+        &lt;&#x2F;p&gt;
+    &lt;&#x2F;div&gt;
+    &lt;div class=&quot;column&quot;&gt;
+&lt;figure class=&quot;image is-2by1&quot;&gt;
+&lt;iframe
+    class=&quot;youtube has-ratio&quot;
+    width=&quot;560&quot;
+    height=&quot;315&quot;
+    src=&quot;&quot;
+    data-src=&quot;https:&#x2F;&#x2F;www.youtube-nocookie.com&#x2F;embed&#x2F;fJnQ5bxlLN0&quot;
+    title=&quot;YouTube video player&quot;
+    frameborder=&quot;0&quot;
+    allow=&quot;accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture&quot;
+    allowfullscreen&gt;s
+&lt;&#x2F;iframe&gt;
+&lt;&#x2F;figure&gt;
+    &lt;&#x2F;div&gt;
+&lt;&#x2F;div&gt;
+&lt;p&gt;This is &quot;lossy&quot; because when a shape has nooks, if these end up doubling-back from the pov of the Centroid, then they will be lost. However, it retains more detail than just finding the Convex Hull.&lt;&#x2F;p&gt;
+&lt;p&gt;This Summary has some nice properties such as being able to use to find similar Regions. Here is an example where we treat it is a 360-element Vector and find those Regions within a certain &quot;similarity&quot; where &lt;code&gt;similarity = (1.0 - avg(diff between distances at each Bearing))&lt;&#x2F;code&gt;:&lt;&#x2F;p&gt;
+&lt;figure class=&quot;image is-2by1&quot;&gt;
+&lt;iframe
+    class=&quot;youtube has-ratio&quot;
+    width=&quot;560&quot;
+    height=&quot;315&quot;
+    src=&quot;&quot;
+    data-src=&quot;https:&#x2F;&#x2F;www.youtube-nocookie.com&#x2F;embed&#x2F;OGD0sO5145s&quot;
+    title=&quot;YouTube video player&quot;
+    frameborder=&quot;0&quot;
+    allow=&quot;accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture&quot;
+    allowfullscreen&gt;s
+&lt;&#x2F;iframe&gt;
+&lt;&#x2F;figure&gt;&lt;p&gt;&lt;&#x2F;p&gt;
+&lt;p&gt;This version only has Regions for Edinburgh but you can have a play yourself here: &lt;a href=&quot;https:&#x2F;&#x2F;linzer.houseofmoran.io&quot;&gt;linzer.houseofmoran.io&lt;&#x2F;a&gt;.&lt;&#x2F;p&gt;
+&lt;p&gt;This now gives a substrate on top of which I can build other stuff.&lt;&#x2F;p&gt;
+&lt;p&gt;However, part of the reason I am writing this up here is because this is almost certainly not a new problem &#x2F; solution. I wanted to have a go myself to better understand it, but I am very much up for suggestions of alternatives, or even a well-known name for this technique.&lt;&#x2F;p&gt;
+&lt;p&gt;(I can be contacted on &lt;a href=&quot;https:&#x2F;&#x2F;mastodon.scot&#x2F;@mike_moran&quot;&gt;Mastodon&lt;&#x2F;a&gt; or &lt;a href=&quot;https:&#x2F;&#x2F;bsky.app&#x2F;profile&#x2F;mikemoran.bsky.social&quot;&gt;Bluesky&lt;&#x2F;a&gt;).&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>The Biscuits Project: decomposing the structure of cities</title>
+        <published>2024-10-01T00:00:00+00:00</published>
+        <updated>2024-10-01T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Mike Moran
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://geo.houseofmoran.io/posts/2024-10-01/"/>
+        <id>https://geo.houseofmoran.io/posts/2024-10-01/</id>
+        
+        <content type="html" xml:base="https://geo.houseofmoran.io/posts/2024-10-01/">&lt;p&gt;I did a talk on this project at the &lt;a href=&quot;https:&#x2F;&#x2F;thegeomob.com&#x2F;post&#x2F;oct-1st-2024-geomobedi-details&quot;&gt;GeoMOB Edinburgh event on 1&#x2F;10&#x2F;2024&lt;&#x2F;a&gt;.
+The &lt;a href=&quot;&#x2F;slides&#x2F;2024_Geomob_Oct_Presentation.pdf&quot;&gt;slides&lt;&#x2F;a&gt; are available, but I&#x27;ll give a summary of the accompanying explanation content here.&lt;&#x2F;p&gt;
+&lt;p&gt;The &quot;Biscuits&quot; project began back in &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;mikemoraned&#x2F;biscuits?tab=readme-ov-file#september-2017&quot;&gt;September 2017&lt;&#x2F;a&gt;.
+It was inspired by a work of art by &lt;a href=&quot;https:&#x2F;&#x2F;www.armellecaron.fr&quot;&gt;Armelle Caron&lt;&#x2F;a&gt;
+called &lt;a href=&quot;https:&#x2F;&#x2F;www.armellecaron.fr&#x2F;works&#x2F;les-villes-rangees&#x2F;&quot;&gt;Les Villes Rangees&lt;&#x2F;a&gt;:&lt;&#x2F;p&gt;
+&lt;figure class=&quot;image is-4by3&quot;&gt;
+    &lt;img src=&quot;&amp;#x2F;images&amp;#x2F;les-villes-rangees-website-2024.png&quot; &#x2F;&gt;
+&lt;&#x2F;figure&gt;
+&lt;p&gt;&lt;&#x2F;p&gt;
+&lt;p&gt;I wondered if I could automatically &quot;destruct&quot; and lay out the sections in a similar way. So began a side-project I&#x27;ve been working on,
+off-and-on, for 7 years. The original Github project gives &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;mikemoraned&#x2F;biscuits?tab=readme-ov-file#biscuits&quot;&gt;a bit more detailed history&lt;&#x2F;a&gt;,
+but the major iterations were:&lt;&#x2F;p&gt;
+&lt;div class=&quot;columns&quot;&gt;
+    &lt;div class=&quot;column&quot;&gt;
+        &lt;div class=&quot;card&quot;&gt;
+            &lt;header class=&quot;card-header&quot;&gt;
+                &lt;p class=&quot;card-header-title&quot;&gt;Speculaas: April 2018&lt;&#x2F;p&gt;
+            &lt;&#x2F;header&gt;
+            &lt;div class=&quot;card-image&quot;&gt;
+                &lt;figure class=&quot;image is-2by1&quot;&gt;
+&lt;iframe
+    class=&quot;youtube has-ratio&quot;
+    width=&quot;560&quot;
+    height=&quot;315&quot;
+    src=&quot;&quot;
+    data-src=&quot;https:&#x2F;&#x2F;www.youtube-nocookie.com&#x2F;embed&#x2F;gakOIbRsMHI&quot;
+    title=&quot;YouTube video player&quot;
+    frameborder=&quot;0&quot;
+    allow=&quot;accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture&quot;
+    allowfullscreen&gt;s
+&lt;&#x2F;iframe&gt;
+&lt;&#x2F;figure&gt;
+            &lt;&#x2F;div&gt;
+            &lt;div class=&quot;card-content&quot;&gt;
+                &lt;div class=&quot;content is-size-5&quot;&gt;
+                    &lt;ul&gt;
+                        &lt;li&gt;😞 screenshotted static &#x27;maps&#x27;&lt;&#x2F;li&gt;
+                        &lt;li&gt;😀 animated and interactive&lt;&#x2F;li&gt;
+                        &lt;li&gt;😀 bin-packing auto-layout&lt;&#x2F;li&gt;
+                    &lt;&#x2F;ul&gt;
+                &lt;&#x2F;div&gt;
+            &lt;&#x2F;div&gt;
+        &lt;&#x2F;div&gt;
+    &lt;&#x2F;div&gt;
+    &lt;div class=&quot;column&quot;&gt;
+        &lt;div class=&quot;card&quot;&gt;
+            &lt;header class=&quot;card-header&quot;&gt;
+                &lt;p class=&quot;card-header-title&quot;&gt;Garibaldi: August 2019&lt;&#x2F;p&gt;
+            &lt;&#x2F;header&gt;
+            &lt;div class=&quot;card-image&quot;&gt;
+                &lt;figure class=&quot;image is-2by1&quot;&gt;
+    &lt;img src=&quot;&amp;#x2F;images&amp;#x2F;garibaldi.png&quot; &#x2F;&gt;
+&lt;&#x2F;figure&gt;
+
+            &lt;&#x2F;div&gt;
+            &lt;div class=&quot;card-content&quot;&gt;
+                &lt;div class=&quot;content is-size-5&quot;&gt;
+                    &lt;ul&gt;
+                        &lt;li&gt;😀 dynamic maps&lt;&#x2F;li&gt;
+                        &lt;li&gt;😀 interactive (runs in browser)&lt;&#x2F;li&gt;
+                        &lt;li&gt;😭 pixel-based region-building affected by resolution quirks&lt;&#x2F;li&gt;
+                    &lt;&#x2F;ul&gt;
+                &lt;&#x2F;div&gt;
+            &lt;&#x2F;div&gt;
+        &lt;&#x2F;div&gt;
+    &lt;&#x2F;div&gt;
+&lt;&#x2F;div&gt;
+&lt;aside&gt;
+(All of the names of iterations are different kinds of Biscuit)
+&lt;&#x2F;aside&gt;
+&lt;br &#x2F;&gt;
+&lt;p&gt;Obviously we then had COVID happen in 2020, which was distracting to say the least. However, the biggest issue was
+that I discovered doing things &lt;em&gt;entirely&lt;&#x2F;em&gt; in the browser at pixel level was not very robust. There were various techniques I could
+have applied, like a separate off-screen canvas for calculations. That would require a lot of testing to get right and make work.&lt;&#x2F;p&gt;
+&lt;p&gt;It felt though that this was going against-the-grain and, more generally, I was really just reluctant to go learn about how
+OpenstreetMap and Geo API&#x27;s &#x2F; libraries work.&lt;&#x2F;p&gt;
+&lt;p&gt;Between then and now that&#x27;s effectively what I&#x27;ve done, or at least enough to recreate where I got to in Speculaas, albeit entirely off-line.&lt;&#x2F;p&gt;
+&lt;p&gt;The current version, which I got ready for the GeoMOB presentation, is pretty simple at the high-level:&lt;&#x2F;p&gt;
+&lt;div class=&quot;box&quot; data-theme=&quot;light&quot;&gt;
+    &lt;pre class=&quot;mermaid&quot;&gt;
+    flowchart LR
+    b(Boundaries) --&amp;gt; r(Regions) --&amp;gt; l(Layout)
+    &lt;&#x2F;pre&gt;
+&lt;&#x2F;div&gt;&lt;div class=&quot;columns&quot;&gt;
+    &lt;div class=&quot;column&quot;&gt;
+        &lt;div class=&quot;card&quot;&gt;
+            &lt;header class=&quot;card-header&quot;&gt;
+                &lt;p class=&quot;card-header-title&quot;&gt;Boundaries&lt;&#x2F;p&gt;
+            &lt;&#x2F;header&gt;
+            &lt;div class=&quot;card-image&quot;&gt;
+                &lt;figure class=&quot;image is-5by3&quot;&gt;
+    &lt;img src=&quot;&amp;#x2F;images&amp;#x2F;boundaries.png&quot; &#x2F;&gt;
+&lt;&#x2F;figure&gt;
+
+            &lt;&#x2F;div&gt;
+            &lt;div class=&quot;card-content&quot;&gt;
+                &lt;div class=&quot;content is-size-6&quot;&gt;
+This is where the Map data enters. We want to get to a binary version of an area where 
+&quot;black&quot; = part we want to keep and &quot;white&quot; = a border of some kind.
+&lt;p&gt;I&#x27;ll not go into detail here but this image was derived by sampling and overlapping routes across
+Edinburgh from &lt;a href=&quot;https:&#x2F;&#x2F;stadiamaps.com&quot;&gt;Stadia Maps&lt;&#x2F;a&gt;.
+&lt;&#x2F;div&gt;
+&lt;&#x2F;div&gt;
+&lt;&#x2F;div&gt;
+&lt;&#x2F;div&gt;
+&lt;div class=&quot;column&quot;&gt;
+&lt;div class=&quot;card&quot;&gt;
+&lt;header class=&quot;card-header&quot;&gt;
+&lt;p class=&quot;card-header-title&quot;&gt;Find Regions&lt;&#x2F;p&gt;
+&lt;&#x2F;header&gt;
+&lt;div class=&quot;card-image&quot;&gt;
+&lt;figure class=&quot;image is-5by3&quot;&gt;
+    &lt;img src=&quot;&amp;#x2F;images&amp;#x2F;regions1.png&quot; &#x2F;&gt;
+&lt;&#x2F;figure&gt;
+
+&lt;&#x2F;div&gt;
+&lt;div class=&quot;card-content&quot;&gt;
+&lt;div class=&quot;content is-size-6&quot;&gt;
+The area is defined in terms of pixels and not geo coordinates. This is partly because I find it easier to do, but also because it gives me most freedom to mix-and-match sources. So, for example, whilst I&#x27;ve not done it yet it in this version, adding an exclusion area for water is as simple as finding a source and drawing it as white pixels.&lt;&#x2F;p&gt;
+&lt;p&gt;The actual Regions are found by applying a &lt;a href=&quot;https:&#x2F;&#x2F;en.wikipedia.org&#x2F;wiki&#x2F;Boundary_tracing&quot;&gt;Boundary Tracing&lt;&#x2F;a&gt; algorithm at the pixel level.
+&lt;&#x2F;div&gt;
+&lt;&#x2F;div&gt;
+&lt;&#x2F;div&gt;
+&lt;&#x2F;div&gt;&lt;&#x2F;p&gt;
+&lt;&#x2F;div&gt;
+&lt;div class=&quot;columns&quot;&gt;
+    &lt;div class=&quot;column&quot;&gt;
+        &lt;div class=&quot;card&quot;&gt;
+            &lt;header class=&quot;card-header&quot;&gt;
+                &lt;p class=&quot;card-header-title&quot;&gt;Back to Geo-land&lt;&#x2F;p&gt;
+            &lt;&#x2F;header&gt;
+            &lt;div class=&quot;card-image&quot;&gt;
+                &lt;figure class=&quot;image is-5by3&quot;&gt;
+    &lt;img src=&quot;&amp;#x2F;images&amp;#x2F;regions2.png&quot; &#x2F;&gt;
+&lt;&#x2F;figure&gt;
+
+            &lt;&#x2F;div&gt;
+            &lt;div class=&quot;card-content&quot;&gt;
+                &lt;div class=&quot;content is-size-6&quot;&gt;
+To get back to Geo-land I re-interpret the boundaries that have been derived into geo &lt;code&gt;Polygons&lt;&#x2F;code&gt;. 
+&lt;p&gt;&lt;&#x2F;p&gt;
+&lt;aside&gt;
+&lt;p&gt;
+It&#x27;s these pixel-processing stages that leads to the low-level blockiness in the shapes.
+&lt;&#x2F;p&gt;
+&lt;p&gt;
+I can &lt;em&gt;probably&lt;&#x2F;em&gt; make a future version of this pure-geo by doing something like:
+&lt;ol&gt;
+&lt;li&gt;Take all input &lt;code&gt;Geometry&lt;&#x2F;code&gt; which defines the border areas.&lt;&#x2F;li&gt;
+&lt;li&gt;Union them together.&lt;&#x2F;li&gt;
+&lt;li&gt;Define an area border (e.g. a city&#x27;s limits) as a &lt;code&gt;Polygon&lt;&#x2F;code&gt; and takeaway (difference) the unioned border areas.
+&lt;li&gt;What remains should be the Regions&lt;&#x2F;li&gt;
+&lt;&#x2F;ol&gt;
+&lt;p&gt;However, the pixel-level version I have works for now. As long as I wrap it behind a &lt;code&gt;trait&lt;&#x2F;code&gt; I can replace it later.&lt;&#x2F;p&gt;
+&lt;&#x2F;p&gt;
+&lt;&#x2F;aside&gt;
+                &lt;&#x2F;div&gt;
+            &lt;&#x2F;div&gt;
+        &lt;&#x2F;div&gt;
+    &lt;&#x2F;div&gt;
+    &lt;div class=&quot;column&quot;&gt;
+        &lt;div class=&quot;card&quot;&gt;
+            &lt;header class=&quot;card-header&quot;&gt;
+                &lt;p class=&quot;card-header-title&quot;&gt;Layout&lt;&#x2F;p&gt;
+            &lt;&#x2F;header&gt;
+            &lt;div class=&quot;card-image&quot;&gt;
+                &lt;figure class=&quot;image is-5by3&quot;&gt;
+    &lt;img src=&quot;&amp;#x2F;images&amp;#x2F;edinburgh_layout_pedestrian.1000.guillotine.rotated.png&quot; &#x2F;&gt;
+&lt;&#x2F;figure&gt;
+
+            &lt;&#x2F;div&gt;
+            &lt;div class=&quot;card-content&quot;&gt;
+                &lt;div class=&quot;content is-size-6&quot;&gt;
+&lt;p&gt;There are lots of different ways layout could be done. For this iteration, as in Speculaas, I treat this as &lt;a href=&quot;https:&#x2F;&#x2F;www.csc.liv.ac.uk&#x2F;~epa&#x2F;surveyhtml.html&quot;&gt;2d bin-packing&lt;&#x2F;a&gt; problem.&lt;&#x2F;p&gt;
+&lt;p&gt;This particular example here shows a layout based on a &lt;a href=&quot;https:&#x2F;&#x2F;okanplusz.wordpress.com&#x2F;2016&#x2F;07&#x2F;07&#x2F;bin-packing&#x2F;&quot;&gt;Guillotine&lt;&#x2F;a&gt; algorithm.
+&lt;&#x2F;div&gt;
+&lt;&#x2F;div&gt;
+&lt;&#x2F;div&gt;
+&lt;&#x2F;div&gt;&lt;&#x2F;p&gt;
+&lt;&#x2F;div&gt;
+&lt;p&gt;What&#x27;s next? Well, first a scorecard on &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;mikemoraned&#x2F;geo&#x2F;tree&#x2F;main&#x2F;apps&#x2F;linzer&quot;&gt;this implementation, which I&#x27;ve christened &quot;Linzer&quot;&lt;&#x2F;a&gt;:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;😀 pedestrian and auto-biased route sources&lt;&#x2F;li&gt;
+&lt;li&gt;😀 deterministic&lt;&#x2F;li&gt;
+&lt;li&gt;😀 bin-packing auto-layout&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;After this, there are a lot of things I could do next to improve it. Some of these I&#x27;ve done before in different iterations, and some are totally new:&lt;&#x2F;p&gt;
+&lt;ul&gt;
+&lt;li&gt;boundaries:
+&lt;ul&gt;
+&lt;li&gt;roads, paths&lt;&#x2F;li&gt;
+&lt;li&gt;clip by city boundary&lt;&#x2F;li&gt;
+&lt;li&gt;mask-out water bodies&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;regions:
+&lt;ul&gt;
+&lt;li&gt;green areas&lt;&#x2F;li&gt;
+&lt;li&gt;rotate to minimal bbox&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;layout:
+&lt;ul&gt;
+&lt;li&gt;layout as text glyphs&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;&#x2F;li&gt;
+&lt;li&gt;display:
+&lt;ul&gt;
+&lt;li&gt;animated placement&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;&#x2F;li&gt;
+&lt;&#x2F;ul&gt;
+&lt;p&gt;However, since this is more of an Art Project than a technical one, I reserve the right to &quot;honour my whimsy&quot; and do something totally different.&lt;&#x2F;p&gt;
+</content>
+        
+    </entry>
+</feed>
