@@ -34,6 +34,14 @@
         * [ ] ...
     * [ ] outstanding problem with running `just --set area hamburg --set profile auto all` (will solve later)
 
+## March
+
+* [ ] change `routing` to use OvertureMaps (OM) for definition of the city boundaries
+  * [ ] update bounding-box bounds of cities to be defined based on reading the city from OM
+  * [ ] update random sampling to use actual city boundary
+  * [ ] clamp routes to only those wholly contained within city shape
+* [ ] filter out water areas
+  * [ ] use water areas from OM as definition of holes in city shape
 
 # Winter 2024 TODO's
 
