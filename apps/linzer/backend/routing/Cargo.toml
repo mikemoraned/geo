@@ -9,14 +9,13 @@ ferrostar = { workspace = true }
 clap = { workspace = true }
 url = { workspace = true }
 geo = { workspace = true }
-geojson = { workspace = true }
 geozero = { workspace = true }
 rand = { workspace = true }
 
 startup = { path = "../startup" }
 cli = { path = "../cli" }
 
-duckdb = { version="1.2.1", features = ["bundled"] }
+datafusion = "46.0.0"
 reqwest = "0.12"
 fast_poisson = "1.0"
 bytes = "1.8"
