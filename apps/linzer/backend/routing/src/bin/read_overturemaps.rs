@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-use std::fs;
-use std::fs::File;
+use std::sync::Arc;
 use clap::Parser;
-use geoarrow::io::parquet::GeoParquetDatasetMetadata;
-use parquet::arrow::arrow_reader::{ArrowReaderMetadata, ArrowReaderOptions};
+use datafusion::datasource::file_format::parquet::ParquetFormat;
+use datafusion::datasource::listing::{ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl};
+use datafusion::prelude::*;
 
 /// Load some data from overturemaps
 #[derive(Parser, Debug)]
@@ -19,20 +18,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("{:?}", args);
 
+    let ctx = SessionContext::new();
+    let session_state = ctx.state();
     let table_path = format!("{}/theme=divisions/type=division_area/", &args.overturemaps);
 
-    // now try doing something with geoarrow
-    let paths = fs::read_dir(&table_path.clone()).unwrap();
-    let mut map = HashMap::new();
-    for path in paths {
-        // let file = path.unwrap().path().file_name().unwrap().to_str().unwrap().to_string();
-        let name = path.unwrap().path();
-        let file = File::open(name.clone()).unwrap();
-        println!("file: {file:?}");
-        let metadata = ArrowReaderMetadata::load(&file, ArrowReaderOptions::new())?;
-        map.insert(String::from(name.as_path().to_str().unwrap()), metadata);
-    }
-    let dataset = GeoParquetDatasetMetadata::from_files(map)?;
+    // Parse the path
+    let table_path = ListingTableUrl::parse(table_path)?;
+    println!("path: {}", &table_path);
+
+    // Create default parquet options
+    let file_format = ParquetFormat::new();
+    let listing_options = ListingOptions::new(Arc::new(file_format))
+        .with_file_extension(".parquet");
+    println!("listing options: {:?}", &listing_options);
+
+    // Resolve the schema
+    let resolved_schema = listing_options
+        .infer_schema(&session_state, &table_path)
+        .await?;
+    println!("schema: {:?}", &resolved_schema);
+
+    let config = ListingTableConfig::new(table_path)
+        .with_listing_options(listing_options)
+        .with_schema(resolved_schema);
+    println!("config: {:?}", &config);
+
+    // Create a new TableProvider
+    let provider = Arc::new(ListingTable::try_new(config)?);
+
+    // This provider can now be read as a dataframe:
+    // let df = ctx.read_table(provider.clone());
+
+    ctx.register_table("division_area", provider)?;
+
+    let df = ctx.sql("SELECT id,geometry FROM division_area LIMIT 1").await?;
+    df.show().await?;
 
     Ok(())
 }
