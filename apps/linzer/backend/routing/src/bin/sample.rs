@@ -6,6 +6,7 @@ use geo::{coord, Coord, GeometryCollection, Point, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use rand::{RngCore, SeedableRng};
 use serde::Deserialize;
+use thiserror::Error;
 
 /// Create sample points in area
 #[derive(Parser, Debug)]
@@ -14,6 +15,10 @@ struct Args {
     /// config file defining the area
     #[arg(long)]
     area: PathBuf,
+
+    /// base location for OvertureMaps data
+    #[arg(long)]
+    overture_maps: Option<String>,
 
     /// number of points to generate
     #[arg(long)]
@@ -34,7 +39,13 @@ struct Args {
 
 #[derive(Deserialize, Debug)]
 struct Config {
-   bounds: Bounds
+    bounds: Bounds,
+    overture_maps: Option<OvertureMaps>,
+}
+
+#[derive(Deserialize, Debug)]
+struct OvertureMaps {
+    gers_id: String
 }
 
 #[derive(Deserialize, Debug)]
@@ -42,6 +53,12 @@ struct Bounds {
     point1: Coord,
     point2: Coord,
     name: String
+}
+
+#[derive(Error, Debug)]
+pub enum SamplerError {
+    #[error("overture maps base dir required")]
+    MissingOvertureMapsBase
 }
 
 #[tokio::main]
@@ -53,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config : Config = toml::from_str(&config_str)?;
     println!("Name: {}", config.bounds.name);
     
-    let bounds = Rect::new(config.bounds.point1, config.bounds.point2); 
+    let bounds = read_bounds(&args, &config).await?;
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(args.seed);
 
@@ -64,6 +81,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     save(&ends, &args.ends)?;
     
     Ok(())
+}
+
+async fn read_bounds(args: &Args, config: &Config) -> Result<Rect, Box<dyn std::error::Error>> {
+    if let Some(om) = config.overture_maps.as_ref() {
+        if let Some(om_base) = args.overture_maps.as_ref() {
+            use overturemaps::overturemaps::OvertureMaps;
+            let om = OvertureMaps::load_from_base(om_base.clone()).await?;
+            todo!()
+        }
+        else {
+            Err(Box::new(SamplerError::MissingOvertureMapsBase))
+        }
+    }
+    else {
+        Ok(Rect::new(config.bounds.point1, config.bounds.point2))
+    }
 }
 
 fn save(geo: &Vec<geo::geometry::Geometry>, path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {

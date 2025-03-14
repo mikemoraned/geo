@@ -1,3 +1,6 @@
+[overturemaps]
+gers_id = "085ba2a9bfffffff01a888f06236016b"
+
 [bounds]
 name = "Edinburgh, defined by queensferry and dalkeith"
 point1 = { x = -3.409195, y = 55.992622 }
