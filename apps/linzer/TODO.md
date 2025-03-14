@@ -37,9 +37,9 @@
 ## March
 
 * [ ] change `routing` to use OvertureMaps (OM) for definition of the city boundaries
-  * [ ] check I can load OM data and use it
+  * [x] check I can load OM data and use it
     * [x] load `division_area` into datafusion and count the rows
-    * [ ] convert geometry column in WKB binary format into geo types
+    * [x] convert geometry column in WKB binary format into geo types
   * [ ] update bounding-box bounds of cities to be defined based on reading the city from OM
   * [ ] update random sampling to use actual city boundary
   * [ ] clamp routes to only those wholly contained within city shape
