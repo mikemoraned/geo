@@ -5,6 +5,7 @@ use datafusion::datasource::listing::{ListingOptions, ListingTable, ListingTable
 use datafusion::prelude::*;
 use futures::StreamExt;
 use std::sync::Arc;
+use geozero::ToGeo;
 
 /// Load some data from overturemaps
 #[derive(Parser, Debug)]
@@ -59,9 +60,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut stream = df.execute_stream().await?;
     while let Some(b) = stream.next().await.transpose()? {
         let id_col  = b.column(0).as_string_view();
-        // let float_col: &PrimitiveArray<Float64Type> = b.column(1).as_primitive();
-        for id in id_col.iter() {
-            println!("id: {:?}", id);
+        let geometry_col = b.column(1).as_binary_view();
+        for (id, geometry) in id_col.iter().zip(geometry_col.iter()) {
+            if let (Some(id), Some(geometry)) = (id, geometry) {
+                println!("id: {:?}", id);
+                let wkb = geozero::wkb::Wkb(geometry.to_vec());
+                let geometry = wkb.to_geo()?;
+                println!("geometry: {:?}", &geometry);
+            }
         }
     }
 

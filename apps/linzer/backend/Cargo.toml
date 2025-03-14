@@ -16,7 +16,7 @@ tracing = "0.1"
 
 geo = "0.28"
 geojson = { version = "0.24", features = ["geo-types"] }
-geozero = "0.13"
+geozero = { version = "0.14", features = ["with-wkb"] }
 
 rand = "0.8"
 
