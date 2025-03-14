@@ -1,5 +1,5 @@
 [workspace]
-members = ["api", "cli", "conversion", "display", "layout", "regions", "routing", "startup"]
+members = ["api", "cli", "conversion", "display", "layout", "overturemaps", "regions", "routing", "startup"]
 resolver = "2"
 
 [workspace.dependencies]
