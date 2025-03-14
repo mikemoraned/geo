@@ -1,8 +1,10 @@
-use std::sync::Arc;
+use arrow::array::AsArray;
 use clap::Parser;
 use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::listing::{ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl};
 use datafusion::prelude::*;
+use futures::StreamExt;
+use std::sync::Arc;
 
 /// Load some data from overturemaps
 #[derive(Parser, Debug)]
@@ -41,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = ListingTableConfig::new(table_path)
         .with_listing_options(listing_options)
         .with_schema(resolved_schema);
-    println!("config: {:?}", &config);
+    // println!("config: {:?}", &config);
 
     // Create a new TableProvider
     let provider = Arc::new(ListingTable::try_new(config)?);
@@ -52,7 +54,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ctx.register_table("division_area", provider)?;
 
     let df = ctx.sql("SELECT id,geometry FROM division_area LIMIT 1").await?;
-    df.show().await?;
+    df.clone().show().await?;
+
+    let mut stream = df.execute_stream().await?;
+    while let Some(b) = stream.next().await.transpose()? {
+        let id_col  = b.column(0).as_string_view();
+        // let float_col: &PrimitiveArray<Float64Type> = b.column(1).as_primitive();
+        for id in id_col.iter() {
+            println!("id: {:?}", id);
+        }
+    }
 
     Ok(())
 }
