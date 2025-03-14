@@ -38,8 +38,8 @@
 
 * [ ] change `routing` to use OvertureMaps (OM) for definition of the city boundaries
   * [ ] check I can load OM data and use it
-    * [ ] build a duckdb db from the OM data
-    * [ ] load that duckdb db and query it simply
+    * [x] load `division_area` into datafusion and count the rows
+    * [ ] add geo support to datafusion
   * [ ] update bounding-box bounds of cities to be defined based on reading the city from OM
   * [ ] update random sampling to use actual city boundary
   * [ ] clamp routes to only those wholly contained within city shape
