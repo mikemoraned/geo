@@ -1,11 +1,11 @@
 use std::{fs::File, io::BufWriter, path::PathBuf};
 
-use clap::{command, Parser};
+use clap::Parser;
+use config::Config;
 use fast_poisson::Poisson2D;
-use geo::{coord, Coord, GeometryCollection, Point, Rect};
+use geo::{coord, BoundingRect, GeometryCollection, Point, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use rand::{RngCore, SeedableRng};
-use serde::Deserialize;
 use thiserror::Error;
 
 /// Create sample points in area
@@ -18,7 +18,7 @@ struct Args {
 
     /// base location for OvertureMaps data
     #[arg(long)]
-    overture_maps: Option<String>,
+    overturemaps: Option<String>,
 
     /// number of points to generate
     #[arg(long)]
@@ -37,28 +37,14 @@ struct Args {
     ends: PathBuf,
 }
 
-#[derive(Deserialize, Debug)]
-struct Config {
-    bounds: Bounds,
-    overture_maps: Option<OvertureMaps>,
-}
-
-#[derive(Deserialize, Debug)]
-struct OvertureMaps {
-    gers_id: String
-}
-
-#[derive(Deserialize, Debug)]
-struct Bounds {
-    point1: Coord,
-    point2: Coord,
-    name: String
-}
-
 #[derive(Error, Debug)]
 pub enum SamplerError {
     #[error("overture maps base dir required")]
-    MissingOvertureMapsBase
+    MissingOvertureMapsBase,
+    #[error("unable to find anything with that GERS Id")]
+    CannotFindGersId,
+    #[error("Geometry for GERS Id could be converted into bounding rect")]
+    CannotCreateBoundingRect,
 }
 
 #[tokio::main]
@@ -66,11 +52,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("{:?}", args);
 
-    let config_str = std::fs::read_to_string(&args.area)?;
-    let config : Config = toml::from_str(&config_str)?;
+    let config : Config = Config::read_from_file(&args.area)?;
     println!("Name: {}", config.bounds.name);
     
     let bounds = read_bounds(&args, &config).await?;
+    println!("Bounds: {:?}", bounds);
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(args.seed);
 
@@ -84,11 +70,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn read_bounds(args: &Args, config: &Config) -> Result<Rect, Box<dyn std::error::Error>> {
-    if let Some(om) = config.overture_maps.as_ref() {
-        if let Some(om_base) = args.overture_maps.as_ref() {
+    if let Some(om) = config.overturemaps.as_ref() {
+        println!("Using overture maps");
+        let gers_id = &om.gers_id;
+        if let Some(om_base) = args.overturemaps.as_ref() {
             use overturemaps::overturemaps::OvertureMaps;
             let om = OvertureMaps::load_from_base(om_base.clone()).await?;
-            todo!()
+            if let Some(geometry) = om.find_geometry_by_id(gers_id).await? {
+                if let Some(rect) = geometry.bounding_rect() {
+                    Ok(rect)
+                }
+                else {
+                    Err(Box::new(SamplerError::CannotCreateBoundingRect))
+                }
+            }
+            else {
+                Err(Box::new(SamplerError::CannotFindGersId))
+            }
         }
         else {
             Err(Box::new(SamplerError::MissingOvertureMapsBase))

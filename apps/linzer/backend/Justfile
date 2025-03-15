@@ -4,11 +4,13 @@ seed := "1"
 profile := "pedestrian" # or "auto"
 config_base := "../config"
 output_base := "../output"
+overturemaps_base := "/Users/mxm/Scratch/OvertureMaps/release/2025-02-19.0"
 
 samples:
     mkdir -p output/{{area}}
     cargo run --release --bin sample -- \
-        --area ../{{config_base}}/{{area}}.toml \
+        --overturemaps {{overturemaps_base}} \
+        --area {{config_base}}/{{area}}.toml \
         --starts {{output_base}}/{{area}}/sample.{{paths}}.starts.geojson \
         --ends {{output_base}}/{{area}}/sample.{{paths}}.ends.geojson \
         --paths {{paths}} \

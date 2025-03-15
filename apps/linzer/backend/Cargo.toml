@@ -1,5 +1,5 @@
 [workspace]
-members = ["api", "cli", "conversion", "display", "layout", "overturemaps", "regions", "routing", "startup"]
+members = ["api", "cli", "config", "conversion", "display", "layout", "overturemaps", "regions", "routing", "startup"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -25,3 +25,5 @@ image = "0.25"
 imageproc = "0.25"
 
 thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+

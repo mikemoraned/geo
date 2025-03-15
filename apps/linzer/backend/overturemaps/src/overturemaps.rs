@@ -4,10 +4,17 @@ use datafusion::datasource::listing::{ListingOptions, ListingTable, ListingTable
 use datafusion::prelude::*;
 use futures::StreamExt;
 use std::sync::Arc;
+use geo::Geometry;
 use geozero::ToGeo;
+use serde::Deserialize;
+
 pub struct OvertureMaps {
     ctx: SessionContext
 }
+
+
+#[derive(Deserialize, Debug)]
+pub struct GersId(String);
 
 impl OvertureMaps {
     pub async fn load_from_base(base: String) -> Result<Self, Box<dyn std::error::Error>> {
@@ -68,5 +75,28 @@ impl OvertureMaps {
         }
 
         Ok(())
+    }
+
+    pub async fn find_geometry_by_id(&self, id: &GersId) -> Result<Option<Geometry>, Box<dyn std::error::Error>> {
+        let division_area_df = self.ctx.table("division_area").await?;
+        println!("division_area: {:?}", &division_area_df.schema());
+
+        let GersId(id) = id;
+
+        let matching = division_area_df
+            .filter(col("id").eq(lit(id)))?
+            .select(vec![col("geometry")])?;
+        for batch in matching.collect().await? {
+            let geometry_col = batch.column(0).as_binary_view();
+            for geometry in geometry_col.iter() {
+                if let Some(geometry) = geometry {
+                    let wkb = geozero::wkb::Wkb(geometry.to_vec());
+                    let geometry = wkb.to_geo()?;
+                    return Ok(Some(geometry));
+                }
+            }
+        }
+
+        Ok(None)
     }
 }
