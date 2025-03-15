@@ -40,8 +40,9 @@
   * [x] check I can load OM data and use it
     * [x] load `division_area` into datafusion and count the rows
     * [x] convert geometry column in WKB binary format into geo types
-  * [ ] update bounding-box bounds of cities to be defined based on reading the city from OM
-  * [ ] update random sampling to use actual city boundary
+  * [x] update bounding-box bounds of cities to be defined based on reading the city from OM
+    * [x] did this for edinburgh only
+  * [ ] update random sampling to use actual city boundary geometry (not the rectangular bounds)
   * [ ] clamp routes to only those wholly contained within city shape
 * [ ] filter out water areas
   * [ ] use water areas from OM as definition of holes in city shape
