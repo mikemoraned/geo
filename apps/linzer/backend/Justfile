@@ -2,39 +2,41 @@ area := "edinburgh"
 paths := "1000"
 seed := "1"
 profile := "pedestrian" # or "auto"
+config_base := "../config"
+output_base := "../output"
 
 samples:
     mkdir -p output/{{area}}
     cargo run --release --bin sample -- \
-        --area config/{{area}}.toml \
-        --starts output/{{area}}/sample.{{paths}}.starts.geojson \
-        --ends output/{{area}}/sample.{{paths}}.ends.geojson \
+        --area ../{{config_base}}/{{area}}.toml \
+        --starts {{output_base}}/{{area}}/sample.{{paths}}.starts.geojson \
+        --ends {{output_base}}/{{area}}/sample.{{paths}}.ends.geojson \
         --paths {{paths}} \
         --seed {{seed}}
 
 routes:
     cargo run --release --bin routes -- \
-        --starts output/{{area}}/sample.{{paths}}.starts.geojson \
-        --ends output/{{area}}/sample.{{paths}}.ends.geojson \
-        --geojson output/{{area}}/routes_{{profile}}.{{paths}}.geojson \
+        --starts {{output_base}}/{{area}}/sample.{{paths}}.starts.geojson \
+        --ends {{output_base}}/{{area}}/sample.{{paths}}.ends.geojson \
+        --geojson {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.geojson \
         --profile {{profile}}
 
 regions:
     cargo run --release --bin find_regions -- \
-        --routes output/{{area}}/routes_{{profile}}.{{paths}}.geojson \
-        --stage-template output/{{area}}/routes_{{profile}}.{{paths}}.STAGE_NAME.png \
-        --regions output/{{area}}/regions_{{profile}}.{{paths}}.geojson
+        --routes {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.geojson \
+        --stage-template {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.STAGE_NAME.png \
+        --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson
 
 layout:
     cargo run --release --bin layout -- \
-        --regions output/{{area}}/regions_{{profile}}.{{paths}}.geojson \
+        --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson \
         --bin-type guillotine \
-        --layout output/{{area}}/layout_{{profile}}.{{paths}}.guillotine.png
+        --layout {{output_base}}/{{area}}/layout_{{profile}}.{{paths}}.guillotine.png
 
     cargo run --release --bin layout -- \
-        --regions output/{{area}}/regions_{{profile}}.{{paths}}.geojson \
+        --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson \
         --bin-type max-rects \
-        --layout output/{{area}}/layout_{{profile}}.{{paths}}.max-rects.png
+        --layout {{output_base}}/{{area}}/layout_{{profile}}.{{paths}}.max-rects.png
 
 regions_layout: regions layout
     
