@@ -2,7 +2,6 @@ use arrow::array::AsArray;
 use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::listing::{ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl};
 use datafusion::prelude::*;
-use futures::StreamExt;
 use std::sync::Arc;
 use geo::Geometry;
 use geozero::ToGeo;
@@ -54,27 +53,6 @@ impl OvertureMaps {
         Ok(OvertureMaps {
             ctx
         })
-    }
-
-    pub async fn do_something(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let df = self.ctx.sql("SELECT id,geometry FROM division_area LIMIT 1").await?;
-        df.clone().show().await?;
-
-        let mut stream = df.execute_stream().await?;
-        while let Some(b) = stream.next().await.transpose()? {
-            let id_col  = b.column(0).as_string_view();
-            let geometry_col = b.column(1).as_binary_view();
-            for (id, geometry) in id_col.iter().zip(geometry_col.iter()) {
-                if let (Some(id), Some(geometry)) = (id, geometry) {
-                    println!("id: {:?}", id);
-                    let wkb = geozero::wkb::Wkb(geometry.to_vec());
-                    let geometry = wkb.to_geo()?;
-                    println!("geometry: {:?}", &geometry);
-                }
-            }
-        }
-
-        Ok(())
     }
 
     pub async fn find_geometry_by_id(&self, id: &GersId) -> Result<Option<Geometry>, Box<dyn std::error::Error>> {
