@@ -3,7 +3,7 @@ use std::{fs::File, io::BufWriter, path::PathBuf};
 use clap::Parser;
 use config::Config;
 use fast_poisson::Poisson2D;
-use geo::{coord, BoundingRect, GeometryCollection, Point, Rect};
+use geo::{coord, BoundingRect, Geometry, GeometryCollection, Point, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use rand::{RngCore, SeedableRng};
 use thiserror::Error;
@@ -69,7 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn read_bounds(args: &Args, config: &Config) -> Result<Rect, Box<dyn std::error::Error>> {
+async fn read_bounds(args: &Args, config: &Config) -> Result<Geometry, Box<dyn std::error::Error>> {
     if let Some(om) = config.overturemaps.as_ref() {
         println!("Using overture maps");
         let gers_id = &om.gers_id;
@@ -78,7 +78,7 @@ async fn read_bounds(args: &Args, config: &Config) -> Result<Rect, Box<dyn std::
             let om = OvertureMaps::load_from_base(om_base.clone()).await?;
             if let Some(geometry) = om.find_geometry_by_id(gers_id).await? {
                 if let Some(rect) = geometry.bounding_rect() {
-                    Ok(rect)
+                    Ok(Geometry::Rect(rect))
                 }
                 else {
                     Err(Box::new(SamplerError::CannotCreateBoundingRect))
@@ -93,7 +93,7 @@ async fn read_bounds(args: &Args, config: &Config) -> Result<Rect, Box<dyn std::
         }
     }
     else {
-        Ok(Rect::new(config.bounds.point1, config.bounds.point2))
+        Ok(Geometry::Rect(Rect::new(config.bounds.point1, config.bounds.point2)))
     }
 }
 
@@ -107,28 +107,31 @@ fn save(geo: &Vec<geo::geometry::Geometry>, path: &PathBuf) -> Result<(), Box<dy
     Ok(())
 }
 
-fn random_points(bounds: &Rect, n: usize, seed: u64) -> Result<Vec<geo::geometry::Geometry>, Box<dyn std::error::Error>> {
-    let min = bounds.min();
-    let width = bounds.width();
-    let height = bounds.height();
+fn random_points(bounds: &Geometry, n: usize, seed: u64) -> Result<Vec<Geometry>, Box<dyn std::error::Error>> {
+    let bounding_box = bounds.bounding_rect().ok_or(Box::new(SamplerError::CannotCreateBoundingRect))?;
+    let min = bounding_box.min();
+    let width = bounding_box.width();
+    let height = bounding_box.height();
     let radius = (width * height / (n as f64)).sqrt() / 1.5;
     let points : Vec<_> = Poisson2D::new()
         .with_seed(seed)
         .with_dimensions([width, height], radius)
         .iter().take(n).collect();
 
-    if points.len() != n {
-        return Err(format!("expected {} points, got {}", n, points.len()).into());
-    }
-
-    Ok(points
+    let coords = points
         .iter()
-        .map(|[x_offset, y_offset]| { 
+        .map(|[x_offset, y_offset]| {
             let coord = coord! {
                 x: x_offset + min.x,
                 y: y_offset + min.y,
             };
             geo::geometry::Geometry::Point(Point::from(coord))
         })
-        .collect())
+        .collect();
+
+    if points.len() != n {
+        return Err(format!("expected {} points, got {}", n, points.len()).into());
+    }
+
+    Ok(coords)
 }
