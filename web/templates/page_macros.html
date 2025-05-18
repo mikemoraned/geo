@@ -14,17 +14,17 @@
   </figure>
 {% endmacro %}
 
-{% macro posts() %}
+{% macro posts(summary_only=false) %}
 {% set section = get_section(path="posts/_index.md") %}
 {% set pages = section.pages %}
 <section class="section">
   {% for page in pages %}
-  {{ self::post(page = page) }}
+  {{ self::post(page = page, summary_only = summary_only) }}
   {% endfor %}
 </section>
 {% endmacro %}
 
-{% macro post(page) %}
+{% macro post(page, summary_only=false) %}
 <div class="block">
     <div class="card">
       <header class="card-header">
@@ -49,7 +49,18 @@
       {% endif %}
       <div class="card-content">
         <div class="content">
+            {% if summary_only %}
+            <div style="font-style: italic;">
+              {{ page.summary | safe }}
+            </div>
+            <p style="font-size: larger;">
+              <a href="{{ page.path }}">
+                more...
+              </a>
+            </p>
+            {% else %}
             {{ page.content | safe }}
+            {% endif %}
             <a href="{{ page.path }}">
               <time datetime="{{ page.date }}">
                   <i class="fa-solid fa-calendar-day"></i> {{ page.date | date(format="%e %B %Y") }}
