@@ -3,7 +3,7 @@ use std::{fs::File, io::BufWriter, path::PathBuf};
 use clap::Parser;
 use config::Config;
 use fast_poisson::Poisson2D;
-use geo::{coord, BoundingRect, Geometry, GeometryCollection, Point, Rect};
+use geo::{coord, BoundingRect, Contains, Geometry, GeometryCollection, Point, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use rand::{RngCore, SeedableRng};
 use thiserror::Error;
@@ -60,8 +60,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(args.seed);
 
-    let starts = random_points(&bounds, args.paths, rng.next_u64())?;
-    let ends = random_points(&bounds, args.paths, rng.next_u64())?;
+    let mut starts = random_points(&bounds, args.paths, rng.next_u64())?;
+    let mut ends = random_points(&bounds, args.paths, rng.next_u64())?;
+
+    // TODO: for now, enforce variant of being same length by truncating each as needed
+    let min_length = starts.len().min(ends.len());
+    starts.truncate(min_length);
+    ends.truncate(min_length);
 
     save(&starts, &args.starts)?;
     save(&ends, &args.ends)?;
@@ -77,12 +82,7 @@ async fn read_bounds(args: &Args, config: &Config) -> Result<Geometry, Box<dyn s
             use overturemaps::overturemaps::OvertureMaps;
             let om = OvertureMaps::load_from_base(om_base.clone()).await?;
             if let Some(geometry) = om.find_geometry_by_id(gers_id).await? {
-                if let Some(rect) = geometry.bounding_rect() {
-                    Ok(Geometry::Rect(rect))
-                }
-                else {
-                    Err(Box::new(SamplerError::CannotCreateBoundingRect))
-                }
+                Ok(geometry)
             }
             else {
                 Err(Box::new(SamplerError::CannotFindGersId))
@@ -127,6 +127,7 @@ fn random_points(bounds: &Geometry, n: usize, seed: u64) -> Result<Vec<Geometry>
             };
             geo::geometry::Geometry::Point(Point::from(coord))
         })
+        .filter(|c| bounds.contains(c))
         .collect();
 
     if points.len() != n {

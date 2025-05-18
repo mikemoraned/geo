@@ -43,6 +43,7 @@
   * [x] update bounding-box bounds of cities to be defined based on reading the city from OM
     * [x] did this for edinburgh only
   * [ ] update random sampling to use actual city boundary geometry (not the rectangular bounds)
+  * [ ] reconsider different, less arbitary, solution for "enforce variant of being same length by truncating each as needed" TODO 
   * [ ] update all city bounds to be specified by reference to OM GERS id
   * [ ] clamp routes to only those wholly contained within city shape
 * [ ] filter out water areas
