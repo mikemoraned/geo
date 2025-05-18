@@ -2,11 +2,12 @@
 {% import "page_macros.html" as page_macros %}
 
 {% block body %}
-<section class="section">
-    <h1 class="title is-2">Mike Moran's Geo Projects</h1>
-    <div class="content">
+<section class="hero is-small is-info">
+    <div class="hero-body">
+        <p class="title"><i class="fa-solid fa-globe"></i> Geo Projects</p>
+        <p class="subtitle">by <a href="https://www.houseofmoran.com">Mike Moran</a></p>
     </div>
 </section>
 
-{{ page_macros::posts() }}
+{{ page_macros::posts(summary_only = true) }}
 {% endblock body %}

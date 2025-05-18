@@ -12,23 +12,23 @@
       allowfullscreen>s
   </iframe>
   </figure>
-{% endmacro meetups %}
+{% endmacro %}
 
-{% macro posts() %}
+{% macro posts(summary_only=false) %}
 {% set section = get_section(path="posts/_index.md") %}
 {% set pages = section.pages %}
 <section class="section">
   {% for page in pages %}
-  {{ self::post(page = page) }}
+  {{ self::post(page = page, summary_only = summary_only) }}
   {% endfor %}
 </section>
-{% endmacro meetups %}
+{% endmacro %}
 
-{% macro post(page) %}
+{% macro post(page, summary_only=false) %}
 <div class="block">
     <div class="card">
       <header class="card-header">
-        <p class="card-header-title">{{ page.title }}</p>
+        <a href="{{ page.path }}"><p class="card-header-title">{{ page.title }}</p></a>
       </header>
       {% if page.extra.youtube_id %}
       <div class="card-image">
@@ -38,16 +38,29 @@
       {% if page.extra.header_image_url %}
       <div class="card-image">
         <figure class="image is-4by3">
-          <img
-            src="{{ page.extra.header_image_url }}"
-            alt="{{ page.extra.header_image_description}}"
-          />
+          <a href="{{ page.path }}">
+            <img
+              src="{{ page.extra.header_image_url }}"
+              alt="{{ page.extra.header_image_description}}"
+            />
+          </a>
         </figure>
       </div>
       {% endif %}
       <div class="card-content">
         <div class="content">
+            {% if summary_only %}
+            <div style="font-style: italic;">
+              {{ page.summary | safe }}
+            </div>
+            <p style="font-size: larger;">
+              <a href="{{ page.path }}">
+                more...
+              </a>
+            </p>
+            {% else %}
             {{ page.content | safe }}
+            {% endif %}
             <a href="{{ page.path }}">
               <time datetime="{{ page.date }}">
                   <i class="fa-solid fa-calendar-day"></i> {{ page.date | date(format="%e %B %Y") }}
@@ -57,4 +70,4 @@
       </div>
     </div>
   </div>
-{% endmacro meetup %}
+{% endmacro %}

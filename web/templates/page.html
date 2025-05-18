@@ -2,6 +2,18 @@
 {% import "page_macros.html" as page_macros %}
 
 {% block body %}
+<nav class="navbar is-info" role="navigation" aria-label="main navigation">
+    <div class="navbar-brand">
+        <a class="navbar-item" href="/">
+            <i class="fa-solid fa-globe"></i> Geo Projects
+        </a>
+
+        <a class="navbar-item" href="https://www.houseofmoran.com">
+            by Mike Moran
+        </a>
+    </div>
+</nav>
+
 <section class="section">
     <article>
     {{ page_macros::post(page = page) }}
