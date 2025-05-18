@@ -12,7 +12,7 @@
       allowfullscreen>s
   </iframe>
   </figure>
-{% endmacro meetups %}
+{% endmacro %}
 
 {% macro posts() %}
 {% set section = get_section(path="posts/_index.md") %}
@@ -22,13 +22,13 @@
   {{ self::post(page = page) }}
   {% endfor %}
 </section>
-{% endmacro meetups %}
+{% endmacro %}
 
 {% macro post(page) %}
 <div class="block">
     <div class="card">
       <header class="card-header">
-        <p class="card-header-title">{{ page.title }}</p>
+        <a href="{{ page.path }}"><p class="card-header-title">{{ page.title }}</p></a>
       </header>
       {% if page.extra.youtube_id %}
       <div class="card-image">
@@ -38,10 +38,12 @@
       {% if page.extra.header_image_url %}
       <div class="card-image">
         <figure class="image is-4by3">
-          <img
-            src="{{ page.extra.header_image_url }}"
-            alt="{{ page.extra.header_image_description}}"
-          />
+          <a href="{{ page.path }}">
+            <img
+              src="{{ page.extra.header_image_url }}"
+              alt="{{ page.extra.header_image_description}}"
+            />
+          </a>
         </figure>
       </div>
       {% endif %}
@@ -57,4 +59,4 @@
       </div>
     </div>
   </div>
-{% endmacro meetup %}
+{% endmacro %}

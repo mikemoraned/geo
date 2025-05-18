@@ -32,10 +32,6 @@
       name="twitter:description"
       content="{{ description }}"
     />
-    {# <meta
-      name="twitter:image"
-      content="https://rustandfriends.org/images/hill_logo_meetup1.png"
-    /> #}
 
     {% block atom %}
       <link rel="alternate" type="application/atom+xml" title="Atom" href="{{ get_url(path="atom.xml", trailing_slash=false) }}">
@@ -43,8 +39,9 @@
 
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/bulma@1.0.2/css/bulma.min.css"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
     >
+    <script src="https://kit.fontawesome.com/d6b9545e6b.js" crossorigin="anonymous"></script>
     <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.file-downloads.hash.outbound-links.js"></script>
     <style>
       aside {
@@ -58,13 +55,9 @@
   <body>
     <div class="container">
       <div class="columns">
-        <div class="column is-three-quarters">
+        <div class="column">
           {% block body %}
           {% endblock body %}
-        </div>
-        <div class="column">
-          {% block sidebar %}
-          {% endblock sidebar %}
         </div>
       </div>
     </div>
