@@ -1,4 +1,5 @@
 
+
 export function createMarkers(map) {
     return new Markers(map);
 }
@@ -13,7 +14,7 @@ class Markers {
         if (this.markersById[id]) {
             this.markersById[id].setLngLat([position.lng, position.lat]);
         } else {
-            const marker = new mapboxgl.Marker()
+            const marker = new mapboxgl.Marker({ color: '#FF0000' })
                 .setLngLat([position.lng, position.lat])
                 .addTo(this.map);
             this.markersById[id] = marker;
