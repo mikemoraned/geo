@@ -58,7 +58,7 @@ class Model {
         this.store.addTableListener(
             'centers',
             (store, tableId, getCellChange) => {
-                const collated = [];
+                const collatedChanges = [];
                 const table = store.getTable(tableId);
                 for (const [clientId, row] of Object.entries(table)) {
                     const latCellChange = getCellChange(tableId, clientId, 'lat');
@@ -70,12 +70,24 @@ class Model {
                             lat: row.lat,
                             lng: row.lng
                         };
-                        collated.push(center);
+                        collatedChanges.push(center);
                     }
                 };
                 
-                listenerFn(collated);
+                console.log("collatedChanges", collatedChanges);
+                listenerFn(collatedChanges);
             },
         );
+        const initialPositions = [];
+        for (const [clientId, row] of Object.entries(this.store.getTable('centers'))) {
+            const center = {
+                id: clientId,
+                lat: row.lat,
+                lng: row.lng
+            };
+            initialPositions.push(center);
+        }
+        console.log("Initial positions", initialPositions);
+        listenerFn(initialPositions);
     }
 }
