@@ -1,6 +1,6 @@
-import { createMergeableStore } from 'https://cdn.jsdelivr.net/npm/tinybase@5.4.4/+esm';
-import { createWsSynchronizer } from 'https://cdn.jsdelivr.net/npm/tinybase@5.4.4/synchronizers/synchronizer-ws-client/+esm';
-import { createLocalPersister } from 'https://cdn.jsdelivr.net/npm/tinybase@5.4.4/persisters/persister-browser/+esm';
+import { createMergeableStore } from 'https://cdn.jsdelivr.net/npm/tinybase@6.1.2/+esm';
+import { createWsSynchronizer } from 'https://cdn.jsdelivr.net/npm/tinybase@6.1.2/synchronizers/synchronizer-ws-client/+esm';
+import { createLocalPersister } from 'https://cdn.jsdelivr.net/npm/tinybase@6.1.2/persisters/persister-browser/+esm';
 import { v4 as uuidv4 } from 'https://cdn.jsdelivr.net/npm/uuid@11.1.0/+esm';
 
 async function createLocalOnlyStore() {

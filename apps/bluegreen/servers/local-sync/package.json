@@ -10,8 +10,7 @@
   "license": "Apache-2.0",
   "description": "",
   "dependencies": {
-    "react": "^19.1.0",
-    "tinybase": "^5.4.4",
+    "tinybase": "^6.1.2",
     "ws": "^8.18.2"
   }
 }
