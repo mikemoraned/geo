@@ -16,6 +16,7 @@
     <div id="mapbox"></div>
     <script type="module">
         import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
+        import { createModel }  from "./js/model.js";
 
         const edinburgh = [-3.188267, 55.953251];
         const berlin_centroid = [13.402316096586881,52.50149390823518];
@@ -31,14 +32,15 @@
             projection: 'mercator',
 			...starting_position
 		});
-        console.log("Map created");        
+        console.log("Map created");
 
         map.on('load', async () => {
             console.log("Map loaded");
+            const model = await createModel(map.getCenter());
 
             function shareView() {
                 const center = map.getCenter();
-                console.log("Center:", center);
+                model.setCurrentView(center);
             }
 
             map.on("viewreset", shareView);
