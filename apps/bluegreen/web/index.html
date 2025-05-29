@@ -17,6 +17,7 @@
     <script type="module">
         import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
         import { createModel }  from "./js/model.js";
+        import { createMarkers } from "./js/markers.js";
 
         const edinburgh = [-3.188267, 55.953251];
         const berlin_centroid = [13.402316096586881,52.50149390823518];
@@ -37,6 +38,7 @@
         map.on('load', async () => {
             console.log("Map loaded");
             const model = await createModel(map.getCenter());
+            const markers = createMarkers(map);
 
             function shareView() {
                 const center = map.getCenter();
@@ -48,6 +50,10 @@
 
             function renderCenters(changed) {
                 console.log("Rendering centers", changed);
+                for (const change of changed) {
+                    const { id, lat, lng } = change;
+                    markers.createOrUpdateMarker(id, { lat, lng });
+                }
             }
             model.addCentersListener(renderCenters);
         });
