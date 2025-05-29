@@ -35,6 +35,14 @@
 
         map.on('load', async () => {
             console.log("Map loaded");
+
+            function shareView() {
+                const center = map.getCenter();
+                console.log("Center:", center);
+            }
+
+            map.on("viewreset", shareView);
+            map.on("moveend", shareView);
         });
     </script>
   </body>
