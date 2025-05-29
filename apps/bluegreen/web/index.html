@@ -45,6 +45,11 @@
 
             map.on("viewreset", shareView);
             map.on("moveend", shareView);
+
+            function renderCenters(changed) {
+                console.log("Rendering centers", changed);
+            }
+            model.addCentersListener(renderCenters);
         });
     </script>
   </body>
