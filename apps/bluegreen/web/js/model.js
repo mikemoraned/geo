@@ -1,11 +1,19 @@
 import { createMergeableStore } from 'https://cdn.jsdelivr.net/npm/tinybase@5.4.4/+esm';
-import { v4 as uuidv4 } from 'https://cdn.jsdelivr.net/npm/uuid@11.1.0/+esm'
+import { createWsSynchronizer } from 'https://cdn.jsdelivr.net/npm/tinybase@5.4.4/synchronizers/synchronizer-ws-client/+esm';
 import { createLocalPersister } from 'https://cdn.jsdelivr.net/npm/tinybase@5.4.4/persisters/persister-browser/+esm';
+import { v4 as uuidv4 } from 'https://cdn.jsdelivr.net/npm/uuid@11.1.0/+esm';
 
-
-export async function createModel(center) {
+export async function createModel(mapCenter, wsSyncUrl) {
     const store = createMergeableStore('bluegreen');
     console.log('Model created with store:', store);
+
+    const clientSynchronizer = await createWsSynchronizer(
+        store,
+        new WebSocket(wsSyncUrl),
+    );
+    console.log('WebSocket synchronizer created:', clientSynchronizer);
+    await clientSynchronizer.startSync();
+    console.log('WebSocket synchronizer started');
 
     const persister = createLocalPersister(store, 'bluegreen_v2');
     await persister.load();
@@ -21,7 +29,7 @@ export async function createModel(center) {
         console.log('Existing client ID:', clientId);
     }
     
-    return new Model(clientId, center, store);
+    return new Model(clientId, mapCenter, store);
 }
 
 class Model {

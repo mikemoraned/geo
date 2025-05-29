@@ -1,0 +1,17 @@
+{
+  "name": "local-sync",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "Apache-2.0",
+  "description": "",
+  "dependencies": {
+    "react": "^19.1.0",
+    "tinybase": "^5.4.4",
+    "ws": "^8.18.2"
+  }
+}

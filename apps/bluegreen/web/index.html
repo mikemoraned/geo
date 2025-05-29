@@ -15,7 +15,7 @@
   <body>
     <div id="mapbox"></div>
     <script type="module">
-        import { PUBLIC_MAPBOX_TOKEN } from "./js/settings.js";
+        import { PUBLIC_MAPBOX_TOKEN, WS_SYNC_URL } from "./js/settings.js";
         import { createModel }  from "./js/model.js";
         import { createMarkers } from "./js/markers.js";
 
@@ -37,7 +37,7 @@
 
         map.on('load', async () => {
             console.log("Map loaded");
-            const model = await createModel(map.getCenter());
+            const model = await createModel(map.getCenter(), WS_SYNC_URL);
             const markers = createMarkers(map);
 
             function shareView() {
