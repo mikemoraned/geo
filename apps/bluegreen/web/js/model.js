@@ -44,4 +44,30 @@ class Model {
         console.log(this.store.getTables());
         console.log('Current view set to:', center);
     }
+
+    addCentersListener(listenerFn) {
+        var ignore = null;
+        this.store.addTableListener(
+            'centers',
+            (store, tableId, getCellChange) => {
+                const collated = [];
+                const table = store.getTable(tableId);
+                for (const [clientId, row] of Object.entries(table)) {
+                    const latCellChange = getCellChange(tableId, clientId, 'lat');
+                    const lonCellChange = getCellChange(tableId, clientId, 'lon');
+                    const changed = latCellChange[0] || lonCellChange[0];
+                    if (changed) {
+                        const center = {
+                            id: clientId,
+                            lat: row.lat,
+                            lng: row.lng
+                        };
+                        collated.push(center);
+                    }
+                };
+                
+                listenerFn(collated);
+            },
+        );
+    }
 }
