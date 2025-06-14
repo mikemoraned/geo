@@ -39,12 +39,14 @@ struct Args {
 
 #[derive(Error, Debug)]
 pub enum SamplerError {
-    #[error("overture maps base dir required")]
+    #[error("OvertureMaps base dir required")]
     MissingOvertureMapsBase,
-    #[error("unable to find anything with that GERS Id")]
+    #[error("Unable to find anything with that GERS Id")]
     CannotFindGersId,
     #[error("Geometry for GERS Id could be converted into bounding rect")]
     CannotCreateBoundingRect,
+    #[error("Random sampling of area did not produce enough points")]
+    CannotGetEnoughRandomPoints,
 }
 
 #[tokio::main]
@@ -52,25 +54,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("{:?}", args);
 
-    let config : Config = Config::read_from_file(&args.area)?;
+    let config: Config = Config::read_from_file(&args.area)?;
     println!("Name: {}", config.bounds.name);
-    
+
     let bounds = read_bounds(&args, &config).await?;
     println!("Bounds: {:?}", bounds);
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(args.seed);
 
-    let mut starts = random_points(&bounds, args.paths, rng.next_u64())?;
-    let mut ends = random_points(&bounds, args.paths, rng.next_u64())?;
-
-    // TODO: for now, enforce variant of being same length by truncating each as needed
-    let min_length = starts.len().min(ends.len());
-    starts.truncate(min_length);
-    ends.truncate(min_length);
+    let starts = random_points(&bounds, args.paths, rng.next_u64())?;
+    let ends = random_points(&bounds, args.paths, rng.next_u64())?;
 
     save(&starts, &args.starts)?;
     save(&ends, &args.ends)?;
-    
+
     Ok(())
 }
 
@@ -83,21 +80,24 @@ async fn read_bounds(args: &Args, config: &Config) -> Result<Geometry, Box<dyn s
             let om = OvertureMaps::load_from_base(om_base.clone()).await?;
             if let Some(geometry) = om.find_geometry_by_id(gers_id).await? {
                 Ok(geometry)
-            }
-            else {
+            } else {
                 Err(Box::new(SamplerError::CannotFindGersId))
             }
-        }
-        else {
+        } else {
             Err(Box::new(SamplerError::MissingOvertureMapsBase))
         }
-    }
-    else {
-        Ok(Geometry::Rect(Rect::new(config.bounds.point1, config.bounds.point2)))
+    } else {
+        Ok(Geometry::Rect(Rect::new(
+            config.bounds.point1,
+            config.bounds.point2,
+        )))
     }
 }
 
-fn save(geo: &Vec<geo::geometry::Geometry>, path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn save(
+    geo: &Vec<geo::geometry::Geometry>,
+    path: &PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
     let collection = GeometryCollection::new_from(geo.clone());
 
     let fout = BufWriter::new(File::create(path)?);
@@ -107,32 +107,56 @@ fn save(geo: &Vec<geo::geometry::Geometry>, path: &PathBuf) -> Result<(), Box<dy
     Ok(())
 }
 
-fn random_points(bounds: &Geometry, n: usize, seed: u64) -> Result<Vec<Geometry>, Box<dyn std::error::Error>> {
-    let bounding_box = bounds.bounding_rect().ok_or(Box::new(SamplerError::CannotCreateBoundingRect))?;
+/// random_points generates `n` random points within the given bounds using a Poisson disk sampling algorithm.
+fn random_points(
+    bounds: &Geometry,
+    n: usize,
+    seed: u64,
+) -> Result<Vec<Geometry>, Box<dyn std::error::Error>> {
+    use geo::Area;
+
+    let bounding_box = bounds
+        .bounding_rect()
+        .ok_or(Box::new(SamplerError::CannotCreateBoundingRect))?;
+
     let min = bounding_box.min();
     let width = bounding_box.width();
     let height = bounding_box.height();
-    let radius = (width * height / (n as f64)).sqrt() / 1.5;
-    let points : Vec<_> = Poisson2D::new()
+
+    // we sample more than `n` points to ensure we have enough valid points after filtering to the geometry bounds
+    let filled_fraction = bounds.unsigned_area() / bounding_box.unsigned_area();
+    let sample_n = (n as f64 / filled_fraction).ceil() as usize;
+    println!(
+        "Sampling {} points to get {} valid points, as filled area is {}% of rectangular bounds",
+        sample_n,
+        n,
+        100.0 * filled_fraction
+    );
+
+    let radius = (width * height / (sample_n as f64)).sqrt() / 1.5;
+    let mut sample_points = Poisson2D::new()
         .with_seed(seed)
         .with_dimensions([width, height], radius)
-        .iter().take(n).collect();
-
-    let coords = points
         .iter()
-        .map(|[x_offset, y_offset]| {
-            let coord = coord! {
+        .peekable();
+
+    let mut coords = Vec::new();
+    while coords.len() < n && sample_points.peek().is_some() {
+        if let Some([x_offset, y_offset]) = sample_points.next() {
+            let sample_coord = coord! {
                 x: x_offset + min.x,
                 y: y_offset + min.y,
             };
-            geo::geometry::Geometry::Point(Point::from(coord))
-        })
-        .filter(|c| bounds.contains(c))
-        .collect();
-
-    if points.len() != n {
-        return Err(format!("expected {} points, got {}", n, points.len()).into());
+            let sample_point = geo::geometry::Geometry::Point(Point::from(sample_coord));
+            if bounds.contains(&sample_point) {
+                coords.push(sample_point);
+            }
+        }
     }
 
-    Ok(coords)
+    if coords.len() == n {
+        Ok(coords)
+    } else {
+        Err(Box::new(SamplerError::CannotGetEnoughRandomPoints))
+    }
 }
