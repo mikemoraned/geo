@@ -11,6 +11,7 @@ samples:
     cargo run --release --bin sample -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
+        --bounds {{output_base}}/{{area}}/bounds.geojson \
         --starts {{output_base}}/{{area}}/sample.{{paths}}.starts.geojson \
         --ends {{output_base}}/{{area}}/sample.{{paths}}.ends.geojson \
         --paths {{paths}} \

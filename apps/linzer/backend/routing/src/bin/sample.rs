@@ -28,6 +28,10 @@ struct Args {
     #[arg(long)]
     seed: u64,
 
+    /// output GeoJSON `.geojson` file for bounds of region
+    #[arg(long)]
+    bounds: PathBuf,
+
     /// output GeoJSON `.geojson` file for starting points
     #[arg(long)]
     starts: PathBuf,
@@ -59,6 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bounds = read_bounds(&args, &config).await?;
     println!("Bounds: {:?}", bounds);
+    save(&vec![bounds.clone()], &args.bounds)?;
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(args.seed);
 
