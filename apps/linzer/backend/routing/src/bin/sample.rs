@@ -124,7 +124,8 @@ fn random_points(
     let height = bounding_box.height();
 
     // we sample more than `n` points to ensure we have enough valid points after filtering to the geometry bounds
-    let filled_fraction = bounds.unsigned_area() / bounding_box.unsigned_area();
+    let filled_area = bounds.unsigned_area();
+    let filled_fraction = filled_area / bounding_box.unsigned_area();
     let sample_n = (n as f64 / filled_fraction).ceil() as usize;
     println!(
         "Sampling {} points to get {} valid points, as filled area is {}% of rectangular bounds",
@@ -133,7 +134,11 @@ fn random_points(
         100.0 * filled_fraction
     );
 
-    let radius = (width * height / (sample_n as f64)).sqrt() / 1.5;
+    // also scale the radius between points based on the area being covered
+    let square_area_per_point = filled_area / (n as f64);
+    let side_length = square_area_per_point.sqrt();
+    let diagonal_length = (2.0 * side_length.powi(2)).sqrt(); // hypotoneuse
+    let radius = diagonal_length / 2.0;
     let mut sample_points = Poisson2D::new()
         .with_seed(seed)
         .with_dimensions([width, height], radius)

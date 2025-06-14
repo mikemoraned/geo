@@ -1,5 +1,5 @@
 area := "edinburgh"
-paths := "1000"
+paths := "2000"
 seed := "1"
 profile := "pedestrian" # or "auto"
 config_base := "../config"
