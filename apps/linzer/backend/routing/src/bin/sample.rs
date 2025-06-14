@@ -120,6 +120,12 @@ fn random_points(
 ) -> Result<Vec<Geometry>, Box<dyn std::error::Error>> {
     use geo::Area;
 
+    // TODO: change algorithm:
+    // 1. find R randomly distributed points which are within the region, such that it is spread out and R >= n
+    //    do this by initially asking for more than `n` accounting for %-age area filled. If after filtering to bounds, < n is left, then try again
+    //    with a larger R
+    // 2. randomly subselect `n` smoothly from within the points (so that it not biased to one side i.e. don't just choose the first n)
+
     let bounding_box = bounds
         .bounding_rect()
         .ok_or(Box::new(SamplerError::CannotCreateBoundingRect))?;
@@ -149,6 +155,10 @@ fn random_points(
         .with_dimensions([width, height], radius)
         .iter()
         .peekable();
+
+    // TODO: need to then randomly sample from throughout the iterator as the position is
+    // ordered (if we just sample first `n` then we get a skewed distribution of the leftmost points)
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
     let mut coords = Vec::new();
     while coords.len() < n && sample_points.peek().is_some() {
