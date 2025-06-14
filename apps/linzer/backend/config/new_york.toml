@@ -1,6 +1,0 @@
-
-[bounds]
-name = "New York, similar area to original artist"
-# found via https://boundingbox.klokantech.com
-point1 = { x = -74.0252, y = 40.697469 } 
-point2 = { x = -73.915337, y = 40.764591 }

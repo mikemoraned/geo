@@ -1,11 +1,12 @@
 use std::{fs::File, io::BufWriter, path::PathBuf};
 
-use clap::{command, Parser};
+use clap::Parser;
+use config::Config;
 use fast_poisson::Poisson2D;
-use geo::{coord, Coord, GeometryCollection, Point, Rect};
+use geo::{coord, BoundingRect, Contains, Geometry, GeometryCollection, Point, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use rand::{RngCore, SeedableRng};
-use serde::Deserialize;
+use thiserror::Error;
 
 /// Create sample points in area
 #[derive(Parser, Debug)]
@@ -15,6 +16,10 @@ struct Args {
     #[arg(long)]
     area: PathBuf,
 
+    /// base location for OvertureMaps data
+    #[arg(long)]
+    overturemaps: Option<String>,
+
     /// number of points to generate
     #[arg(long)]
     paths: usize,
@@ -22,6 +27,10 @@ struct Args {
     /// seed for random number generator
     #[arg(long)]
     seed: u64,
+
+    /// output GeoJSON `.geojson` file for bounds of region
+    #[arg(long)]
+    bounds: PathBuf,
 
     /// output GeoJSON `.geojson` file for starting points
     #[arg(long)]
@@ -32,16 +41,16 @@ struct Args {
     ends: PathBuf,
 }
 
-#[derive(Deserialize, Debug)]
-struct Config {
-   bounds: Bounds
-}
-
-#[derive(Deserialize, Debug)]
-struct Bounds {
-    point1: Coord,
-    point2: Coord,
-    name: String
+#[derive(Error, Debug)]
+pub enum SamplerError {
+    #[error("OvertureMaps base dir required")]
+    MissingOvertureMapsBase,
+    #[error("Unable to find anything with that GERS Id")]
+    CannotFindGersId,
+    #[error("Geometry for GERS Id could be converted into bounding rect")]
+    CannotCreateBoundingRect,
+    #[error("Random sampling of area did not produce enough points")]
+    CannotGetEnoughRandomPoints,
 }
 
 #[tokio::main]
@@ -49,11 +58,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("{:?}", args);
 
-    let config_str = std::fs::read_to_string(&args.area)?;
-    let config : Config = toml::from_str(&config_str)?;
+    let config: Config = Config::read_from_file(&args.area)?;
     println!("Name: {}", config.bounds.name);
-    
-    let bounds = Rect::new(config.bounds.point1, config.bounds.point2); 
+
+    let bounds = read_bounds(&args, &config).await?;
+    println!("Bounds: {:?}", bounds);
+    save(&vec![bounds.clone()], &args.bounds)?;
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(args.seed);
 
@@ -62,11 +72,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     save(&starts, &args.starts)?;
     save(&ends, &args.ends)?;
-    
+
     Ok(())
 }
 
-fn save(geo: &Vec<geo::geometry::Geometry>, path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+async fn read_bounds(args: &Args, config: &Config) -> Result<Geometry, Box<dyn std::error::Error>> {
+    if let Some(om) = config.overturemaps.as_ref() {
+        println!("Using overture maps");
+        let gers_id = &om.gers_id;
+        if let Some(om_base) = args.overturemaps.as_ref() {
+            use overturemaps::overturemaps::OvertureMaps;
+            let om = OvertureMaps::load_from_base(om_base.clone()).await?;
+            if let Some(geometry) = om.find_geometry_by_id(gers_id).await? {
+                Ok(geometry)
+            } else {
+                Err(Box::new(SamplerError::CannotFindGersId))
+            }
+        } else {
+            Err(Box::new(SamplerError::MissingOvertureMapsBase))
+        }
+    } else {
+        Ok(Geometry::Rect(Rect::new(
+            config.bounds.point1,
+            config.bounds.point2,
+        )))
+    }
+}
+
+fn save(
+    geo: &Vec<geo::geometry::Geometry>,
+    path: &PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
     let collection = GeometryCollection::new_from(geo.clone());
 
     let fout = BufWriter::new(File::create(path)?);
@@ -76,28 +112,71 @@ fn save(geo: &Vec<geo::geometry::Geometry>, path: &PathBuf) -> Result<(), Box<dy
     Ok(())
 }
 
-fn random_points(bounds: &Rect, n: usize, seed: u64) -> Result<Vec<geo::geometry::Geometry>, Box<dyn std::error::Error>> {
-    let min = bounds.min();
-    let width = bounds.width();
-    let height = bounds.height();
-    let radius = (width * height / (n as f64)).sqrt() / 1.5;
-    let points : Vec<_> = Poisson2D::new()
+/// random_points generates `n` random points within the given bounds using a Poisson disk sampling algorithm.
+fn random_points(
+    bounds: &Geometry,
+    n: usize,
+    seed: u64,
+) -> Result<Vec<Geometry>, Box<dyn std::error::Error>> {
+    use geo::Area;
+
+    // TODO: change algorithm:
+    // 1. find R randomly distributed points which are within the region, such that it is spread out and R >= n
+    //    do this by initially asking for more than `n` accounting for %-age area filled. If after filtering to bounds, < n is left, then try again
+    //    with a larger R
+    // 2. randomly subselect `n` smoothly from within the points (so that it not biased to one side i.e. don't just choose the first n)
+
+    let bounding_box = bounds
+        .bounding_rect()
+        .ok_or(Box::new(SamplerError::CannotCreateBoundingRect))?;
+
+    let min = bounding_box.min();
+    let width = bounding_box.width();
+    let height = bounding_box.height();
+
+    // we sample more than `n` points to ensure we have enough valid points after filtering to the geometry bounds
+    let filled_area = bounds.unsigned_area();
+    let filled_fraction = filled_area / bounding_box.unsigned_area();
+    let sample_n = (n as f64 / filled_fraction).ceil() as usize;
+    println!(
+        "Sampling {} points to get {} valid points, as filled area is {}% of rectangular bounds",
+        sample_n,
+        n,
+        100.0 * filled_fraction
+    );
+
+    // also scale the radius between points based on the area being covered
+    let square_area_per_point = filled_area / (n as f64);
+    let side_length = square_area_per_point.sqrt();
+    let diagonal_length = (2.0 * side_length.powi(2)).sqrt(); // hypotoneuse
+    let radius = diagonal_length / 2.0;
+    let mut sample_points = Poisson2D::new()
         .with_seed(seed)
         .with_dimensions([width, height], radius)
-        .iter().take(n).collect();
-
-    if points.len() != n {
-        return Err(format!("expected {} points, got {}", n, points.len()).into());
-    }
-
-    Ok(points
         .iter()
-        .map(|[x_offset, y_offset]| { 
-            let coord = coord! {
+        .peekable();
+
+    // TODO: need to then randomly sample from throughout the iterator as the position is
+    // ordered (if we just sample first `n` then we get a skewed distribution of the leftmost points)
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+    let mut coords = Vec::new();
+    while coords.len() < n && sample_points.peek().is_some() {
+        if let Some([x_offset, y_offset]) = sample_points.next() {
+            let sample_coord = coord! {
                 x: x_offset + min.x,
                 y: y_offset + min.y,
             };
-            geo::geometry::Geometry::Point(Point::from(coord))
-        })
-        .collect())
+            let sample_point = geo::geometry::Geometry::Point(Point::from(sample_coord));
+            if bounds.contains(&sample_point) {
+                coords.push(sample_point);
+            }
+        }
+    }
+
+    if coords.len() == n {
+        Ok(coords)
+    } else {
+        Err(Box::new(SamplerError::CannotGetEnoughRandomPoints))
+    }
 }

@@ -1,0 +1,8 @@
+{
+  // Rust-specific settings
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file"  // ensures full-document formatting
+  },
+}
