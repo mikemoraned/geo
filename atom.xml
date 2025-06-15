@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+    <title></title>
+    <link rel="self" type="application/atom+xml" href="https://geo.houseofmoran.io/atom.xml"/>
+    <link rel="alternate" type="text/html" href="https://geo.houseofmoran.io"/>
+    <generator uri="https://www.getzola.org/">Zola</generator>
+    <updated>2025-01-26T00:00:00+00:00</updated>
+    <id>https://geo.houseofmoran.io/atom.xml</id>
+    <entry xml:lang="en">
+        <title>Linzer: Similar Regions Across Multiple Cities</title>
+        <published>2025-01-26T00:00:00+00:00</published>
+        <updated>2025-01-26T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Mike Moran
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://geo.houseofmoran.io/posts/2025-01-26/"/>
+        <id>https://geo.houseofmoran.io/posts/2025-01-26/</id>
+        
+        <summary type="html">&lt;p&gt;It was great to get along to my second &lt;a href=&quot;https:&#x2F;&#x2F;lu.ma&#x2F;0d99mx3r&quot;&gt;&quot;Makers gonna make&quot;&lt;&#x2F;a&gt; event at Codebase on Saturday, despite the Red Weather Warning on Friday. Many thanks to &lt;a href=&quot;https:&#x2F;&#x2F;www.linkedin.com&#x2F;in&#x2F;peter-trizuliak&#x2F;&quot;&gt;Peter Trizuliak&lt;&#x2F;a&gt; for organising.&lt;&#x2F;p&gt;
+&lt;p&gt;It&#x27;s a pretty laid-back environment with a nice mix of focus time, breaks for pizza and free coffee &#x2F; food (thanks to sponsors, &lt;a href=&quot;https:&#x2F;&#x2F;www.shopify.com&#x2F;uk&quot;&gt;Shopify&lt;&#x2F;a&gt;, &lt;a href=&quot;https:&#x2F;&#x2F;thisiscodebase.com&quot;&gt;Codebase&lt;&#x2F;a&gt; and &lt;a href=&quot;https:&#x2F;&#x2F;www.thesourcecoffee.co.uk&#x2F;brewd&quot;&gt;The Source Coffee roasters&lt;&#x2F;a&gt;). You can present what you&#x27;ve done and&#x2F;or head to pub later, but no pressure to do either. The &lt;a href=&quot;https:&#x2F;&#x2F;lu.ma&#x2F;c410sjxy&quot;&gt;next event is coming up in February&lt;&#x2F;a&gt;; I unfortunately can&#x27;t make this one, but maybe see you at another!&lt;&#x2F;p&gt;</summary>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>Linzer: Region Summaries and Similarities</title>
+        <published>2025-01-07T00:00:00+00:00</published>
+        <updated>2025-01-07T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Mike Moran
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://geo.houseofmoran.io/posts/2025-01-07/"/>
+        <id>https://geo.houseofmoran.io/posts/2025-01-07/</id>
+        
+        <summary type="html">&lt;p&gt;Over the holidays I was thinking about where I am with the &lt;a href=&quot;https:&#x2F;&#x2F;geo.houseofmoran.io&#x2F;posts&#x2F;2024-10-01&#x2F;&quot;&gt;Biscuits&lt;&#x2F;a&gt; project. The &lt;a href=&quot;https:&#x2F;&#x2F;linzer.houseofmoran.io&quot;&gt;Linzer&lt;&#x2F;a&gt; version has gotten to the point where I have a lot of the core bits of technical knowledge required, and I &quot;merely&quot; need to understand the aesthetics, if I wanted to copy the original artist.&lt;&#x2F;p&gt;
+&lt;p&gt;Whilst it is good to attempt to copy to learn, I am now a bit uneasy with it as a goal. This is partly because the habit of &quot;Computing People&quot; copying &quot;Artistic people&quot; is becoming a bit rude in the current race-to-the-bottom of AI Art. However, it&#x27;s also because I have some other ideas I wanna explore. So, I&#x27;m gonna do that instead.&lt;&#x2F;p&gt;</summary>
+        
+    </entry>
+    <entry xml:lang="en">
+        <title>The Biscuits Project: decomposing the structure of cities</title>
+        <published>2024-10-01T00:00:00+00:00</published>
+        <updated>2024-10-01T00:00:00+00:00</updated>
+        
+        <author>
+          <name>
+            
+              Mike Moran
+            
+          </name>
+        </author>
+        
+        <link rel="alternate" type="text/html" href="https://geo.houseofmoran.io/posts/2024-10-01/"/>
+        <id>https://geo.houseofmoran.io/posts/2024-10-01/</id>
+        
+        <summary type="html">&lt;p&gt;I did a talk on this project at the &lt;a href=&quot;https:&#x2F;&#x2F;thegeomob.com&#x2F;post&#x2F;oct-1st-2024-geomobedi-details&quot;&gt;GeoMOB Edinburgh event on 1&#x2F;10&#x2F;2024&lt;&#x2F;a&gt;.
+The &lt;a href=&quot;&#x2F;slides&#x2F;2024_Geomob_Oct_Presentation.pdf&quot;&gt;slides&lt;&#x2F;a&gt; are available, but I&#x27;ll give a summary of the accompanying explanation content here.&lt;&#x2F;p&gt;
+&lt;p&gt;The &quot;Biscuits&quot; project began back in &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;mikemoraned&#x2F;biscuits?tab=readme-ov-file#september-2017&quot;&gt;September 2017&lt;&#x2F;a&gt;.
+It was inspired by a work of art by &lt;a href=&quot;https:&#x2F;&#x2F;www.armellecaron.fr&quot;&gt;Armelle Caron&lt;&#x2F;a&gt;
+called &lt;a href=&quot;https:&#x2F;&#x2F;www.armellecaron.fr&#x2F;works&#x2F;les-villes-rangees&#x2F;&quot;&gt;Les Villes Rangees&lt;&#x2F;a&gt;:&lt;&#x2F;p&gt;</summary>
+        
+    </entry>
+</feed>
