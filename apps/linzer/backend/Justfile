@@ -7,7 +7,7 @@ output_base := "../output"
 overturemaps_base := "/Volumes/PRO-G40/OvertureMaps/data/release/2025-05-21.0"
 
 samples:
-    mkdir -p output/{{area}}
+    mkdir -p {{output_base}}/{{area}}
     cargo run --release --bin sample -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
@@ -65,3 +65,7 @@ generate_all:
 
     just --set area amsterdam --set profile pedestrian all
     just --set area amsterdam --set profile auto all
+
+    just --set area berlin --set profile pedestrian all
+    just --set area berlin --set profile auto all
+
