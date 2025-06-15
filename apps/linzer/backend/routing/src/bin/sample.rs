@@ -116,7 +116,7 @@ async fn read_bounds(args: &Args, config: &Config) -> Result<Geometry, Box<dyn s
                         Ok(geometry)
                     }
                 } else {
-                    Err(Box::new(SamplerError::CannotFindGersId))
+                    Ok(geometry)
                 }
             } else {
                 Err(Box::new(SamplerError::CannotFindGersId))
