@@ -119,12 +119,7 @@ fn random_points(
     seed: u64,
 ) -> Result<Vec<Geometry>, Box<dyn std::error::Error>> {
     use geo::Area;
-
-    // TODO: change algorithm:
-    // 1. find R randomly distributed points which are within the region, such that it is spread out and R >= n
-    //    do this by initially asking for more than `n` accounting for %-age area filled. If after filtering to bounds, < n is left, then try again
-    //    with a larger R
-    // 2. randomly subselect `n` smoothly from within the points (so that it not biased to one side i.e. don't just choose the first n)
+    use rand::seq::IteratorRandom;
 
     let bounding_box = bounds
         .bounding_rect()
@@ -150,33 +145,40 @@ fn random_points(
     let side_length = square_area_per_point.sqrt();
     let diagonal_length = (2.0 * side_length.powi(2)).sqrt(); // hypotoneuse
     let radius = diagonal_length / 2.0;
-    let mut sample_points = Poisson2D::new()
+
+    let sample_points: Vec<_> = Poisson2D::new()
         .with_seed(seed)
         .with_dimensions([width, height], radius)
         .iter()
-        .peekable();
+        .take(sample_n)
+        .collect();
 
-    // TODO: need to then randomly sample from throughout the iterator as the position is
-    // ordered (if we just sample first `n` then we get a skewed distribution of the leftmost points)
-    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-
-    let mut coords = Vec::new();
-    while coords.len() < n && sample_points.peek().is_some() {
-        if let Some([x_offset, y_offset]) = sample_points.next() {
-            let sample_coord = coord! {
-                x: x_offset + min.x,
-                y: y_offset + min.y,
-            };
-            let sample_point = geo::geometry::Geometry::Point(Point::from(sample_coord));
-            if bounds.contains(&sample_point) {
-                coords.push(sample_point);
-            }
+    // go through all sample points, convert to coords, and find only those which overlap bounds
+    let mut coords_within_bounds = vec![];
+    for sample_point in sample_points.iter() {
+        let [x_offset, y_offset] = sample_point;
+        let sample_coord = coord! {
+            x: x_offset + min.x,
+            y: y_offset + min.y,
+        };
+        let sample_point = geo::geometry::Geometry::Point(Point::from(sample_coord));
+        if bounds.contains(&sample_point) {
+            coords_within_bounds.push(sample_point);
         }
     }
 
-    if coords.len() == n {
-        Ok(coords)
-    } else {
-        Err(Box::new(SamplerError::CannotGetEnoughRandomPoints))
+    if coords_within_bounds.len() < n {
+        // TODO: could probably fix this by re-sampling with a larger `sample_n` but for now
+        // for simplicity just fail
+        return Err(Box::new(SamplerError::CannotGetEnoughRandomPoints));
     }
+
+    // need to then randomly sample from throughout the coords found as the position is
+    // ordered (if we just sample first `n` then we get a skewed distribution of the leftmost points)
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let coords = coords_within_bounds
+        .into_iter()
+        .choose_multiple(&mut rng, n);
+
+    Ok(coords)
 }
