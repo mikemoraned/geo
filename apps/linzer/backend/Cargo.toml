@@ -1,5 +1,5 @@
 [workspace]
-members = ["api", "cli", "conversion", "display", "layout", "regions", "routing", "startup"]
+members = ["api", "cli", "config", "conversion", "display", "layout", "overturemaps", "regions", "routing", "startup"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -16,10 +16,14 @@ tracing = "0.1"
 
 geo = "0.28"
 geojson = { version = "0.24", features = ["geo-types"] }
-geozero = "0.13"
+geozero = { version = "0.14", features = ["with-wkb"] }
 
 rand = "0.8"
 
 tiny-skia = "0.11"
 image = "0.25"
 imageproc = "0.25"
+
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+
