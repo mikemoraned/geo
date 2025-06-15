@@ -4,7 +4,7 @@ seed := "1"
 profile := "pedestrian" # or "auto"
 config_base := "../config"
 output_base := "../output"
-overturemaps_base := "/Users/mxm/Scratch/OvertureMaps/release/2025-02-19.0"
+overturemaps_base := "/Volumes/PRO-G40/OvertureMaps/data/release/2025-05-21.0"
 
 samples:
     mkdir -p output/{{area}}
