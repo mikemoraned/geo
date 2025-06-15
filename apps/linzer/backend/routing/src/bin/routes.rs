@@ -24,7 +24,7 @@ struct Args {
     server: Server,
 
     /// how many times it should retry a routing request before giving up
-    #[arg(long, default_value = "10")]
+    #[arg(long, default_value = "2")]
     max_retries: u32,
 
     /// profile
