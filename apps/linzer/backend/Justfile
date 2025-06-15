@@ -62,3 +62,6 @@ generate_all:
 
     just --set area paris --set profile pedestrian all
     just --set area paris --set profile auto all
+
+    just --set area amsterdam --set profile pedestrian all
+    just --set area amsterdam --set profile auto all
