@@ -1,8 +1,2 @@
 [overturemaps]
 gers_id = "085f1366ffffffff0123ad1610d936d7"
-
-[bounds]
-name = "Paris, similar area to original artist"
-# found via https://boundingbox.klokantech.com
-point1 = { x = 2.252268, y = 48.824878 }
-point2 = { x = 2.382903, y = 48.895463 }
