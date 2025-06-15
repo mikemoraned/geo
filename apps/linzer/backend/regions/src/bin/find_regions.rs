@@ -1,11 +1,23 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::{BufReader, BufWriter, Cursor}, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    fs::File,
+    io::{BufReader, BufWriter, Cursor},
+    path::PathBuf,
+};
 
 use clap::{command, Parser};
 use conversion::projection::Projection;
 use geo::{coord, Area, BoundingRect, Coord, Geometry, GeometryCollection, Within};
-use geozero::{geo_types::GeoWriter, geojson::{GeoJsonReader, GeoJsonWriter}, GeozeroDatasource, GeozeroGeometry};
+use geozero::{
+    geo_types::GeoWriter,
+    geojson::{GeoJsonReader, GeoJsonWriter},
+    GeozeroDatasource, GeozeroGeometry,
+};
 use image::{GrayImage, ImageReader, Luma, Rgba, RgbaImage};
-use imageproc::{definitions::Image, region_labelling::{connected_components, Connectivity}};
+use imageproc::{
+    definitions::Image,
+    region_labelling::{connected_components, Connectivity},
+};
 use rand::Rng;
 use regions::contours::find_contours_in_luma;
 
@@ -47,35 +59,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Geometry::GeometryCollection(geoms) = writer.take_geometry().unwrap() {
         println!("Found {} geometries", geoms.len());
 
-        let (draw_image , projection) = draw_routes(&geoms)?;
+        let (draw_image, projection) = draw_routes(&geoms)?;
 
-        let draw_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "draw");
+        let draw_stage_png = args
+            .stage_template
+            .to_str()
+            .unwrap()
+            .replace("STAGE_NAME", "draw");
         draw_image.save(draw_stage_png)?;
 
         let background_color = Luma([255u8]);
-        let labelled_image : Image<Luma<u32>> =
+        let labelled_image: Image<Luma<u32>> =
             connected_components(&draw_image, Connectivity::Four, background_color);
 
-        let labelled_colored_image : RgbaImage = assign_random_colors(&labelled_image);
+        let labelled_colored_image: RgbaImage = assign_random_colors(&labelled_image);
 
-        let labelled_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "labelled");
+        let labelled_stage_png = args
+            .stage_template
+            .to_str()
+            .unwrap()
+            .replace("STAGE_NAME", "labelled");
         labelled_colored_image.save(labelled_stage_png)?;
 
         let contours = find_contours_in_luma(Luma([0u32; 1]), &labelled_image);
         println!("Found {} contours", contours.len());
-        let contours_image = draw_contours(&contours, labelled_image.width(), labelled_image.height())?;
-        let contours_stage_png = args.stage_template.to_str().unwrap().replace("STAGE_NAME", "contours");
+        let contours_image =
+            draw_contours(&contours, labelled_image.width(), labelled_image.height())?;
+        let contours_stage_png = args
+            .stage_template
+            .to_str()
+            .unwrap()
+            .replace("STAGE_NAME", "contours");
         contours_image.save(contours_stage_png)?;
 
-        let mut contour_collection = GeometryCollection::from(contours.iter().map(|contour| {
-            let coords : Vec<Coord> = contour.iter().map(|point| {
-                let (x, y) = projection.invert(point.x as f64, point.y as f64);
-                coord!(x: x, y: y)
-            }).collect();
-            let exterior = geo::LineString::new(coords);
-            let poly = geo::Polygon::new(exterior, vec![]);
-            Geometry::Polygon(poly)
-        }).collect::<Vec<Geometry>>());
+        let mut contour_collection = GeometryCollection::from(
+            contours
+                .iter()
+                .map(|contour| {
+                    let coords: Vec<Coord> = contour
+                        .iter()
+                        .map(|point| {
+                            let (x, y) = projection.invert(point.x as f64, point.y as f64);
+                            coord!(x: x, y: y)
+                        })
+                        .collect();
+                    let exterior = geo::LineString::new(coords);
+                    let poly = geo::Polygon::new(exterior, vec![]);
+                    Geometry::Polygon(poly)
+                })
+                .collect::<Vec<Geometry>>(),
+        );
 
         if args.exclude_border {
             contour_collection = exclude_border(&contour_collection);
@@ -96,17 +129,21 @@ fn exclude_by_proportion(collection: &GeometryCollection, proportion: f32) -> Ge
     let max_width = bounds.width() as f32 * proportion;
     let max_height = bounds.height() as f32 * proportion;
     let max_area = (collection.signed_area()) as f32 * proportion;
-    let filtered : Vec<Geometry> = collection.clone().into_iter().filter(|geom| {
-        if let Geometry::Polygon(poly) = geom {
-            let poly_bounds = poly.bounding_rect().unwrap();
-            let width = poly_bounds.width() as f32;
-            let height = poly_bounds.height() as f32;
-            let area = poly.signed_area() as f32;
-            width < max_width && height < max_height && area < max_area
-        } else {
-            false
-        }
-    }).collect();
+    let filtered: Vec<Geometry> = collection
+        .clone()
+        .into_iter()
+        .filter(|geom| {
+            if let Geometry::Polygon(poly) = geom {
+                let poly_bounds = poly.bounding_rect().unwrap();
+                let width = poly_bounds.width() as f32;
+                let height = poly_bounds.height() as f32;
+                let area = poly.signed_area() as f32;
+                width < max_width && height < max_height && area < max_area
+            } else {
+                false
+            }
+        })
+        .collect();
     GeometryCollection::from(filtered)
 }
 
@@ -120,19 +157,26 @@ fn exclude_border(collection: &GeometryCollection) -> GeometryCollection {
     let min = coord!(x: current_bounds.min().x + shrink_amount_x, y: current_bounds.min().y + shrink_amount_y);
     let max = coord!(x: current_bounds.max().x - shrink_amount_x, y: current_bounds.max().y - shrink_amount_y);
     let smaller_bounds = geo::Rect::new(min, max);
-    let filtered : Vec<Geometry> = collection.clone().into_iter().filter(|geom| {
-        if let Geometry::Polygon(poly) = geom {
-            let bounds = poly.bounding_rect().unwrap();
-            bounds.is_within(&smaller_bounds)
-        } else {
-            false
-        }
-    }).collect();
+    let filtered: Vec<Geometry> = collection
+        .clone()
+        .into_iter()
+        .filter(|geom| {
+            if let Geometry::Polygon(poly) = geom {
+                let bounds = poly.bounding_rect().unwrap();
+                bounds.is_within(&smaller_bounds)
+            } else {
+                false
+            }
+        })
+        .collect();
     GeometryCollection::from(filtered)
 }
 
 fn assign_random_colors(labelled_image: &Image<Luma<u32>>) -> RgbaImage {
-    let unique_ids = labelled_image.pixels().map(|p| p[0]).collect::<HashSet<u32>>();
+    let unique_ids = labelled_image
+        .pixels()
+        .map(|p| p[0])
+        .collect::<HashSet<u32>>();
     let mut color_map = HashMap::new();
     for id in unique_ids {
         let color = Rgba([rand::random(), rand::random(), rand::random(), 255]);
@@ -145,7 +189,9 @@ fn assign_random_colors(labelled_image: &Image<Luma<u32>>) -> RgbaImage {
     image
 }
 
-fn draw_routes(collection: &GeometryCollection) -> Result<(GrayImage, Projection), Box<dyn std::error::Error>> {
+fn draw_routes(
+    collection: &GeometryCollection,
+) -> Result<(GrayImage, Projection), Box<dyn std::error::Error>> {
     use tiny_skia::*;
 
     let bounds = collection.bounding_rect().unwrap();
@@ -181,10 +227,11 @@ fn draw_routes(collection: &GeometryCollection) -> Result<(GrayImage, Projection
 
     // so, first make everything white by default
     pixmap.fill_rect(
-        Rect::from_xywh(0.0, 0.0, width_px as f32, height_px as f32).ok_or("Failed to create rect")?,
+        Rect::from_xywh(0.0, 0.0, width_px as f32, height_px as f32)
+            .ok_or("Failed to create rect")?,
         &white,
         Transform::identity(),
-        None
+        None,
     );
 
     // then draw any polygons in black as backgrounds for regions
@@ -233,7 +280,11 @@ fn draw_routes(collection: &GeometryCollection) -> Result<(GrayImage, Projection
     Ok((image, projection))
 }
 
-fn draw_contours(contours: &Vec<Vec<regions::contours::Point<u32>>>, width_px: u32, height_px: u32) -> Result<RgbaImage, Box<dyn std::error::Error>> {
+fn draw_contours(
+    contours: &Vec<Vec<regions::contours::Point<u32>>>,
+    width_px: u32,
+    height_px: u32,
+) -> Result<RgbaImage, Box<dyn std::error::Error>> {
     use tiny_skia::*;
 
     let mut pixmap = Pixmap::new(width_px, height_px).ok_or("Failed to create pixmap")?;
@@ -250,10 +301,11 @@ fn draw_contours(contours: &Vec<Vec<regions::contours::Point<u32>>>, width_px: u
     stroke.width = 1.0;
 
     pixmap.fill_rect(
-        Rect::from_xywh(0.0, 0.0, width_px as f32, height_px as f32).ok_or("Failed to create rect")?,
+        Rect::from_xywh(0.0, 0.0, width_px as f32, height_px as f32)
+            .ok_or("Failed to create rect")?,
         &black,
         Transform::identity(),
-        None
+        None,
     );
 
     let mut rng = rand::thread_rng();
@@ -272,9 +324,20 @@ fn draw_contours(contours: &Vec<Vec<regions::contours::Point<u32>>>, width_px: u
         let path = pb.finish().ok_or("Failed to finish path")?;
         pixmap.stroke_path(&path, &white, &stroke, Transform::identity(), None);
         let mut paint = Paint::default();
-        paint.set_color_rgba8(rng.gen_range(0 .. 255), rng.gen_range(0 .. 255), rng.gen_range(0 .. 255), 255);
+        paint.set_color_rgba8(
+            rng.gen_range(0..255),
+            rng.gen_range(0..255),
+            rng.gen_range(0..255),
+            255,
+        );
         paint.anti_alias = true;
-        pixmap.fill_path(&path, &paint, FillRule::EvenOdd, Transform::identity(), None);
+        pixmap.fill_path(
+            &path,
+            &paint,
+            FillRule::EvenOdd,
+            Transform::identity(),
+            None,
+        );
     }
 
     let png_bytes = pixmap.encode_png()?;
