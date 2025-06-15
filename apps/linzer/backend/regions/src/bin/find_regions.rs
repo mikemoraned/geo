@@ -235,6 +235,7 @@ fn draw_routes(
     );
 
     // then draw any polygons in black as backgrounds for regions
+    let mut count_polygon_backgrounds = 0usize;
     for geom in collection.iter() {
         if let Geometry::Polygon(poly) = geom {
             let mut pb = PathBuilder::new();
@@ -248,10 +249,13 @@ fn draw_routes(
             pb.close();
             let path = pb.finish().ok_or("Failed to finish path")?;
             pixmap.fill_path(&path, &black, FillRule::EvenOdd, transform, None);
+            count_polygon_backgrounds += 1;
         }
     }
+    println!("Drew {} black backgrounds", count_polygon_backgrounds);
 
     // then draw linestrings as candidate borders
+    let mut count_line_borders = 0usize;
     for geom in collection.iter() {
         if let Geometry::LineString(line) = geom {
             let mut pb = PathBuilder::new();
@@ -264,8 +268,10 @@ fn draw_routes(
             });
             let path = pb.finish().ok_or("Failed to finish path")?;
             pixmap.stroke_path(&path, &white, &stroke, transform, None);
+            count_line_borders += 1;
         }
     }
+    println!("Drew {} white borders", count_line_borders);
 
     // apply threshold to get a binary image, where black is candidate regions and white is ignorable border
     let image = GrayImage::from_fn(width_px, height_px, |x, y| {

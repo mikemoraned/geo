@@ -7,7 +7,7 @@ use std::{
 use clap::{command, Parser};
 use cli::progress::progress_bar;
 use config::Config;
-use geo::{BoundingRect, Coord, Geometry, GeometryCollection, LineString, Point, Rect};
+use geo::{Contains, Coord, Geometry, GeometryCollection, LineString, Point};
 use geozero::{
     geo_types::GeoWriter,
     geojson::{GeoJsonReader, GeoJsonWriter},
@@ -94,7 +94,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("no starting points found".into());
     }
 
-    let bounds = read_bounds(&args, &config);
+    let bounds = read_bounds(&args, &config).await?;
+    // ensure we later save the bounds of the area as this will define the background
+    // for the routes
+    geo.push(bounds.clone());
 
     let paired: Vec<(Point, Point)> = starts
         .clone()
@@ -106,7 +109,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (Point(start), Point(end)) in paired {
         match find_route(&routing, &start, &end, &args.profile, args.max_retries).await {
             Ok(route) => {
-                geo.push(geo::geometry::Geometry::LineString(route));
+                let route_geo = geo::geometry::Geometry::LineString(route);
+                if bounds.contains(&route_geo) {
+                    geo.push(route_geo);
+                }
             }
             Err(e) => {
                 println!(
