@@ -73,8 +73,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(args.seed);
 
-    let starts = random_points(&bounds, args.paths, rng.next_u64())?;
-    let ends = random_points(&bounds, args.paths, rng.next_u64())?;
+    let mut starts = random_points(&bounds, args.paths, rng.next_u64())?;
+    let mut ends = random_points(&bounds, args.paths, rng.next_u64())?;
+
+    if starts.len() != ends.len() {
+        println!(
+            "Warning: number of starting points does not match number of ending points, {} != {}, correcting for now",
+            starts.len(),
+            ends.len()
+        );
+        let min_len = std::cmp::min(starts.len(), ends.len());
+        starts = starts.into_iter().take(min_len).collect();
+        ends = ends.into_iter().take(min_len).collect();
+    }
 
     save(&starts, &args.starts)?;
     save(&ends, &args.ends)?;
@@ -206,17 +217,21 @@ fn random_points(
         }
     }
 
+    let mut returned_n = n;
     if coords_within_bounds.len() < n {
-        // TODO: could probably fix this by re-sampling with a larger `sample_n` but for now
-        // for simplicity just fail
-        return Err(Box::new(SamplerError::CannotGetEnoughRandomPoints));
+        println!(
+            "warn: Only found {} points within bounds, but needed {}, allowing to continue",
+            coords_within_bounds.len(),
+            n
+        );
+        returned_n = coords_within_bounds.len();
     }
 
     // need to then randomly sample from throughout the coords found
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     let coords = coords_within_bounds
         .into_iter()
-        .choose_multiple(&mut rng, n);
+        .choose_multiple(&mut rng, returned_n);
 
     Ok(coords)
 }
