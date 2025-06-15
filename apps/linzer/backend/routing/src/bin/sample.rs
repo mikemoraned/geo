@@ -3,7 +3,7 @@ use std::{fs::File, io::BufWriter, path::PathBuf};
 use clap::Parser;
 use config::Config;
 use fast_poisson::Poisson2D;
-use geo::{coord, BoundingRect, Contains, Geometry, GeometryCollection, Point, Rect};
+use geo::{coord, BoundingRect, Contains, Coord, Geometry, GeometryCollection, Point, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use rand::{RngCore, SeedableRng};
 use thiserror::Error;
@@ -129,38 +129,55 @@ fn random_points(
     let width = bounding_box.width();
     let height = bounding_box.height();
 
-    // we sample more than `n` points to ensure we have enough valid points after filtering to the geometry bounds
+    // to ensure fair sampling across the whole area, we define a grid over the bounding box,
+    // such that we want to have one random point per grid entry, and expect to have `n` points left over after
+    // reducing to the points which overlap the bounds
     let filled_area = bounds.unsigned_area();
     let filled_fraction = filled_area / bounding_box.unsigned_area();
-    let sample_n = (n as f64 / filled_fraction).ceil() as usize;
-    println!(
-        "Sampling {} points to get {} valid points, as filled area is {}% of rectangular bounds",
-        sample_n,
-        n,
-        100.0 * filled_fraction
-    );
+    let desired_grid_entries = (n as f64 / filled_fraction).ceil() as usize;
+    let mut grid = Grid::new(&bounding_box, desired_grid_entries);
 
-    // also scale the radius between points based on the area being covered
+    // scale the radius between points based on the area being covered
     let square_area_per_point = filled_area / (n as f64);
     let side_length = square_area_per_point.sqrt();
     let diagonal_length = (2.0 * side_length.powi(2)).sqrt(); // hypotoneuse
     let radius = diagonal_length / 2.0;
 
-    let sample_points: Vec<_> = Poisson2D::new()
-        .with_seed(seed)
+    let mut sampler_seed = seed;
+    let mut sample_iter = Poisson2D::new()
+        .with_seed(sampler_seed)
         .with_dimensions([width, height], radius)
-        .iter()
-        .take(sample_n)
-        .collect();
+        .iter();
+
+    while !grid.is_filled() {
+        println!(
+            "{}% filled, {} remaining to fill\r",
+            (grid.proportion_filled() * 100.0).round(),
+            grid.count_remaining_to_fill
+        );
+        if let Some([x_offset, y_offset]) = sample_iter.next() {
+            let coord = coord! {
+                x: x_offset + min.x,
+                y: y_offset + min.y,
+            };
+            grid.add_coord(coord);
+        } else {
+            println!(
+                "Ran out of random points to sample, but still need more, so recreating sampler with a new seed"
+            );
+            sampler_seed += 1;
+            sample_iter = Poisson2D::new()
+                .with_seed(sampler_seed)
+                .with_dimensions([width, height], radius)
+                .iter();
+        }
+    }
+
+    let sample_coords = grid.into_coords();
 
     // go through all sample points, convert to coords, and find only those which overlap bounds
     let mut coords_within_bounds = vec![];
-    for sample_point in sample_points.iter() {
-        let [x_offset, y_offset] = sample_point;
-        let sample_coord = coord! {
-            x: x_offset + min.x,
-            y: y_offset + min.y,
-        };
+    for sample_coord in sample_coords.into_iter() {
         let sample_point = geo::geometry::Geometry::Point(Point::from(sample_coord));
         if bounds.contains(&sample_point) {
             coords_within_bounds.push(sample_point);
@@ -173,12 +190,68 @@ fn random_points(
         return Err(Box::new(SamplerError::CannotGetEnoughRandomPoints));
     }
 
-    // need to then randomly sample from throughout the coords found as the position is
-    // ordered (if we just sample first `n` then we get a skewed distribution of the leftmost points)
+    // need to then randomly sample from throughout the coords found
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     let coords = coords_within_bounds
         .into_iter()
         .choose_multiple(&mut rng, n);
 
     Ok(coords)
+}
+
+struct Grid {
+    bounding_box: Rect,
+    x_stride: f64,
+    y_stride: f64,
+    count_remaining_to_fill: usize,
+    grid_size: usize,
+    grid: Vec<Vec<bool>>,
+    coords: Vec<Coord>,
+}
+
+impl Grid {
+    pub fn new(bounding_box: &Rect, desired_grid_entries: usize) -> Self {
+        // actual grid needs to be square so decide on a size which covers at least `desired_grid_entries`
+        let grid_side_length = ((desired_grid_entries as f64).sqrt().ceil()) as usize;
+        let x_stride = bounding_box.width() / (grid_side_length as f64);
+        let y_stride = bounding_box.height() / (grid_side_length as f64);
+        let grid_size = grid_side_length * grid_side_length;
+        let count_remaining_to_fill = grid_side_length * grid_side_length;
+        let grid = vec![vec![false; grid_side_length]; grid_side_length];
+        let coords = vec![];
+        Grid {
+            bounding_box: bounding_box.clone(),
+            x_stride,
+            y_stride,
+            count_remaining_to_fill,
+            grid_size,
+            grid,
+            coords,
+        }
+    }
+
+    pub fn proportion_filled(&self) -> f64 {
+        (self.grid_size - self.count_remaining_to_fill) as f64 / self.grid_size as f64
+    }
+
+    pub fn is_filled(&self) -> bool {
+        self.count_remaining_to_fill == 0
+    }
+
+    pub fn add_coord(&mut self, coord: Coord) {
+        let x_index = ((coord.x - self.bounding_box.min().x) / self.x_stride).floor() as usize;
+        let y_index = ((coord.y - self.bounding_box.min().y) / self.y_stride).floor() as usize;
+
+        if x_index < self.grid.len() && y_index < self.grid[x_index].len() {
+            if !self.grid[x_index][y_index] {
+                self.grid[x_index][y_index] = true;
+                self.count_remaining_to_fill -= 1;
+                self.coords.push(coord);
+            }
+        }
+    }
+
+    pub fn into_coords(self) -> Vec<Coord> {
+        self.coords
+    }
 }
