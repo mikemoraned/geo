@@ -6,19 +6,36 @@ use std::{
 
 use clap::{command, Parser};
 use cli::progress::progress_bar;
+use config::Config;
 use geo::{BoundingRect, Coord, Geometry, GeometryCollection, LineString, Point, Rect};
 use geozero::{
     geo_types::GeoWriter,
     geojson::{GeoJsonReader, GeoJsonWriter},
     GeozeroDatasource, GeozeroGeometry,
 };
-use routing::stadia::{Profile, Server, StandardRouting};
+use routing::{
+    bounds,
+    stadia::{Profile, Server, StandardRouting},
+};
 use startup::env::load_secret;
+use thiserror::Error;
 
 /// Find routes in an area
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    /// config file defining the area
+    #[arg(long)]
+    area: PathBuf,
+
+    /// base location for OvertureMaps data
+    #[arg(long)]
+    overturemaps: Option<String>,
+
+    /// if the region has multiple polygons, choose the largest one
+    #[arg(long, default_value_t = true)]
+    choose_largest_polygon: bool,
+
     /// stadiamaps server kind that we should talk to
     #[arg(long, default_value_t = Server::default())]
     server: Server,
@@ -39,19 +56,23 @@ struct Args {
     #[arg(long)]
     ends: PathBuf,
 
-    /// whether to save the bounds of the area
-    #[arg(long, default_value_t = true)]
-    save_bounds: bool,
-
     /// output GeoJSON `.geojson` file
     #[arg(long)]
     geojson: PathBuf,
+}
+
+#[derive(Error, Debug)]
+pub enum RouterError {
+    #[error("OvertureMaps base dir required")]
+    MissingOvertureMapsBase,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("{:?}", args);
+
+    let config: Config = Config::read_from_file(&args.area)?;
 
     let stadia_maps_api_key = load_secret("STADIA_MAPS_API_KEY")?;
 
@@ -73,10 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("no starting points found".into());
     }
 
-    let bounds = bounds(&starts, &ends)?;
-    if args.save_bounds {
-        geo.push(geo::geometry::Geometry::Rect(bounds));
-    }
+    let bounds = read_bounds(&args, &config);
 
     let paired: Vec<(Point, Point)> = starts
         .clone()
@@ -102,11 +120,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let geo_collection = GeometryCollection::new_from(geo);
 
-    let fout = BufWriter::new(File::create(args.geojson)?);
+    let fout = BufWriter::new(File::create(&args.geojson)?);
     let mut gout = GeoJsonWriter::new(fout);
     geo::geometry::Geometry::GeometryCollection(geo_collection).process_geom(&mut gout)?;
 
     Ok(())
+}
+
+async fn read_bounds(args: &Args, config: &Config) -> Result<Geometry, Box<dyn std::error::Error>> {
+    println!("Using overture maps");
+    let gers_id = &config.overturemaps.gers_id;
+    if let Some(om_base) = args.overturemaps.as_ref() {
+        use overturemaps::overturemaps::OvertureMaps;
+        let om = OvertureMaps::load_from_base(om_base.clone()).await?;
+        Ok(bounds::read_bounds(gers_id, &om, args.choose_largest_polygon).await?)
+    } else {
+        Err(Box::new(RouterError::MissingOvertureMapsBase))
+    }
 }
 
 async fn find_route(
@@ -130,21 +160,6 @@ async fn find_route(
         }
     }
     return Err(format!("Failed to find route after {} retries", max_retries).into());
-}
-
-fn bounds(
-    starts: &Vec<geo::Point>,
-    ends: &Vec<geo::Point>,
-) -> Result<Rect, Box<dyn std::error::Error>> {
-    let points: Vec<_> = starts
-        .iter()
-        .chain(ends.iter())
-        .map(|p| Geometry::Point(p.clone()))
-        .collect();
-    let combined = GeometryCollection::new_from(points.clone());
-    combined
-        .bounding_rect()
-        .ok_or("failed to calculate bounds".into())
 }
 
 fn read_points(path: &PathBuf) -> Result<Vec<geo::Point>, Box<dyn std::error::Error>> {

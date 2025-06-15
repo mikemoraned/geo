@@ -6,6 +6,7 @@ use fast_poisson::Poisson2D;
 use geo::{coord, BoundingRect, Contains, Coord, Geometry, GeometryCollection, Point, Rect};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use rand::{RngCore, SeedableRng};
+use routing::bounds;
 use thiserror::Error;
 
 /// Create sample points in area
@@ -98,26 +99,7 @@ async fn read_bounds(args: &Args, config: &Config) -> Result<Geometry, Box<dyn s
     if let Some(om_base) = args.overturemaps.as_ref() {
         use overturemaps::overturemaps::OvertureMaps;
         let om = OvertureMaps::load_from_base(om_base.clone()).await?;
-        if let Some(geometry) = om.find_geometry_by_id(gers_id).await? {
-            if let Geometry::MultiPolygon(ref multi) = geometry {
-                use geo::Area;
-
-                if args.choose_largest_polygon {
-                    println!("Choosing largest polygon from MultiPolygon");
-                    let largest_polygon = multi
-                        .into_iter()
-                        .max_by(|a, b| a.unsigned_area().partial_cmp(&b.unsigned_area()).unwrap())
-                        .ok_or(Box::new(SamplerError::CannotFindGersId))?;
-                    Ok(Geometry::Polygon(largest_polygon.clone()))
-                } else {
-                    Ok(geometry)
-                }
-            } else {
-                Ok(geometry)
-            }
-        } else {
-            Err(Box::new(SamplerError::CannotFindGersId))
-        }
+        Ok(bounds::read_bounds(gers_id, &om, args.choose_largest_polygon).await?)
     } else {
         Err(Box::new(SamplerError::MissingOvertureMapsBase))
     }
