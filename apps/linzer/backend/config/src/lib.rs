@@ -1,24 +1,15 @@
-use std::path::PathBuf;
-use geo::Coord;
-use serde::Deserialize;
 use overturemaps::overturemaps::GersId;
+use serde::Deserialize;
+use std::path::PathBuf;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    pub bounds: Bounds,
-    pub overturemaps: Option<OvertureMaps>,
+    pub overturemaps: OvertureMaps,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct OvertureMaps {
     pub gers_id: GersId,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Bounds {
-    pub point1: Coord,
-    pub point2: Coord,
-    pub name: String
 }
 
 impl Config {

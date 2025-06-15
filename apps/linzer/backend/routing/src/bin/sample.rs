@@ -65,7 +65,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{:?}", args);
 
     let config: Config = Config::read_from_file(&args.area)?;
-    println!("Name: {}", config.bounds.name);
 
     let bounds = read_bounds(&args, &config).await?;
     println!("Bounds: {:?}", bounds);
@@ -94,41 +93,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn read_bounds(args: &Args, config: &Config) -> Result<Geometry, Box<dyn std::error::Error>> {
-    use geo::Area;
-    if let Some(om) = config.overturemaps.as_ref() {
-        println!("Using overture maps");
-        let gers_id = &om.gers_id;
-        if let Some(om_base) = args.overturemaps.as_ref() {
-            use overturemaps::overturemaps::OvertureMaps;
-            let om = OvertureMaps::load_from_base(om_base.clone()).await?;
-            if let Some(geometry) = om.find_geometry_by_id(gers_id).await? {
-                if let Geometry::MultiPolygon(ref multi) = geometry {
-                    if args.choose_largest_polygon {
-                        println!("Choosing largest polygon from MultiPolygon");
-                        let largest_polygon = multi
-                            .into_iter()
-                            .max_by(|a, b| {
-                                a.unsigned_area().partial_cmp(&b.unsigned_area()).unwrap()
-                            })
-                            .ok_or(Box::new(SamplerError::CannotFindGersId))?;
-                        Ok(Geometry::Polygon(largest_polygon.clone()))
-                    } else {
-                        Ok(geometry)
-                    }
+    println!("Using overture maps");
+    let gers_id = &config.overturemaps.gers_id;
+    if let Some(om_base) = args.overturemaps.as_ref() {
+        use overturemaps::overturemaps::OvertureMaps;
+        let om = OvertureMaps::load_from_base(om_base.clone()).await?;
+        if let Some(geometry) = om.find_geometry_by_id(gers_id).await? {
+            if let Geometry::MultiPolygon(ref multi) = geometry {
+                use geo::Area;
+
+                if args.choose_largest_polygon {
+                    println!("Choosing largest polygon from MultiPolygon");
+                    let largest_polygon = multi
+                        .into_iter()
+                        .max_by(|a, b| a.unsigned_area().partial_cmp(&b.unsigned_area()).unwrap())
+                        .ok_or(Box::new(SamplerError::CannotFindGersId))?;
+                    Ok(Geometry::Polygon(largest_polygon.clone()))
                 } else {
                     Ok(geometry)
                 }
             } else {
-                Err(Box::new(SamplerError::CannotFindGersId))
+                Ok(geometry)
             }
         } else {
-            Err(Box::new(SamplerError::MissingOvertureMapsBase))
+            Err(Box::new(SamplerError::CannotFindGersId))
         }
     } else {
-        Ok(Geometry::Rect(Rect::new(
-            config.bounds.point1,
-            config.bounds.point2,
-        )))
+        Err(Box::new(SamplerError::MissingOvertureMapsBase))
     }
 }
 
