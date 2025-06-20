@@ -3,8 +3,9 @@ use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::listing::{
     ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
 };
+use datafusion::functions::core::expr_ext::FieldAccessor;
 use datafusion::prelude::*;
-use geo::{Geometry, Rect};
+use geo::{Geometry, GeometryCollection, Rect};
 use geozero::ToGeo;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -96,9 +97,39 @@ impl OvertureMaps {
 
         let base_water_df = self.ctx.table("base_water").await?;
 
-        Ok(Geometry::Rect(bounds.clone()))
+        let matching = base_water_df
+            .filter(col("bbox").field("xmin").gt(lit(bounds.min().x)))?
+            .filter(col("bbox").field("ymin").gt(lit(bounds.min().y)))?
+            .filter(col("bbox").field("xmax").lt(lit(bounds.max().x)))?
+            .filter(col("bbox").field("ymax").lt(lit(bounds.max().y)))?
+            .select(vec![col("geometry")])?
+            .collect()
+            .await?;
 
-        // convert_record_batch_to_geometry(&water_in_region)
+        println!("found {} batches", matching.len());
+
+        let mut geos = vec![];
+        for batch in matching {
+            let geometry_col = batch.column(0).as_binary_view();
+            for geometry in geometry_col.iter() {
+                if let Some(geometry) = geometry {
+                    let wkb = geozero::wkb::Wkb(geometry.to_vec());
+                    match wkb.to_geo() {
+                        Ok(geometry) => {
+                            geos.push(geometry.clone());
+                        }
+                        Err(e) => {
+                            println!("error converting WKB to Geometry: {}", e);
+                            return Err(Box::new(e));
+                        }
+                    }
+                }
+            }
+        }
+        println!("found {} geometries", geos.len());
+
+        let collection = GeometryCollection::new_from(geos);
+        Ok(Geometry::GeometryCollection(collection))
     }
 }
 
