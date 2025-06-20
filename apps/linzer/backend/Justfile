@@ -6,6 +6,12 @@ config_base := "../config"
 output_base := "../output"
 overturemaps_base := "/Volumes/PRO-G40/OvertureMaps/data/release/2025-05-21.0"
 
+water:
+    cargo run --release --bin water -- \
+        --overturemaps {{overturemaps_base}} \
+        --area {{config_base}}/{{area}}.toml \
+        --water {{output_base}}/{{area}}/water.geojson
+
 samples:
     mkdir -p {{output_base}}/{{area}}
     cargo run --release --bin sample -- \
