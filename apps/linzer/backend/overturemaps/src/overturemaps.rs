@@ -4,7 +4,7 @@ use datafusion::datasource::listing::{
     ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
 };
 use datafusion::prelude::*;
-use geo::Geometry;
+use geo::{Geometry, Rect};
 use geozero::ToGeo;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -24,6 +24,7 @@ impl OvertureMaps {
         let overture_mapping = vec![
             ("division_area", "theme=divisions/type=division_area/"),
             ("base_land_cover", "theme=base/type=land_cover/"),
+            ("base_water", "theme=base/type=water/"),
         ];
 
         for (table_name, overture_path) in overture_mapping {
@@ -85,6 +86,19 @@ impl OvertureMaps {
         println!("no geometry found for id: {:?}", id);
 
         Ok(None)
+    }
+
+    pub async fn find_water_in_region(
+        &self,
+        bounds: &Rect<f64>,
+    ) -> Result<Geometry, Box<dyn std::error::Error>> {
+        println!("finding water in region: {:?}", bounds);
+
+        let base_water_df = self.ctx.table("base_water").await?;
+
+        Ok(Geometry::Rect(bounds.clone()))
+
+        // convert_record_batch_to_geometry(&water_in_region)
     }
 }
 
