@@ -1,6 +1,6 @@
-SELECT *
+SELECT names.primary, *
 FROM division_area
-WHERE names.primary LIKE '%Venice%'
+WHERE names.primary LIKE '%Stockholm%'
 
 ---
 
@@ -10,7 +10,8 @@ WITH city AS (
     WHERE  
     	-- id = '0851d7537fffffff015d4f9f0d8b31e6' -- Berlin
     	-- id = '085ba2a9bfffffff01a888f06236016b' -- Edinburgh
-    	id = '0850a811bfffffff010c628b3d6d6ee3' -- Amsterdam
+    	-- id = '0850a811bfffffff010c628b3d6d6ee3' -- Amsterdam
+    	id = '0854ae143fffffff01609212ad48701b' -- Stockholms kommun
 ),
 bbox AS (                  
     SELECT
@@ -51,6 +52,8 @@ FROM   city
 -- 100 * 0.0003313394412799 / 0.03784896591359801 = 0.8754253473
 -- Amsterdam:
 -- 100 * 0.004743008080688963 / 0.032147921495904924 = 14.7537005815
+-- Stockholms kommun
+-- 100 * 0.0014272509252040676 / 0.034018436934689894 = 4.1955217635
 
 ---
 
