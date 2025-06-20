@@ -2,7 +2,7 @@ use std::{fs::File, io::BufWriter, path::PathBuf};
 
 use clap::{command, Parser};
 use config::Config;
-use geo::{BoundingRect, GeometryCollection};
+use geo::GeometryCollection;
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use thiserror::Error;
 
@@ -44,8 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let om = OvertureMaps::load_from_base(om_base.clone()).await?;
 
         if let Some(bounds) = om.find_geometry_by_id(gers_id).await? {
-            let rect_bounds = bounds.bounding_rect().ok_or(WaterError::CannotFindBounds)?;
-            let water = om.find_water_in_region(&rect_bounds).await?;
+            let water = om.find_water_in_region(&bounds).await?;
             save(&water, &args.water)?;
         }
     }

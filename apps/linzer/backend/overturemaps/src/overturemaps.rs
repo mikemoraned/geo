@@ -5,10 +5,17 @@ use datafusion::datasource::listing::{
 };
 use datafusion::functions::core::expr_ext::FieldAccessor;
 use datafusion::prelude::*;
-use geo::{Geometry, GeometryCollection, Rect};
+use geo::{BoundingRect, Contains, Geometry, GeometryCollection};
 use geozero::ToGeo;
 use serde::Deserialize;
 use std::sync::Arc;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum OvertureError {
+    #[error("Unable to find bounds")]
+    CannotFindBounds,
+}
 
 pub struct OvertureMaps {
     ctx: SessionContext,
@@ -91,17 +98,24 @@ impl OvertureMaps {
 
     pub async fn find_water_in_region(
         &self,
-        bounds: &Rect<f64>,
+        region: &Geometry<f64>,
     ) -> Result<Geometry, Box<dyn std::error::Error>> {
-        println!("finding water in region: {:?}", bounds);
+        let bounds = region
+            .bounding_rect()
+            .ok_or(OvertureError::CannotFindBounds)?;
+        println!("finding water in bounds: {:?}", bounds);
 
         let base_water_df = self.ctx.table("base_water").await?;
 
         let matching = base_water_df
-            .filter(col("bbox").field("xmin").gt(lit(bounds.min().x)))?
-            .filter(col("bbox").field("ymin").gt(lit(bounds.min().y)))?
-            .filter(col("bbox").field("xmax").lt(lit(bounds.max().x)))?
-            .filter(col("bbox").field("ymax").lt(lit(bounds.max().y)))?
+            .filter(
+                col("bbox")
+                    .field("xmin")
+                    .gt(lit(bounds.min().x))
+                    .and(col("bbox").field("ymin").gt(lit(bounds.min().y)))
+                    .and(col("bbox").field("xmax").lt(lit(bounds.max().x)))
+                    .and(col("bbox").field("ymax").lt(lit(bounds.max().y))),
+            )?
             .select(vec![col("geometry")])?
             .collect()
             .await?;
@@ -116,7 +130,9 @@ impl OvertureMaps {
                     let wkb = geozero::wkb::Wkb(geometry.to_vec());
                     match wkb.to_geo() {
                         Ok(geometry) => {
-                            geos.push(geometry.clone());
+                            if region.contains(&geometry) {
+                                geos.push(geometry.clone());
+                            }
                         }
                         Err(e) => {
                             println!("error converting WKB to Geometry: {}", e);
