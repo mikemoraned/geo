@@ -3,7 +3,10 @@ use std::{fs::File, io::BufWriter, path::PathBuf};
 use clap::Parser;
 use config::Config;
 use fast_poisson::Poisson2D;
-use geo::{coord, BoundingRect, Contains, Coord, Geometry, GeometryCollection, Point, Rect};
+use geo::{
+    coord, Area, BooleanOps, BoundingRect, Contains, Coord, Geometry, GeometryCollection,
+    MultiPolygon, Point, Rect,
+};
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use rand::{RngCore, SeedableRng};
 use routing::bounds;
@@ -25,6 +28,10 @@ struct Args {
     #[arg(long, default_value_t = true)]
     choose_largest_polygon: bool,
 
+    /// exclude points which are in water
+    #[arg(long, default_value_t = true)]
+    exclude_water: bool,
+
     /// number of points to generate
     #[arg(long)]
     paths: usize,
@@ -36,6 +43,10 @@ struct Args {
     /// output GeoJSON `.geojson` file for bounds of region
     #[arg(long)]
     bounds: PathBuf,
+
+    /// output GeoJSON `.geojson` file for mask used, which may exclude water
+    #[arg(long)]
+    mask: PathBuf,
 
     /// output GeoJSON `.geojson` file for starting points
     #[arg(long)]
@@ -68,13 +79,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config: Config = Config::read_from_file(&args.area)?;
 
     let bounds = read_bounds(&args, &config).await?;
-    println!("Bounds: {:?}", bounds);
     save(&vec![bounds.clone()], &args.bounds)?;
+    let masked = if args.exclude_water {
+        println!("Excluding water from bounds");
+        let water = read_water(&args, &config).await?;
+        let masked = difference(&bounds, &water);
+        println!(
+            "size went from {} to {}",
+            bounds.unsigned_area(),
+            masked.unsigned_area()
+        );
+        masked
+    } else {
+        println!("Not excluding water from bounds");
+        bounds.clone()
+    };
+    save(&vec![masked.clone()], &args.mask)?;
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(args.seed);
 
-    let mut starts = random_points(&bounds, args.paths, rng.next_u64())?;
-    let mut ends = random_points(&bounds, args.paths, rng.next_u64())?;
+    let mut starts = random_points(&masked, args.paths, rng.next_u64())?;
+    let mut ends = random_points(&masked, args.paths, rng.next_u64())?;
 
     if starts.len() != ends.len() {
         println!(
@@ -94,7 +119,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn read_bounds(args: &Args, config: &Config) -> Result<Geometry, Box<dyn std::error::Error>> {
-    println!("Using overture maps");
     let gers_id = &config.overturemaps.gers_id;
     if let Some(om_base) = args.overturemaps.as_ref() {
         use overturemaps::overturemaps::OvertureMaps;
@@ -102,6 +126,72 @@ async fn read_bounds(args: &Args, config: &Config) -> Result<Geometry, Box<dyn s
         Ok(bounds::read_bounds(gers_id, &om, args.choose_largest_polygon).await?)
     } else {
         Err(Box::new(SamplerError::MissingOvertureMapsBase))
+    }
+}
+
+async fn read_water(args: &Args, config: &Config) -> Result<Geometry, Box<dyn std::error::Error>> {
+    let gers_id = &config.overturemaps.gers_id;
+    if let Some(om_base) = args.overturemaps.as_ref() {
+        use overturemaps::overturemaps::OvertureMaps;
+        let om = OvertureMaps::load_from_base(om_base.clone()).await?;
+        if let Some(bounds) = om.find_geometry_by_id(gers_id).await? {
+            let water = om.find_water_in_region(&bounds).await?;
+            Ok(water)
+        } else {
+            Err(Box::new(SamplerError::CannotFindGersId))
+        }
+    } else {
+        Err(Box::new(SamplerError::MissingOvertureMapsBase))
+    }
+}
+
+fn difference(geo1: &Geometry<f64>, geo2: &Geometry<f64>) -> Geometry<f64> {
+    match geo1 {
+        Geometry::Polygon(poly1) => match geo2 {
+            Geometry::Polygon(poly2) => {
+                println!("Difference between two polygons");
+                Geometry::MultiPolygon(poly1.difference(&poly2))
+            }
+            Geometry::MultiPolygon(multi2) => {
+                println!("Difference between polygon and multipolygon");
+                Geometry::MultiPolygon(MultiPolygon::new(vec![poly1.clone()]).difference(&multi2))
+            }
+            Geometry::GeometryCollection(GeometryCollection(parts)) => {
+                println!("Difference between polygon and geometry collection");
+                let difference_on_parts = parts
+                    .iter()
+                    .cloned()
+                    .reduce(|acc, geo2| difference(&acc, &geo2));
+                if let Some(difference) = difference_on_parts {
+                    difference
+                } else {
+                    Geometry::MultiPolygon(MultiPolygon::new(vec![]))
+                }
+            }
+            _ => {
+                println!("Difference between polygon and non-polygon");
+                Geometry::MultiPolygon(MultiPolygon::new(vec![poly1.clone()]))
+            }
+        },
+        Geometry::MultiPolygon(multi1) => match geo2 {
+            Geometry::Polygon(poly2) => {
+                println!("Difference between multipolygon and polygon");
+                Geometry::MultiPolygon(multi1.difference(&MultiPolygon::new(vec![poly2.clone()])))
+            }
+            Geometry::MultiPolygon(multi2) => {
+                println!("Difference between two multipolygons");
+                Geometry::MultiPolygon(multi1.difference(&multi2))
+            }
+            _ => {
+                println!("Difference between multipolygon and non-polygon");
+                Geometry::MultiPolygon(multi1.clone())
+            }
+        },
+
+        _ => {
+            println!("Difference with non-polygon geometry, returning empty MultiPolygon");
+            Geometry::MultiPolygon(MultiPolygon::new(vec![]))
+        }
     }
 }
 
@@ -156,11 +246,11 @@ fn random_points(
         .iter();
 
     while !grid.is_filled() {
-        println!(
-            "{}% filled, {} remaining to fill\r",
-            (grid.proportion_filled() * 100.0).round(),
-            grid.count_remaining_to_fill
-        );
+        // println!(
+        //     "{}% filled, {} remaining to fill\r",
+        //     (grid.proportion_filled() * 100.0).round(),
+        //     grid.count_remaining_to_fill
+        // );
         if let Some([x_offset, y_offset]) = sample_iter.next() {
             let coord = coord! {
                 x: x_offset + min.x,
