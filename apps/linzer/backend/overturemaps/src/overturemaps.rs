@@ -5,7 +5,7 @@ use datafusion::datasource::listing::{
 };
 use datafusion::functions::core::expr_ext::FieldAccessor;
 use datafusion::prelude::*;
-use geo::{BoundingRect, Contains, Geometry, GeometryCollection};
+use geo::{Area, BooleanOps, BoundingRect, Geometry, GeometryCollection, MultiPolygon};
 use geozero::ToGeo;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -122,7 +122,9 @@ impl OvertureMaps {
 
         println!("found {} batches", matching.len());
 
-        let mut geos = vec![];
+        let mut intersections = vec![];
+        let mut kept_geometries_count = 0;
+        let mut ignored_geometries_count = 0;
         for batch in matching {
             let geometry_col = batch.column(0).as_binary_view();
             for geometry in geometry_col.iter() {
@@ -130,8 +132,12 @@ impl OvertureMaps {
                     let wkb = geozero::wkb::Wkb(geometry.to_vec());
                     match wkb.to_geo() {
                         Ok(geometry) => {
-                            if region.contains(&geometry) {
-                                geos.push(geometry.clone());
+                            let intersection = intersect(&region, &geometry);
+                            if intersection.signed_area() > 0.0 {
+                                kept_geometries_count += 1;
+                                intersections.push(Geometry::MultiPolygon(intersection));
+                            } else {
+                                ignored_geometries_count += 1;
                             }
                         }
                         Err(e) => {
@@ -142,10 +148,36 @@ impl OvertureMaps {
                 }
             }
         }
-        println!("found {} geometries", geos.len());
+        println!(
+            "found {} geometries, kept {}, ignored {}",
+            kept_geometries_count + ignored_geometries_count,
+            kept_geometries_count,
+            ignored_geometries_count
+        );
 
-        let collection = GeometryCollection::new_from(geos);
+        let collection = GeometryCollection::new_from(intersections);
         Ok(Geometry::GeometryCollection(collection))
+    }
+}
+
+fn intersect(geo1: &Geometry<f64>, geo2: &Geometry<f64>) -> MultiPolygon<f64> {
+    match geo1 {
+        Geometry::Polygon(poly1) => match geo2 {
+            Geometry::Polygon(poly2) => poly1.intersection(&poly2),
+            Geometry::MultiPolygon(multi2) => {
+                MultiPolygon::new(vec![poly1.clone()]).intersection(&multi2)
+            }
+            _ => MultiPolygon::new(vec![]),
+        },
+        Geometry::MultiPolygon(multi1) => match geo2 {
+            Geometry::Polygon(poly2) => {
+                multi1.intersection(&MultiPolygon::new(vec![poly2.clone()]))
+            }
+            Geometry::MultiPolygon(multi2) => multi1.intersection(&multi2),
+            _ => MultiPolygon::new(vec![]),
+        },
+
+        _ => MultiPolygon::new(vec![]),
     }
 }
 

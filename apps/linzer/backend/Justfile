@@ -53,7 +53,16 @@ regions_layout: regions layout
     
 all: samples routes regions_layout
 
-generate_all:
+areas_all_water:
+    just --set area hamburg water
+    just --set area edinburgh water
+    just --set area jerusalem water
+    just --set area new_york water
+    just --set area paris water
+    just --set area amsterdam water
+    just --set area berlin water
+
+areas_all:
     just --set area hamburg --set profile pedestrian all
     just --set area hamburg --set profile auto all
 
