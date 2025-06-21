@@ -171,9 +171,9 @@ impl OvertureMaps {
 fn intersect(geo1: &Geometry<f64>, geo2: &Geometry<f64>) -> MultiPolygon<f64> {
     match geo1 {
         Geometry::Polygon(poly1) => match geo2 {
-            Geometry::Polygon(poly2) => poly1.intersection(&poly2),
+            Geometry::Polygon(poly2) => poly1.intersection(poly2),
             Geometry::MultiPolygon(multi2) => {
-                MultiPolygon::new(vec![poly1.clone()]).intersection(&multi2)
+                MultiPolygon::new(vec![poly1.clone()]).intersection(multi2)
             }
             _ => MultiPolygon::new(vec![]),
         },
@@ -181,7 +181,7 @@ fn intersect(geo1: &Geometry<f64>, geo2: &Geometry<f64>) -> MultiPolygon<f64> {
             Geometry::Polygon(poly2) => {
                 multi1.intersection(&MultiPolygon::new(vec![poly2.clone()]))
             }
-            Geometry::MultiPolygon(multi2) => multi1.intersection(&multi2),
+            Geometry::MultiPolygon(multi2) => multi1.intersection(multi2),
             _ => MultiPolygon::new(vec![]),
         },
 

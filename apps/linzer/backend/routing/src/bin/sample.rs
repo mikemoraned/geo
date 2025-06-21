@@ -149,47 +149,42 @@ fn difference(geo1: &Geometry<f64>, geo2: &Geometry<f64>) -> Geometry<f64> {
     match geo1 {
         Geometry::Polygon(poly1) => match geo2 {
             Geometry::Polygon(poly2) => {
-                println!("Difference between two polygons");
-                Geometry::MultiPolygon(poly1.difference(&poly2))
+                // println!("Difference between two polygons");
+                Geometry::MultiPolygon(poly1.difference(poly2))
             }
             Geometry::MultiPolygon(multi2) => {
-                println!("Difference between polygon and multipolygon");
-                Geometry::MultiPolygon(MultiPolygon::new(vec![poly1.clone()]).difference(&multi2))
+                // println!("Difference between polygon and multipolygon");
+                Geometry::MultiPolygon(MultiPolygon::new(vec![poly1.clone()]).difference(multi2))
             }
             Geometry::GeometryCollection(GeometryCollection(parts)) => {
-                println!("Difference between polygon and geometry collection");
+                // println!("Difference between polygon and geometry collection");
                 let difference_on_parts = parts
                     .iter()
-                    .cloned()
-                    .reduce(|acc, geo2| difference(&acc, &geo2));
-                if let Some(difference) = difference_on_parts {
-                    difference
-                } else {
-                    Geometry::MultiPolygon(MultiPolygon::new(vec![]))
-                }
+                    .fold(geo1.clone(), |acc, geo2| difference(&acc, geo2));
+                difference_on_parts
             }
             _ => {
-                println!("Difference between polygon and non-polygon");
+                // println!("Difference between polygon and non-polygon");
                 Geometry::MultiPolygon(MultiPolygon::new(vec![poly1.clone()]))
             }
         },
         Geometry::MultiPolygon(multi1) => match geo2 {
             Geometry::Polygon(poly2) => {
-                println!("Difference between multipolygon and polygon");
+                // println!("Difference between multipolygon and polygon");
                 Geometry::MultiPolygon(multi1.difference(&MultiPolygon::new(vec![poly2.clone()])))
             }
             Geometry::MultiPolygon(multi2) => {
-                println!("Difference between two multipolygons");
-                Geometry::MultiPolygon(multi1.difference(&multi2))
+                // println!("Difference between two multipolygons");
+                Geometry::MultiPolygon(multi1.difference(multi2))
             }
             _ => {
-                println!("Difference between multipolygon and non-polygon");
+                // println!("Difference between multipolygon and non-polygon");
                 Geometry::MultiPolygon(multi1.clone())
             }
         },
 
         _ => {
-            println!("Difference with non-polygon geometry, returning empty MultiPolygon");
+            // println!("Difference with non-polygon geometry, returning empty MultiPolygon");
             Geometry::MultiPolygon(MultiPolygon::new(vec![]))
         }
     }
