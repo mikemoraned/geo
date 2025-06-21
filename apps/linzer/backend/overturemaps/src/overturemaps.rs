@@ -104,15 +104,27 @@ impl OvertureMaps {
             .ok_or(OvertureError::CannotFindBounds)?;
         println!("finding water in bounds: {:?}", bounds);
 
+        let xmin = bounds.min().x;
+        let ymin = bounds.min().y;
+        let xmax = bounds.max().x;
+        let ymax = bounds.max().y;
         let sql = format!(
             "
             SELECT geometry FROM base_water
-            WHERE bbox.xmin > {} AND bbox.ymin > {} AND bbox.xmax < {} AND bbox.ymax < {}
-            ",
-            bounds.min().x,
-            bounds.min().y,
-            bounds.max().x,
-            bounds.max().y
+            WHERE 
+                 -- bounding boxes are overlapping if they *don't* overlap along any axis
+                 -- if we see our region's bounding box as A, and the geometry's bounding box as B:
+                 NOT (
+                    {xmax} <= bbox.xmin    -- A is entirely left of B
+                    OR bbox.xmax <= {xmin} -- A is entirely right of B
+                    OR bbox.ymin           -- A is entirely below B
+                       >= 
+                       {ymax} 
+                    OR {ymin}              -- A is entirely above B
+                       >=
+                       bbox.ymax  
+                )  
+            "
         );
         let matching = self.ctx.sql(&sql).await?.collect().await?;
 
