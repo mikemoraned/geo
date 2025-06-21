@@ -3,7 +3,6 @@ use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::listing::{
     ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
 };
-use datafusion::functions::core::expr_ext::FieldAccessor;
 use datafusion::prelude::*;
 use geo::{Area, BooleanOps, BoundingRect, Geometry, GeometryCollection, MultiPolygon};
 use geozero::ToGeo;
@@ -105,20 +104,17 @@ impl OvertureMaps {
             .ok_or(OvertureError::CannotFindBounds)?;
         println!("finding water in bounds: {:?}", bounds);
 
-        let base_water_df = self.ctx.table("base_water").await?;
-
-        let matching = base_water_df
-            .filter(
-                col("bbox")
-                    .field("xmin")
-                    .gt(lit(bounds.min().x))
-                    .and(col("bbox").field("ymin").gt(lit(bounds.min().y)))
-                    .and(col("bbox").field("xmax").lt(lit(bounds.max().x)))
-                    .and(col("bbox").field("ymax").lt(lit(bounds.max().y))),
-            )?
-            .select(vec![col("geometry")])?
-            .collect()
-            .await?;
+        let sql = format!(
+            "
+            SELECT geometry FROM base_water
+            WHERE bbox.xmin > {} AND bbox.ymin > {} AND bbox.xmax < {} AND bbox.ymax < {}
+            ",
+            bounds.min().x,
+            bounds.min().y,
+            bounds.max().x,
+            bounds.max().y
+        );
+        let matching = self.ctx.sql(&sql).await?.collect().await?;
 
         println!("found {} batches", matching.len());
 
