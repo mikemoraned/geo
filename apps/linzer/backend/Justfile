@@ -35,7 +35,8 @@ routes:
 
 regions:
     cargo run --release --bin find_regions -- \
-        --routes {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.geojson \
+        --background {{output_base}}/{{area}}/bounds.geojson \
+        --borders {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.geojson \
         --stage-template {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.STAGE_NAME.png \
         --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson
 
