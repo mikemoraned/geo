@@ -27,13 +27,13 @@ use tiny_skia::{FillRule, Paint, Pixmap, Stroke, Transform};
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// input GeoJSON `.geojson` file representing what to be drawn as the background
+    /// input GeoJSON `.geojson` file(s) representing what to be drawn as the backgrounds
     #[arg(long)]
-    background: PathBuf,
+    background: Vec<PathBuf>,
 
-    /// input GeoJSON `.geojson` file representing what to be drawn as the borders
+    /// input GeoJSON `.geojson` file(s) representing what to be drawn as the borders
     #[arg(long)]
-    borders: PathBuf,
+    borders: Vec<PathBuf>,
 
     /// whether to exclude regions that are on the border
     #[arg(long, default_value_t = true)]
@@ -129,17 +129,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn read_geometry(path: &PathBuf) -> Result<Geometry, Box<dyn std::error::Error>> {
-    let mut file = BufReader::new(File::open(path)?);
-    let mut reader = GeoJsonReader(&mut file);
-    let mut writer = GeoWriter::new();
-    reader.process_geom(&mut writer)?;
+fn read_geometry(paths: &Vec<PathBuf>) -> Result<Geometry, Box<dyn std::error::Error>> {
+    let mut geometries_per_path = vec![];
+    for path in paths {
+        let mut file = BufReader::new(File::open(path)?);
+        let mut reader = GeoJsonReader(&mut file);
+        let mut writer = GeoWriter::new();
+        reader.process_geom(&mut writer)?;
 
-    if let Some(geometry) = writer.take_geometry() {
-        Ok(geometry)
-    } else {
-        Err(Box::new(RegionsError::CannotReadGeometry))
+        if let Some(geometry) = writer.take_geometry() {
+            geometries_per_path.push(geometry);
+        } else {
+            return Err(Box::new(RegionsError::CannotReadGeometry));
+        }
     }
+
+    let collection = GeometryCollection::new_from(geometries_per_path);
+    Ok(Geometry::GeometryCollection(collection))
 }
 
 fn exclude_by_proportion(collection: &GeometryCollection, proportion: f32) -> GeometryCollection {
@@ -253,45 +259,12 @@ fn draw_routes(
         None,
     );
 
-    // then draw any polygons in black as backgrounds for regions
-    // let mut count_polygon_backgrounds = 0usize;
-    // for geom in collection.iter() {
-    //     if let Geometry::Polygon(poly) = geom {
-    //         let mut pb = PathBuilder::new();
-    //         poly.exterior().points().for_each(|p| {
-    //             if pb.is_empty() {
-    //                 pb.move_to(p.x() as f32, p.y() as f32);
-    //             } else {
-    //                 pb.line_to(p.x() as f32, p.y() as f32);
-    //             }
-    //         });
-    //         pb.close();
-    //         let path = pb.finish().ok_or("Failed to finish path")?;
-    //         pixmap.fill_path(&path, &black, FillRule::EvenOdd, transform, None);
-    //         count_polygon_backgrounds += 1;
-    //     }
-    // }
+    // then draw backgrounds for regions
     let count_background_geometries =
         draw_geometry(&mut pixmap, background, &black, &stroke, transform)?;
     println!("Drew {} black backgrounds", count_background_geometries);
 
-    // then draw linestrings as candidate borders
-    // let mut count_line_borders = 0usize;
-    // for geom in collection.iter() {
-    //     if let Geometry::LineString(line) = geom {
-    //         let mut pb = PathBuilder::new();
-    //         line.points().for_each(|p| {
-    //             if pb.is_empty() {
-    //                 pb.move_to(p.x() as f32, p.y() as f32);
-    //             } else {
-    //                 pb.line_to(p.x() as f32, p.y() as f32);
-    //             }
-    //         });
-    //         let path = pb.finish().ok_or("Failed to finish path")?;
-    //         pixmap.stroke_path(&path, &white, &stroke, transform, None);
-    //         count_line_borders += 1;
-    //     }
-    // }
+    // then draw candidate borders
     let count_borders_geometries = draw_geometry(&mut pixmap, borders, &white, &stroke, transform)?;
     println!("Drew {} white borders", count_borders_geometries);
 

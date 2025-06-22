@@ -37,6 +37,7 @@ regions:
     cargo run --release --bin find_regions -- \
         --background {{output_base}}/{{area}}/bounds.geojson \
         --borders {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.geojson \
+        --borders {{output_base}}/{{area}}/water.geojson \
         --stage-template {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.STAGE_NAME.png \
         --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson
 
@@ -53,7 +54,7 @@ layout:
 
 regions_layout: regions layout
     
-all: samples routes regions_layout
+all: water samples routes regions_layout
 
 areas_all_water:
     just --set area hamburg water
