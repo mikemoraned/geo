@@ -6,14 +6,16 @@ config_base := "../config"
 output_base := "../output"
 overturemaps_base := "/Volumes/PRO-G40/OvertureMaps/data/release/2025-05-21.0"
 
-water:
+area_dir:
+    mkdir -p {{output_base}}/{{area}}
+
+water: area_dir
     cargo run --release --bin water -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
         --water {{output_base}}/{{area}}/water.geojson
 
-samples:
-    mkdir -p {{output_base}}/{{area}}
+samples: area_dir
     cargo run --release --bin sample -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
@@ -24,7 +26,7 @@ samples:
         --paths {{paths}} \
         --seed {{seed}}
 
-routes:
+routes: area_dir
     cargo run --release --bin routes -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
@@ -33,7 +35,7 @@ routes:
         --geojson {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.geojson \
         --profile {{profile}}
 
-regions:
+regions: area_dir
     cargo run --release --bin find_regions -- \
         --background {{output_base}}/{{area}}/bounds.geojson \
         --borders {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.geojson \
@@ -41,7 +43,7 @@ regions:
         --stage-template {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.STAGE_NAME.png \
         --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson
 
-layout:
+layout: area_dir
     cargo run --release --bin layout -- \
         --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson \
         --bin-type guillotine \
@@ -64,6 +66,8 @@ areas_all_water:
     just --set area paris water
     just --set area amsterdam water
     just --set area berlin water
+    just --set area gothemburg water
+    just --set area stockholm water
 
 areas_all:
     just --set area hamburg --set profile pedestrian all
@@ -87,3 +91,8 @@ areas_all:
     just --set area berlin --set profile pedestrian all
     just --set area berlin --set profile auto all
 
+    just --set area gothemburg --set profile pedestrian all
+    just --set area gothemburg --set profile auto all
+
+    just --set area stockholm --set profile pedestrian all
+    just --set area stockholm --set profile auto all
