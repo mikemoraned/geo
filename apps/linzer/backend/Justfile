@@ -58,41 +58,40 @@ regions_layout: regions layout
     
 all: water samples routes regions_layout
 
-areas_all_water:
-    just --set area hamburg water
-    just --set area edinburgh water
-    just --set area jerusalem water
-    just --set area new_york water
-    just --set area paris water
-    just --set area amsterdam water
-    just --set area berlin water
-    just --set area gothemburg water
-    just --set area stockholm water
+rule_name := "all"
+areas:
+    just --set area hamburg --set profile pedestrian {{rule_name}}
+    just --set area hamburg --set profile auto {{rule_name}}
 
-areas_all:
-    just --set area hamburg --set profile pedestrian all
-    just --set area hamburg --set profile auto all
+    just --set area edinburgh --set profile pedestrian {{rule_name}}
+    just --set area edinburgh --set profile auto {{rule_name}}
 
-    just --set area edinburgh --set profile pedestrian all
-    just --set area edinburgh --set profile auto all
+    just --set area jerusalem --set profile pedestrian {{rule_name}}
+    just --set area jerusalem --set profile auto {{rule_name}}
 
-    just --set area jerusalem --set profile pedestrian all
-    just --set area jerusalem --set profile auto all
+    just --set area new_york --set profile pedestrian {{rule_name}}
+    just --set area new_york --set profile auto {{rule_name}}
 
-    just --set area new_york --set profile pedestrian all
-    just --set area new_york --set profile auto all
+    just --set area paris --set profile pedestrian {{rule_name}}
+    just --set area paris --set profile auto {{rule_name}}
 
-    just --set area paris --set profile pedestrian all
-    just --set area paris --set profile auto all
+    just --set area amsterdam --set profile pedestrian {{rule_name}}
+    just --set area amsterdam --set profile auto {{rule_name}}
 
-    just --set area amsterdam --set profile pedestrian all
-    just --set area amsterdam --set profile auto all
+    just --set area berlin --set profile pedestrian {{rule_name}}
+    just --set area berlin --set profile auto {{rule_name}}
 
-    just --set area berlin --set profile pedestrian all
-    just --set area berlin --set profile auto all
+    just --set area gothemburg --set profile pedestrian {{rule_name}}
+    just --set area gothemburg --set profile auto {{rule_name}}
 
-    just --set area gothemburg --set profile pedestrian all
-    just --set area gothemburg --set profile auto all
+    just --set area stockholm --set profile pedestrian {{rule_name}}
+    just --set area stockholm --set profile auto {{rule_name}}
 
-    just --set area stockholm --set profile pedestrian all
-    just --set area stockholm --set profile auto all
+    just --set area stockholm --set profile pedestrian {{rule_name}}
+    just --set area stockholm --set profile auto {{rule_name}}
+
+    just --set area vejle --set profile pedestrian {{rule_name}}
+    just --set area vejle --set profile auto {{rule_name}}
+
+    just --set area ronneburg --set profile pedestrian {{rule_name}}
+    just --set area ronneburg --set profile auto {{rule_name}}

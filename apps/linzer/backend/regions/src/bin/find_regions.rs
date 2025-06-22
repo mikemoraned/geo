@@ -36,7 +36,7 @@ struct Args {
     borders: Vec<PathBuf>,
 
     /// whether to exclude regions that are on the border
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     exclude_border: bool,
 
     /// only allow regions whos proportions of width, height, or area are less than this value
