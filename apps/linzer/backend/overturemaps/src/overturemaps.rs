@@ -1,4 +1,5 @@
 use arrow::array::{AsArray, RecordBatch};
+use clap::ValueEnum;
 use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::listing::{
     ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
@@ -22,6 +23,12 @@ pub struct OvertureMaps {
 
 #[derive(Deserialize, Debug)]
 pub struct GersId(String);
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum WaterHandling {
+    ClipToRegion,
+    KeepAsIs,
+}
 
 impl OvertureMaps {
     pub async fn load_from_base(base: String) -> Result<Self, Box<dyn std::error::Error>> {
@@ -98,6 +105,7 @@ impl OvertureMaps {
     pub async fn find_water_in_region(
         &self,
         region: &Geometry<f64>,
+        options: WaterHandling,
     ) -> Result<Geometry, Box<dyn std::error::Error>> {
         let bounds = region
             .bounding_rect()
@@ -139,15 +147,21 @@ impl OvertureMaps {
                 if let Some(geometry) = geometry {
                     let wkb = geozero::wkb::Wkb(geometry.to_vec());
                     match wkb.to_geo() {
-                        Ok(geometry) => {
-                            let intersection = intersect(&region, &geometry);
-                            if intersection.signed_area() > 0.0 {
+                        Ok(geometry) => match options {
+                            WaterHandling::KeepAsIs => {
                                 kept_geometries_count += 1;
-                                intersections.push(Geometry::MultiPolygon(intersection));
-                            } else {
-                                ignored_geometries_count += 1;
+                                intersections.push(geometry.clone());
                             }
-                        }
+                            WaterHandling::ClipToRegion => {
+                                let intersection = intersect(&region, &geometry);
+                                if intersection.signed_area() > 0.0 {
+                                    kept_geometries_count += 1;
+                                    intersections.push(Geometry::MultiPolygon(intersection));
+                                } else {
+                                    ignored_geometries_count += 1;
+                                }
+                            }
+                        },
                         Err(e) => {
                             println!("error converting WKB to Geometry: {}", e);
                             return Err(Box::new(e));

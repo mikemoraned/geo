@@ -13,7 +13,15 @@ water: area_dir
     cargo run --release --bin water -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
-        --water {{output_base}}/{{area}}/water.geojson
+        --water {{output_base}}/{{area}}/water.geojson \
+        --handling clip-to-region
+
+water_asis: area_dir
+    cargo run --release --bin water -- \
+        --overturemaps {{overturemaps_base}} \
+        --area {{config_base}}/{{area}}.toml \
+        --water {{output_base}}/{{area}}/water_asis.geojson \
+        --handling keep-as-is
 
 samples: area_dir
     cargo run --release --bin sample -- \

@@ -4,6 +4,7 @@ use clap::{command, Parser};
 use config::Config;
 use geo::GeometryCollection;
 use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
+use overturemaps::overturemaps::WaterHandling;
 use thiserror::Error;
 
 /// Find routes in an area
@@ -21,6 +22,10 @@ struct Args {
     /// output GeoJSON `.geojson` file representing the water found
     #[arg(long)]
     water: PathBuf,
+
+    /// water handling
+    #[arg(long, value_enum)]
+    handling: WaterHandling,
 }
 
 #[derive(Error, Debug)]
@@ -44,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let om = OvertureMaps::load_from_base(om_base.clone()).await?;
 
         if let Some(bounds) = om.find_geometry_by_id(gers_id).await? {
-            let water = om.find_water_in_region(&bounds).await?;
+            let water = om.find_water_in_region(&bounds, args.handling).await?;
             save(&water, &args.water)?;
         }
     }
