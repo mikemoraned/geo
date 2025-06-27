@@ -7,7 +7,7 @@ use std::{
 
 use clap::{command, Parser};
 use conversion::projection::Projection;
-use geo::{coord, Area, BoundingRect, Coord, Geometry, GeometryCollection, Within};
+use geo::{coord, Area, BoundingRect, Coord, Geometry, GeometryCollection, LineString, Within};
 use geozero::{
     geo_types::GeoWriter,
     geojson::{GeoJsonReader, GeoJsonWriter},
@@ -21,7 +21,7 @@ use imageproc::{
 use rand::Rng;
 use regions::contours::find_contours_in_luma;
 use thiserror::Error;
-use tiny_skia::{FillRule, Paint, Pixmap, Stroke, Transform};
+use tiny_skia::{Color, FillRule, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
 
 /// find regions in an area
 #[derive(Parser, Debug)]
@@ -288,33 +288,30 @@ fn draw_geometry(
     stroke: &Stroke,
     transform: Transform,
 ) -> Result<usize, Box<dyn std::error::Error>> {
-    use tiny_skia::PathBuilder;
+    let mut transparent = Paint::default();
+    transparent.set_color(Color::TRANSPARENT);
+    transparent.anti_alias = true;
+
+    let mut red = Paint::default();
+    red.set_color(Color::from_rgba(1.0, 0.0, 0.0, 1.0).unwrap());
+    red.anti_alias = true;
+
+    let mut black = Paint::default();
+    black.set_color(Color::BLACK);
+    black.anti_alias = true;
 
     match geometry {
         Geometry::Polygon(poly) => {
-            let mut pb = PathBuilder::new();
-            poly.exterior().points().for_each(|p| {
-                if pb.is_empty() {
-                    pb.move_to(p.x() as f32, p.y() as f32);
-                } else {
-                    pb.line_to(p.x() as f32, p.y() as f32);
-                }
-            });
-            pb.close();
-            let path = pb.finish().ok_or("Failed to finish path")?;
+            let path = path_from_line(poly.exterior())?;
             pixmap.fill_path(&path, paint, FillRule::EvenOdd, transform, None);
+            for interior in poly.interiors() {
+                let interior_path = path_from_line(interior)?;
+                pixmap.fill_path(&interior_path, &black, FillRule::EvenOdd, transform, None);
+            }
             Ok(1)
         }
         Geometry::LineString(line) => {
-            let mut pb = PathBuilder::new();
-            line.points().for_each(|p| {
-                if pb.is_empty() {
-                    pb.move_to(p.x() as f32, p.y() as f32);
-                } else {
-                    pb.line_to(p.x() as f32, p.y() as f32);
-                }
-            });
-            let path = pb.finish().ok_or("Failed to finish path")?;
+            let path = path_from_line(line)?;
             pixmap.stroke_path(&path, paint, &stroke, transform, None);
             Ok(1)
         }
@@ -340,6 +337,18 @@ fn draw_geometry(
         }
         _ => Ok(0),
     }
+}
+
+fn path_from_line(line: &LineString) -> Result<Path, Box<dyn std::error::Error>> {
+    let mut pb = PathBuilder::new();
+    for (i, point) in line.points().enumerate() {
+        if i == 0 {
+            pb.move_to(point.x() as f32, point.y() as f32);
+        } else {
+            pb.line_to(point.x() as f32, point.y() as f32);
+        }
+    }
+    Ok(pb.finish().ok_or("Failed to finish path")?)
 }
 
 fn draw_contours(
