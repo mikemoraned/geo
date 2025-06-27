@@ -21,7 +21,7 @@ use imageproc::{
 use rand::Rng;
 use regions::contours::find_contours_in_luma;
 use thiserror::Error;
-use tiny_skia::{Color, FillRule, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
+use tiny_skia::{FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
 
 /// find regions in an area
 #[derive(Parser, Debug)]
@@ -288,26 +288,18 @@ fn draw_geometry(
     stroke: &Stroke,
     transform: Transform,
 ) -> Result<usize, Box<dyn std::error::Error>> {
-    let mut transparent = Paint::default();
-    transparent.set_color(Color::TRANSPARENT);
-    transparent.anti_alias = true;
-
-    let mut red = Paint::default();
-    red.set_color(Color::from_rgba(1.0, 0.0, 0.0, 1.0).unwrap());
-    red.anti_alias = true;
-
-    let mut black = Paint::default();
-    black.set_color(Color::BLACK);
-    black.anti_alias = true;
-
+    let mut mask = Mask::new(pixmap.width() as u32, pixmap.height() as u32).unwrap();
     match geometry {
         Geometry::Polygon(poly) => {
             let path = path_from_line(poly.exterior())?;
-            pixmap.fill_path(&path, paint, FillRule::EvenOdd, transform, None);
+            mask.clear();
             for interior in poly.interiors() {
                 let interior_path = path_from_line(interior)?;
-                pixmap.fill_path(&interior_path, &black, FillRule::EvenOdd, transform, None);
+                mask.fill_path(&interior_path, FillRule::EvenOdd, true, transform);
             }
+            mask.invert();
+            pixmap.fill_path(&path, paint, FillRule::EvenOdd, transform, Some(&mask));
+
             Ok(1)
         }
         Geometry::LineString(line) => {
