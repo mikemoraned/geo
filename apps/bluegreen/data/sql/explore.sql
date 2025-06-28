@@ -318,3 +318,15 @@ WHERE names.primary LIKE '%Venice%'
 
 SELECT *
 FROM ST_Read('/Users/mxm/Code/mine/geo/apps/linzer/output/amsterdam/water.geojson');
+
+
+---
+
+SELECT names.primary, *
+FROM division_area
+WHERE names.primary LIKE '%Martin%'
+
+SELECT names.primary, *
+FROM division_area
+WHERE bbox.xmin BETWEEN 18.661508 AND 49.163027
+    AND bbox.ymin BETWEEN 18.836438 AND 49.27799

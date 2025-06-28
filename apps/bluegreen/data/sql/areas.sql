@@ -1,6 +1,6 @@
 SELECT names.primary, *
 FROM division_area
-WHERE names.primary LIKE '%Göteborg%'
+WHERE names.primary LIKE '%Ronneburg%'
 
 ---
 
