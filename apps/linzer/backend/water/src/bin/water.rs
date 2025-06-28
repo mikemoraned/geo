@@ -30,10 +30,8 @@ struct Args {
 
 #[derive(Error, Debug)]
 pub enum WaterError {
-    #[error("Unable to find bounds")]
-    CannotFindBounds,
-    #[error("Unable to find water")]
-    CannotFindWater,
+    #[error("Unable to save geometry")]
+    CannotSaveGeometry,
 }
 
 #[tokio::main]
@@ -58,11 +56,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn save(geo: &geo::geometry::Geometry, path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    let collection = GeometryCollection::new_from(vec![geo.clone()]);
+    match geo {
+        geo::geometry::Geometry::GeometryCollection(collection) => {
+            let fout = BufWriter::new(File::create(path)?);
+            let mut gout = GeoJsonWriter::new(fout);
+            geo::geometry::Geometry::GeometryCollection(collection.clone())
+                .process_geom(&mut gout)?;
 
-    let fout = BufWriter::new(File::create(path)?);
-    let mut gout = GeoJsonWriter::new(fout);
-    geo::geometry::Geometry::GeometryCollection(collection).process_geom(&mut gout)?;
+            Ok(())
+        }
 
-    Ok(())
+        _ => Err(Box::new(WaterError::CannotSaveGeometry)),
+    }
 }
