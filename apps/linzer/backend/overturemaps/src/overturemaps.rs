@@ -1,13 +1,21 @@
 use arrow::array::{AsArray, RecordBatch};
+use clap::ValueEnum;
 use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::listing::{
     ListingOptions, ListingTable, ListingTableConfig, ListingTableUrl,
 };
 use datafusion::prelude::*;
-use geo::Geometry;
+use geo::{Area, BooleanOps, BoundingRect, Geometry, GeometryCollection, MultiPolygon};
 use geozero::ToGeo;
 use serde::Deserialize;
 use std::sync::Arc;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum OvertureError {
+    #[error("Unable to find bounds")]
+    CannotFindBounds,
+}
 
 pub struct OvertureMaps {
     ctx: SessionContext,
@@ -15,6 +23,12 @@ pub struct OvertureMaps {
 
 #[derive(Deserialize, Debug)]
 pub struct GersId(String);
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum WaterHandling {
+    ClipToRegion,
+    KeepAsIs,
+}
 
 impl OvertureMaps {
     pub async fn load_from_base(base: String) -> Result<Self, Box<dyn std::error::Error>> {
@@ -24,6 +38,7 @@ impl OvertureMaps {
         let overture_mapping = vec![
             ("division_area", "theme=divisions/type=division_area/"),
             ("base_land_cover", "theme=base/type=land_cover/"),
+            ("base_water", "theme=base/type=water/"),
         ];
 
         for (table_name, overture_path) in overture_mapping {
@@ -85,6 +100,106 @@ impl OvertureMaps {
         println!("no geometry found for id: {:?}", id);
 
         Ok(None)
+    }
+
+    pub async fn find_water_in_region(
+        &self,
+        region: &Geometry<f64>,
+        options: WaterHandling,
+    ) -> Result<Geometry, Box<dyn std::error::Error>> {
+        let bounds = region
+            .bounding_rect()
+            .ok_or(OvertureError::CannotFindBounds)?;
+        println!("finding water in bounds: {:?}", bounds);
+
+        let xmin = bounds.min().x;
+        let ymin = bounds.min().y;
+        let xmax = bounds.max().x;
+        let ymax = bounds.max().y;
+        let sql = format!(
+            "
+            SELECT geometry FROM base_water
+            WHERE 
+                 -- bounding boxes are overlapping if they *don't* overlap along any axis
+                 -- if we see our region's bounding box as A, and the geometry's bounding box as B:
+                 NOT (
+                    {xmax} <= bbox.xmin    -- A is entirely left of B
+                    OR bbox.xmax <= {xmin} -- A is entirely right of B
+                    OR bbox.ymin           -- A is entirely below B
+                       >= 
+                       {ymax} 
+                    OR {ymin}              -- A is entirely above B
+                       >=
+                       bbox.ymax  
+                )  
+            "
+        );
+        let matching = self.ctx.sql(&sql).await?.collect().await?;
+
+        println!("found {} batches", matching.len());
+
+        let mut intersections = vec![];
+        let mut kept_geometries_count = 0;
+        let mut ignored_geometries_count = 0;
+        for batch in matching {
+            let geometry_col = batch.column(0).as_binary_view();
+            for geometry in geometry_col.iter() {
+                if let Some(geometry) = geometry {
+                    let wkb = geozero::wkb::Wkb(geometry.to_vec());
+                    match wkb.to_geo() {
+                        Ok(geometry) => match options {
+                            WaterHandling::KeepAsIs => {
+                                kept_geometries_count += 1;
+                                intersections.push(geometry.clone());
+                            }
+                            WaterHandling::ClipToRegion => {
+                                let intersection = intersect(&region, &geometry);
+                                if intersection.signed_area() > 0.0 {
+                                    kept_geometries_count += 1;
+                                    intersections.push(Geometry::MultiPolygon(intersection));
+                                } else {
+                                    ignored_geometries_count += 1;
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            println!("error converting WKB to Geometry: {}", e);
+                            return Err(Box::new(e));
+                        }
+                    }
+                }
+            }
+        }
+        println!(
+            "found {} geometries, kept {}, ignored {}",
+            kept_geometries_count + ignored_geometries_count,
+            kept_geometries_count,
+            ignored_geometries_count
+        );
+
+        let collection = GeometryCollection::new_from(intersections);
+        Ok(Geometry::GeometryCollection(collection))
+    }
+}
+
+fn intersect(geo1: &Geometry<f64>, geo2: &Geometry<f64>) -> MultiPolygon<f64> {
+    match geo1 {
+        Geometry::Polygon(poly1) => match geo2 {
+            Geometry::Polygon(poly2) => poly1.intersection(poly2),
+            Geometry::MultiPolygon(multi2) => {
+                MultiPolygon::new(vec![poly1.clone()]).intersection(multi2)
+            }
+            _ => MultiPolygon::new(vec![]),
+        },
+        Geometry::MultiPolygon(multi1) => match geo2 {
+            Geometry::Polygon(poly2) => {
+                multi1.intersection(&MultiPolygon::new(vec![poly2.clone()]))
+            }
+            Geometry::MultiPolygon(multi2) => multi1.intersection(multi2),
+            _ => MultiPolygon::new(vec![]),
+        },
+
+        _ => MultiPolygon::new(vec![]),
     }
 }
 

@@ -6,18 +6,35 @@ config_base := "../config"
 output_base := "../output"
 overturemaps_base := "/Volumes/PRO-G40/OvertureMaps/data/release/2025-05-21.0"
 
-samples:
-    mkdir -p output/{{area}}
+area_dir:
+    mkdir -p {{output_base}}/{{area}}
+
+water: area_dir
+    cargo run --release --bin water -- \
+        --overturemaps {{overturemaps_base}} \
+        --area {{config_base}}/{{area}}.toml \
+        --water {{output_base}}/{{area}}/water.geojson \
+        --handling clip-to-region
+
+water_asis: area_dir
+    cargo run --release --bin water -- \
+        --overturemaps {{overturemaps_base}} \
+        --area {{config_base}}/{{area}}.toml \
+        --water {{output_base}}/{{area}}/water_asis.geojson \
+        --handling keep-as-is
+
+samples: area_dir
     cargo run --release --bin sample -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
         --bounds {{output_base}}/{{area}}/bounds.geojson \
+        --mask {{output_base}}/{{area}}/bounds_masked.geojson \
         --starts {{output_base}}/{{area}}/sample.{{paths}}.starts.geojson \
         --ends {{output_base}}/{{area}}/sample.{{paths}}.ends.geojson \
         --paths {{paths}} \
         --seed {{seed}}
 
-routes:
+routes: area_dir
     cargo run --release --bin routes -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
@@ -26,13 +43,15 @@ routes:
         --geojson {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.geojson \
         --profile {{profile}}
 
-regions:
+regions: area_dir
     cargo run --release --bin find_regions -- \
-        --routes {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.geojson \
+        --background {{output_base}}/{{area}}/bounds.geojson \
+        --borders {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.geojson \
+        --borders {{output_base}}/{{area}}/water.geojson \
         --stage-template {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.STAGE_NAME.png \
         --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson
 
-layout:
+layout: area_dir
     cargo run --release --bin layout -- \
         --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson \
         --bin-type guillotine \
@@ -45,23 +64,42 @@ layout:
 
 regions_layout: regions layout
     
-all: samples routes regions_layout
+all: water samples routes regions_layout
 
-generate_all:
-    just --set area hamburg --set profile pedestrian all
-    just --set area hamburg --set profile auto all
+rule_name := "all"
+areas:
+    just --set area hamburg --set profile pedestrian {{rule_name}}
+    just --set area hamburg --set profile auto {{rule_name}}
 
-    just --set area edinburgh --set profile pedestrian all
-    just --set area edinburgh --set profile auto all
+    just --set area edinburgh --set profile pedestrian {{rule_name}}
+    just --set area edinburgh --set profile auto {{rule_name}}
 
-    just --set area jerusalem --set profile pedestrian all
-    just --set area jerusalem --set profile auto all
+    just --set area jerusalem --set profile pedestrian {{rule_name}}
+    just --set area jerusalem --set profile auto {{rule_name}}
 
-    just --set area new_york --set profile pedestrian all
-    just --set area new_york --set profile auto all
+    just --set area new_york --set profile pedestrian {{rule_name}}
+    just --set area new_york --set profile auto {{rule_name}}
 
-    just --set area paris --set profile pedestrian all
-    just --set area paris --set profile auto all
+    just --set area paris --set profile pedestrian {{rule_name}}
+    just --set area paris --set profile auto {{rule_name}}
 
-    just --set area amsterdam --set profile pedestrian all
-    just --set area amsterdam --set profile auto all
+    just --set area amsterdam --set profile pedestrian {{rule_name}}
+    just --set area amsterdam --set profile auto {{rule_name}}
+
+    just --set area berlin --set profile pedestrian {{rule_name}}
+    just --set area berlin --set profile auto {{rule_name}}
+
+    just --set area gothemburg --set profile pedestrian {{rule_name}}
+    just --set area gothemburg --set profile auto {{rule_name}}
+
+    just --set area stockholm --set profile pedestrian {{rule_name}}
+    just --set area stockholm --set profile auto {{rule_name}}
+
+    just --set area stockholm --set profile pedestrian {{rule_name}}
+    just --set area stockholm --set profile auto {{rule_name}}
+
+    just --set area vejle --set profile pedestrian {{rule_name}}
+    just --set area vejle --set profile auto {{rule_name}}
+
+    just --set area ronneburg --set profile pedestrian {{rule_name}}
+    just --set area ronneburg --set profile auto {{rule_name}}

@@ -7,6 +7,8 @@ edition = "2021"
 geozero = { workspace = true }
 serde = { workspace = true }
 geo = { workspace = true }
+thiserror = { workspace = true }
+clap = { workspace = true }
 
 datafusion = "46.0.0"
 arrow = { version = "54.2.1", features = ["prettyprint"] }

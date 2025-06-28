@@ -95,9 +95,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let bounds = read_bounds(&args, &config).await?;
-    // ensure we later save the bounds of the area as this will define the background
-    // for the routes
-    geo.push(bounds.clone());
 
     let paired: Vec<(Point, Point)> = starts
         .clone()

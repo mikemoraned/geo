@@ -1,3 +1,12 @@
+copy_cities:
+    cp ../output/hamburg/regions_pedestrian.1000.geojson web/data/hamburg
+    cp ../output/edinburgh/regions_pedestrian.1000.geojson web/data/edinburgh
+    cp ../output/jerusalem/regions_pedestrian.1000.geojson web/data/jerusalem
+    cp ../output/new_york/regions_pedestrian.1000.geojson web/data/new_york
+    cp ../output/paris/regions_pedestrian.1000.geojson web/data/paris
+    cp ../output/amsterdam/regions_pedestrian.1000.geojson web/data/amsterdam
+    cp ../output/berlin/regions_pedestrian.1000.geojson web/data/berlin
+
 build:
     cd rust/web && wasm-pack build --release --target web --out-dir ../../web/dist
     rm ./web/dist/.gitignore

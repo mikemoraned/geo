@@ -7,7 +7,7 @@ use std::{
 
 use clap::{command, Parser};
 use conversion::projection::Projection;
-use geo::{coord, Area, BoundingRect, Coord, Geometry, GeometryCollection, Within};
+use geo::{coord, Area, BoundingRect, Coord, Geometry, GeometryCollection, LineString, Within};
 use geozero::{
     geo_types::GeoWriter,
     geojson::{GeoJsonReader, GeoJsonWriter},
@@ -20,17 +20,23 @@ use imageproc::{
 };
 use rand::Rng;
 use regions::contours::find_contours_in_luma;
+use thiserror::Error;
+use tiny_skia::{FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
 
 /// find regions in an area
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// input GeoJSON `.geojson` file representing the routes
+    /// input GeoJSON `.geojson` file(s) representing what to be drawn as the backgrounds
     #[arg(long)]
-    routes: PathBuf,
+    background: Vec<PathBuf>,
+
+    /// input GeoJSON `.geojson` file(s) representing what to be drawn as the borders
+    #[arg(long)]
+    borders: Vec<PathBuf>,
 
     /// whether to exclude regions that are on the border
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     exclude_border: bool,
 
     /// only allow regions whos proportions of width, height, or area are less than this value
@@ -46,82 +52,100 @@ struct Args {
     regions: PathBuf,
 }
 
+#[derive(Error, Debug)]
+pub enum RegionsError {
+    #[error("Could not read geometry from file")]
+    CannotReadGeometry,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("{:?}", args);
 
-    let mut file = BufReader::new(File::open(args.routes)?);
-    let mut reader = GeoJsonReader(&mut file);
-    let mut writer = GeoWriter::new();
-    reader.process_geom(&mut writer)?;
+    let background_geometry = read_geometry(&args.background)?;
+    let border_geometry = read_geometry(&args.borders)?;
 
-    if let Geometry::GeometryCollection(geoms) = writer.take_geometry().unwrap() {
-        println!("Found {} geometries", geoms.len());
+    let (draw_image, projection) = draw_routes(&background_geometry, &border_geometry)?;
 
-        let (draw_image, projection) = draw_routes(&geoms)?;
+    let draw_stage_png = args
+        .stage_template
+        .to_str()
+        .unwrap()
+        .replace("STAGE_NAME", "draw");
+    draw_image.save(draw_stage_png)?;
 
-        let draw_stage_png = args
-            .stage_template
-            .to_str()
-            .unwrap()
-            .replace("STAGE_NAME", "draw");
-        draw_image.save(draw_stage_png)?;
+    let background_color = Luma([255u8]);
+    let labelled_image: Image<Luma<u32>> =
+        connected_components(&draw_image, Connectivity::Four, background_color);
 
-        let background_color = Luma([255u8]);
-        let labelled_image: Image<Luma<u32>> =
-            connected_components(&draw_image, Connectivity::Four, background_color);
+    let labelled_colored_image: RgbaImage = assign_random_colors(&labelled_image);
 
-        let labelled_colored_image: RgbaImage = assign_random_colors(&labelled_image);
+    let labelled_stage_png = args
+        .stage_template
+        .to_str()
+        .unwrap()
+        .replace("STAGE_NAME", "labelled");
+    labelled_colored_image.save(labelled_stage_png)?;
 
-        let labelled_stage_png = args
-            .stage_template
-            .to_str()
-            .unwrap()
-            .replace("STAGE_NAME", "labelled");
-        labelled_colored_image.save(labelled_stage_png)?;
+    let contours = find_contours_in_luma(Luma([0u32; 1]), &labelled_image);
+    println!("Found {} contours", contours.len());
+    let contours_image = draw_contours(&contours, labelled_image.width(), labelled_image.height())?;
+    let contours_stage_png = args
+        .stage_template
+        .to_str()
+        .unwrap()
+        .replace("STAGE_NAME", "contours");
+    contours_image.save(contours_stage_png)?;
 
-        let contours = find_contours_in_luma(Luma([0u32; 1]), &labelled_image);
-        println!("Found {} contours", contours.len());
-        let contours_image =
-            draw_contours(&contours, labelled_image.width(), labelled_image.height())?;
-        let contours_stage_png = args
-            .stage_template
-            .to_str()
-            .unwrap()
-            .replace("STAGE_NAME", "contours");
-        contours_image.save(contours_stage_png)?;
+    let mut contour_collection = GeometryCollection::from(
+        contours
+            .iter()
+            .map(|contour| {
+                let coords: Vec<Coord> = contour
+                    .iter()
+                    .map(|point| {
+                        let (x, y) = projection.invert(point.x as f64, point.y as f64);
+                        coord!(x: x, y: y)
+                    })
+                    .collect();
+                let exterior = geo::LineString::new(coords);
+                let poly = geo::Polygon::new(exterior, vec![]);
+                Geometry::Polygon(poly)
+            })
+            .collect::<Vec<Geometry>>(),
+    );
 
-        let mut contour_collection = GeometryCollection::from(
-            contours
-                .iter()
-                .map(|contour| {
-                    let coords: Vec<Coord> = contour
-                        .iter()
-                        .map(|point| {
-                            let (x, y) = projection.invert(point.x as f64, point.y as f64);
-                            coord!(x: x, y: y)
-                        })
-                        .collect();
-                    let exterior = geo::LineString::new(coords);
-                    let poly = geo::Polygon::new(exterior, vec![]);
-                    Geometry::Polygon(poly)
-                })
-                .collect::<Vec<Geometry>>(),
-        );
-
-        if args.exclude_border {
-            contour_collection = exclude_border(&contour_collection);
-        }
-
-        contour_collection = exclude_by_proportion(&contour_collection, args.exclude_by_proportion);
-
-        let regions_file = BufWriter::new(File::create(args.regions)?);
-        let mut regions_writer = GeoJsonWriter::new(regions_file);
-        Geometry::GeometryCollection(contour_collection).process_geom(&mut regions_writer)?;
+    if args.exclude_border {
+        contour_collection = exclude_border(&contour_collection);
     }
 
+    contour_collection = exclude_by_proportion(&contour_collection, args.exclude_by_proportion);
+
+    let regions_file = BufWriter::new(File::create(args.regions)?);
+    let mut regions_writer = GeoJsonWriter::new(regions_file);
+    Geometry::GeometryCollection(contour_collection).process_geom(&mut regions_writer)?;
+
     Ok(())
+}
+
+fn read_geometry(paths: &Vec<PathBuf>) -> Result<Geometry, Box<dyn std::error::Error>> {
+    let mut geometries_per_path = vec![];
+    for path in paths {
+        let mut file = BufReader::new(File::open(path)?);
+        let mut reader = GeoJsonReader(&mut file);
+        let mut writer = GeoWriter::new();
+        reader.process_geom(&mut writer)?;
+
+        if let Some(geometry) = writer.take_geometry() {
+            geometries_per_path.push(geometry);
+        } else {
+            return Err(Box::new(RegionsError::CannotReadGeometry));
+        }
+    }
+
+    let collection = GeometryCollection::new_from(geometries_per_path);
+    Ok(Geometry::GeometryCollection(collection))
 }
 
 fn exclude_by_proportion(collection: &GeometryCollection, proportion: f32) -> GeometryCollection {
@@ -190,11 +214,12 @@ fn assign_random_colors(labelled_image: &Image<Luma<u32>>) -> RgbaImage {
 }
 
 fn draw_routes(
-    collection: &GeometryCollection,
+    background: &Geometry,
+    borders: &Geometry,
 ) -> Result<(GrayImage, Projection), Box<dyn std::error::Error>> {
     use tiny_skia::*;
 
-    let bounds = collection.bounding_rect().unwrap();
+    let bounds = background.bounding_rect().unwrap();
     println!("Bounding rect: {:?}", bounds);
 
     let scale = 10000.0;
@@ -223,7 +248,7 @@ fn draw_routes(
     let mut stroke = Stroke::default();
     stroke.width = 0.0005 * width.min(height);
 
-    // anything that is white is a border and anything that is black is a region
+    // anything that is white is a border and anything that is black is a candidate region,
 
     // so, first make everything white by default
     pixmap.fill_rect(
@@ -234,44 +259,14 @@ fn draw_routes(
         None,
     );
 
-    // then draw any polygons in black as backgrounds for regions
-    let mut count_polygon_backgrounds = 0usize;
-    for geom in collection.iter() {
-        if let Geometry::Polygon(poly) = geom {
-            let mut pb = PathBuilder::new();
-            poly.exterior().points().for_each(|p| {
-                if pb.is_empty() {
-                    pb.move_to(p.x() as f32, p.y() as f32);
-                } else {
-                    pb.line_to(p.x() as f32, p.y() as f32);
-                }
-            });
-            pb.close();
-            let path = pb.finish().ok_or("Failed to finish path")?;
-            pixmap.fill_path(&path, &black, FillRule::EvenOdd, transform, None);
-            count_polygon_backgrounds += 1;
-        }
-    }
-    println!("Drew {} black backgrounds", count_polygon_backgrounds);
+    // then draw backgrounds for regions
+    let count_background_geometries =
+        draw_geometry(&mut pixmap, background, &black, &stroke, transform)?;
+    println!("Drew {} black backgrounds", count_background_geometries);
 
-    // then draw linestrings as candidate borders
-    let mut count_line_borders = 0usize;
-    for geom in collection.iter() {
-        if let Geometry::LineString(line) = geom {
-            let mut pb = PathBuilder::new();
-            line.points().for_each(|p| {
-                if pb.is_empty() {
-                    pb.move_to(p.x() as f32, p.y() as f32);
-                } else {
-                    pb.line_to(p.x() as f32, p.y() as f32);
-                }
-            });
-            let path = pb.finish().ok_or("Failed to finish path")?;
-            pixmap.stroke_path(&path, &white, &stroke, transform, None);
-            count_line_borders += 1;
-        }
-    }
-    println!("Drew {} white borders", count_line_borders);
+    // then draw candidate borders
+    let count_borders_geometries = draw_geometry(&mut pixmap, borders, &white, &stroke, transform)?;
+    println!("Drew {} white borders", count_borders_geometries);
 
     // apply threshold to get a binary image, where black is candidate regions and white is ignorable border
     let image = GrayImage::from_fn(width_px, height_px, |x, y| {
@@ -284,6 +279,68 @@ fn draw_routes(
     });
 
     Ok((image, projection))
+}
+
+fn draw_geometry(
+    pixmap: &mut Pixmap,
+    geometry: &Geometry,
+    paint: &Paint,
+    stroke: &Stroke,
+    transform: Transform,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let mut mask = Mask::new(pixmap.width() as u32, pixmap.height() as u32).unwrap();
+    match geometry {
+        Geometry::Polygon(poly) => {
+            let path = path_from_line(poly.exterior())?;
+            mask.clear();
+            for interior in poly.interiors() {
+                let interior_path = path_from_line(interior)?;
+                mask.fill_path(&interior_path, FillRule::EvenOdd, true, transform);
+            }
+            mask.invert();
+            pixmap.fill_path(&path, paint, FillRule::EvenOdd, transform, Some(&mask));
+
+            Ok(1)
+        }
+        Geometry::LineString(line) => {
+            let path = path_from_line(line)?;
+            pixmap.stroke_path(&path, paint, &stroke, transform, None);
+            Ok(1)
+        }
+        Geometry::MultiPolygon(multi_poly) => {
+            let mut count = 0usize;
+            for poly in multi_poly.iter() {
+                count += draw_geometry(
+                    pixmap,
+                    &Geometry::Polygon(poly.clone()),
+                    paint,
+                    stroke,
+                    transform,
+                )?;
+            }
+            Ok(count)
+        }
+        Geometry::GeometryCollection(collection) => {
+            let mut count = 0usize;
+            for geom in collection.iter() {
+                count += draw_geometry(pixmap, geom, paint, stroke, transform)?;
+            }
+            Ok(count)
+        }
+        _ => Ok(0),
+    }
+}
+
+fn path_from_line(line: &LineString) -> Result<Path, Box<dyn std::error::Error>> {
+    let mut pb = PathBuilder::new();
+    for (i, point) in line.points().enumerate() {
+        if i == 0 {
+            pb.move_to(point.x() as f32, point.y() as f32);
+        } else {
+            pb.line_to(point.x() as f32, point.y() as f32);
+        }
+    }
+    Ok(pb.finish().ok_or("Failed to finish path")?)
 }
 
 fn draw_contours(
