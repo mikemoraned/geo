@@ -1,24 +1,62 @@
-import './style.css'
-import javascriptLogo from './javascript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.js'
+// deck.gl
+// SPDX-License-Identifier: MIT
+// Copyright (c) vis.gl contributors
 
-document.querySelector('#app').innerHTML = `
-  <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="${viteLogo}" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank">
-      <img src="${javascriptLogo}" class="logo vanilla" alt="JavaScript logo" />
-    </a>
-    <h1>Hello Vite!</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
-    </div>
-    <p class="read-the-docs">
-      Click on the Vite logo to learn more
-    </p>
-  </div>
-`
+import {MapboxOverlay as DeckOverlay} from '@deck.gl/mapbox';
+import {GeoJsonLayer, ArcLayer} from '@deck.gl/layers';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
-setupCounter(document.querySelector('#counter'))
+// source: Natural Earth http://www.naturalearthdata.com/ via geojson.xyz
+const AIR_PORTS =
+  'https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_10m_airports.geojson';
+
+// Set your Mapbox token here or via environment variable
+const MAPBOX_TOKEN = process.env.MapboxAccessToken; // eslint-disable-line
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/light-v9',
+  accessToken: MAPBOX_TOKEN,
+  center: [0.45, 51.47],
+  zoom: 4,
+  bearing: 0,
+  pitch: 30
+});
+
+const deckOverlay = new DeckOverlay({
+  // interleaved: true,
+  layers: [
+    new GeoJsonLayer({
+      id: 'airports',
+      data: AIR_PORTS,
+      // Styles
+      filled: true,
+      pointRadiusMinPixels: 2,
+      pointRadiusScale: 2000,
+      getPointRadius: f => 11 - f.properties.scalerank,
+      getFillColor: [200, 0, 80, 180],
+      // Interactive props
+      pickable: true,
+      autoHighlight: true,
+      onClick: info =>
+        // eslint-disable-next-line
+        info.object && alert(`${info.object.properties.name} (${info.object.properties.abbrev})`)
+      // beforeId: 'waterway-label' // In interleaved mode render the layer under map labels
+    }),
+    new ArcLayer({
+      id: 'arcs',
+      data: AIR_PORTS,
+      dataTransform: d => d.features.filter(f => f.properties.scalerank < 4),
+      // Styles
+      getSourcePosition: f => [-0.4531566, 51.4709959], // London
+      getTargetPosition: f => f.geometry.coordinates,
+      getSourceColor: [0, 128, 200],
+      getTargetColor: [200, 0, 80],
+      getWidth: 1
+    })
+  ]
+});
+
+map.addControl(deckOverlay);
+map.addControl(new mapboxgl.NavigationControl());
