@@ -314,3 +314,7 @@ FROM
                  hive_partitioning=1)
 WHERE names.primary LIKE '%Venice%'
 
+---
+
+SELECT *
+FROM ST_Read('/Users/mxm/Code/mine/geo/apps/linzer/output/amsterdam/water.geojson');
