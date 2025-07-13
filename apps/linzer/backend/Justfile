@@ -14,6 +14,7 @@ water: area_dir
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
         --water {{output_base}}/{{area}}/water.geojson \
+        --water {{output_base}}/{{area}}/water.arrow \
         --handling clip-to-region
 
 water_asis: area_dir
@@ -21,6 +22,7 @@ water_asis: area_dir
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
         --water {{output_base}}/{{area}}/water_asis.geojson \
+        --water {{output_base}}/{{area}}/water_asis.arrow \
         --handling keep-as-is
 
 samples: area_dir

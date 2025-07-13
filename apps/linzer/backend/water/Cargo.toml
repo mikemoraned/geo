@@ -5,10 +5,13 @@ edition = "2021"
 
 [dependencies]
 geozero = { workspace = true }
+geoarrow = { workspace = true }
 geo = { workspace = true }
 tokio = { workspace = true }
 clap = { workspace = true }
 thiserror = { workspace = true }
+arrow-schema = { workspace = true }
+arrow-array = { workspace = true }
 
 overturemaps = { path = "../overturemaps" }
 config = { path = "../config" }
