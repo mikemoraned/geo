@@ -18,10 +18,10 @@ geo = "0.30"
 geojson = { version = "0.24", features = ["geo-types"] }
 geozero = { version = "0.14", features = ["with-wkb"] }
 geoarrow = { version="0.3.0", features = ["geozero"] }
-arrow-schema = "55.1.0"
-arrow-array = "55.1.0"
-datafusion = "46.0.0"
-arrow = { version = "55.1.0", features = ["prettyprint"] }
+arrow-schema = "=53.2.0"
+arrow-array = "=53.2.0"
+datafusion = "43.0.0"
+arrow = { version = "=53.2.0", features = ["prettyprint"] }
 futures = "0.3.31"
 
 rand = "0.8"
@@ -32,4 +32,6 @@ imageproc = "0.25"
 
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"] }
+
+chrono = "= 0.4.38"
 
