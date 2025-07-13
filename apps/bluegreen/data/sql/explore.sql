@@ -326,7 +326,22 @@ SELECT names.primary, *
 FROM division_area
 WHERE names.primary LIKE '%Martin%'
 
+-- <gmd:EX_GeographicBoundingBox><gmd:westBoundLongitude><gco:Decimal>18.6615084484</gco:Decimal></gmd:westBoundLongitude><gmd:eastBoundLongitude><gco:Decimal>18.8364384323</gco:Decimal></gmd:eastBoundLongitude><gmd:southBoundLatitude><gco:Decimal>49.1630267805</gco:Decimal></gmd:southBoundLatitude><gmd:northBoundLatitude><gco:Decimal>49.2779901389</gco:Decimal></gmd:northBoundLatitude></gmd:EX_GeographicBoundingBox>
+
 SELECT names.primary, *
 FROM division_area
-WHERE bbox.xmin BETWEEN 18.661508 AND 49.163027
-    AND bbox.ymin BETWEEN 18.836438 AND 49.27799
+WHERE bbox.xmin BETWEEN 18.661508 AND 18.836438 
+    AND bbox.ymin BETWEEN 49.163027 AND 49.27799
+    
+SELECT names.primary, *
+FROM transportation_segments
+WHERE bbox.xmin BETWEEN 18.661508 AND 18.836438 
+    AND bbox.ymin BETWEEN 49.163027 AND 49.27799
+    
+    
+-- <gmd:EX_GeographicBoundingBox><gmd:westBoundLongitude><gco:Decimal>18.8121448271</gco:Decimal></gmd:westBoundLongitude><gmd:eastBoundLongitude><gco:Decimal>18.935054373</gco:Decimal></gmd:eastBoundLongitude><gmd:southBoundLatitude><gco:Decimal>49.1233501507</gco:Decimal></gmd:southBoundLatitude><gmd:northBoundLatitude><gco:Decimal>49.1936256461</gco:Decimal></gmd:northBoundLatitude></gmd:EX_GeographicBoundingBox>
+    
+SELECT names.primary, *
+FROM transportation_segments
+WHERE bbox.xmin BETWEEN 18.8121448271 AND 18.935054373
+    AND bbox.ymin BETWEEN 49.1233501507 AND 49.1936256461

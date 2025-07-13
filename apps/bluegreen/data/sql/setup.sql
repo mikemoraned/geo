@@ -21,3 +21,14 @@ FROM
 SELECT *
 FROM base_water
 LIMIT 10
+
+CREATE OR REPLACE VIEW transportation_segments AS
+SELECT
+    *
+FROM
+    read_parquet('/Volumes/PRO-G40/OvertureMaps/data/release/2025-05-21.0/theme=transportation/type=segment/*', 
+                 hive_partitioning=1)
+                 
+SELECT *
+FROM transportation_segments
+LIMIT 10                
