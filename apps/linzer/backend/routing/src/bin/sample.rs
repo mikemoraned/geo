@@ -11,6 +11,7 @@ use geozero::{geojson::GeoJsonWriter, GeozeroGeometry};
 use rand::{RngCore, SeedableRng};
 use routing::bounds;
 use thiserror::Error;
+use overturemaps::overturemaps::WaterHandling;
 
 /// Create sample points in area
 #[derive(Parser, Debug)]
@@ -135,7 +136,7 @@ async fn read_water(args: &Args, config: &Config) -> Result<Geometry, Box<dyn st
         use overturemaps::overturemaps::OvertureMaps;
         let om = OvertureMaps::load_from_base(om_base.clone()).await?;
         if let Some(bounds) = om.find_geometry_by_id(gers_id).await? {
-            let water = om.find_water_in_region(&bounds).await?;
+            let water = om.find_water_in_region(&bounds, WaterHandling::ClipToRegion).await?;
             Ok(water)
         } else {
             Err(Box::new(SamplerError::CannotFindGersId))
