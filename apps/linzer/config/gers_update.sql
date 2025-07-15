@@ -177,3 +177,42 @@ FROM base_land_cover_june
 WHERE bbox.xmin >= 35.156044 AND bbox.xmax <= 35.507954
       AND bbox.ymin >= 31.656881 AND bbox.ymax <= 31.952284
       AND id='e77650e6-4bc3-5e54-b5b4-46f8e3b1b375'
+
+CREATE OR REPLACE VIEW division_area_may AS
+SELECT
+    *
+FROM
+    read_parquet('/Volumes/PRO-G40/OvertureMaps/data/release/2025-05-21.0/theme=divisions/type=division_area/*', 
+                 hive_partitioning=1)
+
+SELECT * 
+FROM division_area_may
+WHERE id ='08596a323fffffff01c67019d4f1c8d0'                
+                 
+SELECT * 
+FROM division_area_june
+WHERE id ='955c0b4a-b28c-401f-827c-7d0837ba8104'
+
+SELECT * 
+FROM division_area_june
+WHERE id ='9bb24708-5951-4eba-af6b-dfd4a971e9bd'
+
+
+
+SELECT * 
+FROM division_area_june
+WHERE bbox.xmin >= 8.104499 AND bbox.xmax <= 10.325282
+      AND bbox.ymin >= 53.39511 AND bbox.ymax <= 54.027657
+      
+SELECT * 
+FROM division_area_may
+WHERE id='0850609cbfffffff01721b0295fac0f6'
+
+SELECT * 
+FROM division_area_june
+WHERE id='6ef8f90c-4f3b-4d59-92a5-3306f96e9d4c'
+
+SELECT * 
+FROM division_area_june
+WHERE bbox.xmin >= 11.231564 AND bbox.xmax <= 12.241608
+      AND bbox.ymin >= 57.499657 AND bbox.ymax <= 57.866005
