@@ -95,9 +95,6 @@ areas:
     just --set area stockholm --set profile pedestrian {{rule_name}}
     just --set area stockholm --set profile auto {{rule_name}}
 
-    just --set area stockholm --set profile pedestrian {{rule_name}}
-    just --set area stockholm --set profile auto {{rule_name}}
-
     just --set area vejle --set profile pedestrian {{rule_name}}
     just --set area vejle --set profile auto {{rule_name}}
 
