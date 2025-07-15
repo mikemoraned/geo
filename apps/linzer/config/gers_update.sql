@@ -100,3 +100,80 @@ ORDER BY c.city ASC
 -- |stockholm |d8ce38d3-c16e-4ec4-9e6f-5ab76bbb4d0c|0854ae143fffffff01609212ad48701b|
 -- |vejle     |706a6083-00dd-4aa8-b530-c4160b05c0b7|085d465cbfffffff01b558002f798928|
 
+CREATE OR REPLACE VIEW base_land_cover_june_to_may_id_mapping AS
+SELECT
+    *
+FROM
+    read_parquet('/Volumes/PRO-G40/OvertureMaps/data/june_to_may_id_mapping/theme=base/type=land_cover/*', hive_partitioning=1)
+    
+SELECT *
+FROM base_land_cover_june_to_may_id_mapping
+LIMIT 100
+
+
+CREATE OR REPLACE VIEW base_land_cover_may AS
+SELECT
+    *
+FROM
+    read_parquet('/Volumes/PRO-G40/OvertureMaps/data/release/2025-05-21.0/theme=base/type=land_cover/*', 
+                 hive_partitioning=1)
+                 
+CREATE OR REPLACE VIEW base_land_cover_june AS
+SELECT
+    *
+FROM
+    read_parquet('/Volumes/PRO-G40/OvertureMaps/data/release/2025-06-25.0/theme=base/type=land_cover/*', 
+                 hive_partitioning=1)
+
+SELECT *
+FROM base_land_cover_may
+WHERE id='08b2db2b70d8bfff0005d68bbb7ae2f8'
+
+SELECT *
+FROM base_land_cover_may
+WHERE bbox.xmin >= 35.156044 AND bbox.xmax <= 35.507954
+      AND bbox.ymin >= 31.656881 AND bbox.ymax <= 31.952284
+      AND id='08b2db2b70d8bfff0005d68bbb7ae2f8'
+
+SELECT *
+FROM base_land_cover_june
+WHERE bbox.xmin >= 35.156044 AND bbox.xmax <= 35.507954
+      AND bbox.ymin >= 31.656881 AND bbox.ymax <= 31.952284
+
+
+SELECT id,geometry
+FROM base_land_cover_may
+WHERE id='08b2db2b70d8bfff0005d68bbb7ae2f8'
+UNION ALL
+SELECT id,geometry
+FROM base_land_cover_june
+WHERE bbox.xmin >= 35.156044 AND bbox.xmax <= 35.507954
+      AND bbox.ymin >= 31.656881 AND bbox.ymax <= 31.952284
+      
+CREATE OR REPLACE VIEW division_area_june AS
+SELECT
+    *
+FROM
+    read_parquet('/Volumes/PRO-G40/OvertureMaps/data/release/2025-06-25.0/theme=divisions/type=division_area/*', 
+                 hive_partitioning=1)
+
+SELECT *
+FROM division_area_june
+WHERE bbox.xmin >= 35.156044 AND bbox.xmax <= 35.507954
+      AND bbox.ymin >= 31.656881 AND bbox.ymax <= 31.952284
+      
+      
+SELECT *
+FROM base_land_cover_june
+WHERE id='e77650e6-4bc3-5e54-b5b4-46f8e3b1b375'
+
+SELECT *
+FROM base_land_cover_june
+WHERE bbox.xmin >= 35.156044 AND bbox.xmax <= 35.507954
+      AND bbox.ymin >= 31.656881 AND bbox.ymax <= 31.952284
+      
+SELECT *
+FROM base_land_cover_june
+WHERE bbox.xmin >= 35.156044 AND bbox.xmax <= 35.507954
+      AND bbox.ymin >= 31.656881 AND bbox.ymax <= 31.952284
+      AND id='e77650e6-4bc3-5e54-b5b4-46f8e3b1b375'
