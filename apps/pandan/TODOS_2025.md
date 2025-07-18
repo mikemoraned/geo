@@ -1,0 +1,9 @@
+# July/August
+
+* [ ] get to equivalent-level functionality as https://spectrum.houseofmoran.io but using newer stuff
+    * [ ] define greenery
+        * ...
+    * [ ] lookup route between points in a way which is biased towards walking
+        * ...
+    * [ ] do intersection of route with greenery area, client-side in browser, and display
+        * ...
