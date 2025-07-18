@@ -4,7 +4,7 @@ seed := "1"
 profile := "pedestrian" # or "auto"
 config_base := "../config"
 output_base := "../output"
-overturemaps_base := "/Volumes/PRO-G40/OvertureMaps/data/release/2025-05-21.0"
+overturemaps_base := "/Volumes/PRO-G40/OvertureMaps/data/release/2025-06-25.0"
 
 area_dir:
     mkdir -p {{output_base}}/{{area}}
@@ -91,9 +91,6 @@ areas:
 
     just --set area gothemburg --set profile pedestrian {{rule_name}}
     just --set area gothemburg --set profile auto {{rule_name}}
-
-    just --set area stockholm --set profile pedestrian {{rule_name}}
-    just --set area stockholm --set profile auto {{rule_name}}
 
     just --set area stockholm --set profile pedestrian {{rule_name}}
     just --set area stockholm --set profile auto {{rule_name}}
