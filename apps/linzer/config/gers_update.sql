@@ -216,3 +216,51 @@ SELECT *
 FROM division_area_june
 WHERE bbox.xmin >= 11.231564 AND bbox.xmax <= 12.241608
       AND bbox.ymin >= 57.499657 AND bbox.ymax <= 57.866005
+      
+      
+-- re: https://github.com/orgs/OvertureMaps/discussions/409
+
+-- definitions of `base_land_cover_may` and `base_land_cover_june` from my local copies of the OvertureMaps data
+CREATE OR REPLACE VIEW base_land_cover_may AS
+SELECT
+    *
+FROM
+    read_parquet('/Volumes/PRO-G40/OvertureMaps/data/release/2025-05-21.0/theme=base/type=land_cover/*', 
+                 hive_partitioning=1)
+                 
+CREATE OR REPLACE VIEW base_land_cover_june AS
+SELECT
+    *
+FROM
+    read_parquet('/Volumes/PRO-G40/OvertureMaps/data/release/2025-06-25.0/theme=base/type=land_cover/*', 
+                 hive_partitioning=1) 
+
+
+-- May                 
+SELECT sources[1].record_id, sources, bbox
+FROM base_land_cover_may
+WHERE id='08b2db2b70d8bfff0005d68bbb7ae2f8'
+
+-- |(sources[1]).record_id|sources                                                     |bbox                                        |
+-- |----------------------|------------------------------------------------------------|--------------------------------------------|
+-- |                      |{'[, ESA WorldCover, null, 2024-11-07T00:00:00.000Z, null]'}|[35.156044, 35.507954, 31.656881, 31.952284]|
+
+-- June
+SELECT sources[1].record_id, sources, bbox
+FROM base_land_cover_june
+WHERE id='e77650e6-4bc3-5e54-b5b4-46f8e3b1b375'
+
+-- |(sources[1]).record_id|sources                                                           |bbox                                        |
+-- |----------------------|------------------------------------------------------------------|--------------------------------------------|
+-- |                      |{'[, ESA WorldCover, null, 2024-11-07T00:00:00.000Z, null, null]'}|[35.156044, 35.507954, 31.656881, 31.952284]|
+
+
+SELECT 
+  may.id AS may_id, 
+  june.id AS june_id
+FROM 
+  may JOIN june ON SPLIT(may.sources[1].record_id, '@')[1] = SPLIT(may.sources[1].record_id, '@')[1]
+  AND may.class = june.class 
+  AND may.subtype = june.subtype 
+  AND may.type = june.type
+WHERE type IN ('infrastructure','water','land','land_use')
