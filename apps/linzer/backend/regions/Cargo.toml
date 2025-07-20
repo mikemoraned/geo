@@ -17,7 +17,6 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 geo-shell = { workspace = true }
 
-startup = { path = "../startup" }
 cli = { path = "../cli" }
 conversion = { path = "../conversion" }
 

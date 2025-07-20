@@ -16,7 +16,6 @@ tracing = { workspace = true }
 geo-shell = { workspace = true }
 geo-overturemaps = { workspace = true }
 
-startup = { path = "../startup" }
 cli = { path = "../cli" }
 overturemaps = { path = "../overturemaps" }
 

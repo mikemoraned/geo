@@ -19,5 +19,5 @@
         * actually just using simple logging for now; now need for opentelemetry yet
         * [x] use it in pandan
         * [x] use it in linzer
-    * [ ] extract `env` (e.g. used for stadiamaps secrets)
+    * [x] extract `env` (e.g. used for stadiamaps secrets)
     * [ ] ...

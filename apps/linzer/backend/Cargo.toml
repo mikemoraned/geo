@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "conversion", "layout", "overturemaps", "regions", "routing", "startup", "water"]
+members = ["cli", "conversion", "layout", "overturemaps", "regions", "routing", "water"]
 resolver = "3"
 
 [workspace.dependencies]
@@ -9,7 +9,6 @@ ferrostar = "0.10"
 url = "2.5"
 
 clap = { version = "4.5", features = ["derive"] }
-dotenvy = "0.15"
 tracing = "0.1"
 
 geo = "0.30"

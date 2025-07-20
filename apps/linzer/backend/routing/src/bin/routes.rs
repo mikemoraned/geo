@@ -7,7 +7,7 @@ use std::{
 use clap::{Parser, command};
 use cli::progress::progress_bar;
 use geo::{Contains, Coord, Geometry, GeometryCollection, LineString, Point};
-use geo_shell::{config::Config, tracing::setup_tracing_and_logging};
+use geo_shell::{config::Config, env::load_secret, tracing::setup_tracing_and_logging};
 use geozero::{
     GeozeroDatasource, GeozeroGeometry,
     geo_types::GeoWriter,
@@ -17,7 +17,6 @@ use routing::{
     bounds,
     stadia::{Profile, Server, StandardRouting},
 };
-use startup::env::load_secret;
 use thiserror::Error;
 use tracing::{debug, error, info, warn};
 
