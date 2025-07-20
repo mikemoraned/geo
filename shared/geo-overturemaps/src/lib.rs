@@ -1,4 +1,6 @@
 use std::fmt::Display;
+use datafusion_common::ScalarValue;
+use datafusion_expr::{Expr, Literal};
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -13,5 +15,17 @@ impl GersId {
 impl Display for GersId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl Literal for GersId {
+   fn lit(&self) -> Expr {
+        Expr::Literal(ScalarValue::Utf8(Some(self.0.clone())))
+    }
+}
+
+impl Literal for &GersId {
+   fn lit(&self) -> Expr {
+        Expr::Literal(ScalarValue::Utf8(Some(self.0.clone())))
     }
 }

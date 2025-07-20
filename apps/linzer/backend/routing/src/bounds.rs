@@ -1,5 +1,6 @@
 use geo::Geometry;
-use overturemaps::overturemaps::{GersId, OvertureMaps};
+use geo_overturemaps::GersId;
+use overturemaps::overturemaps::OvertureMaps;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

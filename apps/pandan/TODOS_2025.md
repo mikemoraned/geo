@@ -10,9 +10,9 @@
         * ...
 
 * [ ] refactor for sharing / general cleanup:
-    * [ ] extract out shared config and overturemaps crates
-        * [ ] extract basic crates
+    * [x] extract out shared config and overturemaps crates
+        * [x] extract basic crates
         * [x] get pandan using them in a minimal way
-        * [ ] change linzer to use those instead of it's own
+        * [x] change linzer to use those instead of it's own
     * [ ] get rid of crufty linzer crates that are unused / incomplete
     * [ ] extract shared telemetry crate and use it in pandan

@@ -6,8 +6,8 @@ use datafusion::datasource::listing::{
 };
 use datafusion::prelude::*;
 use geo::{Area, BooleanOps, BoundingRect, Geometry, GeometryCollection, MultiPolygon};
+use geo_overturemaps::GersId;
 use geozero::ToGeo;
-use serde::Deserialize;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -20,9 +20,6 @@ pub enum OvertureError {
 pub struct OvertureMaps {
     ctx: SessionContext,
 }
-
-#[derive(Deserialize, Debug)]
-pub struct GersId(String);
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
 pub enum WaterHandling {
@@ -207,7 +204,6 @@ async fn find_geometry_by_id(
     df: &DataFrame,
     id: &GersId,
 ) -> Result<Vec<RecordBatch>, Box<dyn std::error::Error>> {
-    let GersId(id) = id;
     let matching = df
         .clone()
         .filter(col("id").eq(lit(id)))?

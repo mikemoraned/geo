@@ -1,7 +1,7 @@
 [package]
 name = "overturemaps"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 geozero = { workspace = true }
@@ -9,6 +9,7 @@ serde = { workspace = true }
 geo = { workspace = true }
 thiserror = { workspace = true }
 clap = { workspace = true }
+geo-overturemaps = { workspace = true }
 
 datafusion = "46.0.0"
 arrow = { version = "54.2.1", features = ["prettyprint"] }

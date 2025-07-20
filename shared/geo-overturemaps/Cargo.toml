@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
+datafusion-expr = "46.0"
+datafusion-common = "46.0"

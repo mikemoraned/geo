@@ -4,14 +4,14 @@ use std::{
     path::PathBuf,
 };
 
-use clap::{command, Parser};
+use clap::{Parser, command};
 use cli::progress::progress_bar;
-use config::Config;
 use geo::{Contains, Coord, Geometry, GeometryCollection, LineString, Point};
+use geo_config::Config;
 use geozero::{
+    GeozeroDatasource, GeozeroGeometry,
     geo_types::GeoWriter,
     geojson::{GeoJsonReader, GeoJsonWriter},
-    GeozeroDatasource, GeozeroGeometry,
 };
 use routing::{
     bounds,
