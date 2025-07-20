@@ -302,7 +302,6 @@ struct Grid {
     x_stride: f64,
     y_stride: f64,
     count_remaining_to_fill: usize,
-    grid_size: usize,
     grid: Vec<Vec<bool>>,
     coords: Vec<Coord>,
 }
@@ -313,7 +312,6 @@ impl Grid {
         let grid_side_length = ((desired_grid_entries as f64).sqrt().ceil()) as usize;
         let x_stride = bounding_box.width() / (grid_side_length as f64);
         let y_stride = bounding_box.height() / (grid_side_length as f64);
-        let grid_size = grid_side_length * grid_side_length;
         let count_remaining_to_fill = grid_side_length * grid_side_length;
         let grid = vec![vec![false; grid_side_length]; grid_side_length];
         let coords = vec![];
@@ -322,14 +320,9 @@ impl Grid {
             x_stride,
             y_stride,
             count_remaining_to_fill,
-            grid_size,
             grid,
             coords,
         }
-    }
-
-    pub fn proportion_filled(&self) -> f64 {
-        (self.grid_size - self.count_remaining_to_fill) as f64 / self.grid_size as f64
     }
 
     pub fn is_filled(&self) -> bool {
