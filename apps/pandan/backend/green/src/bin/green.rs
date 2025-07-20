@@ -17,12 +17,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config: Config = Config::read_from_file(&args.config)?;
 
-    println!("Read config: {:?}", config);
+    println!("Read config: {config:?}");
 
     let overturemaps = config.overturemaps;
     let gers_id = overturemaps.gers_id;
 
-    println!("Overturemaps Gers ID: {}", gers_id);
+    println!("Overturemaps Gers ID: {gers_id}");
 
     Ok(())
 }
