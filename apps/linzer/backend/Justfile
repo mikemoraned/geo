@@ -2,9 +2,12 @@ area := "edinburgh"
 paths := "1000"
 seed := "1"
 profile := "pedestrian" # or "auto"
-config_base := "../config"
+config_base := "../../../config"
 output_base := "../output"
 overturemaps_base := "/Volumes/PRO-G40/OvertureMaps/data/release/2025-06-25.0"
+
+build:
+    cargo build --release
 
 area_dir:
     mkdir -p {{output_base}}/{{area}}
