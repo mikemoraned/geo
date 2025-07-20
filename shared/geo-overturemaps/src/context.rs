@@ -16,13 +16,15 @@ impl OvertureContext {
         info!("Loading Overture Maps context from release path: {:?}", base.as_ref());
         
         let path = base.as_ref();
-        let ctx = SessionContext::new();
+
+        let session_config = SessionConfig::new().with_collect_statistics(true);
+        let ctx = SessionContext::new_with_config(session_config);
 
         let overture_mapping = vec![
             ("division_area", "theme=divisions/type=division_area/"),
         ];
 
-        let read_options = ParquetReadOptions::default();
+        let read_options = ParquetReadOptions::default().parquet_pruning(true);
         for (table_name, relative_path) in overture_mapping {
             let full_path = path.join(relative_path);
             debug!("Loading table {} from path: {:?}", table_name, full_path);
