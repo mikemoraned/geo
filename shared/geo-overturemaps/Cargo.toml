@@ -5,5 +5,8 @@ edition = "2024"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-datafusion-expr = "46.0"
-datafusion-common = "46.0"
+geo = "0.30"
+tokio = { version="1.46", features = ["test-util"] }
+datafusion = "46.0"
+tracing = "0.1"
+geozero = { version = "0.14", features = ["with-wkb"] }

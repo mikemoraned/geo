@@ -6,4 +6,6 @@ edition = "2024"
 [dependencies]
 tracing = { workspace = true }
 clap = { workspace = true }
+tokio = { workspace = true }
 geo-shell = { workspace = true }
+geo-overturemaps = { workspace = true }

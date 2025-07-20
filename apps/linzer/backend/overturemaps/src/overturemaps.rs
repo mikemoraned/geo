@@ -6,7 +6,7 @@ use datafusion::datasource::listing::{
 };
 use datafusion::prelude::*;
 use geo::{Area, BooleanOps, BoundingRect, Geometry, GeometryCollection, MultiPolygon};
-use geo_overturemaps::GersId;
+use geo_overturemaps::model::GersId;
 use geozero::ToGeo;
 use std::sync::Arc;
 use thiserror::Error;

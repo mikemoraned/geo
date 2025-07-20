@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use geo_overturemaps::context::OvertureContext;
 use geo_shell::{config::Config, tracing::setup_tracing_and_logging};
 use tracing::info;
 
@@ -11,9 +12,14 @@ struct Args {
     /// config file defining the area
     #[arg(long)]
     config: PathBuf,
+
+    /// Overturemaps Release base
+    #[arg(long)]
+    overturemaps: PathBuf,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_tracing_and_logging()?;   
 
     let args = Args::parse();
@@ -26,6 +32,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gers_id = overturemaps.gers_id;
 
     info!("Overturemaps Gers ID: {gers_id}");
+
+    let om = OvertureContext::load_from_release(args.overturemaps).await?;
+    let geometry = om.find_geometry_by_id(&gers_id).await?;
+    info!("Found geometry: {geometry:?}");
 
     Ok(())
 }

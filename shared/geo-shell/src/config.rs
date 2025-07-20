@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use geo_overturemaps::GersId;
+use geo_overturemaps::model::GersId;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]

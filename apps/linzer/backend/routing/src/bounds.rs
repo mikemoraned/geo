@@ -1,5 +1,5 @@
 use geo::Geometry;
-use geo_overturemaps::GersId;
+use geo_overturemaps::model::GersId;
 use overturemaps::overturemaps::OvertureMaps;
 use thiserror::Error;
 use tracing::{debug, info};
