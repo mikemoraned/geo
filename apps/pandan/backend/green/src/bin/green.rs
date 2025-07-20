@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use geo_shell::config::Config;
+use geo_shell::{config::Config, tracing::setup_tracing_and_logging};
+use tracing::info;
 
 /// Find greenery in an area
 #[derive(Parser, Debug)]
@@ -13,16 +14,18 @@ struct Args {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_tracing_and_logging()?;   
+
     let args = Args::parse();
 
     let config: Config = Config::read_from_file(&args.config)?;
 
-    println!("Read config: {config:?}");
+    info!("Read config: {config:?}");
 
     let overturemaps = config.overturemaps;
     let gers_id = overturemaps.gers_id;
 
-    println!("Overturemaps Gers ID: {gers_id}");
+    info!("Overturemaps Gers ID: {gers_id}");
 
     Ok(())
 }

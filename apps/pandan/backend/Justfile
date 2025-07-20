@@ -1,0 +1,2 @@
+green:
+    RUST_LOG=info cargo run --release --bin green -- --config ../../../config/edinburgh.toml
