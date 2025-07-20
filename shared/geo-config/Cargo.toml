@@ -1,0 +1,11 @@
+[package]
+name = "geo-config"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+geo = "0.30"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.9"
+
+geo-overturemaps = { path="../geo-overturemaps" }

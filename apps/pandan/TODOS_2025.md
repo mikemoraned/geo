@@ -8,3 +8,9 @@
         * ...
     * [ ] do intersection of route with greenery area, client-side in browser, and display
         * ...
+
+* [ ] refactor for sharing:
+    * [x] extract out shared config and overturemaps crates
+    * [x] get pandan using them in a minimal way
+    * [ ] change linzer to use those instead of it's own
+    * [ ] get rid of crufty linzer crates that are unused / incomplete
