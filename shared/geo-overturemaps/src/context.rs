@@ -63,17 +63,15 @@ fn convert_record_batch_to_geometry(
 ) -> Result<Option<Geometry>, Box<dyn std::error::Error>> {
     for batch in matching {
         let geometry_col = batch.column(0).as_binary_view();
-        for geometry in geometry_col.iter() {
-            if let Some(geometry) = geometry {
-                let wkb = geozero::wkb::Wkb(geometry.to_vec());
-                match wkb.to_geo() {
-                    Ok(geometry) => {
-                        return Ok(Some(geometry.clone()));
-                    }
-                    Err(e) => {
-                        error!("error converting WKB to Geometry: {}", e);
-                        return Err(Box::new(e));
-                    }
+        if let Some(geometry) = geometry_col.iter().flatten().next() {
+            let wkb = geozero::wkb::Wkb(geometry.to_vec());
+            match wkb.to_geo() {
+                Ok(geometry) => {
+                    return Ok(Some(geometry.clone()));
+                }
+                Err(e) => {
+                    error!("error converting WKB to Geometry: {}", e);
+                    return Err(Box::new(e));
                 }
             }
         }
