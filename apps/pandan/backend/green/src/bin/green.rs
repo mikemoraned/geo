@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use geo_config::Config;
+use geo_shell::config::Config;
 
 /// Find greenery in an area
 #[derive(Parser, Debug)]

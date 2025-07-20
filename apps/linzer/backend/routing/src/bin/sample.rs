@@ -6,7 +6,7 @@ use geo::{
     Area, BooleanOps, BoundingRect, Contains, Coord, Geometry, GeometryCollection, MultiPolygon,
     Point, Rect, coord,
 };
-use geo_config::Config;
+use geo_shell::config::Config;
 use geozero::{GeozeroGeometry, geojson::GeoJsonWriter};
 use overturemaps::overturemaps::WaterHandling;
 use rand::{RngCore, SeedableRng};

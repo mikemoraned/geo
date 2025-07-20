@@ -12,7 +12,7 @@ geo = { workspace = true }
 geozero = { workspace = true }
 rand = { workspace = true }
 thiserror = { workspace = true }
-geo-config = { workspace = true }
+geo-shell = { workspace = true }
 geo-overturemaps = { workspace = true }
 
 startup = { path = "../startup" }

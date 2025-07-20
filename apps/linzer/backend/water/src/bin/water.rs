@@ -2,7 +2,7 @@ use std::{fs::File, io::BufWriter, path::PathBuf};
 
 use clap::{Parser, command};
 use geo::GeometryCollection;
-use geo_config::Config;
+use geo_shell::config::Config;
 use geozero::{GeozeroGeometry, geojson::GeoJsonWriter};
 use overturemaps::overturemaps::WaterHandling;
 use thiserror::Error;

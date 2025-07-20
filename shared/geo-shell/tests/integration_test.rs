@@ -1,6 +1,6 @@
 use std::path::PathBuf; 
 
-use geo_config::Config;
+use geo_shell::config::Config;
 use geo_overturemaps::GersId;
 
 #[test]

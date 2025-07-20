@@ -25,5 +25,5 @@ imageproc = "0.25"
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 
-geo-config = { path="../../../shared/geo-config" }
+geo-shell = { path="../../../shared/geo-shell" }
 geo-overturemaps = { path="../../../shared/geo-overturemaps" }

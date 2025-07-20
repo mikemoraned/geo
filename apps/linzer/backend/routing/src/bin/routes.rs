@@ -7,7 +7,7 @@ use std::{
 use clap::{Parser, command};
 use cli::progress::progress_bar;
 use geo::{Contains, Coord, Geometry, GeometryCollection, LineString, Point};
-use geo_config::Config;
+use geo_shell::config::Config;
 use geozero::{
     GeozeroDatasource, GeozeroGeometry,
     geo_types::GeoWriter,
