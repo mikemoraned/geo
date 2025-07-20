@@ -12,6 +12,7 @@ geo = { workspace = true }
 geozero = { workspace = true }
 rand = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 geo-shell = { workspace = true }
 geo-overturemaps = { workspace = true }
 

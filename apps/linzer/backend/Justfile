@@ -5,6 +5,7 @@ profile := "pedestrian" # or "auto"
 config_base := "../../../config"
 output_base := "../output"
 overturemaps_base := "/Volumes/PRO-G40/OvertureMaps/data/release/2025-06-25.0"
+rust_log := "info"
 
 build:
     cargo build --release
@@ -13,21 +14,21 @@ area_dir:
     mkdir -p {{output_base}}/{{area}}
 
 water: area_dir
-    cargo run --release --bin water -- \
+    RUST_LOG={{rust_log}} cargo run --release --bin water -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
         --water {{output_base}}/{{area}}/water.geojson \
         --handling clip-to-region
 
 water_asis: area_dir
-    cargo run --release --bin water -- \
+    RUST_LOG={{rust_log}} cargo run --release --bin water -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
         --water {{output_base}}/{{area}}/water_asis.geojson \
         --handling keep-as-is
 
 samples: area_dir
-    cargo run --release --bin sample -- \
+    RUST_LOG={{rust_log}} cargo run --release --bin sample -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
         --bounds {{output_base}}/{{area}}/bounds.geojson \
@@ -38,7 +39,7 @@ samples: area_dir
         --seed {{seed}}
 
 routes: area_dir
-    cargo run --release --bin routes -- \
+    RUST_LOG={{rust_log}} cargo run --release --bin routes -- \
         --overturemaps {{overturemaps_base}} \
         --area {{config_base}}/{{area}}.toml \
         --starts {{output_base}}/{{area}}/sample.{{paths}}.starts.geojson \
@@ -47,7 +48,7 @@ routes: area_dir
         --profile {{profile}}
 
 regions: area_dir
-    cargo run --release --bin find_regions -- \
+    RUST_LOG={{rust_log}} cargo run --release --bin find_regions -- \
         --background {{output_base}}/{{area}}/bounds.geojson \
         --borders {{output_base}}/{{area}}/routes_{{profile}}.{{paths}}.geojson \
         --borders {{output_base}}/{{area}}/water.geojson \
@@ -55,12 +56,12 @@ regions: area_dir
         --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson
 
 layout: area_dir
-    cargo run --release --bin layout -- \
+    RUST_LOG={{rust_log}} cargo run --release --bin layout -- \
         --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson \
         --bin-type guillotine \
         --layout {{output_base}}/{{area}}/layout_{{profile}}.{{paths}}.guillotine.png
 
-    cargo run --release --bin layout -- \
+    RUST_LOG={{rust_log}} cargo run --release --bin layout -- \
         --regions {{output_base}}/{{area}}/regions_{{profile}}.{{paths}}.geojson \
         --bin-type max-rects \
         --layout {{output_base}}/{{area}}/layout_{{profile}}.{{paths}}.max-rects.png

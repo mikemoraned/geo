@@ -2,10 +2,11 @@ use std::{fs::File, io::BufWriter, path::PathBuf};
 
 use clap::{Parser, command};
 use geo::GeometryCollection;
-use geo_shell::config::Config;
+use geo_shell::{config::Config, tracing::setup_tracing_and_logging};
 use geozero::{GeozeroGeometry, geojson::GeoJsonWriter};
 use overturemaps::overturemaps::WaterHandling;
 use thiserror::Error;
+use tracing::info;
 
 /// Find routes in an area
 #[derive(Parser, Debug)]
@@ -38,8 +39,10 @@ pub enum WaterError {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_tracing_and_logging()?;
+
     let args = Args::parse();
-    println!("{:?}", args);
+    info!("{:?}", args);
 
     let config: Config = Config::read_from_file(&args.area)?;
 

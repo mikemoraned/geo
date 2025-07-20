@@ -15,8 +15,9 @@
         * [x] get pandan using them in a minimal way
         * [x] change linzer to use those instead of it's own
     * [x] get rid of crufty linzer crates that are unused / incomplete
-    * [ ] extract shared telemetry crate
+    * [x] extract shared telemetry crate
         * actually just using simple logging for now; now need for opentelemetry yet
         * [x] use it in pandan
-        * [ ] use it in linzer, at least in top-level
+        * [x] use it in linzer
+    * [ ] extract `env` (e.g. used for stadiamaps secrets)
     * [ ] ...

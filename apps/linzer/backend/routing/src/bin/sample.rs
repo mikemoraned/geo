@@ -6,12 +6,13 @@ use geo::{
     Area, BooleanOps, BoundingRect, Contains, Coord, Geometry, GeometryCollection, MultiPolygon,
     Point, Rect, coord,
 };
-use geo_shell::config::Config;
+use geo_shell::{config::Config, tracing::setup_tracing_and_logging};
 use geozero::{GeozeroGeometry, geojson::GeoJsonWriter};
 use overturemaps::overturemaps::WaterHandling;
 use rand::{RngCore, SeedableRng};
 use routing::bounds;
 use thiserror::Error;
+use tracing::{info, trace, warn};
 
 /// Create sample points in area
 #[derive(Parser, Debug)]
@@ -74,25 +75,27 @@ pub enum SamplerError {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_tracing_and_logging()?;
+
     let args = Args::parse();
-    println!("{:?}", args);
+    info!("{:?}", args);
 
     let config: Config = Config::read_from_file(&args.area)?;
 
     let bounds = read_bounds(&args, &config).await?;
     save(&vec![bounds.clone()], &args.bounds)?;
     let masked = if args.exclude_water {
-        println!("Excluding water from bounds");
+        info!("Excluding water from bounds");
         let water = read_water(&args, &config).await?;
         let masked = difference(&bounds, &water);
-        println!(
+        info!(
             "size went from {} to {}",
             bounds.unsigned_area(),
             masked.unsigned_area()
         );
         masked
     } else {
-        println!("Not excluding water from bounds");
+        info!("Not excluding water from bounds");
         bounds.clone()
     };
     save(&vec![masked.clone()], &args.mask)?;
@@ -103,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut ends = random_points(&masked, args.paths, rng.next_u64())?;
 
     if starts.len() != ends.len() {
-        println!(
+        warn!(
             "Warning: number of starting points does not match number of ending points, {} != {}, correcting for now",
             starts.len(),
             ends.len()
@@ -152,42 +155,42 @@ fn difference(geo1: &Geometry<f64>, geo2: &Geometry<f64>) -> Geometry<f64> {
     match geo1 {
         Geometry::Polygon(poly1) => match geo2 {
             Geometry::Polygon(poly2) => {
-                // println!("Difference between two polygons");
+                trace!("Difference between two polygons");
                 Geometry::MultiPolygon(poly1.difference(poly2))
             }
             Geometry::MultiPolygon(multi2) => {
-                // println!("Difference between polygon and multipolygon");
+                trace!("Difference between polygon and multipolygon");
                 Geometry::MultiPolygon(MultiPolygon::new(vec![poly1.clone()]).difference(multi2))
             }
             Geometry::GeometryCollection(GeometryCollection(parts)) => {
-                // println!("Difference between polygon and geometry collection");
+                trace!("Difference between polygon and geometry collection");
                 let difference_on_parts = parts
                     .iter()
                     .fold(geo1.clone(), |acc, geo2| difference(&acc, geo2));
                 difference_on_parts
             }
             _ => {
-                // println!("Difference between polygon and non-polygon");
+                trace!("Difference between polygon and non-polygon");
                 Geometry::MultiPolygon(MultiPolygon::new(vec![poly1.clone()]))
             }
         },
         Geometry::MultiPolygon(multi1) => match geo2 {
             Geometry::Polygon(poly2) => {
-                // println!("Difference between multipolygon and polygon");
+                trace!("Difference between multipolygon and polygon");
                 Geometry::MultiPolygon(multi1.difference(&MultiPolygon::new(vec![poly2.clone()])))
             }
             Geometry::MultiPolygon(multi2) => {
-                // println!("Difference between two multipolygons");
+                trace!("Difference between two multipolygons");
                 Geometry::MultiPolygon(multi1.difference(multi2))
             }
             _ => {
-                // println!("Difference between multipolygon and non-polygon");
+                trace!("Difference between multipolygon and non-polygon");
                 Geometry::MultiPolygon(multi1.clone())
             }
         },
 
         _ => {
-            // println!("Difference with non-polygon geometry, returning empty MultiPolygon");
+            trace!("Difference with non-polygon geometry, returning empty MultiPolygon");
             Geometry::MultiPolygon(MultiPolygon::new(vec![]))
         }
     }
@@ -244,11 +247,6 @@ fn random_points(
         .iter();
 
     while !grid.is_filled() {
-        // println!(
-        //     "{}% filled, {} remaining to fill\r",
-        //     (grid.proportion_filled() * 100.0).round(),
-        //     grid.count_remaining_to_fill
-        // );
         if let Some([x_offset, y_offset]) = sample_iter.next() {
             let coord = coord! {
                 x: x_offset + min.x,
@@ -256,7 +254,7 @@ fn random_points(
             };
             grid.add_coord(coord);
         } else {
-            println!(
+            warn!(
                 "Ran out of random points to sample, but still need more, so recreating sampler with a new seed"
             );
             sampler_seed += 1;
@@ -280,7 +278,7 @@ fn random_points(
 
     let mut returned_n = n;
     if coords_within_bounds.len() < n {
-        println!(
+        warn!(
             "warn: Only found {} points within bounds, but needed {}, allowing to continue",
             coords_within_bounds.len(),
             n

@@ -1,18 +1,25 @@
-use std::{collections::HashMap, fs::File, io::{BufReader, Cursor}, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufReader, Cursor},
+    path::PathBuf,
+};
 
-use binpack2d::{bin_new, Dimension, Rectangle};
-use clap::{command, Parser};
+use binpack2d::{Dimension, Rectangle, bin_new};
+use clap::{Parser, command};
 use conversion::projection::Projection;
 use geo::{BoundingRect, Geometry, GeometryCollection, Polygon};
-use geozero::{geo_types::GeoWriter, geojson::GeoJsonReader, GeozeroDatasource};
+use geo_shell::tracing::setup_tracing_and_logging;
+use geozero::{GeozeroDatasource, geo_types::GeoWriter, geojson::GeoJsonReader};
 use image::{ImageReader, RgbaImage};
+use tracing::{debug, info};
 
 #[derive(clap:: ValueEnum, Clone, Debug)]
 enum BinType {
     /// use the guillotine bin packing algorithm
     Guillotine,
     /// use the maxrects bin packing algorithm
-    MaxRects
+    MaxRects,
 }
 
 impl Into<binpack2d::BinType> for BinType {
@@ -43,8 +50,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_tracing_and_logging()?;
+
     let args = Args::parse();
-    println!("{:?}", args);
+    info!("{:?}", args);
 
     let mut file = BufReader::new(File::open(args.regions)?);
     let mut reader = GeoJsonReader(&mut file);
@@ -52,18 +61,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     reader.process_geom(&mut writer)?;
 
     if let Geometry::GeometryCollection(collection) = writer.take_geometry().unwrap() {
-        println!("Found {} geometries", collection.len());
+        debug!("Found {} geometries", collection.len());
 
         let (dimensions, projection, identified) = create_dimensions(&collection);
 
         let bounds = collection.bounding_rect().unwrap();
         let (width, height) = (
-            (bounds.width() * projection.scale_x) as i32 * 2, 
-            (bounds.height() * projection.scale_y) as i32 * 2
+            (bounds.width() * projection.scale_x) as i32 * 2,
+            (bounds.height() * projection.scale_y) as i32 * 2,
         );
         let mut bin = bin_new(args.bin_type.into(), width, height);
         let (inserted, rejected) = bin.insert_list(&dimensions);
-        println!("Inserted: {} Rejected: {}", inserted.len(), rejected.len());
+        debug!("Inserted: {} Rejected: {}", inserted.len(), rejected.len());
 
         let image = draw_layout(&inserted, &projection, &identified)?;
         image.save(args.layout)?;
@@ -72,9 +81,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn create_dimensions(collection: &GeometryCollection) -> (Vec<Dimension>, Projection, HashMap<isize, &Polygon>) {
+fn create_dimensions(
+    collection: &GeometryCollection,
+) -> (Vec<Dimension>, Projection, HashMap<isize, &Polygon>) {
     let scale = 10000.0;
-    let projection = Projection::from_geo_bounding_box_to_scaled_space(collection.bounding_rect().unwrap(), scale);
+    let projection = Projection::from_geo_bounding_box_to_scaled_space(
+        collection.bounding_rect().unwrap(),
+        scale,
+    );
     let mut identified = HashMap::new();
 
     let mut dimensions = vec![];
@@ -83,10 +97,11 @@ fn create_dimensions(collection: &GeometryCollection) -> (Vec<Dimension>, Projec
             let bounds = polygon.bounding_rect().unwrap();
             let id = index as isize;
             let dimension = Dimension::with_id(
-                id, 
-                (bounds.width() * projection.scale_x) as i32, 
-                (bounds.height() * projection.scale_y) as i32, 
-                0);
+                id,
+                (bounds.width() * projection.scale_x) as i32,
+                (bounds.height() * projection.scale_y) as i32,
+                0,
+            );
             dimensions.push(dimension);
             identified.insert(id, polygon);
         }
@@ -94,11 +109,23 @@ fn create_dimensions(collection: &GeometryCollection) -> (Vec<Dimension>, Projec
     (dimensions, projection, identified)
 }
 
-fn draw_layout(rects: &Vec<Rectangle>, projection: &Projection, identified: &HashMap<isize, &Polygon>) -> Result<RgbaImage, Box<dyn std::error::Error>> {
+fn draw_layout(
+    rects: &Vec<Rectangle>,
+    projection: &Projection,
+    identified: &HashMap<isize, &Polygon>,
+) -> Result<RgbaImage, Box<dyn std::error::Error>> {
     use tiny_skia::*;
 
-    let max_x = rects.iter().map(|rect| rect.x() + rect.width()).max().unwrap();
-    let max_y = rects.iter().map(|rect| rect.y() + rect.height()).max().unwrap();
+    let max_x = rects
+        .iter()
+        .map(|rect| rect.x() + rect.width())
+        .max()
+        .unwrap();
+    let max_y = rects
+        .iter()
+        .map(|rect| rect.y() + rect.height())
+        .max()
+        .unwrap();
 
     let mut pixmap = Pixmap::new(max_x as u32, max_y as u32).ok_or("Failed to create pixmap")?;
 
@@ -121,21 +148,26 @@ fn draw_layout(rects: &Vec<Rectangle>, projection: &Projection, identified: &Has
         Rect::from_xywh(0.0, 0.0, max_x as f32, max_y as f32).ok_or("Failed to create rect")?,
         &black,
         Transform::identity(),
-        None
+        None,
     );
 
     for rect in rects.iter() {
         let mut pb = PathBuilder::new();
         pb.move_to(rect.x() as f32, rect.y() as f32);
         pb.line_to(rect.x() as f32 + rect.width() as f32, rect.y() as f32);
-        pb.line_to(rect.x() as f32 + rect.width() as f32, rect.y() as f32 + rect.height() as f32);
+        pb.line_to(
+            rect.x() as f32 + rect.width() as f32,
+            rect.y() as f32 + rect.height() as f32,
+        );
         pb.line_to(rect.x() as f32, rect.y() as f32 + rect.height() as f32);
         pb.close();
         let path = pb.finish().ok_or("Failed to finish path")?;
         pixmap.stroke_path(&path, &red, &stroke, Transform::identity(), None);
 
         let id = rect.id();
-        let polygon = identified.get(&id).ok_or(format!("Failed to find geometry for id {}", id))?;
+        let polygon = identified
+            .get(&id)
+            .ok_or(format!("Failed to find geometry for id {}", id))?;
         let mut pb = PathBuilder::new();
         let bounds = polygon.bounding_rect().unwrap();
         let rect_is_landscape = rect.width() > rect.height();
@@ -143,16 +175,20 @@ fn draw_layout(rects: &Vec<Rectangle>, projection: &Projection, identified: &Has
         polygon.exterior().points().for_each(|p| {
             let (normalised_x, normalised_y) = (
                 (p.x() - bounds.min().x) * projection.scale_x,
-                (p.y() - bounds.min().y) * projection.scale_y
+                (p.y() - bounds.min().y) * projection.scale_y,
             );
-            let (x, y) = 
-                if rect_is_landscape == polygon_is_landscape {
-                    (normalised_x + rect.x() as f64, normalised_y + rect.y() as f64)
-                }
-                else {
-                    // rotate 90 degrees
-                    (normalised_y + rect.x() as f64, normalised_x + rect.y() as f64)
-                };
+            let (x, y) = if rect_is_landscape == polygon_is_landscape {
+                (
+                    normalised_x + rect.x() as f64,
+                    normalised_y + rect.y() as f64,
+                )
+            } else {
+                // rotate 90 degrees
+                (
+                    normalised_y + rect.x() as f64,
+                    normalised_x + rect.y() as f64,
+                )
+            };
             if pb.is_empty() {
                 pb.move_to(x as f32, y as f32);
             } else {
@@ -161,7 +197,13 @@ fn draw_layout(rects: &Vec<Rectangle>, projection: &Projection, identified: &Has
         });
         pb.close();
         let path = pb.finish().ok_or("Failed to finish path")?;
-        pixmap.fill_path(&path, &white, FillRule::EvenOdd, Transform::identity(), None);
+        pixmap.fill_path(
+            &path,
+            &white,
+            FillRule::EvenOdd,
+            Transform::identity(),
+            None,
+        );
     }
 
     let png_bytes = pixmap.encode_png()?;

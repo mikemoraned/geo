@@ -10,6 +10,7 @@ use geo_overturemaps::GersId;
 use geozero::ToGeo;
 use std::sync::Arc;
 use thiserror::Error;
+use tracing::{debug, error, trace, warn};
 
 #[derive(Error, Debug)]
 pub enum OvertureError {
@@ -39,7 +40,7 @@ impl OvertureMaps {
         ];
 
         for (table_name, overture_path) in overture_mapping {
-            println!("loading table: {} from path: {}", table_name, overture_path);
+            debug!("loading table: {} from path: {}", table_name, overture_path);
             // Create default parquet options
             let file_format = ParquetFormat::new();
             let listing_options =
@@ -50,13 +51,13 @@ impl OvertureMaps {
 
             // Parse the path
             let table_path = ListingTableUrl::parse(table_path)?;
-            println!("path: {}", &table_path);
+            debug!("path: {}", &table_path);
 
             // Resolve the schema
             let resolved_schema = listing_options
                 .infer_schema(&session_state, &table_path)
                 .await?;
-            println!("schema: {:?}", &resolved_schema);
+            debug!("schema: {:?}", &resolved_schema);
 
             let config = ListingTableConfig::new(table_path)
                 .with_listing_options(listing_options)
@@ -75,26 +76,26 @@ impl OvertureMaps {
         &self,
         id: &GersId,
     ) -> Result<Option<Geometry>, Box<dyn std::error::Error>> {
-        println!("finding geometry for id: {:?}", id);
+        debug!("finding geometry for id: {:?}", id);
 
-        println!("looking in division_area table");
+        debug!("looking in division_area table");
         let division_area_df = self.ctx.table("division_area").await?;
-        // println!("division_area: {:?}", &division_area_df.schema());
+        trace!("division_area: {:?}", &division_area_df.schema());
 
         let division_area_match = find_geometry_by_id(&division_area_df, id).await?;
         if !division_area_match.is_empty() {
             return convert_record_batch_to_geometry(&division_area_match);
         }
 
-        println!("looking in base_land_cover table");
+        debug!("looking in base_land_cover table");
         let base_land_cover_df = self.ctx.table("base_land_cover").await?;
         let base_land_cover_match = find_geometry_by_id(&base_land_cover_df, id).await?;
         if !base_land_cover_match.is_empty() {
-            println!("found geometry in base_land_cover table");
+            debug!("found geometry in base_land_cover table");
             return convert_record_batch_to_geometry(&base_land_cover_match);
         }
 
-        println!("no geometry found for id: {:?}", id);
+        warn!("no geometry found for id: {:?}", id);
 
         Ok(None)
     }
@@ -107,7 +108,7 @@ impl OvertureMaps {
         let bounds = region
             .bounding_rect()
             .ok_or(OvertureError::CannotFindBounds)?;
-        println!("finding water in bounds: {:?}", bounds);
+        debug!("finding water in bounds: {:?}", bounds);
 
         let xmin = bounds.min().x;
         let ymin = bounds.min().y;
@@ -133,7 +134,7 @@ impl OvertureMaps {
         );
         let matching = self.ctx.sql(&sql).await?.collect().await?;
 
-        println!("found {} batches", matching.len());
+        debug!("found {} batches", matching.len());
 
         let mut intersections = vec![];
         let mut kept_geometries_count = 0;
@@ -160,14 +161,14 @@ impl OvertureMaps {
                             }
                         },
                         Err(e) => {
-                            println!("error converting WKB to Geometry: {}", e);
+                            error!("error converting WKB to Geometry: {}", e);
                             return Err(Box::new(e));
                         }
                     }
                 }
             }
         }
-        println!(
+        debug!(
             "found {} geometries, kept {}, ignored {}",
             kept_geometries_count + ignored_geometries_count,
             kept_geometries_count,
@@ -227,7 +228,7 @@ fn convert_record_batch_to_geometry(
                         return Ok(Some(geometry.clone()));
                     }
                     Err(e) => {
-                        println!("error converting WKB to Geometry: {}", e);
+                        error!("error converting WKB to Geometry: {}", e);
                         return Err(Box::new(e));
                     }
                 }

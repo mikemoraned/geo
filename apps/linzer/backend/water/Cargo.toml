@@ -9,6 +9,7 @@ geo = { workspace = true }
 tokio = { workspace = true }
 clap = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 geo-shell = { workspace = true }
 geo-overturemaps = { workspace = true }
 

@@ -7,7 +7,7 @@ use std::{
 use clap::{Parser, command};
 use cli::progress::progress_bar;
 use geo::{Contains, Coord, Geometry, GeometryCollection, LineString, Point};
-use geo_shell::config::Config;
+use geo_shell::{config::Config, tracing::setup_tracing_and_logging};
 use geozero::{
     GeozeroDatasource, GeozeroGeometry,
     geo_types::GeoWriter,
@@ -19,6 +19,7 @@ use routing::{
 };
 use startup::env::load_secret;
 use thiserror::Error;
+use tracing::{debug, error, info, warn};
 
 /// Find routes in an area
 #[derive(Parser, Debug)]
@@ -69,8 +70,10 @@ pub enum RouterError {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_tracing_and_logging()?;
+
     let args = Args::parse();
-    println!("{:?}", args);
+    info!("{:?}", args);
 
     let config: Config = Config::read_from_file(&args.area)?;
 
@@ -112,7 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Err(e) => {
-                println!(
+                warn!(
                     "Error finding route from {:?} to {:?}: {}, so will skip",
                     start, end, e
                 );
@@ -131,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn read_bounds(args: &Args, config: &Config) -> Result<Geometry, Box<dyn std::error::Error>> {
-    println!("Using overture maps");
+    debug!("Using overture maps");
     let gers_id = &config.overturemaps.gers_id;
     if let Some(om_base) = args.overturemaps.as_ref() {
         use overturemaps::overturemaps::OvertureMaps;
@@ -155,7 +158,7 @@ async fn find_route(
         match routing.find_route(&start, &end, &profile).await {
             Ok(route) => return Ok(route),
             Err(e) => {
-                println!(
+                warn!(
                     "Error whilst getting route: {:?}, start: {:?}, end: {:?}, profile: {:?}",
                     e, start, end, profile
                 );

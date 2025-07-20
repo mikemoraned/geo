@@ -10,6 +10,7 @@ geo = { workspace = true }
 thiserror = { workspace = true }
 clap = { workspace = true }
 geo-overturemaps = { workspace = true }
+tracing = { workspace = true }
 
 datafusion = "46.0.0"
 arrow = { version = "54.2.1", features = ["prettyprint"] }

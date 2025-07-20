@@ -5,23 +5,25 @@ use std::{
     path::PathBuf,
 };
 
-use clap::{command, Parser};
+use clap::{Parser, command};
 use conversion::projection::Projection;
-use geo::{coord, Area, BoundingRect, Coord, Geometry, GeometryCollection, LineString, Within};
+use geo::{Area, BoundingRect, Coord, Geometry, GeometryCollection, LineString, Within, coord};
+use geo_shell::tracing::setup_tracing_and_logging;
 use geozero::{
+    GeozeroDatasource, GeozeroGeometry,
     geo_types::GeoWriter,
     geojson::{GeoJsonReader, GeoJsonWriter},
-    GeozeroDatasource, GeozeroGeometry,
 };
 use image::{GrayImage, ImageReader, Luma, Rgba, RgbaImage};
 use imageproc::{
     definitions::Image,
-    region_labelling::{connected_components, Connectivity},
+    region_labelling::{Connectivity, connected_components},
 };
 use rand::Rng;
 use regions::contours::find_contours_in_luma;
 use thiserror::Error;
 use tiny_skia::{FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
+use tracing::{debug, info};
 
 /// find regions in an area
 #[derive(Parser, Debug)]
@@ -60,8 +62,10 @@ pub enum RegionsError {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_tracing_and_logging()?;
+
     let args = Args::parse();
-    println!("{:?}", args);
+    info!("{:?}", args);
 
     let background_geometry = read_geometry(&args.background)?;
     let border_geometry = read_geometry(&args.borders)?;
@@ -89,7 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     labelled_colored_image.save(labelled_stage_png)?;
 
     let contours = find_contours_in_luma(Luma([0u32; 1]), &labelled_image);
-    println!("Found {} contours", contours.len());
+    info!("Found {} contours", contours.len());
     let contours_image = draw_contours(&contours, labelled_image.width(), labelled_image.height())?;
     let contours_stage_png = args
         .stage_template
@@ -220,7 +224,7 @@ fn draw_routes(
     use tiny_skia::*;
 
     let bounds = background.bounding_rect().unwrap();
-    println!("Bounding rect: {:?}", bounds);
+    debug!("Bounding rect: {:?}", bounds);
 
     let scale = 10000.0;
     let projection = Projection::from_geo_bounding_box_to_scaled_space(bounds, scale);
@@ -231,8 +235,8 @@ fn draw_routes(
     let width_px = (width * scale).ceil() as u32;
     let height_px = (height * scale).ceil() as u32;
 
-    println!("Width: {} Height: {}", width, height);
-    println!("Width px: {} Height px: {}", width_px, height_px);
+    debug!("Width: {} Height: {}", width, height);
+    debug!("Width px: {} Height px: {}", width_px, height_px);
     let mut pixmap = Pixmap::new(width_px, height_px).ok_or("Failed to create pixmap")?;
 
     let transform = projection.as_transform();
@@ -262,11 +266,11 @@ fn draw_routes(
     // then draw backgrounds for regions
     let count_background_geometries =
         draw_geometry(&mut pixmap, background, &black, &stroke, transform)?;
-    println!("Drew {} black backgrounds", count_background_geometries);
+    debug!("Drew {} black backgrounds", count_background_geometries);
 
     // then draw candidate borders
     let count_borders_geometries = draw_geometry(&mut pixmap, borders, &white, &stroke, transform)?;
-    println!("Drew {} white borders", count_borders_geometries);
+    debug!("Drew {} white borders", count_borders_geometries);
 
     // apply threshold to get a binary image, where black is candidate regions and white is ignorable border
     let image = GrayImage::from_fn(width_px, height_px, |x, y| {
