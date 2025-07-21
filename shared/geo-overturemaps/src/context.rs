@@ -57,7 +57,7 @@ impl OvertureContext {
         &self,
         id: &GersId,
     ) -> Result<Option<Geometry>, Box<dyn std::error::Error>> {
-        let search_tables = vec!["division_area"];
+        let search_tables = vec!["division_area","land_cover"];
         for table_name in search_tables {
             debug!("Searching in table: {}", table_name);
             let df = self.ctx.table(table_name).await?;
@@ -89,7 +89,7 @@ impl OvertureContext {
         let within_bounds_df = find_table_rows_intersecting_bounds(&self.ctx, "land_cover", &bounds).await?;
         
         debug!("finding land cover with subtypes: {:?}", allowed_subtypes);
-        let allowed_subtypes_expr = allowed_subtypes.clone().into_iter().map(|a| lit(a)).collect();
+        let allowed_subtypes_expr = allowed_subtypes.clone().into_iter().map(lit).collect();
         let has_allowed_subtype_df = within_bounds_df
             .filter(col("subtype").in_list(allowed_subtypes_expr, false))?;
         
