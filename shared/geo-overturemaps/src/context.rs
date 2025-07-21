@@ -79,14 +79,30 @@ impl OvertureContext {
         &self,
         region: &Geometry<f64>,
         clipping_mode: ClippingMode,
+        allowed_subtypes: Vec<&str>,
     ) -> Result<Option<Geometry>, Box<dyn std::error::Error>> {
         let bounds = region
             .bounding_rect()
             .ok_or(OvertureError::CannotDetermineBounds)?;
         debug!("finding water in bounds: {:?}", bounds);
 
-        let matching = find_table_rows_intersecting_bounds(&self.ctx, "land_cover", &bounds).await?;
-        debug!("found {} batches", matching.len());
+        let within_bounds_df = find_table_rows_intersecting_bounds(&self.ctx, "land_cover", &bounds).await?;
+        
+        debug!("finding land cover with subtypes: {:?}", allowed_subtypes);
+        let allowed_subtypes_expr = allowed_subtypes.clone().into_iter().map(|a| lit(a)).collect();
+        let has_allowed_subtype_df = within_bounds_df
+            .filter(col("subtype").in_list(allowed_subtypes_expr, false))?;
+        
+        let geometry_only_df = has_allowed_subtype_df
+            .select(vec![col("geometry")])?;
+        let matching = geometry_only_df.collect().await?;
+
+        debug!("found {} batches within bounds", matching.len());
+
+        if matching.is_empty() {
+            debug!("no geometries found within bounds");
+            return Ok(None);
+        }
 
         match clipping_mode {
             ClippingMode::ClipToRegion => {
@@ -156,14 +172,14 @@ async fn find_table_rows_intersecting_bounds(
     ctx: &SessionContext,
     table_name: &str,
     bounds: &Rect<f64>,
-) -> Result<Vec<RecordBatch>, Box<dyn std::error::Error>> {
+) -> Result<DataFrame, Box<dyn std::error::Error>> {
     let xmin = bounds.min().x;
     let ymin = bounds.min().y;
     let xmax = bounds.max().x;
     let ymax = bounds.max().y;
     let sql = format!(
         "
-        SELECT geometry FROM {table_name}
+        SELECT * FROM {table_name}
         WHERE 
                 -- bounding boxes are overlapping if they *don't* overlap along all axes
                 -- if we see our region's bounding box as A, and the geometry's bounding box as B:
@@ -179,7 +195,7 @@ async fn find_table_rows_intersecting_bounds(
             )  
         "
     );
-    Ok(ctx.sql(&sql).await?.collect().await?)
+    Ok(ctx.sql(&sql).await?)
 }
 
 fn intersect(geo1: &Geometry<f64>, geo2: &Geometry<f64>) -> MultiPolygon<f64> {

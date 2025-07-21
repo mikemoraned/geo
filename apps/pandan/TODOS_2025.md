@@ -7,7 +7,7 @@
             * [x] save the geometry as geojson
             * [x] load all land_cover that overlaps the bounding box of a region (no filtering by tags or classes)
             * [x] clip land_cover found to region boundary
-            * [ ] only include land_cover with particular tags which related to greenery
+            * [x] only include land_cover with particular tags which related to greenery (forest, shrub)
             * ...
         * ...
     * [ ] lookup route between points in a way which is biased towards walking
