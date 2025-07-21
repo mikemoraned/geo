@@ -4,6 +4,8 @@
     * [ ] define greenery
         * [ ] find thing in OvertureMaps that corresponds to [GreenTags](https://github.com/mikemoraned/spectrum/blob/main/app/service/builder/src/filter.rs#L7)
             * [x] do a minimal version of `find_geometry_by_id` which finds the region in OvertureMaps `division_area`
+            * [x] save the geometry as geojson
+            * [ ] load all geometry within the bounding box of a region (no filtering by tags or classes)
             * ...
         * ...
     * [ ] lookup route between points in a way which is biased towards walking

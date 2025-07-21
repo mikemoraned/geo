@@ -1,10 +1,15 @@
 area := "edinburgh"
 
+output_base := "output"
 overturemaps_base := "/Volumes/PRO-G40/OvertureMaps/data/release/2025-06-25.0"
 config_base := "../../../config"
 rust_log := "info"
 
-green:
+area_dir:
+    mkdir -p {{output_base}}/{{area}}
+
+green: area_dir
     RUST_LOG={{rust_log}} cargo run --release --bin green -- \
         --config {{config_base}}/{{area}}.toml \
-        --overturemaps {{overturemaps_base}}
+        --overturemaps {{overturemaps_base}} \
+        --green {{output_base}}/{{area}}/green.geojson
