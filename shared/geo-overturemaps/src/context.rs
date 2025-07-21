@@ -1,14 +1,21 @@
 use std::path::Path;
 
 use datafusion::{arrow::array::{AsArray, RecordBatch}, prelude::*};
-use geo::Geometry;
+use geo::{BoundingRect, Geometry, Rect};
 use geozero::ToGeo;
+use thiserror::Error;
 use tracing::{debug, error, info};
 
 use crate::model::GersId;
 
 pub struct OvertureContext {
     ctx: SessionContext,
+}
+
+#[derive(Error, Debug)]
+pub enum OvertureError {
+    #[error("Unable to determine bounds")]
+    CannotDetermineBounds,
 }
 
 impl OvertureContext {
@@ -22,6 +29,7 @@ impl OvertureContext {
 
         let overture_mapping = vec![
             ("division_area", "theme=divisions/type=division_area/"),
+            ("land_cover", "theme=base/type=land_cover/"),
         ];
 
         let read_options = ParquetReadOptions::default().parquet_pruning(true);
@@ -31,6 +39,8 @@ impl OvertureContext {
 
             ctx.register_parquet(table_name, full_path.to_str().unwrap(), read_options.clone()).await?;
         }
+
+        info!("Overture Maps context loaded successfully");
 
         Ok(OvertureContext {
             ctx
@@ -58,6 +68,21 @@ impl OvertureContext {
 
         Ok(None)
     }
+
+     pub async fn find_land_cover_in_region(
+        &self,
+        region: &Geometry<f64>
+    ) -> Result<Option<Geometry>, Box<dyn std::error::Error>> {
+        let bounds = region
+            .bounding_rect()
+            .ok_or(OvertureError::CannotDetermineBounds)?;
+        debug!("finding water in bounds: {:?}", bounds);
+
+        let matching = find_table_rows_intersecting_bounds(&self.ctx, "land_cover", &bounds).await?;
+        debug!("found {} batches", matching.len());
+        
+        convert_record_batch_to_geometry(&matching)
+    }
 }
 
 fn convert_record_batch_to_geometry(
@@ -80,4 +105,34 @@ fn convert_record_batch_to_geometry(
     }
 
     Ok(None)
+}
+
+async fn find_table_rows_intersecting_bounds(
+    ctx: &SessionContext,
+    table_name: &str,
+    bounds: &Rect<f64>,
+) -> Result<Vec<RecordBatch>, Box<dyn std::error::Error>> {
+    let xmin = bounds.min().x;
+    let ymin = bounds.min().y;
+    let xmax = bounds.max().x;
+    let ymax = bounds.max().y;
+    let sql = format!(
+        "
+        SELECT geometry FROM {table_name}
+        WHERE 
+                -- bounding boxes are overlapping if they *don't* overlap along any axis
+                -- if we see our region's bounding box as A, and the geometry's bounding box as B:
+                NOT (
+                {xmax} <= bbox.xmin    -- A is entirely left of B
+                OR bbox.xmax <= {xmin} -- A is entirely right of B
+                OR bbox.ymin           -- A is entirely below B
+                    >= 
+                    {ymax} 
+                OR {ymin}              -- A is entirely above B
+                    >=
+                    bbox.ymax  
+            )  
+        "
+    );
+    Ok(ctx.sql(&sql).await?.collect().await?)
 }

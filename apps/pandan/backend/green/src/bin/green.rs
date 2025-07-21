@@ -40,11 +40,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let om = OvertureContext::load_from_release(args.overturemaps).await?;
     let geometry = om.find_geometry_by_id(&gers_id).await?;
-    if let Some(geometry) = &geometry {
-        info!("Found geometry with ID {gers_id}");
-
-        save_as_geojson(&geometry, &args.green)?;
-        info!("Saved geometry to {:?}", args.green);
+    if let Some(region) = geometry {
+        info!("Found region");
+        if let Some(land_cover) = om.find_land_cover_in_region(&region).await? {
+            info!("Found land cover ");
+            save_as_geojson(&land_cover, &args.green)?;
+            info!("Saved geometry to {:?}", args.green);
+        } else {
+            warn!("No land cover found in region");
+        }
     } else {
         warn!("No geometry found with ID {gers_id}");
     }

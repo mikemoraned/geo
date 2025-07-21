@@ -1,6 +1,7 @@
 use geo_overturemaps::{context::OvertureContext, io::save_as_geojson, model::GersId};
 
 #[tokio::test]
+#[test_log::test]
 async fn test_save_geometry_as_geojson() {
     let release_path = "tests/data/release/2025-06-25.0";
     let om = OvertureContext::load_from_release(release_path).await.unwrap();
