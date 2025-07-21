@@ -8,6 +8,7 @@
             * [x] load all land_cover that overlaps the bounding box of a region (no filtering by tags or classes)
             * [x] clip land_cover found to region boundary
             * [x] only include land_cover with particular tags which related to greenery (forest, shrub)
+            * [ ] bug/understanding: for copenhagen, find out why some parts of land_cover, subtype forest, show up on overture explorer but not in my extracted dataset
             * ...
         * ...
     * [ ] lookup route between points in a way which is biased towards walking
