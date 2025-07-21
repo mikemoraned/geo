@@ -6,7 +6,7 @@
             * [x] do a minimal version of `find_geometry_by_id` which finds the region in OvertureMaps `division_area`
             * [x] save the geometry as geojson
             * [x] load all land_cover that overlaps the bounding box of a region (no filtering by tags or classes)
-            * [ ] clip land_cover found to region boundary
+            * [x] clip land_cover found to region boundary
             * [ ] only include land_cover with particular tags which related to greenery
             * ...
         * ...

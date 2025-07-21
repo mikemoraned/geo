@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use geo_overturemaps::{context::OvertureContext, io::save_as_geojson};
+use geo_overturemaps::{context::{ClippingMode, OvertureContext}, io::save_as_geojson};
 use geo_shell::{config::Config, tracing::setup_tracing_and_logging};
 use tracing::{info, warn};
 
@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let geometry = om.find_geometry_by_id(&gers_id).await?;
     if let Some(region) = geometry {
         info!("Found region");
-        if let Some(land_cover) = om.find_land_cover_in_region(&region).await? {
+        if let Some(land_cover) = om.find_land_cover_in_region(&region, ClippingMode::ClipToRegion).await? {
             info!("Found land cover ");
             save_as_geojson(&land_cover, &args.green)?;
             info!("Saved geometry to {:?}", args.green);
