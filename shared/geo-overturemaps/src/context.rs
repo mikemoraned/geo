@@ -95,23 +95,21 @@ impl OvertureContext {
                 let mut ignored_geometries_count = 0;
                 for batch in matching {
                     let geometry_col = batch.column(0).as_binary_view();
-                    for geometry in geometry_col.iter() {
-                        if let Some(geometry) = geometry {
-                            let wkb = geozero::wkb::Wkb(geometry.to_vec());
-                            match wkb.to_geo() {
-                                Ok(geometry) => {
-                                    let intersection = intersect(&region, &geometry);
-                                    if intersection.signed_area() > 0.0 {
-                                        kept_geometries_count += 1;
-                                        intersections.push(Geometry::MultiPolygon(intersection));
-                                    } else {
-                                        ignored_geometries_count += 1;
-                                    }
-                                },
-                                Err(e) => {
-                                    error!("error converting WKB to Geometry: {}", e);
-                                    return Err(Box::new(e));
+                    for geometry in geometry_col.iter().flatten() {
+                        let wkb = geozero::wkb::Wkb(geometry.to_vec());
+                        match wkb.to_geo() {
+                            Ok(geometry) => {
+                                let intersection = intersect(region, &geometry);
+                                if intersection.signed_area() > 0.0 {
+                                    kept_geometries_count += 1;
+                                    intersections.push(Geometry::MultiPolygon(intersection));
+                                } else {
+                                    ignored_geometries_count += 1;
                                 }
+                            },
+                            Err(e) => {
+                                error!("error converting WKB to Geometry: {}", e);
+                                return Err(Box::new(e));
                             }
                         }
                     }
