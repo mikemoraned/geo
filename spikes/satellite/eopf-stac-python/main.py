@@ -30,6 +30,21 @@ def main():
     print("Catalog ID:      ", S2l2a_coll.id)
     print("Available Links: ", S2l2a_coll.links)
 
+    time_frame = eopf_catalog.search(  # searching the catalog
+        collections="sentinel-2-l2a",
+        datetime="2020-05-01T00:00:00Z/2023-05-31T23:59:59.999999Z",
+    )  # the interval we are interested in, separated by '/'
+
+    # we apply the helper function `list_found_elements`
+    time_items = list_found_elements(time_frame)
+    print(time_frame)
+
+    print("Search Results:")
+    print(
+        "Total Items Found for Sentinel-2 L-2A between May 1, 2020, and May 31, 2023:  ",
+        len(time_items[0]),
+    )
+
 
 def list_found_elements(search_result):
     id = []
