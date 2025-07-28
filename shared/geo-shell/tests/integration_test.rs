@@ -1,7 +1,7 @@
 use std::path::PathBuf; 
 
 use geo_shell::config::Config;
-use geo_overturemaps::GersId;
+use geo_overturemaps::model::GersId;
 
 #[test]
 fn test_config_reading() {
