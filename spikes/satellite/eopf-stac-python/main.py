@@ -25,6 +25,11 @@ def main():
             "* [https://github.com/EOPF-Sample-Service/eopf-stac/issues/18 appears to not be resolved]"
         )
 
+    S2l2a_coll = eopf_catalog.get_collection("sentinel-2-l2a")
+    print("Keywords:        ", S2l2a_coll.keywords)
+    print("Catalog ID:      ", S2l2a_coll.id)
+    print("Available Links: ", S2l2a_coll.links)
+
 
 def list_found_elements(search_result):
     id = []
