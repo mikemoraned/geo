@@ -17,6 +17,7 @@ def main():
     print("Available datasets:")
     for key in z.keys():
         print(f" - {key}")
+    print(z.info_complete())
 
 
 if __name__ == "__main__":
