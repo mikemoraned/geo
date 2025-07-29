@@ -1,0 +1,11 @@
+[package]
+name = "esa-rust-direct"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+env_logger = "0.11.8"
+log = "0.4.27"
+zarrs = "0.21.2"
+zarrs_http = "0.2.2"
+zarrs_storage = "0.3.4"
