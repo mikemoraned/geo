@@ -328,6 +328,18 @@ wheels = [
 ]
 
 [[package]]
+name = "click"
+version = "8.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/46/61/de6cd827efad202d7057d93e0fed9294b96952e188f7384832791c7b2254/click-8.3.0.tar.gz", hash = "sha256:e7b8232224eba16f4ebe410c25ced9f7875cb5f3263ffc93cc3e8da705e229c4", size = 276943, upload-time = "2025-09-18T17:32:23.696Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/db/d3/9dcc0f5797f070ec8edf30fbadfb200e71d9db6b84d211e3b2085a7589a0/click-8.3.0-py3-none-any.whl", hash = "sha256:9b9f285302c6e3064f4330c05f05b81945b2a39544279343e6e7c5f27a9baddc", size = 107295, upload-time = "2025-09-18T17:32:22.42Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1382,6 +1394,21 @@ wheels = [
 ]
 
 [[package]]
+name = "overturemaps"
+version = "0.17.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "numpy" },
+    { name = "pyarrow" },
+    { name = "shapely" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b7/5a/633cca2c886cc2395cb2fa9a9a29dabe1b32579ecbd750615e5290cf6989/overturemaps-0.17.0.tar.gz", hash = "sha256:b3cff25777a7792b1080af2f26a84406889d80bbabcfce17812eea8ae2d63844", size = 10621, upload-time = "2025-09-26T14:26:52.205Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7b/f5/9f71eb39da2ecc82eb205038b1211260ed593e153841e9d51c60990fcd68/overturemaps-0.17.0-py3-none-any.whl", hash = "sha256:c3cf9a84ae9629e24b1e3f923a096032e6bff9598c6417f85f12ddaa54df5ed0", size = 11123, upload-time = "2025-09-26T14:26:51.378Z" },
+]
+
+[[package]]
 name = "packaging"
 version = "25.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2302,6 +2329,7 @@ dependencies = [
     { name = "jupyter" },
     { name = "lonboard" },
     { name = "matplotlib" },
+    { name = "overturemaps" },
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "shapely" },
@@ -2317,6 +2345,7 @@ requires-dist = [
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "lonboard", specifier = ">=0.12.1" },
     { name = "matplotlib", specifier = ">=3.10.6" },
+    { name = "overturemaps", specifier = ">=0.17.0" },
     { name = "pandas", specifier = ">=2.3.2" },
     { name = "pyarrow", specifier = ">=21.0.0" },
     { name = "shapely", specifier = ">=2.1.2" },

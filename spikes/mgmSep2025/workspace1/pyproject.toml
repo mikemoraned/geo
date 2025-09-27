@@ -12,6 +12,7 @@ dependencies = [
     "jupyter>=1.1.1",
     "lonboard>=0.12.1",
     "matplotlib>=3.10.6",
+    "overturemaps>=0.17.0",
     "pandas>=2.3.2",
     "pyarrow>=21.0.0",
     "shapely>=2.1.2",
