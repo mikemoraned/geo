@@ -11,6 +11,6 @@ TODOs:
 * [ ] get data about tube stations in London
     * [x] load segments in a sub-area of London
         * https://boundingbox.klokantech.com
-    * [ ] load connectors as well as segments
-    * [ ] find which of these connectors correspond to tube stations
+    * [x] load connectors as well as segments
+    * [x] find which of these connectors correspond to tube stations
     * [ ] find all tube stations in London
