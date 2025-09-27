@@ -8,9 +8,10 @@ TODOs:
     `uv run jupyter lab`
 * [x] use lonboard
 * [x] get data directly from overturemaps via overturemaps.py as may be fast enough for what I need
-* [ ] get data about tube stations in London
+* [x] get data about tube stations in London
     * [x] load segments in a sub-area of London
         * https://boundingbox.klokantech.com
     * [x] load connectors as well as segments
     * [x] find which of these connectors correspond to tube stations
-    * [ ] find all tube stations in London
+    * [x] find all tube stations in London
+        * I've *sort-of* done this in that I have found all connectors that lay on a segment that is a subway
