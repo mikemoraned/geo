@@ -15,3 +15,7 @@ TODOs:
     * [x] find which of these connectors correspond to tube stations
     * [x] find all tube stations in London
         * I've *sort-of* done this in that I have found all connectors that lay on a segment that is a subway
+* [ ] get buildings in the area of interest and find what types there are (from OvertureMaps)
+    * [x] get buildings in an area
+    * [ ] ...
+* [ ] find examples of geoai datasets / models I could use
