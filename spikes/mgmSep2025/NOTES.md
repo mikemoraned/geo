@@ -20,3 +20,8 @@ TODOs:
     * [ ] ...
 * [ ] map points in london to an an h3 grid
 * [ ] find examples of geoai datasets / models I could use
+
+
+IDEAs:
+* use "height diversity" from the viewpoint of a location as a proxy for variety as seen from that point.
+    * e.g. from a location project the heights of nearby buildings (within a radius) back to the location. the heights become angles as seen from the location. those angles can then by bucketed into a distribution by angle and normalised. similarity between locations is then the cosine distance between these distributions.
