@@ -18,4 +18,5 @@ TODOs:
 * [ ] get buildings in the area of interest and find what types there are (from OvertureMaps)
     * [x] get buildings in an area
     * [ ] ...
+* [ ] map points in london to an an h3 grid
 * [ ] find examples of geoai datasets / models I could use
