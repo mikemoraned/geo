@@ -1,2 +1,8 @@
 jupyter:
     uv run jupyter lab
+
+preview:
+    quarto preview tube.ipynb
+
+render:
+    quarto render tube.ipynb --to html --output-dir ../../../web/static/notebooks/
