@@ -15,6 +15,20 @@ TODOs:
     * [x] find which of these connectors correspond to tube stations
     * [x] find all tube stations in London
         * I've *sort-of* done this in that I have found all connectors that lay on a segment that is a subway
+* [ ] turn tube station data into publishable website on blog
+    * [x] workspace setup:
+    ```
+    mkdir workspace2
+    cd workspace2
+    uv init
+    rm main.py
+    ```
+    * [ ] install quarto (https://quarto.org/docs/get-started/)
+    
+    * [ ] set up publishing of a notebook using quarto
+    
+
+MAYBE:
 * [ ] get buildings in the area of interest and find what types there are (from OvertureMaps)
     * [x] get buildings in an area
     * [ ] ...
