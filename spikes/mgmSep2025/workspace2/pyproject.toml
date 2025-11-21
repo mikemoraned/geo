@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "duckdb>=1.4.2",
     "folium>=0.20.0",
     "geopandas>=1.1.1",
     "jupyter>=1.1.1",
@@ -12,5 +13,7 @@ dependencies = [
     "matplotlib>=3.10.7",
     "overturemaps>=0.17.0",
     "pandas>=2.3.3",
+    "pyarrow>=22.0.0",
     "quarto>=0.1.0",
+    "shapely>=2.1.2",
 ]

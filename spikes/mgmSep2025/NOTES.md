@@ -23,8 +23,11 @@ TODOs:
     uv init
     rm main.py
     ```
-    * [ ] install quarto (https://quarto.org/docs/get-started/)
-    
+    * [x] install quarto (https://quarto.org/docs/get-started/)
+    * [ ] recreate tube station analysis
+        * [ ] get data loading efficiently
+            * [ ] use local OvertureMaps copy
+        * [ ] ...
     * [ ] set up publishing of a notebook using quarto
     
 
