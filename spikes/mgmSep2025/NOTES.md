@@ -24,10 +24,10 @@ TODOs:
     rm main.py
     ```
     * [x] install quarto (https://quarto.org/docs/get-started/)
-    * [ ] recreate tube station analysis
-        * [ ] get data loading efficiently
-            * [ ] use local OvertureMaps copy
-        * [ ] ...
+    * [x] recreate tube station analysis
+        * [x] get data loading efficiently
+            * [x] use local OvertureMaps copy
+        * [x] recreate what I did on first MGM day
     * [ ] set up publishing of a notebook using quarto
     
 
