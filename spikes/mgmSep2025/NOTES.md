@@ -28,7 +28,7 @@ TODOs:
         * [x] get data loading efficiently
             * [x] use local OvertureMaps copy
         * [x] recreate what I did on first MGM day
-    * [ ] try marimo instead
+    * [x] try marimo instead
     * [ ] set up publishing of a notebook using quarto
     
 

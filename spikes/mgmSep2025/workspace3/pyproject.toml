@@ -2,8 +2,11 @@
 name = "workspace3"
 version = "0.1.0"
 description = "Add your description here"
-readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "folium>=0.12",
+    "mapclassify>=2.10.0",
     "marimo>=0.18.4",
+    "matplotlib>=3.10.8",
+    "pyarrow>=22.0.0",
 ]
