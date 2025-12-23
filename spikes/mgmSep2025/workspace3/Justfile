@@ -1,0 +1,5 @@
+marimo:
+    uv run marimo edit tube.py
+
+render:
+    uv run marimo export html tube.py -f -o ../../../web/static/notebooks/tube.html
