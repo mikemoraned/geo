@@ -94,6 +94,13 @@ def _(london_segments_gdf):
             get_color=[0, 128, 255, 180],
             get_width=100
     )
+    return Map, london_layer
+
+
+@app.cell
+def _(Map, london_layer):
+    m = Map([london_layer])
+    m
     return
 
 
