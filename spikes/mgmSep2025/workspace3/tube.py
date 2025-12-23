@@ -117,7 +117,7 @@ def _(duckdb_connection):
 @app.cell
 def _():
     overturemaps_release = "2025-12-17.0"
-    overturemaps_base = f"/Volumes/PRO-G40/OvertureMaps/data/release/{overturemaps_release}" # this is a local copy I have on a drive
+    overturemaps_base = f"/Volumes/PRO-G40/OvertureMaps/data/release/{overturemaps_release}" # this is a local copy I have on a drive for speed of access
     return (overturemaps_base,)
 
 
