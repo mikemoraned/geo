@@ -1,0 +1,8 @@
+jupyter:
+    uv run jupyter lab --port 10001
+
+preview:
+    quarto preview tube.ipynb
+
+render:
+    quarto render tube.ipynb --to html --output-dir ../../../web/static/notebooks/

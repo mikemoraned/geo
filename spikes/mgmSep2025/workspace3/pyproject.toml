@@ -1,0 +1,14 @@
+[project]
+name = "workspace3"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=0.75.0",
+    "folium>=0.12",
+    "lonboard>=0.13.0",
+    "mapclassify>=2.10.0",
+    "marimo>=0.18.4",
+    "matplotlib>=3.10.8",
+    "pyarrow>=22.0.0",
+]
