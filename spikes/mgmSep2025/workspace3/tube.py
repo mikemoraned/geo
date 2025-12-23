@@ -47,27 +47,6 @@ def _(duckdb):
 
 @app.cell
 def _(gpd, wkt):
-    def load_by_ids(conn, overture_local_base, gers_ids):
-        path = f"{overture_local_base}/theme=divisions/type=division_area/*"
-        gers_ids_joined = ",".join([f"'{g}'" for g in gers_ids])
-        query = f"""
-        SELECT * EXCLUDE(geometry), ST_AsText(geometry) AS geometry 
-        FROM read_parquet('{path}')
-        WHERE id IN ({gers_ids_joined})
-        """
-        arrow_table = conn.execute(query).fetch_arrow_table()
-        df = arrow_table.to_pandas()
-        gdf = gpd.GeoDataFrame(
-            df,
-            geometry=df['geometry'].apply(wkt.loads),
-            crs="EPSG:4326"
-        )
-        return gdf
-    return (load_by_ids,)
-
-
-@app.cell
-def _(gpd, wkt):
     def load_area(conn, overture_local_base, overture_theme, overture_type, bbox):
         (minx,miny,maxx,maxy) = bbox
         path = f"{overture_local_base}/theme={overture_theme}/type={overture_type}/*"
@@ -109,28 +88,6 @@ def _():
     overturemaps_release = "2025-12-17.0"
     overturemaps_base = f"/Volumes/PRO-G40/OvertureMaps/data/release/{overturemaps_release}"
     return (overturemaps_base,)
-
-
-@app.cell
-def _():
-    gers_ids = [
-        "531326d0-51f4-4c9e-8af5-d704aeea7830", # City of Westminster
-        "89c092f8-4287-4401-b72f-4a5a067eee22", # City of London
-        "5e0a58c5-df70-47c4-a71d-52235d3cb6d5"  # London Borough of Tower Hamlets
-    ] 
-    return (gers_ids,)
-
-
-@app.cell
-def _(conn, gers_ids, load_by_ids, overturemaps_base):
-    london_regions_gdf = load_by_ids(conn, overturemaps_base, gers_ids)
-    return (london_regions_gdf,)
-
-
-@app.cell
-def _(london_regions_gdf):
-    london_regions_gdf.explore()
-    return
 
 
 @app.cell
@@ -220,9 +177,8 @@ def _(london_connectors_gdf, london_subway_segment_gdf):
 
 
 @app.cell
-def _(london_connectors_restricted_gdf, london_regions_gdf):
-    m = london_connectors_restricted_gdf.explore(tiles="CartoDB positron")
-    london_regions_gdf.explore(m=m)
+def _(london_connectors_restricted_gdf):
+    london_connectors_restricted_gdf.explore(tiles="CartoDB positron")
     return
 
 
