@@ -2,4 +2,4 @@ marimo:
     uv run marimo edit
 
 render:
-    uv run marimo export html tube.py -f -o ../../../web/static/notebooks/tube.html
+    uv run marimo export html tube.py --force --output ../../../web/static/notebooks/makers-gonna-make/2025-09/tube.html

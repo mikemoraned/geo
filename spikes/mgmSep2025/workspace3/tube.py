@@ -39,7 +39,7 @@ def _():
 def _(duckdb):
     def duckdb_connection():
         conn = duckdb.connect()
-        conn.install_extension('spatial')
+        conn.install_extension('spatial', force_install=False)
         conn.load_extension('spatial')
         return conn
     return (duckdb_connection,)
