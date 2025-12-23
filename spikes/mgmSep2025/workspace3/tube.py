@@ -87,7 +87,8 @@ def _():
 
 @app.cell
 def _():
-    overturemaps_base = "/Volumes/PRO-G40/OvertureMaps/data/release/2025-08-20.0"
+    overturemaps_release = "2025-12-17.0"
+    overturemaps_base = f"/Volumes/PRO-G40/OvertureMaps/data/release/{overturemaps_release}"
     return (overturemaps_base,)
 
 
