@@ -1,10 +1,10 @@
-use arrow::array::{Float64Array, StringArray};
-use arrow::record_batch::RecordBatch;
+use arrow::array::AsArray;
+use arrow::compute::cast;
+use arrow::datatypes::{DataType, Float64Type};
 use chrono::{DateTime, Utc};
 use clap::Parser;
+use datafusion::prelude::*;
 use motis_openapi_progenitor::types::Mode;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
-use std::fs::File;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -26,67 +26,66 @@ fn parse_datetime(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    // Open the parquet file
-    let file = File::open(&args.parquet_file)?;
-    let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
-    let reader = builder.build()?;
+    // Create DataFusion context and read parquet file
+    let ctx = SessionContext::new();
+    let df = ctx
+        .read_parquet(&args.parquet_file, ParquetReadOptions::default())
+        .await?;
+
+    // Collect all data into memory
+    let batches = df.collect().await?;
 
     // Create MOTIS client
     let client = motis_openapi_progenitor::Client::new("http://localhost:8080");
     let departure_time = args.departure_time;
 
     // Define allowed transit modes
-    let transit_modes = vec![
-        Mode::Rail,
-        Mode::Tram,
-    ];
+    let transit_modes = vec![Mode::Rail, Mode::Tram];
 
     // Process each batch of records
-    for batch_result in reader {
-        let batch: RecordBatch = batch_result?;
+    for batch in batches {
+        let num_rows = batch.num_rows();
 
-        // Extract columns
-        let id_origin = batch
-            .column_by_name("id_origin")
-            .and_then(|col| col.as_any().downcast_ref::<StringArray>());
-        let id_dest = batch
-            .column_by_name("id_dest")
-            .and_then(|col| col.as_any().downcast_ref::<StringArray>());
+        // Extract columns and cast string columns to Utf8 for easier access
+        let id_origin = cast(
+            batch.column_by_name("id_origin").expect("id_origin column"),
+            &DataType::Utf8,
+        )?
+        .as_string::<i32>()
+        .clone();
+        let id_dest = cast(
+            batch.column_by_name("id_dest").expect("id_dest column"),
+            &DataType::Utf8,
+        )?
+        .as_string::<i32>()
+        .clone();
         let lat_origin = batch
             .column_by_name("lat_origin")
-            .and_then(|col| col.as_any().downcast_ref::<Float64Array>());
+            .expect("lat_origin column")
+            .as_primitive::<Float64Type>();
         let lon_origin = batch
             .column_by_name("lon_origin")
-            .and_then(|col| col.as_any().downcast_ref::<Float64Array>());
+            .expect("lon_origin column")
+            .as_primitive::<Float64Type>();
         let lat_dest = batch
             .column_by_name("lat_dest")
-            .and_then(|col| col.as_any().downcast_ref::<Float64Array>());
+            .expect("lat_dest column")
+            .as_primitive::<Float64Type>();
         let lon_dest = batch
             .column_by_name("lon_dest")
-            .and_then(|col| col.as_any().downcast_ref::<Float64Array>());
-
-        // Ensure all columns are present
-        let (id_origin, id_dest, lat_origin, lon_origin, lat_dest, lon_dest) = match (
-            id_origin, id_dest, lat_origin, lon_origin, lat_dest, lon_dest,
-        ) {
-            (Some(a), Some(b), Some(c), Some(d), Some(e), Some(f)) => (a, b, c, d, e, f),
-            _ => {
-                eprintln!("Missing required columns in parquet file");
-                continue;
-            }
-        };
+            .expect("lon_dest column")
+            .as_primitive::<Float64Type>();
 
         // Process each row
-        for i in 0..batch.num_rows() {
+        for i in 0..num_rows {
+            let id_origin_val = id_origin.value(i);
+            let id_dest_val = id_dest.value(i);
             let from_place = format!("{},{}", lat_origin.value(i), lon_origin.value(i));
             let to_place = format!("{},{}", lat_dest.value(i), lon_dest.value(i));
 
             println!(
                 "Processing: {} -> {} ({} -> {})",
-                id_origin.value(i),
-                id_dest.value(i),
-                from_place,
-                to_place
+                id_origin_val, id_dest_val, from_place, to_place
             );
 
             match client

@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 motis-openapi-progenitor = "0.3.0"
 tokio = { version = "1", features = ["full"] }
-parquet = "53"
+datafusion = "43"
 arrow = "53"
 clap = { version = "4", features = ["derive"] }
 chrono = "0.4"
