@@ -11,12 +11,12 @@ download_geo_data:
     wget https://download.geofabrik.de/europe/germany-latest.osm.pbf -O ./geo_data/osm.pbf
     wget https://download.gtfs.de/germany/free/latest.zip -O ./geo_data/gtfs.zip
 
-[working-directory: 'motis']
+[working-directory: 'motis_server']
 motis_setup:
     ./motis config ../geo_data/osm.pbf ../geo_data/gtfs.zip
     ./motis import
 
-[working-directory: 'motis']
+[working-directory: 'motis_server']
 motis_server:
     ./motis server
 
