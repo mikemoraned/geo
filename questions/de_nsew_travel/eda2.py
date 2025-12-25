@@ -215,12 +215,6 @@ def _(pd):
 
 @app.cell
 def _(travel_times):
-    travel_times[(travel_times['success'] == True) & (travel_times['total_time'] == 0)]
-    return
-
-
-@app.cell
-def _(travel_times):
     travel_times[(travel_times['success'] == True) & (travel_times['total_time'] != 0)]
     return
 
@@ -228,7 +222,7 @@ def _(travel_times):
 @app.cell
 def _(LineString, gpt, travel_times):
     # Create line geometries from origin and destination coordinates
-    travel_times_lines = travel_times[(travel_times['success'] == True) & (travel_times['total_time'] != 0)].copy()
+    travel_times_lines = travel_times[(travel_times['success'] == True)].copy()
     travel_times_lines['geometry'] = travel_times_lines.apply(
         lambda row: LineString([
             (row['lon_origin'], row['lat_origin']),

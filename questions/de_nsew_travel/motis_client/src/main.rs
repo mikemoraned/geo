@@ -127,14 +127,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match result {
                 Ok(res) => {
                     // Get the shortest itinerary duration
-                    let duration = res
-                        .itineraries
-                        .first()
-                        .map(|it| it.duration as u32)
-                        .unwrap_or(0);
-                    total_time_builder.append_value(duration);
-                    success_builder.append_value(true);
-                    println!("  Success: duration = {} seconds", duration);
+                    let mut shortest_itineraries = res.itineraries.clone();
+                    shortest_itineraries.sort_by(|a, b| a.duration.cmp(&b.duration));
+                    if let Some(shortest_itinerary) = shortest_itineraries.first() {
+                        let duration = shortest_itinerary.duration as u32;
+                        total_time_builder.append_value(duration);
+                        success_builder.append_value(true);
+                        println!("  Success: duration = {} seconds", duration);
+                    } else {
+                        total_time_builder.append_null();
+                        success_builder.append_value(false);
+                    }
                 }
                 Err(e) => {
                     total_time_builder.append_null();
@@ -185,7 +188,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Write to parquet
     let output_df = ctx.read_batch(output_batch)?;
     output_df
-        .write_parquet(&args.output, datafusion::dataframe::DataFrameWriteOptions::new(), None)
+        .write_parquet(
+            &args.output,
+            datafusion::dataframe::DataFrameWriteOptions::new(),
+            None,
+        )
         .await?;
 
     println!("\nResults written to: {}", args.output);
