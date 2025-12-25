@@ -1,5 +1,4 @@
 use arrow::array::AsArray;
-use arrow::compute::cast;
 use arrow::datatypes::{DataType, Float64Type};
 use chrono::{DateTime, Utc};
 use clap::Parser;
@@ -30,7 +29,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ctx = SessionContext::new();
     let df = ctx
         .read_parquet(&args.parquet_file, ParquetReadOptions::default())
-        .await?;
+        .await?
+        .with_column("id_origin", cast(col("id_origin"), DataType::Utf8))?
+        .with_column("id_dest", cast(col("id_dest"), DataType::Utf8))?;
 
     // Collect all data into memory
     let batches = df.collect().await?;
@@ -46,34 +47,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for batch in batches {
         let num_rows = batch.num_rows();
 
-        // Extract columns and cast string columns to Utf8 for easier access
-        let id_origin = cast(
-            batch.column_by_name("id_origin").expect("id_origin column"),
-            &DataType::Utf8,
-        )?
-        .as_string::<i32>()
-        .clone();
-        let id_dest = cast(
-            batch.column_by_name("id_dest").expect("id_dest column"),
-            &DataType::Utf8,
-        )?
-        .as_string::<i32>()
-        .clone();
+        // Extract columns - now all casts are already done by DataFusion
+        let id_origin = batch
+            .column_by_name("id_origin")
+            .expect("id_origin")
+            .as_string::<i32>();
+        let id_dest = batch
+            .column_by_name("id_dest")
+            .expect("id_dest")
+            .as_string::<i32>();
         let lat_origin = batch
             .column_by_name("lat_origin")
-            .expect("lat_origin column")
+            .expect("lat_origin")
             .as_primitive::<Float64Type>();
         let lon_origin = batch
             .column_by_name("lon_origin")
-            .expect("lon_origin column")
+            .expect("lon_origin")
             .as_primitive::<Float64Type>();
         let lat_dest = batch
             .column_by_name("lat_dest")
-            .expect("lat_dest column")
+            .expect("lat_dest")
             .as_primitive::<Float64Type>();
         let lon_dest = batch
             .column_by_name("lon_dest")
-            .expect("lon_dest column")
+            .expect("lon_dest")
             .as_primitive::<Float64Type>();
 
         // Process each row
