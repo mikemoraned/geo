@@ -4,6 +4,7 @@ use arrow::record_batch::RecordBatch;
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use datafusion::prelude::*;
+use indicatif::{ProgressBar, ProgressStyle};
 use motis_openapi_progenitor::types::Mode;
 use std::sync::Arc;
 
@@ -48,6 +49,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let allowed_transit_modes = vec![Mode::Rail, Mode::Tram];
     let max_travel_time_in_minutes = 24 * 60;
+
+    // Count total rows for progress bar
+    let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+    let pb = ProgressBar::new(total_rows as u64);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg}")
+            .unwrap()
+            .progress_chars("=>-"),
+    );
 
     // Build result arrays
     let mut id_origin_builder = StringBuilder::new();
@@ -101,11 +112,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let from_place = format!("{},{}", lat_origin_val, lon_origin_val);
             let to_place = format!("{},{}", lat_dest_val, lon_dest_val);
 
-            println!(
-                "Processing: {} -> {} ({} -> {})",
-                id_origin_val, id_dest_val, from_place, to_place
-            );
-
             let result = client
                 .plan()
                 .from_place(&from_place)
@@ -144,23 +150,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .append_value(&leg.leg_geometry.points);
                         }
                         polylines_builder.append(true);
-
-                        println!("  Success: duration = {} seconds", duration);
                     } else {
                         total_time_builder.append_null();
                         success_builder.append_value(false);
                         polylines_builder.append(false);
                     }
                 }
-                Err(e) => {
+                Err(_e) => {
                     total_time_builder.append_null();
                     success_builder.append_value(false);
                     polylines_builder.append(false);
-                    eprintln!("  Error: {e}");
                 }
             }
+
+            pb.inc(1);
         }
     }
+
+    pb.finish_with_message("Processing complete");
 
     // Create output schema
     let schema = Arc::new(Schema::new(vec![
