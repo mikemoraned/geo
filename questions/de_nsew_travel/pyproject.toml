@@ -9,8 +9,10 @@ dependencies = [
     "duckdb>=1.4.3",
     "folium>=0.12",
     "geopandas>=1.1.2",
+    "lonboard>=0.13.0",
     "mapclassify>=2.10.0",
     "marimo>=0.18.4",
     "matplotlib>=3.10.8",
     "overturemaps>=0.18.0",
+    "pandas>=2.3.3",
 ]
