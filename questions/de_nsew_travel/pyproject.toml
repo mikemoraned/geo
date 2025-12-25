@@ -1,0 +1,16 @@
+[project]
+name = "de-nsew-travel"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=0.75.0",
+    "duckdb>=1.4.3",
+    "folium>=0.12",
+    "geopandas>=1.1.2",
+    "mapclassify>=2.10.0",
+    "marimo>=0.18.4",
+    "matplotlib>=3.10.8",
+    "overturemaps>=0.18.0",
+]

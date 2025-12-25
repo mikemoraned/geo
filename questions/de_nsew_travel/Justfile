@@ -1,0 +1,2 @@
+marimo:
+    uv run marimo edit
