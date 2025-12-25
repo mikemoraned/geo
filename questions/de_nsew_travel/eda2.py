@@ -48,7 +48,7 @@ def _(de_div):
 @app.cell
 def _(de_div):
     cities_de = de_div[de_div['class'] == 'city'].sort_values('population', ascending=False)
-    cities_de[['names', 'population', 'geometry']].head(20)
+    cities_de.head(20)
     return (cities_de,)
 
 
@@ -186,6 +186,17 @@ def _(city_pairs_diff_quadrant, pd):
     city_pairs_export.to_parquet('city_pairs_diff_quadrant.parquet', index=False)
 
     city_pairs_export.head()
+    return (city_pairs_export,)
+
+
+@app.cell
+def _(city_pairs_export):
+    berlin_id = '9187e609-5a2f-4535-85ec-e2b88399eea3'
+    berlin_city_pairs_export = city_pairs_export[city_pairs_export['id_origin'] == berlin_id]
+
+    berlin_city_pairs_export.to_parquet('berlin_city_pairs_diff_quadrant.parquet', index=False)
+
+    berlin_city_pairs_export.head()
     return
 
 
