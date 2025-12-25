@@ -249,5 +249,45 @@ def _(LineString, gpt, travel_times):
     return
 
 
+@app.cell
+def _(LineString, gpt, travel_times):
+    import polyline
+    from shapely.geometry import MultiLineString
+
+    # Decode polylines and create MultiLineString geometries
+    def decode_polylines_to_multilinestring(polylines_array):
+        if polylines_array is None or len(polylines_array) == 0:
+            return None
+        lines = []
+        for encoded_polyline in polylines_array:
+            if encoded_polyline:
+                # polyline.decode returns list of (lat, lon) tuples, need to swap to (lon, lat) for shapely
+                coords = [(lon, lat) for lat, lon in polyline.decode(encoded_polyline, precision=6)]
+                if len(coords) >= 2:
+                    lines.append(LineString(coords))
+        if len(lines) == 0:
+            return None
+        return MultiLineString(lines)
+
+    # Create new geodataframe with decoded route geometries
+    travel_times_routes = travel_times[(travel_times['success'] == True)].copy()
+    travel_times_routes['route_geometry'] = travel_times_routes['polylines'].apply(decode_polylines_to_multilinestring)
+
+    travel_routes_gdf = gpt.GeoDataFrame(
+        travel_times_routes.drop(columns=['polylines']),
+        geometry='route_geometry',
+        crs='EPSG:4326'
+    )
+
+    travel_routes_gdf.explore(
+        column='total_time',
+        cmap='RdYlGn_r',
+        tiles="CartoDB positron",
+        style_kwds={'weight': 2, 'opacity': 0.7},
+        tooltip=['id_origin', 'id_dest', 'total_time']
+    )
+    return
+
+
 if __name__ == "__main__":
     app.run()

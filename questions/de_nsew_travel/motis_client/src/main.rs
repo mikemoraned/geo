@@ -1,4 +1,4 @@
-use arrow::array::{AsArray, BooleanBuilder, Float64Builder, StringBuilder, UInt32Builder};
+use arrow::array::{AsArray, BooleanBuilder, Float64Builder, ListBuilder, StringBuilder, UInt32Builder};
 use arrow::datatypes::{DataType, Field, Float64Type, Schema};
 use arrow::record_batch::RecordBatch;
 use chrono::{DateTime, Utc};
@@ -58,6 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut lon_dest_builder = Float64Builder::new();
     let mut total_time_builder = UInt32Builder::new();
     let mut success_builder = BooleanBuilder::new();
+    let mut polylines_builder = ListBuilder::new(StringBuilder::new());
 
     // Process each batch of records
     for batch in batches {
@@ -135,15 +136,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let duration = shortest_itinerary.duration as u32;
                         total_time_builder.append_value(duration);
                         success_builder.append_value(true);
+
+                        // Extract polylines from legs
+                        for leg in &shortest_itinerary.legs {
+                            polylines_builder
+                                .values()
+                                .append_value(&leg.leg_geometry.points);
+                        }
+                        polylines_builder.append(true);
+
                         println!("  Success: duration = {} seconds", duration);
                     } else {
                         total_time_builder.append_null();
                         success_builder.append_value(false);
+                        polylines_builder.append(false);
                     }
                 }
                 Err(e) => {
                     total_time_builder.append_null();
                     success_builder.append_value(false);
+                    polylines_builder.append(false);
                     eprintln!("  Error: {e}");
                 }
             }
@@ -160,6 +172,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Field::new("lon_dest", DataType::Float64, false),
         Field::new("total_time", DataType::UInt32, true),
         Field::new("success", DataType::Boolean, false),
+        Field::new(
+            "polylines",
+            DataType::List(Arc::new(Field::new("item", DataType::Utf8, true))),
+            true,
+        ),
     ]));
 
     // Build arrays
@@ -171,6 +188,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lon_dest_array = Arc::new(lon_dest_builder.finish());
     let total_time_array = Arc::new(total_time_builder.finish());
     let success_array = Arc::new(success_builder.finish());
+    let polylines_array = Arc::new(polylines_builder.finish());
 
     // Create record batch
     let output_batch = RecordBatch::try_new(
@@ -184,6 +202,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             lon_dest_array,
             total_time_array,
             success_array,
+            polylines_array,
         ],
     )?;
 
