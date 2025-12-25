@@ -2,6 +2,7 @@ use arrow::array::{Float64Array, StringArray};
 use arrow::record_batch::RecordBatch;
 use chrono::{DateTime, Utc};
 use clap::Parser;
+use motis_openapi_progenitor::types::Mode;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use std::fs::File;
 
@@ -33,6 +34,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create MOTIS client
     let client = motis_openapi_progenitor::Client::new("http://localhost:8080");
     let departure_time = args.departure_time;
+
+    // Define allowed transit modes
+    let transit_modes = vec![
+        Mode::Rail,
+        Mode::Tram,
+    ];
 
     // Process each batch of records
     for batch_result in reader {
@@ -87,6 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .from_place(&from_place)
                 .to_place(&to_place)
                 .time(departure_time)
+                .transit_modes(transit_modes.clone())
                 .detailed_transfers(false)
                 .send()
                 .await
