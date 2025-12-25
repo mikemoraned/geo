@@ -15,4 +15,6 @@ dependencies = [
     "matplotlib>=3.10.8",
     "overturemaps>=0.18.0",
     "pandas>=2.3.3",
+    "pyhafas>=0.6.1",
+    "tqdm>=4.67.1",
 ]
