@@ -167,7 +167,7 @@ def _(city_pairs_diff_quadrant, gpt):
         tiles="CartoDB positron",
         style_kwds={'weight': 1, 'opacity': 0.5}
     )
-    return
+    return (LineString,)
 
 
 @app.cell
@@ -183,7 +183,7 @@ def _(city_pairs_diff_quadrant, pd):
     })
 
     # Export to parquet
-    city_pairs_export.to_parquet('city_pairs_diff_quadrant.parquet', index=False)
+    # city_pairs_export.to_parquet('city_pairs_diff_quadrant.parquet', index=False)
 
     city_pairs_export.head()
     return (city_pairs_export,)
@@ -194,7 +194,7 @@ def _(city_pairs_export):
     berlin_id = '9187e609-5a2f-4535-85ec-e2b88399eea3'
     berlin_city_pairs_export = city_pairs_export[city_pairs_export['id_origin'] == berlin_id]
 
-    berlin_city_pairs_export.to_parquet('berlin_city_pairs_diff_quadrant.parquet', index=False)
+    # berlin_city_pairs_export.to_parquet('berlin_city_pairs_diff_quadrant.parquet', index=False)
 
     berlin_city_pairs_export.head()
     return (berlin_city_pairs_export,)
@@ -203,7 +203,55 @@ def _(city_pairs_export):
 @app.cell
 def _(berlin_city_pairs_export):
     berlin_city_pairs_export.info()
+    return
 
+
+@app.cell
+def _(pd):
+    travel_times = pd.read_parquet('berlin_city_pairs_diff_quadrant_travel_times.parquet')
+    travel_times.head()
+    return (travel_times,)
+
+
+@app.cell
+def _(travel_times):
+    travel_times[(travel_times['success'] == True) & (travel_times['total_time'] == 0)]
+    return
+
+
+@app.cell
+def _(travel_times):
+    travel_times[(travel_times['success'] == True) & (travel_times['total_time'] != 0)]
+    return
+
+
+@app.cell
+def _(LineString, gpt, travel_times):
+    # Create line geometries from origin and destination coordinates
+    travel_times_lines = travel_times[(travel_times['success'] == True) & (travel_times['total_time'] != 0)].copy()
+    travel_times_lines['geometry'] = travel_times_lines.apply(
+        lambda row: LineString([
+            (row['lon_origin'], row['lat_origin']),
+            (row['lon_dest'], row['lat_dest'])
+        ]),
+        axis=1
+    )
+
+    # Convert to GeoDataFrame
+    travel_times_gdf = gpt.GeoDataFrame(
+        travel_times_lines,
+        geometry='geometry',
+        crs='EPSG:4326'
+    )
+
+    # Visualize with travel time as color
+    travel_times_gdf.explore(
+        column='total_time',
+        cmap='RdYlGn_r',
+        tiles="CartoDB positron",
+        style_kwds={'weight': 2, 'opacity': 0.7},
+        tooltip=['id_origin', 'id_dest', 'total_time']
+    )
     return
 
 
