@@ -16,5 +16,7 @@ dependencies = [
     "overturemaps>=0.18.0",
     "pandas>=2.3.3",
     "pyhafas>=0.6.1",
+    "python-dotenv>=1.2.1",
     "tqdm>=4.67.1",
+    "traveltimepy>=4.4.0",
 ]
