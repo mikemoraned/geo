@@ -55,10 +55,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pb = ProgressBar::new(total_rows as u64);
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg}")
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} ({msg})")
             .unwrap()
             .progress_chars("=>-"),
     );
+    pb.set_message("✓0 ✗0");
 
     // Build result arrays
     let mut id_origin_builder = StringBuilder::new();
@@ -70,6 +71,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut total_time_builder = UInt32Builder::new();
     let mut success_builder = BooleanBuilder::new();
     let mut polylines_builder = ListBuilder::new(StringBuilder::new());
+
+    // Track success/failure counts
+    let mut success_count = 0;
+    let mut failure_count = 0;
 
     // Process each batch of records
     for batch in batches {
@@ -133,7 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             lon_dest_builder.append_value(lon_dest_val);
 
             // Append result columns
-            match result {
+            let is_success = match result {
                 Ok(res) => {
                     // Get the shortest itinerary duration
                     let mut shortest_itineraries = res.itineraries.clone();
@@ -150,24 +155,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .append_value(&leg.leg_geometry.points);
                         }
                         polylines_builder.append(true);
+                        true
                     } else {
                         total_time_builder.append_null();
                         success_builder.append_value(false);
                         polylines_builder.append(false);
+                        false
                     }
                 }
                 Err(_e) => {
                     total_time_builder.append_null();
                     success_builder.append_value(false);
                     polylines_builder.append(false);
+                    false
                 }
-            }
+            };
 
+            // Update counters and progress bar
+            if is_success {
+                success_count += 1;
+            } else {
+                failure_count += 1;
+            }
+            pb.set_message(format!("✓{} ✗{}", success_count, failure_count));
             pb.inc(1);
         }
     }
 
-    pb.finish_with_message("Processing complete");
+    pb.finish_with_message(format!("✓{} ✗{}", success_count, failure_count));
 
     // Create output schema
     let schema = Arc::new(Schema::new(vec![
