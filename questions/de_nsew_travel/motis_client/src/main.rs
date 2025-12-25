@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pb = ProgressBar::new(total_rows as u64);
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} ({msg})")
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} ETA: {eta} ({msg})")
             .unwrap()
             .progress_chars("=>-"),
     );
