@@ -8,8 +8,8 @@ download_motis:
     
 download_geo_data:
     mkdir -p geo_data
-    wget https://github.com/motis-project/test-data/raw/aachen/aachen.osm.pbf -O ./geo_data/osm.pbf
-    wget https://opendata.avv.de/current_GTFS/AVV_GTFS_Masten_mit_SPNV.zip -O ./geo_data/gtfs.zip
+    wget https://download.geofabrik.de/europe/germany-latest.osm.pbf -O ./geo_data/osm.pbf
+    wget https://download.gtfs.de/germany/free/latest.zip -O ./geo_data/gtfs.zip
 
 [working-directory: 'motis']
 motis_setup:
