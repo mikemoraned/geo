@@ -197,6 +197,13 @@ def _(city_pairs_export):
     berlin_city_pairs_export.to_parquet('berlin_city_pairs_diff_quadrant.parquet', index=False)
 
     berlin_city_pairs_export.head()
+    return (berlin_city_pairs_export,)
+
+
+@app.cell
+def _(berlin_city_pairs_export):
+    berlin_city_pairs_export.info()
+
     return
 
 

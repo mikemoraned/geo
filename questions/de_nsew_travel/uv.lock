@@ -462,6 +462,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pyhafas" },
     { name = "python-dotenv" },
+    { name = "requests" },
     { name = "tqdm" },
     { name = "traveltimepy" },
 ]
@@ -480,6 +481,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pyhafas", specifier = ">=0.6.1" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
+    { name = "requests", specifier = ">=2.32.5" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "traveltimepy", specifier = ">=4.4.0" },
 ]
