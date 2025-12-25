@@ -46,8 +46,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = motis_openapi_progenitor::Client::new("http://localhost:8080");
     let departure_time = args.departure_time;
 
-    // Define allowed transit modes
-    let transit_modes = vec![Mode::Rail, Mode::Tram];
+    let allowed_transit_modes = vec![Mode::Rail, Mode::Tram];
+    let max_travel_time_in_minutes = 24 * 60;
 
     // Build result arrays
     let mut id_origin_builder = StringBuilder::new();
@@ -109,9 +109,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .plan()
                 .from_place(&from_place)
                 .to_place(&to_place)
+                .arrive_by(true)
                 .time(departure_time)
-                .transit_modes(transit_modes.clone())
-                .detailed_transfers(false)
+                .transit_modes(allowed_transit_modes.clone())
+                .max_travel_time(max_travel_time_in_minutes)
+                .detailed_transfers(true)
                 .send()
                 .await;
 
