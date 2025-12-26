@@ -13,7 +13,8 @@ def _():
     import duckdb
     from shapely import wkt, LineString
     import seaborn as sns
-    return LineString, duckdb, gpd, mo, pd, sns, wkt
+    import matplotlib.pyplot as plt
+    return LineString, duckdb, gpd, mo, pd, plt, sns, wkt
 
 
 @app.cell
@@ -319,16 +320,24 @@ def _(import_travel_times):
 
 @app.cell
 def _(travel_times):
-    import lonboard
-    from lonboard import Map
-
-    # Create a PathLayer for the route geometries
-    path_layer = lonboard.PathLayer.from_geopandas(
-        travel_times,
-        width_min_pixels=2,
+    travel_times.explore(
+        "total_time", tiles="CartoDB positron", cmap="turbo"
     )
+    return
 
-    Map(layers=[path_layer], basemap_style=lonboard.basemap.CartoBasemap.Positron)
+
+@app.cell
+def _():
+    # import lonboard
+    # from lonboard import Map
+
+    # # Create a PathLayer for the route geometries
+    # path_layer = lonboard.PathLayer.from_geopandas(
+    #     travel_times,
+    #     width_min_pixels=2,
+    # )
+
+    # Map(layers=[path_layer], basemap_style=lonboard.basemap.CartoBasemap.Positron)
     return
 
 
@@ -347,9 +356,7 @@ def _(sns, travel_times):
 @app.cell
 def _(routes, travel_times):
     travel_times_with_routes = travel_times.merge(
-        routes,
-        on=["id_origin", "id_dest"],
-        how="left"
+        routes, on=["id_origin", "id_dest"], how="left"
     )
     travel_times_with_routes
     return (travel_times_with_routes,)
@@ -363,39 +370,61 @@ def _(sns, travel_times_with_routes):
 
 @app.cell
 def _(sns, travel_times_with_routes):
-    sns.kdeplot(data=travel_times_with_routes, x="total_time", hue="route_label")
+    sns.kdeplot(data=travel_times_with_routes, x="total_time", hue="route_label",
+        common_norm=False)
+    return
+
+
+@app.cell
+def _(sns, travel_times_with_routes):
+    sns.histplot(data=travel_times_with_routes, x="total_time", hue="route_label",
+        common_norm=False)
     return
 
 
 @app.cell
 def _(travel_times_with_routes):
     travel_times_with_route_category = travel_times_with_routes.copy()
-    travel_times_with_route_category['category'] = travel_times_with_route_category.route_label.apply(
-            lambda r: "North<->South" if r in [
+    travel_times_with_route_category["category"] = (
+        travel_times_with_route_category.route_label.apply(
+            lambda r: "North<->South"
+            if r
+            in [
                 "North-East->South-East",
                 "South-East->North-East",
                 "North-West->South-West",
                 "South-West->North-West",
-            ] else "East<->West"
+            ]
+            else "East<->West"
         )
+    )
     return (travel_times_with_route_category,)
 
 
 @app.cell
 def _(sns, travel_times_with_route_category):
-    sns.kdeplot(data=travel_times_with_route_category, x="total_time", hue="category")
+    sns.kdeplot(
+        data=travel_times_with_route_category, x="total_time", hue="category"
+    )
     return
 
 
 @app.cell
 def _(sns, travel_times_with_route_category):
-    sns.histplot(data=travel_times_with_route_category, x="total_time", hue="category")
+    sns.histplot(
+        data=travel_times_with_route_category, x="total_time", hue="category"
+    )
     return
 
 
 @app.cell
 def _(sns, travel_times_with_route_category):
-    sns.kdeplot(data=travel_times_with_route_category, x="total_time", hue="category", common_norm=False)
+    sns.kdeplot(
+        data=travel_times_with_route_category,
+        x="total_time",
+        hue="category",
+        common_norm=False,
+    )
     return
 
 
@@ -413,15 +442,17 @@ def _(travel_times_with_route_category):
 
     # Calculate crow-flies distance between origin and destination
     travel_times_with_distance = travel_times_with_route_category.copy()
-    travel_times_with_distance['crow_flies_km'] = travel_times_with_distance.apply(
+    travel_times_with_distance["crow_flies_km"] = travel_times_with_distance.apply(
         lambda row: geodesic(
-            (row['lat_origin'], row['lon_origin']),
-            (row['lat_dest'], row['lon_dest'])
+            (row["lat_origin"], row["lon_origin"]),
+            (row["lat_dest"], row["lon_dest"]),
         ).kilometers,
-        axis=1
+        axis=1,
     )
 
-    travel_times_with_distance[['id_origin', 'id_dest', 'total_time', 'crow_flies_km', 'category']].head()
+    travel_times_with_distance[
+        ["id_origin", "id_dest", "total_time", "crow_flies_km", "category"]
+    ].head()
     return (travel_times_with_distance,)
 
 
@@ -429,13 +460,36 @@ def _(travel_times_with_route_category):
 def _(travel_times_with_distance):
     # Calculate speed as crow-flies distance divided by total time
     travel_times_with_speed = travel_times_with_distance.copy()
-    travel_times_with_speed['speed_km_per_sec'] = travel_times_with_speed['crow_flies_km'] / travel_times_with_speed['total_time']
+    travel_times_with_speed["speed_km_per_sec"] = (
+        travel_times_with_speed["crow_flies_km"]
+        / travel_times_with_speed["total_time"]
+    )
 
     # Also add speed in km/h for more intuitive interpretation
-    travel_times_with_speed['speed_km_per_h'] = travel_times_with_speed['speed_km_per_sec'] * 3600
+    travel_times_with_speed["speed_km_per_h"] = (
+        travel_times_with_speed["speed_km_per_sec"] * 3600
+    )
 
-    travel_times_with_speed[['id_origin', 'id_dest', 'total_time', 'crow_flies_km', 'speed_km_per_sec', 'speed_km_per_h', 'category']].head()
+    travel_times_with_speed[
+        [
+            "id_origin",
+            "id_dest",
+            "total_time",
+            "crow_flies_km",
+            "speed_km_per_sec",
+            "speed_km_per_h",
+            "category",
+        ]
+    ].head()
     return (travel_times_with_speed,)
+
+
+@app.cell
+def _(travel_times_with_speed):
+    travel_times_with_speed.explore(
+        "speed_km_per_h", tiles="CartoDB positron", cmap="hot"
+    )
+    return
 
 
 @app.cell
@@ -446,7 +500,33 @@ def _(sns, travel_times_with_speed):
 
 @app.cell
 def _(sns, travel_times_with_speed):
-    sns.kdeplot(data=travel_times_with_speed, x="speed_km_per_h", hue="category", common_norm=False)
+    sns.kdeplot(
+        data=travel_times_with_speed,
+        x="speed_km_per_h",
+        hue="category",
+        common_norm=False,
+    )
+    return
+
+
+@app.cell
+def _(plt, sns, travel_times_with_speed):
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    travel_times_with_speed.plot(ax=ax1,
+        column="speed_km_per_h", cmap="hot", legend=True
+    )
+    ax1.set_axis_off()
+    ax1.set_title('Speed on route')
+    sns.kdeplot(ax=ax2,
+        data=travel_times_with_speed,
+        x="speed_km_per_h",
+        hue="category",
+        common_norm=False,
+    )
+    ax2.set_title('Routes split by direction')
+    plt.tight_layout()
+    plt.show()
+
     return
 
 
@@ -458,13 +538,20 @@ def _(sns, travel_times_with_speed):
 
 @app.cell
 def _(sns, travel_times_with_speed):
-    sns.kdeplot(data=travel_times_with_speed, x="crow_flies_km", hue="category", common_norm=False)
+    sns.kdeplot(
+        data=travel_times_with_speed,
+        x="crow_flies_km",
+        hue="category",
+        common_norm=False,
+    )
     return
 
 
 @app.cell
 def _(sns, travel_times_with_speed):
-    sns.scatterplot(data=travel_times_with_speed, x="crow_flies_km", y="speed_km_per_h")
+    sns.scatterplot(
+        data=travel_times_with_speed, x="crow_flies_km", y="speed_km_per_h"
+    )
     return
 
 
