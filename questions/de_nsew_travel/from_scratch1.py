@@ -440,6 +440,12 @@ def _(travel_times_with_distance):
 
 @app.cell
 def _(sns, travel_times_with_speed):
+    sns.kdeplot(data=travel_times_with_speed, x="speed_km_per_h")
+    return
+
+
+@app.cell
+def _(sns, travel_times_with_speed):
     sns.kdeplot(data=travel_times_with_speed, x="speed_km_per_h", hue="category", common_norm=False)
     return
 
@@ -453,6 +459,12 @@ def _(sns, travel_times_with_speed):
 @app.cell
 def _(sns, travel_times_with_speed):
     sns.kdeplot(data=travel_times_with_speed, x="crow_flies_km", hue="category", common_norm=False)
+    return
+
+
+@app.cell
+def _(sns, travel_times_with_speed):
+    sns.scatterplot(data=travel_times_with_speed, x="crow_flies_km", y="speed_km_per_h")
     return
 
 
