@@ -151,7 +151,12 @@ def _(cities_quadrants, germany_boundary):
     quadrant_plot = germany_boundary.explore(
         tiles="CartoDB positron", color="lightgray"
     )
-    cities_quadrants.explore("quadrant", m=quadrant_plot, categorical=True)
+    cities_quadrants.explore(
+        "quadrant",
+        m=quadrant_plot,
+        categorical=True,
+        cmap=["red", "green", "blue", "orange"],
+    )
     quadrant_plot
     return
 
@@ -200,7 +205,7 @@ def _(LineString, gpd):
 @app.cell
 def _(cities_quadrants, visualise_route_labels):
     visualise_route_labels(all_possible_routes(cities_quadrants)).sample(
-        100, random_state=1
+        1000, random_state=1
     ).explore("route_label", tiles="CartoDB positron")
     return
 
@@ -230,7 +235,7 @@ def _(cities_quadrants):
 
 @app.cell
 def _(routes, visualise_route_labels):
-    visualise_route_labels(routes).sample(300, random_state=2).explore(
+    visualise_route_labels(routes).sample(1000, random_state=1).explore(
         "route_label", tiles="CartoDB positron"
     )
     return
@@ -320,24 +325,9 @@ def _(import_travel_times):
 
 @app.cell
 def _(travel_times):
-    travel_times.explore(
+    travel_times.sample(1000, random_state=1).explore(
         "total_time", tiles="CartoDB positron", cmap="turbo"
     )
-    return
-
-
-@app.cell
-def _():
-    # import lonboard
-    # from lonboard import Map
-
-    # # Create a PathLayer for the route geometries
-    # path_layer = lonboard.PathLayer.from_geopandas(
-    #     travel_times,
-    #     width_min_pixels=2,
-    # )
-
-    # Map(layers=[path_layer], basemap_style=lonboard.basemap.CartoBasemap.Positron)
     return
 
 
@@ -370,15 +360,23 @@ def _(sns, travel_times_with_routes):
 
 @app.cell
 def _(sns, travel_times_with_routes):
-    sns.kdeplot(data=travel_times_with_routes, x="total_time", hue="route_label",
-        common_norm=False)
+    sns.kdeplot(
+        data=travel_times_with_routes,
+        x="total_time",
+        hue="route_label",
+        common_norm=False,
+    )
     return
 
 
 @app.cell
 def _(sns, travel_times_with_routes):
-    sns.histplot(data=travel_times_with_routes, x="total_time", hue="route_label",
-        common_norm=False)
+    sns.histplot(
+        data=travel_times_with_routes,
+        x="total_time",
+        hue="route_label",
+        common_norm=False,
+    )
     return
 
 
@@ -486,7 +484,7 @@ def _(travel_times_with_distance):
 
 @app.cell
 def _(travel_times_with_speed):
-    travel_times_with_speed.explore(
+    travel_times_with_speed.sample(1000, random_state=1).explore(
         "speed_km_per_h", tiles="CartoDB positron", cmap="hot"
     )
     return
@@ -512,21 +510,21 @@ def _(sns, travel_times_with_speed):
 @app.cell
 def _(plt, sns, travel_times_with_speed):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    travel_times_with_speed.plot(ax=ax1,
-        column="speed_km_per_h", cmap="hot", legend=True
+    travel_times_with_speed.plot(
+        ax=ax1, column="speed_km_per_h", cmap="hot", legend=True
     )
     ax1.set_axis_off()
-    ax1.set_title('Speed on route')
-    sns.kdeplot(ax=ax2,
+    ax1.set_title("Speed on route")
+    sns.kdeplot(
+        ax=ax2,
         data=travel_times_with_speed,
         x="speed_km_per_h",
         hue="category",
         common_norm=False,
     )
-    ax2.set_title('Routes split by direction')
+    ax2.set_title("Routes split by direction")
     plt.tight_layout()
     plt.show()
-
     return
 
 
@@ -544,6 +542,28 @@ def _(sns, travel_times_with_speed):
         hue="category",
         common_norm=False,
     )
+    return
+
+
+@app.cell
+def _(plt, sns, travel_times_with_speed):
+    fig2, (fig2_ax1, fig2_ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    sns.kdeplot(
+        ax=fig2_ax1,
+        data=travel_times_with_speed,
+        x="crow_flies_km",
+        hue="category",
+        common_norm=False,
+    )
+    sns.histplot(
+        ax=fig2_ax2,
+        data=travel_times_with_speed,
+        x="crow_flies_km",
+        hue="category",
+        common_norm=False,
+    )
+    plt.tight_layout()
+    plt.show()
     return
 
 

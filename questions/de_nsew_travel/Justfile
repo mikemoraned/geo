@@ -26,3 +26,7 @@ motis_routes:
 
 marimo:
     uv run marimo edit
+
+render:
+    mkdir -p ../../web/static/notebooks/questions/de_nsew_travel
+    uv run marimo export html 2025-12-26.py --force --output ../../web/static/notebooks/questions/de_nsew_travel/2025-12-26.html
