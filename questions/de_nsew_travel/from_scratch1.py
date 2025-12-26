@@ -402,8 +402,57 @@ def _(sns, travel_times_with_route_category):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    TODO: need to normalise time by crow-flies distance (as otherwise I am maybe just measuring differences in distances not times)
+    need to normalise time by crow-flies distance (as otherwise I am maybe just measuring differences in distances not times)
     """)
+    return
+
+
+@app.cell
+def _(travel_times_with_route_category):
+    from geopy.distance import geodesic
+
+    # Calculate crow-flies distance between origin and destination
+    travel_times_with_distance = travel_times_with_route_category.copy()
+    travel_times_with_distance['crow_flies_km'] = travel_times_with_distance.apply(
+        lambda row: geodesic(
+            (row['lat_origin'], row['lon_origin']),
+            (row['lat_dest'], row['lon_dest'])
+        ).kilometers,
+        axis=1
+    )
+
+    travel_times_with_distance[['id_origin', 'id_dest', 'total_time', 'crow_flies_km', 'category']].head()
+    return (travel_times_with_distance,)
+
+
+@app.cell
+def _(travel_times_with_distance):
+    # Calculate speed as crow-flies distance divided by total time
+    travel_times_with_speed = travel_times_with_distance.copy()
+    travel_times_with_speed['speed_km_per_sec'] = travel_times_with_speed['crow_flies_km'] / travel_times_with_speed['total_time']
+
+    # Also add speed in km/h for more intuitive interpretation
+    travel_times_with_speed['speed_km_per_h'] = travel_times_with_speed['speed_km_per_sec'] * 3600
+
+    travel_times_with_speed[['id_origin', 'id_dest', 'total_time', 'crow_flies_km', 'speed_km_per_sec', 'speed_km_per_h', 'category']].head()
+    return (travel_times_with_speed,)
+
+
+@app.cell
+def _(sns, travel_times_with_speed):
+    sns.kdeplot(data=travel_times_with_speed, x="speed_km_per_h", hue="category", common_norm=False)
+    return
+
+
+@app.cell
+def _(sns, travel_times_with_speed):
+    sns.histplot(data=travel_times_with_speed, x="speed_km_per_h", hue="category")
+    return
+
+
+@app.cell
+def _(sns, travel_times_with_speed):
+    sns.kdeplot(data=travel_times_with_speed, x="crow_flies_km", hue="category", common_norm=False)
     return
 
 
