@@ -20,5 +20,9 @@ motis_setup:
 motis_server:
     ./motis server
 
+[working-directory: 'motis_client']
+motis_routes:
+    cargo run -- --input ../routes.parquet --output ../routes_travel_times.parquet --departure-time "2026-01-10T09:00:00Z" 
+
 marimo:
     uv run marimo edit
