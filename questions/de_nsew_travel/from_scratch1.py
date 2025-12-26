@@ -12,7 +12,8 @@ def _():
     import marimo as mo
     import duckdb
     from shapely import wkt, LineString
-    return LineString, duckdb, gpd, mo, pd, wkt
+    import seaborn as sns
+    return LineString, duckdb, gpd, mo, pd, sns, wkt
 
 
 @app.cell
@@ -328,6 +329,81 @@ def _(travel_times):
     )
 
     Map(layers=[path_layer], basemap_style=lonboard.basemap.CartoBasemap.Positron)
+    return
+
+
+@app.cell
+def _(sns, travel_times):
+    sns.kdeplot(data=travel_times, x="total_time")
+    return
+
+
+@app.cell
+def _(sns, travel_times):
+    sns.histplot(data=travel_times, x="total_time")
+    return
+
+
+@app.cell
+def _(routes, travel_times):
+    travel_times_with_routes = travel_times.merge(
+        routes,
+        on=["id_origin", "id_dest"],
+        how="left"
+    )
+    travel_times_with_routes
+    return (travel_times_with_routes,)
+
+
+@app.cell
+def _(sns, travel_times_with_routes):
+    sns.histplot(data=travel_times_with_routes, x="total_time", hue="route_label")
+    return
+
+
+@app.cell
+def _(sns, travel_times_with_routes):
+    sns.kdeplot(data=travel_times_with_routes, x="total_time", hue="route_label")
+    return
+
+
+@app.cell
+def _(travel_times_with_routes):
+    travel_times_with_route_category = travel_times_with_routes.copy()
+    travel_times_with_route_category['category'] = travel_times_with_route_category.route_label.apply(
+            lambda r: "North<->South" if r in [
+                "North-East->South-East",
+                "South-East->North-East",
+                "North-West->South-West",
+                "South-West->North-West",
+            ] else "East<->West"
+        )
+    return (travel_times_with_route_category,)
+
+
+@app.cell
+def _(sns, travel_times_with_route_category):
+    sns.kdeplot(data=travel_times_with_route_category, x="total_time", hue="category")
+    return
+
+
+@app.cell
+def _(sns, travel_times_with_route_category):
+    sns.histplot(data=travel_times_with_route_category, x="total_time", hue="category")
+    return
+
+
+@app.cell
+def _(sns, travel_times_with_route_category):
+    sns.kdeplot(data=travel_times_with_route_category, x="total_time", hue="category", common_norm=False)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    TODO: need to normalise time by crow-flies distance (as otherwise I am maybe just measuring differences in distances not times)
+    """)
     return
 
 
