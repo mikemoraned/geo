@@ -1,0 +1,13 @@
+[package]
+name = "motis_client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+motis-openapi-progenitor = "0.3.0"
+tokio = { version = "1", features = ["full"] }
+datafusion = "43"
+arrow = "53"
+clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
+indicatif = "0.17"

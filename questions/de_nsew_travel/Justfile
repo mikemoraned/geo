@@ -1,0 +1,32 @@
+TARGET := "macos-arm64"
+VERSION := "v2.7.6"
+
+download_motis:
+    wget https://github.com/motis-project/motis/releases/download/{{VERSION}}/motis-{{TARGET}}.tar.bz2
+    mkdir -p ./motis/
+    cd motis && tar xf ../motis-{{TARGET}}.tar.bz2
+    
+download_geo_data:
+    mkdir -p geo_data
+    wget https://download.geofabrik.de/europe/germany-latest.osm.pbf -O ./geo_data/osm.pbf
+    wget https://download.gtfs.de/germany/free/latest.zip -O ./geo_data/gtfs.zip
+
+[working-directory: 'motis_server']
+motis_setup:
+    ./motis config ../geo_data/osm.pbf ../geo_data/gtfs.zip
+    ./motis import
+
+[working-directory: 'motis_server']
+motis_server:
+    ./motis server
+
+[working-directory: 'motis_client']
+motis_routes:
+    cargo run -- --input ../routes.parquet --output ../routes_travel_times.parquet --departure-time "2026-01-10T09:00:00Z" 
+
+marimo:
+    uv run marimo edit
+
+render:
+    mkdir -p ../../web/static/notebooks/questions/de_nsew_travel
+    uv run marimo export html 2025-12-26.py --force --output ../../web/static/notebooks/questions/de_nsew_travel/2025-12-26.html
