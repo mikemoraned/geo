@@ -1,5 +1,5 @@
 .env
 motis_server
-motis-*.tar.bz2
+motis-*.tar*
 geo_data
 __marimo__
