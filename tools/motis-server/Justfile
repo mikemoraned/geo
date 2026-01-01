@@ -5,19 +5,19 @@ MOTIS_DIR := "motis_server"
 GEO_DATA_DIR := "geo_data"
 
 download_motis:
-    wget https://github.com/motis-project/motis/releases/download/{{VERSION}}/motis-{{TARGET}}.tar.bz2
+    time wget https://github.com/motis-project/motis/releases/download/{{VERSION}}/motis-{{TARGET}}.tar.bz2
     mkdir -p ./{{ MOTIS_DIR }}/
     cd {{ MOTIS_DIR }} && tar xf ../motis-{{TARGET}}.tar.bz2
     
 download_geo_data:
     mkdir -p geo_data
-    wget https://download.geofabrik.de/europe/germany-latest.osm.pbf -O ./{{ GEO_DATA_DIR }}/germany.osm.pbf
-    wget https://download.gtfs.de/germany/free/latest.zip -O ./{{ GEO_DATA_DIR }}/germany_gtfs.zip
+    time wget https://download.geofabrik.de/europe/germany-latest.osm.pbf -O ./{{ GEO_DATA_DIR }}/germany.osm.pbf
+    time wget https://download.gtfs.de/germany/free/latest.zip -O ./{{ GEO_DATA_DIR }}/germany_gtfs.zip
 
 [working-directory: 'motis_server']
 motis_setup:
-    ./motis config ../{{ GEO_DATA_DIR }}/germany.osm.pbf ../{{ GEO_DATA_DIR }}/germany_gtfs.zip
-    ./motis import
+    time ./motis config ../{{ GEO_DATA_DIR }}/germany.osm.pbf ../{{ GEO_DATA_DIR }}/germany_gtfs.zip
+    time ./motis import
 
 [working-directory: 'motis_server']
 motis_server:
