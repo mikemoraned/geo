@@ -4,13 +4,15 @@ VERSION := "v2.8.0"
 MOTIS_DIR := "motis_server"
 GEO_DATA_DIR := "geo_data"
 
-download_motis:
-    time wget https://github.com/motis-project/motis/releases/download/{{VERSION}}/motis-{{TARGET}}.tar.bz2
+create_dirs:
     mkdir -p ./{{ MOTIS_DIR }}/
+    mkdir -p ./{{ GEO_DATA_DIR }}/
+
+download_motis: create_dirs
+    time wget https://github.com/motis-project/motis/releases/download/{{VERSION}}/motis-{{TARGET}}.tar.bz2
     cd {{ MOTIS_DIR }} && tar xf ../motis-{{TARGET}}.tar.bz2
     
-download_geo_data:
-    mkdir -p geo_data
+download_geo_data: create_dirs
     time wget https://download.geofabrik.de/europe/germany-latest.osm.pbf -O ./{{ GEO_DATA_DIR }}/germany.osm.pbf
     time wget https://download.gtfs.de/germany/free/latest.zip -O ./{{ GEO_DATA_DIR }}/germany_gtfs.zip
 
