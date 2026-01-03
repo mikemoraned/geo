@@ -1,0 +1,189 @@
+
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- HTML Meta Tags -->
+    <title>Geo projects of Mike Moran</title>
+    <meta
+      name="description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Facebook Meta Tags -->
+    <meta property="og:url" content="https://geo.houseofmoran.io" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Geo projects of Mike Moran" />
+    <meta
+      property="og:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="twitter:domain" content="geo.houseofmoran.io" />
+    <meta property="twitter:url" content="https://geo.houseofmoran.io" />
+    <meta name="twitter:title" content="Geo projects of Mike Moran" />
+    <meta
+      name="twitter:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    
+      <link rel="alternate" type="application/atom+xml" title="Atom" href="https://geo.houseofmoran.io/atom.xml">
+    
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
+    >
+    <script src="https://kit.fontawesome.com/d6b9545e6b.js" crossorigin="anonymous"></script>
+    <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.file-downloads.hash.outbound-links.js"></script>
+    <style>
+      aside {
+        font-size: smaller;
+        border: 1px solid lightgray;
+        border-radius: 5px;
+        padding: 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="columns">
+        <div class="column">
+          
+<nav class="navbar is-info" role="navigation" aria-label="main navigation">
+    <div class="navbar-brand">
+        <a class="navbar-item" href="/">
+            <i class="fa-solid fa-globe"></i> Geo Projects
+        </a>
+
+        <a class="navbar-item" href="https://www.houseofmoran.com">
+            by Mike Moran
+        </a>
+    </div>
+</nav>
+
+<section class="section">
+    <article>
+    
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2025-01-07&#x2F;">
+        <p class="card-header-title">Linzer: Region Summaries and Similarities</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2025-01-07&#x2F;">
+          <img src="&#x2F;images&#x2F;linzer1.png" alt="Linzer Biscuit App showing similar Regions in Edinburgh" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>Over the holidays I was thinking about where I am with the <a href="https://geo.houseofmoran.io/posts/2024-10-01/">Biscuits</a> project. The <a href="https://linzer.houseofmoran.io">Linzer</a> version has gotten to the point where I have a lot of the core bits of technical knowledge required, and I "merely" need to understand the aesthetics, if I wanted to copy the original artist.</p>
+<p>Whilst it is good to attempt to copy to learn, I am now a bit uneasy with it as a goal. This is partly because the habit of "Computing People" copying "Artistic people" is becoming a bit rude in the current race-to-the-bottom of AI Art. However, it's also because I have some other ideas I wanna explore. So, I'm gonna do that instead.</p>
+<span id="continue-reading"></span>
+<p>This doesn't change the need for good core parts. To that end I've been putting together something that I call a "Region Summary". This is intended to be a lossy-but-simple summary of a Region, that still allows comparison between them.</p>
+<div class="columns">
+    <div class="column is-one-third">
+        <p style="font-size: smaller">
+        It is defined as:
+            <ol style="font-size: smaller">
+            <li>Find the Centroid</li>
+            <li>Draw a Line from each Point on the border to it</li>
+            <li>Find the Bearing and Distance of each of these</li>
+            <li>Accumulate the Distance against each Bearing and keep the maximum Distance</li>
+            <li>The Dominant Bearing is the one for which the sum of Distances at 0,90,180,270 relative to the Bearing is maximised</li>
+            <li>Normalise the (Bearing,Distance) pairs relative to the Dominant Bearing</li>
+            </ol>
+        </p>
+    </div>
+    <div class="column">
+<figure class="image is-2by1">
+<iframe
+    class="youtube has-ratio"
+    width="560"
+    height="315"
+    src=""
+    data-src="https://www.youtube-nocookie.com/embed/fJnQ5bxlLN0"
+    title="YouTube video player"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen>s
+</iframe>
+</figure>
+    </div>
+</div>
+<p>This is "lossy" because when a shape has nooks, if these end up doubling-back from the pov of the Centroid, then they will be lost. However, it retains more detail than just finding the Convex Hull.</p>
+<p>This Summary has some nice properties such as being able to use to find similar Regions. Here is an example where we treat it is a 360-element Vector and find those Regions within a certain "similarity" where <code>similarity = (1.0 - avg(diff between distances at each Bearing))</code>:</p>
+<figure class="image is-2by1">
+<iframe
+    class="youtube has-ratio"
+    width="560"
+    height="315"
+    src=""
+    data-src="https://www.youtube-nocookie.com/embed/OGD0sO5145s"
+    title="YouTube video player"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen>s
+</iframe>
+</figure><p></p>
+<p>This version only has Regions for Edinburgh but you can have a play yourself here: <a href="https://linzer.houseofmoran.io">linzer.houseofmoran.io</a>.</p>
+<p>This now gives a substrate on top of which I can build other stuff.</p>
+<p>However, part of the reason I am writing this up here is because this is almost certainly not a new problem / solution. I wanted to have a go myself to better understand it, but I am very much up for suggestions of alternatives, or even a well-known name for this technique.</p>
+<p>(I can be contacted on <a href="https://mastodon.scot/@mike_moran">Mastodon</a> or <a href="https://bsky.app/profile/mikemoran.bsky.social">Bluesky</a>).</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2025-01-07&#x2F;">
+          <time datetime="2025-01-07">
+            <i class="fa-solid fa-calendar-day"></i>  7 January 2025
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+    </article>
+</section>
+
+        </div>
+      </div>
+    </div>
+    <footer class="footer">
+      <div class="content has-text-centered">
+        <p>
+          Last updated on  3 January 2026 at 12:15am
+        </p>
+      </div>
+    </footer>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/+esm';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script defer>
+      const youtube_iframes = Array.from(
+        document.getElementsByClassName("youtube")
+      );
+      youtube_iframes.forEach((youtube_iframe) => {
+        const data_src = youtube_iframe.getAttribute("data-src");
+        if (data_src) {
+          youtube_iframe.setAttribute("src", data_src);
+        }
+      });
+    </script>
+  </body>
+</html>

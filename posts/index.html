@@ -1,0 +1,815 @@
+
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- HTML Meta Tags -->
+    <title>Geo projects of Mike Moran</title>
+    <meta
+      name="description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Facebook Meta Tags -->
+    <meta property="og:url" content="https://geo.houseofmoran.io" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Geo projects of Mike Moran" />
+    <meta
+      property="og:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="twitter:domain" content="geo.houseofmoran.io" />
+    <meta property="twitter:url" content="https://geo.houseofmoran.io" />
+    <meta name="twitter:title" content="Geo projects of Mike Moran" />
+    <meta
+      name="twitter:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    
+      <link rel="alternate" type="application/atom+xml" title="Atom" href="https://geo.houseofmoran.io/atom.xml">
+    
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
+    >
+    <script src="https://kit.fontawesome.com/d6b9545e6b.js" crossorigin="anonymous"></script>
+    <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.file-downloads.hash.outbound-links.js"></script>
+    <style>
+      aside {
+        font-size: smaller;
+        border: 1px solid lightgray;
+        border-radius: 5px;
+        padding: 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="columns">
+        <div class="column">
+          
+
+
+
+<section class="section">
+  
+  
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2025-12-26&#x2F;">
+        <p class="card-header-title">Is German Train Travel Faster North↔South or East↔West?</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2025-12-26&#x2F;">
+          <img src="&#x2F;images&#x2F;de_nsew_travel.png" alt="Map of Speed on route vs Distribution of Routes split by direction" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>Years ago I wrote short stories. For many of these I now look back and cringe. For this question, I suspect I shall look back at it similarly. However I think it's important to record this otherwise I'll have nothing to look back on, which is worse.</p>
+<p>As is often the case when I am in Germany, the topic of (painful) train travel came up, and in particular: is it quicker to go North↔South or East↔West? Me being me, I wondered if I could answer this with data.</p>
+<span id="continue-reading"></span>
+<p>The TLDR is: maaaaaaybe. You can see the <a href="/notebooks/questions/de_nsew_travel/2025-12-26.html">notebook</a> for more detail on where I got to, but my approach was, in summary:</p>
+<ol>
+<li>Find all cities in Germany.</li>
+<li>Create all pairs of cities that traverse a North↔South or East↔West boundary.</li>
+<li>Find shortest travel time between these cities.</li>
+<li>Compute speed by dividing travel time by crow-flies distance between cities.</li>
+<li>Group routes into North↔South or East↔West and plot a distribution.</li>
+</ol>
+<p>The overall outcome can be seen in the image at top: there doesn't seem to be an obvious difference. I could be more rigorous about this by doing a statistical test, but I think there are bigger issues to deal with.</p>
+<p>As is often the case, doing an initial investigation just reveals problems with the definition of the question 😀. For example, if I look at the distribution of crow-fly distances, by normalising to speed, am I ignoring something of interest?</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;crow_flies_km.png" />
+</figure><br />
+<p>Is it maybe that East↔West journeys are generally longer than North↔South? Perhaps not. If you look at the map of cities you can see there is a cluster of cities near the North↔South boundary.</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;quadrants.png" />
+</figure><br />
+<p>This will introduce a bias in that it will produce a bunch of routes that are short.</p>
+<p>There is also the issue that I am (arbitrarily) choosing 9am on 10th Jan 2026 as the departure time.</p>
+<p>I only wanted to spend a day on this, so I won't take this further for now. However, if I did, I'd probably want to instead do <em>something</em> like:</p>
+<ul>
+<li>Prepare:
+<ol>
+<li>Take the area of Germany and subdivide it into areas using <a href="https://h3geo.org">H3</a> or <a href="https://a5geo.org">A5</a> cells.</li>
+<li>Use the centroid of each of these to categorise them into quadrants.</li>
+<li>Find all pairs as before, but this time between centroids of these areas.</li>
+</ol>
+</li>
+<li>Collect: for each pair, for 24h throughout the day, in 1h steps, find fastest travel time.</li>
+<li>Analyse:
+<ul>
+<li>Do something like before but, since there may still be bias from how often routes of different lengths occur between areas, I probably want to bucket by route length and compute an average.</li>
+<li>This will give me more of an unbiased summary. However, since population distribution isn't unbiased, I probably want to rebias the sample by wieghting towards where more people live. This gives more of an idea of what a typical experience would be like.</li>
+</ul>
+</li>
+</ul>
+<p>Anyways, I'm not gonna do all that now 😀.</p>
+<p>One thing I <em>will</em> probably do sooner is re-use the <a href="https://github.com/motis-project/motis">motis server setup</a>. It was a massive pain trying out many public/private libraries/services for travel times, and finding various versions of broken-ness or "please talk to sales" road-blocks.</p>
+<p>Motis worked really well out-of-the-box and could easily handle all of Germany on my Macbook Air; only took about 20 minutes to import the data, and then lookups were fast. Also, even though I was using it for API only, the nice UI for inspecting / debugging was a great bonus.</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;motis.png" />
+</figure><br />
+<p>Even better, it's based on open-data for <a href="https://download.geofabrik.de/europe/germany.html">Maps</a> and <a href="https://gtfs.de">Timetables</a>!</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2025-12-26&#x2F;">
+          <time datetime="2025-12-26">
+            <i class="fa-solid fa-calendar-day"></i> 26 December 2025
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+  
+  
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2025-12-23&#x2F;">
+        <p class="card-header-title">Makers Gonna Make: Finding Tube Stations</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2025-12-23&#x2F;">
+          <img src="&#x2F;images&#x2F;kings_cross_infra.png" alt="Infrastructure in Kings Cross Area" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <blockquote>
+<p>"Mike Moran showed us how he uses Python to take all the routes near King's Crossing in London and filter them down to subway stations only. Magic, if you ask me."</p>
+</blockquote>
+<p><a href="https://www.linkedin.com/posts/peter-trizuliak_11-makers-locked-in-for-8-hours-on-another-activity-7378156457441275905-1j7g/">Indeed</a>. However, <em>it was also magic to me</em>, when I looked at what I'd done a few weeks later and tried to understand it. 🤔 So ...</p>
+<span id="continue-reading"></span>
+<p>I took this as an opportunity to start a tidier and more repeatable habit. I used Jupyter for <a href="https://mgmmmmm.com">MGM</a> and also quite a bit recently for a <a href="https://martinfleischmann.net/sds/">course</a>. Whilst it's great for doing things quickly it can be quite flaky, and leads to some of the issues of repeatability. I heard about <a href="https://marimo.io">Marimo</a> and wanted to give it a try.</p>
+<p>You can see the <a href="/notebooks/makers-gonna-make/2025-09/tube.html">notebook</a> for the outcome.</p>
+<p>Overall my first impressions are good! It forces you to do things like define variables once, and will automatically run dependent cells. Extra super-nice things are built-in integrations with <code>uv</code> and a very clean format for seeing diffs; the save format is essentially 'just python'. Definitely something I'll be using from now on if I can.</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2025-12-23&#x2F;">
+          <time datetime="2025-12-23">
+            <i class="fa-solid fa-calendar-day"></i> 23 December 2025
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+  
+  
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2025-07-29&#x2F;">
+        <p class="card-header-title">Is it snowing less?</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2025-07-29&#x2F;">
+          <img src="&#x2F;images&#x2F;swe_uk.png" alt="Visualisaton of snow cover over UK" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>Back in the 90's I remember one particular winter in Edinburgh when I was starting University, next to Pollock Halls, and my god it snowed. It was like, proper Winter Wonderland stuff. Since then? Hmmphf. Similarly, I've been coming to Ronneburg in Germany since the early 2000's and remember some pretty fun times taking the sledge out. Recently? Not so much.</p>
+<p>So, is it snowing less?</p>
+<span id="continue-reading"></span>
+<p>To be up-front, answering this question is a deliberate excuse to try to find free data from Satellites. It's not on the mainline of my <a href="https://geo.houseofmoran.io/posts/2024-10-01/">Biscuits</a> theme but it would be nice to have some freely-accessible Satellite data in the same way that <a href="https://overturemaps.org">Overture Maps</a> is available for structured data sources. That is pretty-nice in that no login is required, and the data is available in a modern cloud-orientated way. So, same biases apply here.</p>
+<p>I'd heard of a couple of things in this area: COG (<a href="https://cogeo.org">Cloud-optimised GeoTIFF</a>) and <a href="https://guide.cloudnativegeo.org/zarr/intro.html">Zarr</a>. In particular, for COGs, I'd heard about <a href="https://browser.dataspace.copernicus.eu/">Copernicus Browser</a> on the <a href="https://georust.org">Georust Discord</a>.</p>
+<p>I had a fun play around with it including producing a little animation of weather over Ronneburg:</p>
+<video controls>
+  <source src="/images/Sentinel-2_L2A-1647522061351546-timelapse-ezgif.com-gif-to-mp4-converter.mp4" type="video/mp4" />
+</video>
+<p>I had a few difficulties working out how to get data programmatically, so I switched to pursue Zarr data-sources instead.</p>
+<p><em>Narrators Voice: As with many <a href="https://github.com/mikemoraned/geo/tree/main/spikes/">Spikes</a> I'll probably look back on this and wonder why the hell I didn't take a short-cut. That's fine, spikes are as much for learning the longer ways round as for doing the most efficient one.</em></p>
+<p>After much futzing about online I found <a href="https://github.com/esa-cci/esa-climate-toolbox">esa-climate-toolbox</a> which looked good for a couple of reasons:</p>
+<ol>
+<li>example notebooks implied it had <a href="https://github.com/esa-cci/esa-climate-toolbox/blob/main/notebooks/Accessing_Data/5-ECT_Zarr_Access.ipynb">Zarr</a> data available</li>
+<li>it had reasonable <a href="https://esa-climate-toolbox.readthedocs.io/en/latest/index.html">docs</a></li>
+</ol>
+<p>You can read the <a href="https://github.com/mikemoraned/geo/tree/main/spikes/satellite/esa-python-conda/snow_minimal.ipynb">notebook</a> for the details, but I ended up guessing that the dataset mentioning <code>SNOW</code> would be useful 🙂. It also looked like it contained the right sort of stuff:</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;swe_uk.png" />
+</figure>
+<p>From this dataset I was able to get the "SWE" (Snow Water Equivalent) for the Edinburgh and Ronneburg areas, as defined by bounding boxes from Overture Maps:</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;swe_edin.png" />
+</figure><figure class="image">
+    <img src="&#x2F;images&#x2F;swe_ronn.png" />
+</figure>
+<p>These each show the "raw" swe per day and then a rolling average over 365 days. So, is it snowing less? <em>I am not a meteorologist</em> but ... yes?</p>
+<p>Regardless of analysis accuracy, it's nice seeing this data is available, and it has been an interesting couple of days of playing about with this stuff. I would have <em>liked</em> to also get access more directly from <a href="https://github.com/mikemoraned/geo/tree/main/spikes/satellite/esa-rust-direct/src/main.rs">Rust</a>, but not everything in the world has to be in Rust. Yet 😉.</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2025-07-29&#x2F;">
+          <time datetime="2025-07-29">
+            <i class="fa-solid fa-calendar-day"></i> 29 July 2025
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+  
+  
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2025-06-27&#x2F;">
+        <p class="card-header-title">Water Biscuits</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2025-06-27&#x2F;">
+          <img src="&#x2F;images&#x2F;amsterdam_water_biscuits.png" alt="Visualisation of water areas of Amsterdam" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>I couldn't <em>quite</em> get it ready for my <a href="https://geo.houseofmoran.io/posts/2025-06-17/">EdinburghJS presentation</a> but I now have water being properly handled in <a href="https://github.com/mikemoraned/geo/tree/main/apps/linzer">Linzer</a>. It's a subtlety, but I found when exploring in my <a href="https://garibaldi.houseofmoran.io">Garibaldi</a> iteration that you got better regions if you treated water as part of the boundary.</p>
+<span id="continue-reading"></span>
+<p>Just to recap, the way I previously defined regions ('biscuits') was:</p>
+<ol>
+<li>Find city boundary</li>
+<li>Choose random start/end points in that boundary</li>
+<li>Find routes between those points, either biased to be pedestrian or car (<code>auto</code>) routes</li>
+<li>Draw the city boundary as black and the routes as white borders (see below); this effectively unions the routes</li>
+<li>Find connected white pixels and turn back into regions</li>
+</ol>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;amsterdam_without_water.draw.png" />
+</figure>
+<p>(note: image is reflected in x-axis)</p>
+<p>The changes I made were to steps 2 and 4:</p>
+<ul>
+<li>2: Mask-out the water areas from the city bounds so that they can't be used as start/end points (sorry swimmers!):
+<figure class="image">
+    <img src="&#x2F;images&#x2F;amsterdam_bounds_masked.png" />
+</figure></li>
+<li>4: Draw the water areas as border pixels: <figure class="image">
+    <img src="&#x2F;images&#x2F;amsterdam_with_water.draw.png" />
+</figure></li>
+</ul>
+<p>This is hugely impactful for somewhere like Amsterdam which is 15% water! (maybe more on that later in a related side-project)</p>
+<p>One of the funny things about long-term side-projects is that you get the "opportunity" to come back to short-cuts you'd taken earlier. I was wondering why in places like Paris it wasn't finding regions on the islands in the center of the city. Before adding water I didn't really have to deal with drawing any polygons with holes, which these parts of Paris happen to have. So, it wasn't finding them because ... I hadn't bothered implementing rendering of interiors.</p>
+<p>Turns out it was actually fairly easy to implement on top of <a href="https://github.com/linebender/tiny-skia">tiny-skia</a> using a Mask:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">let mut</span><span> mask = Mask::new(pixmap.</span><span style="color:#96b5b4;">width</span><span>() as </span><span style="color:#b48ead;">u32</span><span>, pixmap.</span><span style="color:#96b5b4;">height</span><span>() as </span><span style="color:#b48ead;">u32</span><span>).</span><span style="color:#96b5b4;">unwrap</span><span>();
+</span><span>...
+</span><span style="color:#b48ead;">let</span><span> path = </span><span style="color:#96b5b4;">path_from_line</span><span>(poly.</span><span style="color:#96b5b4;">exterior</span><span>())?;
+</span><span>mask.</span><span style="color:#96b5b4;">clear</span><span>();
+</span><span style="color:#b48ead;">for</span><span> interior in poly.</span><span style="color:#96b5b4;">interiors</span><span>() {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> interior_path = </span><span style="color:#96b5b4;">path_from_line</span><span>(interior)?;
+</span><span>    mask.</span><span style="color:#96b5b4;">fill_path</span><span>(&amp;interior_path, FillRule::EvenOdd, </span><span style="color:#d08770;">true</span><span>, transform);
+</span><span>}
+</span><span>mask.</span><span style="color:#96b5b4;">invert</span><span>();
+</span><span>pixmap.</span><span style="color:#96b5b4;">fill_path</span><span>(&amp;path, paint, FillRule::EvenOdd, transform, Some(&amp;mask));
+</span></code></pre>
+<p>Anyways, it's been really nice to draw a line under something I've known I've needed to do for a looooong time.</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2025-06-27&#x2F;">
+          <time datetime="2025-06-27">
+            <i class="fa-solid fa-calendar-day"></i> 27 June 2025
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+  
+  
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2025-06-17&#x2F;">
+        <p class="card-header-title">Biscuits and Beyond (presentation at EdinburghJS)</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2025-06-17&#x2F;">
+          <img src="&#x2F;images&#x2F;2025_June_Edinburgh_JS_presentation-3_sample_slide.png" alt="Example slide showing process for deriving signatures" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>Many thanks to <a href="https://www.meetup.com/edinburghjs/">EdinburghJS</a> for hosting me at their <a href="https://www.meetup.com/edinburghjs/events/307933384/">Geo and JS June Meetup</a>, particularly since I mentioned very little Javascript (zero 😊).</p>
+<p>The <a href="/slides/2025_June_Edinburgh_JS_presentation-3.pdf">slides are available</a>, but here's all the links I mentioned:</p>
+<span id="continue-reading"></span>
+<ul>
+<li>original Artist who inspired me: <a href="http://www.armellecaron.fr/works/les-villes-rangees/">http://www.armellecaron.fr/works/les-villes-rangees/</a></li>
+<li>history:
+<ul>
+<li><a href="https://speculaas.houseofmoran.io/">Speculaas</a>:
+<ul>
+<li>😀 bin-packing auto-layout</li>
+<li>😀 animated and interactive</li>
+<li>😞 screenshotted static 'maps'</li>
+</ul>
+</li>
+<li><a href="https://garibaldi.houseofmoran.io/">Garibaldi</a>:
+<ul>
+<li>😀 dynamic maps</li>
+<li>😀 interactive (runs in browser)</li>
+<li>😭 pixel-based region-building affected by resolution quirks</li>
+</ul>
+</li>
+<li><a href="https://linzer.houseofmoran.io">Linzer</a> / <a href="https://github.com/mikemoraned/geo/tree/main/apps/linzer">Github</a>
+<ul>
+<li>😀 pedestrian and auto-biased route sources</li>
+<li>😀 deterministic</li>
+<li>😀 bin-packing auto-layout</li>
+<li>😀 explore in the browser</li>
+<li>😀 find similar regions</li>
+<li>😞 not fully dynamic maps</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>resources:
+<ul>
+<li><a href="https://geojson.io/">https://geojson.io/</a></li>
+<li><a href="https://www.mapbox.com">https://www.mapbox.com</a></li>
+<li><a href="https://overturemaps.org">https://overturemaps.org</a> / <a href="https://www.openstreetmap.org/">https://www.openstreetmap.org/</a></li>
+<li><a href="https://stadiamaps.com">https://stadiamaps.com</a></li>
+<li><a href="https://duckdb.org">https://duckdb.org</a></li>
+<li><a href="https://georust.org">https://georust.org</a></li>
+<li><a href="https://thegeomob.com">https://thegeomob.com</a></li>
+</ul>
+</li>
+<li>extra:
+<ul>
+<li><a href="https://spectrum.houseofmoran.io">Greenery and Water</a></li>
+</ul>
+</li>
+</ul>
+
+        
+        <a href="&#x2F;posts&#x2F;2025-06-17&#x2F;">
+          <time datetime="2025-06-17">
+            <i class="fa-solid fa-calendar-day"></i> 17 June 2025
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+  
+  
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2025-01-26&#x2F;">
+        <p class="card-header-title">Linzer: Similar Regions Across Multiple Cities</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2025-01-26&#x2F;">
+          <img src="&#x2F;images&#x2F;linzer2.png" alt="Linzer Biscuit App showing similar regions across multiple cities" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>It was great to get along to my second <a href="https://lu.ma/0d99mx3r">"Makers gonna make"</a> event at Codebase on Saturday, despite the Red Weather Warning on Friday. Many thanks to <a href="https://www.linkedin.com/in/peter-trizuliak/">Peter Trizuliak</a> for organising.</p>
+<p>It's a pretty laid-back environment with a nice mix of focus time, breaks for pizza and free coffee / food (thanks to sponsors, <a href="https://www.shopify.com/uk">Shopify</a>, <a href="https://thisiscodebase.com">Codebase</a> and <a href="https://www.thesourcecoffee.co.uk/brewd">The Source Coffee roasters</a>). You can present what you've done and/or head to pub later, but no pressure to do either. The <a href="https://lu.ma/c410sjxy">next event is coming up in February</a>; I unfortunately can't make this one, but maybe see you at another!</p>
+<span id="continue-reading"></span><figure class="image is-2by1">
+<iframe
+    class="youtube has-ratio"
+    width="560"
+    height="315"
+    src=""
+    data-src="https://www.youtube-nocookie.com/embed/ebPuT4rWffc"
+    title="YouTube video player"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen>s
+</iframe>
+</figure>
+<p><br></br></p>
+<p>I worked on some extensions and performance tweaks to make my <a href="https://linzer.houseofmoran.io">Linzer</a> app work with multiple cities (see <a href="https://geo.houseofmoran.io/posts/2025-01-07/">previous blog post</a> for some context). I mainly did this to continue providing examples that the Region "Signatures" made sense. Given unrelated stuff I need to work on in Q1 2025, it'll be a while before I have something meaningfully that uses them but it's good to see them making sense so far.</p>
+<p>Thanks to all the attendees for feedback, including links to the very interesting-looking <a href="https://creatingwithdata.com">Creating with Data</a> (subscribed!).</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2025-01-26&#x2F;">
+          <time datetime="2025-01-26">
+            <i class="fa-solid fa-calendar-day"></i> 26 January 2025
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+  
+  
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2025-01-07&#x2F;">
+        <p class="card-header-title">Linzer: Region Summaries and Similarities</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2025-01-07&#x2F;">
+          <img src="&#x2F;images&#x2F;linzer1.png" alt="Linzer Biscuit App showing similar Regions in Edinburgh" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>Over the holidays I was thinking about where I am with the <a href="https://geo.houseofmoran.io/posts/2024-10-01/">Biscuits</a> project. The <a href="https://linzer.houseofmoran.io">Linzer</a> version has gotten to the point where I have a lot of the core bits of technical knowledge required, and I "merely" need to understand the aesthetics, if I wanted to copy the original artist.</p>
+<p>Whilst it is good to attempt to copy to learn, I am now a bit uneasy with it as a goal. This is partly because the habit of "Computing People" copying "Artistic people" is becoming a bit rude in the current race-to-the-bottom of AI Art. However, it's also because I have some other ideas I wanna explore. So, I'm gonna do that instead.</p>
+<span id="continue-reading"></span>
+<p>This doesn't change the need for good core parts. To that end I've been putting together something that I call a "Region Summary". This is intended to be a lossy-but-simple summary of a Region, that still allows comparison between them.</p>
+<div class="columns">
+    <div class="column is-one-third">
+        <p style="font-size: smaller">
+        It is defined as:
+            <ol style="font-size: smaller">
+            <li>Find the Centroid</li>
+            <li>Draw a Line from each Point on the border to it</li>
+            <li>Find the Bearing and Distance of each of these</li>
+            <li>Accumulate the Distance against each Bearing and keep the maximum Distance</li>
+            <li>The Dominant Bearing is the one for which the sum of Distances at 0,90,180,270 relative to the Bearing is maximised</li>
+            <li>Normalise the (Bearing,Distance) pairs relative to the Dominant Bearing</li>
+            </ol>
+        </p>
+    </div>
+    <div class="column">
+<figure class="image is-2by1">
+<iframe
+    class="youtube has-ratio"
+    width="560"
+    height="315"
+    src=""
+    data-src="https://www.youtube-nocookie.com/embed/fJnQ5bxlLN0"
+    title="YouTube video player"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen>s
+</iframe>
+</figure>
+    </div>
+</div>
+<p>This is "lossy" because when a shape has nooks, if these end up doubling-back from the pov of the Centroid, then they will be lost. However, it retains more detail than just finding the Convex Hull.</p>
+<p>This Summary has some nice properties such as being able to use to find similar Regions. Here is an example where we treat it is a 360-element Vector and find those Regions within a certain "similarity" where <code>similarity = (1.0 - avg(diff between distances at each Bearing))</code>:</p>
+<figure class="image is-2by1">
+<iframe
+    class="youtube has-ratio"
+    width="560"
+    height="315"
+    src=""
+    data-src="https://www.youtube-nocookie.com/embed/OGD0sO5145s"
+    title="YouTube video player"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen>s
+</iframe>
+</figure><p></p>
+<p>This version only has Regions for Edinburgh but you can have a play yourself here: <a href="https://linzer.houseofmoran.io">linzer.houseofmoran.io</a>.</p>
+<p>This now gives a substrate on top of which I can build other stuff.</p>
+<p>However, part of the reason I am writing this up here is because this is almost certainly not a new problem / solution. I wanted to have a go myself to better understand it, but I am very much up for suggestions of alternatives, or even a well-known name for this technique.</p>
+<p>(I can be contacted on <a href="https://mastodon.scot/@mike_moran">Mastodon</a> or <a href="https://bsky.app/profile/mikemoran.bsky.social">Bluesky</a>).</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2025-01-07&#x2F;">
+          <time datetime="2025-01-07">
+            <i class="fa-solid fa-calendar-day"></i>  7 January 2025
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+  
+  
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2024-10-01&#x2F;">
+        <p class="card-header-title">The Biscuits Project: decomposing the structure of cities</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2024-10-01&#x2F;">
+          <img src="&#x2F;images&#x2F;edinburgh_layout_pedestrian.1000.guillotine.rotated.png" alt="Guillone Layout of Edinburgh Regions derived from Pedestrian Routes" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>I did a talk on this project at the <a href="https://thegeomob.com/post/oct-1st-2024-geomobedi-details">GeoMOB Edinburgh event on 1/10/2024</a>.
+The <a href="/slides/2024_Geomob_Oct_Presentation.pdf">slides</a> are available, but I'll give a summary of the accompanying explanation content here.</p>
+<p>The "Biscuits" project began back in <a href="https://github.com/mikemoraned/biscuits?tab=readme-ov-file#september-2017">September 2017</a>.
+It was inspired by a work of art by <a href="https://www.armellecaron.fr">Armelle Caron</a>
+called <a href="https://www.armellecaron.fr/works/les-villes-rangees/">Les Villes Rangees</a>:</p>
+<span id="continue-reading"></span><figure class="image">
+    <img src="&#x2F;images&#x2F;les-villes-rangees-website-2024.png" />
+</figure><p></p>
+<p>I wondered if I could automatically "destruct" and lay out the sections in a similar way. So began a side-project I've been working on,
+off-and-on, for 7 years. The original Github project gives <a href="https://github.com/mikemoraned/biscuits?tab=readme-ov-file#biscuits">a bit more detailed history</a>,
+but the major iterations were:</p>
+<div class="columns">
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">Speculaas: April 2018</p>
+            </header>
+            <div class="card-image">
+                <figure class="image is-2by1">
+<iframe
+    class="youtube has-ratio"
+    width="560"
+    height="315"
+    src=""
+    data-src="https://www.youtube-nocookie.com/embed/gakOIbRsMHI"
+    title="YouTube video player"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen>s
+</iframe>
+</figure>
+            </div>
+            <div class="card-content">
+                <div class="content is-size-5">
+                    <ul>
+                        <li>😞 screenshotted static 'maps'</li>
+                        <li>😀 animated and interactive</li>
+                        <li>😀 bin-packing auto-layout</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">Garibaldi: August 2019</p>
+            </header>
+            <div class="card-image">
+                <figure class="image">
+    <img src="&#x2F;images&#x2F;garibaldi.png" />
+</figure>
+            </div>
+            <div class="card-content">
+                <div class="content is-size-5">
+                    <ul>
+                        <li>😀 dynamic maps</li>
+                        <li>😀 interactive (runs in browser)</li>
+                        <li>😭 pixel-based region-building affected by resolution quirks</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<aside>
+(All of the names of iterations are different kinds of Biscuit)
+</aside>
+<br />
+<p>Obviously we then had COVID happen in 2020, which was distracting to say the least. However, the biggest issue was
+that I discovered doing things <em>entirely</em> in the browser at pixel level was not very robust. There were various techniques I could
+have applied, like a separate off-screen canvas for calculations. That would require a lot of testing to get right and make work.</p>
+<p>It felt though that this was going against-the-grain and, more generally, I was really just reluctant to go learn about how
+OpenstreetMap and Geo API's / libraries work.</p>
+<p>Between then and now that's effectively what I've done, or at least enough to recreate where I got to in Speculaas, albeit entirely off-line.</p>
+<p>The current version, which I got ready for the GeoMOB presentation, is pretty simple at the high-level:</p>
+<div class="box" data-theme="light">
+    <pre class="mermaid">
+    flowchart LR
+    b(Boundaries) --&gt; r(Regions) --&gt; l(Layout)
+    </pre>
+</div><div class="columns">
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">Boundaries</p>
+            </header>
+            <div class="card-image">
+                <figure class="image">
+    <img src="&#x2F;images&#x2F;boundaries.png" />
+</figure>
+            </div>
+            <div class="card-content">
+                <div class="content is-size-6">
+This is where the Map data enters. We want to get to a binary version of an area where 
+"black" = part we want to keep and "white" = a border of some kind.
+<p>I'll not go into detail here but this image was derived by sampling and overlapping routes across
+Edinburgh from <a href="https://stadiamaps.com">Stadia Maps</a>.
+</div>
+</div>
+</div>
+</div>
+<div class="column">
+<div class="card">
+<header class="card-header">
+<p class="card-header-title">Find Regions</p>
+</header>
+<div class="card-image">
+<figure class="image">
+    <img src="&#x2F;images&#x2F;regions1.png" />
+</figure>
+</div>
+<div class="card-content">
+<div class="content is-size-6">
+The area is defined in terms of pixels and not geo coordinates. This is partly because I find it easier to do, but also because it gives me most freedom to mix-and-match sources. So, for example, whilst I've not done it yet it in this version, adding an exclusion area for water is as simple as finding a source and drawing it as white pixels.</p>
+<p>The actual Regions are found by applying a <a href="https://en.wikipedia.org/wiki/Boundary_tracing">Boundary Tracing</a> algorithm at the pixel level.
+</div>
+</div>
+</div>
+</div></p>
+</div>
+<div class="columns">
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">Back to Geo-land</p>
+            </header>
+            <div class="card-image">
+                <figure class="image">
+    <img src="&#x2F;images&#x2F;regions2.png" />
+</figure>
+            </div>
+            <div class="card-content">
+                <div class="content is-size-6">
+To get back to Geo-land I re-interpret the boundaries that have been derived into geo <code>Polygons</code>. 
+<p></p>
+<aside>
+<p>
+It's these pixel-processing stages that leads to the low-level blockiness in the shapes.
+</p>
+<p>
+I can <em>probably</em> make a future version of this pure-geo by doing something like:
+<ol>
+<li>Take all input <code>Geometry</code> which defines the border areas.</li>
+<li>Union them together.</li>
+<li>Define an area border (e.g. a city's limits) as a <code>Polygon</code> and takeaway (difference) the unioned border areas.
+<li>What remains should be the Regions</li>
+</ol>
+<p>However, the pixel-level version I have works for now. As long as I wrap it behind a <code>trait</code> I can replace it later.</p>
+</p>
+</aside>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">Layout</p>
+            </header>
+            <div class="card-image">
+                <figure class="image">
+    <img src="&#x2F;images&#x2F;edinburgh_layout_pedestrian.1000.guillotine.rotated.png" />
+</figure>
+            </div>
+            <div class="card-content">
+                <div class="content is-size-6">
+<p>There are lots of different ways layout could be done. For this iteration, as in Speculaas, I treat this as <a href="https://www.csc.liv.ac.uk/~epa/surveyhtml.html">2d bin-packing</a> problem.</p>
+<p>This particular example here shows a layout based on a <a href="https://okanplusz.wordpress.com/2016/07/07/bin-packing/">Guillotine</a> algorithm.
+</div>
+</div>
+</div>
+</div></p>
+</div>
+<p>What's next? Well, first a scorecard on <a href="https://github.com/mikemoraned/geo/tree/main/apps/linzer">this implementation, which I've christened "Linzer"</a>:</p>
+<ul>
+<li>😀 pedestrian and auto-biased route sources</li>
+<li>😀 deterministic</li>
+<li>😀 bin-packing auto-layout</li>
+</ul>
+<p>After this, there are a lot of things I could do next to improve it. Some of these I've done before in different iterations, and some are totally new:</p>
+<ul>
+<li>boundaries:
+<ul>
+<li>roads, paths</li>
+<li>clip by city boundary</li>
+<li>mask-out water bodies</li>
+</ul>
+</li>
+<li>regions:
+<ul>
+<li>green areas</li>
+<li>rotate to minimal bbox</li>
+</ul>
+</li>
+<li>layout:
+<ul>
+<li>layout as text glyphs</li>
+</ul>
+</li>
+<li>display:
+<ul>
+<li>animated placement</li>
+</ul>
+</li>
+</ul>
+<p>However, since this is more of an Art Project than a technical one, I reserve the right to "honour my whimsy" and do something totally different.</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2024-10-01&#x2F;">
+          <time datetime="2024-10-01">
+            <i class="fa-solid fa-calendar-day"></i>  1 October 2024
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+  
+</section>
+
+
+        </div>
+      </div>
+    </div>
+    <footer class="footer">
+      <div class="content has-text-centered">
+        <p>
+          Last updated on  3 January 2026 at 12:15am
+        </p>
+      </div>
+    </footer>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/+esm';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script defer>
+      const youtube_iframes = Array.from(
+        document.getElementsByClassName("youtube")
+      );
+      youtube_iframes.forEach((youtube_iframe) => {
+        const data_src = youtube_iframe.getAttribute("data-src");
+        if (data_src) {
+          youtube_iframe.setAttribute("src", data_src);
+        }
+      });
+    </script>
+  </body>
+</html>

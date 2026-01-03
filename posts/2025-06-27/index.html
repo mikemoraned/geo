@@ -1,0 +1,175 @@
+
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- HTML Meta Tags -->
+    <title>Geo projects of Mike Moran</title>
+    <meta
+      name="description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Facebook Meta Tags -->
+    <meta property="og:url" content="https://geo.houseofmoran.io" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Geo projects of Mike Moran" />
+    <meta
+      property="og:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="twitter:domain" content="geo.houseofmoran.io" />
+    <meta property="twitter:url" content="https://geo.houseofmoran.io" />
+    <meta name="twitter:title" content="Geo projects of Mike Moran" />
+    <meta
+      name="twitter:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    
+      <link rel="alternate" type="application/atom+xml" title="Atom" href="https://geo.houseofmoran.io/atom.xml">
+    
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
+    >
+    <script src="https://kit.fontawesome.com/d6b9545e6b.js" crossorigin="anonymous"></script>
+    <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.file-downloads.hash.outbound-links.js"></script>
+    <style>
+      aside {
+        font-size: smaller;
+        border: 1px solid lightgray;
+        border-radius: 5px;
+        padding: 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="columns">
+        <div class="column">
+          
+<nav class="navbar is-info" role="navigation" aria-label="main navigation">
+    <div class="navbar-brand">
+        <a class="navbar-item" href="/">
+            <i class="fa-solid fa-globe"></i> Geo Projects
+        </a>
+
+        <a class="navbar-item" href="https://www.houseofmoran.com">
+            by Mike Moran
+        </a>
+    </div>
+</nav>
+
+<section class="section">
+    <article>
+    
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2025-06-27&#x2F;">
+        <p class="card-header-title">Water Biscuits</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2025-06-27&#x2F;">
+          <img src="&#x2F;images&#x2F;amsterdam_water_biscuits.png" alt="Visualisation of water areas of Amsterdam" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>I couldn't <em>quite</em> get it ready for my <a href="https://geo.houseofmoran.io/posts/2025-06-17/">EdinburghJS presentation</a> but I now have water being properly handled in <a href="https://github.com/mikemoraned/geo/tree/main/apps/linzer">Linzer</a>. It's a subtlety, but I found when exploring in my <a href="https://garibaldi.houseofmoran.io">Garibaldi</a> iteration that you got better regions if you treated water as part of the boundary.</p>
+<span id="continue-reading"></span>
+<p>Just to recap, the way I previously defined regions ('biscuits') was:</p>
+<ol>
+<li>Find city boundary</li>
+<li>Choose random start/end points in that boundary</li>
+<li>Find routes between those points, either biased to be pedestrian or car (<code>auto</code>) routes</li>
+<li>Draw the city boundary as black and the routes as white borders (see below); this effectively unions the routes</li>
+<li>Find connected white pixels and turn back into regions</li>
+</ol>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;amsterdam_without_water.draw.png" />
+</figure>
+<p>(note: image is reflected in x-axis)</p>
+<p>The changes I made were to steps 2 and 4:</p>
+<ul>
+<li>2: Mask-out the water areas from the city bounds so that they can't be used as start/end points (sorry swimmers!):
+<figure class="image">
+    <img src="&#x2F;images&#x2F;amsterdam_bounds_masked.png" />
+</figure></li>
+<li>4: Draw the water areas as border pixels: <figure class="image">
+    <img src="&#x2F;images&#x2F;amsterdam_with_water.draw.png" />
+</figure></li>
+</ul>
+<p>This is hugely impactful for somewhere like Amsterdam which is 15% water! (maybe more on that later in a related side-project)</p>
+<p>One of the funny things about long-term side-projects is that you get the "opportunity" to come back to short-cuts you'd taken earlier. I was wondering why in places like Paris it wasn't finding regions on the islands in the center of the city. Before adding water I didn't really have to deal with drawing any polygons with holes, which these parts of Paris happen to have. So, it wasn't finding them because ... I hadn't bothered implementing rendering of interiors.</p>
+<p>Turns out it was actually fairly easy to implement on top of <a href="https://github.com/linebender/tiny-skia">tiny-skia</a> using a Mask:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">let mut</span><span> mask = Mask::new(pixmap.</span><span style="color:#96b5b4;">width</span><span>() as </span><span style="color:#b48ead;">u32</span><span>, pixmap.</span><span style="color:#96b5b4;">height</span><span>() as </span><span style="color:#b48ead;">u32</span><span>).</span><span style="color:#96b5b4;">unwrap</span><span>();
+</span><span>...
+</span><span style="color:#b48ead;">let</span><span> path = </span><span style="color:#96b5b4;">path_from_line</span><span>(poly.</span><span style="color:#96b5b4;">exterior</span><span>())?;
+</span><span>mask.</span><span style="color:#96b5b4;">clear</span><span>();
+</span><span style="color:#b48ead;">for</span><span> interior in poly.</span><span style="color:#96b5b4;">interiors</span><span>() {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> interior_path = </span><span style="color:#96b5b4;">path_from_line</span><span>(interior)?;
+</span><span>    mask.</span><span style="color:#96b5b4;">fill_path</span><span>(&amp;interior_path, FillRule::EvenOdd, </span><span style="color:#d08770;">true</span><span>, transform);
+</span><span>}
+</span><span>mask.</span><span style="color:#96b5b4;">invert</span><span>();
+</span><span>pixmap.</span><span style="color:#96b5b4;">fill_path</span><span>(&amp;path, paint, FillRule::EvenOdd, transform, Some(&amp;mask));
+</span></code></pre>
+<p>Anyways, it's been really nice to draw a line under something I've known I've needed to do for a looooong time.</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2025-06-27&#x2F;">
+          <time datetime="2025-06-27">
+            <i class="fa-solid fa-calendar-day"></i> 27 June 2025
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+    </article>
+</section>
+
+        </div>
+      </div>
+    </div>
+    <footer class="footer">
+      <div class="content has-text-centered">
+        <p>
+          Last updated on  3 January 2026 at 12:15am
+        </p>
+      </div>
+    </footer>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/+esm';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script defer>
+      const youtube_iframes = Array.from(
+        document.getElementsByClassName("youtube")
+      );
+      youtube_iframes.forEach((youtube_iframe) => {
+        const data_src = youtube_iframe.getAttribute("data-src");
+        if (data_src) {
+          youtube_iframe.setAttribute("src", data_src);
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,164 @@
+
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- HTML Meta Tags -->
+    <title>Geo projects of Mike Moran</title>
+    <meta
+      name="description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Facebook Meta Tags -->
+    <meta property="og:url" content="https://geo.houseofmoran.io" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Geo projects of Mike Moran" />
+    <meta
+      property="og:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="twitter:domain" content="geo.houseofmoran.io" />
+    <meta property="twitter:url" content="https://geo.houseofmoran.io" />
+    <meta name="twitter:title" content="Geo projects of Mike Moran" />
+    <meta
+      name="twitter:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    
+      <link rel="alternate" type="application/atom+xml" title="Atom" href="https://geo.houseofmoran.io/atom.xml">
+    
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
+    >
+    <script src="https://kit.fontawesome.com/d6b9545e6b.js" crossorigin="anonymous"></script>
+    <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.file-downloads.hash.outbound-links.js"></script>
+    <style>
+      aside {
+        font-size: smaller;
+        border: 1px solid lightgray;
+        border-radius: 5px;
+        padding: 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="columns">
+        <div class="column">
+          
+<nav class="navbar is-info" role="navigation" aria-label="main navigation">
+    <div class="navbar-brand">
+        <a class="navbar-item" href="/">
+            <i class="fa-solid fa-globe"></i> Geo Projects
+        </a>
+
+        <a class="navbar-item" href="https://www.houseofmoran.com">
+            by Mike Moran
+        </a>
+    </div>
+</nav>
+
+<section class="section">
+    <article>
+    
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2025-07-29&#x2F;">
+        <p class="card-header-title">Is it snowing less?</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2025-07-29&#x2F;">
+          <img src="&#x2F;images&#x2F;swe_uk.png" alt="Visualisaton of snow cover over UK" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>Back in the 90's I remember one particular winter in Edinburgh when I was starting University, next to Pollock Halls, and my god it snowed. It was like, proper Winter Wonderland stuff. Since then? Hmmphf. Similarly, I've been coming to Ronneburg in Germany since the early 2000's and remember some pretty fun times taking the sledge out. Recently? Not so much.</p>
+<p>So, is it snowing less?</p>
+<span id="continue-reading"></span>
+<p>To be up-front, answering this question is a deliberate excuse to try to find free data from Satellites. It's not on the mainline of my <a href="https://geo.houseofmoran.io/posts/2024-10-01/">Biscuits</a> theme but it would be nice to have some freely-accessible Satellite data in the same way that <a href="https://overturemaps.org">Overture Maps</a> is available for structured data sources. That is pretty-nice in that no login is required, and the data is available in a modern cloud-orientated way. So, same biases apply here.</p>
+<p>I'd heard of a couple of things in this area: COG (<a href="https://cogeo.org">Cloud-optimised GeoTIFF</a>) and <a href="https://guide.cloudnativegeo.org/zarr/intro.html">Zarr</a>. In particular, for COGs, I'd heard about <a href="https://browser.dataspace.copernicus.eu/">Copernicus Browser</a> on the <a href="https://georust.org">Georust Discord</a>.</p>
+<p>I had a fun play around with it including producing a little animation of weather over Ronneburg:</p>
+<video controls>
+  <source src="/images/Sentinel-2_L2A-1647522061351546-timelapse-ezgif.com-gif-to-mp4-converter.mp4" type="video/mp4" />
+</video>
+<p>I had a few difficulties working out how to get data programmatically, so I switched to pursue Zarr data-sources instead.</p>
+<p><em>Narrators Voice: As with many <a href="https://github.com/mikemoraned/geo/tree/main/spikes/">Spikes</a> I'll probably look back on this and wonder why the hell I didn't take a short-cut. That's fine, spikes are as much for learning the longer ways round as for doing the most efficient one.</em></p>
+<p>After much futzing about online I found <a href="https://github.com/esa-cci/esa-climate-toolbox">esa-climate-toolbox</a> which looked good for a couple of reasons:</p>
+<ol>
+<li>example notebooks implied it had <a href="https://github.com/esa-cci/esa-climate-toolbox/blob/main/notebooks/Accessing_Data/5-ECT_Zarr_Access.ipynb">Zarr</a> data available</li>
+<li>it had reasonable <a href="https://esa-climate-toolbox.readthedocs.io/en/latest/index.html">docs</a></li>
+</ol>
+<p>You can read the <a href="https://github.com/mikemoraned/geo/tree/main/spikes/satellite/esa-python-conda/snow_minimal.ipynb">notebook</a> for the details, but I ended up guessing that the dataset mentioning <code>SNOW</code> would be useful 🙂. It also looked like it contained the right sort of stuff:</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;swe_uk.png" />
+</figure>
+<p>From this dataset I was able to get the "SWE" (Snow Water Equivalent) for the Edinburgh and Ronneburg areas, as defined by bounding boxes from Overture Maps:</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;swe_edin.png" />
+</figure><figure class="image">
+    <img src="&#x2F;images&#x2F;swe_ronn.png" />
+</figure>
+<p>These each show the "raw" swe per day and then a rolling average over 365 days. So, is it snowing less? <em>I am not a meteorologist</em> but ... yes?</p>
+<p>Regardless of analysis accuracy, it's nice seeing this data is available, and it has been an interesting couple of days of playing about with this stuff. I would have <em>liked</em> to also get access more directly from <a href="https://github.com/mikemoraned/geo/tree/main/spikes/satellite/esa-rust-direct/src/main.rs">Rust</a>, but not everything in the world has to be in Rust. Yet 😉.</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2025-07-29&#x2F;">
+          <time datetime="2025-07-29">
+            <i class="fa-solid fa-calendar-day"></i> 29 July 2025
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+    </article>
+</section>
+
+        </div>
+      </div>
+    </div>
+    <footer class="footer">
+      <div class="content has-text-centered">
+        <p>
+          Last updated on  3 January 2026 at 12:15am
+        </p>
+      </div>
+    </footer>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/+esm';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script defer>
+      const youtube_iframes = Array.from(
+        document.getElementsByClassName("youtube")
+      );
+      youtube_iframes.forEach((youtube_iframe) => {
+        const data_src = youtube_iframe.getAttribute("data-src");
+        if (data_src) {
+          youtube_iframe.setAttribute("src", data_src);
+        }
+      });
+    </script>
+  </body>
+</html>

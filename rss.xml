@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+      <title></title>
+      <link>https://geo.houseofmoran.io</link>
+      <description></description>
+      <generator>Zola</generator>
+      <language>en</language>
+      <atom:link href="https://geo.houseofmoran.io/rss.xml" rel="self" type="application/rss+xml"/>
+      <lastBuildDate>Fri, 26 Dec 2025 00:00:00 +0000</lastBuildDate>
+      <item>
+          <title>Is German Train Travel Faster North↔South or East↔West?</title>
+          <pubDate>Fri, 26 Dec 2025 00:00:00 +0000</pubDate>
+          <author>Mike Moran</author>
+          <link>https://geo.houseofmoran.io/posts/2025-12-26/</link>
+          <guid>https://geo.houseofmoran.io/posts/2025-12-26/</guid>
+          <description xml:base="https://geo.houseofmoran.io/posts/2025-12-26/">&lt;p&gt;Years ago I wrote short stories. For many of these I now look back and cringe. For this question, I suspect I shall look back at it similarly. However I think it&#x27;s important to record this otherwise I&#x27;ll have nothing to look back on, which is worse.&lt;&#x2F;p&gt;
+&lt;p&gt;As is often the case when I am in Germany, the topic of (painful) train travel came up, and in particular: is it quicker to go North↔South or East↔West? Me being me, I wondered if I could answer this with data.&lt;&#x2F;p&gt;</description>
+      </item>
+      <item>
+          <title>Makers Gonna Make: Finding Tube Stations</title>
+          <pubDate>Tue, 23 Dec 2025 00:00:00 +0000</pubDate>
+          <author>Mike Moran</author>
+          <link>https://geo.houseofmoran.io/posts/2025-12-23/</link>
+          <guid>https://geo.houseofmoran.io/posts/2025-12-23/</guid>
+          <description xml:base="https://geo.houseofmoran.io/posts/2025-12-23/">&lt;blockquote&gt;
+&lt;p&gt;&quot;Mike Moran showed us how he uses Python to take all the routes near King&#x27;s Crossing in London and filter them down to subway stations only. Magic, if you ask me.&quot;&lt;&#x2F;p&gt;
+&lt;&#x2F;blockquote&gt;
+&lt;p&gt;&lt;a href=&quot;https:&#x2F;&#x2F;www.linkedin.com&#x2F;posts&#x2F;peter-trizuliak_11-makers-locked-in-for-8-hours-on-another-activity-7378156457441275905-1j7g&#x2F;&quot;&gt;Indeed&lt;&#x2F;a&gt;. However, &lt;em&gt;it was also magic to me&lt;&#x2F;em&gt;, when I looked at what I&#x27;d done a few weeks later and tried to understand it. 🤔 So ...&lt;&#x2F;p&gt;</description>
+      </item>
+      <item>
+          <title>Is it snowing less?</title>
+          <pubDate>Tue, 29 Jul 2025 00:00:00 +0000</pubDate>
+          <author>Mike Moran</author>
+          <link>https://geo.houseofmoran.io/posts/2025-07-29/</link>
+          <guid>https://geo.houseofmoran.io/posts/2025-07-29/</guid>
+          <description xml:base="https://geo.houseofmoran.io/posts/2025-07-29/">&lt;p&gt;Back in the 90&#x27;s I remember one particular winter in Edinburgh when I was starting University, next to Pollock Halls, and my god it snowed. It was like, proper Winter Wonderland stuff. Since then? Hmmphf. Similarly, I&#x27;ve been coming to Ronneburg in Germany since the early 2000&#x27;s and remember some pretty fun times taking the sledge out. Recently? Not so much.&lt;&#x2F;p&gt;
+&lt;p&gt;So, is it snowing less?&lt;&#x2F;p&gt;</description>
+      </item>
+      <item>
+          <title>Water Biscuits</title>
+          <pubDate>Fri, 27 Jun 2025 00:00:00 +0000</pubDate>
+          <author>Mike Moran</author>
+          <link>https://geo.houseofmoran.io/posts/2025-06-27/</link>
+          <guid>https://geo.houseofmoran.io/posts/2025-06-27/</guid>
+          <description xml:base="https://geo.houseofmoran.io/posts/2025-06-27/">&lt;p&gt;I couldn&#x27;t &lt;em&gt;quite&lt;&#x2F;em&gt; get it ready for my &lt;a href=&quot;https:&#x2F;&#x2F;geo.houseofmoran.io&#x2F;posts&#x2F;2025-06-17&#x2F;&quot;&gt;EdinburghJS presentation&lt;&#x2F;a&gt; but I now have water being properly handled in &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;mikemoraned&#x2F;geo&#x2F;tree&#x2F;main&#x2F;apps&#x2F;linzer&quot;&gt;Linzer&lt;&#x2F;a&gt;. It&#x27;s a subtlety, but I found when exploring in my &lt;a href=&quot;https:&#x2F;&#x2F;garibaldi.houseofmoran.io&quot;&gt;Garibaldi&lt;&#x2F;a&gt; iteration that you got better regions if you treated water as part of the boundary.&lt;&#x2F;p&gt;</description>
+      </item>
+      <item>
+          <title>Biscuits and Beyond (presentation at EdinburghJS)</title>
+          <pubDate>Tue, 17 Jun 2025 00:00:00 +0000</pubDate>
+          <author>Mike Moran</author>
+          <link>https://geo.houseofmoran.io/posts/2025-06-17/</link>
+          <guid>https://geo.houseofmoran.io/posts/2025-06-17/</guid>
+          <description xml:base="https://geo.houseofmoran.io/posts/2025-06-17/">&lt;p&gt;Many thanks to &lt;a href=&quot;https:&#x2F;&#x2F;www.meetup.com&#x2F;edinburghjs&#x2F;&quot;&gt;EdinburghJS&lt;&#x2F;a&gt; for hosting me at their &lt;a href=&quot;https:&#x2F;&#x2F;www.meetup.com&#x2F;edinburghjs&#x2F;events&#x2F;307933384&#x2F;&quot;&gt;Geo and JS June Meetup&lt;&#x2F;a&gt;, particularly since I mentioned very little Javascript (zero 😊).&lt;&#x2F;p&gt;
+&lt;p&gt;The &lt;a href=&quot;&#x2F;slides&#x2F;2025_June_Edinburgh_JS_presentation-3.pdf&quot;&gt;slides are available&lt;&#x2F;a&gt;, but here&#x27;s all the links I mentioned:&lt;&#x2F;p&gt;</description>
+      </item>
+      <item>
+          <title>Linzer: Similar Regions Across Multiple Cities</title>
+          <pubDate>Sun, 26 Jan 2025 00:00:00 +0000</pubDate>
+          <author>Mike Moran</author>
+          <link>https://geo.houseofmoran.io/posts/2025-01-26/</link>
+          <guid>https://geo.houseofmoran.io/posts/2025-01-26/</guid>
+          <description xml:base="https://geo.houseofmoran.io/posts/2025-01-26/">&lt;p&gt;It was great to get along to my second &lt;a href=&quot;https:&#x2F;&#x2F;lu.ma&#x2F;0d99mx3r&quot;&gt;&quot;Makers gonna make&quot;&lt;&#x2F;a&gt; event at Codebase on Saturday, despite the Red Weather Warning on Friday. Many thanks to &lt;a href=&quot;https:&#x2F;&#x2F;www.linkedin.com&#x2F;in&#x2F;peter-trizuliak&#x2F;&quot;&gt;Peter Trizuliak&lt;&#x2F;a&gt; for organising.&lt;&#x2F;p&gt;
+&lt;p&gt;It&#x27;s a pretty laid-back environment with a nice mix of focus time, breaks for pizza and free coffee &#x2F; food (thanks to sponsors, &lt;a href=&quot;https:&#x2F;&#x2F;www.shopify.com&#x2F;uk&quot;&gt;Shopify&lt;&#x2F;a&gt;, &lt;a href=&quot;https:&#x2F;&#x2F;thisiscodebase.com&quot;&gt;Codebase&lt;&#x2F;a&gt; and &lt;a href=&quot;https:&#x2F;&#x2F;www.thesourcecoffee.co.uk&#x2F;brewd&quot;&gt;The Source Coffee roasters&lt;&#x2F;a&gt;). You can present what you&#x27;ve done and&#x2F;or head to pub later, but no pressure to do either. The &lt;a href=&quot;https:&#x2F;&#x2F;lu.ma&#x2F;c410sjxy&quot;&gt;next event is coming up in February&lt;&#x2F;a&gt;; I unfortunately can&#x27;t make this one, but maybe see you at another!&lt;&#x2F;p&gt;</description>
+      </item>
+      <item>
+          <title>Linzer: Region Summaries and Similarities</title>
+          <pubDate>Tue, 07 Jan 2025 00:00:00 +0000</pubDate>
+          <author>Mike Moran</author>
+          <link>https://geo.houseofmoran.io/posts/2025-01-07/</link>
+          <guid>https://geo.houseofmoran.io/posts/2025-01-07/</guid>
+          <description xml:base="https://geo.houseofmoran.io/posts/2025-01-07/">&lt;p&gt;Over the holidays I was thinking about where I am with the &lt;a href=&quot;https:&#x2F;&#x2F;geo.houseofmoran.io&#x2F;posts&#x2F;2024-10-01&#x2F;&quot;&gt;Biscuits&lt;&#x2F;a&gt; project. The &lt;a href=&quot;https:&#x2F;&#x2F;linzer.houseofmoran.io&quot;&gt;Linzer&lt;&#x2F;a&gt; version has gotten to the point where I have a lot of the core bits of technical knowledge required, and I &quot;merely&quot; need to understand the aesthetics, if I wanted to copy the original artist.&lt;&#x2F;p&gt;
+&lt;p&gt;Whilst it is good to attempt to copy to learn, I am now a bit uneasy with it as a goal. This is partly because the habit of &quot;Computing People&quot; copying &quot;Artistic people&quot; is becoming a bit rude in the current race-to-the-bottom of AI Art. However, it&#x27;s also because I have some other ideas I wanna explore. So, I&#x27;m gonna do that instead.&lt;&#x2F;p&gt;</description>
+      </item>
+      <item>
+          <title>The Biscuits Project: decomposing the structure of cities</title>
+          <pubDate>Tue, 01 Oct 2024 00:00:00 +0000</pubDate>
+          <author>Mike Moran</author>
+          <link>https://geo.houseofmoran.io/posts/2024-10-01/</link>
+          <guid>https://geo.houseofmoran.io/posts/2024-10-01/</guid>
+          <description xml:base="https://geo.houseofmoran.io/posts/2024-10-01/">&lt;p&gt;I did a talk on this project at the &lt;a href=&quot;https:&#x2F;&#x2F;thegeomob.com&#x2F;post&#x2F;oct-1st-2024-geomobedi-details&quot;&gt;GeoMOB Edinburgh event on 1&#x2F;10&#x2F;2024&lt;&#x2F;a&gt;.
+The &lt;a href=&quot;&#x2F;slides&#x2F;2024_Geomob_Oct_Presentation.pdf&quot;&gt;slides&lt;&#x2F;a&gt; are available, but I&#x27;ll give a summary of the accompanying explanation content here.&lt;&#x2F;p&gt;
+&lt;p&gt;The &quot;Biscuits&quot; project began back in &lt;a href=&quot;https:&#x2F;&#x2F;github.com&#x2F;mikemoraned&#x2F;biscuits?tab=readme-ov-file#september-2017&quot;&gt;September 2017&lt;&#x2F;a&gt;.
+It was inspired by a work of art by &lt;a href=&quot;https:&#x2F;&#x2F;www.armellecaron.fr&quot;&gt;Armelle Caron&lt;&#x2F;a&gt;
+called &lt;a href=&quot;https:&#x2F;&#x2F;www.armellecaron.fr&#x2F;works&#x2F;les-villes-rangees&#x2F;&quot;&gt;Les Villes Rangees&lt;&#x2F;a&gt;:&lt;&#x2F;p&gt;</description>
+      </item>
+    </channel>
+</rss>

@@ -1,0 +1,182 @@
+
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- HTML Meta Tags -->
+    <title>Geo projects of Mike Moran</title>
+    <meta
+      name="description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Facebook Meta Tags -->
+    <meta property="og:url" content="https://geo.houseofmoran.io" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Geo projects of Mike Moran" />
+    <meta
+      property="og:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="twitter:domain" content="geo.houseofmoran.io" />
+    <meta property="twitter:url" content="https://geo.houseofmoran.io" />
+    <meta name="twitter:title" content="Geo projects of Mike Moran" />
+    <meta
+      name="twitter:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    
+      <link rel="alternate" type="application/atom+xml" title="Atom" href="https://geo.houseofmoran.io/atom.xml">
+    
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
+    >
+    <script src="https://kit.fontawesome.com/d6b9545e6b.js" crossorigin="anonymous"></script>
+    <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.file-downloads.hash.outbound-links.js"></script>
+    <style>
+      aside {
+        font-size: smaller;
+        border: 1px solid lightgray;
+        border-radius: 5px;
+        padding: 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="columns">
+        <div class="column">
+          
+<nav class="navbar is-info" role="navigation" aria-label="main navigation">
+    <div class="navbar-brand">
+        <a class="navbar-item" href="/">
+            <i class="fa-solid fa-globe"></i> Geo Projects
+        </a>
+
+        <a class="navbar-item" href="https://www.houseofmoran.com">
+            by Mike Moran
+        </a>
+    </div>
+</nav>
+
+<section class="section">
+    <article>
+    
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2025-12-26&#x2F;">
+        <p class="card-header-title">Is German Train Travel Faster North↔South or East↔West?</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2025-12-26&#x2F;">
+          <img src="&#x2F;images&#x2F;de_nsew_travel.png" alt="Map of Speed on route vs Distribution of Routes split by direction" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>Years ago I wrote short stories. For many of these I now look back and cringe. For this question, I suspect I shall look back at it similarly. However I think it's important to record this otherwise I'll have nothing to look back on, which is worse.</p>
+<p>As is often the case when I am in Germany, the topic of (painful) train travel came up, and in particular: is it quicker to go North↔South or East↔West? Me being me, I wondered if I could answer this with data.</p>
+<span id="continue-reading"></span>
+<p>The TLDR is: maaaaaaybe. You can see the <a href="/notebooks/questions/de_nsew_travel/2025-12-26.html">notebook</a> for more detail on where I got to, but my approach was, in summary:</p>
+<ol>
+<li>Find all cities in Germany.</li>
+<li>Create all pairs of cities that traverse a North↔South or East↔West boundary.</li>
+<li>Find shortest travel time between these cities.</li>
+<li>Compute speed by dividing travel time by crow-flies distance between cities.</li>
+<li>Group routes into North↔South or East↔West and plot a distribution.</li>
+</ol>
+<p>The overall outcome can be seen in the image at top: there doesn't seem to be an obvious difference. I could be more rigorous about this by doing a statistical test, but I think there are bigger issues to deal with.</p>
+<p>As is often the case, doing an initial investigation just reveals problems with the definition of the question 😀. For example, if I look at the distribution of crow-fly distances, by normalising to speed, am I ignoring something of interest?</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;crow_flies_km.png" />
+</figure><br />
+<p>Is it maybe that East↔West journeys are generally longer than North↔South? Perhaps not. If you look at the map of cities you can see there is a cluster of cities near the North↔South boundary.</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;quadrants.png" />
+</figure><br />
+<p>This will introduce a bias in that it will produce a bunch of routes that are short.</p>
+<p>There is also the issue that I am (arbitrarily) choosing 9am on 10th Jan 2026 as the departure time.</p>
+<p>I only wanted to spend a day on this, so I won't take this further for now. However, if I did, I'd probably want to instead do <em>something</em> like:</p>
+<ul>
+<li>Prepare:
+<ol>
+<li>Take the area of Germany and subdivide it into areas using <a href="https://h3geo.org">H3</a> or <a href="https://a5geo.org">A5</a> cells.</li>
+<li>Use the centroid of each of these to categorise them into quadrants.</li>
+<li>Find all pairs as before, but this time between centroids of these areas.</li>
+</ol>
+</li>
+<li>Collect: for each pair, for 24h throughout the day, in 1h steps, find fastest travel time.</li>
+<li>Analyse:
+<ul>
+<li>Do something like before but, since there may still be bias from how often routes of different lengths occur between areas, I probably want to bucket by route length and compute an average.</li>
+<li>This will give me more of an unbiased summary. However, since population distribution isn't unbiased, I probably want to rebias the sample by wieghting towards where more people live. This gives more of an idea of what a typical experience would be like.</li>
+</ul>
+</li>
+</ul>
+<p>Anyways, I'm not gonna do all that now 😀.</p>
+<p>One thing I <em>will</em> probably do sooner is re-use the <a href="https://github.com/motis-project/motis">motis server setup</a>. It was a massive pain trying out many public/private libraries/services for travel times, and finding various versions of broken-ness or "please talk to sales" road-blocks.</p>
+<p>Motis worked really well out-of-the-box and could easily handle all of Germany on my Macbook Air; only took about 20 minutes to import the data, and then lookups were fast. Also, even though I was using it for API only, the nice UI for inspecting / debugging was a great bonus.</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;motis.png" />
+</figure><br />
+<p>Even better, it's based on open-data for <a href="https://download.geofabrik.de/europe/germany.html">Maps</a> and <a href="https://gtfs.de">Timetables</a>!</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2025-12-26&#x2F;">
+          <time datetime="2025-12-26">
+            <i class="fa-solid fa-calendar-day"></i> 26 December 2025
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+    </article>
+</section>
+
+        </div>
+      </div>
+    </div>
+    <footer class="footer">
+      <div class="content has-text-centered">
+        <p>
+          Last updated on  3 January 2026 at 12:15am
+        </p>
+      </div>
+    </footer>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/+esm';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script defer>
+      const youtube_iframes = Array.from(
+        document.getElementsByClassName("youtube")
+      );
+      youtube_iframes.forEach((youtube_iframe) => {
+        const data_src = youtube_iframe.getAttribute("data-src");
+        if (data_src) {
+          youtube_iframe.setAttribute("src", data_src);
+        }
+      });
+    </script>
+  </body>
+</html>

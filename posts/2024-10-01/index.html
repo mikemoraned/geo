@@ -1,0 +1,343 @@
+
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- HTML Meta Tags -->
+    <title>Geo projects of Mike Moran</title>
+    <meta
+      name="description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Facebook Meta Tags -->
+    <meta property="og:url" content="https://geo.houseofmoran.io" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Geo projects of Mike Moran" />
+    <meta
+      property="og:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="twitter:domain" content="geo.houseofmoran.io" />
+    <meta property="twitter:url" content="https://geo.houseofmoran.io" />
+    <meta name="twitter:title" content="Geo projects of Mike Moran" />
+    <meta
+      name="twitter:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    
+      <link rel="alternate" type="application/atom+xml" title="Atom" href="https://geo.houseofmoran.io/atom.xml">
+    
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
+    >
+    <script src="https://kit.fontawesome.com/d6b9545e6b.js" crossorigin="anonymous"></script>
+    <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.file-downloads.hash.outbound-links.js"></script>
+    <style>
+      aside {
+        font-size: smaller;
+        border: 1px solid lightgray;
+        border-radius: 5px;
+        padding: 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="columns">
+        <div class="column">
+          
+<nav class="navbar is-info" role="navigation" aria-label="main navigation">
+    <div class="navbar-brand">
+        <a class="navbar-item" href="/">
+            <i class="fa-solid fa-globe"></i> Geo Projects
+        </a>
+
+        <a class="navbar-item" href="https://www.houseofmoran.com">
+            by Mike Moran
+        </a>
+    </div>
+</nav>
+
+<section class="section">
+    <article>
+    
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2024-10-01&#x2F;">
+        <p class="card-header-title">The Biscuits Project: decomposing the structure of cities</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2024-10-01&#x2F;">
+          <img src="&#x2F;images&#x2F;edinburgh_layout_pedestrian.1000.guillotine.rotated.png" alt="Guillone Layout of Edinburgh Regions derived from Pedestrian Routes" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>I did a talk on this project at the <a href="https://thegeomob.com/post/oct-1st-2024-geomobedi-details">GeoMOB Edinburgh event on 1/10/2024</a>.
+The <a href="/slides/2024_Geomob_Oct_Presentation.pdf">slides</a> are available, but I'll give a summary of the accompanying explanation content here.</p>
+<p>The "Biscuits" project began back in <a href="https://github.com/mikemoraned/biscuits?tab=readme-ov-file#september-2017">September 2017</a>.
+It was inspired by a work of art by <a href="https://www.armellecaron.fr">Armelle Caron</a>
+called <a href="https://www.armellecaron.fr/works/les-villes-rangees/">Les Villes Rangees</a>:</p>
+<span id="continue-reading"></span><figure class="image">
+    <img src="&#x2F;images&#x2F;les-villes-rangees-website-2024.png" />
+</figure><p></p>
+<p>I wondered if I could automatically "destruct" and lay out the sections in a similar way. So began a side-project I've been working on,
+off-and-on, for 7 years. The original Github project gives <a href="https://github.com/mikemoraned/biscuits?tab=readme-ov-file#biscuits">a bit more detailed history</a>,
+but the major iterations were:</p>
+<div class="columns">
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">Speculaas: April 2018</p>
+            </header>
+            <div class="card-image">
+                <figure class="image is-2by1">
+<iframe
+    class="youtube has-ratio"
+    width="560"
+    height="315"
+    src=""
+    data-src="https://www.youtube-nocookie.com/embed/gakOIbRsMHI"
+    title="YouTube video player"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen>s
+</iframe>
+</figure>
+            </div>
+            <div class="card-content">
+                <div class="content is-size-5">
+                    <ul>
+                        <li>😞 screenshotted static 'maps'</li>
+                        <li>😀 animated and interactive</li>
+                        <li>😀 bin-packing auto-layout</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">Garibaldi: August 2019</p>
+            </header>
+            <div class="card-image">
+                <figure class="image">
+    <img src="&#x2F;images&#x2F;garibaldi.png" />
+</figure>
+            </div>
+            <div class="card-content">
+                <div class="content is-size-5">
+                    <ul>
+                        <li>😀 dynamic maps</li>
+                        <li>😀 interactive (runs in browser)</li>
+                        <li>😭 pixel-based region-building affected by resolution quirks</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<aside>
+(All of the names of iterations are different kinds of Biscuit)
+</aside>
+<br />
+<p>Obviously we then had COVID happen in 2020, which was distracting to say the least. However, the biggest issue was
+that I discovered doing things <em>entirely</em> in the browser at pixel level was not very robust. There were various techniques I could
+have applied, like a separate off-screen canvas for calculations. That would require a lot of testing to get right and make work.</p>
+<p>It felt though that this was going against-the-grain and, more generally, I was really just reluctant to go learn about how
+OpenstreetMap and Geo API's / libraries work.</p>
+<p>Between then and now that's effectively what I've done, or at least enough to recreate where I got to in Speculaas, albeit entirely off-line.</p>
+<p>The current version, which I got ready for the GeoMOB presentation, is pretty simple at the high-level:</p>
+<div class="box" data-theme="light">
+    <pre class="mermaid">
+    flowchart LR
+    b(Boundaries) --&gt; r(Regions) --&gt; l(Layout)
+    </pre>
+</div><div class="columns">
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">Boundaries</p>
+            </header>
+            <div class="card-image">
+                <figure class="image">
+    <img src="&#x2F;images&#x2F;boundaries.png" />
+</figure>
+            </div>
+            <div class="card-content">
+                <div class="content is-size-6">
+This is where the Map data enters. We want to get to a binary version of an area where 
+"black" = part we want to keep and "white" = a border of some kind.
+<p>I'll not go into detail here but this image was derived by sampling and overlapping routes across
+Edinburgh from <a href="https://stadiamaps.com">Stadia Maps</a>.
+</div>
+</div>
+</div>
+</div>
+<div class="column">
+<div class="card">
+<header class="card-header">
+<p class="card-header-title">Find Regions</p>
+</header>
+<div class="card-image">
+<figure class="image">
+    <img src="&#x2F;images&#x2F;regions1.png" />
+</figure>
+</div>
+<div class="card-content">
+<div class="content is-size-6">
+The area is defined in terms of pixels and not geo coordinates. This is partly because I find it easier to do, but also because it gives me most freedom to mix-and-match sources. So, for example, whilst I've not done it yet it in this version, adding an exclusion area for water is as simple as finding a source and drawing it as white pixels.</p>
+<p>The actual Regions are found by applying a <a href="https://en.wikipedia.org/wiki/Boundary_tracing">Boundary Tracing</a> algorithm at the pixel level.
+</div>
+</div>
+</div>
+</div></p>
+</div>
+<div class="columns">
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">Back to Geo-land</p>
+            </header>
+            <div class="card-image">
+                <figure class="image">
+    <img src="&#x2F;images&#x2F;regions2.png" />
+</figure>
+            </div>
+            <div class="card-content">
+                <div class="content is-size-6">
+To get back to Geo-land I re-interpret the boundaries that have been derived into geo <code>Polygons</code>. 
+<p></p>
+<aside>
+<p>
+It's these pixel-processing stages that leads to the low-level blockiness in the shapes.
+</p>
+<p>
+I can <em>probably</em> make a future version of this pure-geo by doing something like:
+<ol>
+<li>Take all input <code>Geometry</code> which defines the border areas.</li>
+<li>Union them together.</li>
+<li>Define an area border (e.g. a city's limits) as a <code>Polygon</code> and takeaway (difference) the unioned border areas.
+<li>What remains should be the Regions</li>
+</ol>
+<p>However, the pixel-level version I have works for now. As long as I wrap it behind a <code>trait</code> I can replace it later.</p>
+</p>
+</aside>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="column">
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">Layout</p>
+            </header>
+            <div class="card-image">
+                <figure class="image">
+    <img src="&#x2F;images&#x2F;edinburgh_layout_pedestrian.1000.guillotine.rotated.png" />
+</figure>
+            </div>
+            <div class="card-content">
+                <div class="content is-size-6">
+<p>There are lots of different ways layout could be done. For this iteration, as in Speculaas, I treat this as <a href="https://www.csc.liv.ac.uk/~epa/surveyhtml.html">2d bin-packing</a> problem.</p>
+<p>This particular example here shows a layout based on a <a href="https://okanplusz.wordpress.com/2016/07/07/bin-packing/">Guillotine</a> algorithm.
+</div>
+</div>
+</div>
+</div></p>
+</div>
+<p>What's next? Well, first a scorecard on <a href="https://github.com/mikemoraned/geo/tree/main/apps/linzer">this implementation, which I've christened "Linzer"</a>:</p>
+<ul>
+<li>😀 pedestrian and auto-biased route sources</li>
+<li>😀 deterministic</li>
+<li>😀 bin-packing auto-layout</li>
+</ul>
+<p>After this, there are a lot of things I could do next to improve it. Some of these I've done before in different iterations, and some are totally new:</p>
+<ul>
+<li>boundaries:
+<ul>
+<li>roads, paths</li>
+<li>clip by city boundary</li>
+<li>mask-out water bodies</li>
+</ul>
+</li>
+<li>regions:
+<ul>
+<li>green areas</li>
+<li>rotate to minimal bbox</li>
+</ul>
+</li>
+<li>layout:
+<ul>
+<li>layout as text glyphs</li>
+</ul>
+</li>
+<li>display:
+<ul>
+<li>animated placement</li>
+</ul>
+</li>
+</ul>
+<p>However, since this is more of an Art Project than a technical one, I reserve the right to "honour my whimsy" and do something totally different.</p>
+
+        
+        <a href="&#x2F;posts&#x2F;2024-10-01&#x2F;">
+          <time datetime="2024-10-01">
+            <i class="fa-solid fa-calendar-day"></i>  1 October 2024
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+    </article>
+</section>
+
+        </div>
+      </div>
+    </div>
+    <footer class="footer">
+      <div class="content has-text-centered">
+        <p>
+          Last updated on  3 January 2026 at 12:15am
+        </p>
+      </div>
+    </footer>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/+esm';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script defer>
+      const youtube_iframes = Array.from(
+        document.getElementsByClassName("youtube")
+      );
+      youtube_iframes.forEach((youtube_iframe) => {
+        const data_src = youtube_iframe.getAttribute("data-src");
+        if (data_src) {
+          youtube_iframe.setAttribute("src", data_src);
+        }
+      });
+    </script>
+  </body>
+</html>
