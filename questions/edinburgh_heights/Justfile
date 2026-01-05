@@ -1,0 +1,7 @@
+marimo:
+    uv run marimo edit
+
+[working-directory: 'data']
+fetch_data:
+    wget https://srsp-open-data.s3-eu-west-2.amazonaws.com/lidar/phase-5/dtm/27700/gridded/NN70SE_50CM_DTM_PHASE5.tif
+    wget https://srsp-open-data.s3-eu-west-2.amazonaws.com/lidar/phase-5/dtm/27700/gridded/NS79NE_50CM_DTM_PHASE5.tif
