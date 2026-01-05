@@ -140,7 +140,7 @@ def _(Polygon, gpd, h3):
 
 @app.cell
 def _(edinburgh_gdf, get_h3_cells_for_gdf):
-    h3_resolution = 9
+    h3_resolution = 10
     edinburgh_h3_cells_gdf = get_h3_cells_for_gdf(edinburgh_gdf, h3_resolution)
     edinburgh_h3_cells_gdf.head()
     return edinburgh_h3_cells_gdf, h3_resolution
@@ -391,8 +391,8 @@ def _(edinburgh_height_gdfs, merge_and_compute_average):
 
 
 @app.cell
-def _(edinburgh_height_gdf):
-    edinburgh_height_gdf.explore("avg_height")
+def _():
+    # edinburgh_height_gdf.explore("avg_height")
     return
 
 
@@ -404,7 +404,9 @@ def _(edinburgh_height_gdf, h3_resolution):
 
 @app.cell
 def _(edinburgh_height_gdf, h3_resolution):
-    edinburgh_height_gdf.to_feather(f"edinburgh_{h3_resolution}.arrow", compression="uncompressed")
+    edinburgh_height_gdf.to_feather(
+        f"edinburgh_{h3_resolution}.arrow", compression="uncompressed"
+    )
     return
 
 
