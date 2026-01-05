@@ -96,6 +96,25 @@ def _(edinburgh_gdf):
 
 
 @app.cell
+def _(edinburgh_gdf, gpd):
+    # the boundary looks a bit over simplified and is missing-out bits of the coast. so, bloat a bit to recover the coast
+    def buffer(gdf: gpd.GeoDataFrame, buffer_metres: float) -> gpd.GeoDataFrame:
+        original_crs = gdf.crs
+        gdf_buffered = gdf.to_crs(epsg=27700).copy() # EPSG 27700 has a unit of metres so is valid to use here
+        gdf_buffered["geometry"] = gdf_buffered.geometry.buffer(buffer_metres)
+        return gdf_buffered.to_crs(original_crs)
+
+    edinburgh_buffered_gdf = buffer(edinburgh_gdf, buffer_metres=400)
+    return (edinburgh_buffered_gdf,)
+
+
+@app.cell
+def _(edinburgh_buffered_gdf):
+    edinburgh_buffered_gdf.explore()
+    return
+
+
+@app.cell
 def _(Polygon, gpd, h3):
     def get_h3_cells_for_gdf(gdf, resolution):
         """
@@ -139,9 +158,9 @@ def _(Polygon, gpd, h3):
 
 
 @app.cell
-def _(edinburgh_gdf, get_h3_cells_for_gdf):
+def _(edinburgh_buffered_gdf, get_h3_cells_for_gdf):
     h3_resolution = 10
-    edinburgh_h3_cells_gdf = get_h3_cells_for_gdf(edinburgh_gdf, h3_resolution)
+    edinburgh_h3_cells_gdf = get_h3_cells_for_gdf(edinburgh_buffered_gdf, h3_resolution)
     edinburgh_h3_cells_gdf.head()
     return edinburgh_h3_cells_gdf, h3_resolution
 
