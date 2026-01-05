@@ -140,7 +140,7 @@ def _(Polygon, gpd, h3):
 
 @app.cell
 def _(edinburgh_gdf, get_h3_cells_for_gdf):
-    h3_resolution = 8
+    h3_resolution = 9
     edinburgh_h3_cells_gdf = get_h3_cells_for_gdf(edinburgh_gdf, h3_resolution)
     edinburgh_h3_cells_gdf.head()
     return edinburgh_h3_cells_gdf, h3_resolution
