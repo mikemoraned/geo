@@ -408,6 +408,22 @@ def _():
 
 
 @app.cell
+def _(edinburgh_gdf):
+    edinburgh_gdf.to_feather(
+        f"edinburgh.arrow", compression="uncompressed"
+    )
+    return
+
+
+@app.cell
+def _(edinburgh_buffered_gdf):
+    edinburgh_buffered_gdf.to_feather(
+        f"edinburgh_buffered.arrow", compression="uncompressed"
+    )
+    return
+
+
+@app.cell
 def _(edinburgh_height_gdf, h3_resolution):
     edinburgh_height_gdf.to_parquet(f"edinburgh_min_{h3_resolution}.geoparquet")
     return
