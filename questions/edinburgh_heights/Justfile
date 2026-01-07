@@ -1,7 +1,11 @@
+render_dir := "../../web/static/notebooks/questions/edinburgh_heights"
+
 marimo:
     uv run marimo edit
 
-[working-directory: 'data']
-fetch_data:
-    wget https://srsp-open-data.s3-eu-west-2.amazonaws.com/lidar/phase-5/dtm/27700/gridded/NN70SE_50CM_DTM_PHASE5.tif
-    wget https://srsp-open-data.s3-eu-west-2.amazonaws.com/lidar/phase-5/dtm/27700/gridded/NS79NE_50CM_DTM_PHASE5.tif
+render:
+    rm -rf {{render_dir}}/*
+    mkdir -p {{render_dir}}
+    uv run marimo export html-wasm vis12.py --force --output {{render_dir}}/vis.html
+    cp edinburgh.arrow {{render_dir}}
+    cp edinburgh_min_10.arrow {{render_dir}}
