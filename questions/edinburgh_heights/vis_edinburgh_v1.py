@@ -67,6 +67,7 @@ def _(BoundaryNorm, mo, np, plt):
 
         return norm
 
+
     def plot_boundary(gdf, ax):
         gdf.dissolve().boundary.plot(ax=ax, edgecolor="black", linewidth=0.5)
 
@@ -131,22 +132,24 @@ def _(mo):
 
 
 @app.cell
-def _(heights_gdf, make_header_plot, mo):
+def _(grid, heights_gdf, make_header_plot, make_thresholded_mini_plot, mo):
     height_thresholds = [1, 5, 10, 25, 100, 200, 300, 400]
     mo.vstack(
         [
-            make_header_plot(heights_gdf, height_thresholds),
-        ],
-        align="center",
-    )
-    return (height_thresholds,)
-
-
-@app.cell
-def _(grid, height_thresholds, heights_gdf, make_thresholded_mini_plot):
-    grid(
-        [make_thresholded_mini_plot(heights_gdf, h) for h in height_thresholds],
-        cols=4,
+            mo.vstack(
+                [
+                    make_header_plot(heights_gdf, height_thresholds),
+                ],
+                align="center",
+            ),
+            grid(
+                [
+                    make_thresholded_mini_plot(heights_gdf, h)
+                    for h in height_thresholds
+                ],
+                cols=4,
+            ),
+        ]
     )
     return
 
