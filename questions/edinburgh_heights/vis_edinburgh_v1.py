@@ -51,31 +51,34 @@ def _(city_name, h3_resolution):
 
 @app.cell
 def _(arrow_data_file, epsg_metres, gpd):
-    heights_gdf = (
-        gpd.read_feather(arrow_data_file)
-        .to_crs(epsg=epsg_metres)
-        .copy()
-    )
+    heights_gdf = gpd.read_feather(arrow_data_file).to_crs(epsg=epsg_metres).copy()
     return (heights_gdf,)
 
 
 @app.cell
-def _(heights_gdf):
-    min_height = heights_gdf[["min_height"]]
-    return (min_height,)
+def _():
+    return
 
 
 @app.cell
-def _(BoundaryNorm, min_height, mo, np, plt):
+def _(BoundaryNorm, mo, np, plt):
     @mo.cache
-    def make_header_plot(heights_gdf, height_thresholds=[]):
-        fig, ax = plt.subplots(figsize=(8, 8))
-        ax.set_axis_off()
-    
+    def make_norm(heights_gdf):
+        min_height = heights_gdf[["min_height"]]
         percentiles = np.linspace(0, 100, 41)
         bounds = np.percentile(min_height, percentiles)
 
         norm = BoundaryNorm(bounds, ncolors=256)
+
+        return norm
+
+
+    @mo.cache
+    def make_header_plot(heights_gdf, height_thresholds=[]):
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.set_axis_off()
+
+        norm = make_norm(heights_gdf)
 
         heights_gdf.plot("min_height", ax=ax, cmap="terrain", norm=norm)
 
@@ -96,16 +99,52 @@ def _(BoundaryNorm, min_height, mo, np, plt):
         ax_inset.yaxis.set_visible(False)
 
         return plt.gca()
-    return (make_header_plot,)
+
+
+    @mo.cache
+    def make_thresholded_mini_plot(heights_gdf, height_threshold):
+        fig, ax = plt.subplots(figsize=(4, 4))
+        ax.set_axis_off()
+        ax.set_title(f">= {height_threshold}m", fontsize=9)
+
+        norm = make_norm(heights_gdf)
+
+        thresholded_gdf = heights_gdf[
+            heights_gdf["min_height"] >= height_threshold
+        ]
+
+        thresholded_gdf.plot("min_height", ax=ax, cmap="terrain", norm=norm)
+
+        return plt.gca()
+    return make_header_plot, make_thresholded_mini_plot
+
+
+@app.cell
+def _(mo):
+    def grid(items, cols=2):
+        """Lay out items in a grid with the specified number of columns."""
+        rows = [mo.hstack(items[i : i + cols]) for i in range(0, len(items), cols)]
+        return mo.vstack(rows, gap=1)
+    return (grid,)
 
 
 @app.cell
 def _(heights_gdf, make_header_plot, mo):
+    height_thresholds = [1, 5, 10, 25, 100]
     mo.vstack(
         [
-            make_header_plot(heights_gdf),
+            make_header_plot(heights_gdf, height_thresholds),
         ],
         align="center",
+    )
+    return (height_thresholds,)
+
+
+@app.cell
+def _(grid, height_thresholds, heights_gdf, make_thresholded_mini_plot):
+    grid(
+        [make_thresholded_mini_plot(heights_gdf, h) for h in height_thresholds],
+        cols=4,
     )
     return
 
