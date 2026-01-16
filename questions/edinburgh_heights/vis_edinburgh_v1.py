@@ -56,11 +56,6 @@ def _(arrow_data_file, epsg_metres, gpd):
 
 
 @app.cell
-def _():
-    return
-
-
-@app.cell
 def _(BoundaryNorm, mo, np, plt):
     @mo.cache
     def make_norm(heights_gdf):
@@ -72,11 +67,16 @@ def _(BoundaryNorm, mo, np, plt):
 
         return norm
 
+    def plot_boundary(gdf, ax):
+        gdf.dissolve().boundary.plot(ax=ax, edgecolor="black", linewidth=0.5)
+
 
     @mo.cache
     def make_header_plot(heights_gdf, height_thresholds=[]):
         fig, ax = plt.subplots(figsize=(8, 8))
         ax.set_axis_off()
+
+        plot_boundary(heights_gdf, ax)
 
         norm = make_norm(heights_gdf)
 
@@ -107,6 +107,8 @@ def _(BoundaryNorm, mo, np, plt):
         ax.set_axis_off()
         ax.set_title(f">= {height_threshold}m", fontsize=9)
 
+        plot_boundary(heights_gdf, ax)
+
         norm = make_norm(heights_gdf)
 
         thresholded_gdf = heights_gdf[
@@ -130,7 +132,7 @@ def _(mo):
 
 @app.cell
 def _(heights_gdf, make_header_plot, mo):
-    height_thresholds = [1, 5, 10, 25, 100]
+    height_thresholds = [1, 5, 10, 25, 100, 200, 300, 400]
     mo.vstack(
         [
             make_header_plot(heights_gdf, height_thresholds),
