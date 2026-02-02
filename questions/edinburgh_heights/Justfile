@@ -6,6 +6,5 @@ marimo:
 render:
     rm -rf {{render_dir}}/*
     mkdir -p {{render_dir}}
-    uv run marimo export html-wasm vis12.py --force --output {{render_dir}}/vis.html
-    cp edinburgh.arrow {{render_dir}}
+    uv run marimo export html vis_edinburgh_v1.py --force --output {{render_dir}}/vis_edinburgh.html
     cp edinburgh_min_10.arrow {{render_dir}}
