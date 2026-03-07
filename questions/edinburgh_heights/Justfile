@@ -3,8 +3,15 @@ render_dir := "../../web/static/notebooks/questions/edinburgh_heights"
 marimo:
     uv run marimo edit
 
-render:
-    rm -rf {{render_dir}}/*
-    mkdir -p {{render_dir}}
-    uv run marimo export html vis_edinburgh_v1.py --force --output {{render_dir}}/vis_edinburgh.html
-    cp edinburgh_min_10.arrow {{render_dir}}
+clean_render:
+    rm -rf {{ render_dir }}/*
+    mkdir -p {{ render_dir }}
+
+extract_render:
+    uv run marimo export html extract_edinburgh_v1.py --force --output {{ render_dir }}/extract_edinburgh.html
+
+vis_render:
+    uv run marimo export html vis_edinburgh_v1.py --force --output {{ render_dir }}/vis_edinburgh.html
+    cp edinburgh_min_10.arrow {{ render_dir }}
+
+render: clean_render vis_render extract_render

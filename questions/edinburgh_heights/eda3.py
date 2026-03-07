@@ -66,7 +66,7 @@ def _(gpd, wkt):
 
 @app.cell
 def _(query_to_dataframe):
-    def load_city_boundary(conn, gers_id, release="2025-12-17.0"):
+    def load_city_boundary(conn, gers_id, release="2026-02-18.0"):
         query = f"""
             SELECT * EXCLUDE(geometry), ST_AsText(geometry) AS geometry 
             FROM read_parquet('s3://overturemaps-us-west-2/release/{release}/theme=divisions/type=division_area/*', filename=true, hive_partitioning=1)
@@ -100,9 +100,12 @@ def _(edinburgh_gdf, gpd):
     # the boundary looks a bit over simplified and is missing-out bits of the coast. so, bloat a bit to recover the coast
     def buffer(gdf: gpd.GeoDataFrame, buffer_metres: float) -> gpd.GeoDataFrame:
         original_crs = gdf.crs
-        gdf_buffered = gdf.to_crs(epsg=27700).copy() # EPSG 27700 has a unit of metres so is valid to use here
+        gdf_buffered = gdf.to_crs(
+            epsg=27700
+        ).copy()  # EPSG 27700 has a unit of metres so is valid to use here
         gdf_buffered["geometry"] = gdf_buffered.geometry.buffer(buffer_metres)
         return gdf_buffered.to_crs(original_crs)
+
 
     edinburgh_buffered_gdf = buffer(edinburgh_gdf, buffer_metres=400)
     return (edinburgh_buffered_gdf,)
@@ -160,7 +163,9 @@ def _(Polygon, gpd, h3):
 @app.cell
 def _(edinburgh_buffered_gdf, get_h3_cells_for_gdf):
     h3_resolution = 10
-    edinburgh_h3_cells_gdf = get_h3_cells_for_gdf(edinburgh_buffered_gdf, h3_resolution)
+    edinburgh_h3_cells_gdf = get_h3_cells_for_gdf(
+        edinburgh_buffered_gdf, h3_resolution
+    )
     edinburgh_h3_cells_gdf.head()
     return edinburgh_h3_cells_gdf, h3_resolution
 
@@ -298,7 +303,7 @@ def _(box, gpd, mapping, mask, np, pd, rasterio):
                     results.append(
                         {
                             "h3_index": h3_index,
-                            "min_height": float(np.min(valid_data))
+                            "min_height": float(np.min(valid_data)),
                         }
                     )
 
@@ -375,12 +380,8 @@ def _(List, gpd, pd):
         geometries = all_geometries.groupby(level=0).first()
 
         # Concatenate and min the numeric columns
-        all_stats = pd.concat(
-            [gdf[["min_height"]] for gdf in non_empty_gdfs]
-        )
-        merged_stats = all_stats.groupby(level=0).agg(
-            {"min_height": "min"}
-        )
+        all_stats = pd.concat([gdf[["min_height"]] for gdf in non_empty_gdfs])
+        merged_stats = all_stats.groupby(level=0).agg({"min_height": "min"})
 
         # Combine geometry and stats into GeoDataFrame
         result = gpd.GeoDataFrame(merged_stats.join(geometries), crs="EPSG:4326")
@@ -409,9 +410,7 @@ def _():
 
 @app.cell
 def _(edinburgh_gdf):
-    edinburgh_gdf.to_feather(
-        f"edinburgh.arrow", compression="uncompressed"
-    )
+    edinburgh_gdf.to_feather(f"edinburgh.arrow", compression="uncompressed")
     return
 
 

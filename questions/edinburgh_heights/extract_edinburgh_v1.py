@@ -100,12 +100,9 @@ def _(edinburgh_gdf, gpd):
     # the boundary looks a bit over simplified and is missing-out bits of the coast. so, bloat a bit to recover the coast
     def buffer(gdf: gpd.GeoDataFrame, buffer_metres: float) -> gpd.GeoDataFrame:
         original_crs = gdf.crs
-        gdf_buffered = gdf.to_crs(
-            epsg=27700
-        ).copy()  # EPSG 27700 has a unit of metres so is valid to use here
+        gdf_buffered = gdf.to_crs(epsg=27700).copy() # EPSG 27700 has a unit of metres so is valid to use here
         gdf_buffered["geometry"] = gdf_buffered.geometry.buffer(buffer_metres)
         return gdf_buffered.to_crs(original_crs)
-
 
     edinburgh_buffered_gdf = buffer(edinburgh_gdf, buffer_metres=400)
     return (edinburgh_buffered_gdf,)
@@ -163,9 +160,7 @@ def _(Polygon, gpd, h3):
 @app.cell
 def _(edinburgh_buffered_gdf, get_h3_cells_for_gdf):
     h3_resolution = 10
-    edinburgh_h3_cells_gdf = get_h3_cells_for_gdf(
-        edinburgh_buffered_gdf, h3_resolution
-    )
+    edinburgh_h3_cells_gdf = get_h3_cells_for_gdf(edinburgh_buffered_gdf, h3_resolution)
     edinburgh_h3_cells_gdf.head()
     return edinburgh_h3_cells_gdf, h3_resolution
 
@@ -238,7 +233,7 @@ def _(box, gpd, mapping, mask, np, pd, rasterio):
         tiff_url: str, h3_gdf: gpd.GeoDataFrame
     ) -> gpd.GeoDataFrame:
         """
-        Process a single GeoTIFF and compute total height and sample count
+        Process a single GeoTIFF and compute minimum height
         for each H3 cell that intersects with the raster.
 
         Args:
@@ -246,7 +241,7 @@ def _(box, gpd, mapping, mask, np, pd, rasterio):
             h3_gdf: GeoDataFrame with H3 cell polygons, indexed by h3_index (EPSG:4326)
 
         Returns:
-            GeoDataFrame with h3_index index, geometry, and columns: total_height, total_samples
+            GeoDataFrame with h3_index index, geometry, and columns: min_height
             CRS is EPSG:4326 (H3 native CRS)
         """
         print(f"Opening raster: {tiff_url}")
@@ -303,8 +298,7 @@ def _(box, gpd, mapping, mask, np, pd, rasterio):
                     results.append(
                         {
                             "h3_index": h3_index,
-                            "total_height": float(np.sum(valid_data)),
-                            "total_samples": int(len(valid_data)),
+                            "min_height": float(np.min(valid_data))
                         }
                     )
 
@@ -312,7 +306,7 @@ def _(box, gpd, mapping, mask, np, pd, rasterio):
 
         if not results:
             return gpd.GeoDataFrame(
-                columns=["geometry", "total_height", "total_samples"],
+                columns=["geometry", "min_height"],
                 crs="EPSG:4326",
             )
 
@@ -340,26 +334,26 @@ def _(edinburgh_geotiff_urls, edinburgh_h3_cells_gdf, process_geotiff):
 
 @app.cell
 def _(edinburgh_height_gdfs):
-    edinburgh_height_gdfs[20].explore("total_height")
+    edinburgh_height_gdfs[20].explore("min_height")
     return
 
 
 @app.cell
 def _(List, gpd, pd):
-    def merge_and_compute_average(
+    def merge_and_compute_min(
         gdfs: List[gpd.GeoDataFrame],
     ) -> gpd.GeoDataFrame:
         """
-        Merge multiple height GeoDataFrames by summing total_height and total_samples
-        for each H3 cell, then compute average height.
+        Merge multiple height GeoDataFrames by finding min of min_height
+        for each H3 cell.
 
         Args:
             gdfs: List of GeoDataFrames with h3_index index, geometry,
-                  and columns: total_height, total_samples
+                  and columns: min_height
 
         Returns:
             GeoDataFrame with h3_index index, geometry, and columns:
-            total_height, total_samples, avg_height (CRS: EPSG:4326)
+            min_height (CRS: EPSG:4326)
         """
         # Filter out empty GeoDataFrames
         non_empty_gdfs = [gdf for gdf in gdfs if len(gdf) > 0]
@@ -370,9 +364,7 @@ def _(List, gpd, pd):
             return gpd.GeoDataFrame(
                 columns=[
                     "geometry",
-                    "total_height",
-                    "total_samples",
-                    "avg_height",
+                    "min_height",
                 ],
                 crs="EPSG:4326",
             )
@@ -382,17 +374,12 @@ def _(List, gpd, pd):
         all_geometries = pd.concat([gdf[["geometry"]] for gdf in non_empty_gdfs])
         geometries = all_geometries.groupby(level=0).first()
 
-        # Concatenate and sum the numeric columns
+        # Concatenate and min the numeric columns
         all_stats = pd.concat(
-            [gdf[["total_height", "total_samples"]] for gdf in non_empty_gdfs]
+            [gdf[["min_height"]] for gdf in non_empty_gdfs]
         )
         merged_stats = all_stats.groupby(level=0).agg(
-            {"total_height": "sum", "total_samples": "sum"}
-        )
-
-        # Compute average height
-        merged_stats["avg_height"] = (
-            merged_stats["total_height"] / merged_stats["total_samples"]
+            {"min_height": "min"}
         )
 
         # Combine geometry and stats into GeoDataFrame
@@ -400,16 +387,16 @@ def _(List, gpd, pd):
 
         print(f"  Merged into {len(result)} H3 cells")
         print(
-            f"  Height range: {result['avg_height'].min():.2f} to {result['avg_height'].max():.2f}"
+            f"  Height range: {result['min_height'].min():.2f} to {result['min_height'].max():.2f}"
         )
 
         return result
-    return (merge_and_compute_average,)
+    return (merge_and_compute_min,)
 
 
 @app.cell
-def _(edinburgh_height_gdfs, merge_and_compute_average):
-    edinburgh_height_gdf = merge_and_compute_average(edinburgh_height_gdfs)
+def _(edinburgh_height_gdfs, merge_and_compute_min):
+    edinburgh_height_gdf = merge_and_compute_min(edinburgh_height_gdfs)
     edinburgh_height_gdf.head()
     return (edinburgh_height_gdf,)
 
@@ -421,15 +408,31 @@ def _():
 
 
 @app.cell
+def _(edinburgh_gdf):
+    edinburgh_gdf.to_feather(
+        f"edinburgh.arrow", compression="uncompressed"
+    )
+    return
+
+
+@app.cell
+def _(edinburgh_buffered_gdf):
+    edinburgh_buffered_gdf.to_feather(
+        f"edinburgh_buffered.arrow", compression="uncompressed"
+    )
+    return
+
+
+@app.cell
 def _(edinburgh_height_gdf, h3_resolution):
-    edinburgh_height_gdf.to_parquet(f"edinburgh_{h3_resolution}.geoparquet")
+    edinburgh_height_gdf.to_parquet(f"edinburgh_min_{h3_resolution}.geoparquet")
     return
 
 
 @app.cell
 def _(edinburgh_height_gdf, h3_resolution):
     edinburgh_height_gdf.to_feather(
-        f"edinburgh_{h3_resolution}.arrow", compression="uncompressed"
+        f"edinburgh_min_{h3_resolution}.arrow", compression="uncompressed"
     )
     return
 
