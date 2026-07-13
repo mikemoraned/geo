@@ -2,28 +2,31 @@
 
 See [README.md](README.md) for what geo is. This file covers how to work on it.
 
-geo is an umbrella monorepo for geo projects: `apps/` (individual apps, e.g. `keks`),
-a shared `backend` cargo workspace, a top-level `web` site, `questions/` (Python data
-explorations, uv-managed), `spikes/`, and `tools/`.
+geo is an umbrella monorepo for geo projects: `apps/` (individual apps, e.g. `linzer`), 
+a top-level `web` site, `questions/` (Python data explorations, uv-managed), 
+`spikes/`, and `tools/`.
 
 ## Methodology
 
 We follow a Walking Skeleton approach: incremental, thin, end-to-end slices — each one
 something you could ship and observe working, rather than a horizontal layer.
 
-Slices are tracked in `docs/` and driven by two commands:
+Slices are tracked **per app**, in that app's own `docs/` dir (e.g.
+`apps/lookout/docs/`). Run the slice commands from within the app you're working on —
+they operate on the `docs/` relative to your current directory:
 
 - `/choose-slice` — pick the next slice from `docs/next-slices.md` and promote it to
   `docs/current-slice.md`
 - `/complete-slice` — archive the finished current slice into `docs/completed-slices.md`
 
-Slice docs:
+Each app's slice docs:
 
-- `@docs/current-slice.md` — currently active slice and remaining tasks
-- `@docs/next-slices.md` — upcoming slices
-- `@docs/completed-slices.md` — append-only history of completed slices
+- `docs/current-slice.md` — currently active slice and remaining tasks
+- `docs/next-slices.md` — upcoming slices
+- `docs/completed-slices.md` — append-only history of completed slices
 
-See `.claude/rules/slices.md` for how to edit the slice docs.
+The `/choose-slice` and `/complete-slice` skills and the `.claude/rules/slices.md` rule
+are shared at the repo root and reused across apps.
 
 ### Test-Driven Development
 

@@ -4,6 +4,11 @@ description: Archive the current slice to completed-slices.md
 user-invocable: true
 ---
 
+This skill is shared across apps. All `docs/…` paths below are **relative to the
+current working directory**, so it operates on the slice docs of whichever app you're
+running in (e.g. `apps/lookout/docs/…` when run from `apps/lookout`). Run it from an
+app dir that has a `docs/` with the three slice files.
+
 ## Steps
 
 1. **Read** `docs/current-slice.md`

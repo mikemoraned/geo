@@ -1,7 +1,7 @@
 ---
 paths:
-  - "docs/completed-slices.md"
-  - "docs/current-slice.md"
+  - "**/docs/completed-slices.md"
+  - "**/docs/current-slice.md"
 ---
 
 # Slice Documentation Rules
