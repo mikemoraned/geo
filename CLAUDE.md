@@ -2,14 +2,14 @@
 
 See [README.md](README.md) for what geo is. This file covers how to work on it.
 
-geo is an umbrella monorepo for geo projects: `apps/` (individual apps, e.g. `linzer`), 
-a top-level `web` site, `questions/` (Python data explorations, uv-managed), 
-`spikes/`, and `tools/`.
+geo is an umbrella monorepo for geo-related projects, containing different areas:
+* `apps/`: individual apps, e.g. `linzer`
+* `web`: a top-level website, which is a blog which lives at https://geo.houseofmoran.io
+* `questions/`: data explorations, typically in notebooks, uv-managed
+* `spikes/`: throwaway code used for experimentation and discovery that we keep around for reference of what was done, but code typically shouldn't be used directly
+* `tools/`: shared tools e.g. a motis-server
 
 ## Methodology
-
-We follow a Walking Skeleton approach: incremental, thin, end-to-end slices — each one
-something you could ship and observe working, rather than a horizontal layer.
 
 Slices are tracked **per app**, in that app's own `docs/` dir (e.g.
 `apps/lookout/docs/`). Run the slice commands from within the app you're working on —
