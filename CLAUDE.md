@@ -9,6 +9,14 @@ geo is an umbrella monorepo for geo-related projects, containing different areas
 * `spikes/`: throwaway code used for experimentation and discovery that we keep around for reference of what was done, but code typically shouldn't be used directly
 * `tools/`: shared tools e.g. a motis-server
 
+## Running Claude
+
+Launch Claude for an app under the safehouse sandbox with `just claude <app>`
+(e.g. `just claude lookout`). This starts Claude with its working directory set to
+`apps/<app>` — so the per-app slice skills resolve correctly — with read/write inside
+that app and read-only across the rest of the repo (needed so Claude can discover the
+shared `.claude/` skills and rules at the repo root).
+
 ## Methodology
 
 Slices are tracked **per app**, in that app's own `docs/` dir (e.g.
