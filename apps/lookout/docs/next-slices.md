@@ -11,6 +11,10 @@ We want to get the most minimal setup of:
 * rust server saves that data to disk in rerun.io format
 * data is loaded in rerun.io app and visualised
 
+### Decisions
+
+The crates layout should be very similar to https://github.com/mikemoraned/bobby. Feel free to copy / be-inspired by that layout.
+
 ### Tasks
 
 * see target.md for overall guiding advice, but this initially breaks down into:
