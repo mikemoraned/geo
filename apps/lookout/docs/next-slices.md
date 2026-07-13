@@ -18,3 +18,12 @@ We want to get the most minimal setup of:
         * ...
     * [ ] a refactoring that introduces the crux library as a refactoring that splits the parts that are working into the correct architectural area
 
+## Slice: get iroh running on m5stack and on laptop, sharing accelerometer data
+
+### Target
+
+See "dumb accelerometer" idea in target.md
+
+### Tasks 
+
+...
