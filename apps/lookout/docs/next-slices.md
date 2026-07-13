@@ -22,7 +22,7 @@ We want to get the most minimal setup of:
 
 ### Target
 
-See "dumb accelerometer" idea in target.md
+See "dumb accelerometer" idea in target.md. If iroh doesn't work, we can always share over BLE.
 
 ### Tasks 
 
