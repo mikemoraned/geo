@@ -30,9 +30,12 @@ This means that ahead of time we have to build a dataset that supports the looku
 1. Get the train network for an area from [OvertureMaps](https://docs.overturemaps.org/guides/transportation/)
 2. distill this down into a series of segments, or whatever supports the lookup
 
+We can additionally improve accuracy by using accelerometers from devices that are coupled i.e. my laptop, my phone and my ipad. This is where a local device comms library comes in as it allows this accelerometer data to be shared across the devices. We may also want to consider using an [M5](https://m5stack.com) device purely as a dumb accelerometer i.e. it need not be running the whole stack, and just providing sensor data.
+
 # Constraints, Trade-offs and Technology Choices
 
 - Use the [crux](https://redbadger.github.io/crux/) library for ports and adapters
+- Use the [iroh](https://docs.iroh.computer/quickstart) library for multi-device comms
 - sensor data is persisted in https://rerun.io format
 - all code inside the centre of the archictecture should be in Rust i.e. all business logic is in Rust
 - for front-end on web we should follow a single-page-app pattern and use typescript + https://www.solidjs.com
