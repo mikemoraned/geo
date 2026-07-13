@@ -34,7 +34,7 @@ See target.md for overall guiding advice.
 
 **Spike — get it working at all (no crux, no Solid):**
 
-* [ ] Scaffold the `crates/` cargo workspace + an axum server crate that compiles and
+* [x] Scaffold the `crates/` cargo workspace + an axum server crate that compiles and
       serves a static "hello" page over HTTP on localhost.
 * [ ] Static front-end page (vanilla HTML/JS): subscribe to `DeviceMotionEvent` and open a
       websocket to the server. Confirm it runs on localhost in both Safari and Chrome.
