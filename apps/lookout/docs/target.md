@@ -39,3 +39,23 @@ We can additionally improve accuracy by using accelerometers from devices that a
 - sensor data is persisted in https://rerun.io format
 - all code inside the centre of the archictecture should be in Rust i.e. all business logic is in Rust
 - for front-end on web we should follow a single-page-app pattern and use typescript + https://www.solidjs.com
+
+# Learned Constraints
+
+- **The dev laptop cannot self-source motion data.** The dev machine is an Apple Silicon
+  (M3) MacBook Air (`Mac15,12`); Apple Silicon dropped the Sudden Motion Sensor, so there
+  is no built-in accelerometer the OS or browser can read — `DeviceMotionEvent` never
+  fires in desktop Safari/Chrome, and there is no SMC motion sensor. A "browser + server
+  both on the laptop, localhost only" setup can validate the websocket transport and
+  persistence plumbing, but **cannot** produce real accelerometer data. Any slice needing
+  real motion must use an external source:
+    - **AirPods** (Pro / 3rd-gen / Max) via macOS `CMHeadphoneMotionManager` — real
+      accel+gyro, wireless, no cert; a small native (Swift) helper forwards it. (Head
+      motion, not device motion.)
+    - **A game controller with an IMU** (PS5 DualSense, DS4, Switch Joy-Con/Pro) — real
+      3-axis accel+gyro, but the browser Gamepad API does *not* expose the IMU, so it
+      needs a native HID reader → websocket.
+    - **iPhone/iPad running the page** — the real target, gives proper `DeviceMotionEvent`
+      data, but on a LAN IP (not `localhost`) the sensor API needs a secure context, so it
+      requires HTTPS via a cert (`mkcert`) or a tunnel (`cloudflared`/`ngrok`).
+    - An **M5 / dedicated sensor board** remains a future option.

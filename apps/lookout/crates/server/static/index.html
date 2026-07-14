@@ -4,9 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Lookout</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; }
+      #status { font-weight: bold; }
+      #sample { font-family: ui-monospace, monospace; white-space: pre; }
+    </style>
   </head>
   <body>
-    <h1>Lookout — hello</h1>
-    <p>Static page served by the axum server on localhost.</p>
+    <h1>Lookout</h1>
+    <p>Stream accelerometer (<code>DeviceMotionEvent</code>) samples to the server over a websocket.</p>
+    <button id="start">Start</button>
+    <p>status: <span id="status">idle</span></p>
+    <p>sent: <span id="count">0</span></p>
+    <div id="sample"></div>
+    <script src="/app.js"></script>
   </body>
 </html>
