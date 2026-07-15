@@ -1,4 +1,7 @@
-FROM rust:slim AS builder
+# Pin the builder to the same Debian release as the runtime (bookworm) so the
+# binary's glibc matches. Untagged `rust:slim` tracks the latest Debian stable,
+# which rolled to trixie (glibc 2.38) and broke the bookworm-slim runtime.
+FROM rust:slim-bookworm AS builder
 
 WORKDIR /prod
 COPY . .
