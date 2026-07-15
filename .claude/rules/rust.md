@@ -38,6 +38,8 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
 - **Import a type directly from the crate that owns it; don't re-export it through an intermediary to keep an old path alive.** When a type's home is `shared` (or any crate), consumers write `use shared::Foo` directly. Do **not** add a `pub use shared::Foo` to some middle crate just so an existing `middle_crate::Foo` import keeps compiling — that hides where the type really lives and couples consumers to the wrong crate. We control every crate in this workspace, so it is fine (and preferred) to break an internal cross-crate import path when a type moves to its proper home: update the call sites to import from the new owner in the same change. A re-export is only justified when it is a deliberate, documented part of *that* crate's own public API — never as a compatibility shim.
 - Keep shared/library types as pure data types — don't add policy or business-logic methods to them. Policy logic belongs in the crate that owns the decision. Only inherent behaviour (formatting, parsing, construction) belongs on the type itself.
 - Testing:
+  - Run tests with `cargo nextest run` (via `just test` / `just test-no-docker`), not `cargo test`
+  - Tests needing Docker (e.g. testcontainers) get a `_docker`-suffixed name so the `no-docker` nextest profile skips them; `just test-no-docker` is the sandbox-safe run
   - Core functionality gets inline unit tests
   - Multi-part integration gets integ tests (use captured real data)
   - Prefer high-level invariant-based tests over bespoke examples; use [proptest](https://docs.rs/proptest/latest/proptest/) for property-based tests

@@ -91,19 +91,24 @@ verifiable milestone.
 
 **Phase 2 — websocket → redis (verify samples land in redis):**
 
-* [ ] Add a `shared` crate with the `Sample` model (id / t / optional gps / optional accel)
+* [x] Add a `shared` crate with the `Sample` model (id / t / optional gps / optional accel)
       and serde JSON round-trip tests.
 * [ ] Set up secrets the bobby way: create the `lookout-upstash-redis-url` item in the `Dev`
       1Password vault and a checked-in `deploy/lookout.env` holding
       `LOOKOUT_REDIS_URL=op://Dev/lookout-upstash-redis-url/password` (reference only).
-* [ ] Add `redis` to the `server` crate; connect to upstash via `LOOKOUT_REDIS_URL`. On each
+* [x] Add `redis` to the `server` crate; connect to upstash via `LOOKOUT_REDIS_URL`. On each
       received websocket sample, deserialize into `Sample` and `LPUSH` the JSON onto the
       `lookout-telemetry` list. Log queue depth. Run locally via
       `op run --env-file=deploy/lookout.env -- cargo run -p server` to verify against upstash.
-* [ ] Frontend: open the websocket (`wss://lookout.fly.dev/ws`) and send timestamped JSON
+      (Pushing goes through a `SampleSink` port — `RedisSink` for prod — so the `/ws` path is
+      covered by a Docker-free integ test with a recording sink. Redis is optional: log-only
+      when `LOOKOUT_REDIS_URL` is unset. Verifying against real upstash still needs the
+      secret + db, below.)
+* [x] Frontend: open the websocket (`wss://lookout.fly.dev/ws`) and send timestamped JSON
       `Sample`s. Handle reconnect on the flaky-connection path; decide whether to buffer
       unsent samples locally and flush on reconnect now, or accept dead-zone gaps in a first
-      pass (see Decisions).
+      pass (see Decisions). (Built a best-effort in-memory outbox flushed on (re)connect with
+      backoff — not persisted, so a reload or an overflow past MAX_OUTBOX drops oldest.)
 * [ ] Redeploy to fly with the secret pushed via
       `fly secrets set LOOKOUT_REDIS_URL="$(op read 'op://Dev/lookout-upstash-redis-url/password')"`.
       Confirm from the phone that samples appear in the upstash `lookout-telemetry` queue

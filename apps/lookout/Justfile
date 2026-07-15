@@ -1,12 +1,26 @@
 # Lookout app recipes. Run from `apps/lookout`.
 
 # Run the server locally on http://localhost:3000 (override with PORT).
+# Log-only: LOOKOUT_REDIS_URL is unset, so received samples are logged, not queued.
 serve:
     cargo run -p server
+
+# Run the server locally with the upstash redis URL resolved from 1Password, so
+# received samples are LPUSHed onto the lookout-telemetry queue.
+serve-redis:
+    op run --env-file=deploy/lookout.env -- cargo run -p server
 
 # Build the release binary.
 build:
     cargo build --release -p server
+
+# Run all tests with nextest (includes _docker tests — requires Docker).
+test:
+    cargo nextest run --workspace
+
+# Run tests without Docker: the no-docker profile skips _docker-named tests.
+test-no-docker:
+    cargo nextest run --workspace --profile no-docker
 
 # Deploy the server to fly.io (lookout.fly.dev), using ./fly.toml + ./Dockerfile.
 deploy:

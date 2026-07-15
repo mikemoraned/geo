@@ -108,6 +108,7 @@ function emitGpsSample() {
   gpsCount += 1;
   gpsCountEl.textContent = String(gpsCount);
   gpsEl.textContent = JSON.stringify(sample.gps, null, 2);
+  sendSample(sample);
 }
 
 function sampleTick() {
@@ -189,6 +190,7 @@ async function start() {
     gpsEl.textContent = "geolocation unavailable";
   }
 
+  connectWs();
   setInterval(sampleTick, SAMPLE_INTERVAL_MS);
   setStatus("gathering");
 }

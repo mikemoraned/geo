@@ -1,11 +1,8 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::response::Response;
-use axum::routing::any;
-use axum::Router;
-use tower_http::services::ServeDir;
-use tower_http::trace::TraceLayer;
+use server::queue::RedisSink;
+use server::{build_app, AppState};
 
 fn static_dir() -> String {
     std::env::var("LOOKOUT_STATIC_DIR")
@@ -21,10 +18,30 @@ async fn main() {
         )
         .init();
 
-    let app = Router::new()
-        .route("/ws", any(ws_upgrade))
-        .fallback_service(ServeDir::new(static_dir()))
-        .layer(TraceLayer::new_for_http());
+    // rustls needs a process-global crypto provider installed once before any
+    // `rediss://` (TLS) connection is made.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("install rustls crypto provider");
+
+    let sink = match std::env::var("LOOKOUT_REDIS_URL") {
+        Ok(url) => match RedisSink::connect(&url).await {
+            Ok(sink) => {
+                tracing::info!("connected to telemetry redis");
+                Some(Arc::new(sink) as Arc<dyn server::queue::SampleSink>)
+            }
+            Err(err) => {
+                tracing::error!(%err, "failed to connect to telemetry redis; running log-only");
+                None
+            }
+        },
+        Err(_) => {
+            tracing::warn!("LOOKOUT_REDIS_URL unset; received samples will be logged only");
+            None
+        }
+    };
+
+    let app = build_app(AppState { sink }, static_dir());
 
     let port: u16 = std::env::var("PORT")
         .ok()
@@ -34,20 +51,4 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     tracing::info!("listening on http://{addr}");
     axum::serve(listener, app).await.unwrap();
-}
-
-async fn ws_upgrade(upgrade: WebSocketUpgrade) -> Response {
-    upgrade.on_upgrade(handle_socket)
-}
-
-async fn handle_socket(mut socket: WebSocket) {
-    tracing::info!("websocket connected");
-    while let Some(Ok(msg)) = socket.recv().await {
-        match msg {
-            Message::Text(text) => tracing::info!(%text, "sample"),
-            Message::Close(_) => break,
-            _ => {}
-        }
-    }
-    tracing::info!("websocket disconnected");
 }

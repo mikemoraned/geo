@@ -1,0 +1,10 @@
+# Tests whose name contains `docker` need a Docker daemon (testcontainers). The
+# `no-docker` profile filters them out so the suite runs without Docker.
+[profile.default]
+status-level = "skip"
+final-status-level = "skip"
+
+[profile.no-docker]
+default-filter = "not test(/docker/)"
+status-level = "skip"
+final-status-level = "skip"
