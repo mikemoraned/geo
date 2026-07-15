@@ -11,7 +11,7 @@ const DEVICE_ID_COOKIE = "lookout_device_id";
 
 // Raw sensor events fire far faster than we want to record; we keep only the latest
 // reading from each source and emit one sample per source on this fixed interval.
-const SAMPLE_INTERVAL_MS = 500;
+const SAMPLE_INTERVAL_MS = 10000;
 
 let accelCount = 0;
 let gpsCount = 0;
