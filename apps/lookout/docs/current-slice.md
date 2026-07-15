@@ -93,7 +93,7 @@ verifiable milestone.
 
 * [x] Add a `shared` crate with the `Sample` model (id / t / optional gps / optional accel)
       and serde JSON round-trip tests.
-* [ ] Set up secrets the bobby way: create the `lookout-upstash-redis-url` item in the `Dev`
+* [x] Set up secrets the bobby way: create the `lookout-upstash-redis-url` item in the `Dev`
       1Password vault and a checked-in `deploy/lookout.env` holding
       `LOOKOUT_REDIS_URL=op://Dev/lookout-upstash-redis-url/password` (reference only).
 * [x] Add `redis` to the `server` crate; connect to upstash via `LOOKOUT_REDIS_URL`. On each
@@ -109,10 +109,16 @@ verifiable milestone.
       unsent samples locally and flush on reconnect now, or accept dead-zone gaps in a first
       pass (see Decisions). (Built a best-effort in-memory outbox flushed on (re)connect with
       backoff — not persisted, so a reload or an overflow past MAX_OUTBOX drops oldest.)
-* [ ] Redeploy to fly with the secret pushed via
+* [x] Redeploy to fly with the secret pushed via
       `fly secrets set LOOKOUT_REDIS_URL="$(op read 'op://Dev/lookout-upstash-redis-url/password')"`.
       Confirm from the phone that samples appear in the upstash `lookout-telemetry` queue
-      (manual verification in the upstash console).
+      (manual verification in the upstash console). (Root cause of the initial "no data" was a
+      bad upstash credential — reset it in upstash + 1Password. Debugging added durable
+      machinery: a `/version` endpoint + startup log of the build git hash (via a
+      `BUILD_GIT_HASH` build arg), fail-loud exit when `LOOKOUT_REDIS_URL` is set but redis is
+      unreachable, and a release-mode `end_to_end` test hitting real upstash (`just
+      end_to_end_test`). Also pinned the Docker builder to `rust:slim-bookworm` for a glibc
+      mismatch, and added `tls-rustls` redis features for `rediss://`.)
 
 **Phase 3 — local cli drains redis → rerun:**
 
