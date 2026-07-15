@@ -84,9 +84,10 @@ verifiable milestone.
       pattern) serving the static page; deploy to `lookout-hom.fly.dev`.
 * [x] Confirm on the phone: load `https://lookout-hom.fly.dev`, grant motion + geolocation
       permissions, and see the page actively gathering data.
-* [ ] Throttle gather/display (and later send) to one sample each per fixed interval
+* [x] Throttle gather/display (and later send) to one sample each per fixed interval
       (`SAMPLE_INTERVAL_MS`, default 500ms) — raw `devicemotion`/`watchPosition` fire far
-      too often.
+      too often. (Interval landed at 10000ms; each source also emits a leading sample on
+      its first reading rather than waiting a full interval.)
 
 **Phase 2 — websocket → redis (verify samples land in redis):**
 
