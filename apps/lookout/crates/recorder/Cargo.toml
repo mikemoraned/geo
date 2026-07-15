@@ -1,0 +1,19 @@
+[package]
+name = "recorder"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+rustls = { workspace = true }
+clap = { workspace = true }
+redis = { workspace = true }
+shared = { workspace = true }
+telemetry = { workspace = true }
+# SDK only (default features also pull the native/web viewer); we just write a .rrd.
+rerun = { version = "0.34", default-features = false, features = ["sdk"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,19 @@
+[package]
+name = "telemetry"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+redis = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+shared = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+testcontainers = "0.27"
+testcontainers-modules = { version = "0.15", features = ["redis"] }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

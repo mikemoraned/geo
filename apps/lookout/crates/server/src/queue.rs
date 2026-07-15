@@ -1,24 +1,14 @@
-//! The telemetry queue: samples are pushed onto a sink that the `recorder` cli
-//! later drains. The production sink is an upstash redis list (`RedisSink`),
-//! reached over TLS (`rediss://`) using the URL from `LOOKOUT_REDIS_URL`.
-//!
-//! `SampleSink` is the port the websocket handler pushes to, so tests can swap a
-//! recording sink for redis and drive the real handler without a container.
-
-use std::time::Duration;
+//! The websocket handler's push side of the telemetry queue. `SampleSink` is the
+//! port the handler pushes to, so tests can swap a recording sink for redis and
+//! drive the real handler without a container. The production sink (`RedisSink`)
+//! `LPUSH`es onto the shared queue; connection + key live in the `telemetry` crate.
 
 use async_trait::async_trait;
 use redis::aio::MultiplexedConnection;
-use redis::{AsyncConnectionConfig, Client, RedisError};
+use redis::RedisError;
 use shared::Sample;
 
-/// The redis list holding queued telemetry samples.
-pub const QUEUE_KEY: &str = "lookout-telemetry";
-
-/// redis's defaults (1s connect, 500ms response) are far too tight for a remote
-/// Upstash TLS endpoint over the public internet; use generous timeouts that
-/// still bound a genuine hang.
-const TIMEOUT: Duration = Duration::from_secs(10);
+pub use telemetry::QUEUE_KEY;
 
 /// Failure enqueueing a sample.
 #[derive(Debug, thiserror::Error)]
@@ -42,18 +32,11 @@ pub struct RedisSink {
 }
 
 impl RedisSink {
-    /// Open a multiplexed connection to the telemetry redis.
-    ///
-    /// A `rediss://` URL negotiates TLS via rustls; the caller must have installed
-    /// a rustls crypto provider first (see the server binary's startup).
+    /// Connect to the telemetry redis. A `rediss://` URL negotiates TLS via rustls;
+    /// the caller must have installed a rustls crypto provider first (see the server
+    /// binary's startup).
     pub async fn connect(url: &str) -> Result<Self, RedisError> {
-        let client = Client::open(url)?;
-        let config = AsyncConnectionConfig::new()
-            .set_connection_timeout(TIMEOUT)
-            .set_response_timeout(TIMEOUT);
-        let conn = client
-            .get_multiplexed_async_connection_with_config(&config)
-            .await?;
+        let conn = telemetry::connect(url).await?;
         Ok(Self { conn })
     }
 }
@@ -71,19 +54,5 @@ impl SampleSink for RedisSink {
             .query_async(&mut conn)
             .await?;
         Ok(depth)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    /// upstash is TLS-only, so we connect with `rediss://`. redis only parses that
-    /// scheme when the crate is built with TLS features; without them `Client::open`
-    /// fails with InvalidClientConfig and the server silently falls back to log-only
-    /// (this shipped once). No network — parsing the URL is enough to prove the
-    /// features are present.
-    #[test]
-    fn rediss_urls_parse() {
-        redis::Client::open("rediss://default:secret@example.upstash.io:6379")
-            .expect("rediss:// must parse — needs redis TLS features enabled");
     }
 }

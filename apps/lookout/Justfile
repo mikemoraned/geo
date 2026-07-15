@@ -36,6 +36,11 @@ end_to_end_test:
 deploy:
     fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}"
 
+# Read the upstash telemetry queue into a rerun .rrd, with the redis URL from
+# 1Password. No args = non-destructive view-latest; `just record drain` to drain.
+record *args:
+    op run --env-file=deploy/lookout.env -- cargo run -p recorder -- {{args}}
+
 # Push the upstash redis URL secret to fly from 1Password.
 push-secrets:
     fly secrets set LOOKOUT_REDIS_URL="$(op read 'op://Dev/lookout-upstash-redis-url/password')"

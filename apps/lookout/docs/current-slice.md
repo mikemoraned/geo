@@ -122,10 +122,16 @@ verifiable milestone.
 
 **Phase 3 — local cli drains redis → rerun:**
 
-* [ ] Add a `recorder` cli crate that connects to the upstash list via `LOOKOUT_REDIS_URL`
+* [x] Add a `recorder` cli crate that connects to the upstash list via `LOOKOUT_REDIS_URL`
       (run via `op run --env-file=deploy/lookout.env -- …`), `BRPOP`s and deserializes
       `Sample`s, and logs them to a `.rrd` via the rerun SDK (accel x/y/z scalars, gps
       lat/lon, per-device entity paths, `t` as timeline). Flush on Ctrl-C / empty.
+      (Queue connect/key/drain extracted to a `telemetry` crate shared by server + recorder.
+      Recorder has two subcommands, default **view-latest** — non-destructive `LRANGE` of the
+      latest N (default 1000) — and **drain** — destructive `BRPOP` until empty/Ctrl-C — so
+      you don't accidentally consume the queue while iterating. gps also logged as rerun geo
+      points. Run via `just record` / `just record drain`. Queue read paths covered by a
+      `telemetry` `_docker` test; producing a real `.rrd` from live data is the next item.)
 * [ ] End-to-end: take a real train trip with the phone capturing gps + accel to upstash,
       then run the local `recorder` to drain into a `.rrd` and open it in the rerun viewer,
       confirming the accel curves and gps track are visible.
