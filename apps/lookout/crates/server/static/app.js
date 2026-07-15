@@ -20,6 +20,15 @@ let gpsCount = 0;
 let pendingAccel = null;
 let pendingGps = null;
 
+// Fire one sample as soon as any source produces its first reading, rather than
+// waiting a full SAMPLE_INTERVAL_MS for the interval's first tick.
+let firstSampleTaken = false;
+function takeFirstSample() {
+  if (firstSampleTaken) return;
+  firstSampleTaken = true;
+  sampleTick();
+}
+
 function setStatus(text) {
   statusEl.textContent = text;
 }
@@ -53,11 +62,13 @@ idEl.textContent = id;
 function onMotion(event) {
   const a = event.accelerationIncludingGravity || event.acceleration || {};
   pendingAccel = { x: a.x ?? null, y: a.y ?? null, z: a.z ?? null };
+  takeFirstSample();
 }
 
 function onPosition(position) {
   const c = position.coords;
   pendingGps = { lat: c.latitude, lon: c.longitude, alt: c.altitude, acc: c.accuracy };
+  takeFirstSample();
 }
 
 function onPositionError(err) {
