@@ -1,4 +1,4 @@
-app = 'lookout'
+app = 'lookout-hom'
 primary_region = 'lhr'
 
 [build]
