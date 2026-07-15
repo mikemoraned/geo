@@ -79,8 +79,15 @@ function onPosition(position) {
   takeFirstGpsSample();
 }
 
+// watchPosition keeps trying after an error, so POSITION_UNAVAILABLE (Core Location's
+// kCLErrorLocationUnknown) is usually a transient "no fix yet" — don't treat it as fatal
+// or let it clobber a fix we already have.
 function onPositionError(err) {
-  gpsEl.textContent = `error: ${err.message}`;
+  if (err.code === err.PERMISSION_DENIED) {
+    gpsEl.textContent = "permission denied";
+  } else if (gpsCount === 0) {
+    gpsEl.textContent = "waiting for a gps fix…";
+  }
 }
 
 // A sample carries the device id, a timestamp, and either an accel or gps reading.
@@ -91,6 +98,7 @@ function emitAccelSample() {
   accelCount += 1;
   accelCountEl.textContent = String(accelCount);
   accelEl.textContent = JSON.stringify(sample.accel, null, 2);
+  sendSample(sample);
 }
 
 function emitGpsSample() {
@@ -105,6 +113,50 @@ function emitGpsSample() {
 function sampleTick() {
   emitAccelSample();
   emitGpsSample();
+}
+
+// Websocket delivery. Samples go into an in-memory outbox and are flushed whenever
+// the socket is open; a dropped connection (train dead zone) triggers reconnect with
+// backoff and re-flush. Best-effort only — the outbox isn't persisted, so a page
+// reload, or a dead zone long enough to overflow MAX_OUTBOX, drops the oldest samples.
+const WS_URL = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws`;
+const MAX_OUTBOX = 5000;
+const INITIAL_RECONNECT_MS = 1000;
+const MAX_RECONNECT_MS = 30000;
+
+let ws = null;
+let outbox = [];
+let reconnectMs = INITIAL_RECONNECT_MS;
+
+function connectWs() {
+  ws = new WebSocket(WS_URL);
+  ws.addEventListener("open", () => {
+    reconnectMs = INITIAL_RECONNECT_MS;
+    setStatus("gathering — connected");
+    flushOutbox();
+  });
+  ws.addEventListener("close", () => {
+    setStatus("gathering — reconnecting…");
+    setTimeout(connectWs, reconnectMs);
+    reconnectMs = Math.min(reconnectMs * 2, MAX_RECONNECT_MS);
+  });
+  // A socket error is followed by a close event, so let close drive the reconnect.
+  ws.addEventListener("error", () => ws.close());
+}
+
+function flushOutbox() {
+  while (outbox.length && ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(outbox[0]));
+    outbox.shift();
+  }
+}
+
+function sendSample(sample) {
+  outbox.push(sample);
+  if (outbox.length > MAX_OUTBOX) {
+    outbox.splice(0, outbox.length - MAX_OUTBOX);
+  }
+  flushOutbox();
 }
 
 async function start() {
