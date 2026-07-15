@@ -33,8 +33,12 @@ async fn main() {
                 Some(Arc::new(sink) as Arc<dyn server::queue::SampleSink>)
             }
             Err(err) => {
-                tracing::error!(%err, "failed to connect to telemetry redis; running log-only");
-                None
+                // A configured-but-unreachable redis would silently drop all
+                // telemetry. Fail hard so the deploy is visibly broken instead of
+                // quietly running log-only. eprintln (stderr) is used because it
+                // ships reliably even when the tracing boot-burst is dropped.
+                eprintln!("FATAL: LOOKOUT_REDIS_URL is set but redis connect failed: {err}");
+                std::process::exit(1);
             }
         },
         Err(_) => {
