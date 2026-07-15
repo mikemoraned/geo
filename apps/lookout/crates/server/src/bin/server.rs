@@ -18,6 +18,8 @@ async fn main() {
         )
         .init();
 
+    tracing::info!(git_hash = server::GIT_HASH, "server starting");
+
     // rustls needs a process-global crypto provider installed once before any
     // `rediss://` (TLS) connection is made.
     rustls::crypto::ring::default_provider()

@@ -196,3 +196,13 @@ async function start() {
 }
 
 startBtn.addEventListener("click", start);
+
+// Show the server build's git hash, so a running deploy can be matched to source.
+fetch("/version")
+  .then((r) => r.text())
+  .then((v) => {
+    el("version").textContent = v;
+  })
+  .catch(() => {
+    el("version").textContent = "unknown";
+  });

@@ -5,13 +5,18 @@ use std::sync::Arc;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
 use axum::response::Response;
-use axum::routing::any;
+use axum::routing::{any, get};
 use axum::Router;
 use shared::Sample;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
 use crate::queue::SampleSink;
+
+/// The git commit this binary was built from, injected via the `BUILD_GIT_HASH`
+/// build arg (or "unknown" for a bare `cargo build`). Logged at startup and served
+/// at `/version` so a running deploy can be matched to its source.
+pub const GIT_HASH: &str = env!("BUILD_GIT_HASH");
 
 /// Shared handler state. `sink` is `None` when no telemetry sink is configured
 /// (e.g. `LOOKOUT_REDIS_URL` unset), in which case received samples are logged
@@ -26,9 +31,15 @@ pub struct AppState {
 pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
     Router::new()
         .route("/ws", any(ws_upgrade))
+        .route("/version", get(version))
         .fallback_service(ServeDir::new(static_dir.into()))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// The build's git hash, for matching a running deploy to its source.
+async fn version() -> &'static str {
+    GIT_HASH
 }
 
 async fn ws_upgrade(State(state): State<AppState>, upgrade: WebSocketUpgrade) -> Response {

@@ -3,6 +3,11 @@
 # which rolled to trixie (glibc 2.38) and broke the bookworm-slim runtime.
 FROM rust:slim-bookworm AS builder
 
+# Git hash of the deployed source, passed by `just deploy` (`--build-arg`). The
+# build script re-emits it as BUILD_GIT_HASH for env!() in the binary.
+ARG BUILD_GIT_HASH=unknown
+ENV BUILD_GIT_HASH=$BUILD_GIT_HASH
+
 WORKDIR /prod
 COPY . .
 RUN cargo build --release -p server

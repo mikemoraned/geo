@@ -1,14 +1,18 @@
 # Lookout app recipes. Run from `apps/lookout`.
 
+# Short git hash of the working tree, with a -dirty suffix if uncommitted. Baked
+# into the binary (BUILD_GIT_HASH) so it's logged at startup and served at /version.
+git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git diff --quiet 2>/dev/null || echo -dirty)"`
+
 # Run the server locally on http://localhost:3000 (override with PORT).
 # Log-only: LOOKOUT_REDIS_URL is unset, so received samples are logged, not queued.
 serve:
-    cargo run -p server
+    BUILD_GIT_HASH={{git_hash}} cargo run -p server
 
 # Run the server locally with the upstash redis URL resolved from 1Password, so
 # received samples are LPUSHed onto the lookout-telemetry queue.
 serve-redis:
-    op run --env-file=deploy/lookout.env -- cargo run -p server
+    BUILD_GIT_HASH={{git_hash}} op run --env-file=deploy/lookout.env -- cargo run -p server
 
 # Build the release binary.
 build:
@@ -23,8 +27,9 @@ test-no-docker:
     cargo nextest run --workspace --profile no-docker
 
 # Deploy the server to fly.io (lookout.fly.dev), using ./fly.toml + ./Dockerfile.
+# Bakes the git hash into the build so /version and startup logs identify the deploy.
 deploy:
-    fly deploy
+    fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}"
 
 # Push the upstash redis URL secret to fly from 1Password.
 push-secrets:
