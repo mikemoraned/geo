@@ -26,6 +26,11 @@ test:
 test-no-docker:
     cargo nextest run --workspace --profile no-docker
 
+# Run the end_to_end tests against real services (release mode), with real
+# credentials injected from 1Password. Hits the real upstash redis.
+end_to_end_test:
+    op run --env-file=deploy/lookout.env -- cargo nextest run --release --workspace --profile end-to-end
+
 # Deploy the server to fly.io (lookout.fly.dev), using ./fly.toml + ./Dockerfile.
 # Bakes the git hash into the build so /version and startup logs identify the deploy.
 deploy:
