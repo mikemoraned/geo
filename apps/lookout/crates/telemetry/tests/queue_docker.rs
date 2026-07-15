@@ -11,12 +11,19 @@ use redis::aio::MultiplexedConnection;
 use shared::{Accel, Sample};
 use telemetry::{brpop_sample, latest_samples, QUEUE_KEY};
 use testcontainers::runners::AsyncRunner;
-use testcontainers::ContainerAsync;
+use testcontainers::{ContainerAsync, ImageExt};
 use testcontainers_modules::redis::{Redis, REDIS_PORT};
 use uuid::Uuid;
 
 async fn start_redis() -> (ContainerAsync<Redis>, String) {
-    let container = Redis::default().start().await.expect("start redis");
+    // Pin a modern redis: `brpop_sample` uses a fractional BRPOP timeout, which
+    // only Redis >= 6.0 accepts (the module's default image is older). upstash,
+    // the real backend, is modern.
+    let container = Redis::default()
+        .with_tag("7-alpine")
+        .start()
+        .await
+        .expect("start redis");
     let host = container.get_host().await.expect("host");
     let port = container
         .get_host_port_ipv4(REDIS_PORT)
