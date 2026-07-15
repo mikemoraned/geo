@@ -1,38 +1,74 @@
-const statusEl = document.getElementById("status");
-const countEl = document.getElementById("count");
-const sampleEl = document.getElementById("sample");
-const startBtn = document.getElementById("start");
+const el = (id) => document.getElementById(id);
+const statusEl = el("status");
+const idEl = el("id");
+const accelEl = el("accel");
+const accelCountEl = el("accel-count");
+const gpsEl = el("gps");
+const gpsCountEl = el("gps-count");
+const startBtn = el("start");
 
-let ws = null;
-let count = 0;
+const DEVICE_ID_COOKIE = "lookout_device_id";
+
+let accelCount = 0;
+let gpsCount = 0;
 
 function setStatus(text) {
   statusEl.textContent = text;
 }
 
-function openSocket() {
-  const url = `ws://${location.host}/ws`;
-  ws = new WebSocket(url);
-  ws.addEventListener("open", () => setStatus("connected"));
-  ws.addEventListener("close", () => setStatus("disconnected"));
-  ws.addEventListener("error", () => setStatus("socket error"));
+function getCookie(name) {
+  return document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(`${name}=`))
+    ?.split("=")[1];
 }
 
+function setCookie(name, value) {
+  const oneYear = 60 * 60 * 24 * 365;
+  document.cookie = `${name}=${value}; max-age=${oneYear}; path=/; SameSite=Strict`;
+}
+
+// Stable per-device identity, generated once and persisted in a cookie.
+function deviceId() {
+  let id = getCookie(DEVICE_ID_COOKIE);
+  if (!id) {
+    id = crypto.randomUUID();
+    setCookie(DEVICE_ID_COOKIE, id);
+  }
+  return id;
+}
+
+const id = deviceId();
+idEl.textContent = id;
+
+// A sample carries the device id, a timestamp, and either an accel or gps reading.
+// Phase 1 only gathers and displays these — it does not send them anywhere yet.
 function onMotion(event) {
-  // includeGravity acceleration is present on both Safari and Chrome.
   const a = event.accelerationIncludingGravity || event.acceleration || {};
   const sample = {
+    id,
     t: Date.now(),
-    x: a.x ?? null,
-    y: a.y ?? null,
-    z: a.z ?? null,
+    accel: { x: a.x ?? null, y: a.y ?? null, z: a.z ?? null },
   };
-  sampleEl.textContent = JSON.stringify(sample, null, 2);
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(sample));
-    count += 1;
-    countEl.textContent = String(count);
-  }
+  accelCount += 1;
+  accelCountEl.textContent = String(accelCount);
+  accelEl.textContent = JSON.stringify(sample.accel, null, 2);
+}
+
+function onPosition(position) {
+  const c = position.coords;
+  const sample = {
+    id,
+    t: Date.now(),
+    gps: { lat: c.latitude, lon: c.longitude, alt: c.altitude, acc: c.accuracy },
+  };
+  gpsCount += 1;
+  gpsCountEl.textContent = String(gpsCount);
+  gpsEl.textContent = JSON.stringify(sample.gps, null, 2);
+}
+
+function onPositionError(err) {
+  gpsEl.textContent = `error: ${err.message}`;
 }
 
 async function start() {
@@ -48,15 +84,24 @@ async function start() {
         return;
       }
     } catch (err) {
-      setStatus(`permission error: ${err}`);
+      setStatus(`motion permission error: ${err}`);
       startBtn.disabled = false;
       return;
     }
   }
 
-  openSocket();
   window.addEventListener("devicemotion", onMotion);
-  setStatus("listening");
+
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(onPosition, onPositionError, {
+      enableHighAccuracy: true,
+      maximumAge: 0,
+    });
+  } else {
+    gpsEl.textContent = "geolocation unavailable";
+  }
+
+  setStatus("gathering");
 }
 
 startBtn.addEventListener("click", start);

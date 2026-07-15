@@ -7,7 +7,10 @@ use axum::Router;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
-const STATIC_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/static");
+fn static_dir() -> String {
+    std::env::var("LOOKOUT_STATIC_DIR")
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string())
+}
 
 #[tokio::main]
 async fn main() {
@@ -20,14 +23,14 @@ async fn main() {
 
     let app = Router::new()
         .route("/ws", any(ws_upgrade))
-        .fallback_service(ServeDir::new(STATIC_DIR))
+        .fallback_service(ServeDir::new(static_dir()))
         .layer(TraceLayer::new_for_http());
 
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(3000);
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     tracing::info!("listening on http://{addr}");
     axum::serve(listener, app).await.unwrap();

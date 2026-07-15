@@ -1,0 +1,17 @@
+# Lookout app recipes. Run from `apps/lookout`.
+
+# Run the server locally on http://localhost:3000 (override with PORT).
+serve:
+    cargo run -p server
+
+# Build the release binary.
+build:
+    cargo build --release -p server
+
+# Deploy the server to fly.io (lookout.fly.dev), using ./fly.toml + ./Dockerfile.
+deploy:
+    fly deploy
+
+# Push the upstash redis URL secret to fly from 1Password (needed from Phase 2 on).
+push-secrets:
+    fly secrets set LOOKOUT_REDIS_URL="$(op read 'op://Dev/lookout-upstash-redis-url/password')"

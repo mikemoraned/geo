@@ -77,7 +77,7 @@ verifiable milestone.
 
 **Phase 1 — webapp deployed to fly.io, gathering data (not yet over websocket):**
 
-* [ ] Frontend: persist a `crypto.randomUUID()` device id in a cookie; sample `devicemotion`
+* [x] Frontend: persist a `crypto.randomUUID()` device id in a cookie; sample `devicemotion`
       (accel) and `geolocation.watchPosition` (gps); show live status (id, counts, last
       gps/accel). Gather and display only — do **not** open/send the websocket yet.
 * [ ] Add a Dockerfile + fly.toml for the `server` crate (following the repo `backend/`
