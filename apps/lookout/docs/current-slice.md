@@ -80,10 +80,13 @@ verifiable milestone.
 * [x] Frontend: persist a `crypto.randomUUID()` device id in a cookie; sample `devicemotion`
       (accel) and `geolocation.watchPosition` (gps); show live status (id, counts, last
       gps/accel). Gather and display only — do **not** open/send the websocket yet.
-* [ ] Add a Dockerfile + fly.toml for the `server` crate (following the repo `backend/`
-      pattern) serving the static page; deploy to `lookout.fly.dev`.
-* [ ] Confirm on the phone: load `https://lookout.fly.dev`, grant motion + geolocation
+* [x] Add a Dockerfile + fly.toml for the `server` crate (following the repo `backend/`
+      pattern) serving the static page; deploy to `lookout-hom.fly.dev`.
+* [x] Confirm on the phone: load `https://lookout-hom.fly.dev`, grant motion + geolocation
       permissions, and see the page actively gathering data.
+* [ ] Throttle gather/display (and later send) to one sample each per fixed interval
+      (`SAMPLE_INTERVAL_MS`, default 500ms) — raw `devicemotion`/`watchPosition` fire far
+      too often.
 
 **Phase 2 — websocket → redis (verify samples land in redis):**
 

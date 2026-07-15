@@ -12,6 +12,6 @@ build:
 deploy:
     fly deploy
 
-# Push the upstash redis URL secret to fly from 1Password (needed from Phase 2 on).
+# Push the upstash redis URL secret to fly from 1Password.
 push-secrets:
     fly secrets set LOOKOUT_REDIS_URL="$(op read 'op://Dev/lookout-upstash-redis-url/password')"

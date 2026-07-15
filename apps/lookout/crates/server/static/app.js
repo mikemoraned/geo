@@ -9,8 +9,16 @@ const startBtn = el("start");
 
 const DEVICE_ID_COOKIE = "lookout_device_id";
 
+// Raw sensor events fire far faster than we want to record; we keep only the latest
+// reading from each source and emit one sample per source on this fixed interval.
+const SAMPLE_INTERVAL_MS = 500;
+
 let accelCount = 0;
 let gpsCount = 0;
+
+// Latest unread reading from each source, consumed (and cleared) on each sample tick.
+let pendingAccel = null;
+let pendingGps = null;
 
 function setStatus(text) {
   statusEl.textContent = text;
@@ -41,34 +49,37 @@ function deviceId() {
 const id = deviceId();
 idEl.textContent = id;
 
-// A sample carries the device id, a timestamp, and either an accel or gps reading.
-// Phase 1 only gathers and displays these — it does not send them anywhere yet.
+// Sensor events only stash their latest reading; sampleTick turns them into samples.
 function onMotion(event) {
   const a = event.accelerationIncludingGravity || event.acceleration || {};
-  const sample = {
-    id,
-    t: Date.now(),
-    accel: { x: a.x ?? null, y: a.y ?? null, z: a.z ?? null },
-  };
-  accelCount += 1;
-  accelCountEl.textContent = String(accelCount);
-  accelEl.textContent = JSON.stringify(sample.accel, null, 2);
+  pendingAccel = { x: a.x ?? null, y: a.y ?? null, z: a.z ?? null };
 }
 
 function onPosition(position) {
   const c = position.coords;
-  const sample = {
-    id,
-    t: Date.now(),
-    gps: { lat: c.latitude, lon: c.longitude, alt: c.altitude, acc: c.accuracy },
-  };
-  gpsCount += 1;
-  gpsCountEl.textContent = String(gpsCount);
-  gpsEl.textContent = JSON.stringify(sample.gps, null, 2);
+  pendingGps = { lat: c.latitude, lon: c.longitude, alt: c.altitude, acc: c.accuracy };
 }
 
 function onPositionError(err) {
   gpsEl.textContent = `error: ${err.message}`;
+}
+
+// A sample carries the device id, a timestamp, and either an accel or gps reading.
+function sampleTick() {
+  if (pendingAccel) {
+    const sample = { id, t: Date.now(), accel: pendingAccel };
+    pendingAccel = null;
+    accelCount += 1;
+    accelCountEl.textContent = String(accelCount);
+    accelEl.textContent = JSON.stringify(sample.accel, null, 2);
+  }
+  if (pendingGps) {
+    const sample = { id, t: Date.now(), gps: pendingGps };
+    pendingGps = null;
+    gpsCount += 1;
+    gpsCountEl.textContent = String(gpsCount);
+    gpsEl.textContent = JSON.stringify(sample.gps, null, 2);
+  }
 }
 
 async function start() {
@@ -101,6 +112,7 @@ async function start() {
     gpsEl.textContent = "geolocation unavailable";
   }
 
+  setInterval(sampleTick, SAMPLE_INTERVAL_MS);
   setStatus("gathering");
 }
 
