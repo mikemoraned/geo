@@ -20,13 +20,21 @@ let gpsCount = 0;
 let pendingAccel = null;
 let pendingGps = null;
 
-// Fire one sample as soon as any source produces its first reading, rather than
-// waiting a full SAMPLE_INTERVAL_MS for the interval's first tick.
-let firstSampleTaken = false;
-function takeFirstSample() {
-  if (firstSampleTaken) return;
-  firstSampleTaken = true;
-  sampleTick();
+// Fire each source's first sample as soon as it produces a reading, rather than
+// waiting a full SAMPLE_INTERVAL_MS for the interval's first tick. Tracked per source
+// so a first reading from one doesn't suppress the other's leading sample.
+let firstAccelSampled = false;
+function takeFirstAccelSample() {
+  if (firstAccelSampled) return;
+  firstAccelSampled = true;
+  emitAccelSample();
+}
+
+let firstGpsSampled = false;
+function takeFirstGpsSample() {
+  if (firstGpsSampled) return;
+  firstGpsSampled = true;
+  emitGpsSample();
 }
 
 function setStatus(text) {
@@ -62,13 +70,13 @@ idEl.textContent = id;
 function onMotion(event) {
   const a = event.accelerationIncludingGravity || event.acceleration || {};
   pendingAccel = { x: a.x ?? null, y: a.y ?? null, z: a.z ?? null };
-  takeFirstSample();
+  takeFirstAccelSample();
 }
 
 function onPosition(position) {
   const c = position.coords;
   pendingGps = { lat: c.latitude, lon: c.longitude, alt: c.altitude, acc: c.accuracy };
-  takeFirstSample();
+  takeFirstGpsSample();
 }
 
 function onPositionError(err) {
@@ -76,21 +84,27 @@ function onPositionError(err) {
 }
 
 // A sample carries the device id, a timestamp, and either an accel or gps reading.
+function emitAccelSample() {
+  if (!pendingAccel) return;
+  const sample = { id, t: Date.now(), accel: pendingAccel };
+  pendingAccel = null;
+  accelCount += 1;
+  accelCountEl.textContent = String(accelCount);
+  accelEl.textContent = JSON.stringify(sample.accel, null, 2);
+}
+
+function emitGpsSample() {
+  if (!pendingGps) return;
+  const sample = { id, t: Date.now(), gps: pendingGps };
+  pendingGps = null;
+  gpsCount += 1;
+  gpsCountEl.textContent = String(gpsCount);
+  gpsEl.textContent = JSON.stringify(sample.gps, null, 2);
+}
+
 function sampleTick() {
-  if (pendingAccel) {
-    const sample = { id, t: Date.now(), accel: pendingAccel };
-    pendingAccel = null;
-    accelCount += 1;
-    accelCountEl.textContent = String(accelCount);
-    accelEl.textContent = JSON.stringify(sample.accel, null, 2);
-  }
-  if (pendingGps) {
-    const sample = { id, t: Date.now(), gps: pendingGps };
-    pendingGps = null;
-    gpsCount += 1;
-    gpsCountEl.textContent = String(gpsCount);
-    gpsEl.textContent = JSON.stringify(sample.gps, null, 2);
-  }
+  emitAccelSample();
+  emitGpsSample();
 }
 
 async function start() {
