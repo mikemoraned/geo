@@ -73,3 +73,17 @@ impl SampleSink for RedisSink {
         Ok(depth)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    /// upstash is TLS-only, so we connect with `rediss://`. redis only parses that
+    /// scheme when the crate is built with TLS features; without them `Client::open`
+    /// fails with InvalidClientConfig and the server silently falls back to log-only
+    /// (this shipped once). No network — parsing the URL is enough to prove the
+    /// features are present.
+    #[test]
+    fn rediss_urls_parse() {
+        redis::Client::open("rediss://default:secret@example.upstash.io:6379")
+            .expect("rediss:// must parse — needs redis TLS features enabled");
+    }
+}
