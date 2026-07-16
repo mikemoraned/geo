@@ -1,18 +1,21 @@
 //! The SQLite archive the recorder writes telemetry into.
 //!
-//! Two kinds of table:
+//! Three kinds of table:
 //!   - `raw` — the lossless store: every queue payload, verbatim JSON, keyed on its
 //!     md5 so re-recording the same payload is idempotent.
 //!   - per-sensor (`accel`, `gps`) — a derivation of `raw`, one row per reading,
 //!     deduped on `(device_id, t)` so re-recording an already-seen reading is a no-op.
+//!   - `device` — session metadata from a v1 `StartSession`, keyed on `device_id`,
+//!     for the per-sensor tables to join to.
 //!
-//! Every write is idempotent (`INSERT OR IGNORE`), so both recorder modes (a
-//! non-destructive peek and a destructive drain) can run against the same DB
-//! repeatedly without duplicating rows.
+//! Reading rows are idempotent (`INSERT OR IGNORE`) and a `StartSession` upserts the
+//! device row, so both recorder modes (a non-destructive peek and a destructive
+//! drain) can run against the same DB repeatedly without duplicating rows.
 
 use std::path::Path;
 
 use rusqlite::Connection;
+use shared::{AccelReading, DeviceType, GpsReading, Message, SessionStart, V0Message, V1Message};
 use telemetry::RawSample;
 
 /// DDL run on open; `IF NOT EXISTS` makes opening an existing archive a no-op.
@@ -34,6 +37,16 @@ CREATE TABLE IF NOT EXISTS gps (
   t         INTEGER NOT NULL,
   lat REAL, lon REAL, alt REAL, acc REAL,
   PRIMARY KEY (device_id, t)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS device (
+  device_id   TEXT NOT NULL PRIMARY KEY,
+  t           INTEGER NOT NULL,
+  device_type TEXT,
+  platform    TEXT,
+  user_agent  TEXT,
+  os          TEXT,
+  os_version  TEXT
 ) WITHOUT ROWID;
 ";
 
@@ -68,9 +81,12 @@ impl Store {
         Ok(Self { conn })
     }
 
-    /// Archive one queue payload: the lossless `raw` row plus any per-sensor rows it
-    /// carries. The raw JSON is stored verbatim; a payload that fails to parse is
-    /// still archived losslessly, then surfaced as [`StoreError::Parse`].
+    /// Archive one queue payload: the lossless `raw` row plus the derived row its
+    /// message carries. The raw JSON is stored verbatim; a payload that fails to parse
+    /// is still archived losslessly, then surfaced as [`StoreError::Parse`].
+    ///
+    /// Messages route by version and type, but both protocol versions populate the
+    /// same per-sensor tables, so a v0 payload still derives `accel` / `gps` rows.
     pub fn insert(&self, raw: &RawSample) -> Result<(), StoreError> {
         let json = raw.json();
         let md5 = format!("{:x}", md5::compute(json));
@@ -79,20 +95,66 @@ impl Store {
             (&md5, json),
         )?;
 
-        let sample = raw.parse()?;
-        let device_id = sample.id.to_string();
-        if let Some(accel) = &sample.accel {
-            self.conn.execute(
-                "INSERT OR IGNORE INTO accel (device_id, t, x, y, z) VALUES (?1, ?2, ?3, ?4, ?5)",
-                (&device_id, sample.t, accel.x, accel.y, accel.z),
-            )?;
+        match raw.parse()? {
+            Message::Version0(V0Message::Gps(r)) => self.insert_gps(&r)?,
+            Message::Version0(V0Message::Acceleration(r)) => self.insert_accel(&r)?,
+            Message::Version1(V1Message::Gps(r)) => self.insert_gps(&r)?,
+            Message::Version1(V1Message::Acceleration(r)) => self.insert_accel(&r)?,
+            Message::Version1(V1Message::StartSession(s)) => self.insert_device(&s)?,
         }
-        if let Some(gps) = &sample.gps {
-            self.conn.execute(
-                "INSERT OR IGNORE INTO gps (device_id, t, lat, lon, alt, acc) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                (&device_id, sample.t, gps.lat, gps.lon, gps.alt, gps.acc),
-            )?;
-        }
+        Ok(())
+    }
+
+    fn insert_gps(&self, r: &GpsReading) -> Result<(), rusqlite::Error> {
+        let device_id = r.id.to_string();
+        self.ensure_device(&device_id, r.t)?;
+        self.conn.execute(
+            "INSERT OR IGNORE INTO gps (device_id, t, lat, lon, alt, acc) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (&device_id, r.t, r.gps.lat, r.gps.lon, r.gps.alt, r.gps.acc),
+        )?;
+        Ok(())
+    }
+
+    fn insert_accel(&self, r: &AccelReading) -> Result<(), rusqlite::Error> {
+        let device_id = r.id.to_string();
+        self.ensure_device(&device_id, r.t)?;
+        self.conn.execute(
+            "INSERT OR IGNORE INTO accel (device_id, t, x, y, z) VALUES (?1, ?2, ?3, ?4, ?5)",
+            (&device_id, r.t, r.accel.x, r.accel.y, r.accel.z),
+        )?;
+        Ok(())
+    }
+
+    /// Seed a minimal `unknown` device row so every `device_id` in a per-sensor table
+    /// has a row to join to, even for v0 payloads that carry no session metadata.
+    /// `INSERT OR IGNORE` never clobbers a fuller row a `StartSession` writes, and a
+    /// later `StartSession` upserts the full metadata over this placeholder.
+    fn ensure_device(&self, device_id: &str, t: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO device (device_id, t, device_type) VALUES (?1, ?2, ?3)",
+            (device_id, t, DeviceType::Unknown.as_str()),
+        )?;
+        Ok(())
+    }
+
+    /// Upsert a device's session metadata; a later session refreshes it in place.
+    fn insert_device(&self, s: &SessionStart) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO device (device_id, t, device_type, platform, user_agent, os, os_version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(device_id) DO UPDATE SET
+               t=excluded.t, device_type=excluded.device_type, platform=excluded.platform,
+               user_agent=excluded.user_agent, os=excluded.os, os_version=excluded.os_version",
+            (
+                &s.id.to_string(),
+                s.t,
+                s.device.device_type.as_str(),
+                &s.device.platform,
+                &s.device.user_agent,
+                &s.device.os,
+                &s.device.os_version,
+            ),
+        )?;
         Ok(())
     }
 }
@@ -112,6 +174,8 @@ mod tests {
 
     const GPS_JSON: &str = r#"{"id":"00000000-0000-0000-0000-000000000001","t":1700000000000,"gps":{"lat":55.95,"lon":-3.19,"alt":80.0,"acc":5.0}}"#;
     const ACCEL_JSON: &str = r#"{"id":"00000000-0000-0000-0000-000000000001","t":1700000000000,"accel":{"x":0.1,"y":-9.8,"z":0.3}}"#;
+    const V1_GPS_JSON: &str = r#"{"v":1,"type":"gps","id":"00000000-0000-0000-0000-000000000001","t":1700000000005,"gps":{"lat":55.95,"lon":-3.19,"alt":80.0,"acc":5.0}}"#;
+    const SESSION_JSON: &str = r#"{"v":1,"type":"start_session","id":"00000000-0000-0000-0000-000000000001","t":1700000000000,"device":{"device_type":"iphone","platform":"iPhone","user_agent":"Safari","os":"iOS","os_version":"18.5"}}"#;
 
     #[test]
     fn insert_populates_raw_and_matching_sensor_table() {
@@ -124,6 +188,92 @@ mod tests {
         assert_eq!(count(&store, "raw"), 2);
         assert_eq!(count(&store, "gps"), 1);
         assert_eq!(count(&store, "accel"), 1);
+    }
+
+    /// A v1 sensor payload derives the same per-sensor rows as its v0 shape.
+    #[test]
+    fn v1_sensor_payload_populates_sensor_table() {
+        let store = Store::open_in_memory().expect("open");
+        store
+            .insert(&RawSample::new(V1_GPS_JSON))
+            .expect("insert v1 gps");
+
+        assert_eq!(count(&store, "gps"), 1);
+    }
+
+    /// Every device_id in a per-sensor table has a device row to join to, even for a
+    /// v0 payload with no session metadata: a minimal `unknown` placeholder is seeded.
+    #[test]
+    fn sensor_reading_seeds_a_minimal_device_row() {
+        let store = Store::open_in_memory().expect("open");
+        store.insert(&RawSample::new(GPS_JSON)).expect("insert gps");
+
+        assert_eq!(count(&store, "device"), 1);
+        let (device_type, platform): (String, Option<String>) = store
+            .conn
+            .query_row("SELECT device_type, platform FROM device", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .expect("device row");
+        assert_eq!(device_type, "unknown");
+        assert_eq!(platform, None, "a v0 reading carries no platform metadata");
+    }
+
+    /// A StartSession arriving after a placeholder upgrades it to full metadata in
+    /// place, and a later sensor reading doesn't clobber it back to `unknown`.
+    #[test]
+    fn start_session_upgrades_placeholder_and_survives_later_readings() {
+        let store = Store::open_in_memory().expect("open");
+        store.insert(&RawSample::new(GPS_JSON)).expect("v0 reading");
+        store
+            .insert(&RawSample::new(SESSION_JSON))
+            .expect("start session");
+        store
+            .insert(&RawSample::new(ACCEL_JSON))
+            .expect("later reading");
+
+        assert_eq!(count(&store, "device"), 1);
+        let device_type: String = store
+            .conn
+            .query_row("SELECT device_type FROM device", [], |row| row.get(0))
+            .expect("device_type");
+        assert_eq!(device_type, "iphone", "session metadata is not clobbered");
+    }
+
+    /// A v1 StartSession upserts the device row (and touches no sensor table).
+    #[test]
+    fn start_session_populates_device_table() {
+        let store = Store::open_in_memory().expect("open");
+        store
+            .insert(&RawSample::new(SESSION_JSON))
+            .expect("insert session");
+
+        assert_eq!(count(&store, "raw"), 1);
+        assert_eq!(count(&store, "device"), 1);
+        assert_eq!(count(&store, "gps"), 0);
+        assert_eq!(count(&store, "accel"), 0);
+
+        let platform: String = store
+            .conn
+            .query_row("SELECT platform FROM device", [], |row| row.get(0))
+            .expect("platform");
+        assert_eq!(platform, "iPhone");
+    }
+
+    /// A second session for the same device refreshes the row in place (upsert).
+    #[test]
+    fn start_session_upserts_on_device_id() {
+        let laptop = r#"{"v":1,"type":"start_session","id":"00000000-0000-0000-0000-000000000001","t":1700000000010,"device":{"device_type":"laptop","platform":"MacIntel","user_agent":"Safari","os":"macOS","os_version":"15.0"}}"#;
+        let store = Store::open_in_memory().expect("open");
+        store.insert(&RawSample::new(SESSION_JSON)).expect("first");
+        store.insert(&RawSample::new(laptop)).expect("second");
+
+        assert_eq!(count(&store, "device"), 1);
+        let device_type: String = store
+            .conn
+            .query_row("SELECT device_type FROM device", [], |row| row.get(0))
+            .expect("device_type");
+        assert_eq!(device_type, "laptop", "later session wins on upsert");
     }
 
     #[test]

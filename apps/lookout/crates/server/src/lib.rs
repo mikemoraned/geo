@@ -7,7 +7,7 @@ use axum::extract::State;
 use axum::response::Response;
 use axum::routing::{any, get};
 use axum::Router;
-use shared::Sample;
+use shared::Message as TelemetryMessage;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
@@ -58,10 +58,10 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     tracing::info!("websocket disconnected");
 }
 
-/// Validate an incoming sample and, if a sink is configured, enqueue it.
+/// Validate an incoming message and, if a sink is configured, enqueue it.
 async fn handle_sample(state: &AppState, text: &str) {
-    let sample: Sample = match serde_json::from_str(text) {
-        Ok(sample) => sample,
+    let message: TelemetryMessage = match serde_json::from_str(text) {
+        Ok(message) => message,
         Err(err) => {
             tracing::warn!(%err, %text, "discarding malformed sample");
             return;
@@ -69,10 +69,12 @@ async fn handle_sample(state: &AppState, text: &str) {
     };
 
     match &state.sink {
-        Some(sink) => match sink.push(&sample).await {
-            Ok(depth) => tracing::info!(id = %sample.id, t = sample.t, depth, "queued sample"),
+        Some(sink) => match sink.push(&message).await {
+            Ok(depth) => {
+                tracing::info!(id = %message.id(), t = message.t(), depth, "queued sample")
+            }
             Err(err) => tracing::error!(%err, "failed to queue sample"),
         },
-        None => tracing::info!(id = %sample.id, t = sample.t, "sample (not queued)"),
+        None => tracing::info!(id = %message.id(), t = message.t(), "sample (not queued)"),
     }
 }

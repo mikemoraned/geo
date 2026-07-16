@@ -9,7 +9,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use redis::aio::MultiplexedConnection;
-use shared::{Accel, Gps, Sample};
+use shared::{Accel, AccelReading, Gps, GpsReading, Message, V1Message};
 use telemetry::QUEUE_KEY;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
@@ -50,9 +50,9 @@ async fn wait_ready(url: &str) -> MultiplexedConnection {
     }
 }
 
-/// LPUSH a sample the way the server's `RedisSink` does.
-async fn lpush(conn: &mut MultiplexedConnection, sample: &Sample) {
-    let json = serde_json::to_string(sample).expect("serialize");
+/// LPUSH a message the way the server's `RedisSink` does.
+async fn lpush(conn: &mut MultiplexedConnection, message: &Message) {
+    let json = serde_json::to_string(message).expect("serialize");
     let _: i64 = redis::cmd("LPUSH")
         .arg(QUEUE_KEY)
         .arg(json)
@@ -61,31 +61,29 @@ async fn lpush(conn: &mut MultiplexedConnection, sample: &Sample) {
         .expect("lpush");
 }
 
-fn accel_sample(id: Uuid, t: i64) -> Sample {
-    Sample {
+fn accel_sample(id: Uuid, t: i64) -> Message {
+    Message::Version1(V1Message::Acceleration(AccelReading {
         id,
         t,
-        gps: None,
-        accel: Some(Accel {
+        accel: Accel {
             x: Some(0.1),
             y: Some(-9.8),
             z: Some(0.3),
-        }),
-    }
+        },
+    }))
 }
 
-fn gps_sample(id: Uuid, t: i64, lat: f64) -> Sample {
-    Sample {
+fn gps_sample(id: Uuid, t: i64, lat: f64) -> Message {
+    Message::Version1(V1Message::Gps(GpsReading {
         id,
         t,
-        gps: Some(Gps {
+        gps: Gps {
             lat,
             lon: -3.19,
             alt: Some(80.0),
             acc: 5.0,
-        }),
-        accel: None,
-    }
+        },
+    }))
 }
 
 #[tokio::test]

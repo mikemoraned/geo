@@ -8,7 +8,7 @@
 use std::time::Duration;
 
 use redis::aio::MultiplexedConnection;
-use shared::{Accel, Sample};
+use shared::{Accel, AccelReading, Message, V1Message};
 use telemetry::{brpop_sample, latest_samples, QUEUE_KEY};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
@@ -51,21 +51,20 @@ async fn wait_ready(url: &str) -> MultiplexedConnection {
     }
 }
 
-fn sample(n: u128) -> Sample {
-    Sample {
+fn sample(n: u128) -> Message {
+    Message::Version1(V1Message::Acceleration(AccelReading {
         id: Uuid::from_u128(n),
         t: 1_700_000_000_000 + n as i64,
-        gps: None,
-        accel: Some(Accel {
+        accel: Accel {
             x: Some(n as f64),
             y: None,
             z: None,
-        }),
-    }
+        },
+    }))
 }
 
-/// LPUSH a sample the way the server's `RedisSink` does.
-async fn lpush(conn: &mut MultiplexedConnection, sample: &Sample) {
+/// LPUSH a message the way the server's `RedisSink` does.
+async fn lpush(conn: &mut MultiplexedConnection, sample: &Message) {
     let json = serde_json::to_string(sample).expect("serialize");
     let _: i64 = redis::cmd("LPUSH")
         .arg(QUEUE_KEY)
@@ -87,7 +86,7 @@ async fn queue_read_paths_docker() {
     }
 
     // view-latest: newest-first, limited, and non-destructive.
-    let latest: Vec<Sample> = latest_samples(&mut conn, 2)
+    let latest: Vec<Message> = latest_samples(&mut conn, 2)
         .await
         .expect("latest_samples")
         .iter()

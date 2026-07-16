@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use redis::aio::MultiplexedConnection;
 use server::queue::{RedisSink, SampleSink, QUEUE_KEY};
-use shared::{Accel, Gps, Sample};
+use shared::{Accel, AccelReading, Gps, GpsReading, Message, V1Message};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::redis::{Redis, REDIS_PORT};
@@ -65,27 +65,25 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
 
     let sink = RedisSink::connect(&url).await.expect("connect sink");
 
-    let accel_sample = Sample {
+    let accel_sample = Message::Version1(V1Message::Acceleration(AccelReading {
         id: Uuid::from_u128(1),
         t: 1_700_000_000_001,
-        gps: None,
-        accel: Some(Accel {
+        accel: Accel {
             x: Some(0.1),
             y: Some(-9.8),
             z: Some(0.3),
-        }),
-    };
-    let gps_sample = Sample {
+        },
+    }));
+    let gps_sample = Message::Version1(V1Message::Gps(GpsReading {
         id: Uuid::from_u128(2),
         t: 1_700_000_000_002,
-        gps: Some(Gps {
+        gps: Gps {
             lat: 55.95,
             lon: -3.19,
             alt: None,
             acc: 8.5,
-        }),
-        accel: None,
-    };
+        },
+    }));
 
     // push returns the resulting queue depth
     assert_eq!(sink.push(&accel_sample).await.expect("push accel"), 1);
@@ -106,7 +104,7 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
     assert_eq!(second, gps_sample);
 }
 
-async fn rpop_sample(conn: &mut MultiplexedConnection) -> Sample {
+async fn rpop_sample(conn: &mut MultiplexedConnection) -> Message {
     let raw: String = redis::cmd("RPOP")
         .arg(QUEUE_KEY)
         .query_async(conn)

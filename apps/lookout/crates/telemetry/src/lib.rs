@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncConnectionConfig, Client, RedisError};
-use shared::Sample;
+use shared::Message;
 
 /// The redis list holding queued telemetry samples.
 pub const QUEUE_KEY: &str = "lookout-telemetry";
@@ -16,7 +16,7 @@ pub const QUEUE_KEY: &str = "lookout-telemetry";
 ///
 /// The queue is the lossless source of truth, so the bytes are preserved verbatim
 /// (an archive keyed on their hash must match what was sent, not a re-serialization).
-/// `parse` decodes them into the typed [`Sample`] for derived, per-sensor views.
+/// `parse` decodes them into the typed [`Message`] for derived, per-sensor views.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawSample(String);
 
@@ -32,8 +32,8 @@ impl RawSample {
         &self.0
     }
 
-    /// Decode the payload into a typed [`Sample`].
-    pub fn parse(&self) -> Result<Sample, serde_json::Error> {
+    /// Decode the payload into a typed [`Message`].
+    pub fn parse(&self) -> Result<Message, serde_json::Error> {
         serde_json::from_str(&self.0)
     }
 }

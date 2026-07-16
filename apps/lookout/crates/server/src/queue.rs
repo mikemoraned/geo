@@ -6,7 +6,7 @@
 use async_trait::async_trait;
 use redis::aio::MultiplexedConnection;
 use redis::RedisError;
-use shared::Sample;
+use shared::Message;
 
 pub use telemetry::QUEUE_KEY;
 
@@ -19,11 +19,11 @@ pub enum PushError {
     Redis(#[from] RedisError),
 }
 
-/// A destination the websocket handler enqueues received samples onto.
+/// A destination the websocket handler enqueues received messages onto.
 #[async_trait]
 pub trait SampleSink: Send + Sync {
-    /// Enqueue a sample, returning the resulting queue depth.
-    async fn push(&self, sample: &Sample) -> Result<i64, PushError>;
+    /// Enqueue a message, returning the resulting queue depth.
+    async fn push(&self, message: &Message) -> Result<i64, PushError>;
 }
 
 /// A [`SampleSink`] backed by an upstash redis list.
@@ -43,11 +43,11 @@ impl RedisSink {
 
 #[async_trait]
 impl SampleSink for RedisSink {
-    async fn push(&self, sample: &Sample) -> Result<i64, PushError> {
+    async fn push(&self, message: &Message) -> Result<i64, PushError> {
         // MultiplexedConnection is a cheap, cloneable handle to one shared
         // connection; clone per push so concurrent sockets don't need a lock.
         let mut conn = self.conn.clone();
-        let json = serde_json::to_string(sample)?;
+        let json = serde_json::to_string(message)?;
         let depth: i64 = redis::cmd("LPUSH")
             .arg(QUEUE_KEY)
             .arg(json)

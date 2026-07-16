@@ -9,7 +9,7 @@
 
 use redis::aio::MultiplexedConnection;
 use server::queue::{RedisSink, SampleSink, QUEUE_KEY};
-use shared::{Accel, Sample};
+use shared::{Accel, AccelReading, Message, V1Message};
 use uuid::Uuid;
 
 #[tokio::test]
@@ -25,16 +25,15 @@ async fn redis_round_trip_end_to_end() {
         .await
         .expect("connect to real upstash redis (parse + TLS + auth)");
 
-    let sample = Sample {
+    let sample = Message::Version1(V1Message::Acceleration(AccelReading {
         id: Uuid::new_v4(),
         t: 1_700_000_000_000,
-        gps: None,
-        accel: Some(Accel {
+        accel: Accel {
             x: Some(0.1),
             y: Some(-9.8),
             z: Some(0.3),
-        }),
-    };
+        },
+    }));
     let json = serde_json::to_string(&sample).expect("serialize");
 
     let depth = sink.push(&sample).await.expect("push sample to upstash");

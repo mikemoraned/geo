@@ -66,6 +66,51 @@ function deviceId() {
 const id = deviceId();
 idEl.textContent = id;
 
+// Wire protocol version. v1 is self-describing: every message carries `v` and a
+// `type` tag; v0 (untagged, inferred from the sensor key) is read-only history.
+const WIRE_VERSION = 1;
+
+// Classify the device from what Safari exposes. Safari has no UA client hints
+// (`navigator.userAgentData` is Chromium-only), so `platform` + `userAgent` are all
+// we get. Modern iPadOS reports "MacIntel" with a touch screen, which is how it's
+// told apart from a laptop.
+function deviceInfo() {
+  const platform = navigator.platform || "";
+  const userAgent = navigator.userAgent || "";
+  const touch = navigator.maxTouchPoints || 0;
+
+  const isIphone = /iPhone/.test(platform) || /iPhone/.test(userAgent);
+  const isIpad =
+    /iPad/.test(platform) ||
+    /iPad/.test(userAgent) ||
+    (platform === "MacIntel" && touch > 1);
+
+  let deviceType = "unknown";
+  let os = null;
+  if (isIphone) {
+    deviceType = "iphone";
+    os = "iOS";
+  } else if (isIpad) {
+    deviceType = "ipad";
+    os = "iOS";
+  } else if (/Mac/.test(platform)) {
+    deviceType = "laptop";
+    os = "macOS";
+  }
+
+  // iOS reports "OS 18_5", macOS "Mac OS X 10_15_7"; normalise underscores to dots.
+  const version = userAgent.match(/OS (\d+[_.]\d+(?:[_.]\d+)?)/);
+  const osVersion = version ? version[1].replace(/_/g, ".") : null;
+
+  return {
+    device_type: deviceType,
+    platform,
+    user_agent: userAgent,
+    os,
+    os_version: osVersion,
+  };
+}
+
 // Sensor events only stash their latest reading; sampleTick turns them into samples.
 function onMotion(event) {
   const a = event.accelerationIncludingGravity || event.acceleration || {};
@@ -90,10 +135,17 @@ function onPositionError(err) {
   }
 }
 
-// A sample carries the device id, a timestamp, and either an accel or gps reading.
+// A sample is a v1 message: the wire version, a type tag, the device id, a
+// timestamp, and either an accel or gps reading.
 function emitAccelSample() {
   if (!pendingAccel) return;
-  const sample = { id, t: Date.now(), accel: pendingAccel };
+  const sample = {
+    v: WIRE_VERSION,
+    type: "acceleration",
+    id,
+    t: Date.now(),
+    accel: pendingAccel,
+  };
   pendingAccel = null;
   accelCount += 1;
   accelCountEl.textContent = String(accelCount);
@@ -103,12 +155,30 @@ function emitAccelSample() {
 
 function emitGpsSample() {
   if (!pendingGps) return;
-  const sample = { id, t: Date.now(), gps: pendingGps };
+  const sample = {
+    v: WIRE_VERSION,
+    type: "gps",
+    id,
+    t: Date.now(),
+    gps: pendingGps,
+  };
   pendingGps = null;
   gpsCount += 1;
   gpsCountEl.textContent = String(gpsCount);
   gpsEl.textContent = JSON.stringify(sample.gps, null, 2);
   sendSample(sample);
+}
+
+// Announce the device once, at the start of a recording session, so the recorder
+// can populate the `device` table other tables join to.
+function emitStartSession() {
+  sendSample({
+    v: WIRE_VERSION,
+    type: "start_session",
+    id,
+    t: Date.now(),
+    device: deviceInfo(),
+  });
 }
 
 function sampleTick() {
@@ -191,6 +261,7 @@ async function start() {
   }
 
   connectWs();
+  emitStartSession();
   setInterval(sampleTick, SAMPLE_INTERVAL_MS);
   setStatus("gathering");
 }

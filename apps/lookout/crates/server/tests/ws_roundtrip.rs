@@ -9,22 +9,22 @@ use std::time::Duration;
 use futures_util::SinkExt;
 use server::queue::{PushError, SampleSink};
 use server::{build_app, AppState};
-use shared::{Accel, Sample};
+use shared::{Accel, AccelReading, Gps, GpsReading, Message, V0Message, V1Message};
 use tokio::net::TcpListener;
 use tokio::time::{sleep, Instant};
-use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::Message as WsMessage;
 use uuid::Uuid;
 
-/// A [`SampleSink`] that records pushed samples in memory for assertions.
+/// A [`SampleSink`] that records pushed messages in memory for assertions.
 struct RecordingSink {
-    samples: Arc<Mutex<Vec<Sample>>>,
+    samples: Arc<Mutex<Vec<Message>>>,
 }
 
 #[async_trait::async_trait]
 impl SampleSink for RecordingSink {
-    async fn push(&self, sample: &Sample) -> Result<i64, PushError> {
+    async fn push(&self, message: &Message) -> Result<i64, PushError> {
         let mut samples = self.samples.lock().expect("lock");
-        samples.push(sample.clone());
+        samples.push(message.clone());
         Ok(samples.len() as i64)
     }
 }
@@ -33,8 +33,12 @@ fn static_dir() -> String {
     concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
 }
 
+/// Both protocol versions must pass ingest: a historical v0 payload (no `v`, sensor
+/// key inferred) and a modern v1 message (tagged), while genuinely malformed JSON is
+/// dropped. The three are sent in order and the handler processes them in order, so
+/// the two valid ones land in the sink and the malformed one doesn't.
 #[tokio::test]
-async fn valid_sample_is_enqueued_and_malformed_is_dropped() {
+async fn both_versions_enqueue_and_malformed_is_dropped() {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let sink = RecordingSink {
         samples: Arc::clone(&recorded),
@@ -52,44 +56,60 @@ async fn valid_sample_is_enqueued_and_malformed_is_dropped() {
         axum::serve(listener, app).await.expect("serve");
     });
 
-    let sample = Sample {
+    // A historical v0 payload: no `v`, variant inferred from the `gps` key.
+    let v0_raw = r#"{"id":"00000000-0000-0000-0000-000000000007","t":1700000000007,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5}}"#;
+    let v0_expected = Message::Version0(V0Message::Gps(GpsReading {
+        id: Uuid::from_u128(7),
+        t: 1_700_000_000_007,
+        gps: Gps {
+            lat: 55.95,
+            lon: -3.19,
+            alt: None,
+            acc: 8.5,
+        },
+    }));
+
+    let v1 = Message::Version1(V1Message::Acceleration(AccelReading {
         id: Uuid::from_u128(42),
         t: 1_700_000_000_042,
-        gps: None,
-        accel: Some(Accel {
+        accel: Accel {
             x: Some(0.1),
             y: Some(-9.8),
             z: Some(0.3),
-        }),
-    };
-    let json = serde_json::to_string(&sample).expect("serialize");
+        },
+    }));
+    let v1_json = serde_json::to_string(&v1).expect("serialize");
 
     let (mut ws, _resp) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
         .await
         .expect("connect");
-    // Malformed first, valid second: once the valid one is recorded we know the
-    // malformed one has already been processed (and dropped) by the in-order handler.
-    ws.send(Message::Text("not-a-sample".into()))
+    // Malformed first so that, once both valid ones are recorded, we know the
+    // malformed one was already processed (and dropped) by the in-order handler.
+    ws.send(WsMessage::Text("not-a-sample".into()))
         .await
         .expect("send malformed");
-    ws.send(Message::Text(json.into()))
+    ws.send(WsMessage::Text(v0_raw.into()))
         .await
-        .expect("send valid");
+        .expect("send v0");
+    ws.send(WsMessage::Text(v1_json.into()))
+        .await
+        .expect("send v1");
     ws.close(None).await.expect("close");
 
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         {
             let samples = recorded.lock().expect("lock");
-            if !samples.is_empty() {
-                assert_eq!(samples.len(), 1, "malformed sample must be dropped");
-                assert_eq!(samples[0], sample);
+            if samples.len() >= 2 {
+                assert_eq!(samples.len(), 2, "malformed sample must be dropped");
+                assert_eq!(samples[0], v0_expected);
+                assert_eq!(samples[1], v1);
                 return;
             }
         }
         assert!(
             Instant::now() < deadline,
-            "sample never reached the sink within 5s"
+            "samples never reached the sink within 5s"
         );
         sleep(Duration::from_millis(50)).await;
     }

@@ -80,29 +80,29 @@ Do this refactor **first** — the data-quality field additions below then land 
 retrofitted onto the flat `Sample`. Keep it compiling at each step (stub → failing test
 → implement).
 
-- [ ] **Model the versioned message enum in `shared`.** Replace the flat `Sample` with a
+- [x] **Model the versioned message enum in `shared`.** Replace the flat `Sample` with a
       two-level enum: outer `Version0` / `Version1`, each holding an inner message enum
       (v0: `RecordGps` / `RecordAcceleration`; v1: adds `StartSession`). Carry the `v`
       number on the wire, defaulting to `0` when absent (`#[serde(default)]`). Pick the
       serde tagging (e.g. `v` + a message `type` tag) and document the wire shape in the
       module doc. Keep v1 `RecordGps`/`RecordAcceleration` field-identical to v0 for now
       — the new fields come from the data-quality tasks.
-- [ ] **Roundtrip tests for both versions.** Assert: a payload with no `v` decodes as
+- [x] **Roundtrip tests for both versions.** Assert: a payload with no `v` decodes as
       Version0; an explicit `v:1` decodes as Version1; each version's message variants
       roundtrip; the exact v0 wire shapes currently stored in `raw` still parse
       (re-interpretation from raw must not break). Use captured real payloads.
-- [ ] **`StartSession` message + client metadata.** Define `StartSession` with
+- [x] **`StartSession` message + client metadata.** Define `StartSession` with
       timestamp, device id, and enough metadata to distinguish iPad / iPhone / Laptop
       (os platform, device type). In `app.js`, send a v1 `StartSession` when recording
       starts (the start button), and stamp `v:1` + the message `type` on every emitted
       GPS/accel sample. Derive the metadata from what Safari exposes (`navigator`
       platform / UA-CH); no non-Safari fallbacks.
-- [ ] **`device` table in `store.rs`.** On a `StartSession`, upsert a row into a new
+- [x] **`device` table in `store.rs`.** On a `StartSession`, upsert a row into a new
       `device` table keyed on `device_id` (primary key), holding the session metadata,
       so other tables can join to it. Route messages by version/type when deriving
       per-sensor rows; a v0 payload still populates `accel` / `gps`. Update `store.rs`
       tests.
-- [ ] **Server ingest still validates + queues** the new shape. `handle_sample` parses
+- [x] **Server ingest still validates + queues** the new shape. `handle_sample` parses
       into the enum (rejecting genuinely malformed payloads) and queues raw verbatim as
       today — confirm both v0 and v1 payloads pass. Update `crates/server` tests.
 
