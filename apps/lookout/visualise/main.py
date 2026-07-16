@@ -75,17 +75,33 @@ def log_accel(rows) -> None:
 
 
 def log_gps(rows) -> None:
-    """Log gps rows as geo points under `device/{id}/gps`."""
+    """Log gps rows as per-timestamp points under `device/{id}/gps` plus one static
+    polyline per device under `device/{id}/track`.
+
+    The per-timestamp `GeoPoints` each overwrite the last (a cursor dot that follows
+    the timeline), so on their own the map shows a single dot jumping between fixes.
+    The static `GeoLineStrings` draws the whole journey as a path that is always
+    visible.
+    """
+    tracks: dict[str, list[tuple[float, float]]] = {}
     for device_id, t, lat, lon in rows:
         rr.set_time(TIMELINE, timestamp=t / 1000.0)
         rr.log(f"device/{device_id}/gps", rr.GeoPoints(lat_lon=[(lat, lon)]))
+        tracks.setdefault(device_id, []).append((lat, lon))
+
+    for device_id, path in tracks.items():
+        rr.log(
+            f"device/{device_id}/track",
+            rr.GeoLineStrings(lat_lon=[path]),
+            static=True,
+        )
 
 
 def build_blueprint(devices: list[str]) -> rrb.Blueprint:
     """A map + accel time-series view per device, tiled in a grid."""
     panes = [
         rrb.Vertical(
-            rrb.MapView(origin=f"/device/{device_id}/gps", name=f"{device_id} gps"),
+            rrb.MapView(origin=f"/device/{device_id}", name=f"{device_id} gps"),
             rrb.TimeSeriesView(
                 origin=f"/device/{device_id}/accel", name=f"{device_id} accel"
             ),

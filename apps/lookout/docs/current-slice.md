@@ -180,7 +180,7 @@ verifiable milestone.
 
 All in `visualise/` (Python, rerun-sdk 0.34). Ordered by value.
 
-* [ ] **GPS track is not actually a track.** `log_gps` logs a `GeoPoints` per timestamp,
+* [x] **GPS track is not actually a track.** `log_gps` logs a `GeoPoints` per timestamp,
       each overwriting the last, so the map view (latest-at) shows a single dot jumping
       between fixes rather than a path. Log the whole journey once as a static
       `rr.GeoLineStrings(lat_lon=[[lat, lon], ...])` under `device/{id}/track` — separate
