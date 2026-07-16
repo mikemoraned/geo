@@ -76,3 +76,36 @@ class TestFetchQueries:
     def test_results_ordered_by_time(self, conn):
         rows = main.fetch_accel(conn, cutoff_ms=0, devices=None)
         assert [r[1] for r in rows] == sorted(r[1] for r in rows)
+
+
+class TestReportedPrefixScenario:
+    """Reproduces `--devices 77a`: with several full uuids present, a short prefix
+    must select *only* the id it is a prefix of and exclude every other device."""
+
+    UUIDS = [
+        "77a64f88-c65f-4f9f-90bb-0d069b9f55a1",
+        "c7af4ca1-860d-428f-9b0c-c879985651fb",
+        "cdf2ab5a-0157-4dbe-8406-27a7d4c4970d",
+    ]
+
+    @pytest.fixture
+    def conn(self):
+        conn = sqlite3.connect(":memory:")
+        conn.executescript(
+            """
+            CREATE TABLE accel (device_id TEXT, t INTEGER, x REAL, y REAL, z REAL);
+            CREATE TABLE gps (device_id TEXT, t INTEGER, lat REAL, lon REAL, alt REAL, acc REAL);
+            """
+        )
+        for uuid in self.UUIDS:
+            conn.execute("INSERT INTO accel VALUES (?, 1000, 0.0, 0.0, 0.0)", [uuid])
+            conn.execute("INSERT INTO gps VALUES (?, 1000, 0.0, 0.0, 0.0, 0.0)", [uuid])
+        conn.commit()
+        yield conn
+        conn.close()
+
+    def test_prefix_excludes_other_devices(self, conn):
+        accel = main.fetch_accel(conn, cutoff_ms=0, devices=["77a"])
+        gps = main.fetch_gps(conn, cutoff_ms=0, devices=["77a"])
+        selected = {r[0] for r in accel} | {r[0] for r in gps}
+        assert selected == {"77a64f88-c65f-4f9f-90bb-0d069b9f55a1"}
