@@ -67,7 +67,8 @@ We should re-use as much style of implementation as used in https://github.com/m
   different rates), each optional so a sample can carry either or both.
 * **Identity**: frontend generates a `crypto.randomUUID()` on first load, persists it in a
   cookie, and stamps every sample with it. rerun entity paths are namespaced per device:
-  `/device/{id}/accel/{x,y,z}` and `/device/{id}/gps`.
+  `/device/{id}/accel` (a single `x,y,z` series, with `/device/{id}/accel/magnitude`
+  alongside) and `/device/{id}/gps` (plus a static `/device/{id}/track` polyline).
 * **Queue**: an upstash redis **list** — the server `LPUSH`es JSON samples, the cli `BRPOP`s
   to drain. Both server and cli connect to the same upstash db over TLS (`rediss://…`), 
   reading the URL from a `LOOKOUT_REDIS_URL` env var.
@@ -191,14 +192,14 @@ All in `visualise/` (Python, rerun-sdk 0.34). Ordered by value.
       `rr.GeoPoints(lat_lon=[(lat, lon)], radii=[acc])`. Map view scene units are metres,
       so a positive radius draws the reported uncertainty at true scale — the circle
       inflates in cuttings where fixes degrade. Handle `acc IS NULL`.
-* [ ] **Add `|a|` as a derived series.** The accel is instantaneous and gravity-dominated
+* [x] **Add `|a|` as a derived series.** The accel is instantaneous and gravity-dominated
       (~9.81 m/s² vs ~1 m/s² of train dynamics, in an unknown device orientation), so the
       raw axes are close to uninterpretable. Magnitude is orientation-invariant and the one
       accel signal that means something here. Log at `device/{id}/accel/magnitude` so it
       joins the existing `TimeSeriesView(origin=f"/device/{id}/accel")` plot.
       Expect a flat ~9.81 with spikes where the phone was handled — that is the correct
       result for this dataset, not a bug.
-* [ ] **Accel as one entity, not three.** Rerun moved away from per-axis entities in 0.23
+* [x] **Accel as one entity, not three.** Rerun moved away from per-axis entities in 0.23
       (`gyroscope/x|y|z` → one `rr.Scalars([x, y, z])`). Collapse `device/{id}/accel/{x,y,z}`
       to `device/{id}/accel` and switch `log_accel` to `rr.send_columns` — the natural shape
       for a table→rrd converter. Needs a static

@@ -66,21 +66,45 @@ def fetch_gps(conn: sqlite3.Connection, cutoff_ms: int, devices: list[str] | Non
 
 
 def log_accel(rows) -> None:
-    """Log accel rows as per-axis scalar series under `device/{id}/accel/{x,y,z}`,
-    plus an orientation-invariant magnitude `|a|` under `device/{id}/accel/magnitude`.
+    """Log accel as one `x,y,z` series per device under `device/{id}/accel`, plus an
+    orientation-invariant magnitude `|a|` under `device/{id}/accel/magnitude`.
 
     The raw axes are gravity-dominated in an unknown device orientation, so the
     magnitude is the one accel signal that means something on its own — expect a flat
     ~9.81 with spikes where the phone was handled.
+
+    Written column-wise with `rr.send_columns` (the natural shape for a table→rrd
+    converter). `Scalars` needs the same count at every timestamp, so rows missing any
+    axis are dropped rather than fanned out per-axis.
     """
+    by_device: dict[str, list[tuple[float, float, float, float]]] = {}
     for device_id, t, x, y, z in rows:
-        rr.set_time(TIMELINE, timestamp=t / 1000.0)
-        for axis, value in (("x", x), ("y", y), ("z", z)):
-            if value is not None:
-                rr.log(f"device/{device_id}/accel/{axis}", rr.Scalars(value))
-        if x is not None and y is not None and z is not None:
-            magnitude = (x * x + y * y + z * z) ** 0.5
-            rr.log(f"device/{device_id}/accel/magnitude", rr.Scalars(magnitude))
+        if x is None or y is None or z is None:
+            continue
+        by_device.setdefault(device_id, []).append((t / 1000.0, x, y, z))
+
+    for device_id, samples in by_device.items():
+        times = [s[0] for s in samples]
+        index = [rr.TimeColumn(TIMELINE, timestamp=times)]
+
+        accel_path = f"device/{device_id}/accel"
+        # Static legend labels — without them the three series are unnamed.
+        rr.log(accel_path, rr.SeriesLines(names=["x", "y", "z"]), static=True)
+        xyz = [v for (_, x, y, z) in samples for v in (x, y, z)]
+        rr.send_columns(
+            accel_path,
+            indexes=index,
+            columns=rr.Scalars.columns(scalars=xyz).partition([3] * len(samples)),
+        )
+
+        magnitude_path = f"{accel_path}/magnitude"
+        rr.log(magnitude_path, rr.SeriesLines(names=["|a|"]), static=True)
+        mags = [(x * x + y * y + z * z) ** 0.5 for (_, x, y, z) in samples]
+        rr.send_columns(
+            magnitude_path,
+            indexes=index,
+            columns=rr.Scalars.columns(scalars=mags),
+        )
 
 
 def log_gps(rows) -> None:
