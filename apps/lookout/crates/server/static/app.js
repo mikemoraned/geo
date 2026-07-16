@@ -1,11 +1,15 @@
 const el = (id) => document.getElementById(id);
 const statusEl = el("status");
+const wakeLockEl = el("wakelock");
 const idEl = el("id");
 const accelEl = el("accel");
 const accelCountEl = el("accel-count");
 const gpsEl = el("gps");
 const gpsCountEl = el("gps-count");
 const startBtn = el("start");
+
+// True once the user has started a session; gates wake-lock re-acquisition.
+let recording = false;
 
 const DEVICE_ID_COOKIE = "lookout_device_id";
 
@@ -186,26 +190,57 @@ function sampleTick() {
   emitGpsSample();
 }
 
-// Websocket delivery. Samples go into an in-memory outbox and are flushed whenever
-// the socket is open; a dropped connection (train dead zone) triggers reconnect with
-// backoff and re-flush. Best-effort only — the outbox isn't persisted, so a page
-// reload, or a dead zone long enough to overflow MAX_OUTBOX, drops the oldest samples.
+// Websocket delivery. Samples go into an outbox persisted to localStorage and flushed
+// whenever the socket is open; a dropped connection (train dead zone) triggers
+// reconnect with backoff and re-flush. The server acks each delivered sample, and a
+// sample is removed from the outbox only once acked — so a page reload or a mid-flush
+// disconnect re-sends the un-acked tail rather than losing samples that looked sent.
+// The recorder dedups on (device_id, t), so a re-sent duplicate is harmless.
 const WS_URL = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws`;
 const MAX_OUTBOX = 5000;
 const INITIAL_RECONNECT_MS = 1000;
 const MAX_RECONNECT_MS = 30000;
+const OUTBOX_KEY = "lookout_outbox";
 
 let ws = null;
-let outbox = [];
+let outbox = loadOutbox();
+// Count of outbox entries at the front that have been sent and are awaiting an ack.
+// Reset to 0 on (re)connect so anything unacked from a prior connection is re-sent.
+let inFlight = 0;
 let reconnectMs = INITIAL_RECONNECT_MS;
+
+function loadOutbox() {
+  try {
+    return JSON.parse(localStorage.getItem(OUTBOX_KEY)) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function persistOutbox() {
+  try {
+    localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox));
+  } catch {
+    // Quota exceeded or storage unavailable (private mode): keep capturing in-memory
+    // rather than letting a persistence failure break the recording.
+  }
+}
+
+// Connect if there's no live socket. Idempotent so both start() and a startup with a
+// persisted outbox can call it without opening a second connection.
+function ensureWs() {
+  if (!ws || ws.readyState === WebSocket.CLOSED) connectWs();
+}
 
 function connectWs() {
   ws = new WebSocket(WS_URL);
   ws.addEventListener("open", () => {
     reconnectMs = INITIAL_RECONNECT_MS;
     setStatus("gathering — connected");
+    inFlight = 0;
     flushOutbox();
   });
+  ws.addEventListener("message", onAck);
   ws.addEventListener("close", () => {
     setStatus("gathering — reconnecting…");
     setTimeout(connectWs, reconnectMs);
@@ -215,23 +250,74 @@ function connectWs() {
   ws.addEventListener("error", () => ws.close());
 }
 
+// The server sends one ack per delivered sample, in order over a single socket, so
+// each ack retires the oldest in-flight sample.
+function onAck() {
+  if (!outbox.length) return;
+  outbox.shift();
+  inFlight = Math.max(0, inFlight - 1);
+  persistOutbox();
+}
+
 function flushOutbox() {
-  while (outbox.length && ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(outbox[0]));
-    outbox.shift();
+  while (inFlight < outbox.length && ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(outbox[inFlight]));
+    inFlight += 1;
   }
 }
 
 function sendSample(sample) {
   outbox.push(sample);
   if (outbox.length > MAX_OUTBOX) {
-    outbox.splice(0, outbox.length - MAX_OUTBOX);
+    const dropped = outbox.length - MAX_OUTBOX;
+    outbox.splice(0, dropped);
+    inFlight = Math.max(0, inFlight - dropped);
   }
+  persistOutbox();
   flushOutbox();
 }
 
+// A screen wake lock keeps iOS from auto-locking (which would suspend the page and
+// stop capture). It's released automatically whenever the page hides, so it's
+// re-acquired on visibilitychange → visible. It can't survive the power button, and
+// Low Power Mode refuses the request — surfaced in the UI so a failure is visible on
+// the train.
+let wakeLock = null;
+
+async function acquireWakeLock() {
+  if (!("wakeLock" in navigator)) {
+    wakeLockEl.textContent = "unsupported";
+    return;
+  }
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLockEl.textContent = "held";
+    wakeLock.addEventListener("release", () => {
+      wakeLockEl.textContent = "released";
+    });
+  } catch (err) {
+    // Low Power Mode / a power-button lock refuse the request; capture continues.
+    wakeLock = null;
+    wakeLockEl.textContent = `refused: ${err.name}`;
+  }
+}
+
+function onVisible() {
+  if (document.visibilityState === "hidden") {
+    persistOutbox();
+  } else if (recording) {
+    acquireWakeLock();
+    ensureWs();
+  }
+}
+
+document.addEventListener("visibilitychange", onVisible);
+// pagehide fires on iOS where beforeunload/unload don't; persist the latest outbox.
+window.addEventListener("pagehide", persistOutbox);
+
 async function start() {
   startBtn.disabled = true;
+  recording = true;
 
   // Safari on iOS requires an explicit, user-gesture-triggered permission grant.
   if (typeof DeviceMotionEvent?.requestPermission === "function") {
@@ -260,13 +346,18 @@ async function start() {
     gpsEl.textContent = "geolocation unavailable";
   }
 
-  connectWs();
+  await acquireWakeLock();
+  ensureWs();
   emitStartSession();
   setInterval(sampleTick, SAMPLE_INTERVAL_MS);
   setStatus("gathering");
 }
 
 startBtn.addEventListener("click", start);
+
+// A persisted outbox from a previous session (a reload mid-trip) still needs
+// delivering, so connect and re-flush on startup even before the user hits start.
+if (outbox.length) ensureWs();
 
 // Show the server build's git hash, so a running deploy can be matched to source.
 fetch("/version")

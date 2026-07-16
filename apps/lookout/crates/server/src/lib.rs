@@ -50,7 +50,17 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     tracing::info!("websocket connected");
     while let Some(Ok(msg)) = socket.recv().await {
         match msg {
-            Message::Text(text) => handle_sample(&state, &text).await,
+            Message::Text(text) => {
+                // Ack only once the server has taken responsibility, so the client
+                // drops the message from its outbox; a mid-flush disconnect then
+                // re-sends the un-acked tail instead of losing samples that looked
+                // sent. Withhold the ack on a transient failure so it's retried.
+                if let Ingest::Accepted = handle_sample(&state, &text).await {
+                    if socket.send(Message::Text(ACK.into())).await.is_err() {
+                        break;
+                    }
+                }
+            }
             Message::Close(_) => break,
             _ => {}
         }
@@ -58,23 +68,45 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     tracing::info!("websocket disconnected");
 }
 
+/// The ack frame sent back per accepted message. The client treats any server
+/// message as one ack (delivery is in-order over a single socket), so the payload
+/// is a constant.
+const ACK: &str = "ack";
+
+/// Whether the server has finished with a received message. `Accepted` tells the
+/// client (via an ack) it may drop the message; `Retry` withholds the ack so the
+/// client re-sends it on reconnect.
+enum Ingest {
+    Accepted,
+    Retry,
+}
+
 /// Validate an incoming message and, if a sink is configured, enqueue it.
-async fn handle_sample(state: &AppState, text: &str) {
+async fn handle_sample(state: &AppState, text: &str) -> Ingest {
     let message: TelemetryMessage = match serde_json::from_str(text) {
         Ok(message) => message,
         Err(err) => {
+            // Re-sending won't fix malformed JSON, so accept (drop) it rather than
+            // blocking the client's outbox behind a message that can never succeed.
             tracing::warn!(%err, %text, "discarding malformed sample");
-            return;
+            return Ingest::Accepted;
         }
     };
 
     match &state.sink {
         Some(sink) => match sink.push(&message).await {
             Ok(depth) => {
-                tracing::info!(id = %message.id(), t = message.t(), depth, "queued sample")
+                tracing::info!(id = %message.id(), t = message.t(), depth, "queued sample");
+                Ingest::Accepted
             }
-            Err(err) => tracing::error!(%err, "failed to queue sample"),
+            Err(err) => {
+                tracing::error!(%err, "failed to queue sample");
+                Ingest::Retry
+            }
         },
-        None => tracing::info!(id = %message.id(), t = message.t(), "sample (not queued)"),
+        None => {
+            tracing::info!(id = %message.id(), t = message.t(), "sample (not queued)");
+            Ingest::Accepted
+        }
     }
 }

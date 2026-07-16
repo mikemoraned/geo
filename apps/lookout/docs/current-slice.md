@@ -108,15 +108,15 @@ retrofitted onto the flat `Sample`. Keep it compiling at each step (stub → fai
 
 #### Capture survival
 
-- [ ] **Wake lock.** Acquire `navigator.wakeLock` in `start()`; re-acquire on
+- [x] **Wake lock.** Acquire `navigator.wakeLock` in `start()`; re-acquire on
       `visibilitychange` → visible (it's auto-released on hide). Tolerate rejection (Low
       Power Mode / power button) without breaking capture.
-- [ ] **Surface wake-lock state in the status UI** so a failure is visible on the train
+- [x] **Surface wake-lock state in the status UI** so a failure is visible on the train
       (held / released / refused). Add the field to `index.html` + `app.js`.
-- [ ] **Persist the outbox to `localStorage`.** Write on every `sendSample` enqueue; load
+- [x] **Persist the outbox to `localStorage`.** Write on every `sendSample` enqueue; load
       and re-flush on startup. Use `pagehide` / `visibilitychange` → hidden for any
       flush-on-exit (not `beforeunload`/`unload` — unreliable on iOS).
-- [ ] **Server acks before outbox removal.** Server sends an ack per received sample;
+- [x] **Server acks before outbox removal.** Server sends an ack per received sample;
       `flushOutbox` shifts a sample off only once acked, so a drop mid-flush doesn't lose
       samples that looked sent. (Do after persistence — needs `crates/server/src/lib.rs`
       `handle_socket` to reply.)
