@@ -2,23 +2,42 @@
 
 ### Target
 
-The main thing I want to get is some real sensor data from being on a real train journey:
+The main thing I want to get to is some real sensor data from being on a real train journey:
 * periodic gps snapshot
 * accelerometer data
 
-### Architecture
+We should bias towards recording as much fidelity of data as we can i.e. record everything the browser gives us. It is acceptable to save a subset of samples if saving all of them would be expensive in storage or introduce latency problems.
 
-I think the minimum thing required is:
-1. A browser frontend that periodically samples gps and accelerometer data, and sends them on a websocket to backend service, stamped with a timestamp, and random. The frontend should generate a random uuid which it uses as it's identity, if it doesn't already have one persisted in a cookie. It should send this id on all samples. Samples should be simply JSON.
+### Minimal Architecture
+
+The minimum thing required is something like:
+1. A browser frontend that periodically samples gps and accelerometer data, and sends them on a websocket to a backend service, stamped with a timestamp and a device-id. The frontend should generate a random uuid which it uses as it's device-id (if it doesn't already have one persisted in a cookie). Samples should be simple JSON.
 2. A rust web server:
     * providing the basic web-page for front-end
     * listening on the websocket and saving the telemetry data to a redis queue
-3. A rust cli which can listen on this same queue and empty it in to a rerun.io file
-4. This should then be visualisable in rerun
+3. A rust cli which can listen on this same queue and empty it in to an archive format
+4. This archive format should then be visualisable in rerun
 
 Note:
-* the website is deployed to fly.io (e.g. https://lookout.fly.dev) and the redis is deployed on upstash.com as a db called `lookout-telemetry`
-* the cli which empties the queue into rerun.io is running locally on my laptop
+* the website should be deployed to fly.io (e.g. https://lookout-home.fly.dev) and the redis queue is deployed on upstash.com as a db called `lookout-telemetry`
+* the cli which empties the queue into an archive format is running locally on my laptop
+
+The archive format should be sqlite and we use rerun for visualisations. Both kinds of files should be small enough for now to just be checked in to git.
+
+We should have two types of tables in sqlite:
+* lossless raw samples: this is a single table which just contains *all* data we got from the queue, stored as json. We'll generally not want to be using this directly but we keep it just in case we want to reprocess later if we missed something.
+      * the raw table should have a primary key which is a hash (md5 is enough) of the json, so we can do upserts on same data and not worry about dupes.
+* per sensor tables: this is a table per sensor type deduped on (device_id, t) so we can do `INSERT OR IGNORE` style updates. Example schema for acceleration:
+```sql
+CREATE TABLE accel (
+  device_id TEXT NOT NULL,
+  t         INTEGER NOT NULL,   -- epoch millis, as sent
+  x REAL, y REAL, z REAL,
+  PRIMARY KEY (device_id, t)
+) WITHOUT ROWID;
+```
+
+Per-sensor tables are a derivation of info in the raw table, not an independent store. We can later rebuild them from raw without touching the queue.
 
 We should re-use as much style of implementation as used in https://github.com/mikemoraned/bobby
 
@@ -26,14 +45,14 @@ We should re-use as much style of implementation as used in https://github.com/m
 
 * **Topology** (per the Note above): the frontend + web server are deployed to **fly.io**
   (`lookout.fly.dev`); the queue is **upstash** redis (db `lookout-telemetry`); the
-  `recorder` cli runs **locally on the laptop** and drains upstash into a `.rrd`.
+  `recorder` cli runs **locally on the laptop** and drains upstash into a `.sqlite` DB.
 * **Real source is a phone, not the laptop.** Per the Learned Constraints in target.md the
   M3 laptop has no accelerometer, so the sensor is an iPhone running the frontend on the
   train.
-* **HTTPS comes free from fly.io.** `lookout.fly.dev` serves a real, publicly-trusted cert,
+* **HTTPS comes free from fly.io.** `lookout-hom.fly.dev` serves a real, publicly-trusted cert,
   which satisfies the secure-context requirement of Geolocation and `DeviceMotionEvent`.
   No mkcert / cert-install / LAN / hotspot needed — the phone just loads the public URL,
-  and the websocket is `wss://lookout.fly.dev/ws`. (This supersedes the deferred LAN/cert
+  and the websocket is `wss://lookout-hom.fly.dev/ws`. (This supersedes the deferred LAN/cert
   work noted in target.md.)
 * **Capture needs internet on the phone.** The phone reaches fly.io (and thus upstash) over
   the public internet, so it needs **cellular** during the journey — train wifi is unreliable
@@ -50,9 +69,8 @@ We should re-use as much style of implementation as used in https://github.com/m
   cookie, and stamps every sample with it. rerun entity paths are namespaced per device:
   `/device/{id}/accel/{x,y,z}` and `/device/{id}/gps`.
 * **Queue**: an upstash redis **list** — the server `LPUSH`es JSON samples, the cli `BRPOP`s
-  to drain. Simple and matches "empty it into a rerun file". Both server and cli connect to
-  the same upstash db over TLS (`rediss://…`), reading the URL from a `LOOKOUT_REDIS_URL`
-  env var.
+  to drain. Both server and cli connect to the same upstash db over TLS (`rediss://…`), 
+  reading the URL from a `LOOKOUT_REDIS_URL` env var.
 * **Secrets follow bobby's 1Password pattern.** The upstash TCP URL lives as an item in the
   `Dev` 1Password vault (e.g. `lookout-upstash-redis-url`, value in its `password` field).
   Checked-in `deploy/*.env` files hold only `op://` **references**, never values, e.g.
@@ -62,13 +80,8 @@ We should re-use as much style of implementation as used in https://github.com/m
   'op://Dev/lookout-upstash-redis-url/password')"`. No secret values are committed.
 * **Deploy setup**: follow the existing repo `backend/` fly pattern (Dockerfile + fly.toml)
   for the `server` crate.
-* **CLI is a batch drainer**: run during or after the journey (needs internet to reach
-  upstash); it blocks on the queue, writes accel as three scalar time series and gps as
-  lat/lon scalars (plus rerun geo points if easy), using sample `t` as the timeline, and
-  flushes the `.rrd` on Ctrl-C / empty.
 * **Sampling rates**: accelerometer from `devicemotion` events as they fire; gps via
-  `navigator.geolocation.watchPosition` (or a periodic `getCurrentPosition`). No SolidJS —
-  vanilla HTML/JS, consistent with the previous spike.
+  `navigator.geolocation.watchPosition` (or a periodic `getCurrentPosition`).
 
 ### Tasks
 
@@ -139,10 +152,15 @@ verifiable milestone.
 * [ ] change of plan: need to use something else more suitable than rerun format (which isn't an archive format). 
       * We'll use sqlite as an export format. So, we'll change our plan to:
             * `recorder` cli saves to sqlite (keeps the view and drain modes)
-                  * we should create two separate tables for each kind of sensor
+                  * we should create two separate tables for each kind of sensor (see "Minimal Architecture")
             * new `visualise` cli converts from sqlite into rrd format
+                  * it is ok if this is written in python as rerun has better support for things like programatically specifying "blueprints" in python
+                  * the visualise code should go in the `visualise` dir which has been initialised as an empty uv project
+                  * visualise should select by time and device, not count. So against SQL it should be `--since 7d --devices <uuid list>`
 
 **End-to-end on a real journey:**
 
-* [ ] Take a real train trip with the phone capturing gps + accel to upstash; then run the local `recorder` to drain upstash into a `.sqlite`. Convert to `.rrd` via `visualise`.
+* [x] Take a real train trip with the phone capturing gps + accel to upstash
+* [ ] Run the local `recorder` to drain upstash into a `.sqlite`. 
+* [ ] Convert to `.rrd` via `visualise`.
 * [ ] Open the resulting `.rrd` in the rerun viewer and confirm the accel curves and gps track are visible.

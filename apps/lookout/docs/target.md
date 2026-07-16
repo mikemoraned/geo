@@ -36,11 +36,14 @@ We can additionally improve accuracy by using accelerometers from devices that a
 
 - Use the [crux](https://redbadger.github.io/crux/) library for ports and adapters
 - Use the [iroh](https://docs.iroh.computer/quickstart) library for multi-device comms
-- sensor data is persisted in https://rerun.io format
-- all code inside the centre of the archictecture should be in Rust i.e. all business logic is in Rust
+- sensor data is persisted in sqlite
+- sensor data is visualised in https://rerun.io 
+- all code inside the centre of the architecture should be in Rust i.e. all business logic is in Rust
 - for front-end on web we should follow a single-page-app pattern and use typescript + https://www.solidjs.com
 
-# Learned Constraints
+# Learnings 
+
+## Constraints
 
 - **The dev laptop cannot self-source motion data.** The dev machine is an Apple Silicon
   (M3) MacBook Air (`Mac15,12`); Apple Silicon dropped the Sudden Motion Sensor, so there
