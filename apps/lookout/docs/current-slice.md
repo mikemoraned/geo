@@ -175,3 +175,36 @@ verifiable milestone.
       3 devices, 292 accel + 163 gps).
 * [x] Convert to `.rrd` via `visualise` (`just visualise --since 30d`; `rerun rrd verify` passes).
 * [x] Open the resulting `.rrd` in the rerun viewer and confirm the accel curves and gps track are visible.
+
+**Improve visualisations**
+
+All in `visualise/` (Python, rerun-sdk 0.34). Ordered by value.
+
+* [ ] **GPS track is not actually a track.** `log_gps` logs a `GeoPoints` per timestamp,
+      each overwriting the last, so the map view (latest-at) shows a single dot jumping
+      between fixes rather than a path. Log the whole journey once as a static
+      `rr.GeoLineStrings(lat_lon=[[lat, lon], ...])` under `device/{id}/track` — separate
+      entity from `device/{id}/gps` so it doesn't clash with the per-timestamp points.
+      Widen the blueprint's `MapView(origin=f"/device/{id}/gps")` to
+      `origin=f"/device/{id}"` so both the track and the cursor dot render.
+* [ ] **Show fix accuracy.** `fetch_gps` selects only `lat, lon`; add `acc` and pass it as
+      `rr.GeoPoints(lat_lon=[(lat, lon)], radii=[acc])`. Map view scene units are metres,
+      so a positive radius draws the reported uncertainty at true scale — the circle
+      inflates in cuttings where fixes degrade. Handle `acc IS NULL`.
+* [ ] **Add `|a|` as a derived series.** The accel is instantaneous and gravity-dominated
+      (~9.81 m/s² vs ~1 m/s² of train dynamics, in an unknown device orientation), so the
+      raw axes are close to uninterpretable. Magnitude is orientation-invariant and the one
+      accel signal that means something here. Log at `device/{id}/accel/magnitude` so it
+      joins the existing `TimeSeriesView(origin=f"/device/{id}/accel")` plot.
+      Expect a flat ~9.81 with spikes where the phone was handled — that is the correct
+      result for this dataset, not a bug.
+* [ ] **Accel as one entity, not three.** Rerun moved away from per-axis entities in 0.23
+      (`gyroscope/x|y|z` → one `rr.Scalars([x, y, z])`). Collapse `device/{id}/accel/{x,y,z}`
+      to `device/{id}/accel` and switch `log_accel` to `rr.send_columns` — the natural shape
+      for a table→rrd converter. Needs a static
+      `rr.log(path, rr.SeriesLines(names=["x","y","z"]), static=True)` or the legend has
+      nothing to label the three series with. Note `Scalars` requires the same count per
+      timestamp, so the current per-axis `if value is not None` skip becomes a filter or a
+      fill. Not a perf change at this volume (292 rows) — it's for the legend and the shape.
+      Update the `Identity` decision in current-slice.md, which still specifies
+      `/device/{id}/accel/{x,y,z}`.
