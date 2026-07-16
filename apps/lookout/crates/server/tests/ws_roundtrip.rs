@@ -11,21 +11,22 @@ use futures_util::{SinkExt, StreamExt};
 use server::queue::{PushError, SampleSink};
 use server::{build_app, AppState};
 use shared::{Accel, AccelReading, Gps, GpsReading, Message, V0Message, V1Message};
+use telemetry::RawSample;
 use tokio::net::TcpListener;
 use tokio::time::{sleep, timeout, Instant};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use uuid::Uuid;
 
-/// A [`SampleSink`] that records pushed messages in memory for assertions.
+/// A [`SampleSink`] that records pushed queue items in memory for assertions.
 struct RecordingSink {
-    samples: Arc<Mutex<Vec<Message>>>,
+    samples: Arc<Mutex<Vec<RawSample>>>,
 }
 
 #[async_trait::async_trait]
 impl SampleSink for RecordingSink {
-    async fn push(&self, message: &Message) -> Result<i64, PushError> {
+    async fn push(&self, sample: &RawSample) -> Result<i64, PushError> {
         let mut samples = self.samples.lock().expect("lock");
-        samples.push(message.clone());
+        samples.push(sample.clone());
         Ok(samples.len() as i64)
     }
 }
@@ -35,8 +36,8 @@ fn static_dir() -> String {
 }
 
 /// Spawn the real router with a recording sink; returns its address and the shared
-/// buffer of pushed messages.
-async fn spawn_app() -> (SocketAddr, Arc<Mutex<Vec<Message>>>) {
+/// buffer of pushed queue items.
+async fn spawn_app() -> (SocketAddr, Arc<Mutex<Vec<RawSample>>>) {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let app = build_app(
         AppState {
@@ -73,6 +74,8 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
             lon: -3.19,
             alt: None,
             acc: 8.5,
+            speed: None,
+            heading: None,
         },
     }));
 
@@ -80,6 +83,9 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
         id: Uuid::from_u128(42),
         t: 1_700_000_000_042,
         accel: Accel {
+            rms: 0.42,
+            peak: 1.7,
+            n: 600,
             x: Some(0.1),
             y: Some(-9.8),
             z: Some(0.3),
@@ -109,8 +115,12 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
             let samples = recorded.lock().expect("lock");
             if samples.len() >= 2 {
                 assert_eq!(samples.len(), 2, "malformed sample must be dropped");
-                assert_eq!(samples[0], v0_expected);
-                assert_eq!(samples[1], v1);
+                assert_eq!(samples[0].parse().expect("parse v0"), v0_expected);
+                assert_eq!(samples[1].parse().expect("parse v1"), v1);
+                assert!(
+                    samples[0].received_at() > 0,
+                    "server stamps received_at at handling time"
+                );
                 return;
             }
         }
@@ -132,6 +142,9 @@ async fn server_acks_accepted_message() {
         id: Uuid::from_u128(99),
         t: 1_700_000_000_099,
         accel: Accel {
+            rms: 0.0,
+            peak: 0.0,
+            n: 1,
             x: Some(0.0),
             y: Some(0.0),
             z: Some(0.0),

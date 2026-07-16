@@ -2341,10 +2341,12 @@ name = "telemetry"
 version = "0.1.0"
 dependencies = [
  "redis",
+ "serde",
  "serde_json",
  "shared",
  "testcontainers",
  "testcontainers-modules",
+ "thiserror",
  "tokio",
  "uuid",
 ]

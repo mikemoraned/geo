@@ -20,9 +20,19 @@ const SAMPLE_INTERVAL_MS = 10000;
 let accelCount = 0;
 let gpsCount = 0;
 
-// Latest unread reading from each source, consumed (and cleared) on each sample tick.
-let pendingAccel = null;
+// Accelerometer readings arrive at ~60 Hz. Rather than keep only the latest (at 0.1 Hz
+// an instantaneous sample just measures gravity), aggregate the gravity-removed
+// magnitude across the window and emit { rms, peak, n } on the tick. A single raw
+// instantaneous reading is kept for a tilt view. Accumulators reset each emit.
+let accelSumSq = 0;
+let accelPeak = 0;
+let accelN = 0;
+let lastAccel = null;
+
+// Latest unread gps fix, consumed (and cleared) on each sample tick, plus the fix's
+// own timestamp (0–10 s old — used as the sample `t` instead of Date.now()).
 let pendingGps = null;
+let pendingGpsT = null;
 
 // Fire each source's first sample as soon as it produces a reading, rather than
 // waiting a full SAMPLE_INTERVAL_MS for the interval's first tick. Tracked per source
@@ -115,16 +125,35 @@ function deviceInfo() {
   };
 }
 
-// Sensor events only stash their latest reading; sampleTick turns them into samples.
+// Accelerometer events accumulate into the window; sampleTick emits the aggregate.
+// iOS-only, so `event.acceleration` (gravity-removed) is always present — no
+// accelerationIncludingGravity fallback. Its magnitude is orientation-invariant, so
+// device placement doesn't matter.
 function onMotion(event) {
-  const a = event.accelerationIncludingGravity || event.acceleration || {};
-  pendingAccel = { x: a.x ?? null, y: a.y ?? null, z: a.z ?? null };
+  const a = event.acceleration || {};
+  const x = a.x ?? null;
+  const y = a.y ?? null;
+  const z = a.z ?? null;
+  lastAccel = { x, y, z };
+  const mag = Math.hypot(x ?? 0, y ?? 0, z ?? 0);
+  accelSumSq += mag * mag;
+  accelPeak = Math.max(accelPeak, mag);
+  accelN += 1;
   takeFirstAccelSample();
 }
 
 function onPosition(position) {
   const c = position.coords;
-  pendingGps = { lat: c.latitude, lon: c.longitude, alt: c.altitude, acc: c.accuracy };
+  // speed (Doppler, m/s) and heading (course, degrees) are nullable; keep the nulls.
+  pendingGps = {
+    lat: c.latitude,
+    lon: c.longitude,
+    alt: c.altitude,
+    acc: c.accuracy,
+    speed: c.speed,
+    heading: c.heading,
+  };
+  pendingGpsT = position.timestamp;
   takeFirstGpsSample();
 }
 
@@ -142,15 +171,19 @@ function onPositionError(err) {
 // A sample is a v1 message: the wire version, a type tag, the device id, a
 // timestamp, and either an accel or gps reading.
 function emitAccelSample() {
-  if (!pendingAccel) return;
-  const sample = {
-    v: WIRE_VERSION,
-    type: "acceleration",
-    id,
-    t: Date.now(),
-    accel: pendingAccel,
+  if (accelN === 0) return;
+  const accel = {
+    rms: Math.sqrt(accelSumSq / accelN),
+    peak: accelPeak,
+    n: accelN,
+    x: lastAccel?.x ?? null,
+    y: lastAccel?.y ?? null,
+    z: lastAccel?.z ?? null,
   };
-  pendingAccel = null;
+  accelSumSq = 0;
+  accelPeak = 0;
+  accelN = 0;
+  const sample = { v: WIRE_VERSION, type: "acceleration", id, t: Date.now(), accel };
   accelCount += 1;
   accelCountEl.textContent = String(accelCount);
   accelEl.textContent = JSON.stringify(sample.accel, null, 2);
@@ -159,14 +192,17 @@ function emitAccelSample() {
 
 function emitGpsSample() {
   if (!pendingGps) return;
+  // Stamp the fix's own time, not Date.now(): a watchPosition fix is 0–10 s old, and
+  // at line speed that lag is hundreds of metres against a ~5 m accuracy.
   const sample = {
     v: WIRE_VERSION,
     type: "gps",
     id,
-    t: Date.now(),
+    t: pendingGpsT ?? Date.now(),
     gps: pendingGps,
   };
   pendingGps = null;
+  pendingGpsT = null;
   gpsCount += 1;
   gpsCountEl.textContent = String(gpsCount);
   gpsEl.textContent = JSON.stringify(sample.gps, null, 2);

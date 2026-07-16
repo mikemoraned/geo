@@ -37,7 +37,6 @@ Background for most of the quality items: at 0.1 Hz instantaneous sampling, the 
 #### Consequences elsewhere
 
 * New fields (`speed`/`heading` on gps, `rms`/`peak`/`n` on accel) need adding to the per-sensor tables in `recorder`. No migration — they land in the raw table regardless, and per-sensor tables rebuild from raw.
-* Rerun views change: the `Arrows2D` accel vector shows device tilt, not train acceleration — drop or relabel. Useful instead: `|a| - 9.81` as a disturbance indicator, RMS as roughness, `GeoLineStrings` coloured by Doppler speed.
 * Dry run before the journey: a walk around the block exercises wake lock, outbox persistence across a reload, reconnect with cellular off, and confirms `speed`/`heading` are non-null on the actual device. One device, one browser — no matrix. These failure modes are all silent.
 
 ### Tasks
@@ -123,34 +122,46 @@ retrofitted onto the flat `Sample`. Keep it compiling at each step (stub → fai
 
 #### Data quality (wire model + frontend)
 
-- [ ] **Extend `shared::Gps`** with `speed: Option<f64>` and `heading: Option<f64>`
+- [x] **Extend `shared::Gps`** with `speed: Option<f64>` and `heading: Option<f64>`
       (both nullable; a null carries meaning). Update roundtrip tests.
-- [ ] **Redefine `shared::Accel`** as aggregate `{ rms, peak, n }`, **keeping** a raw
+- [x] **Redefine `shared::Accel`** as aggregate `{ rms, peak, n }`, **keeping** a raw
       instantaneous x/y/z reading alongside (decided: keep it — costs nothing, preserves
       a tilt view). Update tests.
-- [ ] **Capture `coords.speed` / `coords.heading`** in `onPosition`; include in
+- [x] **Capture `coords.speed` / `coords.heading`** in `onPosition`; include in
       `emitGpsSample`. Store nulls, don't drop them.
-- [ ] **Use `position.timestamp` as `t`** for the gps sample, not `Date.now()` (a fix is
+- [x] **Use `position.timestamp` as `t`** for the gps sample, not `Date.now()` (a fix is
       0–10 s old; at 160 km/h that's hundreds of metres). Same epoch-millis basis.
-- [ ] **Aggregate accel in `onMotion`** instead of overwriting: accumulate
+- [x] **Aggregate accel in `onMotion`** instead of overwriting: accumulate
       `event.acceleration` (gravity-removed) across the window, emit `{ rms, peak, n }`
       on the existing tick. `onMotion` loses its `accelerationIncludingGravity` branch
       (iOS-only, no fallback).
 
 #### Persistence + server
 
-- [ ] **Add the new columns to the per-sensor tables** in `store.rs`: `speed`, `heading`
+- [x] **Add the new columns to the per-sensor tables** in `store.rs`: `speed`, `heading`
       on `gps`; `rms`, `peak`, `n` on `accel`. No migration — raw table is unchanged and
       per-sensor tables rebuild from raw. Update `store.rs` tests.
-- [ ] **Server-side `received_at`** stamped on ingest (device clocks drift; `t` is
+- [x] **Server-side `received_at`** stamped on ingest (device clocks drift; `t` is
       device-stamped). Lands in a **separate column** (decided) — keeps the
       raw-verbatim/md5 idempotency contract intact rather than mutating the payload.
+      Note: stamped in the **server** at websocket handling time (not at recorder
+      archive time — the recorder can drain much later). It rides through the queue in
+      a `RawSample` envelope (`{ received_at, payload }`) beside the verbatim payload,
+      and the recorder writes it to the `received_at` column.
 
 #### Views + dry run
 
-- [ ] **Update rerun views** in `visualise/main.py`: relabel/drop the device-tilt accel
-      vector; add `|a| - 9.81` disturbance / RMS roughness; colour `GeoLineStrings` by
-      Doppler speed. Add new columns to the `fetch_accel` / `fetch_gps` queries.
+- [ ] **Update rerun views** in `visualise/main.py`. Add the new columns to the
+      `fetch_accel` / `fetch_gps` queries first, then:
+      * colour the `GeoLineStrings` track by `speed` via `colors=` — the payoff for
+        capturing it, and the view this whole thing has been pointing at.
+      * add `rms` as ride roughness, `peak` as jolts/pointwork. RMS supersedes the `|a|`
+        magnitude series: magnitude only says the device was disturbed, RMS is actual
+        ride quality.
+      * add `n` as its own series — capture health, showing windows where the page was
+        suspended.
+      * the retained raw x/y/z is device tilt, not train acceleration. Label it that way
+        or leave it out of the default blueprint.
 - [ ] **Dry run** before the journey (walk round the block): wake lock holds, outbox
       survives a reload, reconnect works with cellular off, `speed`/`heading` non-null on
       the real device. One device, one browser — these failure modes are all silent.

@@ -13,6 +13,7 @@ use std::time::Duration;
 use redis::aio::MultiplexedConnection;
 use server::queue::{RedisSink, SampleSink, QUEUE_KEY};
 use shared::{Accel, AccelReading, Gps, GpsReading, Message, V1Message};
+use telemetry::RawSample;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::redis::{Redis, REDIS_PORT};
@@ -69,6 +70,9 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
         id: Uuid::from_u128(1),
         t: 1_700_000_000_001,
         accel: Accel {
+            rms: 0.42,
+            peak: 1.7,
+            n: 600,
             x: Some(0.1),
             y: Some(-9.8),
             z: Some(0.3),
@@ -82,12 +86,19 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
             lon: -3.19,
             alt: None,
             acc: 8.5,
+            speed: Some(31.4),
+            heading: Some(275.0),
         },
     }));
 
+    // The sink enqueues RawSample envelopes (payload + received_at), the way the
+    // server's handler builds them.
+    let accel_item = wrap(&accel_sample);
+    let gps_item = wrap(&gps_sample);
+
     // push returns the resulting queue depth
-    assert_eq!(sink.push(&accel_sample).await.expect("push accel"), 1);
-    assert_eq!(sink.push(&gps_sample).await.expect("push gps"), 2);
+    assert_eq!(sink.push(&accel_item).await.expect("push accel"), 1);
+    assert_eq!(sink.push(&gps_item).await.expect("push gps"), 2);
 
     let len: i64 = redis::cmd("LLEN")
         .arg(QUEUE_KEY)
@@ -100,15 +111,19 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
     // oldest sample — draining yields insertion order (FIFO).
     let first = rpop_sample(&mut conn).await;
     let second = rpop_sample(&mut conn).await;
-    assert_eq!(first, accel_sample);
-    assert_eq!(second, gps_sample);
+    assert_eq!(first.parse().expect("parse accel"), accel_sample);
+    assert_eq!(second.parse().expect("parse gps"), gps_sample);
 }
 
-async fn rpop_sample(conn: &mut MultiplexedConnection) -> Message {
-    let raw: String = redis::cmd("RPOP")
+fn wrap(message: &Message) -> RawSample {
+    RawSample::new(1_700_000_050_000, serde_json::to_string(message).expect("serialize"))
+}
+
+async fn rpop_sample(conn: &mut MultiplexedConnection) -> RawSample {
+    let item: String = redis::cmd("RPOP")
         .arg(QUEUE_KEY)
         .query_async(conn)
         .await
         .expect("rpop");
-    serde_json::from_str(&raw).expect("deserialize sample")
+    serde_json::from_str(&item).expect("deserialize envelope")
 }

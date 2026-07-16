@@ -10,6 +10,7 @@
 use redis::aio::MultiplexedConnection;
 use server::queue::{RedisSink, SampleSink, QUEUE_KEY};
 use shared::{Accel, AccelReading, Message, V1Message};
+use telemetry::RawSample;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -29,14 +30,20 @@ async fn redis_round_trip_end_to_end() {
         id: Uuid::new_v4(),
         t: 1_700_000_000_000,
         accel: Accel {
+            rms: 0.42,
+            peak: 1.7,
+            n: 600,
             x: Some(0.1),
             y: Some(-9.8),
             z: Some(0.3),
         },
     }));
-    let json = serde_json::to_string(&sample).expect("serialize");
+    let payload = serde_json::to_string(&sample).expect("serialize");
+    let queued = RawSample::new(1_700_000_050_000, payload);
+    // The queue holds the envelope (payload + received_at), so that's what LREM matches.
+    let item = serde_json::to_string(&queued).expect("serialize envelope");
 
-    let depth = sink.push(&sample).await.expect("push sample to upstash");
+    let depth = sink.push(&queued).await.expect("push sample to upstash");
     assert!(depth >= 1, "queue depth should be >= 1 after push");
 
     // Remove exactly the sample we pushed — proves it landed on the queue and cleans
@@ -45,7 +52,7 @@ async fn redis_round_trip_end_to_end() {
     let removed: i64 = redis::cmd("LREM")
         .arg(QUEUE_KEY)
         .arg(1)
-        .arg(&json)
+        .arg(&item)
         .query_async(&mut conn)
         .await
         .expect("LREM");

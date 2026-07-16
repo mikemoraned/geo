@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use redis::aio::MultiplexedConnection;
 use shared::{Accel, AccelReading, Message, V1Message};
-use telemetry::{brpop_sample, latest_samples, QUEUE_KEY};
+use telemetry::{brpop_sample, latest_samples, RawSample, QUEUE_KEY};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
 use testcontainers_modules::redis::{Redis, REDIS_PORT};
@@ -56,6 +56,9 @@ fn sample(n: u128) -> Message {
         id: Uuid::from_u128(n),
         t: 1_700_000_000_000 + n as i64,
         accel: Accel {
+            rms: 0.0,
+            peak: 0.0,
+            n: 1,
             x: Some(n as f64),
             y: None,
             z: None,
@@ -63,12 +66,15 @@ fn sample(n: u128) -> Message {
     }))
 }
 
-/// LPUSH a message the way the server's `RedisSink` does.
+/// LPUSH a message the way the server's `RedisSink` does: as a RawSample envelope
+/// (payload + received_at).
 async fn lpush(conn: &mut MultiplexedConnection, sample: &Message) {
-    let json = serde_json::to_string(sample).expect("serialize");
+    let payload = serde_json::to_string(sample).expect("serialize");
+    let item = serde_json::to_string(&RawSample::new(1_700_000_050_000, payload))
+        .expect("serialize envelope");
     let _: i64 = redis::cmd("LPUSH")
         .arg(QUEUE_KEY)
-        .arg(json)
+        .arg(item)
         .query_async(conn)
         .await
         .expect("lpush");

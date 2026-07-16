@@ -8,6 +8,8 @@ use axum::response::Response;
 use axum::routing::{any, get};
 use axum::Router;
 use shared::Message as TelemetryMessage;
+use std::time::{SystemTime, UNIX_EPOCH};
+use telemetry::RawSample;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
@@ -81,7 +83,9 @@ enum Ingest {
     Retry,
 }
 
-/// Validate an incoming message and, if a sink is configured, enqueue it.
+/// Validate an incoming message and, if a sink is configured, enqueue it. The queue
+/// item carries the verbatim payload plus `received_at`, stamped here at handling time
+/// so queue latency doesn't distort it.
 async fn handle_sample(state: &AppState, text: &str) -> Ingest {
     let message: TelemetryMessage = match serde_json::from_str(text) {
         Ok(message) => message,
@@ -93,8 +97,9 @@ async fn handle_sample(state: &AppState, text: &str) -> Ingest {
         }
     };
 
+    let sample = RawSample::new(received_at_millis(), text);
     match &state.sink {
-        Some(sink) => match sink.push(&message).await {
+        Some(sink) => match sink.push(&sample).await {
             Ok(depth) => {
                 tracing::info!(id = %message.id(), t = message.t(), depth, "queued sample");
                 Ingest::Accepted
@@ -109,4 +114,14 @@ async fn handle_sample(state: &AppState, text: &str) -> Ingest {
             Ingest::Accepted
         }
     }
+}
+
+/// Wall-clock time now, as epoch milliseconds — a server-stamped counterpart to the
+/// device-stamped `t`. A backwards clock (pre-1970) saturates to 0 rather than
+/// panicking on a single sample.
+fn received_at_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }

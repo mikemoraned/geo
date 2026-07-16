@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use redis::aio::MultiplexedConnection;
 use shared::{Accel, AccelReading, Gps, GpsReading, Message, V1Message};
-use telemetry::QUEUE_KEY;
+use telemetry::{RawSample, QUEUE_KEY};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
 use testcontainers_modules::redis::{Redis, REDIS_PORT};
@@ -50,12 +50,15 @@ async fn wait_ready(url: &str) -> MultiplexedConnection {
     }
 }
 
-/// LPUSH a message the way the server's `RedisSink` does.
+/// LPUSH a message the way the server's `RedisSink` does: as a RawSample envelope
+/// (payload + received_at).
 async fn lpush(conn: &mut MultiplexedConnection, message: &Message) {
-    let json = serde_json::to_string(message).expect("serialize");
+    let payload = serde_json::to_string(message).expect("serialize");
+    let item = serde_json::to_string(&RawSample::new(1_700_000_050_000, payload))
+        .expect("serialize envelope");
     let _: i64 = redis::cmd("LPUSH")
         .arg(QUEUE_KEY)
-        .arg(json)
+        .arg(item)
         .query_async(conn)
         .await
         .expect("lpush");
@@ -66,6 +69,9 @@ fn accel_sample(id: Uuid, t: i64) -> Message {
         id,
         t,
         accel: Accel {
+            rms: 0.42,
+            peak: 1.7,
+            n: 600,
             x: Some(0.1),
             y: Some(-9.8),
             z: Some(0.3),
@@ -82,6 +88,8 @@ fn gps_sample(id: Uuid, t: i64, lat: f64) -> Message {
             lon: -3.19,
             alt: Some(80.0),
             acc: 5.0,
+            speed: Some(31.4),
+            heading: Some(275.0),
         },
     }))
 }

@@ -161,6 +161,8 @@ mod tests {
                 lon: -3.19,
                 alt: None,
                 acc: 8.5,
+                speed: Some(31.4),
+                heading: None,
             },
         }
     }
@@ -170,6 +172,9 @@ mod tests {
             id: Uuid::from_u128(2),
             t: 1_700_000_000_001,
             accel: Accel {
+                rms: 0.42,
+                peak: 1.7,
+                n: 600,
                 x: Some(0.1),
                 y: Some(-9.8),
                 z: Some(0.3),
@@ -220,7 +225,7 @@ mod tests {
     /// A payload without a `v` field decodes as Version0.
     #[test]
     fn absent_version_decodes_as_v0() {
-        let json = r#"{"id":"00000000-0000-0000-0000-000000000001","t":1700000000000,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5}}"#;
+        let json = r#"{"id":"00000000-0000-0000-0000-000000000001","t":1700000000000,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5,"speed":31.4,"heading":null}}"#;
         let message: Message = serde_json::from_str(json).expect("deserialize");
         assert_eq!(message, Message::Version0(V0Message::Gps(gps_reading())));
     }
@@ -228,7 +233,7 @@ mod tests {
     /// An explicit `v:1` decodes as Version1.
     #[test]
     fn explicit_version_1_decodes_as_v1() {
-        let json = r#"{"v":1,"type":"gps","id":"00000000-0000-0000-0000-000000000001","t":1700000000000,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5}}"#;
+        let json = r#"{"v":1,"type":"gps","id":"00000000-0000-0000-0000-000000000001","t":1700000000000,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5,"speed":31.4,"heading":null}}"#;
         let message: Message = serde_json::from_str(json).expect("deserialize");
         assert_eq!(message, Message::Version1(V1Message::Gps(gps_reading())));
     }
@@ -259,13 +264,20 @@ mod tests {
         let stored_accel = r#"{"id":"00000000-0000-0000-0000-000000000001","t":1700000000000,"accel":{"x":0.1,"y":-9.8,"z":0.3}}"#;
 
         let gps: Message = serde_json::from_str(stored_gps).expect("parse stored gps");
-        assert!(matches!(gps, Message::Version0(V0Message::Gps(_))));
+        let Message::Version0(V0Message::Gps(r)) = gps else {
+            panic!("expected v0 gps, got {gps:?}");
+        };
+        // The fields v0 never carried default rather than failing to parse.
+        assert_eq!(r.gps.speed, None);
+        assert_eq!(r.gps.heading, None);
 
         let accel: Message = serde_json::from_str(stored_accel).expect("parse stored accel");
-        assert!(matches!(
-            accel,
-            Message::Version0(V0Message::Acceleration(_))
-        ));
+        let Message::Version0(V0Message::Acceleration(r)) = accel else {
+            panic!("expected v0 accel, got {accel:?}");
+        };
+        assert_eq!(r.accel.n, 0);
+        assert_eq!(r.accel.rms, 0.0);
+        assert_eq!(r.accel.x, Some(0.1));
     }
 
     #[test]
