@@ -151,7 +151,7 @@ retrofitted onto the flat `Sample`. Keep it compiling at each step (stub → fai
 
 #### Views + dry run
 
-- [ ] **Update rerun views** in `visualise/main.py`. Add the new columns to the
+- [x] **Update rerun views** in `visualise/main.py`. Add the new columns to the
       `fetch_accel` / `fetch_gps` queries first, then:
       * colour the `GeoLineStrings` track by `speed` via `colors=` — the payoff for
         capturing it, and the view this whole thing has been pointing at.

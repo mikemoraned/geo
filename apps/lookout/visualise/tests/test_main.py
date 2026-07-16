@@ -41,8 +41,8 @@ class TestFetchQueries:
         conn = sqlite3.connect(":memory:")
         conn.executescript(
             """
-            CREATE TABLE accel (device_id TEXT, t INTEGER, x REAL, y REAL, z REAL);
-            CREATE TABLE gps (device_id TEXT, t INTEGER, lat REAL, lon REAL, alt REAL, acc REAL);
+            CREATE TABLE accel (device_id TEXT, t INTEGER, rms REAL, peak REAL, n INTEGER, x REAL, y REAL, z REAL);
+            CREATE TABLE gps (device_id TEXT, t INTEGER, lat REAL, lon REAL, alt REAL, acc REAL, speed REAL, heading REAL);
             """
         )
         rows = [
@@ -50,14 +50,33 @@ class TestFetchQueries:
             ("aaaa-1", 2000, 0.4, 0.5, 0.6),
             ("bbbb-2", 2000, 1.0, 1.0, 1.0),
         ]
-        conn.executemany("INSERT INTO accel VALUES (?, ?, ?, ?, ?)", rows)
+        conn.executemany("INSERT INTO accel (device_id, t, x, y, z) VALUES (?, ?, ?, ?, ?)", rows)
         conn.executemany(
-            "INSERT INTO gps VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO gps (device_id, t, lat, lon, alt, acc) VALUES (?, ?, ?, ?, ?, ?)",
             [("aaaa-1", 1500, 55.9, -3.1, 80.0, 5.0), ("bbbb-2", 500, 51.5, -0.1, 10.0, 8.0)],
         )
         conn.commit()
         yield conn
         conn.close()
+
+    def test_fetch_accel_selects_aggregate_columns(self, conn):
+        conn.execute(
+            "INSERT INTO accel (device_id, t, rms, peak, n) VALUES ('cccc-3', 3000, 0.42, 1.7, 600)"
+        )
+        conn.commit()
+        (row,) = [r for r in main.fetch_accel(conn, 0, ["cccc"])]
+        # (device_id, t, rms, peak, n, x, y, z)
+        assert row[2] == 0.42 and row[3] == 1.7 and row[4] == 600
+
+    def test_fetch_gps_selects_speed_and_heading(self, conn):
+        conn.execute(
+            "INSERT INTO gps (device_id, t, lat, lon, acc, speed, heading) "
+            "VALUES ('cccc-3', 3000, 55.9, -3.1, 5.0, 31.4, 275.0)"
+        )
+        conn.commit()
+        (row,) = [r for r in main.fetch_gps(conn, 0, ["cccc"])]
+        # (device_id, t, lat, lon, acc, speed, heading)
+        assert row[5] == 31.4 and row[6] == 275.0
 
     def test_cutoff_excludes_older(self, conn):
         rows = main.fetch_accel(conn, cutoff_ms=1500, devices=None)
@@ -78,6 +97,23 @@ class TestFetchQueries:
         assert [r[1] for r in rows] == sorted(r[1] for r in rows)
 
 
+class TestSpeedColor:
+    def test_none_speed_is_grey(self):
+        assert main._speed_color(None, 0.0, 30.0) == main._NO_SPEED
+
+    def test_endpoints_hit_ramp_extremes(self):
+        assert main._speed_color(0.0, 0.0, 30.0) == main._VIRIDIS[0][1]
+        assert main._speed_color(30.0, 0.0, 30.0) == main._VIRIDIS[-1][1]
+
+    def test_degenerate_range_is_midpoint(self):
+        # All fixes at the same speed: no gradient, pick the ramp's middle.
+        assert main._speed_color(5.0, 5.0, 5.0) == main._viridis(0.5)
+
+    def test_returns_rgb_triple(self):
+        r, g, b = main._speed_color(15.0, 0.0, 30.0)
+        assert all(0 <= c <= 255 for c in (r, g, b))
+
+
 class TestReportedPrefixScenario:
     """Reproduces `--devices 77a`: with several full uuids present, a short prefix
     must select *only* the id it is a prefix of and exclude every other device."""
@@ -93,13 +129,13 @@ class TestReportedPrefixScenario:
         conn = sqlite3.connect(":memory:")
         conn.executescript(
             """
-            CREATE TABLE accel (device_id TEXT, t INTEGER, x REAL, y REAL, z REAL);
-            CREATE TABLE gps (device_id TEXT, t INTEGER, lat REAL, lon REAL, alt REAL, acc REAL);
+            CREATE TABLE accel (device_id TEXT, t INTEGER, rms REAL, peak REAL, n INTEGER, x REAL, y REAL, z REAL);
+            CREATE TABLE gps (device_id TEXT, t INTEGER, lat REAL, lon REAL, alt REAL, acc REAL, speed REAL, heading REAL);
             """
         )
         for uuid in self.UUIDS:
-            conn.execute("INSERT INTO accel VALUES (?, 1000, 0.0, 0.0, 0.0)", [uuid])
-            conn.execute("INSERT INTO gps VALUES (?, 1000, 0.0, 0.0, 0.0, 0.0)", [uuid])
+            conn.execute("INSERT INTO accel (device_id, t, x, y, z) VALUES (?, 1000, 0.0, 0.0, 0.0)", [uuid])
+            conn.execute("INSERT INTO gps (device_id, t, lat, lon, alt, acc) VALUES (?, 1000, 0.0, 0.0, 0.0, 0.0)", [uuid])
         conn.commit()
         yield conn
         conn.close()

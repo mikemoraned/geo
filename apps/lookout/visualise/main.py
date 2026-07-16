@@ -3,8 +3,8 @@
 Reads the derived per-sensor tables (`accel`, `gps`), selected by a relative time
 window (`--since 7d`) and optionally by device (`--devices <uuid> ...`), and logs
 them to a rerun recording under per-device entity paths. A blueprint gives each
-selected device a map view for its gps track and a time-series view for its accel
-axes.
+selected device a map view for its speed-coloured gps track and a time-series view of
+its accel ride-quality aggregates (rms roughness, peak jolts).
 
 Run from `apps/lookout` via `just visualise` so the default paths resolve.
 """
@@ -52,7 +52,8 @@ def _device_filter(devices: list[str] | None) -> tuple[str, list[str]]:
 def fetch_accel(conn: sqlite3.Connection, cutoff_ms: int, devices: list[str] | None):
     clause, params = _device_filter(devices)
     return conn.execute(
-        f"SELECT device_id, t, x, y, z FROM accel WHERE t >= ?{clause} ORDER BY t",
+        f"SELECT device_id, t, rms, peak, n, x, y, z FROM accel "
+        f"WHERE t >= ?{clause} ORDER BY t",
         [cutoff_ms, *params],
     ).fetchall()
 
@@ -60,86 +61,135 @@ def fetch_accel(conn: sqlite3.Connection, cutoff_ms: int, devices: list[str] | N
 def fetch_gps(conn: sqlite3.Connection, cutoff_ms: int, devices: list[str] | None):
     clause, params = _device_filter(devices)
     return conn.execute(
-        f"SELECT device_id, t, lat, lon, acc FROM gps WHERE t >= ?{clause} ORDER BY t",
+        f"SELECT device_id, t, lat, lon, acc, speed, heading FROM gps "
+        f"WHERE t >= ?{clause} ORDER BY t",
         [cutoff_ms, *params],
     ).fetchall()
 
 
 def log_accel(rows) -> None:
-    """Log accel as one `x,y,z` series per device under `device/{id}/accel`, plus an
-    orientation-invariant magnitude `|a|` under `device/{id}/accel/magnitude`.
+    """Log accel aggregates per device: ride quality under `device/{id}/accel` (`rms`
+    roughness and `peak` jolts / pointwork) and capture health under
+    `device/{id}/samples` (`n`, the readings-per-window).
 
-    The raw axes are gravity-dominated in an unknown device orientation, so the
-    magnitude is the one accel signal that means something on its own — expect a flat
-    ~9.81 with spikes where the phone was handled.
+    `rms`/`peak` are the accel signals that mean something at the 0.1 Hz sample rate;
+    the raw instantaneous `x,y,z` (kept in the archive as a tilt view) aliases into
+    noise and is not plotted. `n` sits on its own path because at ~600 it would dwarf
+    them — it should hold near-constant while sampling and drop toward zero where the
+    page was suspended, so it reads as a capture-health check rather than a ride
+    signal. Rows without aggregates — legacy captures predating the columns — are
+    dropped rather than shown as a misleading flat zero.
 
     Written column-wise with `rr.send_columns` (the natural shape for a table→rrd
-    converter). `Scalars` needs the same count at every timestamp, so rows missing any
-    axis are dropped rather than fanned out per-axis.
+    converter); `Scalars` needs the same count at every timestamp.
     """
-    by_device: dict[str, list[tuple[float, float, float, float]]] = {}
-    for device_id, t, x, y, z in rows:
-        if x is None or y is None or z is None:
+    by_device: dict[str, list[tuple[float, float, float, int]]] = {}
+    for device_id, t, rms, peak, n, *_ in rows:
+        if rms is None or peak is None:
             continue
-        by_device.setdefault(device_id, []).append((t / 1000.0, x, y, z))
+        by_device.setdefault(device_id, []).append((t / 1000.0, rms, peak, n or 0))
 
     for device_id, samples in by_device.items():
-        times = [s[0] for s in samples]
-        index = [rr.TimeColumn(TIMELINE, timestamp=times)]
+        index = [rr.TimeColumn(TIMELINE, timestamp=[s[0] for s in samples])]
 
         accel_path = f"device/{device_id}/accel"
-        # Static legend labels — without them the three series are unnamed.
-        rr.log(accel_path, rr.SeriesLines(names=["x", "y", "z"]), static=True)
-        xyz = [v for (_, x, y, z) in samples for v in (x, y, z)]
+        # Static legend labels — without them the series are unnamed.
+        rr.log(accel_path, rr.SeriesLines(names=["rms", "peak"]), static=True)
+        values = [v for (_, rms, peak, _) in samples for v in (rms, peak)]
         rr.send_columns(
             accel_path,
             indexes=index,
-            columns=rr.Scalars.columns(scalars=xyz).partition([3] * len(samples)),
+            columns=rr.Scalars.columns(scalars=values).partition([2] * len(samples)),
         )
 
-        magnitude_path = f"{accel_path}/magnitude"
-        rr.log(magnitude_path, rr.SeriesLines(names=["|a|"]), static=True)
-        mags = [(x * x + y * y + z * z) ** 0.5 for (_, x, y, z) in samples]
+        samples_path = f"device/{device_id}/samples"
+        rr.log(samples_path, rr.SeriesLines(names=["n"]), static=True)
         rr.send_columns(
-            magnitude_path,
+            samples_path,
             indexes=index,
-            columns=rr.Scalars.columns(scalars=mags),
+            columns=rr.Scalars.columns(scalars=[s[3] for s in samples]),
         )
+
+
+# Viridis anchor stops (perceptually uniform, colour-blind friendly), interpolated in
+# RGB for the speed-coloured track. Speed with no fix (stationary / unknown) is grey.
+_VIRIDIS = [
+    (0.0, (68, 1, 84)),
+    (0.25, (59, 82, 139)),
+    (0.5, (33, 145, 140)),
+    (0.75, (94, 201, 98)),
+    (1.0, (253, 231, 37)),
+]
+_NO_SPEED = (128, 128, 128)
+
+
+def _viridis(t: float) -> tuple[int, int, int]:
+    """Map ``t`` in [0, 1] to an RGB triple along the viridis ramp."""
+    t = max(0.0, min(1.0, t))
+    for (t0, c0), (t1, c1) in zip(_VIRIDIS, _VIRIDIS[1:]):
+        if t <= t1:
+            f = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
+            return tuple(round(a + (b - a) * f) for a, b in zip(c0, c1))
+    return _VIRIDIS[-1][1]
+
+
+def _speed_color(speed, lo: float, hi: float) -> tuple[int, int, int]:
+    """Colour for a Doppler `speed` (m/s), scaled over the track's own [lo, hi]."""
+    if speed is None:
+        return _NO_SPEED
+    norm = 0.5 if hi <= lo else (speed - lo) / (hi - lo)
+    return _viridis(norm)
 
 
 def log_gps(rows) -> None:
     """Log gps rows as per-timestamp points under `device/{id}/gps` plus one static
-    polyline per device under `device/{id}/track`.
+    per-device track under `device/{id}/track`, coloured by Doppler speed.
 
     The per-timestamp `GeoPoints` each overwrite the last (a cursor dot that follows
     the timeline), so on their own the map shows a single dot jumping between fixes.
-    The static `GeoLineStrings` draws the whole journey as a path that is always
-    visible.
+    The static track draws the whole journey as always-visible `GeoLineStrings`, split
+    into one segment per fix so each can be coloured by the speed at its start.
     """
-    tracks: dict[str, list[tuple[float, float]]] = {}
-    for device_id, t, lat, lon, acc in rows:
+    tracks: dict[str, list[tuple[float, float, float | None]]] = {}
+    for device_id, t, lat, lon, acc, speed, _heading in rows:
         rr.set_time(TIMELINE, timestamp=t / 1000.0)
         # `acc` is the reported horizontal accuracy in metres; map scene units are
         # metres too, so it draws as a true-scale uncertainty circle. Omit the radius
         # when accuracy is unknown.
         radii = [acc] if acc is not None else None
         rr.log(f"device/{device_id}/gps", rr.GeoPoints(lat_lon=[(lat, lon)], radii=radii))
-        tracks.setdefault(device_id, []).append((lat, lon))
+        tracks.setdefault(device_id, []).append((lat, lon, speed))
 
-    for device_id, path in tracks.items():
-        rr.log(
-            f"device/{device_id}/track",
-            rr.GeoLineStrings(lat_lon=[path]),
-            static=True,
-        )
+    for device_id, points in tracks.items():
+        _log_track(device_id, points)
+
+
+def _log_track(device_id: str, points: list[tuple[float, float, float | None]]) -> None:
+    path = f"device/{device_id}/track"
+    if len(points) < 2:
+        # A single fix has no segment to colour — draw the bare point-run.
+        line = [(lat, lon) for lat, lon, _ in points]
+        rr.log(path, rr.GeoLineStrings(lat_lon=[line]), static=True)
+        return
+
+    speeds = [s for _, _, s in points if s is not None]
+    lo = min(speeds) if speeds else 0.0
+    hi = max(speeds) if speeds else 0.0
+    segments = [
+        [(a[0], a[1]), (b[0], b[1])] for a, b in zip(points, points[1:])
+    ]
+    colors = [_speed_color(a[2], lo, hi) for a in points[:-1]]
+    rr.log(path, rr.GeoLineStrings(lat_lon=segments, colors=colors), static=True)
 
 
 def build_blueprint(devices: list[str]) -> rrb.Blueprint:
     """Per device: a static full-route map, a latest-position map that follows the
-    timeline, and an accel time-series view — tiled in a grid.
+    timeline, a ride-quality time-series view (rms/peak), and a capture-health view
+    (n) — tiled in a grid.
 
-    The `track` map shows the whole journey as a static polyline; the `gps` map shows
-    only the per-timestamp point, which moves as the timeline cursor advances.
+    The `track` map shows the whole journey as a static speed-coloured polyline; the
+    `gps` map shows only the per-timestamp point, which moves as the timeline cursor
+    advances.
     """
     panes = [
         rrb.Vertical(
@@ -152,7 +202,10 @@ def build_blueprint(devices: list[str]) -> rrb.Blueprint:
                 ),
             ),
             rrb.TimeSeriesView(
-                origin=f"/device/{device_id}/accel", name=f"{device_id} accel"
+                origin=f"/device/{device_id}/accel", name=f"{device_id} ride"
+            ),
+            rrb.TimeSeriesView(
+                origin=f"/device/{device_id}/samples", name=f"{device_id} capture"
             ),
         )
         for device_id in devices
