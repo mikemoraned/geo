@@ -174,4 +174,4 @@ verifiable milestone.
 * [x] Run the local `recorder` to drain upstash into a `.sqlite` (dump at `data/lookout.sqlite`:
       3 devices, 292 accel + 163 gps).
 * [x] Convert to `.rrd` via `visualise` (`just visualise --since 30d`; `rerun rrd verify` passes).
-* [ ] Open the resulting `.rrd` in the rerun viewer and confirm the accel curves and gps track are visible.
+* [x] Open the resulting `.rrd` in the rerun viewer and confirm the accel curves and gps track are visible.
