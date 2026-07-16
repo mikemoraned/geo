@@ -26,3 +26,37 @@ was built and verified.
   iPhone/iPad over HTTPS (needs a cert or tunnel, the LAN work this slice deferred).
   Recorded in `target.md` under Learned Constraints.
 
+## mike is on a train getting data
+
+Built the full pipeline end to end: an iPhone samples GPS + accelerometer over the
+train journey, streams them to a fly.io-hosted server, and the data is drained locally
+into SQLite and visualised in rerun. The laptop-has-no-accelerometer constraint was
+resolved by making the phone the sensor and serving over fly.io's public HTTPS (secure
+context for Geolocation / DeviceMotion, `wss://` websocket — no cert/LAN work needed).
+
+- **Frontend**: vanilla page that persists a `crypto.randomUUID()` device id in a cookie,
+  samples `devicemotion` + `geolocation.watchPosition` throttled to a fixed interval, and
+  sends timestamped JSON samples over the websocket with a best-effort in-memory outbox
+  flushed on reconnect (not persisted, drops oldest on overflow).
+- **Transport**: server `LPUSH`es samples onto an upstash redis list; pushing goes through
+  a `SampleSink` port (`RedisSink` for prod) so `/ws` is covered by a Docker-free integ
+  test. Redis is optional (log-only when unset) but fails loud when configured yet
+  unreachable. Added a `/version` endpoint + build-git-hash startup log for debugging.
+- **New crates**: `shared` (the `Sample` model), `telemetry` (queue connect/drain, returns
+  a lossless `RawSample`), and a `recorder` cli. Deleted the rerun-as-archive plan.
+- **Recorder cli**: `view-latest` (non-destructive `LRANGE`) and `drain` (destructive
+  `BRPOP`) modes writing to SQLite — a lossless `raw(md5,json)` table plus per-sensor
+  `accel`/`gps` tables, all `INSERT OR IGNORE`. Per-sensor tables are a rebuildable
+  derivation of raw.
+- **Visualise**: a Python `uv` project (rerun-sdk 0.34) converting SQLite → rrd, selecting
+  by `--since <Nd>` / `--devices`. Blueprint pairs a map view with per-device accel
+  time-series. GPS logged as a static `GeoLineStrings` track plus per-fix `GeoPoints` with
+  accuracy radii; accel logged as one `send_columns` entity with a derived `|a|` magnitude
+  series (the one orientation-invariant signal in gravity-dominated data).
+- **Secrets**: bobby's 1Password pattern — checked-in `deploy/*.env` hold only `op://`
+  references; local runs wrap in `op run`, fly deploy pushes resolved values via
+  `fly secrets set`. No secret values committed.
+- Proved on a real journey: 3 devices, 292 accel + 163 gps samples drained to
+  `data/lookout.sqlite`, converted to `.rrd` (`rerun rrd verify` passes), and confirmed
+  visible in the rerun viewer.
+
