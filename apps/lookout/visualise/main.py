@@ -98,10 +98,22 @@ def log_gps(rows) -> None:
 
 
 def build_blueprint(devices: list[str]) -> rrb.Blueprint:
-    """A map + accel time-series view per device, tiled in a grid."""
+    """Per device: a static full-route map, a latest-position map that follows the
+    timeline, and an accel time-series view — tiled in a grid.
+
+    The `track` map shows the whole journey as a static polyline; the `gps` map shows
+    only the per-timestamp point, which moves as the timeline cursor advances.
+    """
     panes = [
         rrb.Vertical(
-            rrb.MapView(origin=f"/device/{device_id}", name=f"{device_id} gps"),
+            rrb.Horizontal(
+                rrb.MapView(
+                    origin=f"/device/{device_id}/track", name=f"{device_id} route"
+                ),
+                rrb.MapView(
+                    origin=f"/device/{device_id}/gps", name=f"{device_id} latest"
+                ),
+            ),
             rrb.TimeSeriesView(
                 origin=f"/device/{device_id}/accel", name=f"{device_id} accel"
             ),
