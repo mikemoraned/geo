@@ -25,7 +25,7 @@ const TIMELINE: &str = "time";
 const DEFAULT_LIMIT: usize = 1000;
 
 /// Default rerun recording path.
-const DEFAULT_OUTPUT: &str = "lookout.rrd";
+const DEFAULT_OUTPUT: &str = "data/lookout.rrd";
 
 #[derive(Parser)]
 #[command(about = "Read the lookout telemetry queue into a rerun .rrd")]

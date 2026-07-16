@@ -120,7 +120,7 @@ verifiable milestone.
       end_to_end_test`). Also pinned the Docker builder to `rust:slim-bookworm` for a glibc
       mismatch, and added `tls-rustls` redis features for `rediss://`.)
 
-**Phase 3 — local cli drains redis → rerun:**
+**Phase 3 — local cli drains redis → archive format:**
 
 * [x] Add a `recorder` cli crate that connects to the upstash list via `LOOKOUT_REDIS_URL`
       (run via `op run --env-file=deploy/lookout.env -- …`), `BRPOP`s and deserializes
@@ -132,13 +132,17 @@ verifiable milestone.
       you don't accidentally consume the queue while iterating. gps also logged as rerun geo
       points. Run via `just record` / `just record drain`. Queue read paths covered by a
       `telemetry` `_docker` test; producing a real `.rrd` from live data is the next item.)
-* [ ] End-to-end: take a real train trip with the phone capturing gps + accel to upstash,
+* [x] End-to-end: take a real train trip with the phone capturing gps + accel to upstash,
       then run the local `recorder` to drain into a `.rrd` and open it in the rerun viewer,
       confirming the accel curves and gps track are visible.
+      * this was sort-of done in that it wasn't drained, just viewed (into ./data/lookout.rrd)
+* [ ] change of plan: need to use something else more suitable than rerun format (which isn't an archive format). 
+      * We'll use sqlite as an export format. So, we'll change our plan to:
+            * `recorder` cli saves to sqlite (keeps the view and drain modes)
+                  * we should create two separate tables for each kind of sensor
+            * new `visualise` cli converts from sqlite into rrd format
 
 **End-to-end on a real journey:**
 
-* [ ] Take a real train trip with the phone capturing gps + accel to upstash; then run the
-      local `recorder` to drain upstash into a `.rrd`.
-* [ ] Open the resulting `.rrd` in the rerun viewer and confirm the accel curves and gps
-      track are visible.
+* [ ] Take a real train trip with the phone capturing gps + accel to upstash; then run the local `recorder` to drain upstash into a `.sqlite`. Convert to `.rrd` via `visualise`.
+* [ ] Open the resulting `.rrd` in the rerun viewer and confirm the accel curves and gps track are visible.
