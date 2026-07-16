@@ -60,7 +60,7 @@ def fetch_accel(conn: sqlite3.Connection, cutoff_ms: int, devices: list[str] | N
 def fetch_gps(conn: sqlite3.Connection, cutoff_ms: int, devices: list[str] | None):
     clause, params = _device_filter(devices)
     return conn.execute(
-        f"SELECT device_id, t, lat, lon FROM gps WHERE t >= ?{clause} ORDER BY t",
+        f"SELECT device_id, t, lat, lon, acc FROM gps WHERE t >= ?{clause} ORDER BY t",
         [cutoff_ms, *params],
     ).fetchall()
 
@@ -84,9 +84,13 @@ def log_gps(rows) -> None:
     visible.
     """
     tracks: dict[str, list[tuple[float, float]]] = {}
-    for device_id, t, lat, lon in rows:
+    for device_id, t, lat, lon, acc in rows:
         rr.set_time(TIMELINE, timestamp=t / 1000.0)
-        rr.log(f"device/{device_id}/gps", rr.GeoPoints(lat_lon=[(lat, lon)]))
+        # `acc` is the reported horizontal accuracy in metres; map scene units are
+        # metres too, so it draws as a true-scale uncertainty circle. Omit the radius
+        # when accuracy is unknown.
+        radii = [acc] if acc is not None else None
+        rr.log(f"device/{device_id}/gps", rr.GeoPoints(lat_lon=[(lat, lon)], radii=radii))
         tracks.setdefault(device_id, []).append((lat, lon))
 
     for device_id, path in tracks.items():

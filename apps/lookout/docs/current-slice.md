@@ -187,7 +187,7 @@ All in `visualise/` (Python, rerun-sdk 0.34). Ordered by value.
       entity from `device/{id}/gps` so it doesn't clash with the per-timestamp points.
       Widen the blueprint's `MapView(origin=f"/device/{id}/gps")` to
       `origin=f"/device/{id}"` so both the track and the cursor dot render.
-* [ ] **Show fix accuracy.** `fetch_gps` selects only `lat, lon`; add `acc` and pass it as
+* [x] **Show fix accuracy.** `fetch_gps` selects only `lat, lon`; add `acc` and pass it as
       `rr.GeoPoints(lat_lon=[(lat, lon)], radii=[acc])`. Map view scene units are metres,
       so a positive radius draws the reported uncertainty at true scale — the circle
       inflates in cuttings where fixes degrade. Handle `acc IS NULL`.
