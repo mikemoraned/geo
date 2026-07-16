@@ -21,13 +21,19 @@ serve-redis:
 build:
     cargo build --release -p server
 
-# Run all tests with nextest (includes _docker tests — requires Docker).
-test:
+# Run all tests: the Rust workspace (incl _docker tests — requires Docker) and the
+# Python visualise tests.
+test: test-python
     cargo nextest run --workspace
 
-# Run tests without Docker: the no-docker profile skips _docker-named tests.
-test-no-docker:
+# Run tests without Docker: the no-docker profile skips _docker-named tests. Still
+# runs the Python visualise tests (they need no Docker).
+test-no-docker: test-python
     cargo nextest run --workspace --profile no-docker
+
+# Run the Python visualise tests.
+test-python:
+    uv run --directory visualise pytest -q
 
 # Run the end_to_end tests against real services (release mode), with real
 # credentials injected from 1Password. Hits the real upstash redis.
@@ -43,6 +49,12 @@ deploy:
 # 1Password. No args = non-destructive view-latest; `just record drain` to drain.
 record *args:
     op run --env-file=deploy/lookout.env -- cargo run -p recorder -- {{args}}
+
+# Convert the SQLite archive into a rerun .rrd, selecting by time window (and
+# optionally device). Requires --since, e.g. `just visualise --since 7d` or
+# `just visualise --since 12h --devices <uuid> <uuid>`. Open the .rrd with `rerun`.
+visualise *args:
+    uv run --project visualise python visualise/main.py {{args}}
 
 # Push the upstash redis URL secret to fly from 1Password.
 push-secrets:

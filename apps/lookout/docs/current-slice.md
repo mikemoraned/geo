@@ -156,16 +156,22 @@ verifiable milestone.
                   * Went with the full Minimal Architecture: a lossless `raw(md5,json)` table
                     *plus* per-sensor `accel`/`gps` tables (all `INSERT OR IGNORE`). To keep raw
                     lossless, `telemetry` now returns a `RawSample` (verbatim json + `parse()`)
-                    rather than a decoded `Sample`. Verified via in-memory store unit tests; still
-                    needs a real `just record` run against upstash (sandbox blocks `op`).
-            * [ ] new `visualise` cli converts from sqlite into rrd format
+                    rather than a decoded `Sample`. Verified by store unit tests, a `_docker`
+                    integ test (prefilled redis → real recorder binary → sqlite), and a real
+                    `just record` run against upstash.
+            * [x] new `visualise` cli converts from sqlite into rrd format
                   * it is ok if this is written in python as rerun has better support for things like programatically specifying "blueprints" in python
                   * the visualise code should go in the `visualise` dir which has been initialised as an empty uv project
                   * visualise should select by time and device, not count. So against SQL it should be `--since 7d --devices <uuid list>`
+                  * Python + rerun-sdk 0.34; reads the per-sensor tables, `--since <Nd>` (required)
+                    / `--devices` (optional, all if omitted). Blueprint: a map view + accel
+                    time-series per device. Run via `just visualise --since 7d`; output rrd
+                    verified with `rerun rrd verify`.
 
 **End-to-end on a real journey:**
 
 * [x] Take a real train trip with the phone capturing gps + accel to upstash
-* [ ] Run the local `recorder` to drain upstash into a `.sqlite`. 
-* [ ] Convert to `.rrd` via `visualise`.
+* [x] Run the local `recorder` to drain upstash into a `.sqlite` (dump at `data/lookout.sqlite`:
+      3 devices, 292 accel + 163 gps).
+* [x] Convert to `.rrd` via `visualise` (`just visualise --since 30d`; `rerun rrd verify` passes).
 * [ ] Open the resulting `.rrd` in the rerun viewer and confirm the accel curves and gps track are visible.

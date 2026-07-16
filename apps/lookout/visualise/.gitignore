@@ -1,0 +1,10 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+
+# Virtual environment (managed by uv from pyproject.toml + uv.lock)
+.venv/
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
