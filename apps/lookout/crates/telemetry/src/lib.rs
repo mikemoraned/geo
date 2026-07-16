@@ -12,6 +12,32 @@ use shared::Sample;
 /// The redis list holding queued telemetry samples.
 pub const QUEUE_KEY: &str = "lookout-telemetry";
 
+/// The raw JSON payload of one queued sample, exactly as it sits on the queue.
+///
+/// The queue is the lossless source of truth, so the bytes are preserved verbatim
+/// (an archive keyed on their hash must match what was sent, not a re-serialization).
+/// `parse` decodes them into the typed [`Sample`] for derived, per-sensor views.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawSample(String);
+
+impl RawSample {
+    /// Wrap a queue JSON payload without validating it (validation is deferred to
+    /// `parse`, so an unparseable payload can still be archived losslessly).
+    pub fn new(json: impl Into<String>) -> Self {
+        Self(json.into())
+    }
+
+    /// The raw JSON payload, exactly as queued.
+    pub fn json(&self) -> &str {
+        &self.0
+    }
+
+    /// Decode the payload into a typed [`Sample`].
+    pub fn parse(&self) -> Result<Sample, serde_json::Error> {
+        serde_json::from_str(&self.0)
+    }
+}
+
 /// redis's defaults (1s connect, 500ms response) are far too tight for a remote
 /// Upstash TLS endpoint over the public internet; use generous timeouts that still
 /// bound a genuine hang.
@@ -31,30 +57,18 @@ pub async fn connect(url: &str) -> Result<MultiplexedConnection, RedisError> {
         .await
 }
 
-/// Failure draining a sample off the queue.
-#[derive(Debug, thiserror::Error)]
-pub enum PopError {
-    #[error("redis error: {0}")]
-    Redis(#[from] RedisError),
-    #[error("failed to deserialize sample: {0}")]
-    Deserialize(#[from] serde_json::Error),
-}
-
 /// `BRPOP` one sample off the tail of the queue (oldest first — FIFO), blocking up to
 /// `timeout`. Returns `None` when the timeout elapses with the queue still empty.
 pub async fn brpop_sample(
     conn: &mut MultiplexedConnection,
     timeout: Duration,
-) -> Result<Option<Sample>, PopError> {
+) -> Result<Option<RawSample>, RedisError> {
     let popped: Option<(String, String)> = redis::cmd("BRPOP")
         .arg(QUEUE_KEY)
         .arg(timeout.as_secs_f64())
         .query_async(conn)
         .await?;
-    match popped {
-        Some((_key, json)) => Ok(Some(serde_json::from_str(&json)?)),
-        None => Ok(None),
-    }
+    Ok(popped.map(|(_key, json)| RawSample::new(json)))
 }
 
 /// Read the most recent `limit` samples **without removing them** (non-destructive).
@@ -63,7 +77,7 @@ pub async fn brpop_sample(
 pub async fn latest_samples(
     conn: &mut MultiplexedConnection,
     limit: usize,
-) -> Result<Vec<Sample>, PopError> {
+) -> Result<Vec<RawSample>, RedisError> {
     if limit == 0 {
         return Ok(Vec::new());
     }
@@ -74,10 +88,7 @@ pub async fn latest_samples(
         .arg(limit as isize - 1)
         .query_async(conn)
         .await?;
-    jsons
-        .iter()
-        .map(|json| serde_json::from_str(json).map_err(PopError::from))
-        .collect()
+    Ok(jsons.into_iter().map(RawSample::new).collect())
 }
 
 #[cfg(test)]

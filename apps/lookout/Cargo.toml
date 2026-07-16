@@ -20,6 +20,11 @@ redis = { version = "0.27", features = ["tokio-rustls-comp", "tls-rustls", "tls-
 rustls = { version = "0.23", features = ["ring"] }
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
+# `bundled` compiles a pinned SQLite from source, so the recorder doesn't depend on
+# a system libsqlite3 being present or new enough.
+rusqlite = { version = "0.40", features = ["bundled"] }
+md5 = "0.7"
+tempfile = "3"
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
 

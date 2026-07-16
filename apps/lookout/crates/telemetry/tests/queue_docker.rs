@@ -87,7 +87,12 @@ async fn queue_read_paths_docker() {
     }
 
     // view-latest: newest-first, limited, and non-destructive.
-    let latest = latest_samples(&mut conn, 2).await.expect("latest_samples");
+    let latest: Vec<Sample> = latest_samples(&mut conn, 2)
+        .await
+        .expect("latest_samples")
+        .iter()
+        .map(|raw| raw.parse().expect("parse"))
+        .collect();
     assert_eq!(latest, vec![sample(3), sample(2)]);
     let len: i64 = redis::cmd("LLEN")
         .arg(QUEUE_KEY)
@@ -98,11 +103,11 @@ async fn queue_read_paths_docker() {
 
     // drain: FIFO (BRPOP from the tail = oldest first), destructive.
     let mut popped = Vec::new();
-    while let Some(s) = brpop_sample(&mut conn, Duration::from_secs(2))
+    while let Some(raw) = brpop_sample(&mut conn, Duration::from_secs(2))
         .await
         .expect("brpop")
     {
-        popped.push(s);
+        popped.push(raw.parse().expect("parse"));
     }
     assert_eq!(popped, vec![sample(1), sample(2), sample(3)]);
 

@@ -10,10 +10,18 @@ tracing-subscriber = { workspace = true }
 rustls = { workspace = true }
 clap = { workspace = true }
 redis = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+rusqlite = { workspace = true }
+md5 = { workspace = true }
 shared = { workspace = true }
 telemetry = { workspace = true }
-# SDK only (default features also pull the native/web viewer); we just write a .rrd.
-rerun = { version = "0.34", default-features = false, features = ["sdk"] }
+
+[dev-dependencies]
+uuid = { workspace = true }
+tempfile = { workspace = true }
+testcontainers = "0.27"
+testcontainers-modules = { version = "0.15", features = ["redis"] }
 
 [lints]
 workspace = true

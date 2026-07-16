@@ -151,9 +151,14 @@ verifiable milestone.
       * this was sort-of done in that it wasn't drained, just viewed (into ./data/lookout.rrd)
 * [ ] change of plan: need to use something else more suitable than rerun format (which isn't an archive format). 
       * We'll use sqlite as an export format. So, we'll change our plan to:
-            * `recorder` cli saves to sqlite (keeps the view and drain modes)
+            * [x] `recorder` cli saves to sqlite (keeps the view and drain modes)
                   * we should create two separate tables for each kind of sensor (see "Minimal Architecture")
-            * new `visualise` cli converts from sqlite into rrd format
+                  * Went with the full Minimal Architecture: a lossless `raw(md5,json)` table
+                    *plus* per-sensor `accel`/`gps` tables (all `INSERT OR IGNORE`). To keep raw
+                    lossless, `telemetry` now returns a `RawSample` (verbatim json + `parse()`)
+                    rather than a decoded `Sample`. Verified via in-memory store unit tests; still
+                    needs a real `just record` run against upstash (sandbox blocks `op`).
+            * [ ] new `visualise` cli converts from sqlite into rrd format
                   * it is ok if this is written in python as rerun has better support for things like programatically specifying "blueprints" in python
                   * the visualise code should go in the `visualise` dir which has been initialised as an empty uv project
                   * visualise should select by time and device, not count. So against SQL it should be `--since 7d --devices <uuid list>`
