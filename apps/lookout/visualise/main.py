@@ -114,6 +114,12 @@ def main() -> None:
     parser.add_argument(
         "--output", type=Path, default=DEFAULT_OUTPUT, help="output .rrd recording"
     )
+    parser.add_argument(
+        "--open",
+        action="store_true",
+        help="also send to a running rerun viewer, forcing this run's layout to be "
+        "active (overrides any blueprint the viewer has persisted for this app)",
+    )
     args = parser.parse_args()
 
     cutoff_ms = int((time.time() - args.since) * 1000)
@@ -135,10 +141,20 @@ def main() -> None:
     rr.init("lookout")
     log_accel(accel)
     log_gps(gps)
-    rr.save(args.output, default_blueprint=build_blueprint(devices))
+    blueprint = build_blueprint(devices)
 
+    if args.open:
+        # Tee to the file and a running viewer. The viewer persists a blueprint per
+        # application id and would otherwise keep showing a stale layout, so push
+        # this run's blueprint as the *active* one to override it.
+        rr.set_sinks(rr.FileSink(path=str(args.output)), rr.GrpcSink())
+        rr.send_blueprint(blueprint, make_active=True, make_default=True)
+    else:
+        rr.save(args.output, default_blueprint=blueprint)
+
+    where = f"{args.output} (+ running viewer)" if args.open else str(args.output)
     print(
-        f"wrote {args.output}: {len(accel)} accel + {len(gps)} gps samples "
+        f"wrote {where}: {len(accel)} accel + {len(gps)} gps samples "
         f"across {len(devices)} device(s)"
     )
 

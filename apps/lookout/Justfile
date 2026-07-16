@@ -51,8 +51,9 @@ record *args:
     op run --env-file=deploy/lookout.env -- cargo run -p recorder -- {{args}}
 
 # Convert the SQLite archive into a rerun .rrd, selecting by time window (and
-# optionally device). Requires --since, e.g. `just visualise --since 7d` or
-# `just visualise --since 12h --devices <uuid> <uuid>`. Open the .rrd with `rerun`.
+# optionally device id prefixes). Requires --since, e.g. `just visualise --since 7d`
+# or `just visualise --since 12h --devices 77a cdf2`. Open the .rrd with `rerun`, or
+# pass `--open` to push it live to a running viewer (overriding its persisted layout).
 visualise *args:
     uv run --project visualise python visualise/main.py {{args}}
 
