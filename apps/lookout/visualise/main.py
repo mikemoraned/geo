@@ -66,12 +66,21 @@ def fetch_gps(conn: sqlite3.Connection, cutoff_ms: int, devices: list[str] | Non
 
 
 def log_accel(rows) -> None:
-    """Log accel rows as per-axis scalar series under `device/{id}/accel/{x,y,z}`."""
+    """Log accel rows as per-axis scalar series under `device/{id}/accel/{x,y,z}`,
+    plus an orientation-invariant magnitude `|a|` under `device/{id}/accel/magnitude`.
+
+    The raw axes are gravity-dominated in an unknown device orientation, so the
+    magnitude is the one accel signal that means something on its own — expect a flat
+    ~9.81 with spikes where the phone was handled.
+    """
     for device_id, t, x, y, z in rows:
         rr.set_time(TIMELINE, timestamp=t / 1000.0)
         for axis, value in (("x", x), ("y", y), ("z", z)):
             if value is not None:
                 rr.log(f"device/{device_id}/accel/{axis}", rr.Scalars(value))
+        if x is not None and y is not None and z is not None:
+            magnitude = (x * x + y * y + z * z) ** 0.5
+            rr.log(f"device/{device_id}/accel/magnitude", rr.Scalars(magnitude))
 
 
 def log_gps(rows) -> None:
