@@ -149,10 +149,11 @@ def main() -> None:
         # this run's blueprint as the *active* one to override it.
         rr.set_sinks(rr.FileSink(path=str(args.output)), rr.GrpcSink())
         rr.send_blueprint(blueprint, make_active=True, make_default=True)
+        where = f"{args.output} (+ running viewer)"
     else:
         rr.save(args.output, default_blueprint=blueprint)
+        where = str(args.output)
 
-    where = f"{args.output} (+ running viewer)" if args.open else str(args.output)
     print(
         f"wrote {where}: {len(accel)} accel + {len(gps)} gps samples "
         f"across {len(devices)} device(s)"
