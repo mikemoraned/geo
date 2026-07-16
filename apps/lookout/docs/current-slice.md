@@ -149,7 +149,7 @@ verifiable milestone.
       then run the local `recorder` to drain into a `.rrd` and open it in the rerun viewer,
       confirming the accel curves and gps track are visible.
       * this was sort-of done in that it wasn't drained, just viewed (into ./data/lookout.rrd)
-* [ ] change of plan: need to use something else more suitable than rerun format (which isn't an archive format). 
+* [x] change of plan: need to use something else more suitable than rerun format (which isn't an archive format). 
       * We'll use sqlite as an export format. So, we'll change our plan to:
             * [x] `recorder` cli saves to sqlite (keeps the view and drain modes)
                   * we should create two separate tables for each kind of sensor (see "Minimal Architecture")
