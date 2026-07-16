@@ -116,11 +116,19 @@ async fn drain(store: &Store, conn: &mut redis::aio::MultiplexedConnection) -> u
                 break;
             }
             result = telemetry::brpop_sample(conn, IDLE_TIMEOUT) => match result {
-                Ok(Some(raw)) => {
-                    if archive(store, &raw) {
-                        count += 1;
+                // BRPOP has already removed the sample, so a failed archive would lose
+                // it. Put it back on the tail and stop, rather than destructively
+                // draining past a failure (e.g. a schema problem affecting every row).
+                Ok(Some(raw)) => match store.insert(&raw) {
+                    Ok(()) => count += 1,
+                    Err(err) => {
+                        tracing::error!(%err, "failed to archive sample; requeuing and stopping to avoid data loss");
+                        if let Err(requeue_err) = telemetry::requeue_sample(conn, &raw).await {
+                            tracing::error!(%requeue_err, "failed to requeue sample after archive error — sample lost");
+                        }
+                        break;
                     }
-                }
+                },
                 Ok(None) => {
                     tracing::info!(count, "queue empty; stopping");
                     break;

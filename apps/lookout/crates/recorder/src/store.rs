@@ -22,11 +22,16 @@ use shared::{AccelReading, DeviceType, GpsReading, Message, SessionStart, V0Mess
 use telemetry::RawSample;
 
 /// DDL run on open; `IF NOT EXISTS` makes opening an existing archive a no-op.
+///
+/// `received_at` and the newer per-sensor columns are nullable so [`migrate`] can
+/// `ALTER TABLE ADD COLUMN` them onto an archive created by an earlier schema — SQLite
+/// forbids adding a `NOT NULL` column without a default, and rows predating the column
+/// genuinely have no value for it.
 const SCHEMA: &str = "\
 CREATE TABLE IF NOT EXISTS raw (
   md5         TEXT NOT NULL PRIMARY KEY,
   json        TEXT NOT NULL,
-  received_at INTEGER NOT NULL
+  received_at INTEGER
 ) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS accel (
@@ -55,6 +60,40 @@ CREATE TABLE IF NOT EXISTS device (
 ) WITHOUT ROWID;
 ";
 
+/// Columns added after the original schema, brought onto an existing archive by
+/// [`migrate`]. `CREATE TABLE IF NOT EXISTS` no-ops on a table that already exists, so
+/// new columns need an explicit `ALTER TABLE`. Each is `(table, column, decl)`.
+const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
+    ("raw", "received_at", "INTEGER"),
+    ("gps", "speed", "REAL"),
+    ("gps", "heading", "REAL"),
+    ("accel", "rms", "REAL"),
+    ("accel", "peak", "REAL"),
+    ("accel", "n", "INTEGER"),
+];
+
+/// Bring an existing archive up to the current schema by adding any [`ADDED_COLUMNS`]
+/// it's missing. A no-op on a freshly-created archive (which already has them) and
+/// idempotent across repeated opens.
+fn migrate(conn: &Connection) -> Result<(), rusqlite::Error> {
+    for (table, column, decl) in ADDED_COLUMNS {
+        if !column_exists(conn, table, column)? {
+            conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"))?;
+        }
+    }
+    Ok(())
+}
+
+fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, rusqlite::Error> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let found = stmt
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<String>, _>>()?
+        .iter()
+        .any(|name| name == column);
+    Ok(found)
+}
+
 /// Failure writing a sample to the archive.
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -70,10 +109,12 @@ pub struct Store {
 }
 
 impl Store {
-    /// Open (creating if absent) the archive at `path` and ensure the schema exists.
+    /// Open (creating if absent) the archive at `path`, ensure the schema exists, and
+    /// migrate an older archive up to the current columns.
     pub fn open(path: &Path) -> Result<Self, StoreError> {
         let conn = Connection::open(path)?;
         conn.execute_batch(SCHEMA)?;
+        migrate(&conn)?;
         Ok(Self { conn })
     }
 
@@ -83,6 +124,7 @@ impl Store {
     pub fn open_in_memory() -> Result<Self, StoreError> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(SCHEMA)?;
+        migrate(&conn)?;
         Ok(Self { conn })
     }
 
@@ -209,6 +251,49 @@ mod tests {
     /// Wrap a payload as the recorder would see it off the queue.
     fn raw(json: &str) -> RawSample {
         RawSample::new(RECEIVED_AT, json)
+    }
+
+    /// The original schema, before `received_at` and the data-quality columns and the
+    /// `device` table were added. Used to prove an archive created by it migrates.
+    const LEGACY_SCHEMA: &str = "\
+CREATE TABLE raw (md5 TEXT NOT NULL PRIMARY KEY, json TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE accel (device_id TEXT NOT NULL, t INTEGER NOT NULL, x REAL, y REAL, z REAL, PRIMARY KEY (device_id, t)) WITHOUT ROWID;
+CREATE TABLE gps (device_id TEXT NOT NULL, t INTEGER NOT NULL, lat REAL, lon REAL, alt REAL, acc REAL, PRIMARY KEY (device_id, t)) WITHOUT ROWID;
+";
+
+    /// Opening an archive created by the original schema — even with existing rows —
+    /// adds the new columns/tables so inserts of the current shape succeed. Reproduces
+    /// the "table raw has no column named received_at" failure on a pre-existing DB.
+    #[test]
+    fn legacy_archive_migrates_and_accepts_current_shape() {
+        let conn = Connection::open_in_memory().expect("open");
+        conn.execute_batch(LEGACY_SCHEMA).expect("legacy schema");
+        // An existing row: a NOT NULL received_at add would fail against it.
+        conn.execute(
+            "INSERT INTO raw (md5, json) VALUES ('legacy', '{}')",
+            [],
+        )
+        .expect("legacy row");
+
+        // The open() path: ensure new tables, then migrate new columns.
+        conn.execute_batch(SCHEMA).expect("schema");
+        migrate(&conn).expect("migrate");
+        let store = Store { conn };
+
+        store.insert(&raw(V1_GPS_JSON)).expect("gps insert post-migration");
+        store.insert(&raw(V1_ACCEL_JSON)).expect("accel insert post-migration");
+        store.insert(&raw(SESSION_JSON)).expect("session insert post-migration");
+
+        assert_eq!(count(&store, "gps"), 1);
+        assert_eq!(count(&store, "accel"), 1);
+        assert_eq!(count(&store, "device"), 1);
+        let legacy_received_at: Option<i64> = store
+            .conn
+            .query_row("SELECT received_at FROM raw WHERE md5 = 'legacy'", [], |r| {
+                r.get(0)
+            })
+            .expect("legacy received_at");
+        assert_eq!(legacy_received_at, None, "rows predating the column are null");
     }
 
     #[test]

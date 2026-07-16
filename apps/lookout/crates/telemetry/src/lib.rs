@@ -99,6 +99,22 @@ pub async fn brpop_sample(
         .map_err(QueueError::from)
 }
 
+/// Put a sample back on the **tail** of the queue — where `BRPOP` took it — so a
+/// failed archive doesn't destroy it. `RPUSH` targets the tail, restoring its FIFO
+/// position ahead of the head-pushed newer samples.
+pub async fn requeue_sample(
+    conn: &mut MultiplexedConnection,
+    sample: &RawSample,
+) -> Result<(), QueueError> {
+    let item = serde_json::to_string(sample)?;
+    let _: i64 = redis::cmd("RPUSH")
+        .arg(QUEUE_KEY)
+        .arg(item)
+        .query_async(conn)
+        .await?;
+    Ok(())
+}
+
 /// Read the most recent `limit` samples **without removing them** (non-destructive).
 /// `LPUSH` puts the newest sample at the head, so index 0 is newest; the returned
 /// vec is newest-first.
