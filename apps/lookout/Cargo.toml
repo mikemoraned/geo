@@ -28,13 +28,17 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 # SedonaDB: a Rust-native, DataFusion/GeoArrow spatial engine the transport `enrich`
 # bin uses in-process to read Overture transport GeoParquet from S3. Not published to
 # crates.io, so pinned to a release tag. We select `aws` (S3 object store) + the
-# pure-Rust `geo` geometry backend, and drop the default `geos`/`tg` backends: `geos`
-# links a *system* GEOS library that isn't present here (enable it later once GEOS is
-# installed). The build still needs a C++ toolchain for transitive C/C++ crates — the
-# Justfile sets CXX=/usr/bin/clang to work around the blocked clang++ shim.
+# pure-Rust `geo` geometry backend with default-features off, which drops the `geos`
+# backend — it links a *system* GEOS library (enable it later once GEOS is installed).
 sedona = { git = "https://github.com/apache/sedona-db", tag = "apache-sedona-db-0.4.0", default-features = false, features = ["aws", "geo"] }
-# Must match the arrow version SedonaDB pins, so `RecordBatch`es returned by queries
-# line up with the arrow types we decode them with.
+# `GeoParquetReadOptions` (S3 read options + geometry decoding) lives here, not in the
+# top-level `sedona` crate; same repo/tag so the versions line up.
+sedona-geoparquet = { git = "https://github.com/apache/sedona-db", tag = "apache-sedona-db-0.4.0" }
+# SedonaDB's query results are DataFusion `DataFrame`s; pinned to the version SedonaDB
+# builds against so the shared arrow/datafusion types line up.
+datafusion = "52.5"
+# Must match the arrow version SedonaDB/DataFusion pin, so `RecordBatch`es returned by
+# queries line up with the arrow types we decode them with.
 arrow = "57.1"
 md5 = "0.7"
 tempfile = "3"
