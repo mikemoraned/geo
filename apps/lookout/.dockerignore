@@ -1,0 +1,10 @@
+# Opt-in: ignore everything, then allow only what the image build needs. This
+# keeps the build context small — everything else (visualise/, data/, target/,
+# docs/) is uploaded to the builder on every deploy otherwise.
+*
+
+# The Rust workspace `cargo build --release -p server` compiles, plus the static
+# assets the runtime image copies from crates/server/static.
+!Cargo.toml
+!Cargo.lock
+!crates

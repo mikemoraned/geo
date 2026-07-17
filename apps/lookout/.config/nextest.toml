@@ -1,0 +1,17 @@
+# Test naming conventions used by these profiles:
+#   *_docker      → needs a Docker daemon (testcontainers)
+#   *end_to_end*  → hits real external services (needs credentials)
+# The default profile skips end_to_end (no credentials in normal runs); no-docker
+# additionally skips docker tests; end-to-end runs only the end_to_end tests.
+[profile.default]
+default-filter = "not test(/end_to_end/)"
+status-level = "skip"
+final-status-level = "skip"
+
+[profile.no-docker]
+default-filter = "not test(/end_to_end/) and not test(/docker/)"
+status-level = "skip"
+final-status-level = "skip"
+
+[profile.end-to-end]
+default-filter = "test(/end_to_end/)"

@@ -1,0 +1,18 @@
+[project]
+name = "visualise"
+version = "0.1.0"
+description = "Convert a lookout SQLite archive into a rerun .rrd for visualisation"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "rerun-sdk>=0.34.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
