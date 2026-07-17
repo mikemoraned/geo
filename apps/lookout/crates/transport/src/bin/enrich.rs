@@ -1,7 +1,7 @@
 //! `enrich`: derive per-`(device, UTC day)` bounding boxes from a lookout SQLite
-//! archive's `gps` table, then fetch the Overture transport data intersecting them.
-//! For now it smoke-tests the Overture fetch by reading a few `segment`s intersecting
-//! the first bounding box; later slice tasks persist the results to a `transport` table.
+//! archive's `gps` table, then fetch the Overture rail `segment`s intersecting them.
+//! Later slice tasks fetch the referenced connectors and persist the results to a
+//! `transport` table.
 
 use std::path::PathBuf;
 
@@ -55,20 +55,21 @@ async fn main() {
         );
     }
 
-    // Smoke test: fetch a few Overture segments intersecting the first bbox.
-    let Some(first) = groups.first() else {
+    // Fetch the Overture rail segments intersecting any of the bounding boxes.
+    if groups.is_empty() {
         tracing::warn!("no bounding boxes; skipping Overture fetch");
         return;
-    };
+    }
+    let bboxes: Vec<_> = groups.iter().map(|g| g.bbox).collect();
     let overture = Overture::open(&args.release);
     overture
         .register_segments()
         .await
         .expect("register Overture segments from S3");
     let batches = overture
-        .segments_in_bbox(&first.bbox, 5)
+        .rail_segments(&bboxes)
         .await
-        .expect("query Overture segments");
+        .expect("query Overture rail segments");
     let rows: usize = batches.iter().map(|b| b.num_rows()).sum();
     let columns: Vec<String> = batches
         .first()
@@ -82,10 +83,9 @@ async fn main() {
         .unwrap_or_default();
     tracing::info!(
         release = %args.release,
-        device_id = %first.key.device_id,
-        day = first.key.day,
+        bboxes = bboxes.len(),
         rows,
         ?columns,
-        "smoke: Overture segments intersecting first bbox",
+        "fetched Overture rail segments",
     );
 }

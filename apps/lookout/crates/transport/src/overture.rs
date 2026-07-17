@@ -78,47 +78,63 @@ impl Overture {
         Ok(())
     }
 
-    /// Query up to `limit` `segments` rows whose geometry intersects `bbox`, returning
-    /// `id`/`subtype`/`class`. Requires [`register_segments`] first. Uses a spatial
-    /// predicate against the bbox envelope so SedonaDB prunes GeoParquet row groups by
-    /// their bbox covering — without it, the query scans the whole global partition.
-    pub async fn segments_in_bbox(
-        &self,
-        bbox: &BBox,
-        limit: usize,
-    ) -> Result<Vec<RecordBatch>, OvertureError> {
+    /// Query every **rail** `segment` whose geometry intersects any of `bboxes`,
+    /// returning `id`/`subtype`/`class`, the geometry as WKB (`ST_AsBinary`), and the
+    /// referenced `connectors` (a list of `{connector_id, at}`). Requires
+    /// [`register_segments`] first. One query against the union of the bbox envelopes,
+    /// so the partition is scanned once and SedonaDB prunes row groups by the combined
+    /// bbox covering; the `subtype = 'rail'` filter keeps only rail. Empty `bboxes`
+    /// yields no rows without touching S3.
+    pub async fn rail_segments(&self, bboxes: &[BBox]) -> Result<Vec<RecordBatch>, OvertureError> {
+        if bboxes.is_empty() {
+            return Ok(Vec::new());
+        }
         let sql = format!(
-            "SELECT id, subtype, class FROM segments
-             WHERE ST_Intersects(geometry, ST_SetSRID(ST_GeomFromWKT('{envelope}'), 4326))
-             LIMIT {limit}",
-            envelope = bbox_envelope_wkt(bbox),
+            "SELECT id, subtype, class, ST_AsBinary(geometry) AS geometry, connectors
+             FROM segments
+             WHERE subtype = 'rail'
+               AND ST_Intersects(geometry, ST_SetSRID(ST_GeomFromWKT('{window}'), 4326))",
+            window = bboxes_multipolygon_wkt(bboxes),
         );
         Ok(self.ctx.sql(&sql).await?.collect().await?)
     }
 }
 
-/// A closed rectangular ring (POLYGON WKT) around `bbox`, with coordinates written as
-/// `lon lat` (WKT/x-y order), for use as a spatial query window.
-fn bbox_envelope_wkt(bbox: &BBox) -> String {
+/// A closed rectangular ring for `bbox` in WKT `lon lat` (x-y) order —
+/// `((w s, e s, e n, w n, w s))` — the inner form shared by POLYGON/MULTIPOLYGON.
+fn bbox_ring_wkt(bbox: &BBox) -> String {
     let (w, e, s, n) = (bbox.min_lon, bbox.max_lon, bbox.min_lat, bbox.max_lat);
-    format!("POLYGON(({w} {s}, {e} {s}, {e} {n}, {w} {n}, {w} {s}))")
+    format!("(({w} {s}, {e} {s}, {e} {n}, {w} {n}, {w} {s}))")
+}
+
+/// A MULTIPOLYGON WKT covering every bbox, for use as a single spatial query window
+/// over all of them at once. Caller ensures `bboxes` is non-empty.
+fn bboxes_multipolygon_wkt(bboxes: &[BBox]) -> String {
+    let rings: Vec<String> = bboxes.iter().map(bbox_ring_wkt).collect();
+    format!("MULTIPOLYGON({})", rings.join(", "))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn bbox(min_lat: f64, max_lat: f64, min_lon: f64, max_lon: f64) -> BBox {
+        BBox {
+            min_lat,
+            max_lat,
+            min_lon,
+            max_lon,
+        }
+    }
+
     #[test]
-    fn bbox_envelope_is_a_closed_lon_lat_ring() {
-        let wkt = bbox_envelope_wkt(&BBox {
-            min_lat: 50.0,
-            max_lat: 51.0,
-            min_lon: 11.0,
-            max_lon: 12.0,
-        });
+    fn multipolygon_covers_every_bbox_as_a_closed_ring() {
+        let wkt =
+            bboxes_multipolygon_wkt(&[bbox(50.0, 51.0, 11.0, 12.0), bbox(52.0, 53.0, 13.0, 14.0)]);
         assert_eq!(
-            wkt, "POLYGON((11 50, 12 50, 12 51, 11 51, 11 50))",
-            "corners run anticlockwise from the SW and close back to it"
+            wkt,
+            "MULTIPOLYGON(((11 50, 12 50, 12 51, 11 51, 11 50)), ((13 52, 14 52, 14 53, 13 53, 13 52)))",
+            "one closed lon-lat ring per bbox, SW corner first"
         );
     }
 
