@@ -19,6 +19,11 @@ pub const DEFAULT_RELEASE: &str = "2026-06-17.0";
 /// The public Overture bucket's region; the bucket name embeds it too.
 const S3_REGION: &str = "us-west-2";
 
+/// Rail `class`es dropped during enrichment: street `tram` lines aren't the transport
+/// we care about. Applied to both the segment fetch and the connector-reference
+/// subquery, so tram connectors are excluded along with tram segments.
+const EXCLUDED_CLASSES: &[&str] = &["tram"];
+
 /// Failure opening or querying Overture.
 #[derive(Debug, thiserror::Error)]
 pub enum OvertureError {
@@ -113,7 +118,9 @@ impl Overture {
                     bbox['ymin'] AS min_lat, bbox['ymax'] AS max_lat
              FROM segments
              WHERE subtype = 'rail'
+               AND {class}
                AND ST_Intersects(geometry, ST_SetSRID(ST_GeomFromWKT('{window}'), 4326))",
+            class = class_filter("class"),
             window = bboxes_multipolygon_wkt(bboxes),
         );
         Ok(self.ctx.sql(&sql).await?.collect().await?)
@@ -149,9 +156,11 @@ impl Overture {
                    SELECT UNNEST(s.connectors) AS elem
                    FROM segments AS s
                    WHERE s.subtype = 'rail'
+                     AND {class}
                      AND ST_Intersects(s.geometry, ST_SetSRID(ST_GeomFromWKT('{window}'), 4326))
                  ) AS refs
                )",
+            class = class_filter("s.class"),
             window = bboxes_multipolygon_wkt(bboxes),
         );
         Ok(self.ctx.sql(&sql).await?.collect().await?)
@@ -170,6 +179,21 @@ fn bbox_ring_wkt(bbox: &BBox) -> String {
 fn bboxes_multipolygon_wkt(bboxes: &[BBox]) -> String {
     let rings: Vec<String> = bboxes.iter().map(bbox_ring_wkt).collect();
     format!("MULTIPOLYGON({})", rings.join(", "))
+}
+
+/// A SQL predicate excluding [`EXCLUDED_CLASSES`] on `column`, keeping null-class rows
+/// (`coalesce` maps a null class to `''`, which is never an excluded class). `TRUE`
+/// when nothing is excluded, so it composes into an `AND` chain unconditionally.
+fn class_filter(column: &str) -> String {
+    if EXCLUDED_CLASSES.is_empty() {
+        return "TRUE".to_string();
+    }
+    let excluded = EXCLUDED_CLASSES
+        .iter()
+        .map(|class| format!("'{class}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("coalesce({column}, '') NOT IN ({excluded})")
 }
 
 #[cfg(test)]
@@ -212,5 +236,20 @@ mod tests {
     #[test]
     fn s3_read_options_are_valid() {
         Overture::s3_read_options().expect("valid anonymous S3 options");
+    }
+
+    /// The class filter excludes each configured class on the given column while a
+    /// `coalesce` keeps null-class rows.
+    #[test]
+    fn class_filter_excludes_configured_classes_keeping_nulls() {
+        assert!(
+            !EXCLUDED_CLASSES.is_empty(),
+            "expects at least one exclusion"
+        );
+        let filter = class_filter("s.class");
+        assert!(filter.starts_with("coalesce(s.class, '') NOT IN ("));
+        for class in EXCLUDED_CLASSES {
+            assert!(filter.contains(&format!("'{class}'")));
+        }
     }
 }

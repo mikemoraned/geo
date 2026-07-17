@@ -53,3 +53,10 @@ The visualisation should be done by extending the current cli to add a new track
 **Wiring + tidy**
 - [x] Add a `just enrich` recipe; update READMEs where needed.
 - [x] `cargo fmt`; `just test-no-docker` + python tests pass. *(fmt clean; `just test-no-docker` = 36 rust tests passed / 4 docker skipped + 33 python tests passed. `visualise/README.md` updated for the transport pane + `--near`; `enrich` is documented via its Justfile recipe + bin docstring like `record`.)*
+
+**Geometry filters**
+
+From looking at the `.rrd` in the viewer, I can see that we are including segments marked as having a class of `tram`. I don't want these so we should filter those out during enrichment.
+
+- [x] Exclude `tram`-class rail segments (and therefore their connectors) during enrichment: apply a class-exclusion predicate in both `rail_segments` and the connector-reference subquery in `rail_connectors`, keyed off a shared `EXCLUDED_CLASSES` list (keeping null-class rows). Unit-test the predicate fragment. *(`class_filter(column)` → `coalesce(column, '') NOT IN ('tram')` — first tried `IS DISTINCT FROM`, but Sedona's planner rejected it with a type-coercion error, so `coalesce(...) NOT IN (...)` is the working form that still keeps null-class rows.)*
+- [x] Validate live: re-run `enrich` against a fresh archive copy and confirm no `class = 'tram'` rows land in the `transport` table. *(526 segments (691 − 165 tram) + 858 connectors (down from 1850 — tram connectors excluded too); segment classes now standard_gauge/narrow_gauge/unknown, no tram.)*
