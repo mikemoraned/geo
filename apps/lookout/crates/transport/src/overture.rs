@@ -67,14 +67,31 @@ impl Overture {
     /// Register the release's `segment` GeoParquet as a queryable table `segments`,
     /// read anonymously from S3. Replaces any existing registration of that name.
     pub async fn register_segments(&self) -> Result<(), OvertureError> {
+        self.register_transportation("segment", "segments").await
+    }
+
+    /// Register the release's `connector` GeoParquet as a queryable table
+    /// `connectors`, read anonymously from S3.
+    pub async fn register_connectors(&self) -> Result<(), OvertureError> {
+        self.register_transportation("connector", "connectors")
+            .await
+    }
+
+    /// Register one `theme=transportation` type's GeoParquet (read anonymously from
+    /// S3) as a queryable table `table`. Replaces any existing registration of it.
+    async fn register_transportation(
+        &self,
+        overture_type: &str,
+        table: &str,
+    ) -> Result<(), OvertureError> {
         let df = self
             .ctx
             .read_parquet(
-                self.transportation_path("segment"),
+                self.transportation_path(overture_type),
                 Self::s3_read_options()?,
             )
             .await?;
-        self.ctx.ctx.register_table("segments", df.into_view())?;
+        self.ctx.ctx.register_table(table, df.into_view())?;
         Ok(())
     }
 
@@ -94,6 +111,41 @@ impl Overture {
              FROM segments
              WHERE subtype = 'rail'
                AND ST_Intersects(geometry, ST_SetSRID(ST_GeomFromWKT('{window}'), 4326))",
+            window = bboxes_multipolygon_wkt(bboxes),
+        );
+        Ok(self.ctx.sql(&sql).await?.collect().await?)
+    }
+
+    /// Fetch the `connectors` referenced by the rail segments intersecting `bboxes`,
+    /// returning `id` + geometry as WKB. Requires both [`register_segments`] and
+    /// [`register_connectors`]. A connector is kept when its point falls in the same
+    /// window (so the connector partition is pruned by its bbox covering) *and* its
+    /// `id` is one of the `connector_id`s referenced by a rail segment in the window.
+    /// The connector table has unique `id`s, so the result is already deduped.
+    ///
+    /// Caveat: the spatial predicate drops the occasional referenced connector that
+    /// sits just outside the window (an endpoint of a rail segment that only clips the
+    /// box) — acceptable for this first cut.
+    pub async fn rail_connectors(
+        &self,
+        bboxes: &[BBox],
+    ) -> Result<Vec<RecordBatch>, OvertureError> {
+        if bboxes.is_empty() {
+            return Ok(Vec::new());
+        }
+        let sql = format!(
+            "SELECT c.id, ST_AsBinary(c.geometry) AS geometry
+             FROM connectors AS c
+             WHERE ST_Intersects(c.geometry, ST_SetSRID(ST_GeomFromWKT('{window}'), 4326))
+               AND c.id IN (
+                 SELECT DISTINCT elem['connector_id']
+                 FROM (
+                   SELECT UNNEST(s.connectors) AS elem
+                   FROM segments AS s
+                   WHERE s.subtype = 'rail'
+                     AND ST_Intersects(s.geometry, ST_SetSRID(ST_GeomFromWKT('{window}'), 4326))
+                 ) AS refs
+               )",
             window = bboxes_multipolygon_wkt(bboxes),
         );
         Ok(self.ctx.sql(&sql).await?.collect().await?)

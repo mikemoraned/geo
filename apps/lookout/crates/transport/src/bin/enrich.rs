@@ -66,26 +66,27 @@ async fn main() {
         .register_segments()
         .await
         .expect("register Overture segments from S3");
-    let batches = overture
+    overture
+        .register_connectors()
+        .await
+        .expect("register Overture connectors from S3");
+
+    let segments = overture
         .rail_segments(&bboxes)
         .await
         .expect("query Overture rail segments");
-    let rows: usize = batches.iter().map(|b| b.num_rows()).sum();
-    let columns: Vec<String> = batches
-        .first()
-        .map(|b| {
-            b.schema()
-                .fields()
-                .iter()
-                .map(|f| f.name().clone())
-                .collect()
-        })
-        .unwrap_or_default();
+    let connectors = overture
+        .rail_connectors(&bboxes)
+        .await
+        .expect("query Overture rail connectors");
+
+    let segment_rows: usize = segments.iter().map(|b| b.num_rows()).sum();
+    let connector_rows: usize = connectors.iter().map(|b| b.num_rows()).sum();
     tracing::info!(
         release = %args.release,
         bboxes = bboxes.len(),
-        rows,
-        ?columns,
-        "fetched Overture rail segments",
+        segments = segment_rows,
+        connectors = connector_rows,
+        "fetched Overture rail transport",
     );
 }
