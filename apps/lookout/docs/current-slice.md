@@ -162,6 +162,7 @@ retrofitted onto the flat `Sample`. Keep it compiling at each step (stub → fai
         suspended.
       * the retained raw x/y/z is device tilt, not train acceleration. Label it that way
         or leave it out of the default blueprint.
-- [ ] **Dry run** before the journey (walk round the block): wake lock holds, outbox
+- [-] **Dry run** before the journey (walk round the block): wake lock holds, outbox
       survives a reload, reconnect works with cellular off, `speed`/`heading` non-null on
       the real device. One device, one browser — these failure modes are all silent.
+      * decided to just risk it on the day
