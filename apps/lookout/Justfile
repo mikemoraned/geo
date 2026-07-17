@@ -50,6 +50,14 @@ deploy:
 record *args:
     op run --env-file=deploy/lookout.env -- cargo run -p recorder -- {{args}}
 
+# Enrich the SQLite archive with Overture transport data: group the `gps` fixes into
+# per-device-day bounding boxes, fetch the rail segments + connectors intersecting them
+# from public Overture Maps S3 (anonymous — no credentials), and write a `transport`
+# table. No args = defaults (data/lookout.sqlite, pinned release); override with --db /
+# --release. Idempotent, so re-running won't duplicate rows.
+enrich *args:
+    cargo run -p transport --bin enrich -- {{args}}
+
 # Convert the SQLite archive into a rerun .rrd, selecting by time window (and
 # optionally device id prefixes). Requires --since, e.g. `just visualise --since 7d`
 # or `just visualise --since 12h --devices 77a cdf2`. Open the .rrd with `rerun`, or
