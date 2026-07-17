@@ -9,6 +9,7 @@ use clap::Parser;
 use transport::{
     archive::Archive,
     overture::{Overture, DEFAULT_RELEASE},
+    store::Store,
 };
 
 /// Default SQLite archive path (the recorder's output).
@@ -88,5 +89,18 @@ async fn main() {
         segments = segment_rows,
         connectors = connector_rows,
         "fetched Overture rail transport",
+    );
+
+    // Persist into the `transport` table of the same archive (idempotent on GERS id).
+    let store = Store::open(&args.db).expect("open transport store");
+    let stored_segments = store.insert_segments(&segments).expect("persist segments");
+    let stored_connectors = store
+        .insert_connectors(&connectors)
+        .expect("persist connectors");
+    tracing::info!(
+        db = %args.db.display(),
+        stored_segments,
+        stored_connectors,
+        "persisted transport table",
     );
 }

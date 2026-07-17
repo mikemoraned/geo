@@ -4,7 +4,9 @@
 //!   - [`groups`] — group fixes by `(device_id, UTC day)` and reduce each to a bbox.
 //!   - [`archive`] — read the `gps` table those groups are built from.
 //!   - [`overture`] — query Overture transport GeoParquet via SedonaDB.
+//!   - [`store`] — persist the fetched segments/connectors into the `transport` table.
 
 pub mod archive;
 pub mod groups;
 pub mod overture;
+pub mod store;

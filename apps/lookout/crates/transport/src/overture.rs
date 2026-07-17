@@ -97,17 +97,20 @@ impl Overture {
 
     /// Query every **rail** `segment` whose geometry intersects any of `bboxes`,
     /// returning `id`/`subtype`/`class`, the geometry as WKB (`ST_AsBinary`), and the
-    /// referenced `connectors` (a list of `{connector_id, at}`). Requires
-    /// [`register_segments`] first. One query against the union of the bbox envelopes,
-    /// so the partition is scanned once and SedonaDB prunes row groups by the combined
-    /// bbox covering; the `subtype = 'rail'` filter keeps only rail. Empty `bboxes`
-    /// yields no rows without touching S3.
+    /// segment's bounding box flattened from Overture's `bbox` struct to
+    /// `min_lon`/`max_lon`/`min_lat`/`max_lat`. Requires [`register_segments`] first.
+    /// One query against the union of the bbox envelopes, so the partition is scanned
+    /// once and SedonaDB prunes row groups by the combined bbox covering; the
+    /// `subtype = 'rail'` filter keeps only rail. Empty `bboxes` yields no rows without
+    /// touching S3.
     pub async fn rail_segments(&self, bboxes: &[BBox]) -> Result<Vec<RecordBatch>, OvertureError> {
         if bboxes.is_empty() {
             return Ok(Vec::new());
         }
         let sql = format!(
-            "SELECT id, subtype, class, ST_AsBinary(geometry) AS geometry, connectors
+            "SELECT id, subtype, class, ST_AsBinary(geometry) AS geometry,
+                    bbox['xmin'] AS min_lon, bbox['xmax'] AS max_lon,
+                    bbox['ymin'] AS min_lat, bbox['ymax'] AS max_lat
              FROM segments
              WHERE subtype = 'rail'
                AND ST_Intersects(geometry, ST_SetSRID(ST_GeomFromWKT('{window}'), 4326))",
@@ -117,7 +120,8 @@ impl Overture {
     }
 
     /// Fetch the `connectors` referenced by the rail segments intersecting `bboxes`,
-    /// returning `id` + geometry as WKB. Requires both [`register_segments`] and
+    /// returning `id`, geometry as WKB, and the connector's bounding box flattened from
+    /// Overture's `bbox` struct. Requires both [`register_segments`] and
     /// [`register_connectors`]. A connector is kept when its point falls in the same
     /// window (so the connector partition is pruned by its bbox covering) *and* its
     /// `id` is one of the `connector_id`s referenced by a rail segment in the window.
@@ -125,7 +129,7 @@ impl Overture {
     ///
     /// Caveat: the spatial predicate drops the occasional referenced connector that
     /// sits just outside the window (an endpoint of a rail segment that only clips the
-    /// box) — acceptable for this first cut.
+    /// box).
     pub async fn rail_connectors(
         &self,
         bboxes: &[BBox],
@@ -134,7 +138,9 @@ impl Overture {
             return Ok(Vec::new());
         }
         let sql = format!(
-            "SELECT c.id, ST_AsBinary(c.geometry) AS geometry
+            "SELECT c.id, ST_AsBinary(c.geometry) AS geometry,
+                    c.bbox['xmin'] AS min_lon, c.bbox['xmax'] AS max_lon,
+                    c.bbox['ymin'] AS min_lat, c.bbox['ymax'] AS max_lat
              FROM connectors AS c
              WHERE ST_Intersects(c.geometry, ST_SetSRID(ST_GeomFromWKT('{window}'), 4326))
                AND c.id IN (
