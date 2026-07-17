@@ -60,3 +60,33 @@ context for Geolocation / DeviceMotion, `wss://` websocket — no cert/LAN work 
   `data/lookout.sqlite`, converted to `.rrd` (`rerun rrd verify` passes), and confirmed
   visible in the rerun viewer.
 
+## improve train-based recording accuracy / reliability
+
+Hardened the capture pipeline so a train journey yields data that both arrives reliably
+and means something, targeting iOS/macOS Safari only. Split into a wire-model refactor,
+capture-survival work on the frontend, and data-quality additions through to the rerun
+views. The pre-journey dry run was deliberately skipped ("risk it on the day").
+
+- **Versioned wire model**: replaced the flat `Sample` with a two-level `Message` enum
+  (`Version0` / `Version1`), each wrapping an inner message set. `v` is carried on the
+  wire and defaults to 0 when absent, so historical unversioned payloads in `raw` still
+  parse. The `shared` crate was reorganised into `message` / `sensor` / `session` modules.
+- **Session metadata**: a new `StartSession` message (v1) lets a device announce its
+  class (iPhone / iPad / laptop, classified client-side from `navigator`) at record time.
+  It's interpreted into a new `device` table keyed on `device_id`; sensor rows seed a
+  minimal `unknown` placeholder so every reading has a device row to join to.
+- **Capture survival (frontend)**: screen wake lock re-acquired on visibility change
+  (surfaced in the UI), an outbox persisted to `localStorage` and re-flushed on startup,
+  and server acks so a sample leaves the outbox only once confirmed — a reload or
+  mid-flush drop re-sends the un-acked tail instead of losing it.
+- **Data quality**: GPS gained Doppler `speed` / `heading` (nulls preserved) and now
+  stamps the fix's own timestamp rather than send time; accel is aggregated over the
+  window into `rms` / `peak` / `n` (gravity-removed), keeping one raw x/y/z for tilt.
+- **Persistence / server**: the queue item became a `RawSample` envelope carrying a
+  server-stamped `received_at` beside the verbatim payload (md5 contract intact). The
+  archive migrates older schemas on open via `ALTER TABLE ADD COLUMN`, and the recorder
+  requeues a sample on archive failure rather than draining past it and losing it.
+- **Views**: the rerun track is now coloured by speed (viridis ramp), `rms`/`peak` show
+  ride quality superseding the old `|a|` magnitude, and `n` plots as a capture-health
+  signal exposing windows where the page was suspended.
+
