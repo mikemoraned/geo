@@ -6,6 +6,11 @@ selecting by a relative time window and optionally by device, and logs them unde
 per-device entity paths with a blueprint: a map view for each device's gps track and
 a time-series view for its accel axes.
 
+If the archive has also been enriched (a `transport` table, produced by `just enrich`),
+the Overture rail network is logged as static geometry under `/transport` — segments as
+`GeoLineStrings` coloured by rail class, connectors as `GeoPoints` — with its own shared
+map pane alongside the device tiles.
+
 ## Usage
 
 Run from `apps/lookout` (so the default `data/…` paths resolve):
@@ -17,7 +22,9 @@ just visualise --since 7d --open                   # also push to a running view
 ```
 
 `--since` is required (`30m`, `12h`, `7d`, `2w`). `--devices` takes id *prefixes*, so a
-few leading characters are enough. Defaults: input `data/lookout.sqlite`, output
+few leading characters are enough. `--near <degrees>` restricts the rail segments drawn
+to those within that distance of a gps fix — a raw lon/lat **degrees** cut (a rough hack,
+not true ground distance), off by default. Defaults: input `data/lookout.sqlite`, output
 `data/lookout.rrd`. Open the result with the rerun viewer:
 
 ```sh

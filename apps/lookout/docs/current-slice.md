@@ -52,4 +52,4 @@ The visualisation should be done by extending the current cli to add a new track
 
 **Wiring + tidy**
 - [x] Add a `just enrich` recipe; update READMEs where needed.
-- [ ] `cargo fmt`; `just test-no-docker` + python tests pass.
+- [x] `cargo fmt`; `just test-no-docker` + python tests pass. *(fmt clean; `just test-no-docker` = 36 rust tests passed / 4 docker skipped + 33 python tests passed. `visualise/README.md` updated for the transport pane + `--near`; `enrich` is documented via its Justfile recipe + bin docstring like `record`.)*
