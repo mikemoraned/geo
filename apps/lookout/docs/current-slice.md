@@ -44,6 +44,7 @@ The visualisation should be done by extending the current cli to add a new track
 **Visualise (extend `visualise/main.py`)**
 - [ ] Read the `transport` table; log segments as static `GeoLineStrings` under `/transport/segments` (coloured by subtype) and connectors as `GeoPoints` under `/transport/connectors`, parsing WKB with shapely. Add a transport map pane to the blueprint.
 - [ ] Add a python test for the new logging path.
+- [ ] *Enrichment on top of the unfiltered version:* optionally restrict the segments logged to those within some distance of a gps sample (a `--near <distance>` flag, off by default). **Hack:** filter using a raw distance in **degrees** rather than doing it properly — the correct approach would reproject to a metres-based CRS and measure true distance, but a degrees threshold is good enough for a first cut. Note this caveat in the code/help text.
 
 **Wiring + tidy**
 - [ ] Add a `just enrich` recipe; update READMEs where needed.
