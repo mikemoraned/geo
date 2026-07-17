@@ -251,7 +251,10 @@ mod tests {
         let message = Message::Version0(V0Message::Gps(gps_reading()));
         let json = serde_json::to_string(&message).expect("serialize");
         assert!(!json.contains("\"v\""), "v0 must not carry a v tag: {json}");
-        assert!(!json.contains("type"), "v0 must not carry a type tag: {json}");
+        assert!(
+            !json.contains("type"),
+            "v0 must not carry a type tag: {json}"
+        );
     }
 
     /// The exact v0 wire shapes stored in `raw` must still parse — re-interpretation

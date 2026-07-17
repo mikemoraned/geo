@@ -116,7 +116,10 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
 }
 
 fn wrap(message: &Message) -> RawSample {
-    RawSample::new(1_700_000_050_000, serde_json::to_string(message).expect("serialize"))
+    RawSample::new(
+        1_700_000_050_000,
+        serde_json::to_string(message).expect("serialize"),
+    )
 }
 
 async fn rpop_sample(conn: &mut MultiplexedConnection) -> RawSample {

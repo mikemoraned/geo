@@ -46,7 +46,10 @@ async fn wait_ready(url: &str) -> MultiplexedConnection {
                 return conn;
             }
         }
-        assert!(std::time::Instant::now() < deadline, "redis not ready in 30s");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "redis not ready in 30s"
+        );
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }

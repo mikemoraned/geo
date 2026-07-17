@@ -45,7 +45,10 @@ async fn wait_ready(url: &str) -> MultiplexedConnection {
                 return conn;
             }
         }
-        assert!(std::time::Instant::now() < deadline, "redis not ready in 30s");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "redis not ready in 30s"
+        );
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
@@ -124,7 +127,9 @@ async fn extract_queue_to_sqlite_docker() {
     let archive = rusqlite::Connection::open(&db_path).expect("open archive");
     let count = |table: &str| -> i64 {
         archive
-            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
             .expect("count")
     };
     assert_eq!(count("raw"), 5, "one lossless row per queued payload");

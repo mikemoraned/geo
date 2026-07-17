@@ -16,7 +16,9 @@ use uuid::Uuid;
 #[tokio::test]
 async fn redis_round_trip_end_to_end() {
     // The same process-global TLS provider the server installs before connecting.
-    rustls::crypto::ring::default_provider().install_default().ok();
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .ok();
 
     let url = std::env::var("LOOKOUT_REDIS_URL")
         .expect("LOOKOUT_REDIS_URL must be set — run via `just end_to_end_test`");

@@ -162,5 +162,9 @@ async fn server_acks_accepted_message() {
         .expect("ack within 5s")
         .expect("stream open")
         .expect("frame");
-    assert_eq!(frame, WsMessage::Text("ack".into()), "expected an ack frame");
+    assert_eq!(
+        frame,
+        WsMessage::Text("ack".into()),
+        "expected an ack frame"
+    );
 }
