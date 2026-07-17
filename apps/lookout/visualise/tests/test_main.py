@@ -2,6 +2,7 @@ import argparse
 import sqlite3
 
 import pytest
+import shapely
 
 import main
 
@@ -112,6 +113,74 @@ class TestSpeedColor:
     def test_returns_rgb_triple(self):
         r, g, b = main._speed_color(15.0, 0.0, 30.0)
         assert all(0 <= c <= 255 for c in (r, g, b))
+
+
+class TestTransport:
+    """The `transport` fetch/transform path: reading the enriched table and turning
+    its WKB geometry into rerun-ready, class-coloured, lat/lon geometry."""
+
+    def test_fetch_missing_table_is_empty(self):
+        conn = sqlite3.connect(":memory:")
+        assert main.fetch_transport(conn) == []
+        conn.close()
+
+    def test_fetch_reads_rows(self):
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE transport (gers_id TEXT, kind TEXT, class TEXT, geom BLOB)"
+        )
+        conn.execute(
+            "INSERT INTO transport (gers_id, kind, class, geom) VALUES ('c1', 'connector', NULL, ?)",
+            [shapely.Point(11.0, 50.0).wkb],
+        )
+        conn.commit()
+        rows = main.fetch_transport(conn)
+        conn.close()
+        assert [(r[0], r[1]) for r in rows] == [("connector", None)]
+
+    def test_class_color_maps_known_and_defaults_unknown(self):
+        assert main._class_color("tram") == main._CLASS_COLORS["tram"]
+        assert main._class_color("unknown") == main._CLASS_DEFAULT
+        assert main._class_color(None) == main._CLASS_DEFAULT
+
+    def test_segment_flips_to_lat_lon_and_colours_by_class(self):
+        geom = shapely.LineString([(11.0, 50.0), (11.1, 50.1)]).wkb
+        segments, colors, connectors = main._transport_geometry([("segment", "tram", geom)])
+        # WKB is (lon, lat); rerun wants (lat, lon).
+        assert segments == [[(50.0, 11.0), (50.1, 11.1)]]
+        assert colors == [main._CLASS_COLORS["tram"]]
+        assert connectors == []
+
+    def test_connector_point_flips_to_lat_lon(self):
+        geom = shapely.Point(11.0, 50.0).wkb
+        segments, _colors, connectors = main._transport_geometry([("connector", None, geom)])
+        assert connectors == [(50.0, 11.0)]
+        assert segments == []
+
+    def test_multilinestring_splits_into_one_polyline_per_part(self):
+        geom = shapely.MultiLineString(
+            [[(11.0, 50.0), (11.1, 50.1)], [(12.0, 51.0), (12.1, 51.1)]]
+        ).wkb
+        segments, colors, _ = main._transport_geometry([("segment", "tram", geom)])
+        assert len(segments) == 2
+        assert colors == [main._CLASS_COLORS["tram"]] * 2
+
+    def test_near_keeps_close_segments_and_drops_far_ones(self):
+        close = shapely.LineString([(11.0, 50.0), (11.01, 50.01)]).wkb
+        far = shapely.LineString([(20.0, 60.0), (20.1, 60.1)]).wkb
+        rows = [("segment", "tram", close), ("segment", "tram", far)]
+        segments, _, _ = main._transport_geometry(
+            rows, gps_lonlat=[(11.0, 50.0)], near=0.05
+        )
+        # Only the segment within 0.05 degrees of the fix survives.
+        assert segments == [[(50.0, 11.0), (50.01, 11.01)]]
+
+    def test_near_none_keeps_all_segments(self):
+        far = shapely.LineString([(20.0, 60.0), (20.1, 60.1)]).wkb
+        segments, _, _ = main._transport_geometry(
+            [("segment", "tram", far)], gps_lonlat=[(11.0, 50.0)], near=None
+        )
+        assert len(segments) == 1
 
 
 class TestReportedPrefixScenario:

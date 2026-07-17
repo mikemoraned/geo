@@ -6,6 +6,10 @@ them to a rerun recording under per-device entity paths. A blueprint gives each
 selected device a map view for its speed-coloured gps track and a time-series view of
 its accel ride-quality aggregates (rms roughness, peak jolts).
 
+If the archive has been enriched (a `transport` table, written by `enrich`), the
+Overture rail network — segments coloured by class, plus their connectors — is logged
+as static geometry under `/transport` and given its own shared map pane.
+
 Run from `apps/lookout` via `just visualise` so the default paths resolve.
 """
 
@@ -17,6 +21,7 @@ from pathlib import Path
 
 import rerun as rr
 import rerun.blueprint as rrb
+import shapely
 
 TIMELINE = "time"
 DEFAULT_DB = Path("data/lookout.sqlite")
@@ -65,6 +70,21 @@ def fetch_gps(conn: sqlite3.Connection, cutoff_ms: int, devices: list[str] | Non
         f"WHERE t >= ?{clause} ORDER BY t",
         [cutoff_ms, *params],
     ).fetchall()
+
+
+def fetch_transport(conn: sqlite3.Connection):
+    """Rows `(kind, class, geom)` from the `transport` table — the Overture rail
+    segments and connectors written by `enrich`, with the geometry as a WKB blob.
+
+    Not time-windowed: the transport network is static enrichment, logged whole. Empty
+    when the archive has never been enriched, i.e. the table is absent.
+    """
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'transport'"
+    ).fetchone()
+    if not exists:
+        return []
+    return conn.execute("SELECT kind, class, geom FROM transport").fetchall()
 
 
 def log_accel(rows) -> None:
@@ -182,10 +202,93 @@ def _log_track(device_id: str, points: list[tuple[float, float, float | None]]) 
     rr.log(path, rr.GeoLineStrings(lat_lon=segments, colors=colors), static=True)
 
 
-def build_blueprint(devices: list[str]) -> rrb.Blueprint:
+# Categorical colours for the rail `class`, so the map distinguishes gauges/modes.
+# Anything unmapped (including the Overture `unknown` class) falls back to grey.
+_CLASS_COLORS = {
+    "standard_gauge": (31, 119, 180),
+    "narrow_gauge": (44, 160, 44),
+    "tram": (255, 127, 14),
+    "subway": (148, 103, 189),
+    "monorail": (214, 39, 40),
+    "funicular": (140, 86, 75),
+    "light_rail": (23, 190, 207),
+}
+_CLASS_DEFAULT = (127, 127, 127)
+# Connectors are the shared junction nodes: one neutral dark dot for all of them.
+_CONNECTOR_COLOR = (40, 40, 40)
+
+
+def _class_color(rail_class: str | None) -> tuple[int, int, int]:
+    """Colour for a rail `class`, or grey for an unknown/unmapped one."""
+    return _CLASS_COLORS.get(rail_class, _CLASS_DEFAULT)
+
+
+def _linestrings(shape) -> list:
+    """The `LineString` parts of a segment geometry — one for a `LineString`, several
+    for a `MultiLineString` — so each can be logged as its own polyline."""
+    if shape.geom_type == "MultiLineString":
+        return list(shape.geoms)
+    return [shape]
+
+
+def _transport_geometry(rows, gps_lonlat=None, near=None):
+    """Transform `transport` rows into rerun-ready geometry, returning
+    `(segments, segment_colors, connectors)`.
+
+    The stored WKB is in `lon lat` (x-y) order, so every coordinate is flipped to
+    rerun's `(lat, lon)`. Segments are coloured by rail `class`. When `near` is set, a
+    segment is kept only if it comes within `near` of a gps fix — a raw **degrees**
+    distance (see the `--near` help), not true ground distance.
+    """
+    near_window = (
+        shapely.MultiPoint(gps_lonlat) if near is not None and gps_lonlat else None
+    )
+    segments: list[list[tuple[float, float]]] = []
+    segment_colors: list[tuple[int, int, int]] = []
+    connectors: list[tuple[float, float]] = []
+    for kind, rail_class, geom in rows:
+        shape = shapely.from_wkb(geom)
+        if kind == "segment":
+            for line in _linestrings(shape):
+                if near_window is not None and line.distance(near_window) > near:
+                    continue
+                segments.append([(lat, lon) for lon, lat in line.coords])
+                segment_colors.append(_class_color(rail_class))
+        elif kind == "connector":
+            connectors.append((shape.y, shape.x))
+    return segments, segment_colors, connectors
+
+
+def log_transport(rows, gps_lonlat=None, near=None) -> None:
+    """Log the Overture transport network as static geometry: rail segments as
+    `GeoLineStrings` under `transport/segments` coloured by rail `class`, and
+    connectors as `GeoPoints` under `transport/connectors`.
+
+    Static because the network is a fixed backdrop the device tracks move across, not
+    something that changes over the recording's timeline.
+    """
+    segments, segment_colors, connectors = _transport_geometry(rows, gps_lonlat, near)
+    if segments:
+        rr.log(
+            "transport/segments",
+            rr.GeoLineStrings(lat_lon=segments, colors=segment_colors),
+            static=True,
+        )
+    if connectors:
+        rr.log(
+            "transport/connectors",
+            rr.GeoPoints(
+                lat_lon=connectors, colors=[_CONNECTOR_COLOR] * len(connectors)
+            ),
+            static=True,
+        )
+
+
+def build_blueprint(devices: list[str], has_transport: bool) -> rrb.Blueprint:
     """Per device: a static full-route map, a latest-position map that follows the
     timeline, a ride-quality time-series view (rms/peak), and a capture-health view
-    (n) — tiled in a grid.
+    (n) — tiled in a grid. When the archive has transport data, one shared map of the
+    Overture rail network is appended alongside.
 
     The `track` map shows the whole journey as a static speed-coloured polyline; the
     `gps` map shows only the per-timestamp point, which moves as the timeline cursor
@@ -210,6 +313,10 @@ def build_blueprint(devices: list[str]) -> rrb.Blueprint:
         )
         for device_id in devices
     ]
+    if has_transport:
+        # The rail network (segments + connectors) is shared across devices, not
+        # per-device, so it sits as its own map pane beside the device tiles.
+        panes.append(rrb.MapView(origin="/transport", name="transport"))
     return rrb.Blueprint(rrb.Grid(*panes), collapse_panels=True)
 
 
@@ -227,6 +334,15 @@ def main() -> None:
         nargs="*",
         metavar="PREFIX",
         help="device id prefixes to include (default: all devices in the window)",
+    )
+    parser.add_argument(
+        "--near",
+        type=float,
+        default=None,
+        metavar="DEGREES",
+        help="only show rail segments within this distance of a gps fix (default: show "
+        "all). HACK: the distance is raw lon/lat degrees, not metres — a rough cut, "
+        "not true ground distance (which would need reprojecting to a metric CRS).",
     )
     parser.add_argument("--db", type=Path, default=DEFAULT_DB, help="input SQLite archive")
     parser.add_argument(
@@ -246,6 +362,7 @@ def main() -> None:
     try:
         accel = fetch_accel(conn, cutoff_ms, args.devices)
         gps = fetch_gps(conn, cutoff_ms, args.devices)
+        transport = fetch_transport(conn)
     finally:
         conn.close()
 
@@ -259,7 +376,11 @@ def main() -> None:
     rr.init("lookout")
     log_accel(accel)
     log_gps(gps)
-    blueprint = build_blueprint(devices)
+    if transport:
+        # `--near` filters against the gps fixes in the selected window (lon, lat).
+        gps_lonlat = [(row[3], row[2]) for row in gps]
+        log_transport(transport, gps_lonlat=gps_lonlat, near=args.near)
+    blueprint = build_blueprint(devices, has_transport=bool(transport))
 
     if args.open:
         # Tee to the file and a running viewer. The viewer persists a blueprint per
@@ -274,7 +395,7 @@ def main() -> None:
 
     print(
         f"wrote {where}: {len(accel)} accel + {len(gps)} gps samples "
-        f"across {len(devices)} device(s)"
+        f"+ {len(transport)} transport features across {len(devices)} device(s)"
     )
 
 
