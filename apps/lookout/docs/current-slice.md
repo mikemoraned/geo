@@ -29,8 +29,8 @@ The visualisation should be done by extending the current cli to add a new track
 ### Tasks
 
 **`geo` crate scaffold + bbox derivation**
-- [ ] Add a `geo` crate to the workspace (`crates/geo`) with an `enrich` bin (`src/bin/enrich.rs`) and modules under `src/` exposed via `lib.rs`; pull `duckdb` (bundled) and `rtree`-enabled `rusqlite` to `[workspace.dependencies]`.
-- [ ] Read the `gps` table from the sqlite archive and group rows into `(device_id, UTC day)` groups; derive a bounding box (min/max lat/lon) per group. Unit-test grouping + bbox against captured rows.
+- [x] Add a `geo` crate to the workspace (`crates/geo`) with an `enrich` bin (`src/bin/enrich.rs`) and modules under `src/` exposed via `lib.rs`; pull `duckdb` (bundled) and `rtree`-enabled `rusqlite` to `[workspace.dependencies]`. *(rusqlite 0.40 has no `rtree` cargo feature — the R\*Tree module is compiled into the `bundled` SQLite build already, so `bundled` alone suffices; verified a `USING rtree(...)` virtual table works.)*
+- [x] Read the `gps` table from the sqlite archive and group rows into `(device_id, UTC day)` groups; derive a bounding box (min/max lat/lon) per group. Unit-test grouping + bbox against captured rows.
 
 **Overture fetch via duckdb**
 - [ ] Open an in-process duckdb, `INSTALL`/`LOAD spatial, httpfs`, set `s3_region=us-west-2` + anonymous access. `--release` CLI arg with a sensible pinned default; `--db` input/output paths.

@@ -21,8 +21,13 @@ rustls = { version = "0.23", features = ["ring"] }
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
 # `bundled` compiles a pinned SQLite from source, so the recorder doesn't depend on
-# a system libsqlite3 being present or new enough.
+# a system libsqlite3 being present or new enough. It also builds SQLite with the
+# R*Tree module (`-DSQLITE_ENABLE_RTREE`), used by the geo enrichment for a spatial
+# index over the `transport` table — no separate rusqlite feature is needed for it.
 rusqlite = { version = "0.40", features = ["bundled"] }
+# `bundled` compiles libduckdb from source (no system libduckdb needed); the geo
+# `enrich` bin uses it in-process to fetch Overture transport data from S3.
+duckdb = { version = "1", features = ["bundled"] }
 md5 = "0.7"
 tempfile = "3"
 shared = { path = "crates/shared" }
