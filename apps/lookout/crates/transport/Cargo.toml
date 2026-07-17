@@ -1,11 +1,13 @@
 [package]
-name = "geo"
+name = "transport"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+arrow = { workspace = true }
 clap = { workspace = true }
 rusqlite = { workspace = true }
+sedona = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

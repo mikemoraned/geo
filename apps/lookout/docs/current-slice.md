@@ -15,7 +15,7 @@ I suggest:
 4. finding all connectors and segments in overturemaps that intersect those bounding boxes
 5. unioning and dedupe those together into a single dataset and save
 
-The bounding boxes are probably small enough that a live fetch of overturemaps data from S3 will be fast enough, but if needed we have a recent local copy on disk. We should do this as a new `enrich` cli in a new `geo` crate, and we should save in sqlite as a new "transport" table, using whatever direct geo support it has. There are perhaps better geo db but let's stick with sqlite for now unless it makes it really hard.
+The bounding boxes are probably small enough that a live fetch of overturemaps data from S3 will be fast enough, but if needed we have a recent local copy on disk. We should do this as a new `enrich` cli in a new `transport` crate, and we should save in sqlite as a new "transport" table, using whatever direct geo support it has. There are perhaps better geo db but let's stick with sqlite for now unless it makes it really hard.
 
 The visualisation should be done by extending the current cli to add a new track corresponding to the segments. Later on we might want to restrict the segments visualised to be those within some distance of a sample, but we can leave that out for now if it's not trivial to do.
 
@@ -31,12 +31,12 @@ The visualisation should be done by extending the current cli to add a new track
 
 ### Tasks
 
-**`geo` crate scaffold + bbox derivation**
-- [x] Add a `geo` crate to the workspace (`crates/geo`) with an `enrich` bin (`src/bin/enrich.rs`) and modules under `src/` exposed via `lib.rs`; pull `duckdb` (bundled) and `rtree`-enabled `rusqlite` to `[workspace.dependencies]`. *(rusqlite 0.40 has no `rtree` cargo feature — the R\*Tree module is compiled into the `bundled` SQLite build already, so `bundled` alone suffices; verified a `USING rtree(...)` virtual table works.)*
+**`transport` crate scaffold + bbox derivation**
+- [x] Add a `transport` crate to the workspace (`crates/transport`) with an `enrich` bin (`src/bin/enrich.rs`) and modules under `src/` exposed via `lib.rs`; pull `duckdb` (bundled) and `rtree`-enabled `rusqlite` to `[workspace.dependencies]`. *(rusqlite 0.40 has no `rtree` cargo feature — the R\*Tree module is compiled into the `bundled` SQLite build already, so `bundled` alone suffices; verified a `USING rtree(...)` virtual table works.)*
 - [x] Read the `gps` table from the sqlite archive and group rows into `(device_id, UTC day)` groups; derive a bounding box (min/max lat/lon) per group. Unit-test grouping + bbox against captured rows.
 
 **Overture fetch via SedonaDB**
-- [ ] Add `sedona` as a git dep pinned to tag `apache-sedona-db-0.4.0` (features incl. `aws` + the geometry backends we want, e.g. `geo`/`geos`); pull `sedona` + a matching `arrow` (57.1) into `[workspace.dependencies]` and drop the now-unused `duckdb` workspace dep. Wire `CXX=/usr/bin/clang` where builds need it (the blocked-`clang++` workaround). Confirm `cargo build -p geo` + a trivial `SedonaContext::new()`.
+- [x] Add `sedona` as a git dep pinned to tag `apache-sedona-db-0.4.0` (features incl. `aws` + the geometry backends we want, e.g. `geo`/`geos`); pull `sedona` + a matching `arrow` (57.1) into `[workspace.dependencies]` and drop the now-unused `duckdb` workspace dep. Wire `CXX=/usr/bin/clang` where builds need it (the blocked-`clang++` workaround). Confirm `cargo build -p transport` + a trivial `SedonaContext::new()`. *(Enabled `["aws", "geo"]` only — **dropped `geos`**: the georust `geos` crate links a system GEOS 3.12 that isn't installed here. The pure-Rust `geo` backend covers ST functions for now; enable `geos` later after `brew install geos`. Also renamed the crate `geo` → `transport` to avoid a name clash with georust's `geo` crate that sedona pulls in transitively.)*
 - [ ] Open a `SedonaContext`, register anonymous S3 (`aws.skip_signature=true`, `aws.region=us-west-2`), and read one `type=segment` partition for a single bbox as a smoke test. `--release` CLI arg with a pinned default; `--db` input/output paths.
 - [ ] Query rail `segment`s intersecting the bboxes (OR the per-bbox `bbox.{xmin,xmax,ymin,ymax}` predicates so row-group pruning applies), `subtype = 'rail'`, returning geometry as WKB (`ST_AsBinary`) + `subtype`/`class` + referenced connector ids. Collect to arrow `RecordBatch`es.
 - [ ] Fetch the `connector`s referenced by the kept segments (by id). Union + dedupe segments and connectors across all bboxes on Overture GERS `id`.

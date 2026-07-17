@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use geo::{archive::Archive, groups::group_bboxes};
+use transport::archive::Archive;
 
 /// Default SQLite archive path (the recorder's output).
 const DEFAULT_DB: &str = "data/lookout.sqlite";
@@ -30,8 +30,7 @@ fn main() {
     let args = Args::parse();
 
     let archive = Archive::open(&args.db).expect("open sqlite archive");
-    let rows = archive.gps_rows().expect("read gps rows");
-    let groups = group_bboxes(rows);
+    let groups = archive.groups().expect("derive bounding boxes");
 
     tracing::info!(
         groups = groups.len(),
