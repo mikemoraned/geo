@@ -91,22 +91,20 @@ impl Message {
     /// The device id every message variant carries.
     pub fn id(&self) -> Uuid {
         match self {
-            Message::Version0(V0Message::Gps(r)) => r.id,
-            Message::Version0(V0Message::Acceleration(r)) => r.id,
+            Message::Version0(V0Message::Gps(r)) | Message::Version1(V1Message::Gps(r)) => r.id,
+            Message::Version0(V0Message::Acceleration(r))
+            | Message::Version1(V1Message::Acceleration(r)) => r.id,
             Message::Version1(V1Message::StartSession(s)) => s.id,
-            Message::Version1(V1Message::Gps(r)) => r.id,
-            Message::Version1(V1Message::Acceleration(r)) => r.id,
         }
     }
 
     /// The capture timestamp (epoch millis) every message variant carries.
     pub fn t(&self) -> i64 {
         match self {
-            Message::Version0(V0Message::Gps(r)) => r.t,
-            Message::Version0(V0Message::Acceleration(r)) => r.t,
+            Message::Version0(V0Message::Gps(r)) | Message::Version1(V1Message::Gps(r)) => r.t,
+            Message::Version0(V0Message::Acceleration(r))
+            | Message::Version1(V1Message::Acceleration(r)) => r.t,
             Message::Version1(V1Message::StartSession(s)) => s.t,
-            Message::Version1(V1Message::Gps(r)) => r.t,
-            Message::Version1(V1Message::Acceleration(r)) => r.t,
         }
     }
 }

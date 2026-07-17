@@ -143,10 +143,11 @@ impl Store {
         )?;
 
         match raw.parse()? {
-            Message::Version0(V0Message::Gps(r)) => self.insert_gps(&r)?,
-            Message::Version0(V0Message::Acceleration(r)) => self.insert_accel(&r)?,
-            Message::Version1(V1Message::Gps(r)) => self.insert_gps(&r)?,
-            Message::Version1(V1Message::Acceleration(r)) => self.insert_accel(&r)?,
+            Message::Version0(V0Message::Gps(r)) | Message::Version1(V1Message::Gps(r)) => {
+                self.insert_gps(&r)?
+            }
+            Message::Version0(V0Message::Acceleration(r))
+            | Message::Version1(V1Message::Acceleration(r)) => self.insert_accel(&r)?,
             Message::Version1(V1Message::StartSession(s)) => self.insert_device(&s)?,
         }
         Ok(())
@@ -269,40 +270,46 @@ CREATE TABLE gps (device_id TEXT NOT NULL, t INTEGER NOT NULL, lat REAL, lon REA
         let conn = Connection::open_in_memory().expect("open");
         conn.execute_batch(LEGACY_SCHEMA).expect("legacy schema");
         // An existing row: a NOT NULL received_at add would fail against it.
-        conn.execute(
-            "INSERT INTO raw (md5, json) VALUES ('legacy', '{}')",
-            [],
-        )
-        .expect("legacy row");
+        conn.execute("INSERT INTO raw (md5, json) VALUES ('legacy', '{}')", [])
+            .expect("legacy row");
 
         // The open() path: ensure new tables, then migrate new columns.
         conn.execute_batch(SCHEMA).expect("schema");
         migrate(&conn).expect("migrate");
         let store = Store { conn };
 
-        store.insert(&raw(V1_GPS_JSON)).expect("gps insert post-migration");
-        store.insert(&raw(V1_ACCEL_JSON)).expect("accel insert post-migration");
-        store.insert(&raw(SESSION_JSON)).expect("session insert post-migration");
+        store
+            .insert(&raw(V1_GPS_JSON))
+            .expect("gps insert post-migration");
+        store
+            .insert(&raw(V1_ACCEL_JSON))
+            .expect("accel insert post-migration");
+        store
+            .insert(&raw(SESSION_JSON))
+            .expect("session insert post-migration");
 
         assert_eq!(count(&store, "gps"), 1);
         assert_eq!(count(&store, "accel"), 1);
         assert_eq!(count(&store, "device"), 1);
         let legacy_received_at: Option<i64> = store
             .conn
-            .query_row("SELECT received_at FROM raw WHERE md5 = 'legacy'", [], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT received_at FROM raw WHERE md5 = 'legacy'",
+                [],
+                |r| r.get(0),
+            )
             .expect("legacy received_at");
-        assert_eq!(legacy_received_at, None, "rows predating the column are null");
+        assert_eq!(
+            legacy_received_at, None,
+            "rows predating the column are null"
+        );
     }
 
     #[test]
     fn insert_populates_raw_and_matching_sensor_table() {
         let store = Store::open_in_memory().expect("open");
         store.insert(&raw(GPS_JSON)).expect("insert gps");
-        store
-            .insert(&raw(ACCEL_JSON))
-            .expect("insert accel");
+        store.insert(&raw(ACCEL_JSON)).expect("insert accel");
 
         assert_eq!(count(&store, "raw"), 2);
         assert_eq!(count(&store, "gps"), 1);
@@ -313,9 +320,7 @@ CREATE TABLE gps (device_id TEXT NOT NULL, t INTEGER NOT NULL, lat REAL, lon REA
     #[test]
     fn v1_sensor_payload_populates_sensor_table() {
         let store = Store::open_in_memory().expect("open");
-        store
-            .insert(&raw(V1_GPS_JSON))
-            .expect("insert v1 gps");
+        store.insert(&raw(V1_GPS_JSON)).expect("insert v1 gps");
 
         assert_eq!(count(&store, "gps"), 1);
     }
@@ -385,12 +390,8 @@ CREATE TABLE gps (device_id TEXT NOT NULL, t INTEGER NOT NULL, lat REAL, lon REA
     fn start_session_upgrades_placeholder_and_survives_later_readings() {
         let store = Store::open_in_memory().expect("open");
         store.insert(&raw(GPS_JSON)).expect("v0 reading");
-        store
-            .insert(&raw(SESSION_JSON))
-            .expect("start session");
-        store
-            .insert(&raw(ACCEL_JSON))
-            .expect("later reading");
+        store.insert(&raw(SESSION_JSON)).expect("start session");
+        store.insert(&raw(ACCEL_JSON)).expect("later reading");
 
         assert_eq!(count(&store, "device"), 1);
         let device_type: String = store
@@ -404,9 +405,7 @@ CREATE TABLE gps (device_id TEXT NOT NULL, t INTEGER NOT NULL, lat REAL, lon REA
     #[test]
     fn start_session_populates_device_table() {
         let store = Store::open_in_memory().expect("open");
-        store
-            .insert(&raw(SESSION_JSON))
-            .expect("insert session");
+        store.insert(&raw(SESSION_JSON)).expect("insert session");
 
         assert_eq!(count(&store, "raw"), 1);
         assert_eq!(count(&store, "device"), 1);
