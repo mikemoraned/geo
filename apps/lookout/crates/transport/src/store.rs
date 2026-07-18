@@ -84,6 +84,7 @@ impl Store {
     /// batches (`id`/`subtype`/`class`/`geometry`/bbox columns). Returns the number of
     /// rows newly inserted (existing `gers_id`s are ignored).
     pub fn insert_segments(&self, batches: &[RecordBatch]) -> Result<usize, StoreError> {
+        let tx = self.conn.unchecked_transaction()?;
         let mut inserted = 0;
         for batch in batches {
             let ids = strings(batch, "id")?;
@@ -92,7 +93,8 @@ impl Store {
             let geoms = binaries(batch, "geometry")?;
             let bbox = BBoxColumns::read(batch)?;
             for i in 0..batch.num_rows() {
-                inserted += self.insert_row(
+                inserted += insert_row(
+                    &tx,
                     ids.value(i),
                     Kind::Segment,
                     optional(&subtypes, i),
@@ -102,6 +104,7 @@ impl Store {
                 )?;
             }
         }
+        tx.commit()?;
         Ok(inserted)
     }
 
@@ -109,13 +112,15 @@ impl Store {
     /// batches (`id`/`geometry`/bbox columns; no subtype/class). Returns the number of
     /// rows newly inserted.
     pub fn insert_connectors(&self, batches: &[RecordBatch]) -> Result<usize, StoreError> {
+        let tx = self.conn.unchecked_transaction()?;
         let mut inserted = 0;
         for batch in batches {
             let ids = strings(batch, "id")?;
             let geoms = binaries(batch, "geometry")?;
             let bbox = BBoxColumns::read(batch)?;
             for i in 0..batch.num_rows() {
-                inserted += self.insert_row(
+                inserted += insert_row(
+                    &tx,
                     ids.value(i),
                     Kind::Connector,
                     None,
@@ -125,53 +130,55 @@ impl Store {
                 )?;
             }
         }
+        tx.commit()?;
         Ok(inserted)
     }
+}
 
-    /// Insert one feature, idempotent on `gers_id`. On a genuinely new row, mirror its
-    /// bbox into the R\*Tree keyed on the freshly-assigned rowid; on an ignored
-    /// duplicate, leave the R\*Tree untouched. Returns 1 if inserted, 0 if ignored.
-    fn insert_row(
-        &self,
-        gers_id: &str,
-        kind: Kind,
-        subtype: Option<&str>,
-        class: Option<&str>,
-        geom: &[u8],
-        bbox: [f64; 4],
-    ) -> Result<usize, StoreError> {
-        let [min_lon, max_lon, min_lat, max_lat] = bbox;
-        let changed = self.conn.execute(
-            "INSERT OR IGNORE INTO transport
-               (gers_id, kind, subtype, class, geom, min_lon, max_lon, min_lat, max_lat)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+/// Insert one feature, idempotent on `gers_id`. On a genuinely new row, mirror its
+/// bbox into the R\*Tree keyed on the freshly-assigned rowid; on an ignored duplicate,
+/// leave the R\*Tree untouched. Returns 1 if inserted, 0 if ignored. Runs on the caller's
+/// `conn` (a batch of these shares one transaction).
+fn insert_row(
+    conn: &Connection,
+    gers_id: &str,
+    kind: Kind,
+    subtype: Option<&str>,
+    class: Option<&str>,
+    geom: &[u8],
+    bbox: [f64; 4],
+) -> Result<usize, StoreError> {
+    let [min_lon, max_lon, min_lat, max_lat] = bbox;
+    let changed = conn.execute(
+        "INSERT OR IGNORE INTO transport
+           (gers_id, kind, subtype, class, geom, min_lon, max_lon, min_lat, max_lat)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            gers_id,
+            kind.as_str(),
+            subtype,
+            class,
+            geom,
+            min_lon,
+            max_lon,
+            min_lat,
+            max_lat
+        ],
+    )?;
+    if changed == 1 {
+        conn.execute(
+            "INSERT INTO transport_rtree (id, min_lon, max_lon, min_lat, max_lat)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
-                gers_id,
-                kind.as_str(),
-                subtype,
-                class,
-                geom,
+                conn.last_insert_rowid(),
                 min_lon,
                 max_lon,
                 min_lat,
                 max_lat
             ],
         )?;
-        if changed == 1 {
-            self.conn.execute(
-                "INSERT INTO transport_rtree (id, min_lon, max_lon, min_lat, max_lat)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![
-                    self.conn.last_insert_rowid(),
-                    min_lon,
-                    max_lon,
-                    min_lat,
-                    max_lat
-                ],
-            )?;
-        }
-        Ok(changed)
     }
+    Ok(changed)
 }
 
 /// The four bbox float columns of a fetched batch, read once and indexed per row.
@@ -202,36 +209,36 @@ impl BBoxColumns {
     }
 }
 
-/// A batch column decoded to `StringArray`, casting from whatever string variant the
-/// query produced (`Utf8`/`LargeUtf8`/`Utf8View`) so callers see one type.
+/// A batch column cast to Arrow type `dtype` and returned as the concrete array `A`
+/// (which must be the array type `dtype` decodes to). Normalises whatever variant the
+/// query produced — `Utf8`/`LargeUtf8`/`Utf8View`, a binary variant, `Float32` — so
+/// callers see one type.
+fn cast_column<A: Array + Clone + 'static>(
+    batch: &RecordBatch,
+    name: &str,
+    dtype: DataType,
+) -> Result<A, StoreError> {
+    let array = cast(column(batch, name)?, &dtype)?;
+    Ok(array
+        .as_any()
+        .downcast_ref::<A>()
+        .expect("cast yields the array type for its DataType")
+        .clone())
+}
+
+/// A batch column decoded to `StringArray`.
 fn strings(batch: &RecordBatch, name: &str) -> Result<StringArray, StoreError> {
-    let array = cast(column(batch, name)?, &DataType::Utf8)?;
-    Ok(array
-        .as_any()
-        .downcast_ref::<StringArray>()
-        .expect("cast to Utf8 yields StringArray")
-        .clone())
+    cast_column(batch, name, DataType::Utf8)
 }
 
-/// A batch column decoded to `BinaryArray` (the WKB geometry), casting from any binary
-/// variant.
+/// A batch column decoded to `BinaryArray` (the WKB geometry).
 fn binaries(batch: &RecordBatch, name: &str) -> Result<BinaryArray, StoreError> {
-    let array = cast(column(batch, name)?, &DataType::Binary)?;
-    Ok(array
-        .as_any()
-        .downcast_ref::<BinaryArray>()
-        .expect("cast to Binary yields BinaryArray")
-        .clone())
+    cast_column(batch, name, DataType::Binary)
 }
 
-/// A batch column decoded to `Float64Array`, casting from the `Float32` Overture bbox.
+/// A batch column decoded to `Float64Array` (the `Float32` Overture bbox widened).
 fn floats(batch: &RecordBatch, name: &str) -> Result<Float64Array, StoreError> {
-    let array = cast(column(batch, name)?, &DataType::Float64)?;
-    Ok(array
-        .as_any()
-        .downcast_ref::<Float64Array>()
-        .expect("cast to Float64 yields Float64Array")
-        .clone())
+    cast_column(batch, name, DataType::Float64)
 }
 
 fn column<'a>(batch: &'a RecordBatch, name: &str) -> Result<&'a dyn Array, StoreError> {

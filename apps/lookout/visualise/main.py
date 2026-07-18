@@ -377,8 +377,9 @@ def main() -> None:
     log_accel(accel)
     log_gps(gps)
     if transport:
-        # `--near` filters against the gps fixes in the selected window (lon, lat).
-        gps_lonlat = [(row[3], row[2]) for row in gps]
+        # `--near` filters against the gps fixes in the selected window (lon, lat);
+        # only needed, so only built, when that flag is set.
+        gps_lonlat = [(row[3], row[2]) for row in gps] if args.near is not None else None
         log_transport(transport, gps_lonlat=gps_lonlat, near=args.near)
     blueprint = build_blueprint(devices, has_transport=bool(transport))
 
