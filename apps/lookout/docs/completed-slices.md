@@ -90,3 +90,32 @@ views. The pre-journey dry run was deliberately skipped ("risk it on the day").
   ride quality superseding the old `|a|` magnitude, and `n` plots as a capture-health
   signal exposing windows where the page was suspended.
 
+## visualise transport geo data for regions
+
+Overlaid the Overture rail network onto the device tracks in rerun, to see where journeys
+correspond to transport segments. A new `enrich` CLI derives per-`(device, UTC day)`
+bounding boxes from the archive's gps fixes, fetches the intersecting Overture rail data
+live from public S3, and persists it into the same SQLite archive; the Python visualiser
+then logs it as a static map backdrop.
+
+- **New `transport` crate** with an `enrich` binary. Fetches Overture `theme=transportation`
+  GeoParquet anonymously from S3 via **SedonaDB** (a Rust-native DataFusion/GeoArrow engine,
+  a git dep) — chosen over duckdb to grow non-trivial spatial work in-process later.
+- **Spatial pruning is essential**: filtering with `ST_Intersects` against a single
+  `MULTIPOLYGON` of all bbox envelopes lets SedonaDB prune GeoParquet row groups by their
+  bbox covering — ~1m vs ~13min for a numeric bbox filter that barely prunes. Geometry is
+  read out as WKB via `ST_AsBinary`.
+- **Rail only**: keep `subtype = 'rail'` segments and the connectors they reference (ids
+  `UNNEST`ed from the segments), excluding `tram`-class rail (and its connectors) via a
+  shared `EXCLUDED_CLASSES` predicate that still keeps null-class rows.
+- **SQLite geo storage**: geometry as a WKB blob plus flattened bbox columns and an R\*Tree
+  virtual table keyed on rowid (for later "within distance of a sample" queries). Idempotent
+  `INSERT OR IGNORE` on the Overture GERS id, following the `recorder::store` pattern.
+- **Visualise**: the Python converter reads the `transport` table, logs rail segments as
+  static `GeoLineStrings` coloured by rail class and connectors as `GeoPoints`, parsing WKB
+  with shapely and flipping stored `lon lat` to rerun's `(lat, lon)`. A shared transport map
+  pane joins the per-device tiles; an un-enriched archive still visualises.
+- **`--near <degrees>` (hack)**: optionally restrict segments to those within a raw planar
+  degrees distance of a gps fix — a rough cut, not true ground distance (which would need
+  reprojecting to a metric CRS); caveat noted in the help and code.
+
