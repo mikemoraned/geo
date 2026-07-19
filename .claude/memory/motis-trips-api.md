@@ -33,6 +33,13 @@ Constraints found by research (2026-07-19):
   (`pfaedle -x germany.osm.pbf -m rail -X filtered.osm.pbf germany_gtfs.zip`), repackage,
   re-import Motis → real track geometry.
 
+**Segment identity is `(trip_id, from_stop_id, departure)`, not `(trip_id, departure)`.**
+Minute-resolution timetables let two legs of one trip depart *different* stops in the
+same minute (seen in real capture: trip `…1133409` departs two stops at 13:20). So the
+ingest dedup key and the `train_segment` UNIQUE key both include `from_stop_id`; keying
+on `(trip_id, departure)` silently drops legs. Polylines are 2-point straight lines (no
+`shapes.txt`), so `train_segment.geom` is a 2-point WKB LineString until pfaedle.
+
 Decisions: depend on the `motis-openapi-progenitor` crate (0.4.0, progenitor-generated,
 reqwest 0.12, `.trips()` + `types::TripSegment`) rather than hand-write/generate in-repo;
 decode polylines with the `polyline` crate. `.trips()` builder: `.zoom(f64)`,

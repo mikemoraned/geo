@@ -6,7 +6,9 @@ edition = "2021"
 [dependencies]
 chrono = { workspace = true }
 clap = { workspace = true }
+geo-types = { workspace = true }
 motis-openapi-progenitor = { workspace = true }
+polyline = { workspace = true }
 redis = { workspace = true }
 rusqlite = { workspace = true }
 rustls = { workspace = true }
@@ -16,6 +18,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+wkb = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

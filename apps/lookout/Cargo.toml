@@ -48,6 +48,10 @@ proptest = "1"
 # segment geometry; `chrono` formats the RFC3339 query window.
 motis-openapi-progenitor = "0.4"
 polyline = "0.11"
+# Encode the decoded polyline LineString to WKB for the derived `train_segment` geom,
+# matching the `transport` table's WKB the Python visualiser reads with shapely.
+wkb = "0.9"
+geo-types = "0.7"
 chrono = "0.4"
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }

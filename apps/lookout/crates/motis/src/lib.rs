@@ -6,8 +6,10 @@
 //!   - [`client`] — a thin wrapper over the Motis `map/trips` endpoint.
 //!   - [`store`] — the append-only raw capture log of returned segments.
 //!   - [`poll`] — the core of one poll tick, wrapped by the `motis_poll` binary.
+//!   - [`ingest`] — dedup + decode the raw log into the derived `train_segment` table.
 
 pub mod client;
+pub mod ingest;
 pub mod poll;
 pub mod store;
 pub mod window;

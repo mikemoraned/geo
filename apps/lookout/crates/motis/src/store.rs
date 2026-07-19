@@ -64,6 +64,12 @@ impl Store {
         Ok(Self { conn })
     }
 
+    /// The underlying connection, for tests that seed the raw log and read it back.
+    #[cfg(test)]
+    pub(crate) fn connection(&self) -> &Connection {
+        &self.conn
+    }
+
     /// Append every segment as its own row, stamped with the `captured_at` poll time.
     /// Always inserts — duplicates are allowed — returning the number of rows written.
     pub fn insert(

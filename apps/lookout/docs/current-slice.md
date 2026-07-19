@@ -142,7 +142,7 @@ code compiling at every step.
   (mirroring `record`).
 - [x] **Verify the capture half.** With the Motis server and real redis running, run the
   loop and confirm segment rows land in `data/motis.sqlite`. Use `/verify`.
-- [ ] **Ingest — dedup + decode into the `lookout` db.** A `motis_ingest` binary (in the
+- [x] **Ingest — dedup + decode into the `lookout` db.** A `motis_ingest` binary (in the
   `motis` crate) that reads the raw, duplication-allowed `motis.sqlite`, **dedups**
   segments on `(trip_id, from_stop_id, departure)` (the same scheduled leg re-seen across
   overlapping polls collapses to one row — prefer the newest `captured_at`'s realtime
@@ -163,6 +163,16 @@ code compiling at every step.
 - [ ] **Verify the full pipeline.** `/verify` the whole chain end to end: poll → ingest →
   visualise, confirming the `.rrd` shows trains moving (using realtime-corrected timing)
   over the same window as the GPS traces (`rerun rrd verify` passes).
+
+
+Note: positions are realtime-corrected *interpolation* (a second, non-GPS reference),
+not raw vehicle GPS — the best the gtfs.de TripUpdates feed allows nationwide. Consider
+filtering to rail-ish modes (drop `BUS`) in the poll or ingest step so the visualisation
+is trains, not all transit.
+
+## Pending refactors / improvements
+
+* [ ] switch all geo types (e.g. BBox) to instead use shared types from external Rust geo libraries where possible; let's avoid inventing something we can re-use
 - [ ] **(Quality improvement) Generate real track geometry with pfaedle.** The gtfs.de
   feed has no `shapes.txt`, so `map/trips` polylines are straight stop-to-stop lines and
   interpolation cuts corners. In `tools/motis-server`, add a Justfile step that runs
@@ -172,12 +182,3 @@ code compiling at every step.
   Heavy one-off run. Verify: `map/trips` polylines now decode to many points (curved
   track), not 2, so the trains follow the rails. Independent of the pipeline above — a
   drop-in geometry upgrade the visualisation picks up automatically on the next ingest.
-
-Note: positions are realtime-corrected *interpolation* (a second, non-GPS reference),
-not raw vehicle GPS — the best the gtfs.de TripUpdates feed allows nationwide. Consider
-filtering to rail-ish modes (drop `BUS`) in the poll or ingest step so the visualisation
-is trains, not all transit.
-
-## Pending refactors
-
-* [ ] switch geo types (e.g. BBox) to instead use shared types from external Rust geo libraries
