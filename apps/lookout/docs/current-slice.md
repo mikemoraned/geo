@@ -140,7 +140,7 @@ code compiling at every step.
   `tracing`. Ctrl-C stops cleanly.
 - [x] **Justfile `poll-motis` recipe.** Wrap the binary in `op run` for the redis URL
   (mirroring `record`).
-- [ ] **Verify the capture half.** With the Motis server and real redis running, run the
+- [x] **Verify the capture half.** With the Motis server and real redis running, run the
   loop and confirm segment rows land in `data/motis.sqlite`. Use `/verify`.
 - [ ] **Ingest — dedup + decode into the `lookout` db.** A `motis_ingest` binary (in the
   `motis` crate) that reads the raw, duplication-allowed `motis.sqlite`, **dedups**
