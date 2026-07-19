@@ -52,6 +52,8 @@ polyline = "0.11"
 # matching the `transport` table's WKB the Python visualiser reads with shapely.
 wkb = "0.9"
 geo-types = "0.7"
+# Serialise geo-types geometries to WKT for the Overture spatial-query window.
+wkt = "0.14"
 chrono = "0.4"
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }

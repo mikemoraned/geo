@@ -9,7 +9,8 @@ use arrow::array::RecordBatch;
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
-use geo_types::Rect;
+use geo_types::{MultiPolygon, Rect};
+use wkt::ToWkt;
 
 /// Default Overture release to read. Overture publishes monthly and only keeps the
 /// most recent releases on S3, so this needs bumping as old ones age out; override
@@ -167,18 +168,12 @@ impl Overture {
     }
 }
 
-/// A closed rectangular ring for `bbox` in WKT `lon lat` (x-y) order —
-/// `((w s, e s, e n, w n, w s))` — the inner form shared by POLYGON/MULTIPOLYGON.
-fn bbox_ring_wkt(bbox: &Rect<f64>) -> String {
-    let (w, e, s, n) = (bbox.min().x, bbox.max().x, bbox.min().y, bbox.max().y);
-    format!("(({w} {s}, {e} {s}, {e} {n}, {w} {n}, {w} {s}))")
-}
-
 /// A MULTIPOLYGON WKT covering every bbox, for use as a single spatial query window
-/// over all of them at once. Caller ensures `bboxes` is non-empty.
+/// over all of them at once. Each [`Rect`] becomes a closed rectangular polygon (`lon
+/// lat`, x-y). Caller ensures `bboxes` is non-empty.
 fn bboxes_multipolygon_wkt(bboxes: &[Rect<f64>]) -> String {
-    let rings: Vec<String> = bboxes.iter().map(bbox_ring_wkt).collect();
-    format!("MULTIPOLYGON({})", rings.join(", "))
+    let polygons = bboxes.iter().copied().map(Rect::to_polygon).collect();
+    MultiPolygon::new(polygons).wkt_string()
 }
 
 /// A SQL predicate excluding [`EXCLUDED_CLASSES`] on `column`, keeping null-class rows
@@ -220,8 +215,8 @@ mod tests {
             bboxes_multipolygon_wkt(&[bbox(50.0, 51.0, 11.0, 12.0), bbox(52.0, 53.0, 13.0, 14.0)]);
         assert_eq!(
             wkt,
-            "MULTIPOLYGON(((11 50, 12 50, 12 51, 11 51, 11 50)), ((13 52, 14 52, 14 53, 13 53, 13 52)))",
-            "one closed lon-lat ring per bbox, SW corner first"
+            "MULTIPOLYGON(((12 50,12 51,11 51,11 50,12 50)),((14 52,14 53,13 53,13 52,14 52)))",
+            "one closed lon-lat rectangle ring per bbox"
         );
     }
 

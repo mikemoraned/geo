@@ -6645,6 +6645,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wkb",
+ "wkt",
 ]
 
 [[package]]
