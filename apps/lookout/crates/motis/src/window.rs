@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use shared::BBox;
+use geo_types::{Coord, Rect};
 
 /// Age beyond which positions are pruned from the window, unless overridden.
 pub const DEFAULT_MAX_AGE: Duration = Duration::from_secs(30 * 60);
@@ -64,30 +64,53 @@ impl PositionWindow {
         self.positions.is_empty()
     }
 
-    /// The tight bounding box of the held positions, or `None` when empty.
-    pub fn bbox(&self) -> Option<BBox> {
+    /// The tight bounding box of the held positions (a lat/lon [`Rect`], `x` = lon,
+    /// `y` = lat), or `None` when empty.
+    pub fn bbox(&self) -> Option<Rect<f64>> {
         let first = self.positions.first()?;
-        let tight = self.positions.iter().fold(
-            BBox {
-                min_lat: first.lat,
-                max_lat: first.lat,
-                min_lon: first.lon,
-                max_lon: first.lon,
+        let (mut min_lat, mut max_lat) = (first.lat, first.lat);
+        let (mut min_lon, mut max_lon) = (first.lon, first.lon);
+        for p in &self.positions {
+            min_lat = min_lat.min(p.lat);
+            max_lat = max_lat.max(p.lat);
+            min_lon = min_lon.min(p.lon);
+            max_lon = max_lon.max(p.lon);
+        }
+        Some(Rect::new(
+            Coord {
+                x: min_lon,
+                y: min_lat,
             },
-            |b, p| BBox {
-                min_lat: b.min_lat.min(p.lat),
-                max_lat: b.max_lat.max(p.lat),
-                min_lon: b.min_lon.min(p.lon),
-                max_lon: b.max_lon.max(p.lon),
+            Coord {
+                x: max_lon,
+                y: max_lat,
             },
-        );
-        Some(tight)
+        ))
     }
 
     /// The tight box with each dimension doubled about its centre, or `None` when empty.
-    pub fn buffered_bbox(&self) -> Option<BBox> {
-        Some(self.bbox()?.scaled_about_centre(BUFFER_FACTOR))
+    pub fn buffered_bbox(&self) -> Option<Rect<f64>> {
+        Some(scaled_about_centre(&self.bbox()?, BUFFER_FACTOR))
     }
+}
+
+/// `rect` scaled about its centre by `factor`: each dimension's span is multiplied by
+/// `factor`, the centre held fixed. Each side is extended by `(factor - 1) * span/2` — a
+/// non-negative grow for `factor >= 1`, so the result always contains `rect` even under
+/// floating-point rounding.
+fn scaled_about_centre(rect: &Rect<f64>, factor: f64) -> Rect<f64> {
+    let grow_x = rect.width() * (factor - 1.0) / 2.0;
+    let grow_y = rect.height() * (factor - 1.0) / 2.0;
+    Rect::new(
+        Coord {
+            x: rect.min().x - grow_x,
+            y: rect.min().y - grow_y,
+        },
+        Coord {
+            x: rect.max().x + grow_x,
+            y: rect.max().y + grow_y,
+        },
+    )
 }
 
 #[cfg(test)]
@@ -97,6 +120,20 @@ mod tests {
 
     fn pos(t: i64, lat: f64, lon: f64) -> Position {
         Position { t, lat, lon }
+    }
+
+    /// A lat/lon [`Rect`] from the extent, keeping tests in `(lat, lon)` reading order.
+    fn rect(min_lat: f64, max_lat: f64, min_lon: f64, max_lon: f64) -> Rect<f64> {
+        Rect::new(
+            Coord {
+                x: min_lon,
+                y: min_lat,
+            },
+            Coord {
+                x: max_lon,
+                y: max_lat,
+            },
+        )
     }
 
     #[test]
@@ -113,30 +150,14 @@ mod tests {
         w.ingest(pos(0, 50.0, 8.0));
         w.ingest(pos(1, 51.0, 9.0));
         w.ingest(pos(2, 49.5, 8.5));
-        assert_eq!(
-            w.bbox(),
-            Some(BBox {
-                min_lat: 49.5,
-                max_lat: 51.0,
-                min_lon: 8.0,
-                max_lon: 9.0,
-            })
-        );
+        assert_eq!(w.bbox(), Some(rect(49.5, 51.0, 8.0, 9.0)));
     }
 
     #[test]
     fn single_position_is_a_point_box() {
         let mut w = PositionWindow::new(Duration::from_secs(1800));
         w.ingest(pos(0, 50.0, 8.0));
-        assert_eq!(
-            w.bbox(),
-            Some(BBox {
-                min_lat: 50.0,
-                max_lat: 50.0,
-                min_lon: 8.0,
-                max_lon: 8.0,
-            })
-        );
+        assert_eq!(w.bbox(), Some(rect(50.0, 50.0, 8.0, 8.0)));
     }
 
     #[test]
@@ -146,15 +167,7 @@ mod tests {
         w.ingest(pos(1, 52.0, 12.0));
         // tight: lat 50..52 (span 2, centre 51), lon 8..12 (span 4, centre 10).
         // doubled about centre: lat 49..53, lon 6..14.
-        assert_eq!(
-            w.buffered_bbox(),
-            Some(BBox {
-                min_lat: 49.0,
-                max_lat: 53.0,
-                min_lon: 6.0,
-                max_lon: 14.0,
-            })
-        );
+        assert_eq!(w.buffered_bbox(), Some(rect(49.0, 53.0, 6.0, 14.0)));
     }
 
     #[test]
@@ -165,15 +178,7 @@ mod tests {
         w.ingest(pos(-30_000, 40.0, 1.0)); // 90s before now → dropped
         w.prune(60_000);
         assert_eq!(w.len(), 2);
-        assert_eq!(
-            w.bbox(),
-            Some(BBox {
-                min_lat: 50.0,
-                max_lat: 51.0,
-                min_lon: 8.0,
-                max_lon: 9.0,
-            })
-        );
+        assert_eq!(w.bbox(), Some(rect(50.0, 51.0, 8.0, 9.0)));
     }
 
     prop_compose! {
@@ -196,10 +201,10 @@ mod tests {
             }
             let tight = w.bbox().unwrap();
             let buffered = w.buffered_bbox().unwrap();
-            prop_assert!(buffered.min_lat <= tight.min_lat);
-            prop_assert!(buffered.max_lat >= tight.max_lat);
-            prop_assert!(buffered.min_lon <= tight.min_lon);
-            prop_assert!(buffered.max_lon >= tight.max_lon);
+            prop_assert!(buffered.min().y <= tight.min().y);
+            prop_assert!(buffered.max().y >= tight.max().y);
+            prop_assert!(buffered.min().x <= tight.min().x);
+            prop_assert!(buffered.max().x >= tight.max().x);
         }
 
         #[test]

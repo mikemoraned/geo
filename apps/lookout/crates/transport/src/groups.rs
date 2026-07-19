@@ -3,7 +3,7 @@
 //! is done in SQL by [`crate::archive::Archive::groups`]; this module is just the
 //! result shape.
 
-use shared::BBox;
+use geo_types::Rect;
 
 /// A group's identity: one bounding box is derived per device per UTC day.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,9 +13,9 @@ pub struct GroupKey {
     pub day: i64,
 }
 
-/// A group and the bounding box of its fixes.
+/// A group and the bounding box of its fixes (a lat/lon [`Rect`], `x` = lon, `y` = lat).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Group {
     pub key: GroupKey,
-    pub bbox: BBox,
+    pub bbox: Rect<f64>,
 }

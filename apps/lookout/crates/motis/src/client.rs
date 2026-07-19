@@ -2,8 +2,8 @@
 //! Motis `map/trips` endpoint for train trips within a bounding box and time window.
 
 use chrono::{DateTime, Duration, Timelike, Utc};
+use geo_types::Rect;
 use motis_openapi_progenitor::{types::TripSegment, Client};
-use shared::BBox;
 
 /// Where the local Motis server listens unless overridden. Uses `127.0.0.1` rather than
 /// `localhost`: Motis binds IPv4 `0.0.0.0`, but `localhost` resolves to IPv6 `::1` first,
@@ -58,7 +58,7 @@ impl MotisClient {
     /// (higher zoom widens the modes returned — subway/tram/bus on top of rail).
     pub async fn trips_in_bbox(
         &self,
-        bbox: &BBox,
+        bbox: &Rect<f64>,
         window: &TimeWindow,
         zoom: f64,
     ) -> Result<Vec<TripSegment>, MotisError> {
@@ -87,26 +87,25 @@ fn whole_second(t: DateTime<Utc>) -> DateTime<Utc> {
 }
 
 /// Map a box to Motis `min`/`max` params: `min` is the SW corner (`min_lat,min_lon`),
-/// `max` the NE corner (`max_lat,max_lon`).
-fn bbox_corners(bbox: &BBox) -> (String, String) {
+/// `max` the NE corner (`max_lat,max_lon`). The [`Rect`] is `(lon, lat)` in `(x, y)`.
+fn bbox_corners(bbox: &Rect<f64>) -> (String, String) {
     (
-        format!("{},{}", bbox.min_lat, bbox.min_lon),
-        format!("{},{}", bbox.max_lat, bbox.max_lon),
+        format!("{},{}", bbox.min().y, bbox.min().x),
+        format!("{},{}", bbox.max().y, bbox.max().x),
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use geo_types::Coord;
 
     #[test]
     fn bbox_maps_to_sw_and_ne_corner_strings() {
-        let bbox = BBox {
-            min_lat: 49.5,
-            max_lat: 50.25,
-            min_lon: 8.4,
-            max_lon: 9.75,
-        };
+        let bbox = Rect::new(
+            Coord { x: 8.4, y: 49.5 },
+            Coord { x: 9.75, y: 50.25 },
+        );
         let (min, max) = bbox_corners(&bbox);
         assert_eq!(min, "49.5,8.4");
         assert_eq!(max, "50.25,9.75");
@@ -133,12 +132,7 @@ mod tests {
     async fn trips_in_bbox_hits_local_server_end_to_end() {
         let client = MotisClient::default();
         // A box over the Frankfurt area, a short window around now.
-        let bbox = BBox {
-            min_lat: 49.9,
-            max_lat: 50.3,
-            min_lon: 8.4,
-            max_lon: 9.0,
-        };
+        let bbox = Rect::new(Coord { x: 8.4, y: 49.9 }, Coord { x: 9.0, y: 50.3 });
         let window = TimeWindow::around(Utc::now(), Duration::minutes(5));
         let segments = client
             .trips_in_bbox(&bbox, &window, 8.0)

@@ -48,10 +48,10 @@ async fn main() {
         tracing::info!(
             device_id = %g.key.device_id,
             day = g.key.day,
-            min_lat = g.bbox.min_lat,
-            max_lat = g.bbox.max_lat,
-            min_lon = g.bbox.min_lon,
-            max_lon = g.bbox.max_lon,
+            min_lat = g.bbox.min().y,
+            max_lat = g.bbox.max().y,
+            min_lon = g.bbox.min().x,
+            max_lon = g.bbox.max().x,
             "bbox",
         );
     }

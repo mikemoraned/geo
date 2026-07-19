@@ -172,7 +172,7 @@ is trains, not all transit.
 
 ## Pending refactors / improvements
 
-* [ ] switch all geo types (e.g. BBox) to instead use shared types from external Rust geo libraries where possible; let's avoid inventing something we can re-use
+* [x] switch all geo types (e.g. BBox) to instead use shared types from external Rust geo libraries where possible; let's avoid inventing something we can re-use
 - [ ] **(Quality improvement) Generate real track geometry with pfaedle.** The gtfs.de
   feed has no `shapes.txt`, so `map/trips` polylines are straight stop-to-stop lines and
   interpolation cuts corners. In `tools/motis-server`, add a Justfile step that runs

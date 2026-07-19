@@ -9,7 +9,7 @@ use arrow::array::RecordBatch;
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
-use shared::BBox;
+use geo_types::Rect;
 
 /// Default Overture release to read. Overture publishes monthly and only keeps the
 /// most recent releases on S3, so this needs bumping as old ones age out; override
@@ -108,7 +108,7 @@ impl Overture {
     /// once and SedonaDB prunes row groups by the combined bbox covering; the
     /// `subtype = 'rail'` filter keeps only rail. Empty `bboxes` yields no rows without
     /// touching S3.
-    pub async fn rail_segments(&self, bboxes: &[BBox]) -> Result<Vec<RecordBatch>, OvertureError> {
+    pub async fn rail_segments(&self, bboxes: &[Rect<f64>]) -> Result<Vec<RecordBatch>, OvertureError> {
         if bboxes.is_empty() {
             return Ok(Vec::new());
         }
@@ -139,7 +139,7 @@ impl Overture {
     /// box).
     pub async fn rail_connectors(
         &self,
-        bboxes: &[BBox],
+        bboxes: &[Rect<f64>],
     ) -> Result<Vec<RecordBatch>, OvertureError> {
         if bboxes.is_empty() {
             return Ok(Vec::new());
@@ -169,14 +169,14 @@ impl Overture {
 
 /// A closed rectangular ring for `bbox` in WKT `lon lat` (x-y) order —
 /// `((w s, e s, e n, w n, w s))` — the inner form shared by POLYGON/MULTIPOLYGON.
-fn bbox_ring_wkt(bbox: &BBox) -> String {
-    let (w, e, s, n) = (bbox.min_lon, bbox.max_lon, bbox.min_lat, bbox.max_lat);
+fn bbox_ring_wkt(bbox: &Rect<f64>) -> String {
+    let (w, e, s, n) = (bbox.min().x, bbox.max().x, bbox.min().y, bbox.max().y);
     format!("(({w} {s}, {e} {s}, {e} {n}, {w} {n}, {w} {s}))")
 }
 
 /// A MULTIPOLYGON WKT covering every bbox, for use as a single spatial query window
 /// over all of them at once. Caller ensures `bboxes` is non-empty.
-fn bboxes_multipolygon_wkt(bboxes: &[BBox]) -> String {
+fn bboxes_multipolygon_wkt(bboxes: &[Rect<f64>]) -> String {
     let rings: Vec<String> = bboxes.iter().map(bbox_ring_wkt).collect();
     format!("MULTIPOLYGON({})", rings.join(", "))
 }
@@ -199,14 +199,19 @@ fn class_filter(column: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use geo_types::Coord;
 
-    fn bbox(min_lat: f64, max_lat: f64, min_lon: f64, max_lon: f64) -> BBox {
-        BBox {
-            min_lat,
-            max_lat,
-            min_lon,
-            max_lon,
-        }
+    fn bbox(min_lat: f64, max_lat: f64, min_lon: f64, max_lon: f64) -> Rect<f64> {
+        Rect::new(
+            Coord {
+                x: min_lon,
+                y: min_lat,
+            },
+            Coord {
+                x: max_lon,
+                y: max_lat,
+            },
+        )
     }
 
     #[test]

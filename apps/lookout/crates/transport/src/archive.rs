@@ -7,7 +7,7 @@ use std::path::Path;
 
 use rusqlite::Connection;
 
-use shared::BBox;
+use geo_types::{Coord, Rect};
 
 use crate::groups::{Group, GroupKey};
 
@@ -56,12 +56,16 @@ impl Archive {
                         device_id: r.get("device_id")?,
                         day: r.get("day")?,
                     },
-                    bbox: BBox {
-                        min_lat: r.get("min_lat")?,
-                        max_lat: r.get("max_lat")?,
-                        min_lon: r.get("min_lon")?,
-                        max_lon: r.get("max_lon")?,
-                    },
+                    bbox: Rect::new(
+                        Coord {
+                            x: r.get("min_lon")?,
+                            y: r.get("min_lat")?,
+                        },
+                        Coord {
+                            x: r.get("max_lon")?,
+                            y: r.get("max_lat")?,
+                        },
+                    ),
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -72,6 +76,20 @@ impl Archive {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A lat/lon [`Rect`] from the extent, keeping tests in `(lat, lon)` reading order.
+    fn rect(min_lat: f64, max_lat: f64, min_lon: f64, max_lon: f64) -> Rect<f64> {
+        Rect::new(
+            Coord {
+                x: min_lon,
+                y: min_lat,
+            },
+            Coord {
+                x: max_lon,
+                y: max_lat,
+            },
+        )
+    }
 
     /// Mirrors the recorder's real `gps` table (`crates/recorder/src/store.rs`); this
     /// crate only *reads* from it, and `groups` aggregates just `device_id`/`t`/`lat`/
@@ -112,25 +130,9 @@ CREATE TABLE gps (
         let groups = archive.groups().expect("groups");
 
         assert_eq!(groups.len(), 2);
-        assert_eq!(
-            groups[0].bbox,
-            BBox {
-                min_lat: 55.95,
-                max_lat: 55.97,
-                min_lon: -3.19,
-                max_lon: -3.15,
-            }
-        );
+        assert_eq!(groups[0].bbox, rect(55.95, 55.97, -3.19, -3.15));
         assert_eq!(groups[0].key.day + 1, groups[1].key.day);
-        assert_eq!(
-            groups[1].bbox,
-            BBox {
-                min_lat: 56.00,
-                max_lat: 56.00,
-                min_lon: -3.10,
-                max_lon: -3.10,
-            }
-        );
+        assert_eq!(groups[1].bbox, rect(56.00, 56.00, -3.10, -3.10));
     }
 
     /// A single fix yields a degenerate (point) box.
@@ -140,15 +142,7 @@ CREATE TABLE gps (
         let groups = archive.groups().expect("groups");
 
         assert_eq!(groups.len(), 1);
-        assert_eq!(
-            groups[0].bbox,
-            BBox {
-                min_lat: 55.95,
-                max_lat: 55.95,
-                min_lon: -3.19,
-                max_lon: -3.19,
-            }
-        );
+        assert_eq!(groups[0].bbox, rect(55.95, 55.95, -3.19, -3.19));
     }
 
     /// Different devices on the same day are distinct groups, returned sorted by key.
