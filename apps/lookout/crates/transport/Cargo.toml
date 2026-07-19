@@ -10,6 +10,7 @@ datafusion = { workspace = true }
 rusqlite = { workspace = true }
 sedona = { workspace = true }
 sedona-geoparquet = { workspace = true }
+shared = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

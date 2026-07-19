@@ -7,7 +7,9 @@ use std::path::Path;
 
 use rusqlite::Connection;
 
-use crate::groups::{BBox, Group, GroupKey};
+use shared::BBox;
+
+use crate::groups::{Group, GroupKey};
 
 /// Milliseconds per day, for flooring an epoch-ms `t` to its UTC day in SQL.
 const MS_PER_DAY: i64 = 86_400_000;

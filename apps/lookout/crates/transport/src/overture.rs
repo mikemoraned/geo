@@ -9,7 +9,7 @@ use arrow::array::RecordBatch;
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
-use crate::groups::BBox;
+use shared::BBox;
 
 /// Default Overture release to read. Overture publishes monthly and only keeps the
 /// most recent releases on S3, so this needs bumping as old ones age out; override

@@ -100,7 +100,7 @@ code compiling at every step.
   `motis-openapi-progenitor`, `polyline`, and (if needed for RFC3339 window formatting)
   `chrono` to `[workspace.dependencies]`. Empty lib compiles and `just test-no-docker`
   passes.
-- [ ] **Promote `BBox` to `shared`.** Move `transport::groups::BBox` into `shared` (a
+- [x] **Promote `BBox` to `shared`.** Move `transport::groups::BBox` into `shared` (a
   pure lat/lon data type — keep the "double it" buffer policy out of it) and update
   `transport`'s call sites to import from `shared` directly (no re-export shim). Both
   crates and their tests still pass.
@@ -169,3 +169,7 @@ Note: positions are realtime-corrected *interpolation* (a second, non-GPS refere
 not raw vehicle GPS — the best the gtfs.de TripUpdates feed allows nationwide. Consider
 filtering to rail-ish modes (drop `BUS`) in the poll or ingest step so the visualisation
 is trains, not all transit.
+
+## Pending refactors
+
+* [ ] switch geo types (e.g. BBox) to instead use shared types from external Rust geo libraries
