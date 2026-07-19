@@ -160,7 +160,7 @@ code compiling at every step.
   optionally the static per-trip route line. Fold into the map blueprint so trains and GPS
   traces share the same view and window. Add Python tests in `visualise/tests`. Absent
   table → no-op (like `transport`).
-- [ ] **Verify the full pipeline.** `/verify` the whole chain end to end: poll → ingest →
+- [x] **Verify the full pipeline.** `/verify` the whole chain end to end: poll → ingest →
   visualise, confirming the `.rrd` shows trains moving (using realtime-corrected timing)
   over the same window as the GPS traces (`rerun rrd verify` passes).
 
