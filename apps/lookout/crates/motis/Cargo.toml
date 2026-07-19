@@ -4,10 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+chrono = { workspace = true }
+motis-openapi-progenitor = { workspace = true }
 shared = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

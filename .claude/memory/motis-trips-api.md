@@ -35,6 +35,17 @@ Constraints found by research (2026-07-19):
 
 Decisions: depend on the `motis-openapi-progenitor` crate (0.4.0, progenitor-generated,
 reqwest 0.12, `.trips()` + `types::TripSegment`) rather than hand-write/generate in-repo;
-decode polylines with the `polyline` crate.
+decode polylines with the `polyline` crate. `.trips()` builder: `.zoom(f64)`,
+`.min`/`.max(String)` (`"lat,lon"`, SW then NE), `.start_time`/`.end_time(DateTime<Utc>)`,
+`.send().await` → `ResponseValue<Vec<TripSegment>>` (`.into_inner()`).
+
+Two gotchas found driving the client against the running server (2026-07-19), both
+handled in `crates/motis/src/client.rs`:
+- **Connect to `127.0.0.1`, not `localhost`.** Motis binds IPv4 `0.0.0.0`; `localhost`
+  resolves to IPv6 `::1` first, which never connects (looked like an empty result).
+- **`map/trips` mis-parses fractional-second RFC3339 time bounds** — the response swings
+  between empty and wildly oversized. Progenitor serialises `DateTime<Utc>` with micros,
+  so the client truncates `start_time`/`end_time` to whole seconds before querying.
+  Whole-second bounds give a stable result (~230 segments for a 10-min Frankfurt window).
 
 See [lookout-architecture](lookout-architecture.md).

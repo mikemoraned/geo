@@ -110,12 +110,20 @@ code compiling at every step.
   when empty), and a buffered box that doubles each dimension about its centre. Pure
   logic → unit + `proptest` invariant tests (buffered box contains the tight box; pruning
   is monotonic).
-- [ ] **`client` module — thin wrapper over `motis-openapi-progenitor`.** A `MotisClient`
+- [x] **`client` module — thin wrapper over `motis-openapi-progenitor`.** A `MotisClient`
   (base URL, default `http://localhost:8080`) with
   `trips_in_bbox(&BBox, window, zoom) -> Result<Vec<TripSegment>, MotisError>` that maps
   our `BBox` → `min`/`max` `"lat,lon"` strings and the window → RFC3339 `startTime`/
   `endTime`, calls `.trips()`, and surfaces failures as a `thiserror` `MotisError`. Test
   the bbox/window → params mapping; a `#[ignore]` live smoke test against `localhost:8080`.
+  > **Notes / gotchas found driving it against the live server:**
+  > - Test is an `end_to_end`-named test (skipped by default/no-docker, run via
+  >   `just end_to_end_test`), not `#[ignore]`, per the repo's nextest convention.
+  > - **Default is `http://127.0.0.1:8080`, not `localhost`**: Motis binds IPv4
+  >   `0.0.0.0`, but `localhost` resolves to IPv6 `::1` first, which never connects.
+  > - **Whole-second timestamps required**: progenitor serialises `DateTime<Utc>` with
+  >   micros, and Motis `map/trips` mis-parses fractional-second bounds (result swings
+  >   between empty and huge). The client truncates the window to whole seconds.
 - [ ] **`store` module — append-only raw `motis` SQLite db.** Schema-on-open like the
   other stores, but **duplication allowed** (no unique key): autoincrement rowid,
   `captured_at` (poll time), plus the segment fields we keep — `trip_id`, `route_name`,

@@ -3,5 +3,7 @@
 //! and decode them into a derived `train_segment` table in the `lookout` db.
 //!
 //!   - [`window`] — a rolling set of recent GPS positions and the buffered bbox they span.
+//!   - [`client`] — a thin wrapper over the Motis `map/trips` endpoint.
 
+pub mod client;
 pub mod window;
