@@ -17,7 +17,13 @@ Constraints found by research (2026-07-19):
   `map/trips` returns `realTime:true` with delay-corrected `departure`/`arrival`.
 - The free German feed is **TripUpdates + ServiceAlerts only — no VehiclePositions** — so
   the best available is realtime-*corrected interpolation*, nationwide, not real GPS.
-- This dataset's polylines are stop-to-stop straight lines (2 points; no shape geometry).
+- **Polylines are straight stop-to-stop lines** because the gtfs.de free feed ships no
+  `shapes.txt` (verified: absent from the zip, no `shape_id` in `trips.txt`), so Motis has
+  only stop coordinates. Motis does NOT auto-generate shapes from OSM today (on their TODO;
+  `with_shapes: true` + loaded OSM still gives straight lines). Fix: run `pfaedle` (rail
+  map-matcher) over `germany.osm.pbf` + `germany_gtfs.zip` to generate `shapes.txt`
+  (`pfaedle -x germany.osm.pbf -m rail -X filtered.osm.pbf germany_gtfs.zip`), repackage,
+  re-import Motis → real track geometry.
 
 Decisions: depend on the `motis-openapi-progenitor` crate (0.4.0, progenitor-generated,
 reqwest 0.12, `.trips()` + `types::TripSegment`) rather than hand-write/generate in-repo;

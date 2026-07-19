@@ -50,9 +50,13 @@ Response: a JSON array of `TripSegment`, one stop-to-stop leg each: `trips[]`
   `config.yml`), so this slice **enables** one. Note: the free German feed
   (gtfs.de) carries **TripUpdates + ServiceAlerts only — no VehiclePositions** — so the
   best available is realtime-corrected interpolation, nationwide, not a raw GPS dot.
-- **Polylines are stop-to-stop straight lines** (2 points) in this dataset — no shape
-  geometry. Interpolation slides a train along straight legs; it upgrades automatically
-  if a shape-carrying feed is ever loaded.
+- **Polylines are stop-to-stop straight lines** (verified: all ~1800 Frankfurt segments
+  decode to ≤2 points) because **the gtfs.de free feed ships no `shapes.txt`** (absent from
+  the zip; no `shape_id` in `trips.txt`), so Motis only has stop coordinates. Motis does
+  *not* auto-generate shapes from OSM today (it's on their TODO; `with_shapes: true` +
+  loaded OSM still yields straight lines). Fix: generate `shapes.txt` from OSM with
+  `pfaedle` (rail-only) and re-import — then interpolation follows real track geometry.
+  Until then, interpolation cuts corners between stops (degraded, not broken).
 
 **Client decision:** depend on the maintained `motis-openapi-progenitor` crate (0.4.0,
 progenitor-generated from this spec, reqwest 0.12, exposes `.trips()` and
@@ -145,6 +149,15 @@ code compiling at every step.
 - [ ] **Verify the full pipeline.** `/verify` the whole chain end to end: poll → ingest →
   visualise, confirming the `.rrd` shows trains moving (using realtime-corrected timing)
   over the same window as the GPS traces (`rerun rrd verify` passes).
+- [ ] **(Quality improvement) Generate real track geometry with pfaedle.** The gtfs.de
+  feed has no `shapes.txt`, so `map/trips` polylines are straight stop-to-stop lines and
+  interpolation cuts corners. In `tools/motis-server`, add a Justfile step that runs
+  `pfaedle` (rail-only) over the OSM + GTFS to produce shapes and repackage the feed, e.g.
+  `pfaedle -x geo_data/germany.osm.pbf -m rail -X geo_data/filtered.osm.pbf geo_data/germany_gtfs.zip`,
+  then zip `gtfs-out/` back over `germany_gtfs.zip` and re-run `motis import` + restart.
+  Heavy one-off run. Verify: `map/trips` polylines now decode to many points (curved
+  track), not 2, so the trains follow the rails. Independent of the pipeline above — a
+  drop-in geometry upgrade the visualisation picks up automatically on the next ingest.
 
 Note: positions are realtime-corrected *interpolation* (a second, non-GPS reference),
 not raw vehicle GPS — the best the gtfs.de TripUpdates feed allows nationwide. Consider
