@@ -104,7 +104,7 @@ code compiling at every step.
   pure lat/lon data type — keep the "double it" buffer policy out of it) and update
   `transport`'s call sites to import from `shared` directly (no re-export shim). Both
   crates and their tests still pass.
-- [ ] **`window` module — rolling GPS position set + buffered bbox.** A `PositionWindow`
+- [x] **`window` module — rolling GPS position set + buffered bbox.** A `PositionWindow`
   that ingests `(t, lat, lon)`, prunes entries older than a configurable age (default
   30 min) relative to `now`, exposes the tight `BBox` of what it holds (`Option`, `None`
   when empty), and a buffered box that doubles each dimension about its centre. Pure

@@ -42,6 +42,7 @@ datafusion = "52.5"
 arrow = "57.1"
 md5 = "0.7"
 tempfile = "3"
+proptest = "1"
 # Motis `map/trips` client: progenitor-generated from the OpenAPI spec (reqwest 0.12),
 # exposes `.trips()` and `types::TripSegment`. `polyline` decodes the Google-encoded
 # segment geometry; `chrono` formats the RFC3339 query window.
