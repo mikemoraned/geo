@@ -1,6 +1,6 @@
 TARGET := "macos-arm64"
 # see releases page: https://github.com/motis-project/motis/releases for list
-VERSION := "v2.8.0"
+VERSION := "v2.10.2"
 MOTIS_DIR := "motis_server"
 GEO_DATA_DIR := "geo_data"
 

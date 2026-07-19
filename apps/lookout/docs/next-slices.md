@@ -7,6 +7,10 @@
 Whilst I am travelling on a train I'd like to get a secondary (non-GPS) source of data by periodically polling a 
 local [Motis](https://github.com/motis-project/motis/) instance running with data for Germany. 
 
+#### Info
+
+I have a local motis server installation (see tools/motis-server/Justfile) running with data for Germany. It is listening on http://localhost:8080.
+
 ### Straw Man Architecture
 
 The idea would be to do something like the following in a continuous loop:
@@ -17,6 +21,7 @@ The idea would be to do something like the following in a continuous loop:
 5. Log this data to a local sqlite `motis` db, with duplication allowed
 
 The intent is then to take this raw data in the db, and ingest it alongside the existing gps data in the `lookout` db to produce a visualisation of train positions over the same time period as the gps traces being visualised.
+
 
 ## Slice: get iroh running on m5stack and on laptop, sharing accelerometer data
 
