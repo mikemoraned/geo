@@ -78,7 +78,7 @@ existing store pattern (`recorder::store` / `transport::store`), the "Rust write
 derived tables, Python reads" split, and reuses `telemetry` for redis. TDD, keeping the
 code compiling at every step.
 
-- [ ] **Enable realtime in the Motis server.** Add the gtfs.de free RT feed to the
+- [x] **Enable realtime in the Motis server.** Add the gtfs.de free RT feed to the
   `germanygtfs` dataset in `tools/motis-server/motis_server/config.yml` (and mirror into
   the Justfile's `motis config` step so it survives a re-config):
   ```yaml
@@ -89,6 +89,12 @@ code compiling at every step.
   Restart `motis server` (no re-import needed — RT is applied at runtime, polled every
   `update_interval` = 60s). Verify: `map/trips` now returns some segments with
   `realTime: true` and `departure != scheduledDeparture`.
+  > **Done differently:** `motis server` reads `data/config.yml` (the expanded config
+  > `import` writes), *not* the top-level `config.yml`. So the Justfile got a `enable_rt`
+  > recipe that `yq`-patches `.timetable.datasets.germanygtfs.rt` into `data/config.yml`
+  > (idempotent `=`; motis has no config-override/env mechanism, `yq` beats an awk hack),
+  > plus a `prerequisites` recipe (`brew install yq`) it depends on, and `motis_setup`
+  > runs it after `import`. Verified: 201/221 segments `realTime: true`, 118 delay-corrected.
 - [ ] **Scaffold the `motis` crate + workspace wiring.** New `crates/motis` (lib + a
   `src/bin/motis_poll.rs`), picked up by the existing `crates/*` workspace glob. Add
   `motis-openapi-progenitor`, `polyline`, and (if needed for RFC3339 window formatting)

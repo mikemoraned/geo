@@ -10,11 +10,19 @@ Constraints found by research (2026-07-19):
 - **No vehicle-positions endpoint.** `map/trips` gives *interpolated* position (walk the
   segment whose `[departure,arrival]` spans T along the decoded polyline), never a raw
   GPS dot.
-- **Realtime must be enabled** on the Motis server: add the gtfs.de free RT feed
+- **Realtime must be enabled** on the Motis server: the gtfs.de free RT feed
   (`https://realtime.gtfs.de/realtime-free.pb`, `protocol: gtfsrt`) under the
-  `germanygtfs` dataset's `rt:` in `tools/motis-server/motis_server/config.yml`, then
-  restart `motis server` (no re-import; polled every `update_interval`=60s). Then
+  `germanygtfs` dataset's `rt:`. **Key gotcha:** `motis server` reads the *expanded*
+  `data/config.yml` that `motis import` writes — NOT the top-level `config.yml` (which is
+  only `import`'s input). So editing top-level `config.yml` does nothing without a
+  re-import. Motis has no config-override flag or env var (checked `--help` for
+  `config`/`server`; only client-side `MOTIS_BASE_URL`), so you must edit the YAML. The
+  Justfile does this with `just enable_rt`: a `yq -i` patch of
+  `.timetable.datasets.germanygtfs.rt` in `data/config.yml` (idempotent `=`; depends on a
+  `prerequisites` recipe = `brew install yq`), run after `import` in `motis_setup`. Then
+  restart `motis server` (no re-import; feed polled every `update_interval`=60s) →
   `map/trips` returns `realTime:true` with delay-corrected `departure`/`arrival`.
+  Verified 2026-07-19: 201/221 Frankfurt-box segments `realTime:true`, 118 delay-corrected.
 - The free German feed is **TripUpdates + ServiceAlerts only — no VehiclePositions** — so
   the best available is realtime-*corrected interpolation*, nationwide, not real GPS.
 - **Polylines are straight stop-to-stop lines** because the gtfs.de free feed ships no
