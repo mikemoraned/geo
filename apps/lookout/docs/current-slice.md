@@ -138,7 +138,7 @@ code compiling at every step.
   within the recent window → update the `PositionWindow` → buffered bbox → query Motis for
   a short time window around now → append segments to the store, with structured
   `tracing`. Ctrl-C stops cleanly.
-- [ ] **Justfile `poll-motis` recipe.** Wrap the binary in `op run` for the redis URL
+- [x] **Justfile `poll-motis` recipe.** Wrap the binary in `op run` for the redis URL
   (mirroring `record`).
 - [ ] **Verify the capture half.** With the Motis server and real redis running, run the
   loop and confirm segment rows land in `data/motis.sqlite`. Use `/verify`.
