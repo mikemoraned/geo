@@ -4,7 +4,8 @@
 
 use std::time::Duration;
 
-use geo_types::{Coord, Rect};
+use geo::{BoundingRect, Scale};
+use geo_types::{MultiPoint, Point, Rect};
 
 /// Age beyond which positions are pruned from the window, unless overridden.
 pub const DEFAULT_MAX_AGE: Duration = Duration::from_secs(30 * 60);
@@ -67,55 +68,22 @@ impl PositionWindow {
     /// The tight bounding box of the held positions (a lat/lon [`Rect`], `x` = lon,
     /// `y` = lat), or `None` when empty.
     pub fn bbox(&self) -> Option<Rect<f64>> {
-        let first = self.positions.first()?;
-        let (mut min_lat, mut max_lat) = (first.lat, first.lat);
-        let (mut min_lon, mut max_lon) = (first.lon, first.lon);
-        for p in &self.positions {
-            min_lat = min_lat.min(p.lat);
-            max_lat = max_lat.max(p.lat);
-            min_lon = min_lon.min(p.lon);
-            max_lon = max_lon.max(p.lon);
-        }
-        Some(Rect::new(
-            Coord {
-                x: min_lon,
-                y: min_lat,
-            },
-            Coord {
-                x: max_lon,
-                y: max_lat,
-            },
-        ))
+        let points: MultiPoint<f64> =
+            self.positions.iter().map(|p| Point::new(p.lon, p.lat)).collect();
+        points.bounding_rect()
     }
 
-    /// The tight box with each dimension doubled about its centre, or `None` when empty.
+    /// The tight box with each dimension scaled about its centre by [`BUFFER_FACTOR`],
+    /// or `None` when empty.
     pub fn buffered_bbox(&self) -> Option<Rect<f64>> {
-        Some(scaled_about_centre(&self.bbox()?, BUFFER_FACTOR))
+        Some(self.bbox()?.scale(BUFFER_FACTOR))
     }
-}
-
-/// `rect` scaled about its centre by `factor`: each dimension's span is multiplied by
-/// `factor`, the centre held fixed. Each side is extended by `(factor - 1) * span/2` — a
-/// non-negative grow for `factor >= 1`, so the result always contains `rect` even under
-/// floating-point rounding.
-fn scaled_about_centre(rect: &Rect<f64>, factor: f64) -> Rect<f64> {
-    let grow_x = rect.width() * (factor - 1.0) / 2.0;
-    let grow_y = rect.height() * (factor - 1.0) / 2.0;
-    Rect::new(
-        Coord {
-            x: rect.min().x - grow_x,
-            y: rect.min().y - grow_y,
-        },
-        Coord {
-            x: rect.max().x + grow_x,
-            y: rect.max().y + grow_y,
-        },
-    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use geo_types::Coord;
     use proptest::prelude::*;
 
     fn pos(t: i64, lat: f64, lon: f64) -> Position {

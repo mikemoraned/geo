@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 chrono = { workspace = true }
 clap = { workspace = true }
+geo = { workspace = true }
 geo-types = { workspace = true }
 motis-openapi-progenitor = { workspace = true }
 polyline = { workspace = true }

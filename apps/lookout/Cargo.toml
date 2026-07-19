@@ -51,7 +51,10 @@ polyline = "0.11"
 # Encode the decoded polyline LineString to WKB for the derived `train_segment` geom,
 # matching the `transport` table's WKB the Python visualiser reads with shapely.
 wkb = "0.9"
+# `geo-types` for the geometry types; `geo` for the algorithms over them (bounding rect,
+# scale). Pinned to 0.31 to match the version sedona-geo already resolves in the tree.
 geo-types = "0.7"
+geo = "0.31"
 # Geometry traits the `wkb` reader exposes, for inspecting decoded geometries in tests.
 geo-traits = "0.3"
 # Serialise geo-types geometries to WKT for the Overture spatial-query window.
