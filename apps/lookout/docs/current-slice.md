@@ -174,7 +174,7 @@ is trains, not all transit.
 
 * [x] switch all geo types (e.g. BBox) to instead use shared types from external Rust geo libraries where possible; let's avoid inventing something we can re-use
 * [x] use the `wkt` crate to build the Overture query-window WKT (`transport::overture::bbox_ring_wkt` / `bboxes_multipolygon_wkt`) instead of hand-formatting the `MULTIPOLYGON` string
-* [ ] read the `train_segment` geom via the `wkb` reader in the `motis::ingest` test, instead of hand-parsing the WKB header bytes
+* [x] read the `train_segment` geom via the `wkb` reader in the `motis::ingest` test, instead of hand-parsing the WKB header bytes
 * [ ] use `geo` algorithms (`BoundingRect` / `Scale`) for `PositionWindow::bbox` and `buffered_bbox` instead of hand-rolled min/max + centre arithmetic
 - [ ] **(Quality improvement) Generate real track geometry with pfaedle.** The gtfs.de
   feed has no `shapes.txt`, so `map/trips` polylines are straight stop-to-stop lines and

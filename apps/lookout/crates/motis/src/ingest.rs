@@ -182,6 +182,7 @@ fn polyline_to_wkb(encoded: &str) -> Result<Vec<u8>, IngestError> {
 mod tests {
     use super::*;
     use chrono::Utc;
+    use geo_traits::{GeometryTrait, GeometryType, LineStringTrait};
     use motis_openapi_progenitor::types::TripSegment;
 
     fn fixture() -> Vec<TripSegment> {
@@ -210,8 +211,8 @@ mod tests {
             .expect("count");
         assert_eq!(count as usize, fixture.len());
 
-        // The stored geom is a little-endian WKB LineString whose point count matches
-        // the decoded polyline.
+        // The stored geom decodes as a WKB LineString whose point count matches the
+        // decoded polyline.
         let (trip_id, geom): (String, Vec<u8>) = dest
             .query_row("SELECT trip_id, geom FROM train_segment LIMIT 1", [], |r| {
                 Ok((r.get(0)?, r.get(1)?))
@@ -226,12 +227,11 @@ mod tests {
             .0
             .len();
 
-        assert_eq!(geom[0], 1, "little-endian byte order marker");
-        assert_eq!(u32::from_le_bytes(geom[1..5].try_into().unwrap()), 2, "LineString type");
-        assert_eq!(
-            u32::from_le_bytes(geom[5..9].try_into().unwrap()) as usize,
-            expected_points,
-        );
+        let geometry = wkb::reader::read_wkb(&geom).expect("stored geom is valid WKB");
+        let GeometryType::LineString(line) = geometry.as_type() else {
+            panic!("stored geom should be a LineString");
+        };
+        assert_eq!(line.num_coords(), expected_points);
     }
 
     /// Among re-sightings of one leg, the newest `captured_at` wins — so its
