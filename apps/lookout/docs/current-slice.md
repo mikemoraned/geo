@@ -124,7 +124,7 @@ code compiling at every step.
   > - **Whole-second timestamps required**: progenitor serialises `DateTime<Utc>` with
   >   micros, and Motis `map/trips` mis-parses fractional-second bounds (result swings
   >   between empty and huge). The client truncates the window to whole seconds.
-- [ ] **`store` module — append-only raw `motis` SQLite db.** Schema-on-open like the
+- [x] **`store` module — append-only raw `motis` SQLite db.** Schema-on-open like the
   other stores, but **duplication allowed** (no unique key): autoincrement rowid,
   `captured_at` (poll time), plus the segment fields we keep — `trip_id`, `route_name`,
   `mode`, `route_color`, `from`/`to` stop id + lat/lon, `departure`/`arrival` and

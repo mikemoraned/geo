@@ -4,6 +4,8 @@
 //!
 //!   - [`window`] — a rolling set of recent GPS positions and the buffered bbox they span.
 //!   - [`client`] — a thin wrapper over the Motis `map/trips` endpoint.
+//!   - [`store`] — the append-only raw capture log of returned segments.
 
 pub mod client;
+pub mod store;
 pub mod window;

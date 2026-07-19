@@ -3953,6 +3953,8 @@ dependencies = [
  "chrono",
  "motis-openapi-progenitor",
  "proptest",
+ "rusqlite",
+ "serde_json",
  "shared",
  "thiserror 2.0.18",
  "tokio",

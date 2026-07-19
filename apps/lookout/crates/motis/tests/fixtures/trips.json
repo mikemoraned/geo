@@ -1,0 +1,188 @@
+[
+  {
+    "trips": [
+      {
+        "tripId": "20260719_08:46_germanygtfs_1260866",
+        "displayName": "ICE 20"
+      }
+    ],
+    "mode": "REGIONAL_RAIL",
+    "distance": 690128.5,
+    "from": {
+      "name": "Frankfurt (Main) Hauptbahnhof",
+      "stopId": "germanygtfs_14844",
+      "parentId": "germanygtfs_632679",
+      "importance": 0.7244438529014587,
+      "lat": 50.10668,
+      "lon": 8.662828,
+      "level": 0.0,
+      "tz": "Europe/Berlin",
+      "vertexType": "TRANSIT",
+      "modes": [
+        "REGIONAL_RAIL",
+        "SUBWAY",
+        "TRAM",
+        "BUS"
+      ]
+    },
+    "to": {
+      "name": "Kassel Bahnhof Wilhelmsh\u00f6he",
+      "stopId": "germanygtfs_420797",
+      "parentId": "germanygtfs_463950",
+      "importance": 0.11568903923034668,
+      "lat": 51.312557,
+      "lon": 9.447116,
+      "level": 0.0,
+      "tz": "Europe/Berlin",
+      "vertexType": "TRANSIT",
+      "modes": [
+        "REGIONAL_RAIL",
+        "TRAM",
+        "BUS"
+      ]
+    },
+    "departure": "2026-07-19T09:48:00Z",
+    "arrival": "2026-07-19T12:11:00Z",
+    "scheduledDeparture": "2026-07-19T09:46:00Z",
+    "scheduledArrival": "2026-07-19T12:11:00Z",
+    "realTime": true,
+    "polyline": "wmypHu}zs@wojFydxC"
+  },
+  {
+    "trips": [
+      {
+        "tripId": "20260719_13:34_germanygtfs_619697",
+        "displayName": "U4"
+      }
+    ],
+    "mode": "SUBWAY",
+    "distance": 8160.48974609375,
+    "from": {
+      "name": "Frankfurt (Main) Gwinnerstra\u00dfe",
+      "stopId": "germanygtfs_122696",
+      "parentId": "germanygtfs_70297",
+      "importance": 0.1000894233584404,
+      "lat": 50.133663,
+      "lon": 8.741189999999998,
+      "level": 0.0,
+      "tz": "Europe/Berlin",
+      "vertexType": "TRANSIT",
+      "modes": [
+        "SUBWAY",
+        "BUS"
+      ]
+    },
+    "to": {
+      "name": "Frankfurt (Main) Sch\u00e4fflestra\u00dfe",
+      "stopId": "germanygtfs_200132",
+      "parentId": "germanygtfs_530501",
+      "importance": 0.09977883845567703,
+      "lat": 50.131157,
+      "lon": 8.734098999999999,
+      "level": 0.0,
+      "tz": "Europe/Berlin",
+      "vertexType": "TRANSIT",
+      "modes": [
+        "SUBWAY",
+        "BUS"
+      ]
+    },
+    "departure": "2026-07-19T11:39:00Z",
+    "arrival": "2026-07-19T11:41:00Z",
+    "scheduledDeparture": "2026-07-19T11:38:00Z",
+    "scheduledArrival": "2026-07-19T11:40:00Z",
+    "realTime": true,
+    "polyline": "kv~pHmgjt@rNhk@"
+  },
+  {
+    "trips": [
+      {
+        "tripId": "20260719_13:37_germanygtfs_1477467",
+        "displayName": "14"
+      }
+    ],
+    "mode": "TRAM",
+    "distance": 4912.21484375,
+    "from": {
+      "name": "Frankfurt (Main) Freiligrathstra\u00dfe",
+      "stopId": "germanygtfs_248701",
+      "parentId": "germanygtfs_368370",
+      "importance": 0.0015138795133680105,
+      "lat": 50.122220000000006,
+      "lon": 8.710222999999997,
+      "level": 0.0,
+      "tz": "Europe/Berlin",
+      "vertexType": "TRANSIT",
+      "modes": [
+        "TRAM",
+        "BUS"
+      ]
+    },
+    "to": {
+      "name": "Frankfurt (Main) Habsburger-/Wittelsbacherallee",
+      "stopId": "germanygtfs_357432",
+      "parentId": "germanygtfs_642286",
+      "importance": 0.0028878606390208006,
+      "lat": 50.12021000000001,
+      "lon": 8.705340999999999,
+      "level": 0.0,
+      "tz": "Europe/Berlin",
+      "vertexType": "TRANSIT",
+      "modes": [
+        "TRAM",
+        "BUS"
+      ]
+    },
+    "departure": "2026-07-19T11:41:00Z",
+    "arrival": "2026-07-19T11:41:00Z",
+    "scheduledDeparture": "2026-07-19T11:39:00Z",
+    "scheduledArrival": "2026-07-19T11:41:00Z",
+    "realTime": true,
+    "polyline": "{n|pH{edt@pKn]"
+  },
+  {
+    "trips": [
+      {
+        "tripId": "20260719_13:22_germanygtfs_1227490",
+        "displayName": "10"
+      }
+    ],
+    "mode": "BUS",
+    "distance": 2728.46240234375,
+    "from": {
+      "name": "Hanau Westbahnhof",
+      "stopId": "germanygtfs_291754",
+      "parentId": "germanygtfs_549824",
+      "importance": 0.02866782806813717,
+      "lat": 50.132450000000006,
+      "lon": 8.910711,
+      "level": 0.0,
+      "tz": "Europe/Berlin",
+      "vertexType": "TRANSIT",
+      "modes": [
+        "REGIONAL_RAIL",
+        "BUS"
+      ]
+    },
+    "to": {
+      "name": "Hanau Heumarkt",
+      "stopId": "germanygtfs_168640",
+      "parentId": "germanygtfs_346231",
+      "importance": 0.0015556217404082417,
+      "lat": 50.13239300000001,
+      "lon": 8.914543,
+      "level": 0.0,
+      "tz": "Europe/Berlin",
+      "vertexType": "TRANSIT",
+      "modes": [
+        "BUS"
+      ]
+    },
+    "departure": "2026-07-19T11:40:00Z",
+    "arrival": "2026-07-19T11:41:00Z",
+    "scheduledDeparture": "2026-07-19T11:38:00Z",
+    "scheduledArrival": "2026-07-19T11:39:00Z",
+    "realTime": true,
+    "polyline": "yn~pH}jku@J}V"
+  }
+]

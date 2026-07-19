@@ -6,11 +6,13 @@ edition = "2021"
 [dependencies]
 chrono = { workspace = true }
 motis-openapi-progenitor = { workspace = true }
+rusqlite = { workspace = true }
 shared = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 
 [lints]
