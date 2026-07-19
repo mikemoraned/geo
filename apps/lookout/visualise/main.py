@@ -10,6 +10,11 @@ If the archive has been enriched (a `transport` table, written by `enrich`), the
 Overture rail network — segments coloured by class, plus their connectors — is logged
 as static geometry under `/transport` and given its own shared map pane.
 
+If it has been ingested from Motis (a `train_segment` table, written by `motis_ingest`),
+each nearby train is logged as a moving dot under `/trains/{trip_id}` — interpolated
+along its decoded route by its realtime-corrected times — and a shared overview map
+shows the trains moving alongside the gps traces over the same window.
+
 Run from `apps/lookout` via `just visualise` so the default paths resolve.
 """
 
@@ -284,11 +289,145 @@ def log_transport(rows, gps_lonlat=None, near=None) -> None:
         )
 
 
-def build_blueprint(devices: list[str], has_transport: bool) -> rrb.Blueprint:
+# Categorical colours per transit `mode`, used when a train has no GTFS `routeColor`
+# (the gtfs.de free feed carries none). Anything unmapped falls back to grey.
+_MODE_COLORS = {
+    "HIGHSPEED_RAIL": (214, 39, 40),
+    "LONG_DISTANCE": (214, 39, 40),
+    "NIGHT_RAIL": (140, 86, 75),
+    "REGIONAL_FAST_RAIL": (255, 127, 14),
+    "REGIONAL_RAIL": (31, 119, 180),
+    "RAIL": (31, 119, 180),
+    "METRO": (148, 103, 189),
+    "SUBWAY": (148, 103, 189),
+    "TRAM": (255, 127, 14),
+    "BUS": (44, 160, 44),
+    "FERRY": (23, 190, 207),
+}
+_MODE_DEFAULT = (127, 127, 127)
+
+# How often (seconds) a train's interpolated position is sampled along a leg. Rerun holds
+# a `GeoPoints` value until the next one, so the dot is resampled to animate along the
+# line rather than jumping stop-to-stop.
+SAMPLE_STEP_S = 10
+
+
+def fetch_train_segments(conn: sqlite3.Connection, cutoff_ms: int):
+    """Rows `(trip_id, mode, route_color, departure, arrival, geom)` from the
+    `train_segment` table — the deduped, decoded moving-train legs written by
+    `motis_ingest`, with the geometry as a WKB `LineString` and realtime-corrected
+    `departure`/`arrival` epoch-ms times.
+
+    Windowed to legs still active at or after the cutoff (`arrival >= cutoff`), so the
+    trains cover the same window as the gps traces. Empty when the archive has never
+    been ingested, i.e. the table is absent.
+    """
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'train_segment'"
+    ).fetchone()
+    if not exists:
+        return []
+    return conn.execute(
+        "SELECT trip_id, mode, route_color, departure, arrival, geom FROM train_segment "
+        "WHERE arrival >= ? ORDER BY trip_id, departure",
+        [cutoff_ms],
+    ).fetchall()
+
+
+def _hex_rgb(text: str) -> tuple[int, int, int] | None:
+    """Parse an `RRGGBB` (or `#RRGGBB`) hex colour to an `(r, g, b)` triple, or None."""
+    s = text.lstrip("#")
+    if len(s) != 6:
+        return None
+    try:
+        return tuple(int(s[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return None
+
+
+def _train_color(mode: str, route_color: str | None) -> tuple[int, int, int]:
+    """Colour for a train: its GTFS `routeColor` (hex) when present and parseable, else
+    a per-`mode` colour, else grey."""
+    if route_color:
+        rgb = _hex_rgb(route_color)
+        if rgb is not None:
+            return rgb
+    return _MODE_COLORS.get(mode, _MODE_DEFAULT)
+
+
+def _interpolate_leg(line, departure_ms: int, arrival_ms: int, step_s: int):
+    """Yield `(t_seconds, lat, lon)` samples of a train's position along `line` across
+    `[departure, arrival]`, at `step_s` spacing plus both endpoints.
+
+    Position at time `T` is `line.interpolate((T - departure)/(arrival - departure))`
+    (normalised), so it follows the real track geometry once the polyline has interior
+    points. A zero/negative-duration leg yields just its start point.
+    """
+    if arrival_ms <= departure_ms:
+        start = line.interpolate(0.0, normalized=True)
+        yield (departure_ms / 1000.0, start.y, start.x)
+        return
+    span = arrival_ms - departure_ms
+    t = departure_ms
+    while t < arrival_ms:
+        point = line.interpolate((t - departure_ms) / span, normalized=True)
+        yield (t / 1000.0, point.y, point.x)
+        t += step_s * 1000
+    end = line.interpolate(1.0, normalized=True)
+    yield (arrival_ms / 1000.0, end.y, end.x)
+
+
+def _train_samples(rows, step_s: int = SAMPLE_STEP_S) -> dict:
+    """Group `train_segment` rows into per-trip animation data:
+    `{trip_id: {"color", "samples": [(t_s, lat, lon)...], "route": [[(lat, lon)...]...]}}`.
+
+    `samples` is the time-ordered moving-dot path across all of a trip's legs; `route`
+    is one lat/lon polyline per leg. Stored WKB is `(lon, lat)`, flipped to `(lat, lon)`.
+    """
+    trains: dict = {}
+    for trip_id, mode, route_color, departure, arrival, geom in rows:
+        line = shapely.from_wkb(geom)
+        entry = trains.setdefault(
+            trip_id,
+            {"color": _train_color(mode, route_color), "samples": [], "route": []},
+        )
+        entry["route"].append([(lat, lon) for lon, lat in line.coords])
+        entry["samples"].extend(_interpolate_leg(line, departure, arrival, step_s))
+    for entry in trains.values():
+        entry["samples"].sort()
+    return trains
+
+
+def log_trains(rows, step_s: int = SAMPLE_STEP_S) -> None:
+    """Log each trip as a moving `GeoPoints` dot under `trains/{trip_id}` that follows
+    the timeline (interpolated along its legs), plus its static route line(s) under
+    `trains/{trip_id}/route`, coloured by `routeColor`/`mode`.
+
+    The dot uses the same per-timestamp `GeoPoints` idiom as the gps cursor, so it moves
+    across the shared map over the same window as the gps traces.
+    """
+    for trip_id, entry in _train_samples(rows, step_s).items():
+        color = entry["color"]
+        if entry["route"]:
+            rr.log(
+                f"trains/{trip_id}/route",
+                rr.GeoLineStrings(lat_lon=entry["route"], colors=[color] * len(entry["route"])),
+                static=True,
+            )
+        for t_s, lat, lon in entry["samples"]:
+            rr.set_time(TIMELINE, timestamp=t_s)
+            rr.log(f"trains/{trip_id}", rr.GeoPoints(lat_lon=[(lat, lon)], colors=[color]))
+
+
+def build_blueprint(
+    devices: list[str], has_transport: bool, has_trains: bool = False
+) -> rrb.Blueprint:
     """Per device: a static full-route map, a latest-position map that follows the
     timeline, a ride-quality time-series view (rms/peak), and a capture-health view
     (n) — tiled in a grid. When the archive has transport data, one shared map of the
-    Overture rail network is appended alongside.
+    Overture rail network is appended alongside. When it has train data, a shared
+    overview map (root origin) shows the gps traces and the moving trains together, so
+    they share one view over the same timeline window.
 
     The `track` map shows the whole journey as a static speed-coloured polyline; the
     `gps` map shows only the per-timestamp point, which moves as the timeline cursor
@@ -317,6 +456,10 @@ def build_blueprint(devices: list[str], has_transport: bool) -> rrb.Blueprint:
         # The rail network (segments + connectors) is shared across devices, not
         # per-device, so it sits as its own map pane beside the device tiles.
         panes.append(rrb.MapView(origin="/transport", name="transport"))
+    if has_trains:
+        # A root-origin map so the gps device tracks and the moving trains render in one
+        # shared view, over the recording's single (shared) timeline window.
+        panes.append(rrb.MapView(origin="/", name="gps + trains"))
     return rrb.Blueprint(rrb.Grid(*panes), collapse_panels=True)
 
 
@@ -363,6 +506,7 @@ def main() -> None:
         accel = fetch_accel(conn, cutoff_ms, args.devices)
         gps = fetch_gps(conn, cutoff_ms, args.devices)
         transport = fetch_transport(conn)
+        trains = fetch_train_segments(conn, cutoff_ms)
     finally:
         conn.close()
 
@@ -381,7 +525,11 @@ def main() -> None:
         # only needed, so only built, when that flag is set.
         gps_lonlat = [(row[3], row[2]) for row in gps] if args.near is not None else None
         log_transport(transport, gps_lonlat=gps_lonlat, near=args.near)
-    blueprint = build_blueprint(devices, has_transport=bool(transport))
+    if trains:
+        log_trains(trains)
+    blueprint = build_blueprint(
+        devices, has_transport=bool(transport), has_trains=bool(trains)
+    )
 
     if args.open:
         # Tee to the file and a running viewer. The viewer persists a blueprint per
@@ -396,7 +544,8 @@ def main() -> None:
 
     print(
         f"wrote {where}: {len(accel)} accel + {len(gps)} gps samples "
-        f"+ {len(transport)} transport features across {len(devices)} device(s)"
+        f"+ {len(transport)} transport features + {len(trains)} train segments "
+        f"across {len(devices)} device(s)"
     )
 
 

@@ -152,7 +152,7 @@ code compiling at every step.
   table). Keeps `trip_id`/`route_name`/`mode`/`route_color`/`realtime` and the
   realtime-corrected `departure`/`arrival`. Add a Justfile `ingest-motis` recipe
   (mirroring `enrich`). Unit test dedup + polyline decode over the captured fixture rows.
-- [ ] **Visualise the trains.** Extend `visualise/main.py`: read `train_segment`
+- [x] **Visualise the trains.** Extend `visualise/main.py`: read `train_segment`
   (time-windowed by `--since`), and for each timeline tick **interpolate** each train's
   position along its WKB line by `(t − departure)/(arrival − departure)` using the
   realtime-corrected times (shapely `line.interpolate(frac, normalized=True)` — shapely is
