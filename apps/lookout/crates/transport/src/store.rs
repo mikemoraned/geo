@@ -261,13 +261,17 @@ mod tests {
 
     use super::*;
 
-    /// A little-endian point WKB for `(x, y)` — an opaque blob as far as the store is
-    /// concerned, but a real one so the round-trip is meaningful.
+    /// A point WKB for `(x, y)` — an opaque blob as far as the store is concerned, but a
+    /// real one (via the `wkb` crate) so the round-trip is meaningful.
     fn point_wkb(x: f64, y: f64) -> Vec<u8> {
-        let mut wkb = vec![0x01, 0x01, 0x00, 0x00, 0x00];
-        wkb.extend_from_slice(&x.to_le_bytes());
-        wkb.extend_from_slice(&y.to_le_bytes());
-        wkb
+        let mut buf = Vec::new();
+        wkb::writer::write_point(
+            &mut buf,
+            &geo_types::Point::new(x, y),
+            &wkb::writer::WriteOptions::default(),
+        )
+        .expect("write point wkb");
+        buf
     }
 
     fn count(store: &Store, table: &str) -> i64 {

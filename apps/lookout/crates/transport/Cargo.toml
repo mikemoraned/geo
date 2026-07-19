@@ -18,6 +18,7 @@ tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+wkb = { workspace = true }
 
 [lints]
 workspace = true
