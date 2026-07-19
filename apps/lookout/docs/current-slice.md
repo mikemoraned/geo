@@ -131,7 +131,7 @@ code compiling at every step.
   `scheduled_departure`/`scheduled_arrival` (epoch ms — keep both so delay is
   recoverable), `realtime` (bool), and the raw `polyline` string. `insert` always appends
   — a test proves the same segment inserted twice yields two rows. In-memory test.
-- [ ] **`motis_poll` binary — the continuous loop.** Wire it together: `clap` args for
+- [x] **`motis_poll` binary — the continuous loop.** Wire it together: `clap` args for
   poll interval, window age, recent-lookback minutes, `zoom`, `--motis-url`
   (default `http://localhost:8080`), `--db` (default `data/motis.sqlite`); redis URL from
   `LOOKOUT_REDIS_URL` like the recorder. Each tick: `latest_samples` → filter to GPS
