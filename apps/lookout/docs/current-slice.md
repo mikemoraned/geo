@@ -20,23 +20,76 @@ The idea would be to do something like the following in a continuous loop:
 
 The intent is then to take this raw data in the db, and ingest it alongside the existing gps data in the `lookout` db to produce a visualisation of train positions over the same time period as the gps traces being visualised.
 
+### Motis API (researched against the running v2.10.2 server)
+
+Endpoint: `GET /api/v1/map/trips` (canonical `/api/v6/map/trips`; the server is
+version-tolerant). Required query params: `zoom` (number — filters by mode: low zoom =
+long-distance only, high zoom adds subway/tram/bus), `min` = `"lat,lon"`, `max` =
+`"lat,lon"`, `startTime`/`endTime` (RFC3339). Optional `precision` (polyline precision,
+default 5). Empirically `min` is the SW corner (`min_lat,min_lon`) and `max` the NE
+corner (`max_lat,max_lon`) — the spec's "lower-right/upper-left" wording is misleading;
+a plain min/max box returns correct data.
+
+Response: a JSON array of `TripSegment`, one stop-to-stop leg each: `trips[]`
+(`tripId`, `routeShortName`/`displayName`), `mode` (`REGIONAL_RAIL`/`SUBWAY`/`TRAM`/
+`BUS`/`HIGHSPEED_RAIL`/…), `routeColor?`, `distance` (m), `realTime` (bool), `from`/`to`
+`Place` (`name`, `stopId`, `lat`, `lon`, `departure`/`arrival`), the segment's
+`departure`/`arrival`/`scheduled*` times, and `polyline` (Google-encoded, precision 5).
+
+**Facts that shape the design:**
+- **`map/trips` gives interpolated, not raw-GPS, positions.** A `TripSegment` is trip
+  geometry ("trip X runs A→B along this polyline, departing 10:20, arriving 10:28"). A
+  train's position *at time T* is obtained by **interpolating** along the segment whose
+  `[departure, arrival]` spans T. That interpolation is the "map to lat/lon positions".
+  There is no vehicle-positions endpoint in the API.
+- **Realtime = delay-corrected times, and it must be enabled.** With a GTFS-RT feed
+  loaded, `map/trips` returns `realTime: true` segments whose `departure`/`arrival` carry
+  actual delays (while `scheduledDeparture`/`scheduledArrival` stay as the plan), so the
+  interpolated position reflects current reality. The running server currently has **no**
+  RT feed (verified: all ~1800 segments `realTime: false`, zero delay, no `rt:` in
+  `config.yml`), so this slice **enables** one. Note: the free German feed
+  (gtfs.de) carries **TripUpdates + ServiceAlerts only — no VehiclePositions** — so the
+  best available is realtime-corrected interpolation, nationwide, not a raw GPS dot.
+- **Polylines are stop-to-stop straight lines** (2 points) in this dataset — no shape
+  geometry. Interpolation slides a train along straight legs; it upgrades automatically
+  if a shape-carrying feed is ever loaded.
+
+**Client decision:** depend on the maintained `motis-openapi-progenitor` crate (0.4.0,
+progenitor-generated from this spec, reqwest 0.12, exposes `.trips()` and
+`types::TripSegment`) rather than hand-writing or generating in-repo. Polyline decoding
+uses the `polyline` crate.
+
+A real 4-segment, mode-varied fixture is captured for the dedup/decoding tests.
+
 ### Tasks
 
 Two halves. **Capture:** a new `motis` crate (lib + a `motis_poll` binary) runs the
 straw-man loop — non-destructively read recent GPS off the redis queue, keep a rolling
-window of them, query the local Motis server for trains in a buffered bounding box, and
-append the results to a raw, duplication-allowed `motis` SQLite db. **Visualise:** a
-Rust ingest step dedups that raw log and maps it to a derived `train_position` table in
-the `lookout` db, and `visualise` logs the moving trains to rerun alongside the GPS
-traces over the same window. Follows the existing store pattern (`recorder::store` /
-`transport::store`), the "Rust writes derived tables, Python reads" split, and reuses
-`telemetry` for redis. TDD, keeping the code compiling at every step.
+window of them, query the local Motis server for trips in a buffered bounding box, and
+append the returned segments to a raw, duplication-allowed `motis` SQLite db.
+**Visualise:** a Rust ingest step dedups that raw log and decodes it to a derived
+`train_segment` table in the `lookout` db, and `visualise` interpolates + logs the
+moving trains to rerun alongside the GPS traces over the same window. Follows the
+existing store pattern (`recorder::store` / `transport::store`), the "Rust writes
+derived tables, Python reads" split, and reuses `telemetry` for redis. TDD, keeping the
+code compiling at every step.
 
+- [ ] **Enable realtime in the Motis server.** Add the gtfs.de free RT feed to the
+  `germanygtfs` dataset in `tools/motis-server/motis_server/config.yml` (and mirror into
+  the Justfile's `motis config` step so it survives a re-config):
+  ```yaml
+  rt:
+    - url: https://realtime.gtfs.de/realtime-free.pb
+      protocol: gtfsrt
+  ```
+  Restart `motis server` (no re-import needed — RT is applied at runtime, polled every
+  `update_interval` = 60s). Verify: `map/trips` now returns some segments with
+  `realTime: true` and `departure != scheduledDeparture`.
 - [ ] **Scaffold the `motis` crate + workspace wiring.** New `crates/motis` (lib + a
-  `src/bin/motis_poll.rs`), picked up by the existing `crates/*` workspace glob. Add an
-  HTTP client dep (`reqwest`, rustls-tls, `json`, `default-features = false` — to match
-  the existing rustls stack and avoid openssl) to `[workspace.dependencies]`. Empty lib
-  compiles and `just test-no-docker` passes.
+  `src/bin/motis_poll.rs`), picked up by the existing `crates/*` workspace glob. Add
+  `motis-openapi-progenitor`, `polyline`, and (if needed for RFC3339 window formatting)
+  `chrono` to `[workspace.dependencies]`. Empty lib compiles and `just test-no-docker`
+  passes.
 - [ ] **Promote `BBox` to `shared`.** Move `transport::groups::BBox` into `shared` (a
   pure lat/lon data type — keep the "double it" buffer policy out of it) and update
   `transport`'s call sites to import from `shared` directly (no re-export shim). Both
@@ -47,41 +100,53 @@ traces over the same window. Follows the existing store pattern (`recorder::stor
   when empty), and a buffered box that doubles each dimension about its centre. Pure
   logic → unit + `proptest` invariant tests (buffered box contains the tight box; pruning
   is monotonic).
-- [ ] **`store` module — append-only `motis` SQLite db.** Schema-on-open like the other
-  stores, but **duplication allowed**: an autoincrement rowid, a `captured_at` (poll
-  time), plus the train fields (trip id, route/line name, lat/lon, whatever the Motis
-  response carries). `insert` always appends — a test proves inserting the same position
-  twice yields two rows. In-memory test.
-- [ ] **`client` module — query Motis for trains in a bbox.** First verify the endpoint
-  and response shape against the running server (`localhost:8080`; likely
-  `GET /api/v1/map/trips` with min/max lat-lon) and capture a real response as a test
-  fixture. Then a typed `TrainPosition` + `thiserror` `MotisError` and
-  `MotisClient::trains_in_bbox(&BBox)`. Main test: parse the captured fixture into typed
-  positions.
+- [ ] **`client` module — thin wrapper over `motis-openapi-progenitor`.** A `MotisClient`
+  (base URL, default `http://localhost:8080`) with
+  `trips_in_bbox(&BBox, window, zoom) -> Result<Vec<TripSegment>, MotisError>` that maps
+  our `BBox` → `min`/`max` `"lat,lon"` strings and the window → RFC3339 `startTime`/
+  `endTime`, calls `.trips()`, and surfaces failures as a `thiserror` `MotisError`. Test
+  the bbox/window → params mapping; a `#[ignore]` live smoke test against `localhost:8080`.
+- [ ] **`store` module — append-only raw `motis` SQLite db.** Schema-on-open like the
+  other stores, but **duplication allowed** (no unique key): autoincrement rowid,
+  `captured_at` (poll time), plus the segment fields we keep — `trip_id`, `route_name`,
+  `mode`, `route_color`, `from`/`to` stop id + lat/lon, `departure`/`arrival` and
+  `scheduled_departure`/`scheduled_arrival` (epoch ms — keep both so delay is
+  recoverable), `realtime` (bool), and the raw `polyline` string. `insert` always appends
+  — a test proves the same segment inserted twice yields two rows. In-memory test.
 - [ ] **`motis_poll` binary — the continuous loop.** Wire it together: `clap` args for
-  poll interval, window age, recent-lookback minutes, `--motis-url`
-  (default `http://localhost:8080`), `--db` (default `data/motis.sqlite`); redis URL
-  from `LOOKOUT_REDIS_URL` like the recorder. Each tick: `latest_samples` → filter to
-  GPS within the recent window → update the `PositionWindow` → buffered bbox → query
-  Motis → append to the store, with structured `tracing`. Ctrl-C stops cleanly.
+  poll interval, window age, recent-lookback minutes, `zoom`, `--motis-url`
+  (default `http://localhost:8080`), `--db` (default `data/motis.sqlite`); redis URL from
+  `LOOKOUT_REDIS_URL` like the recorder. Each tick: `latest_samples` → filter to GPS
+  within the recent window → update the `PositionWindow` → buffered bbox → query Motis for
+  a short time window around now → append segments to the store, with structured
+  `tracing`. Ctrl-C stops cleanly.
 - [ ] **Justfile `poll-motis` recipe.** Wrap the binary in `op run` for the redis URL
   (mirroring `record`).
 - [ ] **Verify the capture half.** With the Motis server and real redis running, run the
-  loop and confirm train-position rows land in `data/motis.sqlite`. Use `/verify`.
-- [ ] **Ingest — dedup + map into the `lookout` db.** A `motis_ingest` binary (in the
-  `motis` crate) that reads the raw, duplication-allowed `motis.sqlite`, **dedups** each
-  train observation (e.g. on `(trip_id, observed_at)` — the same trip re-seen across
-  overlapping polls collapses to one row) and **maps** it to a lat/lon position, writing
-  a derived `train_position` table into `data/lookout.sqlite` (idempotent
-  `INSERT OR IGNORE`, mirroring `enrich`). Any polyline/coordinate decoding the Motis
-  form needs lives here. Add a Justfile `ingest-motis` recipe (mirroring `enrich`). Unit
-  test the dedup + mapping over captured raw rows.
-- [ ] **Visualise the trains.** Extend `visualise/main.py`: read `train_position`
-  (time-windowed by `--since` like `gps`), and log each train as a per-timestamp
-  `GeoPoints` that follows the timeline (a moving dot, like the GPS cursor), keyed per
-  trip and coloured per line/route, plus optionally a per-trip track polyline. Fold into
-  the map blueprint so trains and GPS traces share the same view and window. Add Python
-  tests in `visualise/tests`. Absent table → no-op (like `transport`).
+  loop and confirm segment rows land in `data/motis.sqlite`. Use `/verify`.
+- [ ] **Ingest — dedup + decode into the `lookout` db.** A `motis_ingest` binary (in the
+  `motis` crate) that reads the raw, duplication-allowed `motis.sqlite`, **dedups**
+  segments on `(trip_id, from_stop_id, departure)` (the same scheduled leg re-seen across
+  overlapping polls collapses to one row — prefer the newest `captured_at`'s realtime
+  values), **decodes** each `polyline` (the `polyline` crate) to a lat/lon `LineString`
+  stored as WKB, and writes a derived `train_segment` table into `data/lookout.sqlite`
+  (idempotent `INSERT OR IGNORE`, mirroring `enrich`; WKB geom like the `transport`
+  table). Keeps `trip_id`/`route_name`/`mode`/`route_color`/`realtime` and the
+  realtime-corrected `departure`/`arrival`. Add a Justfile `ingest-motis` recipe
+  (mirroring `enrich`). Unit test dedup + polyline decode over the captured fixture rows.
+- [ ] **Visualise the trains.** Extend `visualise/main.py`: read `train_segment`
+  (time-windowed by `--since`), and for each timeline tick **interpolate** each train's
+  position along its WKB line by `(t − departure)/(arrival − departure)` using the
+  realtime-corrected times (shapely `line.interpolate(frac, normalized=True)` — shapely is
+  already a dep) → a per-trip `GeoPoints` moving dot, coloured by `mode`/`routeColor`;
+  optionally the static per-trip route line. Fold into the map blueprint so trains and GPS
+  traces share the same view and window. Add Python tests in `visualise/tests`. Absent
+  table → no-op (like `transport`).
 - [ ] **Verify the full pipeline.** `/verify` the whole chain end to end: poll → ingest →
-  visualise, confirming the `.rrd` shows trains moving over the same window as the GPS
-  traces (`rerun rrd verify` passes).
+  visualise, confirming the `.rrd` shows trains moving (using realtime-corrected timing)
+  over the same window as the GPS traces (`rerun rrd verify` passes).
+
+Note: positions are realtime-corrected *interpolation* (a second, non-GPS reference),
+not raw vehicle GPS — the best the gtfs.de TripUpdates feed allows nationwide. Consider
+filtering to rail-ish modes (drop `BUS`) in the poll or ingest step so the visualisation
+is trains, not all transit.
