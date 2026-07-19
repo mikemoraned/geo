@@ -95,7 +95,7 @@ code compiling at every step.
   > (idempotent `=`; motis has no config-override/env mechanism, `yq` beats an awk hack),
   > plus a `prerequisites` recipe (`brew install yq`) it depends on, and `motis_setup`
   > runs it after `import`. Verified: 201/221 segments `realTime: true`, 118 delay-corrected.
-- [ ] **Scaffold the `motis` crate + workspace wiring.** New `crates/motis` (lib + a
+- [x] **Scaffold the `motis` crate + workspace wiring.** New `crates/motis` (lib + a
   `src/bin/motis_poll.rs`), picked up by the existing `crates/*` workspace glob. Add
   `motis-openapi-progenitor`, `polyline`, and (if needed for RFC3339 window formatting)
   `chrono` to `[workspace.dependencies]`. Empty lib compiles and `just test-no-docker`
