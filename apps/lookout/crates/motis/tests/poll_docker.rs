@@ -25,6 +25,8 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// The captured real 4-segment, mode-varied fixture (rail/subway/tram/bus).
 const TRIPS_FIXTURE: &str = include_str!("fixtures/trips.json");
+/// A captured real `trip` itinerary; its first leg names `DB Regio AG Mitte Region Hessen`.
+const TRIP_FIXTURE: &str = include_str!("fixtures/trip.json");
 
 async fn start_redis() -> (ContainerAsync<Redis>, String) {
     let container = Redis::default()
@@ -110,6 +112,12 @@ async fn mock_motis(segments_json: &str) -> MockServer {
         .expect(1)
         .mount(&server)
         .await;
+    // Every `trip` lookup (one per distinct tripId) resolves to the same itinerary.
+    Mock::given(method("GET"))
+        .and(path("/api/v4/trip"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(TRIP_FIXTURE.as_bytes(), "application/json"))
+        .mount(&server)
+        .await;
     server
 }
 
@@ -163,10 +171,18 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
         }
     );
 
-    // The segments are persisted to the on-disk db.
-    let count: i64 = rusqlite::Connection::open(db.path())
-        .expect("reopen db")
+    // The segments are persisted to the on-disk db, each with its resolved agency.
+    let reopened = rusqlite::Connection::open(db.path()).expect("reopen db");
+    let count: i64 = reopened
         .query_row("SELECT COUNT(*) FROM segment", [], |r| r.get(0))
         .expect("count");
     assert_eq!(count as usize, fixture_len());
+    let with_agency: i64 = reopened
+        .query_row(
+            "SELECT COUNT(*) FROM segment WHERE agency_name = 'DB Regio AG Mitte Region Hessen'",
+            [],
+            |r| r.get(0),
+        )
+        .expect("count agency");
+    assert_eq!(with_agency as usize, fixture_len(), "every segment's trip resolved an agency");
 }

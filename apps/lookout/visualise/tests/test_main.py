@@ -197,16 +197,17 @@ class TestTrains:
         conn = sqlite3.connect(":memory:")
         conn.execute(
             "CREATE TABLE train_segment (trip_id TEXT, mode TEXT, route_color TEXT, "
-            "departure INTEGER, arrival INTEGER, geom BLOB)"
+            "agency_name TEXT, departure INTEGER, arrival INTEGER, geom BLOB)"
         )
         yield conn
         conn.close()
 
-    def _insert(self, conn, trip_id, mode, route_color, departure, arrival, line):
+    def _insert(self, conn, trip_id, mode, route_color, departure, arrival, line, agency_name=None):
         conn.execute(
-            "INSERT INTO train_segment (trip_id, mode, route_color, departure, arrival, geom) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [trip_id, mode, route_color, departure, arrival, line.wkb],
+            "INSERT INTO train_segment "
+            "(trip_id, mode, route_color, agency_name, departure, arrival, geom) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [trip_id, mode, route_color, agency_name, departure, arrival, line.wkb],
         )
         conn.commit()
 
@@ -217,22 +218,39 @@ class TestTrains:
         rows = main.fetch_train_segments(conn, cutoff_ms=600)
         assert [r[0] for r in rows] == ["new"], "leg arriving before the cutoff is dropped"
 
+    def test_fetch_carries_agency_into_long_distance_color(self, conn):
+        line = shapely.LineString([(11.0, 50.0), (11.0, 52.0)])
+        self._insert(
+            conn, "ice", "REGIONAL_RAIL", None, 1000, 2000, line,
+            agency_name="DB Fernverkehr AG",
+        )
+        rows = main.fetch_train_segments(conn, cutoff_ms=0)
+        trains = main._train_samples(rows, step_s=1)
+        assert trains["ice"]["color"] == main._LONG_DISTANCE_COLOR
+
     def test_hex_rgb_parses_and_rejects(self):
         assert main._hex_rgb("ff8800") == (255, 136, 0)
         assert main._hex_rgb("#ff8800") == (255, 136, 0)
         assert main._hex_rgb("nope") is None
         assert main._hex_rgb("fff") is None
 
-    def test_train_color_prefers_route_color_then_mode(self):
+    def test_train_color_prefers_route_color_then_agency_then_mode(self):
         assert main._train_color("TRAM", "ff8800") == (255, 136, 0)
         assert main._train_color("TRAM", None) == main._MODE_COLORS["TRAM"]
         assert main._train_color("TRAM", "") == main._MODE_COLORS["TRAM"]
         assert main._train_color("WHAT", None) == main._MODE_DEFAULT
+        # A long-distance train Motis reports as REGIONAL_RAIL is separated by its agency.
+        assert (
+            main._train_color("REGIONAL_RAIL", None, "DB Fernverkehr AG")
+            == main._LONG_DISTANCE_COLOR
+        )
+        # routeColor still wins over agency when present.
+        assert main._train_color("REGIONAL_RAIL", "ff8800", "DB Fernverkehr AG") == (255, 136, 0)
 
     def test_interpolates_position_and_flips_to_lat_lon(self):
         # A north-running 2-point line (lon fixed at 11, lat 50→52) over [1000, 3000] ms.
         line = shapely.LineString([(11.0, 50.0), (11.0, 52.0)])
-        rows = [("trip-1", "REGIONAL_RAIL", None, 1000, 3000, line.wkb)]
+        rows = [("trip-1", "REGIONAL_RAIL", None, None, 1000, 3000, line.wkb)]
         trains = main._train_samples(rows, step_s=1)
         samples = trains["trip-1"]["samples"]
         # Endpoints plus the midpoint at half the span; WKB (lon, lat) → (lat, lon).
@@ -245,8 +263,8 @@ class TestTrains:
         line_a = shapely.LineString([(11.0, 50.0), (11.0, 51.0)])
         line_b = shapely.LineString([(11.0, 51.0), (11.0, 52.0)])
         rows = [
-            ("trip-1", "REGIONAL_RAIL", None, 3000, 4000, line_b.wkb),
-            ("trip-1", "REGIONAL_RAIL", None, 1000, 2000, line_a.wkb),
+            ("trip-1", "REGIONAL_RAIL", None, None, 3000, 4000, line_b.wkb),
+            ("trip-1", "REGIONAL_RAIL", None, None, 1000, 2000, line_a.wkb),
         ]
         trains = main._train_samples(rows, step_s=1)
         times = [t for t, _, _ in trains["trip-1"]["samples"]]
@@ -255,7 +273,7 @@ class TestTrains:
 
     def test_zero_duration_leg_yields_single_start_sample(self):
         line = shapely.LineString([(11.0, 50.0), (11.0, 52.0)])
-        rows = [("trip-1", "REGIONAL_RAIL", None, 1000, 1000, line.wkb)]
+        rows = [("trip-1", "REGIONAL_RAIL", None, None, 1000, 1000, line.wkb)]
         samples = main._train_samples(rows, step_s=1)["trip-1"]["samples"]
         assert samples == [(1.0, 50.0, 11.0)]
 

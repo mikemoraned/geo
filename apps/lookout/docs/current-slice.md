@@ -176,7 +176,7 @@ is trains, not all transit.
 * [x] use the `wkt` crate to build the Overture query-window WKT (`transport::overture::bbox_ring_wkt` / `bboxes_multipolygon_wkt`) instead of hand-formatting the `MULTIPOLYGON` string
 * [x] read the `train_segment` geom via the `wkb` reader in the `motis::ingest` test, instead of hand-parsing the WKB header bytes
 * [x] use `geo` algorithms (`BoundingRect` / `Scale`) for `PositionWindow::bbox` and `buffered_bbox` instead of hand-rolled min/max + centre arithmetic
-- [ ] **Capture `agency_name` so long-distance trains are separable.** The feed types all
+- [x] **Capture `agency_name` so long-distance trains are separable.** The feed types all
   rail as `route_type=2`, so Motis reports ICEs as `REGIONAL_RAIL` and `mode` cannot tell
   an ICE from an S-Bahn (see Investigation). `map/trips` doesn't carry agency — verified
   against the generated `TripSegment`/`TripInfo` types (12 and 3 fields, no agency, no
@@ -198,6 +198,12 @@ is trains, not all transit.
   Store `agency_id`/`agency_name` on the raw `motis` rows, carry both through
   `motis_ingest` into `train_segment`, and let the visualisation filter/colour on
   `DB Fernverkehr AG` rather than mode alone.
+  > **Notes:** the client method is named `trip_agency(trip_id) -> Option<Agency>` (it
+  > returns only the agency, not full trip details). The visualisation *colours* on
+  > agency — a `DB Fernverkehr AG` train gets the long-distance red even though `mode`
+  > says `REGIONAL_RAIL` (routeColor still wins when present). `store`'s schema-on-open
+  > `IF NOT EXISTS` won't add columns to a pre-existing raw `motis.sqlite`, so the tracked
+  > db was `ALTER TABLE`d to add the two columns (old rows keep `NULL` agency).
 - [ ] **(Quality improvement) Generate real track geometry with pfaedle.** The gtfs.de
   feed has no `shapes.txt`, so `map/trips` polylines are straight stop-to-stop lines and
   interpolation cuts corners. In `tools/motis-server`, add a Justfile step that runs

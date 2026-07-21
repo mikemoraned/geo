@@ -3,14 +3,16 @@
 //! append them to the capture log. The `motis_poll` binary is a thin loop around
 //! [`poll_once`]; tests drive it directly against a real redis and a mock Motis server.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use motis_openapi_progenitor::types::TripSegment;
 use redis::aio::MultiplexedConnection;
 use shared::{Message, V0Message, V1Message};
 use telemetry::RawSample;
 
-use crate::client::{MotisClient, MotisError, TimeWindow};
+use crate::client::{Agency, MotisClient, MotisError, TimeWindow};
 use crate::store::{Store, StoreError};
 use crate::window::{Position, PositionWindow};
 
@@ -84,13 +86,41 @@ pub async fn poll_once(
         .expect("query window fits in chrono::Duration");
     let query_window = TimeWindow::around(now, half);
     let segments = client.trips_in_bbox(&bbox, &query_window, config.zoom).await?;
-    let written = store.insert(now, &segments)?;
+    let agencies = resolve_agencies(client, &segments).await;
+    let written = store.insert(now, &segments, &agencies)?;
 
     Ok(PollOutcome::Queried {
         ingested,
         positions: window.len(),
         segments: written,
     })
+}
+
+/// Resolve the operating [`Agency`] of each distinct `trip_id` in `segments` via the
+/// Motis `trip` endpoint, keyed by `trip_id`. Stateless — no caching across ticks, since
+/// Motis is local and the poll interval is coarse. A trip whose lookup fails or names no
+/// agency is simply omitted (the store writes `NULL` for it); a failure is logged, never
+/// fatal, so a resolve error can't drop the segment.
+async fn resolve_agencies(
+    client: &MotisClient,
+    segments: &[TripSegment],
+) -> HashMap<String, Agency> {
+    let trip_ids: std::collections::HashSet<&str> = segments
+        .iter()
+        .filter_map(|s| s.trips.first())
+        .map(|t| t.trip_id.as_str())
+        .collect();
+    let mut agencies = HashMap::new();
+    for trip_id in trip_ids {
+        match client.trip_agency(trip_id).await {
+            Ok(Some(agency)) => {
+                agencies.insert(trip_id.to_string(), agency);
+            }
+            Ok(None) => {}
+            Err(err) => tracing::warn!(%trip_id, %err, "resolving trip agency failed"),
+        }
+    }
+    agencies
 }
 
 /// The `(t, lat, lon)` of a sample if it is a GPS fix, else `None` (accel/session or an

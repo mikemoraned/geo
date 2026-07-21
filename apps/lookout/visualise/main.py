@@ -306,6 +306,13 @@ _MODE_COLORS = {
 }
 _MODE_DEFAULT = (127, 127, 127)
 
+# The gtfs.de free feed types every rail service as `route_type=2`, so `mode` reports an
+# ICE as `REGIONAL_RAIL` and can't separate long-distance from regional. Its operating
+# agency can: DB's long-distance trains run under `DB Fernverkehr AG`. These get the
+# long-distance colour regardless of the mode Motis reports.
+_LONG_DISTANCE_AGENCY = "DB Fernverkehr AG"
+_LONG_DISTANCE_COLOR = (214, 39, 40)
+
 # How often (seconds) a train's interpolated position is sampled along a leg. Rerun holds
 # a `GeoPoints` value until the next one, so the dot is resampled to animate along the
 # line rather than jumping stop-to-stop.
@@ -313,7 +320,7 @@ SAMPLE_STEP_S = 10
 
 
 def fetch_train_segments(conn: sqlite3.Connection, cutoff_ms: int):
-    """Rows `(trip_id, mode, route_color, departure, arrival, geom)` from the
+    """Rows `(trip_id, mode, route_color, agency_name, departure, arrival, geom)` from the
     `train_segment` table — the deduped, decoded moving-train legs written by
     `motis_ingest`, with the geometry as a WKB `LineString` and realtime-corrected
     `departure`/`arrival` epoch-ms times.
@@ -328,8 +335,8 @@ def fetch_train_segments(conn: sqlite3.Connection, cutoff_ms: int):
     if not exists:
         return []
     return conn.execute(
-        "SELECT trip_id, mode, route_color, departure, arrival, geom FROM train_segment "
-        "WHERE arrival >= ? ORDER BY trip_id, departure",
+        "SELECT trip_id, mode, route_color, agency_name, departure, arrival, geom "
+        "FROM train_segment WHERE arrival >= ? ORDER BY trip_id, departure",
         [cutoff_ms],
     ).fetchall()
 
@@ -345,13 +352,18 @@ def _hex_rgb(text: str) -> tuple[int, int, int] | None:
         return None
 
 
-def _train_color(mode: str, route_color: str | None) -> tuple[int, int, int]:
+def _train_color(
+    mode: str, route_color: str | None, agency_name: str | None = None
+) -> tuple[int, int, int]:
     """Colour for a train: its GTFS `routeColor` (hex) when present and parseable, else
-    a per-`mode` colour, else grey."""
+    the long-distance colour when operated by `DB Fernverkehr AG` (which `mode` can't
+    distinguish), else a per-`mode` colour, else grey."""
     if route_color:
         rgb = _hex_rgb(route_color)
         if rgb is not None:
             return rgb
+    if agency_name == _LONG_DISTANCE_AGENCY:
+        return _LONG_DISTANCE_COLOR
     return _MODE_COLORS.get(mode, _MODE_DEFAULT)
 
 
@@ -385,11 +397,15 @@ def _train_samples(rows, step_s: int = SAMPLE_STEP_S) -> dict:
     is one lat/lon polyline per leg. Stored WKB is `(lon, lat)`, flipped to `(lat, lon)`.
     """
     trains: dict = {}
-    for trip_id, mode, route_color, departure, arrival, geom in rows:
+    for trip_id, mode, route_color, agency_name, departure, arrival, geom in rows:
         line = shapely.from_wkb(geom)
         entry = trains.setdefault(
             trip_id,
-            {"color": _train_color(mode, route_color), "samples": [], "route": []},
+            {
+                "color": _train_color(mode, route_color, agency_name),
+                "samples": [],
+                "route": [],
+            },
         )
         entry["route"].append([(lat, lon) for lon, lat in line.coords])
         entry["samples"].extend(_interpolate_leg(line, departure, arrival, step_s))

@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS train_segment (
   rowid        INTEGER PRIMARY KEY,
   trip_id      TEXT NOT NULL,
   route_name   TEXT,
+  agency_id    TEXT,
+  agency_name  TEXT,
   mode         TEXT NOT NULL,
   route_color  TEXT,
   realtime     INTEGER NOT NULL,
@@ -56,6 +58,8 @@ pub enum IngestError {
 struct RawSegment {
     trip_id: String,
     route_name: Option<String>,
+    agency_id: Option<String>,
+    agency_name: Option<String>,
     mode: String,
     route_color: Option<String>,
     realtime: bool,
@@ -69,6 +73,8 @@ struct RawSegment {
 struct TrainSegment {
     trip_id: String,
     route_name: Option<String>,
+    agency_id: Option<String>,
+    agency_name: Option<String>,
     mode: String,
     route_color: Option<String>,
     realtime: bool,
@@ -94,8 +100,8 @@ pub fn ingest(source: &Connection, dest: &Connection) -> Result<IngestOutcome, I
 /// (`trip_id, from_stop_id, departure`) to the newest `captured_at`'s row.
 fn read_deduped(source: &Connection) -> Result<Vec<RawSegment>, IngestError> {
     let mut stmt = source.prepare(
-        "SELECT trip_id, route_name, mode, route_color, realtime, from_stop_id,
-                departure, arrival, polyline
+        "SELECT trip_id, route_name, agency_id, agency_name, mode, route_color, realtime,
+                from_stop_id, departure, arrival, polyline
          FROM (
            SELECT *, ROW_NUMBER() OVER (
              PARTITION BY trip_id, from_stop_id, departure ORDER BY captured_at DESC
@@ -108,13 +114,15 @@ fn read_deduped(source: &Connection) -> Result<Vec<RawSegment>, IngestError> {
         Ok(RawSegment {
             trip_id: r.get(0)?,
             route_name: r.get(1)?,
-            mode: r.get(2)?,
-            route_color: r.get(3)?,
-            realtime: r.get(4)?,
-            from_stop_id: r.get(5)?,
-            departure: r.get(6)?,
-            arrival: r.get(7)?,
-            polyline: r.get(8)?,
+            agency_id: r.get(2)?,
+            agency_name: r.get(3)?,
+            mode: r.get(4)?,
+            route_color: r.get(5)?,
+            realtime: r.get(6)?,
+            from_stop_id: r.get(7)?,
+            departure: r.get(8)?,
+            arrival: r.get(9)?,
+            polyline: r.get(10)?,
         })
     })?;
     rows.collect::<Result<Vec<_>, _>>().map_err(IngestError::from)
@@ -132,12 +140,14 @@ fn write_train_segments(
     for s in segments {
         written += tx.execute(
             "INSERT OR IGNORE INTO train_segment
-               (trip_id, route_name, mode, route_color, realtime, from_stop_id,
-                departure, arrival, geom)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+               (trip_id, route_name, agency_id, agency_name, mode, route_color, realtime,
+                from_stop_id, departure, arrival, geom)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 s.trip_id,
                 s.route_name,
+                s.agency_id,
+                s.agency_name,
                 s.mode,
                 s.route_color,
                 s.realtime,
@@ -158,6 +168,8 @@ impl RawSegment {
             geom: polyline_to_wkb(&self.polyline)?,
             trip_id: self.trip_id,
             route_name: self.route_name,
+            agency_id: self.agency_id,
+            agency_name: self.agency_name,
             mode: self.mode,
             route_color: self.route_color,
             realtime: self.realtime,
@@ -196,9 +208,15 @@ mod tests {
         let source = crate::store::Store::open_in_memory().expect("source");
         let fixture = fixture();
         let t1 = Utc::now();
-        source.insert(t1, &fixture).expect("insert t1");
         source
-            .insert(t1 + chrono::Duration::seconds(30), &fixture)
+            .insert(t1, &fixture, &std::collections::HashMap::new())
+            .expect("insert t1");
+        source
+            .insert(
+                t1 + chrono::Duration::seconds(30),
+                &fixture,
+                &std::collections::HashMap::new(),
+            )
             .expect("insert t2"); // same legs re-seen → duplicates
 
         let dest = Connection::open_in_memory().expect("dest");
@@ -240,23 +258,25 @@ mod tests {
     fn dedup_prefers_newest_captured_at() {
         let source = crate::store::Store::open_in_memory().expect("source");
         let insert = "INSERT INTO segment
-            (captured_at, trip_id, route_name, mode, route_color, from_stop_id,
-             from_lat, from_lon, to_stop_id, to_lat, to_lon,
+            (captured_at, trip_id, route_name, agency_id, agency_name, mode, route_color,
+             from_stop_id, from_lat, from_lon, to_stop_id, to_lat, to_lon,
              departure, arrival, scheduled_departure, scheduled_arrival, realtime, polyline)
-            VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)";
+            VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)";
         let poly = "_p~iF~ps|U_ulLnnqC_mqNvxq`@";
         let conn = source.connection();
-        // Older capture: scheduled (realtime false), arrival 600.
+        // Older capture: scheduled (realtime false), arrival 600, agency not yet resolved.
         conn.execute(
             insert,
-            params![1000i64, "trip-1", "RB1", "REGIONAL_RAIL", None::<String>, "stop-a",
+            params![1000i64, "trip-1", "RB1", None::<String>, None::<String>,
+                "REGIONAL_RAIL", None::<String>, "stop-a",
                 50.0, 8.0, "stop-b", 50.1, 8.1, 500i64, 600i64, 480i64, 580i64, false, poly],
         )
         .expect("older");
-        // Newer capture of the same leg: realtime true, arrival delayed to 700.
+        // Newer capture of the same leg: realtime true, arrival delayed to 700, agency resolved.
         conn.execute(
             insert,
-            params![2000i64, "trip-1", "RB1", "REGIONAL_RAIL", None::<String>, "stop-a",
+            params![2000i64, "trip-1", "RB1", "800643", "DB Fernverkehr AG",
+                "REGIONAL_RAIL", None::<String>, "stop-a",
                 50.0, 8.0, "stop-b", 50.1, 8.1, 500i64, 700i64, 480i64, 580i64, true, poly],
         )
         .expect("newer");
@@ -265,12 +285,20 @@ mod tests {
         let outcome = ingest(conn, &dest).expect("ingest");
 
         assert_eq!(outcome.deduped, 1);
-        let (arrival, realtime): (i64, bool) = dest
-            .query_row("SELECT arrival, realtime FROM train_segment", [], |r| {
-                Ok((r.get(0)?, r.get(1)?))
-            })
+        let (arrival, realtime, agency_name, agency_id): (i64, bool, Option<String>, Option<String>) =
+            dest.query_row(
+                "SELECT arrival, realtime, agency_name, agency_id FROM train_segment",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
             .expect("row");
         assert_eq!(arrival, 700, "newest capture's arrival");
         assert!(realtime, "newest capture's realtime flag");
+        assert_eq!(
+            agency_name.as_deref(),
+            Some("DB Fernverkehr AG"),
+            "newest capture's resolved agency carries through"
+        );
+        assert_eq!(agency_id.as_deref(), Some("800643"));
     }
 }

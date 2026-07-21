@@ -5,11 +5,14 @@
 //! (`departure`/`arrival`) and scheduled (`scheduled_*`) so the delay stays recoverable —
 //! and the polyline as its raw Google-encoded string.
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use motis_openapi_progenitor::types::TripSegment;
 use rusqlite::{params, Connection};
+
+use crate::client::Agency;
 
 /// DDL run on open; `IF NOT EXISTS` makes opening an existing db a no-op. No unique key:
 /// the log is append-only and duplication is intentional.
@@ -19,6 +22,8 @@ CREATE TABLE IF NOT EXISTS segment (
   captured_at         INTEGER NOT NULL,
   trip_id             TEXT NOT NULL,
   route_name          TEXT,
+  agency_id           TEXT,
+  agency_name         TEXT,
   mode                TEXT NOT NULL,
   route_color         TEXT,
   from_stop_id        TEXT,
@@ -72,14 +77,17 @@ impl Store {
 
     /// Append every segment as its own row, stamped with the `captured_at` poll time.
     /// Always inserts — duplicates are allowed — returning the number of rows written.
+    /// `agencies` maps a segment's `trip_id` to its resolved [`Agency`]; a trip absent
+    /// from the map stores `NULL` agency (resolution failed or the trip named none).
     pub fn insert(
         &self,
         captured_at: DateTime<Utc>,
         segments: &[TripSegment],
+        agencies: &HashMap<String, Agency>,
     ) -> Result<usize, StoreError> {
         let tx = self.conn.unchecked_transaction()?;
         for segment in segments {
-            insert_row(&tx, captured_at, segment)?;
+            insert_row(&tx, captured_at, segment, agencies)?;
         }
         tx.commit()?;
         Ok(segments.len())
@@ -91,22 +99,26 @@ fn insert_row(
     conn: &Connection,
     captured_at: DateTime<Utc>,
     segment: &TripSegment,
+    agencies: &HashMap<String, Agency>,
 ) -> Result<(), StoreError> {
     let trip = segment.trips.first();
     let trip_id = trip.map(|t| t.trip_id.as_str()).unwrap_or_default();
     let route_name =
         trip.and_then(|t| t.display_name.as_deref().or(t.route_short_name.as_deref()));
+    let agency = agencies.get(trip_id);
     conn.execute(
         "INSERT INTO segment
-           (captured_at, trip_id, route_name, mode, route_color,
+           (captured_at, trip_id, route_name, agency_id, agency_name, mode, route_color,
             from_stop_id, from_lat, from_lon, to_stop_id, to_lat, to_lon,
             departure, arrival, scheduled_departure, scheduled_arrival, realtime, polyline)
          VALUES
-           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
         params![
             captured_at.timestamp_millis(),
             trip_id,
             route_name,
+            agency.and_then(|a| a.id.as_deref()),
+            agency.and_then(|a| a.name.as_deref()),
             segment.mode.to_string(),
             segment.route_color,
             segment.from.stop_id,
@@ -147,7 +159,9 @@ mod tests {
     fn insert_appends_every_segment() {
         let store = Store::open_in_memory().expect("open");
         let segments = fixture_segments();
-        let written = store.insert(Utc::now(), &segments).expect("insert");
+        let written = store
+            .insert(Utc::now(), &segments, &HashMap::new())
+            .expect("insert");
         assert_eq!(written, segments.len());
         assert_eq!(count(&store) as usize, segments.len());
     }
@@ -157,9 +171,49 @@ mod tests {
     fn inserting_the_same_segment_twice_yields_two_rows() {
         let store = Store::open_in_memory().expect("open");
         let one = &fixture_segments()[..1];
-        store.insert(Utc::now(), one).expect("first");
-        store.insert(Utc::now(), one).expect("second");
+        store.insert(Utc::now(), one, &HashMap::new()).expect("first");
+        store.insert(Utc::now(), one, &HashMap::new()).expect("second");
         assert_eq!(count(&store), 2);
+    }
+
+    /// A trip present in the agency map has its `agency_id`/`agency_name` stored; a trip
+    /// absent (resolution failed or named none) stores `NULL`.
+    #[test]
+    fn agency_stored_from_map_or_null_when_absent() {
+        let store = Store::open_in_memory().expect("open");
+        let segments = fixture_segments();
+        let resolved = &segments[0].trips[0].trip_id;
+        let agencies = HashMap::from([(
+            resolved.clone(),
+            Agency {
+                id: Some("292".into()),
+                name: Some("DB Regio AG Mitte Region Hessen".into()),
+            },
+        )]);
+        store
+            .insert(Utc::now(), &segments, &agencies)
+            .expect("insert");
+
+        let (name, id): (Option<String>, Option<String>) = store
+            .conn
+            .query_row(
+                "SELECT agency_name, agency_id FROM segment WHERE trip_id = ?1",
+                [resolved],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .expect("resolved row");
+        assert_eq!(name.as_deref(), Some("DB Regio AG Mitte Region Hessen"));
+        assert_eq!(id.as_deref(), Some("292"));
+
+        let unresolved: i64 = store
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM segment WHERE trip_id <> ?1 AND agency_name IS NULL",
+                [resolved],
+                |r| r.get(0),
+            )
+            .expect("count nulls");
+        assert_eq!(unresolved as usize, segments.len() - 1);
     }
 
     /// The kept fields round-trip, including both realtime and scheduled times (the
@@ -169,7 +223,7 @@ mod tests {
         let store = Store::open_in_memory().expect("open");
         let segment = &fixture_segments()[0];
         store
-            .insert(Utc::now(), std::slice::from_ref(segment))
+            .insert(Utc::now(), std::slice::from_ref(segment), &HashMap::new())
             .expect("insert");
 
         let (trip_id, mode, realtime, departure, scheduled_departure, polyline, from_lat): (

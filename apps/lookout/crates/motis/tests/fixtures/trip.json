@@ -1,0 +1,375 @@
+{
+  "duration": 4140,
+  "startTime": "2026-07-21T09:19:00Z",
+  "endTime": "2026-07-21T10:28:00Z",
+  "transfers": 0,
+  "id": "CqQBCgRSQjIyEiIyMDI2MDcyMV8xMToxOV9nZXJtYW55Z3Rmc18xMjkyNzMyGhJnZXJtYW55Z3Rmc18zNjE5NjAhN2vwvioxSUApoFVmSusfIEAyEWdlcm1hbnlndGZzXzE0ODQ0OZKRs7CnDUlAQQW/DTFeUyFASITz/NIGULCT/dIGWg1SRUdJT05BTF9SQUlMYAFpAAAAAAAAAABxAAAAAAAAAAA=",
+  "legs": [
+    {
+      "mode": "REGIONAL_RAIL",
+      "from": {
+        "name": "Limburg (Lahn) Bahnhof",
+        "stopId": "germanygtfs_361960",
+        "parentId": "germanygtfs_177440",
+        "importance": 0.07823033630847931,
+        "lat": 50.384116999999996,
+        "lon": 8.062342000000001,
+        "level": 0.0,
+        "tz": "Europe/Berlin",
+        "departure": "2026-07-21T09:19:00Z",
+        "scheduledDeparture": "2026-07-21T09:19:00Z",
+        "vertexType": "TRANSIT",
+        "pickupType": "NORMAL",
+        "dropoffType": "NORMAL",
+        "cancelled": false,
+        "modes": [
+          "REGIONAL_RAIL",
+          "BUS"
+        ]
+      },
+      "to": {
+        "name": "Frankfurt (Main) Hauptbahnhof",
+        "stopId": "germanygtfs_14844",
+        "parentId": "germanygtfs_632679",
+        "importance": 0.7244438529014587,
+        "lat": 50.10668,
+        "lon": 8.662828,
+        "level": 0.0,
+        "tz": "Europe/Berlin",
+        "arrival": "2026-07-21T10:28:00Z",
+        "scheduledArrival": "2026-07-21T10:28:00Z",
+        "vertexType": "TRANSIT",
+        "pickupType": "NORMAL",
+        "dropoffType": "NORMAL",
+        "cancelled": false,
+        "modes": [
+          "REGIONAL_RAIL",
+          "SUBWAY",
+          "TRAM",
+          "BUS"
+        ]
+      },
+      "duration": 4140,
+      "startTime": "2026-07-21T09:19:00Z",
+      "endTime": "2026-07-21T10:28:00Z",
+      "scheduledStartTime": "2026-07-21T09:19:00Z",
+      "scheduledEndTime": "2026-07-21T10:28:00Z",
+      "realTime": true,
+      "scheduled": true,
+      "interlineWithPreviousLeg": false,
+      "headsign": "Frankfurt(Main)Hbf",
+      "tripFrom": {
+        "name": "Limburg (Lahn) Bahnhof",
+        "stopId": "germanygtfs_361960",
+        "parentId": "germanygtfs_177440",
+        "importance": 0.07823033630847931,
+        "lat": 50.384116999999996,
+        "lon": 8.062342000000001,
+        "level": 0.0,
+        "tz": "Europe/Berlin",
+        "departure": "2026-07-21T09:19:00Z",
+        "scheduledDeparture": "2026-07-21T09:19:00Z",
+        "vertexType": "TRANSIT",
+        "pickupType": "NORMAL",
+        "dropoffType": "NORMAL",
+        "cancelled": false,
+        "modes": [
+          "REGIONAL_RAIL",
+          "BUS"
+        ]
+      },
+      "tripTo": {
+        "name": "Frankfurt (Main) Hauptbahnhof",
+        "stopId": "germanygtfs_14844",
+        "parentId": "germanygtfs_632679",
+        "importance": 0.7244438529014587,
+        "lat": 50.10668,
+        "lon": 8.662828,
+        "level": 0.0,
+        "tz": "Europe/Berlin",
+        "arrival": "2026-07-21T10:28:00Z",
+        "scheduledArrival": "2026-07-21T10:28:00Z",
+        "vertexType": "TRANSIT",
+        "pickupType": "NORMAL",
+        "dropoffType": "NORMAL",
+        "cancelled": false,
+        "modes": [
+          "REGIONAL_RAIL",
+          "SUBWAY",
+          "TRAM",
+          "BUS"
+        ]
+      },
+      "routeId": "germanygtfs_8030",
+      "routeUrl": "",
+      "directionId": "0",
+      "routeType": 2,
+      "agencyName": "DB Regio AG Mitte Region Hessen",
+      "agencyUrl": "https://www.bahn.de",
+      "agencyId": "292",
+      "tripId": "20260721_11:19_germanygtfs_1292732",
+      "routeShortName": "RB22",
+      "routeLongName": "",
+      "tripShortName": "",
+      "displayName": "RB22",
+      "cancelled": false,
+      "source": "../geo_data/germany_gtfs.zip/stop_times.txt:5632272:5632284",
+      "intermediateStops": [
+        {
+          "name": "Limburg (Lahn)-Eschhofen Bahnhof",
+          "stopId": "germanygtfs_70591",
+          "parentId": "germanygtfs_391768",
+          "importance": 0.03641080856323242,
+          "lat": 50.393482,
+          "lon": 8.104429,
+          "level": 0.0,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-21T09:23:00Z",
+          "departure": "2026-07-21T09:23:00Z",
+          "scheduledArrival": "2026-07-21T09:23:00Z",
+          "scheduledDeparture": "2026-07-21T09:23:00Z",
+          "vertexType": "TRANSIT",
+          "pickupType": "NORMAL",
+          "dropoffType": "NORMAL",
+          "cancelled": false,
+          "modes": [
+            "REGIONAL_RAIL"
+          ]
+        },
+        {
+          "name": "Limburg (Lahn)-Lindenholzhausen Bahnhof",
+          "stopId": "germanygtfs_29167",
+          "parentId": "germanygtfs_258200",
+          "importance": 0.016707228496670723,
+          "lat": 50.377562999999995,
+          "lon": 8.133371999999998,
+          "level": 0.0,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-21T09:27:00Z",
+          "departure": "2026-07-21T09:27:00Z",
+          "scheduledArrival": "2026-07-21T09:27:00Z",
+          "scheduledDeparture": "2026-07-21T09:27:00Z",
+          "vertexType": "TRANSIT",
+          "pickupType": "NORMAL",
+          "dropoffType": "NORMAL",
+          "cancelled": false,
+          "modes": [
+            "REGIONAL_RAIL"
+          ]
+        },
+        {
+          "name": "Brechen-Niederbrechen Bahnhof",
+          "stopId": "germanygtfs_421725",
+          "parentId": "germanygtfs_384850",
+          "importance": 0.020716344937682152,
+          "lat": 50.359595999999996,
+          "lon": 8.159856000000001,
+          "level": 0.0,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-21T09:30:00Z",
+          "departure": "2026-07-21T09:30:00Z",
+          "scheduledArrival": "2026-07-21T09:30:00Z",
+          "scheduledDeparture": "2026-07-21T09:30:00Z",
+          "vertexType": "TRANSIT",
+          "pickupType": "NORMAL",
+          "dropoffType": "NORMAL",
+          "cancelled": false,
+          "modes": [
+            "REGIONAL_RAIL",
+            "BUS"
+          ]
+        },
+        {
+          "name": "Brechen-Oberbrechen Bahnhof",
+          "stopId": "germanygtfs_442138",
+          "parentId": "germanygtfs_607683",
+          "importance": 0.01681840419769287,
+          "lat": 50.354499999999994,
+          "lon": 8.187800999999999,
+          "level": 0.0,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-21T09:33:00Z",
+          "departure": "2026-07-21T09:33:00Z",
+          "scheduledArrival": "2026-07-21T09:33:00Z",
+          "scheduledDeparture": "2026-07-21T09:33:00Z",
+          "vertexType": "TRANSIT",
+          "pickupType": "NORMAL",
+          "dropoffType": "NORMAL",
+          "cancelled": false,
+          "modes": [
+            "REGIONAL_RAIL",
+            "BUS"
+          ]
+        },
+        {
+          "name": "Selters (Taunus)-Niederselters Bahnhof",
+          "stopId": "germanygtfs_381914",
+          "parentId": "germanygtfs_449086",
+          "importance": 0.016815098002552986,
+          "lat": 50.332542000000004,
+          "lon": 8.22998,
+          "level": 0.0,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-21T09:38:00Z",
+          "departure": "2026-07-21T09:38:00Z",
+          "scheduledArrival": "2026-07-21T09:38:00Z",
+          "scheduledDeparture": "2026-07-21T09:38:00Z",
+          "vertexType": "TRANSIT",
+          "pickupType": "NORMAL",
+          "dropoffType": "NORMAL",
+          "cancelled": false,
+          "modes": [
+            "REGIONAL_RAIL",
+            "BUS"
+          ]
+        },
+        {
+          "name": "Bad Camberg Bahnhof",
+          "stopId": "germanygtfs_105631",
+          "parentId": "germanygtfs_378440",
+          "importance": 0.021111449226737022,
+          "lat": 50.296623000000004,
+          "lon": 8.255051,
+          "level": 0.0,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-21T09:42:00Z",
+          "departure": "2026-07-21T09:43:00Z",
+          "scheduledArrival": "2026-07-21T09:42:00Z",
+          "scheduledDeparture": "2026-07-21T09:43:00Z",
+          "vertexType": "TRANSIT",
+          "pickupType": "NORMAL",
+          "dropoffType": "NORMAL",
+          "cancelled": false,
+          "modes": [
+            "REGIONAL_RAIL",
+            "BUS"
+          ]
+        },
+        {
+          "name": "Idstein-W\u00f6rsdorf Bahnhof",
+          "stopId": "germanygtfs_65416",
+          "parentId": "germanygtfs_226543",
+          "importance": 0.016707228496670723,
+          "lat": 50.24475,
+          "lon": 8.249322999999997,
+          "level": 0.0,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-21T09:48:00Z",
+          "departure": "2026-07-21T09:48:00Z",
+          "scheduledArrival": "2026-07-21T09:48:00Z",
+          "scheduledDeparture": "2026-07-21T09:48:00Z",
+          "vertexType": "TRANSIT",
+          "pickupType": "NORMAL",
+          "dropoffType": "NORMAL",
+          "cancelled": false,
+          "modes": [
+            "REGIONAL_RAIL"
+          ]
+        },
+        {
+          "name": "Idstein Bahnhof",
+          "stopId": "germanygtfs_273060",
+          "parentId": "germanygtfs_473288",
+          "importance": 0.02249927632510662,
+          "lat": 50.215990000000005,
+          "lon": 8.257264,
+          "level": 0.0,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-21T09:51:00Z",
+          "departure": "2026-07-21T09:52:00Z",
+          "scheduledArrival": "2026-07-21T09:51:00Z",
+          "scheduledDeparture": "2026-07-21T09:52:00Z",
+          "vertexType": "TRANSIT",
+          "pickupType": "NORMAL",
+          "dropoffType": "NORMAL",
+          "cancelled": false,
+          "modes": [
+            "REGIONAL_RAIL",
+            "BUS"
+          ]
+        },
+        {
+          "name": "Niedernhausen Bahnhof",
+          "stopId": "germanygtfs_650142",
+          "parentId": "germanygtfs_8946",
+          "importance": 0.07062312215566635,
+          "lat": 50.1597,
+          "lon": 8.312879,
+          "level": 0.0,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-21T09:58:00Z",
+          "departure": "2026-07-21T09:59:00Z",
+          "scheduledArrival": "2026-07-21T09:58:00Z",
+          "scheduledDeparture": "2026-07-21T09:59:00Z",
+          "vertexType": "TRANSIT",
+          "pickupType": "NORMAL",
+          "dropoffType": "NORMAL",
+          "cancelled": false,
+          "modes": [
+            "REGIONAL_RAIL",
+            "BUS"
+          ]
+        },
+        {
+          "name": "Hofheim am Taunus Bahnhof",
+          "stopId": "germanygtfs_57505",
+          "parentId": "germanygtfs_465841",
+          "importance": 0.05413638427853584,
+          "lat": 50.084472999999996,
+          "lon": 8.443842,
+          "level": 1.0,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-21T10:10:00Z",
+          "departure": "2026-07-21T10:11:00Z",
+          "scheduledArrival": "2026-07-21T10:10:00Z",
+          "scheduledDeparture": "2026-07-21T10:11:00Z",
+          "vertexType": "TRANSIT",
+          "pickupType": "NORMAL",
+          "dropoffType": "NORMAL",
+          "cancelled": false,
+          "modes": [
+            "REGIONAL_RAIL",
+            "BUS"
+          ]
+        },
+        {
+          "name": "Frankfurt (Main) H\u00f6chst Bahnhof",
+          "stopId": "germanygtfs_320215",
+          "parentId": "germanygtfs_98439",
+          "importance": 0.15081720054149628,
+          "lat": 50.102634,
+          "lon": 8.542369999999998,
+          "level": 1.0,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-21T10:19:00Z",
+          "departure": "2026-07-21T10:20:00Z",
+          "scheduledArrival": "2026-07-21T10:19:00Z",
+          "scheduledDeparture": "2026-07-21T10:20:00Z",
+          "vertexType": "TRANSIT",
+          "pickupType": "NORMAL",
+          "dropoffType": "NORMAL",
+          "cancelled": false,
+          "modes": [
+            "REGIONAL_RAIL",
+            "BUS"
+          ]
+        }
+      ],
+      "legGeometry": {
+        "points": "cx__`]wrzwxCc|uDk_uXj|uHkhtPj|}IogdO~obBsx`PvzkL{xvXjp|TkthNrct^~znB~upPcbzCflja@kf}`@zg|l@{z|nAsuaJ_kc{@w_nAguohA",
+        "precision": 7,
+        "length": 13
+      },
+      "alerts": [
+        {
+          "cause": "UNKNOWN_CAUSE",
+          "effect": "UNKNOWN_EFFECT",
+          "headerText": "",
+          "descriptionText": "Echtzeitdaten aufbereitet von GTFS.de, bereitgestellt von DELFI"
+        }
+      ],
+      "bikesAllowed": false,
+      "wheelchairAccessible": "NOT_ACCESSIBLE"
+    }
+  ]
+}
