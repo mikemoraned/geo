@@ -185,3 +185,11 @@ is trains, not all transit.
   Heavy one-off run. Verify: `map/trips` polylines now decode to many points (curved
   track), not 2, so the trains follow the rails. Independent of the pipeline above — a
   drop-in geometry upgrade the visualisation picks up automatically on the next ingest.
+
+## Observations
+
+### On train on Sunday 19th July from Ronneburg to Mannheim
+
+I am on train ICE 693 from Aschaffenburg Hbf to Mannheim Hbf (which is the ICE 693 to Munchen Hbf). However, this doesn't show up on motis in UI e.g. arrivals at that time (20:30) shows ICE 11. Note that I also didn't find this train earlier when doing a search for routes from Ronneburg to Mannheim. Is it possible the timetables are incomplete/wrong?
+
+Also: when observing "speed" on gps on my phone, it commonly shows as "40.<something>". This seems slow for a train even interpreting as miles per hour.
