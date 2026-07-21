@@ -204,6 +204,57 @@ is trains, not all transit.
   > says `REGIONAL_RAIL` (routeColor still wins when present). `store`'s schema-on-open
   > `IF NOT EXISTS` won't add columns to a pre-existing raw `motis.sqlite`, so the tracked
   > db was `ALTER TABLE`d to add the two columns (old rows keep `NULL` agency).
+### Feed sources (from the transitous comparison — see Investigation)
+
+Context for the group below: `api.transitous.org` returns strictly richer data than our
+instance (train numbers, `route_type` 101/102) **because it imports a different dataset —
+DELFI — not because it is configured better.** No setup step is missing on our side.
+
+Two negative results worth not re-deriving:
+- gtfs.de's dedicated long-distance feed (`download.gtfs.de/germany/fv_free/latest.zip`)
+  is **no better** than the combined free feed: same 3-column `trips.txt`, all 96 routes
+  `route_type=2`. No rearrangement within the gtfs.de *free* tier yields train numbers.
+- **No German open feed carries VehiclePositions.** The DELFI RT feed decodes to 235,301
+  entities, 100% `trip_update`, zero `vehicle`. Realtime-corrected interpolation is the
+  nationwide ceiling — that constraint is structural, not a gtfs.de artifact.
+
+Considered and *not* proposed as work, recorded so it isn't re-researched: **gtfs.de paid
+tiers** ("Complete Feed"/"Complete Feed Plus" — the site publishes no detail on train
+numbers or shapes, and DELFI is free and demonstrably sufficient); **DELFI NeTEx** (same
+data, richer model, more import work for no gain here — GTFS is what Motis wants);
+**DELFI ZHV** (stop registry only, no registration, irrelevant to trip data); **regional
+feeds** (VBB/NRW/MobiData BW — better locally, no long-distance help).
+
+- [ ] **Switch the RT feed to DELFI's.** Cheap and independent of everything else: the
+  `enable_rt` recipe's `https://realtime.gtfs.de/realtime-free.pb` becomes
+  `https://germany.motis-project.org/gtfsrt` (CC-BY-SA-4.0, no registration — one of three
+  mirrors transitous lists). Broader coverage than the gtfs.de free RT feed. Still
+  TripUpdates-only. Verify the `realTime: true` / delay-corrected ratio against the current
+  201/221 baseline.
+- [ ] **Evaluate importing the DELFI static GTFS.** The headline upgrade: real train
+  numbers (`trip_short_name`) and correct `route_type` 101/102, so ICEs report as
+  `HIGHSPEED_RAIL`/`LONG_DISTANCE`. Source: "Deutschlandweite Sollfahrplandaten (GTFS)" at
+  opendata-oepnv.de, CC-BY-4.0, refreshed Mondays, **requires free registration** (the
+  transitous config URL is a share link, not a plain download) — so `download_geo_data`
+  can't fetch it unattended; plan for a manual/credentialed step. Nationwide incl.
+  long-distance. Verify: our instance shows `IC 2569`, not `IC 55`, for the 21 Jul train.
+- [ ] **Check whether DELFI ships `shapes.txt` — may retire the pfaedle task.** Transitous
+  sets `"drop-shapes": true` on their DELFI source, which strongly implies the feed *has*
+  shapes (you don't drop what isn't there), but this is inference — unverified behind the
+  registration wall. Settle it on first download. If DELFI has usable shapes, the pfaedle
+  task below is unnecessary; if transitous drops them for a reason (size/quality), find out
+  which before relying on them.
+- [ ] **Format DELFI train numbers on import.** Raw DELFI `trip_short_name` is unformatted
+  (e.g. `00123`); transitous' `scripts/de-DELFI.lua` strips leading zeros and prefixes the
+  line type (`ICE 123`/`IC 123`) off `route_type`, and fills missing route colours. Decide
+  whether to reproduce that. **Unverified: whether Motis supports per-dataset Lua fixups
+  from a plain `config.yml`** — transitous may apply it in their own build pipeline. Check
+  before assuming; the fallback is normalising in `motis_ingest` instead.
+- [ ] **Revisit agency-based classification once DELFI is in.** With correct `route_type`
+  101/102, `mode` alone distinguishes an ICE from an S-Bahn, so the per-trip `trip_agency`
+  lookup added above may become redundant for *classification* (it stays useful as
+  operator metadata). Re-evaluate rather than delete — decide whether the extra call per
+  distinct trip still earns its place.
 - [ ] **(Quality improvement) Generate real track geometry with pfaedle.** The gtfs.de
   feed has no `shapes.txt`, so `map/trips` polylines are straight stop-to-stop lines and
   interpolation cuts corners. In `tools/motis-server`, add a Justfile step that runs
@@ -213,6 +264,7 @@ is trains, not all transit.
   Heavy one-off run. Verify: `map/trips` polylines now decode to many points (curved
   track), not 2, so the trains follow the rails. Independent of the pipeline above — a
   drop-in geometry upgrade the visualisation picks up automatically on the next ingest.
+  > **Do the DELFI `shapes.txt` check first** — if DELFI ships shapes this task is moot.
 
 ## Observations
 
