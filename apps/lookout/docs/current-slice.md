@@ -176,6 +176,28 @@ is trains, not all transit.
 * [x] use the `wkt` crate to build the Overture query-window WKT (`transport::overture::bbox_ring_wkt` / `bboxes_multipolygon_wkt`) instead of hand-formatting the `MULTIPOLYGON` string
 * [x] read the `train_segment` geom via the `wkb` reader in the `motis::ingest` test, instead of hand-parsing the WKB header bytes
 * [x] use `geo` algorithms (`BoundingRect` / `Scale`) for `PositionWindow::bbox` and `buffered_bbox` instead of hand-rolled min/max + centre arithmetic
+- [ ] **Capture `agency_name` so long-distance trains are separable.** The feed types all
+  rail as `route_type=2`, so Motis reports ICEs as `REGIONAL_RAIL` and `mode` cannot tell
+  an ICE from an S-Bahn (see Investigation). `map/trips` doesn't carry agency — verified
+  against the generated `TripSegment`/`TripInfo` types (12 and 3 fields, no agency, no
+  `additionalProperties`) and against 101 live segments. It's only on
+  `GET /api/v1/trip?tripId=…`, whose legs expose `agencyName`/`agencyId` alongside
+  `routeType` and `routeShortName`.
+
+  The crate already covers this: `client.trip()` → `builder::Trip` with `.trip_id(…)` and
+  `.send() -> Result<ResponseValue<types::Itinerary>, Error<()>>`, and
+  `Itinerary.legs[].agency_name`/`agency_id` are `Option<String>`. Note it defaults to
+  `join_interlined_legs=true`, collapsing a stay-seated trip to one leg whose agency spans
+  the whole trip; pass `join_interlined_legs(false)` if per-segment exactness matters.
+
+  So: add a `trip_details(trip_id)` call to `MotisClient`, and in `motis_poll` resolve
+  each distinct `tripId` in the tick before appending, fresh each tick — no caching. Motis is
+  local and the poll interval is coarse, so the calls are cheap and the loop stays
+  stateless. A resolve failure must not drop the segment — log and store `NULL` agency.
+
+  Store `agency_id`/`agency_name` on the raw `motis` rows, carry both through
+  `motis_ingest` into `train_segment`, and let the visualisation filter/colour on
+  `DB Fernverkehr AG` rather than mode alone.
 - [ ] **(Quality improvement) Generate real track geometry with pfaedle.** The gtfs.de
   feed has no `shapes.txt`, so `map/trips` polylines are straight stop-to-stop lines and
   interpolation cuts corners. In `tools/motis-server`, add a Justfile step that runs
@@ -188,8 +210,43 @@ is trains, not all transit.
 
 ## Observations
 
-### On train on Sunday 19th July from Ronneburg to Mannheim
+### On train on Sunday 19th July from Ronneburg to Mannheim Hbf
 
 I am on train ICE 693 from Aschaffenburg Hbf to Mannheim Hbf (which is the ICE 693 to Munchen Hbf). However, this doesn't show up on motis in UI e.g. arrivals at that time (20:30) shows ICE 11. Note that I also didn't find this train earlier when doing a search for routes from Ronneburg to Mannheim. Is it possible the timetables are incomplete/wrong?
 
 Also: when observing "speed" on gps on my phone, it commonly shows as "40.<something>". This seems slow for a train even interpreting as miles per hour.
+
+### On train on Tuesday 21st July from Mannheim Hbf to Koblenz Hbf
+
+I am on train 08:39 from Mannheim Hbf to Koblenz Hbf, IC2569, leaving at 08:39 and arriving at 10:11. A train on this route and with these departure/arrival times is showing up in Motis when I do a [search](http://localhost:8080/?time=2026-07-21T06%3A30%3A00.000Z&fromPlace=germanygtfs_503494&toPlace=germanygtfs_309638&withFares=true&numLegAlternatives=3&fastestDirectFactor=1.5&joinInterlinedLegs=false&maxMatchingDistance=250&fromName=Mannheim%2C+Hauptbahnhof%2C+Mannheim%2C+Baden-Württemberg%2C+Germany&toName=Koblenz+Hauptbahnhof%2C+Koblenz%2C+Rhineland-Palatinate%2C+Germany) but with train id IC55.
+
+#### Investigation
+
+Both observations have the same cause: the gtfs.de free feed identifies long-distance
+trains by **line**, not by train number. Neither train was missing.
+
+- `routes.txt` carries a small fixed set of long-distance routes named for the DB
+  Fernverkehr Netzplan lines — 47 `ICE nn` and a handful of `IC nn`/`EC nn`. ICE 693
+  (Berlin–Frankfurt–Mannheim–Stuttgart–München) runs on line **ICE 11**; IC 2569 runs on
+  line **IC 55**. Those are the labels observed, and both trips are present in the
+  timetable at the observed times (Mannheim arr 20:30 dep 20:33 → München Hbf on the
+  19th; Mannheim dep 08:39 → Bielefeld Hbf on the 21st).
+- The train number cannot ever be surfaced: `trips.txt` has only
+  `route_id,service_id,trip_id` — no `trip_short_name`, no `trip_headsign`. Confirmed via
+  the API that `tripShortName` is empty on every long-distance stop time. Motis derives
+  the headsign it shows from the trip's last stop.
+- **Consequently the timetables are not incomplete or wrong, just anonymised to line
+  level.** Recovering real train numbers needs a richer feed than gtfs.de free — the same
+  tradeoff as the missing `shapes.txt`.
+
+Incidental finding that shapes the pipeline: every rail route is `route_type=2` (generic
+Rail); there is no 101/102 for high-speed. Motis therefore reports ICEs as
+`REGIONAL_RAIL`, and a `mode=HIGHSPEED_RAIL,LONG_DISTANCE` query at Mannheim Hbf returns
+zero results. So `mode` can drop `BUS` but cannot separate an ICE from an S-Bahn; the
+usable discriminator is `agencyName` (`DB Fernverkehr AG`), which the store does not
+currently capture.
+
+The route-search half of the 19th's observation is unexplained and likely unrelated — the
+timetable demonstrably holds the train, so it points at routing behaviour (Sunday
+service, transfer constraints, or which "Ronneburg" was geocoded) rather than data. Not
+pursued.
