@@ -10,6 +10,7 @@
 
 pub mod client;
 pub mod ingest;
+mod migrate;
 pub mod poll;
 pub mod store;
 pub mod window;

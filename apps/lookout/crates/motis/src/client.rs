@@ -1,6 +1,8 @@
 //! A thin wrapper over the generated `motis-openapi-progenitor` client that queries the
 //! Motis `map/trips` endpoint for train trips within a bounding box and time window.
 
+use std::num::NonZeroU32;
+
 use chrono::{DateTime, Duration, Timelike, Utc};
 use geo_types::Rect;
 use motis_openapi_progenitor::{
@@ -20,15 +22,42 @@ pub enum MotisError {
     Request(#[from] motis_openapi_progenitor::Error<()>),
 }
 
-/// The operating agency of a trip, as reported by the Motis `trip` endpoint. It is the
-/// only discriminator between long-distance and regional rail: the gtfs.de free feed
-/// types every rail service as `route_type=2`, so `mode` reports an ICE as
-/// `REGIONAL_RAIL` — but its agency is `DB Fernverkehr AG`. Either field may be absent
+/// The operating agency of a trip, from the Motis `trip` endpoint — operator metadata not
+/// carried on `map/trips` segments (e.g. `DB Fernverkehr AG`). Either field may be absent
 /// even when a trip resolves.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Agency {
     pub id: Option<String>,
     pub name: Option<String>,
+}
+
+/// A train's operating number — the integer GTFS `trip_short_name`, e.g. `2569` from the
+/// raw `002569`. Distinct from the *line* (`route_short_name`, e.g. `55`) and from `mode`,
+/// which already carries the product family. Non-zero: `0` is not a real train number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TrainNumber(NonZeroU32);
+
+impl TrainNumber {
+    /// From a raw GTFS `trip_short_name`; `None` when it names no number — empty, all zeros
+    /// (some long-distance trips report `0` / `000000`), or non-numeric. Leading zeros are
+    /// dropped by the integer parse.
+    pub fn from_gtfs(raw: &str) -> Option<Self> {
+        raw.parse::<NonZeroU32>().ok().map(Self)
+    }
+
+    /// The number, e.g. `2569`.
+    pub fn get(self) -> u32 {
+        self.0.get()
+    }
+}
+
+/// What the Motis `trip` endpoint adds to a `map/trips` segment: the operating [`Agency`]
+/// and the [`TrainNumber`], neither of which the segment itself carries. Both are optional
+/// even when the trip resolves.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TripDetails {
+    pub agency: Agency,
+    pub train_number: Option<TrainNumber>,
 }
 
 /// The `[start, end]` time span a `map/trips` query covers.
@@ -90,12 +119,11 @@ impl MotisClient {
         Ok(response.into_inner())
     }
 
-    /// The operating [`Agency`] of `trip_id`, from the Motis `trip` endpoint — the only
-    /// place agency is exposed (`map/trips` segments don't carry it). Interlined legs are
-    /// kept separate (`join_interlined_legs=false`) so a stay-seated trip isn't collapsed
-    /// into one leg spanning multiple agencies; the agency is taken from the first leg
-    /// that names one. `Ok(None)` when the trip resolves but no leg names an agency.
-    pub async fn trip_agency(&self, trip_id: &str) -> Result<Option<Agency>, MotisError> {
+    /// The [`TripDetails`] of `trip_id` from the Motis `trip` endpoint — agency and train
+    /// number, neither exposed on `map/trips` segments. Interlined legs are kept separate
+    /// (`join_interlined_legs=false`) so a stay-seated trip isn't collapsed into one leg
+    /// spanning multiple agencies; each field is taken from the first leg that carries it.
+    pub async fn trip_details(&self, trip_id: &str) -> Result<TripDetails, MotisError> {
         let itinerary = self
             .inner
             .trip()
@@ -104,20 +132,30 @@ impl MotisClient {
             .send()
             .await?
             .into_inner();
-        Ok(agency_of(itinerary))
+        Ok(details_of(itinerary))
     }
 }
 
-/// The first agency named across an itinerary's legs, if any.
-fn agency_of(itinerary: Itinerary) -> Option<Agency> {
-    itinerary
+/// The [`TripDetails`] gleaned from an itinerary's legs: the agency from the first leg
+/// naming one, the train number from the first leg carrying a usable `trip_short_name`.
+fn details_of(itinerary: Itinerary) -> TripDetails {
+    let agency = itinerary
         .legs
-        .into_iter()
+        .iter()
         .find(|leg| leg.agency_name.is_some() || leg.agency_id.is_some())
         .map(|leg| Agency {
-            id: leg.agency_id,
-            name: leg.agency_name,
+            id: leg.agency_id.clone(),
+            name: leg.agency_name.clone(),
         })
+        .unwrap_or_default();
+    let train_number = itinerary
+        .legs
+        .iter()
+        .find_map(|leg| leg.trip_short_name.as_deref().and_then(TrainNumber::from_gtfs));
+    TripDetails {
+        agency,
+        train_number,
+    }
 }
 
 /// Truncate to a whole second. Motis `map/trips` mis-parses fractional-second RFC3339
@@ -170,13 +208,25 @@ mod tests {
     }
 
     #[test]
-    fn agency_taken_from_first_leg_that_names_one() {
+    fn details_taken_from_legs() {
         let itinerary: Itinerary =
             serde_json::from_str(include_str!("../tests/fixtures/trip.json"))
                 .expect("parse trip fixture");
-        let agency = agency_of(itinerary).expect("fixture leg names an agency");
-        assert_eq!(agency.name.as_deref(), Some("DB Regio AG Mitte Region Hessen"));
-        assert_eq!(agency.id.as_deref(), Some("292"));
+        let details = details_of(itinerary);
+        assert_eq!(details.agency.name.as_deref(), Some("DB Fernverkehr AG"));
+        assert_eq!(details.agency.id.as_deref(), Some("12681"));
+        // The fixture leg's `trip_short_name` is `002569` → number `2569`.
+        assert_eq!(details.train_number.map(TrainNumber::get), Some(2569));
+    }
+
+    #[test]
+    fn train_number_parses_int_and_rejects_zero_and_non_numeric() {
+        assert_eq!(TrainNumber::from_gtfs("002569").map(TrainNumber::get), Some(2569));
+        assert_eq!(TrainNumber::from_gtfs("2569").map(TrainNumber::get), Some(2569));
+        assert_eq!(TrainNumber::from_gtfs("000000"), None);
+        assert_eq!(TrainNumber::from_gtfs("0"), None);
+        assert_eq!(TrainNumber::from_gtfs(""), None);
+        assert_eq!(TrainNumber::from_gtfs("ICE"), None);
     }
 
     /// Hits the Motis server on `localhost:8080`; run with the server up via
@@ -196,15 +246,14 @@ mod tests {
             "expected some trip segments in the Frankfurt box"
         );
 
-        // The first segment's trip resolves to a named agency via the `trip` endpoint.
+        // The first segment's trip resolves to details via the `trip` endpoint.
         let trip_id = segments[0].trips[0].trip_id.clone();
-        let agency = client
-            .trip_agency(&trip_id)
+        let details = client
+            .trip_details(&trip_id)
             .await
-            .expect("resolve trip agency")
-            .expect("trip names an agency");
+            .expect("resolve trip details");
         assert!(
-            agency.name.is_some() || agency.id.is_some(),
+            details.agency.name.is_some() || details.agency.id.is_some(),
             "expected an agency name or id"
         );
     }

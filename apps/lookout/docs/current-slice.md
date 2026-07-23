@@ -166,9 +166,10 @@ code compiling at every step.
 
 
 Note: positions are realtime-corrected *interpolation* (a second, non-GPS reference),
-not raw vehicle GPS — the best the gtfs.de TripUpdates feed allows nationwide. Consider
-filtering to rail-ish modes (drop `BUS`) in the poll or ingest step so the visualisation
-is trains, not all transit.
+not raw vehicle GPS — the best the DELFI TripUpdates feed allows nationwide. **Done:** the
+poll filters to rail modes (`is_rail`: HighspeedRail/LongDistance/NightRail/
+RegionalFastRail/RegionalRail/Rail), dropping bus/coach/tram/subway/metro before enrichment
+and storage, so the capture is trains, not all transit.
 
 ## Pending refactors / improvements
 
@@ -279,24 +280,21 @@ open. So both switches are plain URL changes, no credential injection.
   points** — i.e. straight stop-to-stop lines. So DB rail trips carry no usable shapes.
   **The pfaedle task is *not* retired for rail** — which is exactly what the visualisation
   needs. (Explains transitous' `drop-shapes: true`: the rail shapes aren't worth the 308 MB.)
-- [ ] **Surface the train number (`IC 2569`) in our pipeline.** Confirmed needed (see Step 1
-  caveat 1): via `map/trips` the poller sees `routeShortName="55"` and `displayName=null` —
-  the train number lives only in `trip_short_name` (`002569`), which that endpoint doesn't
-  expose. Raw DELFI is also unformatted; transitous' `scripts/de-DELFI.lua` strips leading
-  zeros and prefixes the line type off `route_type` (→ `IC 2569`), and fills missing route
-  colours. Two routes, pick one:
-  - **Enrich at `/trip`** (preferred — piggybacks on the `trip_agency` call we're already
-    adding): that endpoint's leg returns `trip_short_name`, so grab it there, format it
-    (`{IC|ICE|EC…} {int(short)}` keyed off mode/route_type), store it, done. No import-time
-    machinery, and it's per-distinct-trip like the agency lookup.
-  - **Reproduce the Lua fixup at import.** Cleaner feed but heavier: **unverified whether
-    Motis runs per-dataset Lua from a plain `config.yml`** — transitous may apply it in
-    their own build pipeline, not motis. Check before assuming.
-- [ ] **Revisit agency-based classification once DELFI is in.** With correct `route_type`
-  101/102, `mode` alone distinguishes an ICE from an S-Bahn, so the per-trip `trip_agency`
-  lookup added above may become redundant for *classification* (it stays useful as
-  operator metadata). Re-evaluate rather than delete — decide whether the extra call per
-  distinct trip still earns its place.
+- [x] **Surface the train number in our pipeline.** Done via the `/trip` enrichment (agency
+  and train number come from the same call). The `trip_agency` client method became
+  `trip_details -> TripDetails { agency, train_number }`; the leg's `trip_short_name`
+  becomes a `TrainNumber` (newtype over `NonZeroU32` — the integer train number, e.g. 2569;
+  `0`/`000000`/non-numeric → `None`). Carried as an INTEGER `train_number` column through the
+  raw `segment` store and the derived `train_segment` table. Deliberately **not** prefixing a
+  category (`IC`/`EC`): DELFI's `routes.txt` has no category field (`route_desc`/
+  `route_long_name` empty for 101/102), and `route_type` can't split IC from EC — so a made-up
+  prefix would mislabel EC trains. `mode` already carries the family honestly; the visual
+  label (mode + number) is part of the colour/label todo. Schema-migrated in place
+  (`ensure_column`) so the live poller's db gained the column without a manual `ALTER`.
+- [x] **Revisit agency-based classification once DELFI is in.** Resolved: `mode` (101/102)
+  now classifies ICE-vs-S-Bahn, so agency is no longer needed for that — **but** the same
+  `/trip` call now fetches the train number, which is genuinely needed, so agency rides
+  along free as operator metadata. Kept, not dropped; classification leans on `mode`.
 - [ ] **(Quality improvement) Generate real track geometry with pfaedle.** DELFI ships a
   `shapes.txt` but only bus/coach operators populate it — DB **rail** trips have no usable
   shapes (verified: rail `map/trips` polylines are ≤4 points, straight stop-to-stop), so
@@ -308,7 +306,8 @@ open. So both switches are plain URL changes, no credential injection.
   Heavy one-off run. Verify: `map/trips` polylines now decode to many points (curved
   track), not 2, so the trains follow the rails. Independent of the pipeline above — a
   drop-in geometry upgrade the visualisation picks up automatically on the next ingest.
-  > **Do the DELFI `shapes.txt` check first** — if DELFI ships shapes this task is moot.
+  > **Confirmed still needed (2026-07-23):** DELFI's `shapes.txt` covers only bus/coach, so
+  > rail geometry is still straight lines — pfaedle remains the fix.
 
 ## Observations
 

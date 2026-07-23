@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use motis_openapi_progenitor::types::TripSegment;
 use rusqlite::{params, Connection};
 
-use crate::client::Agency;
+use crate::client::TripDetails;
 
 /// DDL run on open; `IF NOT EXISTS` makes opening an existing db a no-op. No unique key:
 /// the log is append-only and duplication is intentional.
@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS segment (
   captured_at         INTEGER NOT NULL,
   trip_id             TEXT NOT NULL,
   route_name          TEXT,
+  train_number        INTEGER,
   agency_id           TEXT,
   agency_name         TEXT,
   mode                TEXT NOT NULL,
@@ -54,10 +55,12 @@ pub struct Store {
 }
 
 impl Store {
-    /// Open (creating if absent) the db at `path` and ensure the `segment` table exists.
+    /// Open (creating if absent) the db at `path` and ensure the `segment` table exists,
+    /// migrating a db from an earlier schema to gain `train_number`.
     pub fn open(path: &Path) -> Result<Self, StoreError> {
         let conn = Connection::open(path)?;
         conn.execute_batch(SCHEMA)?;
+        crate::migrate::ensure_column(&conn, "segment", "train_number", "INTEGER")?;
         Ok(Self { conn })
     }
 
@@ -77,17 +80,17 @@ impl Store {
 
     /// Append every segment as its own row, stamped with the `captured_at` poll time.
     /// Always inserts — duplicates are allowed — returning the number of rows written.
-    /// `agencies` maps a segment's `trip_id` to its resolved [`Agency`]; a trip absent
-    /// from the map stores `NULL` agency (resolution failed or the trip named none).
+    /// `details` maps a segment's `trip_id` to its resolved [`TripDetails`]; a trip absent
+    /// from the map stores `NULL` agency and train number (resolution failed or named none).
     pub fn insert(
         &self,
         captured_at: DateTime<Utc>,
         segments: &[TripSegment],
-        agencies: &HashMap<String, Agency>,
+        details: &HashMap<String, TripDetails>,
     ) -> Result<usize, StoreError> {
         let tx = self.conn.unchecked_transaction()?;
         for segment in segments {
-            insert_row(&tx, captured_at, segment, agencies)?;
+            insert_row(&tx, captured_at, segment, details)?;
         }
         tx.commit()?;
         Ok(segments.len())
@@ -99,24 +102,26 @@ fn insert_row(
     conn: &Connection,
     captured_at: DateTime<Utc>,
     segment: &TripSegment,
-    agencies: &HashMap<String, Agency>,
+    details: &HashMap<String, TripDetails>,
 ) -> Result<(), StoreError> {
     let trip = segment.trips.first();
     let trip_id = trip.map(|t| t.trip_id.as_str()).unwrap_or_default();
     let route_name =
         trip.and_then(|t| t.display_name.as_deref().or(t.route_short_name.as_deref()));
-    let agency = agencies.get(trip_id);
+    let details = details.get(trip_id);
+    let agency = details.map(|d| &d.agency);
     conn.execute(
         "INSERT INTO segment
-           (captured_at, trip_id, route_name, agency_id, agency_name, mode, route_color,
-            from_stop_id, from_lat, from_lon, to_stop_id, to_lat, to_lon,
+           (captured_at, trip_id, route_name, train_number, agency_id, agency_name, mode,
+            route_color, from_stop_id, from_lat, from_lon, to_stop_id, to_lat, to_lon,
             departure, arrival, scheduled_departure, scheduled_arrival, realtime, polyline)
          VALUES
-           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
         params![
             captured_at.timestamp_millis(),
             trip_id,
             route_name,
+            details.and_then(|d| d.train_number.map(|n| n.get())),
             agency.and_then(|a| a.id.as_deref()),
             agency.and_then(|a| a.name.as_deref()),
             segment.mode.to_string(),
@@ -141,6 +146,7 @@ fn insert_row(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::client::{Agency, TrainNumber};
 
     /// The captured real 4-segment, mode-varied fixture (rail/subway/tram/bus).
     fn fixture_segments() -> Vec<TripSegment> {
@@ -176,39 +182,44 @@ mod tests {
         assert_eq!(count(&store), 2);
     }
 
-    /// A trip present in the agency map has its `agency_id`/`agency_name` stored; a trip
-    /// absent (resolution failed or named none) stores `NULL`.
+    /// A trip present in the details map has its `agency_*` and `train_number` stored; a
+    /// trip absent (resolution failed or named none) stores `NULL`.
     #[test]
-    fn agency_stored_from_map_or_null_when_absent() {
+    fn details_stored_from_map_or_null_when_absent() {
         let store = Store::open_in_memory().expect("open");
         let segments = fixture_segments();
         let resolved = &segments[0].trips[0].trip_id;
-        let agencies = HashMap::from([(
+        let details = HashMap::from([(
             resolved.clone(),
-            Agency {
-                id: Some("292".into()),
-                name: Some("DB Regio AG Mitte Region Hessen".into()),
+            TripDetails {
+                agency: Agency {
+                    id: Some("12681".into()),
+                    name: Some("DB Fernverkehr AG".into()),
+                },
+                train_number: TrainNumber::from_gtfs("002569"),
             },
         )]);
         store
-            .insert(Utc::now(), &segments, &agencies)
+            .insert(Utc::now(), &segments, &details)
             .expect("insert");
 
-        let (name, id): (Option<String>, Option<String>) = store
+        let (name, id, number): (Option<String>, Option<String>, Option<i64>) = store
             .conn
             .query_row(
-                "SELECT agency_name, agency_id FROM segment WHERE trip_id = ?1",
+                "SELECT agency_name, agency_id, train_number FROM segment WHERE trip_id = ?1",
                 [resolved],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .expect("resolved row");
-        assert_eq!(name.as_deref(), Some("DB Regio AG Mitte Region Hessen"));
-        assert_eq!(id.as_deref(), Some("292"));
+        assert_eq!(name.as_deref(), Some("DB Fernverkehr AG"));
+        assert_eq!(id.as_deref(), Some("12681"));
+        assert_eq!(number, Some(2569));
 
         let unresolved: i64 = store
             .conn
             .query_row(
-                "SELECT COUNT(*) FROM segment WHERE trip_id <> ?1 AND agency_name IS NULL",
+                "SELECT COUNT(*) FROM segment
+                 WHERE trip_id <> ?1 AND agency_name IS NULL AND train_number IS NULL",
                 [resolved],
                 |r| r.get(0),
             )

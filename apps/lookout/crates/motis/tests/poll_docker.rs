@@ -6,75 +6,26 @@
 //! Requires Docker (redis); the `_docker`-suffixed name is skipped by the no-docker
 //! profile. The Motis server is mocked, so no live Motis is needed.
 
+mod common;
+
 use std::time::Duration;
 
 use chrono::Utc;
+use common::{gps, lpush, start_redis, wait_ready, RAIL_MODES};
 use motis::client::MotisClient;
 use motis::poll::{poll_once, PollConfig, PollOutcome};
 use motis::store::Store;
 use motis::window::PositionWindow;
-use redis::aio::MultiplexedConnection;
-use shared::{Accel, AccelReading, Gps, GpsReading, Message, V1Message};
-use telemetry::{RawSample, QUEUE_KEY};
-use testcontainers::runners::AsyncRunner;
-use testcontainers::{ContainerAsync, ImageExt};
-use testcontainers_modules::redis::{Redis, REDIS_PORT};
+use shared::{Accel, AccelReading, Message, V1Message};
 use uuid::Uuid;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-/// The captured real 4-segment, mode-varied fixture (rail/subway/tram/bus).
+/// The captured real 4-segment, mode-varied fixture (rail/subway/tram/bus). The poll
+/// filters to rail, so only the one rail segment is kept.
 const TRIPS_FIXTURE: &str = include_str!("fixtures/trips.json");
-/// A captured real `trip` itinerary; its first leg names `DB Regio AG Mitte Region Hessen`.
+/// A captured real long-distance `trip` itinerary: `DB Fernverkehr AG`, train number 2569.
 const TRIP_FIXTURE: &str = include_str!("fixtures/trip.json");
-
-async fn start_redis() -> (ContainerAsync<Redis>, String) {
-    let container = Redis::default()
-        .with_tag("7-alpine")
-        .start()
-        .await
-        .expect("start redis");
-    let host = container.get_host().await.expect("host");
-    let port = container
-        .get_host_port_ipv4(REDIS_PORT)
-        .await
-        .expect("port");
-    (container, format!("redis://{host}:{port}"))
-}
-
-/// Wait until redis answers a `PING` (the host port-forward can lag `start()`).
-async fn wait_ready(url: &str) -> MultiplexedConnection {
-    let client = redis::Client::open(url).expect("open client");
-    let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    loop {
-        if let Ok(mut conn) = client.get_multiplexed_async_connection().await {
-            if redis::cmd("PING")
-                .query_async::<String>(&mut conn)
-                .await
-                .is_ok()
-            {
-                return conn;
-            }
-        }
-        assert!(std::time::Instant::now() < deadline, "redis not ready in 30s");
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
-fn gps(id: u128, t: i64, lat: f64, lon: f64) -> Message {
-    Message::Version1(V1Message::Gps(GpsReading {
-        id: Uuid::from_u128(id),
-        t,
-        gps: Gps {
-            lat,
-            lon,
-            alt: None,
-            acc: 5.0,
-            speed: None,
-            heading: None,
-        },
-    }))
-}
 
 fn accel(id: u128, t: i64) -> Message {
     Message::Version1(V1Message::Acceleration(AccelReading {
@@ -89,19 +40,6 @@ fn accel(id: u128, t: i64) -> Message {
             z: None,
         },
     }))
-}
-
-/// LPUSH a message the way the server's `RedisSink` does: as a RawSample envelope.
-async fn lpush(conn: &mut MultiplexedConnection, message: &Message) {
-    let payload = serde_json::to_string(message).expect("serialize message");
-    let item = serde_json::to_string(&RawSample::new(1_700_000_050_000, payload))
-        .expect("serialize envelope");
-    let _: i64 = redis::cmd("LPUSH")
-        .arg(QUEUE_KEY)
-        .arg(item)
-        .query_async(conn)
-        .await
-        .expect("lpush");
 }
 
 async fn mock_motis(segments_json: &str) -> MockServer {
@@ -121,12 +59,15 @@ async fn mock_motis(segments_json: &str) -> MockServer {
     server
 }
 
-fn fixture_len() -> usize {
+/// How many fixture segments are rail — the count the poll keeps after filtering.
+fn rail_fixture_len() -> usize {
     serde_json::from_str::<serde_json::Value>(TRIPS_FIXTURE)
         .expect("parse fixture")
         .as_array()
         .expect("fixture is an array")
-        .len()
+        .iter()
+        .filter(|s| RAIL_MODES.contains(&s["mode"].as_str().unwrap_or_default()))
+        .count()
 }
 
 #[tokio::test]
@@ -161,28 +102,34 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
         .expect("poll once");
 
     // The accel sample and the 20-min-old GPS are excluded; the three recent GPS are
-    // ingested and their bbox queried, returning the four fixture segments.
+    // ingested and their bbox queried, returning four segments of which only the one rail
+    // segment survives the filter.
     assert_eq!(
         outcome,
         PollOutcome::Queried {
             ingested: 3,
             positions: 3,
-            segments: fixture_len(),
+            segments: rail_fixture_len(),
         }
     );
 
-    // The segments are persisted to the on-disk db, each with its resolved agency.
+    // Only the rail segment is persisted, with its resolved agency and train number.
     let reopened = rusqlite::Connection::open(db.path()).expect("reopen db");
     let count: i64 = reopened
         .query_row("SELECT COUNT(*) FROM segment", [], |r| r.get(0))
         .expect("count");
-    assert_eq!(count as usize, fixture_len());
-    let with_agency: i64 = reopened
+    assert_eq!(count as usize, rail_fixture_len());
+    let enriched: i64 = reopened
         .query_row(
-            "SELECT COUNT(*) FROM segment WHERE agency_name = 'DB Regio AG Mitte Region Hessen'",
+            "SELECT COUNT(*) FROM segment
+             WHERE agency_name = 'DB Fernverkehr AG' AND train_number = 2569",
             [],
             |r| r.get(0),
         )
-        .expect("count agency");
-    assert_eq!(with_agency as usize, fixture_len(), "every segment's trip resolved an agency");
+        .expect("count enriched");
+    assert_eq!(
+        enriched as usize,
+        rail_fixture_len(),
+        "the rail segment's trip resolved its agency and train number"
+    );
 }

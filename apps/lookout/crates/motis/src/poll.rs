@@ -7,12 +7,12 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use motis_openapi_progenitor::types::TripSegment;
+use motis_openapi_progenitor::types::{Mode, TripSegment};
 use redis::aio::MultiplexedConnection;
 use shared::{Message, V0Message, V1Message};
 use telemetry::RawSample;
 
-use crate::client::{Agency, MotisClient, MotisError, TimeWindow};
+use crate::client::{MotisClient, MotisError, TimeWindow, TripDetails};
 use crate::store::{Store, StoreError};
 use crate::window::{Position, PositionWindow};
 
@@ -85,9 +85,14 @@ pub async fn poll_once(
     let half = chrono::Duration::from_std(config.query_window_half)
         .expect("query window fits in chrono::Duration");
     let query_window = TimeWindow::around(now, half);
-    let segments = client.trips_in_bbox(&bbox, &query_window, config.zoom).await?;
-    let agencies = resolve_agencies(client, &segments).await;
-    let written = store.insert(now, &segments, &agencies)?;
+    let segments: Vec<TripSegment> = client
+        .trips_in_bbox(&bbox, &query_window, config.zoom)
+        .await?
+        .into_iter()
+        .filter(|s| is_rail(&s.mode))
+        .collect();
+    let details = resolve_details(client, &segments).await;
+    let written = store.insert(now, &segments, &details)?;
 
     Ok(PollOutcome::Queried {
         ingested,
@@ -96,31 +101,45 @@ pub async fn poll_once(
     })
 }
 
-/// Resolve the operating [`Agency`] of each distinct `trip_id` in `segments` via the
-/// Motis `trip` endpoint, keyed by `trip_id`. Stateless — no caching across ticks, since
-/// Motis is local and the poll interval is coarse. A trip whose lookup fails or names no
-/// agency is simply omitted (the store writes `NULL` for it); a failure is logged, never
+/// Whether `mode` is a train we track — mainline or regional rail. Drops urban transit
+/// (tram/subway/metro), road modes (bus/coach), and everything non-rail, so the capture is
+/// trains rather than all transit.
+fn is_rail(mode: &Mode) -> bool {
+    matches!(
+        mode,
+        Mode::HighspeedRail
+            | Mode::LongDistance
+            | Mode::NightRail
+            | Mode::RegionalFastRail
+            | Mode::RegionalRail
+            | Mode::Rail
+    )
+}
+
+/// Resolve the [`TripDetails`] (agency + train number) of each distinct `trip_id` in
+/// `segments` via the Motis `trip` endpoint, keyed by `trip_id`. Stateless — no caching
+/// across ticks, since Motis is local and the poll interval is coarse. A trip whose lookup
+/// fails is omitted (the store writes `NULL` for its fields); the failure is logged, never
 /// fatal, so a resolve error can't drop the segment.
-async fn resolve_agencies(
+async fn resolve_details(
     client: &MotisClient,
     segments: &[TripSegment],
-) -> HashMap<String, Agency> {
+) -> HashMap<String, TripDetails> {
     let trip_ids: std::collections::HashSet<&str> = segments
         .iter()
         .filter_map(|s| s.trips.first())
         .map(|t| t.trip_id.as_str())
         .collect();
-    let mut agencies = HashMap::new();
+    let mut details = HashMap::new();
     for trip_id in trip_ids {
-        match client.trip_agency(trip_id).await {
-            Ok(Some(agency)) => {
-                agencies.insert(trip_id.to_string(), agency);
+        match client.trip_details(trip_id).await {
+            Ok(d) => {
+                details.insert(trip_id.to_string(), d);
             }
-            Ok(None) => {}
-            Err(err) => tracing::warn!(%trip_id, %err, "resolving trip agency failed"),
+            Err(err) => tracing::warn!(%trip_id, %err, "resolving trip details failed"),
         }
     }
-    agencies
+    details
 }
 
 /// The `(t, lat, lon)` of a sample if it is a GPS fix, else `None` (accel/session or an
