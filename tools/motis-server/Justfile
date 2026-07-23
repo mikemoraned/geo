@@ -16,9 +16,16 @@ download_motis: create_dirs
     time wget https://github.com/motis-project/motis/releases/download/{{VERSION}}/motis-{{TARGET}}.tar.bz2
     cd {{ MOTIS_DIR }} && tar xf ../motis-{{TARGET}}.tar.bz2
     
+# The GTFS feed is DELFI's nationwide "Sollfahrplandaten" (opendata-oepnv.de, CC-BY-4.0):
+# unlike the gtfs.de free feed it carries real train numbers (trip_short_name) and correct
+# route_type (101/102), so long-distance trains classify as HIGHSPEED_RAIL/LONG_DISTANCE.
+# The URL is DELFI's "permanent link" — public (payload is just the dataset name, no token;
+# no 1Password/secret needed), always the latest weekly build. It 303-redirects to a dated
+# fileadmin zip and sets a cookie en route; wget carries the cookie across the redirect
+# within the one invocation, which is all the opendata-oepnv.de FAQ requires for scripts.
 download_geo_data: create_dirs
     time wget https://download.geofabrik.de/europe/germany-latest.osm.pbf -O ./{{ GEO_DATA_DIR }}/germany.osm.pbf
-    time wget https://download.gtfs.de/germany/free/latest.zip -O ./{{ GEO_DATA_DIR }}/germany_gtfs.zip
+    time wget --max-redirect=5 "https://www.opendata-oepnv.de/ht/de/datensaetze/sharing?tx_vrrkit_view%5Bsharing%5D=eyJkYXRhc2V0IjoiZGV1dHNjaGxhbmR3ZWl0ZS1zb2xsZmFocnBsYW5kYXRlbi1ndGZzIn0" -O ./{{ GEO_DATA_DIR }}/germany_gtfs.zip
 
 [working-directory: 'motis_server']
 motis_setup:
@@ -27,12 +34,15 @@ motis_setup:
     just enable_rt
 
 # `motis server` reads data/config.yml (written by `import`), which has no realtime feed,
-# so add the gtfs.de free RT feed (TripUpdates + ServiceAlerts) under the germanygtfs
-# dataset. Applied at runtime — restart the server to pick it up, no re-import needed.
-# Idempotent (`=` sets the exact list). Needs `yq` — run `just prerequisites` first.
+# so add DELFI's GTFS-RT feed (TripUpdates + ServiceAlerts; no VehiclePositions in any
+# German open feed) under the germanygtfs dataset. Must be DELFI's RT, not gtfs.de's: the
+# static timetable is now DELFI, and gtfs.de RT uses a different trip/stop ID namespace, so
+# pairing them makes ~99.9% of trip updates fail to resolve. Applied at runtime — restart
+# the server to pick it up, no re-import needed. Idempotent (`=` sets the exact list).
+# Needs `yq` — run `just prerequisites` first.
 [working-directory: 'motis_server']
 enable_rt: prerequisites
-    yq -i '.timetable.datasets.germanygtfs.rt = [{"url": "https://realtime.gtfs.de/realtime-free.pb", "protocol": "gtfsrt"}]' data/config.yml
+    yq -i '.timetable.datasets.germanygtfs.rt = [{"url": "https://germany.motis-project.org/gtfsrt", "protocol": "gtfsrt"}]' data/config.yml
 
 [working-directory: 'motis_server']
 motis_server:
