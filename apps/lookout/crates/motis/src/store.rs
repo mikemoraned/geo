@@ -56,11 +56,11 @@ pub struct Store {
 
 impl Store {
     /// Open (creating if absent) the db at `path` and ensure the `segment` table exists,
-    /// migrating a db from an earlier schema to gain `train_number`.
+    /// migrating a db from an earlier schema to gain the enrichment columns.
     pub fn open(path: &Path) -> Result<Self, StoreError> {
         let conn = Connection::open(path)?;
         conn.execute_batch(SCHEMA)?;
-        crate::migrate::ensure_column(&conn, "segment", "train_number", "INTEGER")?;
+        crate::migrate::ensure_enrichment_columns(&conn, "segment")?;
         Ok(Self { conn })
     }
 

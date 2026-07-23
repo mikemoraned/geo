@@ -12,8 +12,9 @@ as static geometry under `/transport` and given its own shared map pane.
 
 If it has been ingested from Motis (a `train_segment` table, written by `motis_ingest`),
 each nearby train is logged as a moving dot under `/trains/{trip_id}` — interpolated
-along its decoded route by its realtime-corrected times — and a shared overview map
-shows the trains moving alongside the gps traces over the same window.
+along its decoded route by its realtime-corrected times, coloured by `mode`/`routeColor`
+and labelled by train number — and a shared overview map shows the trains moving
+alongside the gps traces over the same window.
 
 Run from `apps/lookout` via `just visualise` so the default paths resolve.
 """
@@ -289,8 +290,9 @@ def log_transport(rows, gps_lonlat=None, near=None) -> None:
         )
 
 
-# Categorical colours per transit `mode`, used when a train has no GTFS `routeColor`
-# (the gtfs.de free feed carries none). Anything unmapped falls back to grey.
+# Categorical colours per transit `mode`. DELFI reports correct `route_type`, so `mode`
+# already separates long-distance (HIGHSPEED_RAIL/LONG_DISTANCE) from regional rail — a
+# train's GTFS `routeColor` still wins when the feed carries one. Unmapped → grey.
 _MODE_COLORS = {
     "HIGHSPEED_RAIL": (214, 39, 40),
     "LONG_DISTANCE": (214, 39, 40),
@@ -306,13 +308,6 @@ _MODE_COLORS = {
 }
 _MODE_DEFAULT = (127, 127, 127)
 
-# The gtfs.de free feed types every rail service as `route_type=2`, so `mode` reports an
-# ICE as `REGIONAL_RAIL` and can't separate long-distance from regional. Its operating
-# agency can: DB's long-distance trains run under `DB Fernverkehr AG`. These get the
-# long-distance colour regardless of the mode Motis reports.
-_LONG_DISTANCE_AGENCY = "DB Fernverkehr AG"
-_LONG_DISTANCE_COLOR = (214, 39, 40)
-
 # How often (seconds) a train's interpolated position is sampled along a leg. Rerun holds
 # a `GeoPoints` value until the next one, so the dot is resampled to animate along the
 # line rather than jumping stop-to-stop.
@@ -320,9 +315,9 @@ SAMPLE_STEP_S = 10
 
 
 def fetch_train_segments(conn: sqlite3.Connection, cutoff_ms: int):
-    """Rows `(trip_id, mode, route_color, agency_name, departure, arrival, geom)` from the
-    `train_segment` table — the deduped, decoded moving-train legs written by
-    `motis_ingest`, with the geometry as a WKB `LineString` and realtime-corrected
+    """Rows `(trip_id, mode, route_color, route_name, train_number, departure, arrival,
+    geom)` from the `train_segment` table — the deduped, decoded moving-train legs written
+    by `motis_ingest`, with the geometry as a WKB `LineString` and realtime-corrected
     `departure`/`arrival` epoch-ms times.
 
     Windowed to legs still active at or after the cutoff (`arrival >= cutoff`), so the
@@ -335,7 +330,7 @@ def fetch_train_segments(conn: sqlite3.Connection, cutoff_ms: int):
     if not exists:
         return []
     return conn.execute(
-        "SELECT trip_id, mode, route_color, agency_name, departure, arrival, geom "
+        "SELECT trip_id, mode, route_color, route_name, train_number, departure, arrival, geom "
         "FROM train_segment WHERE arrival >= ? ORDER BY trip_id, departure",
         [cutoff_ms],
     ).fetchall()
@@ -352,19 +347,34 @@ def _hex_rgb(text: str) -> tuple[int, int, int] | None:
         return None
 
 
-def _train_color(
-    mode: str, route_color: str | None, agency_name: str | None = None
-) -> tuple[int, int, int]:
-    """Colour for a train: its GTFS `routeColor` (hex) when present and parseable, else
-    the long-distance colour when operated by `DB Fernverkehr AG` (which `mode` can't
-    distinguish), else a per-`mode` colour, else grey."""
+def _train_color(mode: str, route_color: str | None) -> tuple[int, int, int]:
+    """Colour for a train: its GTFS `routeColor` (hex) when present and parseable, else a
+    per-`mode` colour (DELFI's `mode` separates long-distance from regional), else grey."""
     if route_color:
         rgb = _hex_rgb(route_color)
         if rgb is not None:
             return rgb
-    if agency_name == _LONG_DISTANCE_AGENCY:
-        return _LONG_DISTANCE_COLOR
     return _MODE_COLORS.get(mode, _MODE_DEFAULT)
+
+
+def _train_label(train_number: int | None, route_name: str | None) -> str | None:
+    """The train's human label: the train number (e.g. `2569`) when known, else the line
+    (`route_name`, e.g. `RE4`), else nothing. The number is the identifier a passenger
+    matches to a ticket/platform; `mode`/colour carries the product family."""
+    if train_number is not None:
+        return str(train_number)
+    return route_name or None
+
+
+def _train_entity(trip_id: str, label: str | None) -> str:
+    """The rerun entity path for a train. `GeoPoints` can't render an on-map text label
+    (rerun 0.34), so the human label is surfaced in the path instead — visible on hover
+    and grouped in the streams tree — while `trip_id` stays the unique leaf so distinct
+    trips sharing a label (or a `route_name` fallback) never collide."""
+    if label:
+        slug = label.replace("/", "-").replace(" ", "")
+        return f"trains/{slug}/{trip_id}"
+    return f"trains/{trip_id}"
 
 
 def _interpolate_leg(line, departure_ms: int, arrival_ms: int, step_s: int):
@@ -391,18 +401,20 @@ def _interpolate_leg(line, departure_ms: int, arrival_ms: int, step_s: int):
 
 def _train_samples(rows, step_s: int = SAMPLE_STEP_S) -> dict:
     """Group `train_segment` rows into per-trip animation data:
-    `{trip_id: {"color", "samples": [(t_s, lat, lon)...], "route": [[(lat, lon)...]...]}}`.
+    `{trip_id: {"color", "label", "samples": [(t_s, lat, lon)...], "route": [[(lat,
+    lon)...]...]}}`.
 
     `samples` is the time-ordered moving-dot path across all of a trip's legs; `route`
     is one lat/lon polyline per leg. Stored WKB is `(lon, lat)`, flipped to `(lat, lon)`.
     """
     trains: dict = {}
-    for trip_id, mode, route_color, agency_name, departure, arrival, geom in rows:
+    for trip_id, mode, route_color, route_name, train_number, departure, arrival, geom in rows:
         line = shapely.from_wkb(geom)
         entry = trains.setdefault(
             trip_id,
             {
-                "color": _train_color(mode, route_color, agency_name),
+                "color": _train_color(mode, route_color),
+                "label": _train_label(train_number, route_name),
                 "samples": [],
                 "route": [],
             },
@@ -415,24 +427,26 @@ def _train_samples(rows, step_s: int = SAMPLE_STEP_S) -> dict:
 
 
 def log_trains(rows, step_s: int = SAMPLE_STEP_S) -> None:
-    """Log each trip as a moving `GeoPoints` dot under `trains/{trip_id}` that follows
-    the timeline (interpolated along its legs), plus its static route line(s) under
-    `trains/{trip_id}/route`, coloured by `routeColor`/`mode`.
+    """Log each trip as a moving `GeoPoints` dot that follows the timeline (interpolated
+    along its legs), plus its static route line(s) under `{entity}/route`, coloured by
+    `routeColor`/`mode`. The entity path carries the train number (falling back to the
+    line) so the dot is identifiable on hover and in the streams tree.
 
     The dot uses the same per-timestamp `GeoPoints` idiom as the gps cursor, so it moves
     across the shared map over the same window as the gps traces.
     """
     for trip_id, entry in _train_samples(rows, step_s).items():
         color = entry["color"]
+        entity = _train_entity(trip_id, entry["label"])
         if entry["route"]:
             rr.log(
-                f"trains/{trip_id}/route",
+                f"{entity}/route",
                 rr.GeoLineStrings(lat_lon=entry["route"], colors=[color] * len(entry["route"])),
                 static=True,
             )
         for t_s, lat, lon in entry["samples"]:
             rr.set_time(TIMELINE, timestamp=t_s)
-            rr.log(f"trains/{trip_id}", rr.GeoPoints(lat_lon=[(lat, lon)], colors=[color]))
+            rr.log(entity, rr.GeoPoints(lat_lon=[(lat, lon)], colors=[color]))
 
 
 def build_blueprint(

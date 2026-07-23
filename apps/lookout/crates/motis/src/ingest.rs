@@ -89,6 +89,9 @@ struct TrainSegment {
 
 /// Dedup + decode the raw `segment` log in `source` into `dest`'s `train_segment` table.
 pub fn ingest(source: &Connection, dest: &Connection) -> Result<IngestOutcome, IngestError> {
+    // Self-heal a source `segment` written by an earlier schema, so a raw db captured
+    // before the enrichment columns existed can still be ingested (old rows read as NULL).
+    crate::migrate::ensure_enrichment_columns(source, "segment")?;
     let raws = read_deduped(source)?;
     let deduped = raws.len();
     let segments = raws
@@ -139,7 +142,7 @@ fn write_train_segments(
     segments: &[TrainSegment],
 ) -> Result<usize, IngestError> {
     dest.execute_batch(SCHEMA)?;
-    crate::migrate::ensure_column(dest, "train_segment", "train_number", "INTEGER")?;
+    crate::migrate::ensure_enrichment_columns(dest, "train_segment")?;
     let tx = dest.unchecked_transaction()?;
     let mut written = 0;
     for s in segments {
@@ -314,5 +317,59 @@ mod tests {
             "newest capture's resolved agency carries through"
         );
         assert_eq!(agency_id.as_deref(), Some("800643"));
+    }
+
+    /// Source `segment` and dest `train_segment` from before the enrichment columns
+    /// (agency + train number) existed are both migrated on ingest — old rows read/write
+    /// as NULL — rather than failing the read or the insert.
+    #[test]
+    fn ingests_dbs_from_earlier_schema() {
+        // A v1 source `segment`: no agency, no train_number.
+        let source = Connection::open_in_memory().expect("source");
+        source
+            .execute_batch(
+                "CREATE TABLE segment (
+                   rowid INTEGER PRIMARY KEY, captured_at INTEGER, trip_id TEXT,
+                   route_name TEXT, mode TEXT, route_color TEXT, from_stop_id TEXT,
+                   departure INTEGER, arrival INTEGER, realtime INTEGER, polyline TEXT
+                 )",
+            )
+            .expect("old source schema");
+        source
+            .execute(
+                "INSERT INTO segment
+                   (captured_at, trip_id, route_name, mode, route_color, from_stop_id,
+                    departure, arrival, realtime, polyline)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+                params![
+                    1000i64, "trip-1", "RB1", "REGIONAL_RAIL", None::<String>, "stop-a",
+                    500i64, 600i64, false, "_p~iF~ps|U_ulLnnqC_mqNvxq`@"
+                ],
+            )
+            .expect("insert old row");
+
+        // A v1 dest `train_segment`: no agency, no train_number.
+        let dest = Connection::open_in_memory().expect("dest");
+        dest.execute_batch(
+            "CREATE TABLE train_segment (
+               rowid INTEGER PRIMARY KEY, trip_id TEXT, route_name TEXT, mode TEXT,
+               route_color TEXT, realtime INTEGER, from_stop_id TEXT, departure INTEGER,
+               arrival INTEGER, geom BLOB, UNIQUE(trip_id, from_stop_id, departure)
+             )",
+        )
+        .expect("old dest schema");
+
+        let outcome = ingest(&source, &dest).expect("ingest migrates both schemas");
+        assert_eq!(outcome.written, 1);
+
+        let (number, agency): (Option<i64>, Option<String>) = dest
+            .query_row(
+                "SELECT train_number, agency_name FROM train_segment",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .expect("row");
+        assert_eq!(number, None, "old row has no train number");
+        assert_eq!(agency, None, "old row has no agency");
     }
 }

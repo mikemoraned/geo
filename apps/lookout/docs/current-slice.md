@@ -295,6 +295,13 @@ open. So both switches are plain URL changes, no credential injection.
   now classifies ICE-vs-S-Bahn, so agency is no longer needed for that — **but** the same
   `/trip` call now fetches the train number, which is genuinely needed, so agency rides
   along free as operator metadata. Kept, not dropped; classification leans on `mode`.
+- [x] **Colour trains by mode + label by train number (visualise).** `visualise/main.py`
+  reads `train_number`/`route_name` from `train_segment`, labels each moving dot with the
+  train number (falling back to the line), and colours by `routeColor`→`mode`. Dropped the
+  now-redundant `DB Fernverkehr AG` colour hack — DELFI's `mode` classifies long-distance
+  directly (`HIGHSPEED_RAIL`/`LONG_DISTANCE`). Python tests updated. Note: seeing real
+  labels on the map needs a *fresh* poll (old raw `segment` rows predate `train_number`),
+  which needs live GPS on the redis queue.
 - [ ] **(Quality improvement) Generate real track geometry with pfaedle.** DELFI ships a
   `shapes.txt` but only bus/coach operators populate it — DB **rail** trips have no usable
   shapes (verified: rail `map/trips` polylines are ≤4 points, straight stop-to-stop), so
