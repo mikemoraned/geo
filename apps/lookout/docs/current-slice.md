@@ -39,6 +39,8 @@ We can visualise outputs either inline in the notebook via geopandas / lonboard.
 
 ### Tasks
 
+#### V1:
+
 - [x] Set up marimo AI pairing (https://marimo.io/pair): configure marimo's AI assistant so we
       can pair with Claude while building the notebook.
       Note: marimo.io/pair ships as the `marimo-pair` Claude Code plugin (marketplace
@@ -62,6 +64,20 @@ We can visualise outputs either inline in the notebook via geopandas / lonboard.
 - [ ] Visualise for manual cross-check: overlay rail lines, water, and crossing points in the
       notebook via lonboard/geopandas. Fallback: export geoarrow and load into kepler.gl.
       Spot-check that crossings land where rail visibly meets water.
+
+#### V2:
+
+Same as V1 but also:
+- [ ] try to elimate very short crossings i.e. where we wouldn't be able to see anything from a train because we went by too fast. We probably want to tune tune this, but we can start by eliminating any intersections between rail and water where the length, or diameter, is <= 5 metres. This means we probably need to do the conversion to the appropriated projected CRS so we can have the right units.
+- when visualising this:
+    - [ ] it'd be nice to identify areas by name, so let's add names of cities to the lonboard map
+    - [ ] let's visualise the size of the overlap by:
+        - making the actual centre of overlap a very small point (e.g. 3 pixels)
+        - drawing a small open circle whose radius is proportional to the size of the overlap
+
+#### V3:
+
+Same as V3 but also:
 - [ ] Widen from the four-state region to all of Germany (division-restricted) and re-run, sanity
       checking counts and a few crossings.
 - [ ] (optional) Map each crossing point to a %-distance along its rail segment

@@ -1,0 +1,2 @@
+# Derived GeoParquet outputs from the water_crossings notebooks (regenerable).
+*.parquet
