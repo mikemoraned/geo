@@ -280,14 +280,15 @@ genuinely separate places.
 
 **Approach — connector-component grouping + a within-group distance merge:**
 1. Add `connectors` to the rail extract; build adjacency among **crossing** segments that share a
-   connector id (union-find) → a `component_id` = a maximal run of connected crossing segments =
-   the *physical track* at that crossing. (Robust via Overture connector ids — geometry line-merge
-   under-performed here, see V3b.)
-2. Reduce: group the dumped crossing parts by **(component_id, water_id)**, then **within each
-   group** single-linkage merge parts within distance `D` (projected metres); keep one
-   representative per sub-cluster (largest-`overlap_m` part → keeps a real `rail_segment_id`; total
-   spanned length as `overlap_m`).
-3. Because the spatial merge is **scoped to one (component, water_id)**, `D` is safe to make
+   connector id → a `component_id` = a maximal run of connected crossing segments = the *physical
+   track* at that crossing. (Robust via Overture connector ids — geometry line-merge under-performed
+   here, see V3b.)
+2. Reduce: link kept parts that share a **(component_id, water_id)** and are within distance `D`
+   (projected metres); keep one representative per resulting group (largest-`overlap_m` part → keeps
+   a real `rail_segment_id`; total spanned length + part count as extra columns).
+3. Both steps are **connected-components** problems, handed to **scipy** (`csgraph.connected_components`
+   for the graphs, `spatial.cKDTree.query_pairs` for the distance edges) — no hand-rolled union-find.
+4. Because the spatial merge is **scoped to one (component, water_id)**, `D` is safe to make
    generous (~100–200 m): it only distinguishes *islands / bridge spread* (close → one) from a
    *horseshoe re-crossing* (far → two). Parallel tracks (different component) and different water
    bodies are already separated by the scoping — so **none of V3's chaining / parallel-track
@@ -306,8 +307,11 @@ Built in `notebooks/water_crossings/v5.py` (clone of `v4.py`).
 
 Tasks:
 - [x] Clone `v4.py` → `v5.py`.
-- [x] Add `connectors` to the rail extract; build `component_id` via union-find over shared
-      connector ids (restricted to crossing segments).
+- [x] Add `connectors` to the rail extract; build `component_id` via scipy connected-components
+      over shared connector ids (restricted to crossing segments).
+- [x] Refactor: replace the hand-rolled union-find + O(k²) distance loops with scipy
+      (`csgraph.connected_components` + `spatial.cKDTree.query_pairs`); behaviour unchanged
+      (2,568 → 2,115; Mannheim = 4).
 - [x] Reduce to one crossing per `(component_id, water_id)` sub-clustered by distance `D`; keep the
       largest-`overlap_m` representative (real `rail_segment_id`, `component_id`, `water_id`, plus
       `merged_parts` and `total_overlap_m`). Emit the V2-shaped schema; export `crossing_reps.parquet`

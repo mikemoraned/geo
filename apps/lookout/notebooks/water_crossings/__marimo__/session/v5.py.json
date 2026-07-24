@@ -2,7 +2,7 @@
   "version": "1",
   "metadata": {
     "marimo_version": "0.23.15",
-    "script_metadata_hash": "02f91bb8ca8f033774bedb033a4bb74c"
+    "script_metadata_hash": "6082b4d64cf49e9f1c64358437c6c97f"
   },
   "cells": [
     {
@@ -163,7 +163,7 @@
     },
     {
       "id": "xJFY",
-      "code_hash": "4c61604740993e03ca041495b13ea2f4",
+      "code_hash": "e7cc6726a20e38b325de98addc5c419a",
       "outputs": [
         {
           "type": "data",
@@ -181,7 +181,7 @@
         {
           "type": "data",
           "data": {
-            "text/html": "<marimo-ui-element object-id='Hstk-0' random-id='4e44e476-eaeb-75be-e2c5-ef03d2dbf39d'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;5b5236b4b4974406b58d881d41cd5c2a&quot;}' data-label='null' data-model-id='&quot;5b5236b4b4974406b58d881d41cd5c2a&quot;'></marimo-anywidget></marimo-ui-element>"
+            "text/html": "<marimo-ui-element object-id='Hstk-0' random-id='a9613da8-1d67-60c6-bd69-cb9e0301494f'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;9eed0c60a6174f3cae8534581c68ac2e&quot;}' data-label='null' data-model-id='&quot;9eed0c60a6174f3cae8534581c68ac2e&quot;'></marimo-anywidget></marimo-ui-element>"
           }
         }
       ],
@@ -194,7 +194,7 @@
         {
           "type": "data",
           "data": {
-            "application/json": "{\"rail\": 17080021, \"water\": 60344189, \"crossings\": 755704, \"crossing_points\": 203824, \"crossing_reps\": 261951}"
+            "application/json": "{\"rail\": 17080021, \"water\": 60344189, \"crossings\": 755704, \"crossing_points\": 203824, \"crossing_reps\": 215807}"
           }
         }
       ],

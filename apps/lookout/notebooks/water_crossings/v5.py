@@ -4,7 +4,9 @@
 #     "geopandas==1.1.4",
 #     "lonboard==0.16.0",
 #     "marimo",
+#     "numpy==2.5.1",
 #     "pyarrow==25.0.0",
+#     "scipy==1.18.0",
 # ]
 # requires-python = ">=3.13"
 # ///
@@ -378,89 +380,71 @@ def _(crossing_points_count, mo, points_gdf):
 
 @app.cell
 def _(PROJECTED_CRS, con, crossing_points_count, merge_dist, points_gdf):
-    # V5: collapse to one crossing per (physical track, water body). A physical track = a maximal run
-    # of connected crossing segments (union-find over shared Overture connector ids — robust where a
-    # geometry line-merge under-performed, see V3b). Within each (component_id, water_id) group we
-    # single-linkage merge kept parts within `merge_dist` metres and keep the largest-overlap
-    # representative. Because the merge is scoped to one component+water, `merge_dist` is safe to make
-    # large: it only splits a horseshoe re-crossing (far) from island/bridge spread (close); parallel
-    # tracks (different component) and different water bodies are already kept apart by the scoping.
+    # V5: collapse to one crossing per (physical track, water body). Two connected-components
+    # problems, both handed to scipy (no hand-rolled union-find):
+    #   1. physical track = component of crossing segments that share an Overture connector id
+    #   2. final crossing  = component of kept parts that share a (track, water) and are within
+    #      `merge_dist` metres of each other
+    # Scoping the distance graph to (component, water) keeps parallel tracks / distinct waters apart,
+    # so `merge_dist` only splits horseshoe re-crossings (far) from island/bridge spread (close).
     _ = crossing_points_count  # dataflow: after the pipeline
-    from collections import defaultdict
+    import numpy as np
+    from scipy.spatial import cKDTree
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
 
-    # 1) component_id via union-find over connectors of the crossing segments
+    def _component_labels(n, edges):
+        """Connected-component label (0..k-1) per node for an undirected n-node graph."""
+        e = np.asarray(edges, dtype=int).reshape(-1, 2)
+        g = coo_matrix((np.ones(len(e)), (e[:, 0], e[:, 1])), shape=(n, n))
+        return connected_components(g, directed=False)[1]
+
+    # 1) segment -> physical-track component (edge = two crossing segments share a connector id)
     _rows = con.execute(
         "SELECT id, connectors FROM rail WHERE id IN (SELECT DISTINCT rail_id FROM crossing_points)"
     ).fetchall()
-    _parent = {}
-
-    def _find(x):
-        _parent.setdefault(x, x)
-        r = x
-        while _parent[r] != r:
-            r = _parent[r]
-        while _parent[x] != r:
-            _parent[x], x = r, _parent[x]
-        return r
-
-    def _union(a, b):
-        ra, rb = _find(a), _find(b)
-        if ra != rb:
-            _parent[ra] = rb
-
-    _first_seg = {}
+    _seg_ix = {sid: i for i, (sid, _) in enumerate(_rows)}
+    _seen, _seg_edges = {}, []
     for _sid, _conns in _rows:
-        _find(_sid)
         for _c in _conns or []:
             _cid = _c["connector_id"]
-            if _cid in _first_seg:
-                _union(_sid, _first_seg[_cid])
+            if _cid in _seen:
+                _seg_edges.append((_seg_ix[_sid], _seg_ix[_seen[_cid]]))
             else:
-                _first_seg[_cid] = _sid
-    _component = {sid: _find(sid) for sid in _parent}
+                _seen[_cid] = _sid
+    _seg_comp = _component_labels(len(_seg_ix), _seg_edges)
+    _component = {sid: int(_seg_comp[i]) for sid, i in _seg_ix.items()}
 
-    # 2) attach component + projected metric coords to the kept crossing parts
-    _g = points_gdf.copy()
-    _g["component_id"] = _g["rail_id"].map(_component).fillna(_g["rail_id"])
+    # 2) kept parts, with component id + metric coordinates
+    _g = points_gdf.reset_index(drop=True).copy()
+    _g["component_id"] = _g["rail_id"].map(_component)
     _proj = _g.to_crs(PROJECTED_CRS)
-    _g["_x"] = _proj.geometry.x.to_numpy()
-    _g["_y"] = _proj.geometry.y.to_numpy()
+    _xy = np.column_stack(
+        [_proj.geometry.x.to_numpy(), _proj.geometry.y.to_numpy()]
+    )
 
-    # 3) within each (component_id, water_id) group, single-linkage merge parts within merge_dist metres;
-    #    keep the largest-overlap representative (real rail_id/geom), tag with merged_parts + total length
+    # 3) final crossing = parts linked when same (component, water) AND within merge_dist metres
     _D = float(merge_dist.value)
-    _keep, _npart, _tot = [], {}, {}
-    for _key, _grp in _g.groupby(["component_id", "water_id"], sort=False):
-        _idx = list(_grp.index)
-        _xy = _grp[["_x", "_y"]].to_numpy()
-        _p = {i: i for i in _idx}
+    _key = (
+        _g["component_id"].astype(str) + "|" + _g["water_id"].astype(str)
+    ).to_numpy()
+    _near = cKDTree(_xy).query_pairs(_D, output_type="ndarray")
+    _part_edges = (
+        _near[_key[_near[:, 0]] == _key[_near[:, 1]]]
+        if len(_near)
+        else np.empty((0, 2), int)
+    )
+    _g["_cluster"] = _component_labels(len(_g), _part_edges)
 
-        def _f(x):
-            while _p[x] != x:
-                _p[x] = _p[_p[x]]
-                x = _p[x]
-            return x
-
-        for _i in range(len(_idx)):
-            for _j in range(_i + 1, len(_idx)):
-                if (_xy[_i, 0] - _xy[_j, 0]) ** 2 + (
-                    _xy[_i, 1] - _xy[_j, 1]
-                ) ** 2 <= _D * _D:
-                    _a, _b = _f(_idx[_i]), _f(_idx[_j])
-                    if _a != _b:
-                        _p[_a] = _b
-        _sub = defaultdict(list)
-        for _i in _idx:
-            _sub[_f(_i)].append(_i)
-        for _members in _sub.values():
-            _best = max(_members, key=lambda i: _g.loc[i, "overlap_m"])
-            _keep.append(_best)
-            _npart[_best] = len(_members)
-            _tot[_best] = float(_g.loc[_members, "overlap_m"].sum())
-
-    reps_v5_gdf = _g.loc[_keep].drop(columns=["_x", "_y"]).copy()
-    reps_v5_gdf["merged_parts"] = [_npart[i] for i in _keep]
-    reps_v5_gdf["total_overlap_m"] = [_tot[i] for i in _keep]
+    # one representative per cluster: the largest-overlap part, tagged with size + total length
+    _stats = (
+        _g.groupby("_cluster")["overlap_m"]
+        .agg(["size", "sum"])
+        .rename(columns={"size": "merged_parts", "sum": "total_overlap_m"})
+        .reset_index()
+    )
+    _rep = _g.loc[_g.groupby("_cluster")["overlap_m"].idxmax()]
+    reps_v5_gdf = _rep.merge(_stats, on="_cluster").drop(columns=["_cluster"])
     (len(points_gdf), len(reps_v5_gdf), _D)
     return (reps_v5_gdf,)
 
