@@ -46,12 +46,78 @@ pipeline depends on:
   `route_long_name` are empty for 101/102, and `route_type` can't split IC from EC. So we
   do NOT synthesise a category prefix (it would mislabel EC trains); `mode` carries the
   family honestly and `train_number` is the bare integer.
-- **`shapes.txt` present but rail-useless.** DELFI ships a 308 MB `shapes.txt` (with
-  `shape_id` in `trips.txt`), and Motis loads it (`with_shapes: true`) — but **only
-  bus/coach operators populate geometry.** Rail `map/trips` polylines are still ≤4 points
-  (straight stop-to-stop; COACH hits 1000+). So **pfaedle is still needed** for rail track
-  geometry: run it (rail-only) over `germany.osm.pbf` + the GTFS zip to generate rail
-  shapes, repackage, re-import.
+- **`shapes.txt` present but rail-useless → fixed with pfaedle.** DELFI ships a 308 MB
+  `shapes.txt` (with `shape_id` in `trips.txt`), and Motis loads it (`with_shapes: true`) —
+  but **only bus/coach operators populate geometry.** Rail `map/trips` polylines were ≤4
+  points (straight stop-to-stop; COACH hits 1000+). Fixed by generating rail shapes with
+  **pfaedle** — see the pfaedle section below.
+
+## Rail track geometry via pfaedle (`tools/pfaedle`)
+
+pfaedle map-matches GTFS trips onto OSM to synthesise `shapes.txt`. It's its **own tool**
+under `tools/pfaedle` (a generic OSM+GTFS→shapes tool, not motis-specific), driven from
+`tools/motis-server`'s `shapes` recipe.
+
+- **No homebrew formula — built from source.** `just build` clones `ad-freiburg/pfaedle`
+  and `cmake`-builds it to `build/pfaedle`. Needs `cmake` + `libzip` (`just prerequisites`);
+  libzip lets it read/write the GTFS `.zip` directly. `-x` reads `.pbf` directly.
+- **Run from the build dir, so pass `-c src/pfaedle.cfg`.** pfaedle only finds its default
+  MOT→OSM matching config implicitly when installed; without it → "No MOT configurations".
+- **`-D -m rail` recomputes rail shapes only, keeping bus/coach shapes.** Verified: rail
+  `shp_101_*` shapes come out ~hundreds of points (curved); existing bus shapes untouched.
+  `shapes.txt` grows 308 MB → ~2.3 GB; `trip_short_name` (train numbers) and `route_type`
+  101/102 are preserved through pfaedle's rewrite.
+- **pfaedle's GTFS parser is stricter than motis — drop `transfers.txt` + `pathways.txt`
+  from its input.** It aborts on dangling references those leaf tables carry (DELFI's point at
+  stop ids not in `stops.txt`), which motis tolerates. The splice (below) takes everything
+  non-shape from the *original* feed anyway, so we just delete them from pfaedle's input
+  (`HOLD_OUT`). Note: `trips.txt.shape_id` and `stops.txt.level_id` are validated too, so
+  `shapes.txt`/`levels.txt` must stay *in* the input.
+
+### 🚧 BLOCKED (2026-07-24): importing pfaedle's `shapes.txt` kills GTFS-RT realtime
+
+**Do not ship the pfaedle pipeline as-is — it breaks realtime, and we don't yet know why.**
+Slice parked here; the recipe/tool code is written but the produced feed is unusable.
+
+- **Symptom:** import the raw DELFI feed → RT resolves ~99.97% (realtime ~90% of `map/trips`
+  segments, delays present). Import any feed carrying pfaedle's `shapes.txt` → `trip_resolve_error`
+  ≈ 99.6%, **0% `realTime:true`**. The static schedule itself imports fine (`map/trips` returns
+  the trips, and rail is genuinely curved — HIGHSPEED ~543 pts, REGIONAL ~1050).
+- **Isolated to `shapes.txt`, NOT `trips.txt`.** Three attempts, all broke RT identically:
+  (1) pfaedle's full-feed rewrite; (2) splice via csv (reformats DELFI's quoting); (3) splice
+  that keeps `trips.txt` **byte-identical to raw except the rail `shape_id` fields**
+  (`splice/main.py`, right-split, verified only 163 431 lines differ). In (3) the failing RT
+  trips are **bus** trips whose `shape_id` was never touched → the trigger is the swapped-in
+  `shapes.txt` (308 MB → 2.3 GB), the only remaining difference from the working raw feed.
+- **Not a live-feed currency issue.** Re-fetched the live RT feed same-day: its trip_ids still
+  overlap our static 99.6% (218 446/219 368), so ids are present; motis just fails to resolve
+  them once the big `shapes.txt` is imported.
+- **Leading hypothesis (untested):** pfaedle's 2.3 GB rail geometry makes `motis import` hit a
+  limit / produce a degraded timetable whose RT trip index is incomplete while scheduled
+  queries still work. Alt: something in pfaedle's shape rows motis mishandles.
+- **Why testing stalled:** the clean way to A/B is to import a feed, run `motis server`, read
+  the `GTFS-RT update stats` line from its log. **Claude Code's sandbox can't run `motis server`**
+  — it denies the LMDB tile mmap (`data/tiles/tiles.mdb` → "Operation not permitted"), and Mike
+  doesn't want the sandbox disabled. So each RT test needs Mike to run motis by hand.
+
+**To resume:**
+1. Confirm the trigger: build `raw feed + only shapes.txt swapped` (trips.txt fully original),
+   import, check the RT stat. Expect it to break → confirms `shapes.txt`.
+2. Then chase the cause: inspect `motis import` stdout for shape/memory/limit warnings; try
+   shrinking `shapes.txt` (pfaedle `--grid-size` / a Douglas-Peucker simplification of the rail
+   polylines; and/or drop the unused 308 MB bus shapes), re-import, re-test.
+3. If motis genuinely can't take large rail shapes, consider filing a motis issue, or accept
+   straight-line rail (what transitous does — `drop-shapes: true`) and drop this slice.
+
+**State to restore:** the running server's `data/` currently holds the RT-broken pfaedle import,
+and `geo_data/germany_gtfs.pfaedle.zip` is the (RT-breaking) byte-preserving spliced feed. To get
+working realtime back, re-import the raw feed: `just motis_setup germany_gtfs.zip` + restart.
+
+- **Never overwrites the input.** `tools/motis-server` `just shapes` writes a derived
+  `geo_data/germany_gtfs.pfaedle.zip` and re-imports via `motis_setup germany_gtfs.pfaedle.zip`
+  (its `gtfs` arg defaults to the raw feed). The pfaedle-tool `shapes` recipe writes to a temp
+  then atomically `mv`s to the output, so inputs are never touched and an interrupt can't leave
+  a half-written zip. Heavy one-off (~16 min match over all-Germany rail + a big re-import).
 
 ## The `/trip` endpoint — agency + train number
 

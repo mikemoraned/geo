@@ -315,6 +315,19 @@ open. So both switches are plain URL changes, no credential injection.
   drop-in geometry upgrade the visualisation picks up automatically on the next ingest.
   > **Confirmed still needed (2026-07-23):** DELFI's `shapes.txt` covers only bus/coach, so
   > rail geometry is still straight lines — pfaedle remains the fix.
+  >
+  > **🚧 PARKED (2026-07-24) — tooling done, blocked on a realtime regression.** Built
+  > `tools/pfaedle` (its own tool: build-from-source + a `shapes` recipe) and wired
+  > `tools/motis-server`'s `shapes`/`motis_setup`. pfaedle **does** produce correct curved
+  > rail (HIGHSPEED ~543 pts, REGIONAL ~1050, vs 2). **But importing the resulting `shapes.txt`
+  > kills GTFS-RT realtime** (`trip_resolve_error` ≈ 99.6%, 0% `realTime:true`, vs raw feed's
+  > ~99.97%). Isolated to `shapes.txt` itself, not `trips.txt` (a byte-preserving splice that
+  > leaves `trips.txt` identical to raw except rail `shape_id`s still breaks it, and the failing
+  > RT trips are untouched bus trips). Not a live-feed issue (RT ids still overlap static 99.6%).
+  > Couldn't finish root-causing: the RT test needs `motis server` running, which Claude's
+  > sandbox can't do (LMDB tile mmap denied) and we're not disabling the sandbox. **Full write-up
+  > + resume steps in `.claude/memory/motis-trips-api.md` (the "🚧 BLOCKED" section).** To restore
+  > working realtime meanwhile: `just motis_setup germany_gtfs.zip` + restart.
 
 ## Observations
 
