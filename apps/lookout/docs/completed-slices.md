@@ -119,3 +119,33 @@ then logs it as a static map backdrop.
   degrees distance of a gps fix — a rough cut, not true ground distance (which would need
   reprojecting to a metric CRS); caveat noted in the help and code.
 
+## getting a second source of position data from Motis
+
+Added a second, non-GPS reference for train positions by polling a local Motis server
+for Germany and folding the results in alongside the GPS traces. The key structural fact:
+Motis' `map/trips` gives trip geometry, not vehicle GPS — a train's position at time T is
+*interpolated* along the segment spanning T. No German open feed carries VehiclePositions,
+so realtime-corrected interpolation is the nationwide ceiling; the server was configured
+with a GTFS-RT feed to make that interpolation delay-aware.
+
+- **New `motis` crate** (lib + `motis_poll`, `motis_ingest` binaries), depending on the
+  maintained `motis-openapi-progenitor` client and the `polyline` crate. A `client` wraps
+  `.trips()` and `/trip`; a `window` module keeps a rolling GPS set and derives a buffered
+  bounding box; a `store` appends raw segments to a duplication-allowed `motis.sqlite`.
+- **Capture loop** (`motis_poll`): reads recent GPS off redis non-destructively, builds a
+  buffered bbox, queries Motis, filters to rail modes, resolves each trip via `/trip` for
+  agency + train number, and appends segments. **Ingest** (`motis_ingest`) dedups on the
+  scheduled leg, decodes polylines to WKB linestrings, and writes a derived `train_segment`
+  table into `lookout.sqlite`. **Visualise** interpolates each train along its line by
+  realtime-corrected timing into moving, labelled, mode-coloured dots sharing the GPS view.
+- **Moved the server dataset from gtfs.de free to DELFI** (a plain public URL swap, static
+  then RT feed). This fixed the core data gap: DELFI carries correct `route_type`, so `mode`
+  alone now separates ICE/IC from S-Bahn, retiring the agency-based classification hack; and
+  train numbers arrive via `/trip`'s `trip_short_name`. RT ingest went to ~99.97% success.
+- **`BBox` promoted to `shared`**; geo types reuse external crates (`geo` `BoundingRect`/
+  `Scale`, `wkt`, `wkb`) rather than hand-rolled arithmetic.
+- **Parked (not done): pfaedle rail track geometry.** DELFI's `shapes.txt` covers only
+  bus/coach, so rail interpolation still cuts corners. The pfaedle tooling was built and
+  produces correct curved rail, but importing its `shapes.txt` breaks GTFS-RT realtime; decided to give up on fixing this for now.
+  Full write-up and resume steps live in `.claude/memory/motis-trips-api.md`.
+
