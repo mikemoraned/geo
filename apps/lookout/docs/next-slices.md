@@ -1,28 +1,5 @@
 # Next Slices
 
-## Slice: minimal version of water crossings
-
-### Target
-
-We want to be able to find where rivers / lakes / other visible water bodies cross a train line. This doesn't have to be absolutely perfect i.e. it's ok if we mis-identify some water classes and/or have some other geo anomilies. The water crossing should be visualisable so that we can manually cross-check it makes sense.
-
-It's ok if we only get this for a single country (Germany) or state (Thuringen).
-
-### Straw Man
-
-We should be able to do something like:
-1. Use OvertureMaps [water](https://docs.overturemaps.org/schema/reference/base/water/) dataset, restricted to the German country [division](https://docs.overturemaps.org/schema/reference/divisions/division/)
-2. Similarly, use OvertureMaps [segments](https://docs.overturemaps.org/schema/reference/transportation/segment/) also restricted to Germany, and to rail segments only.
-3. Find the intersections between the water and rail segments. The output of this should be another set of line segments.
-4. We only want the centroids of these line segments as lat/lon points; we want to retain the original segment this came from, and ideally also the id of the water body it overlapped with
-5. (optional) Map these lat/lon points back to the line segment and represent them as a %-age distance along the line segment:
-    * this would make the crossings a [Connector](https://docs.overturemaps.org/schema/reference/transportation/connector/)  
-    * we can enrich our copy of segments with these additional connectors via a [ConnectorReference](https://docs.overturemaps.org/schema/reference/transportation/types/connector_reference/)
-
-For this slice, we should do all this in notebooks, and in particular we should use https://marimo.io/pair with Claude. However, it's fine to be inspired and/or reuse info from existing things like crates/transport/src/overture.rs.
-
-We can visualise outputs either inline in the notebook via geopandas / lonboard. If that doesn't work, we can export as geoarrow and load into kepler.gl.
-
 ## Slice: minimal predictor and evaluation framework 
 
 ### Target
@@ -55,9 +32,7 @@ We can run this predictor for each gps reading in each session, and then assess 
 
 This measurement framework and predictor can both likely be improved, but we need to start with something.
 
-## Tasks
-
-### Refactor to Medallion Architecture
+## Refactor to Medallion Architecture
 
 I think at this point we need to cleanly separate our bits of data processing and storage into a [medallion architecture](https://motherduck.com/glossary/medallion-architecture/). In this context this means something like:
 * bronze:
@@ -70,6 +45,12 @@ I think at this point we need to cleanly separate our bits of data processing an
 * gold:
     * results of runs evaluating particular predictor versions against silver datasets
 
-### ...
+### Tasks
 
-TBC
+...
+
+## ...
+
+### Tasks 
+
+...
