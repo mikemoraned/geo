@@ -38,7 +38,7 @@
         {
           "type": "data",
           "data": {
-            "text/html": "<pre class='text-xs'>&lt;_duckdb.DuckDBPyConnection object at 0x177a2f6b0&gt;</pre>"
+            "text/html": "<pre class='text-xs'>&lt;_duckdb.DuckDBPyConnection object at 0x317dd4030&gt;</pre>"
           }
         }
       ],
@@ -155,7 +155,7 @@
         {
           "type": "data",
           "data": {
-            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>Show overlap classes:</strong></span></span><marimo-ui-element object-id='emfo-0' random-id='ce39cb8e-8e65-32b6-8f3d-d642a724db61'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eLINESTRING overlaps \u2014 areal water, track spans it (1246)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><marimo-ui-element object-id='emfo-1' random-id='2e2585cc-e5e9-21df-5794-a714ff49ba34'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ePOINT overlaps \u2014 linear watercourse centrelines (1322)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>V5 collapse (connector-component + distance):</strong></span></span><marimo-ui-element object-id='emfo-2' random-id='658ea268-52ea-019f-24b4-4bc71242cc14'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ecollapse to one per (physical track, water body)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><marimo-ui-element object-id='emfo-3' random-id='9221beb4-f83f-29f3-a25f-4d161dfb3792'><marimo-slider data-initial-value='100' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003emerge distance within track+water (m)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-start='25' data-stop='500' data-step='25' data-steps='[]' data-debounce='false' data-disabled='false' data-orientation='&quot;horizontal&quot;' data-show-value='true' data-include-input='false' data-full-width='false'></marimo-slider></marimo-ui-element></div>"
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>Show overlap classes:</strong></span></span><marimo-ui-element object-id='emfo-0' random-id='2d9c090e-d706-d5dc-6442-08c18c1b85d5'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eLINESTRING overlaps \u2014 areal water, track spans it (1246)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><marimo-ui-element object-id='emfo-1' random-id='077069ec-b14b-469c-4468-c27e80332875'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ePOINT overlaps \u2014 linear watercourse centrelines (1322)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>V5 collapse (connector-component + distance):</strong></span></span><marimo-ui-element object-id='emfo-2' random-id='82a98ea8-888f-9fc4-f8df-f7fa2bfc0271'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ecollapse to one per (physical track, water body)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><marimo-ui-element object-id='emfo-3' random-id='f9109063-6b45-dbbb-a56e-b10bb7e121b0'><marimo-slider data-initial-value='100' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003emerge distance within track+water (m)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-start='25' data-stop='500' data-step='25' data-steps='[]' data-debounce='false' data-disabled='false' data-orientation='&quot;horizontal&quot;' data-show-value='true' data-include-input='false' data-full-width='false'></marimo-slider></marimo-ui-element></div>"
           }
         }
       ],
@@ -168,7 +168,7 @@
         {
           "type": "data",
           "data": {
-            "text/html": "<marimo-ui-element object-id='xJFY-0' random-id='919bf03b-7302-c4a8-5b48-d0c2cac538a6'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;17d790f5cc7240cf87707d97629939ef&quot;}' data-label='null' data-model-id='&quot;17d790f5cc7240cf87707d97629939ef&quot;'></marimo-anywidget></marimo-ui-element>"
+            "text/html": "<marimo-ui-element object-id='xJFY-0' random-id='77a33cdc-f37a-1aa6-298a-df87c7cb3a71'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;8fa9cff876df4eb393b47a7ba0fcfa82&quot;}' data-label='null' data-model-id='&quot;8fa9cff876df4eb393b47a7ba0fcfa82&quot;'></marimo-anywidget></marimo-ui-element>"
           }
         }
       ],
@@ -181,7 +181,7 @@
         {
           "type": "data",
           "data": {
-            "text/html": "<marimo-ui-element object-id='DOws-0' random-id='7af3465a-048b-40fb-0865-dc7a1a05a1d9'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;c514a40046d547e08b9c02850a51b40f&quot;}' data-label='null' data-model-id='&quot;c514a40046d547e08b9c02850a51b40f&quot;'></marimo-anywidget></marimo-ui-element>"
+            "text/html": "<marimo-ui-element object-id='DOws-0' random-id='61f09511-09ea-6f94-95df-fdbabafeaeed'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;4012503344a748abaea17c0d09fa098e&quot;}' data-label='null' data-model-id='&quot;4012503344a748abaea17c0d09fa098e&quot;'></marimo-anywidget></marimo-ui-element>"
           }
         }
       ],
@@ -194,7 +194,7 @@
         {
           "type": "data",
           "data": {
-            "text/html": "<marimo-ui-element object-id='wchI-0' random-id='769eeaf3-e394-05eb-4251-dbc801a36577'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;6da8c389c5bb43c896cd90d63b898fa0&quot;}' data-label='null' data-model-id='&quot;6da8c389c5bb43c896cd90d63b898fa0&quot;'></marimo-anywidget></marimo-ui-element>"
+            "text/html": "<marimo-ui-element object-id='wchI-0' random-id='2bb654b2-0471-f19c-370d-ab16839bca5a'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;d446f1b0831741718b4adde875017b68&quot;}' data-label='null' data-model-id='&quot;d446f1b0831741718b4adde875017b68&quot;'></marimo-anywidget></marimo-ui-element>"
           }
         }
       ],
@@ -207,7 +207,7 @@
         {
           "type": "data",
           "data": {
-            "text/html": "<marimo-ui-element object-id='Hstk-0' random-id='9d5c4871-0b79-59c7-22cb-abb6838ad794'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;894ec7ea8a9e47d0b968621e85a5ea12&quot;}' data-label='null' data-model-id='&quot;894ec7ea8a9e47d0b968621e85a5ea12&quot;'></marimo-anywidget></marimo-ui-element>"
+            "text/html": "<marimo-ui-element object-id='Hstk-0' random-id='5ccad772-df4a-ebb6-437a-aca62f4452a3'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;693b4436d025498f8f489171b5b9e2bf&quot;}' data-label='null' data-model-id='&quot;693b4436d025498f8f489171b5b9e2bf&quot;'></marimo-anywidget></marimo-ui-element>"
           }
         }
       ],
@@ -220,7 +220,7 @@
         {
           "type": "data",
           "data": {
-            "application/json": "{\"rail\": 17080021, \"water\": 60360895, \"crossings\": 755748, \"crossing_points\": 204669, \"crossing_reps\": 215385}"
+            "application/json": "{\"rail\": 17080021, \"water\": 60487100, \"crossings\": 756426, \"crossing_points\": 204630, \"crossing_reps\": 215748}"
           }
         }
       ],
@@ -233,7 +233,33 @@
         {
           "type": "data",
           "data": {
-            "text/html": "<marimo-ui-element object-id='WDXE-0' random-id='f3c263fe-f391-070c-d109-dcbac22e80aa'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;name&#92;&quot;:&#92;&quot;Mannheim rail bridge (Rhine)&#92;&quot;,&#92;&quot;expected&#92;&quot;:4,&#92;&quot;found&#92;&quot;:4,&#92;&quot;count_ok&#92;&quot;:true,&#92;&quot;segments_ok&#92;&quot;:true,&#92;&quot;pass&#92;&quot;:true}]&quot;' data-total-rows='1' data-total-columns='6' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='false' data-page-size='10' data-field-types='[[&quot;name&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;expected&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;found&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;count_ok&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;segments_ok&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;pass&quot;,[&quot;boolean&quot;,&quot;bool&quot;]]]' data-show-filters='true' data-show-download='true' data-show-search='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='false' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-hidden-columns='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+            "text/html": "<marimo-ui-element object-id='WDXE-0' random-id='1650b9c7-5b02-92a6-837c-01bc5081fcf8'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;name&#92;&quot;:&#92;&quot;Mannheim rail bridge (Rhine)&#92;&quot;,&#92;&quot;expected&#92;&quot;:4,&#92;&quot;found&#92;&quot;:4,&#92;&quot;count_ok&#92;&quot;:true,&#92;&quot;segments_ok&#92;&quot;:true,&#92;&quot;pass&#92;&quot;:true}]&quot;' data-total-rows='1' data-total-columns='6' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='false' data-page-size='10' data-field-types='[[&quot;name&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;expected&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;found&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;count_ok&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;segments_ok&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;pass&quot;,[&quot;boolean&quot;,&quot;bool&quot;]]]' data-show-filters='true' data-show-download='true' data-show-search='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='false' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-hidden-columns='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "tHnH",
+      "code_hash": "d5da72dc47c7dd2459e8a99a139537d1",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><marimo-ui-element object-id='tHnH-0' random-id='960c0f12-1d07-ce5f-0b66-cfb520a9e2f7'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;dc20cb14ea9d4f209720937f8a2c6cd8&quot;}' data-label='null' data-model-id='&quot;dc20cb14ea9d4f209720937f8a2c6cd8&quot;'></marimo-anywidget></marimo-ui-element><div style='display: flex;flex: 1;flex-direction: row;justify-content: space-between;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><marimo-ui-element object-id='tHnH-1' random-id='ba0333f9-0796-59c7-d488-1ff4b6f10587'><marimo-text data-initial-value='&quot;&quot;' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ecase name&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-placeholder='&quot;e.g. Koblenz Rhine bridge&quot;' data-kind='&quot;text&quot;' data-full-width='false' data-disabled='false' data-debounce='true'></marimo-text></marimo-ui-element><marimo-ui-element object-id='tHnH-2' random-id='4a94b33f-a2b1-c111-b5e4-0256e312622e'><marimo-number data-initial-value='1' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eexpected_crossings&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-start='0' data-stop='200' data-debounce='false' data-full-width='false' data-disabled='false'></marimo-number></marimo-ui-element><marimo-ui-element object-id='tHnH-3' random-id='110497eb-5e97-69b8-071e-28fb903637ff'><marimo-button data-initial-value='0' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eRefresh from view&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-kind='&quot;neutral&quot;' data-disabled='false' data-full-width='false'></marimo-button></marimo-ui-element><marimo-ui-element object-id='tHnH-4' random-id='281fbf28-afea-8dbe-c678-8826eefdeb33'><marimo-button data-initial-value='0' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eAppend visible area&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-kind='&quot;neutral&quot;' data-disabled='false' data-full-width='false'></marimo-button></marimo-ui-element></div></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "OVcx",
+      "code_hash": "c4ae64049dfe7864a0d4818c2cf8d369",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">\u2705 Appended <strong>horseshoe</strong> \u2014 visible area <code>[7.33958, 49.69737, 7.36419, 49.70628]</code> (4 crossings). Re-run the test-cases cell to include it.</span></span>"
           }
         }
       ],

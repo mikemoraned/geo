@@ -365,5 +365,15 @@ Tasks:
       imported into `v5.py`. Checks each case against the V5 output — reps inside the bbox count ==
       `expected_crossings`, and each such rep's segment intersects the bbox. Mannheim passes
       (found 4, count_ok, segments_ok).
-- [ ] Add an interactive bbox-capture cell (viewport read or draw/enter) that appends a case
-      (the Mannheim bbox was derived from data rather than drawn).
+- [x] Interactive bbox-capture in `v5.py`: a `mo.ui.anywidget`-wrapped lonboard map showing rail
+      (grey) + V5 crossings (red) + city markers (hover for names), so you can see what a case
+      covers. **Capture = the map's visible area**: pan/zoom so the target fills the view, and the
+      bbox is derived from the synced `view_state` (centre + zoom, deck.gl web-mercator: `512*2**zoom`
+      px span the globe; nominal 1000×560 px map). Name / expected inputs, a Refresh-from-view button
+      showing the live in-box rep count, and an Append button that writes the case via
+      `crossing_checks.add_case`.
+      History: first tried lonboard's on-map box-select (`selected_bounds`) — undiscoverable in this
+      build; then a centre + `box_size_m` slider with a second **preview map** — that extra
+      re-rendering WebGL map is what blew up Safari's memory (not the rail on a single map). Settled
+      on visible-area + one map (rail kept). If memory is still tight, the three V5 step maps + main
+      viz each redraw the full 44k-segment rail — those could drop to the ~1.5k crossing segments.

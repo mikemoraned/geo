@@ -8,8 +8,45 @@ notebook's crossing representatives.
 
 from __future__ import annotations
 
+import json
+
 import geopandas as gpd
 import pandas as pd
+
+
+def add_case(path, name, bounds, expected_crossings, notes="") -> dict:
+    """Append a bbox test case to a GeoJSON FeatureCollection file.
+
+    `bounds` is (min_lon, min_lat, max_lon, max_lat); a rectangular Polygon feature is written
+    with the assertions in its `properties`. Returns the appended feature.
+    """
+    min_lon, min_lat, max_lon, max_lat = (float(v) for v in bounds)
+    feature = {
+        "type": "Feature",
+        "properties": {
+            "name": name,
+            "expected_crossings": int(expected_crossings),
+            "notes": notes,
+        },
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [min_lon, min_lat],
+                    [max_lon, min_lat],
+                    [max_lon, max_lat],
+                    [min_lon, max_lat],
+                    [min_lon, min_lat],
+                ]
+            ],
+        },
+    }
+    with open(path) as f:
+        collection = json.load(f)
+    collection["features"].append(feature)
+    with open(path, "w") as f:
+        json.dump(collection, f, indent=2)
+    return feature
 
 
 def load_cases(path) -> gpd.GeoDataFrame:

@@ -723,5 +723,139 @@ def _(rail_gdf, reps_v5_gdf):
     return
 
 
+@app.cell
+def _(cities_gdf, lonboard, mo, rail_gdf, reps_v5_gdf):
+    # Interactive capture: pan/zoom the map so the target area FILLS the view — the captured bbox is the
+    # visible area. grey = rail segments; red dots = V5 crossings; dark dots = cities (hover for name).
+    # Name it, set expected, then Append.
+    _cap_cities = cities_gdf[["name", "population", "geometry"]].copy()
+    _cap_cities["name"] = _cap_cities["name"].astype("string")
+    capture_map = mo.ui.anywidget(
+        lonboard.Map(
+            [
+                lonboard.PathLayer.from_geopandas(
+                    rail_gdf[["geometry"]],
+                    get_color=[150, 150, 150],
+                    width_min_pixels=1,
+                ),
+                lonboard.ScatterplotLayer.from_geopandas(
+                    reps_v5_gdf[["geometry"]],
+                    get_fill_color=[220, 30, 30],
+                    radius_units="pixels",
+                    get_radius=4,
+                    radius_min_pixels=4,
+                    radius_max_pixels=4,
+                ),
+                lonboard.ScatterplotLayer.from_geopandas(
+                    _cap_cities,
+                    get_fill_color=[30, 30, 30, 220],
+                    stroked=True,
+                    get_line_color=[255, 255, 255],
+                    line_width_min_pixels=1,
+                    radius_units="pixels",
+                    get_radius=5,
+                    radius_min_pixels=5,
+                    radius_max_pixels=5,
+                ),
+            ],
+            height=560,
+        )
+    )
+    case_name = mo.ui.text(
+        placeholder="e.g. Koblenz Rhine bridge", label="case name"
+    )
+    case_expected = mo.ui.number(0, 200, value=1, label="expected_crossings")
+    refresh_button = mo.ui.run_button(label="Refresh from view")
+    append_button = mo.ui.run_button(label="Append visible area")
+    mo.vstack(
+        [
+            capture_map,
+            mo.hstack(
+                [case_name, case_expected, refresh_button, append_button]
+            ),
+        ]
+    )
+    return append_button, capture_map, case_expected, case_name, refresh_button
+
+
+@app.cell
+def _(
+    append_button,
+    capture_map,
+    case_expected,
+    case_name,
+    mo,
+    refresh_button,
+    reps_v5_gdf,
+):
+    # The captured bbox is the map's visible area, derived from view_state (centre + zoom) and the map's
+    # pixel size (deck.gl web-mercator: 512*2**zoom px span the globe). No second map is drawn, to keep
+    # memory low. Append writes the case on button click; click "Refresh from view" after panning.
+    import importlib as _il
+    import math as _math
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _dir = _Path(__file__).parent
+    if str(_dir) not in _sys.path:
+        _sys.path.insert(0, str(_dir))
+    import crossing_checks as _cc
+
+    _cc = _il.reload(_cc)  # pick up module edits without a kernel restart
+    _ = refresh_button.value  # re-run when "Refresh from view" is clicked
+
+    _MAP_W_PX, _MAP_H_PX = (
+        1000,
+        560,
+    )  # nominal capture-map size for the visible-extent calc
+    _vs = capture_map.value.get("view_state") or {}
+    _z, _clat, _clon = (
+        _vs.get("zoom"),
+        _vs.get("latitude"),
+        _vs.get("longitude"),
+    )
+    if _z is None:
+        _out = mo.md(
+            "*Pan/zoom the map so the target area fills the view, then click Refresh from view.*"
+        )
+    else:
+        _deg_per_px = 360.0 / (512 * 2**_z)
+        _dlon = (_MAP_W_PX / 2) * _deg_per_px
+        _dlat = (_MAP_H_PX / 2) * _deg_per_px * _math.cos(_math.radians(_clat))
+        _minx, _miny, _maxx, _maxy = (
+            _clon - _dlon,
+            _clat - _dlat,
+            _clon + _dlon,
+            _clat + _dlat,
+        )
+        _bounds = tuple(round(v, 5) for v in (_minx, _miny, _maxx, _maxy))
+        _found = int(
+            (
+                (reps_v5_gdf.lon >= _minx)
+                & (reps_v5_gdf.lon <= _maxx)
+                & (reps_v5_gdf.lat >= _miny)
+                & (reps_v5_gdf.lat <= _maxy)
+            ).sum()
+        )
+        if append_button.value and case_name.value:
+            _cc.add_case(
+                _dir / "test_cases.geojson",
+                case_name.value,
+                _bounds,
+                case_expected.value,
+            )
+            _out = mo.md(
+                f"✅ Appended **{case_name.value}** — visible area `{list(_bounds)}` "
+                f"({_found} crossings). Re-run the test-cases cell to include it."
+            )
+        else:
+            _out = mo.md(
+                f"**Visible area** `{list(_bounds)}` — **{_found}** crossings inside. "
+                "Frame the target, name it, and click Append."
+            )
+    _out
+    return
+
+
 if __name__ == "__main__":
     app.run()
