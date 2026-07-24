@@ -100,7 +100,15 @@ Same as V1 but also:
 
 #### V3:
 
-Same as V2 but also:
+I am seeing lots of cases where overlaps are very close to each other. This makes sense as each segment is separate but could be very short, so multiple segments all interact with the same water body. I'd like to minimise close-by overlaps to just one representative example.
+
+Some ideas:
+* do agglomerative clustering on the overlap points and then traverse the cluster tree, only keeping one for each sub-tree where all entries are within some distance of each other
+* similar but via k-means clustering of size = 3, with a max-distance limit, where we keep one example per cluster
+
+#### V4:
+
+Same as V3 but also:
 - [ ] Widen from the four-state region to all of Germany (division-restricted) and re-run, sanity
       checking counts and a few crossings.
 - [ ] (optional) Map each crossing point to a %-distance along its rail segment
