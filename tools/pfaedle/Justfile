@@ -1,0 +1,59 @@
+# pfaedle: map-matches GTFS trips onto OSM to generate real track geometry (shapes.txt).
+# Used to give rail trips curved track geometry, which the DELFI feed lacks for rail — see
+# tools/motis-server. pfaedle has no homebrew formula, so we build it from source.
+# https://github.com/ad-freiburg/pfaedle
+
+# Anchor to this Justfile's dir so paths hold when invoked from another tool (`just -f`).
+here := justfile_directory()
+SRC_DIR := here / "src"
+BUILD_DIR := here / "build"
+BIN := BUILD_DIR / "pfaedle"
+# Default MOT→OSM matching config, shipped in the source tree. pfaedle only finds it
+# implicitly when installed; we run from the build dir, so pass it explicitly with `-c`.
+CFG := SRC_DIR / "pfaedle.cfg"
+# Leaf GTFS tables dropped from pfaedle's input. pfaedle's GTFS parser is stricter than
+# motis and aborts on dangling references these tables carry (e.g. DELFI's
+# transfers.txt/pathways.txt point at stop ids absent from stops.txt), yet it needs neither
+# to build shapes. We only take shapes.txt + trips.txt from pfaedle's output (see the splice
+# below), so dropping these from the input is harmless. Override if a feed trips the parser
+# on another leaf table.
+HOLD_OUT := "transfers.txt pathways.txt"
+
+# Build requirements (idempotent): cmake to build, libzip so pfaedle reads/writes the GTFS
+# .zip directly (verified linked via `otool -L`). See pfaedle's README "Requirements".
+prerequisites:
+    brew install cmake libzip
+
+# Clone + build pfaedle from source. One-off; skips the clone if already present. Needs
+# `prerequisites`.
+build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d "{{ SRC_DIR }}" ]; then
+        git clone --recursive https://github.com/ad-freiburg/pfaedle "{{ SRC_DIR }}"
+    fi
+    cmake -S "{{ SRC_DIR }}" -B "{{ BUILD_DIR }}"
+    time cmake --build "{{ BUILD_DIR }}" -j
+    "{{ BIN }}" --help | head -1
+
+# Add real track geometry to a GTFS feed by map-matching onto OSM for the given MOTs. The
+# output is the ORIGINAL feed with only shapes.txt + trips.txt.shape_id replaced by pfaedle's
+# — NOT pfaedle's full rewrite, which breaks motis GTFS-RT trip resolution (realtime → ~0%)
+# even though the data is unchanged (see splice_shapes.py). Heavy one-off (map-matches <mots>
+# nationwide; reads the whole OSM). `-D` recomputes shapes for <mots> only (non-<mots> shapes
+# kept); `-x` reads .pbf directly. Uses ~10 GB of scratch under build/ for a nationwide feed.
+#   osm:  path to OSM file (.pbf or .osm[.bz2/.gz])
+#   gtfs: path to input GTFS .zip
+#   out:  path to write the output GTFS .zip
+#   mots: comma-separated MOTs (default: rail)
+shapes osm gtfs out mots="rail": build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    work="{{ BUILD_DIR }}/shapes-tmp"
+    rm -rf "$work"; mkdir -p "$work/in" "$work/out"
+    unzip -oq "{{ gtfs }}" -d "$work/in"
+    for f in {{ HOLD_OUT }}; do rm -f "$work/in/$f"; done
+    time "{{ BIN }}" -c "{{ CFG }}" -D -m "{{ mots }}" -x "{{ osm }}" -o "$work/out" "$work/in"
+    uv run --project splice python splice/main.py "{{ gtfs }}" "$work/out" "$work/spliced.zip"
+    mv -f "$work/spliced.zip" "{{ out }}"
+    rm -rf "$work"
