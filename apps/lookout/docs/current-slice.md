@@ -175,6 +175,22 @@ contiguous rail **before** intersecting, so one physical crossing yields one ove
 rather than one-per-segment. Preferred over V3 because it **preserves parallel-track crossings**
 (unconnected tracks don't line-merge) and needs no arbitrary `eps`.
 
+> **⛔ Stage 1 finding (measured 2026-07-24, four-state extract) — merge-first does NOT dedup; V3b parked.**
+> - Rail line-merge collapses 44,096 → 38,793 contiguous lines (`ST_LineMerge(ST_Collect(list(geometry)))`;
+>   `ST_Union_Agg` is the *wrong* tool — it nodes at junctions and *fragments* to 70,230).
+> - Crossings recomputed from the merged rail: **3,523 vs V2's 3,527** — essentially unchanged. So
+>   the near-duplicate overlaps are **not** caused by split rail segments (the V3b premise is refuted).
+> - The duplication is **water-side + spatial**: unioning the crossed water (the V4 idea) drops
+>   crossings 3,527 → ~2,553 — point crossings 2,281 → 1,324 as centrelines get absorbed into
+>   polygons; the remainder DBSCAN collapses is separate-but-nearby water bodies + parallel tracks.
+> - Consequences: (1) Stage 2 (re-attach) would build on a no-op; (2) **V3 already delivers deduped
+>   + segment-tied output** — its DBSCAN representatives are real crossing rows, so they keep
+>   `rail_segment_id`/`water_id` (the V2 schema, deduped); (3) **V4 water-union is the real lever**
+>   for the poly+centreline case. Rail-merge is parked as a tested dead-end *for dedup*.
+> - `v3b.py` remains a clean v2 clone (no Stage-1 cells committed).
+
+The original two-stage plan is kept below for the record.
+
 **Two stages:**
 
 *Stage 1 — dedup by merging rail.* Build maximal contiguous rail lines, then intersect with
@@ -219,17 +235,15 @@ junctions. Line-merge + topological re-attach is the recommended standard route.
 
 Tasks:
 - [x] Copy `v2.py` → `v3b.py`.
-- [ ] Stage 1: line-merge contiguous rail, re-run the intersect/filter/dump; compare kept-crossing
-      counts and a few locations (incl. the Mannheim bridge) vs raw V2 and vs V3 DBSCAN.
-- [ ] Stage 2: re-attach each crossing to its single owning segment (topological, small tol,
-      one-segment representative under the centroid), project to `frac` via `ST_LineLocatePoint`;
-      emit the V2-shaped `crossing_points` schema.
+- [x] Stage 1: line-merge contiguous rail, re-run the intersect/filter/dump; compare counts.
+      **Result: no meaningful dedup (3,527 → 3,523) — see finding above. V3b parked.**
+- [-] Stage 2: re-attach each crossing to its single owning segment — moot without a working
+      Stage 1; the `ST_LineLocatePoint` → `frac` (Connector) idea moves to V5 if still wanted.
 
 #### V4:
 
-Same as V3b but also:
+Same as V2 but also:
 * [ ] we account for some water bodies being represented both as a centre-line and an area by doing a union of all water bodies into a single area, which should have the effect of the centre-line disappearing.
-
 
 #### V5:
 
