@@ -302,14 +302,22 @@ Cases handled: islands (C1) ✓, parallel tracks kept (C2) ✓, split bridges (C
 - `D` choice: large enough to span the widest island-braided bridge, small enough to separate the
   tightest horseshoe. Tunable; the scoping makes it forgiving.
 
+Built in `notebooks/water_crossings/v5.py` (clone of `v4.py`).
+
 Tasks:
-- [ ] Clone `v4.py` → `v5.py`.
-- [ ] Add `connectors` to the rail extract; build `component_id` via union-find over shared
+- [x] Clone `v4.py` → `v5.py`.
+- [x] Add `connectors` to the rail extract; build `component_id` via union-find over shared
       connector ids (restricted to crossing segments).
-- [ ] Reduce to one crossing per `(component_id, water_id)` sub-clustered by distance `D`; keep the
-      largest-`overlap_m` representative (real `rail_segment_id`, `component_id`, `water_id`, total
-      `overlap_m`). Emit the V2-shaped schema; export to `data/water/v5/`.
-- [ ] `D` slider; spot-check Mannheim (= 4) and a horseshoe example.
+- [x] Reduce to one crossing per `(component_id, water_id)` sub-clustered by distance `D`; keep the
+      largest-`overlap_m` representative (real `rail_segment_id`, `component_id`, `water_id`, plus
+      `merged_parts` and `total_overlap_m`). Emit the V2-shaped schema; export `crossing_reps.parquet`
+      to `data/water/v5/`.
+- [x] `D` slider (`merge_dist`, 25–500 m, default 100) + `collapse_v5` checkbox in the map.
+      Result at 100 m: **2,568 → 2,115**; **Mannheim river = 4** (4 components, each with its 3
+      island-channels merged, `merged_parts=[3,3,3,3]`). Larger `D` trends toward the full
+      (component,water) collapse (1,811); smaller `D` keeps more horseshoe-style re-crossings apart.
+      (Left as follow-up: add the Mannheim case to the test dataset and confirm each rep sits on an
+      in-bbox segment.)
 
 #### V6:
 
