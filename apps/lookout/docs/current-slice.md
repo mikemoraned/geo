@@ -259,8 +259,8 @@ Same as V2 but also:
 
 #### V5:
 
-To be built in a **new `notebooks/water_crossings/v5.py`** — cloned from `v4.py` (keeps V4's
-centreline-drop; export dir → `data/water/v5/`). Leave earlier notebooks untouched.
+Built in **`notebooks/water_crossings/v5.py`** — cloned from `v4.py` (keeps V4's centreline-drop;
+export dir → `data/water/v5/`). Leave earlier notebooks untouched.
 
 **Goal:** one crossing per **(physical track, water body)** — e.g. the Mannheim rail bridge =
 4 tracks × 1 river = **4** crossings — while (a) preserving parallel tracks and (b) *not*
@@ -302,8 +302,6 @@ Cases handled: islands (C1) ✓, parallel tracks kept (C2) ✓, split bridges (C
   component → would merge. Rare at open-water bridges; spot-check.
 - `D` choice: large enough to span the widest island-braided bridge, small enough to separate the
   tightest horseshoe. Tunable; the scoping makes it forgiving.
-
-Built in `notebooks/water_crossings/v5.py` (clone of `v4.py`).
 
 Tasks:
 - [x] Clone `v4.py` → `v5.py`.
