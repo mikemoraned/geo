@@ -242,12 +242,78 @@ Tasks:
 
 #### V4:
 
+Built in a **new `notebooks/water_crossings/v4.py`** — a verbatim copy of `v2.py` plus the
+water-dedup below (export dir → `data/water/v4/`). Leave `v2.py` untouched.
+
 Same as V2 but also:
-* [ ] we account for some water bodies being represented both as a centre-line and an area by doing a union of all water bodies into a single area, which should have the effect of the centre-line disappearing.
+* [x] we account for some water bodies being represented both as a centre-line and an area by doing a union of all water bodies into a single area, which should have the effect of the centre-line disappearing.
+      Implemented as a **targeted drop** (chosen over a literal full union, to preserve the V2
+      schema — `water_id` / `water_class` / `water_subtype` stay intact): in `crossing_points`,
+      drop each **point** crossing whose location lies inside an **areal water polygon**
+      (`ST_Contains`, bbox-pruned). Rationale: a river stored as both polygon and centreline gives
+      a redundant point there — the rail also crosses the polygon as a line, which already
+      represents it. Net: **3,527 → 2,568** (point crossings 2,281 → 1,322 — remaining points are
+      centreline-only rivers/canals with no polygon; line crossings unchanged at 1,246).
+      Equivalent to unioning water polygons and removing centrelines they cover, but per-body
+      identity is kept. (Adjacent distinct polygons are not merged — a minor effect here.)
 
 #### V5:
 
-Same as V4 but also:
+To be built in a **new `notebooks/water_crossings/v5.py`** — cloned from `v4.py` (keeps V4's
+centreline-drop; export dir → `data/water/v5/`). Leave earlier notebooks untouched.
+
+**Goal:** one crossing per **(physical track, water body)** — e.g. the Mannheim rail bridge =
+4 tracks × 1 river = **4** crossings — while (a) preserving parallel tracks and (b) *not*
+collapsing a **horseshoe** water body that loops back to cross the **same** track in two
+genuinely separate places.
+
+**Why the simpler collapses fall short** (measured on the four-state V4 output):
+- `ST_Dump` per part → **2,568** (Mannheim = 12: the river polygon has **6 island holes**, so each
+  track's span splits into 3 channels — *not* split segments).
+- One per **(rail_segment, water_id)** → **2,164** (Mannheim = 4 ✓) — but a horseshoe river
+  re-crossing the *same* segment far away would wrongly collapse to one mid-point.
+- One per **(connector-component, water_id)** → **1,811** — also merges *split bridges* (a track
+  cut into several connected segments over the water; ~31% of crossing segments connect to another:
+  1,524 → 1,054 components) and still keeps parallel tracks (unconnected → separate components).
+  Same horseshoe blind spot.
+- V3 DBSCAN @100 m → 1,415, but it **over-merges parallel tracks** (Mannheim = 1 ✗).
+
+**Approach — connector-component grouping + a within-group distance merge:**
+1. Add `connectors` to the rail extract; build adjacency among **crossing** segments that share a
+   connector id (union-find) → a `component_id` = a maximal run of connected crossing segments =
+   the *physical track* at that crossing. (Robust via Overture connector ids — geometry line-merge
+   under-performed here, see V3b.)
+2. Reduce: group the dumped crossing parts by **(component_id, water_id)**, then **within each
+   group** single-linkage merge parts within distance `D` (projected metres); keep one
+   representative per sub-cluster (largest-`overlap_m` part → keeps a real `rail_segment_id`; total
+   spanned length as `overlap_m`).
+3. Because the spatial merge is **scoped to one (component, water_id)**, `D` is safe to make
+   generous (~100–200 m): it only distinguishes *islands / bridge spread* (close → one) from a
+   *horseshoe re-crossing* (far → two). Parallel tracks (different component) and different water
+   bodies are already separated by the scoping — so **none of V3's chaining / parallel-track
+   problems apply**. Expose `D` as a slider.
+
+Cases handled: islands (C1) ✓, parallel tracks kept (C2) ✓, split bridges (C3) ✓, poly+centreline
+(C4, via V4 drop) ✓, horseshoe re-crossing kept-as-two (C5) ✓.
+
+**Edge cases:**
+- Parallel tracks that interconnect at a junction *right at* the water share a connector → one
+  component → would merge. Rare at open-water bridges; spot-check.
+- `D` choice: large enough to span the widest island-braided bridge, small enough to separate the
+  tightest horseshoe. Tunable; the scoping makes it forgiving.
+
+Tasks:
+- [ ] Clone `v4.py` → `v5.py`.
+- [ ] Add `connectors` to the rail extract; build `component_id` via union-find over shared
+      connector ids (restricted to crossing segments).
+- [ ] Reduce to one crossing per `(component_id, water_id)` sub-clustered by distance `D`; keep the
+      largest-`overlap_m` representative (real `rail_segment_id`, `component_id`, `water_id`, total
+      `overlap_m`). Emit the V2-shaped schema; export to `data/water/v5/`.
+- [ ] `D` slider; spot-check Mannheim (= 4) and a horseshoe example.
+
+#### V6:
+
+Same as V5 but also:
 - [ ] Widen from the four-state region to all of Germany (division-restricted) and re-run, sanity
       checking counts and a few crossings.
 - [ ] (optional) Map each crossing point to a %-distance along its rail segment
