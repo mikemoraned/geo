@@ -47,37 +47,57 @@ We can visualise outputs either inline in the notebook via geopandas / lonboard.
       `marimo-team/marimo-pair`), not an in-notebook API-key assistant — Claude Code is the agent.
       Installed at user scope; it drives a live marimo kernel (started with `--no-token`) via a
       `marimo-pair` skill. No `ANTHROPIC_API_KEY` needed.
-- [ ] Turn the `notebooks/water_crossings` placeholder into a runnable marimo notebook: add
+- [x] Turn the `notebooks/water_crossings` placeholder into a runnable marimo notebook: add
       `marimo`, `duckdb`, `geopandas`, `shapely`, `lonboard` to `pyproject.toml`; replace the
       stub `main.py` with a marimo notebook; confirm `uv run --project . marimo edit main.py` opens.
-- [ ] Resolve the four target states (Thüringen, Hesse, Baden-Württemberg,
+- [x] Resolve the four target states (Thüringen, Hesse, Baden-Württemberg,
       Rhineland-Palatinate) to Overture `division` region geometries to use as the query window.
-- [ ] Fetch a rail extract: query Overture `segment` for `subtype='rail'` (excluding
+- [x] Fetch a rail extract: query Overture `segment` for `subtype='rail'` (excluding
       `class='tram'`) within the four-state region, write to a local GeoParquet.
-- [ ] Fetch a water extract: query Overture `water` within the same region, write to a
+- [x] Fetch a water extract: query Overture `water` within the same region, write to a
       local GeoParquet.
-- [ ] Compute rail↔water intersections: `ST_Intersection` of rail lines with water geometries,
+- [x] Compute rail↔water intersections: `ST_Intersection` of rail lines with water geometries,
       producing the overlap line segments; retain the source rail segment `id` and the water
       body `id`.
-- [ ] Reduce each intersection to its centroid as a lat/lon point, keeping `rail_segment_id` and
+- [x] Reduce each intersection to its centroid as a lat/lon point, keeping `rail_segment_id` and
       `water_id`; write this crossings dataset to GeoParquet.
-- [ ] Visualise for manual cross-check: overlay rail lines, water, and crossing points in the
+- [x] Visualise for manual cross-check: overlay rail lines, water, and crossing points in the
       notebook via lonboard/geopandas. Fallback: export geoarrow and load into kepler.gl.
       Spot-check that crossings land where rail visibly meets water.
 
 #### V2:
 
+Built in `notebooks/water_crossings/v2.py` — a verbatim copy of `v1.py` plus the items
+below. It reads the local Overture mirror (`/Volumes/PRO-G40/OvertureMaps/data/release/
+<RELEASE>`) when present (much faster than S3, with S3 fallback), and `EXPORT_DIR` is now
+derived from the notebook filename so outputs land in `data/water/v2/` (v1/v2 don't clobber).
+
 Same as V1 but also:
-- [ ] try to elimate very short crossings i.e. where we wouldn't be able to see anything from a train because we went by too fast. We probably want to tune tune this, but we can start by eliminating any intersections between rail and water where the length, or diameter, is <= 5 metres. This means we probably need to do the conversion to the appropriated projected CRS so we can have the right units.
+- [x] try to elimate very short crossings i.e. where we wouldn't be able to see anything from a train because we went by too fast. We probably want to tune tune this, but we can start by eliminating any intersections between rail and water where the length, or diameter, is <= 5 metres. This means we probably need to do the conversion to the appropriated projected CRS so we can have the right units.
+      Decision: overlap length is measured in a metric CRS (`PROJECTED_CRS = EPSG:25832`,
+      UTM 32N). The "≤ 5 m" rule only meaningfully applies to **areal-water** crossings,
+      whose overlap is a line (= the width of water the track spans). **Linear-watercourse**
+      crossings (rail over a river/stream/canal centreline) are *points* with length 0, so
+      rather than dropping them all we keep them by class:
+      `SUBSTANTIAL_WATER_CLASSES = (river, canal, fairway, water)` — dropping stream / ditch
+      / drain. Net effect: 12,801 raw crossings → **3,527 kept** (1,246 line overlaps > 5 m,
+      2,281 point crossings of substantial classes). Threshold + class set are tunable constants.
 - when visualising this:
-    - [ ] it'd be nice to identify areas by name, so let's add names of cities to the lonboard map
-    - [ ] let's visualise the size of the overlap by:
+    - [x] it'd be nice to identify areas by name, so let's add names of cities to the lonboard map
+          Decision: cities = Overture `division` localities with `population ≥ 50,000`
+          (`CITY_MIN_POPULATION`; 48 in-region — Frankfurt, Stuttgart, Mannheim, …).
+          Caveat: lonboard 0.16 has **no TextLayer**, so a city's name shows on **hover**
+          (marker tooltip), not as an always-on label.
+    - [x] let's visualise the size of the overlap by:
         - making the actual centre of overlap a very small point (e.g. 3 pixels)
         - drawing a small open circle whose radius is proportional to the size of the overlap
+          Done as two `ScatterplotLayer`s: a 3 px red centre dot, plus an open circle
+          (`stroked`, `filled=False`) whose radius in **metres** = half the overlap length.
+          Point crossings have length 0, so they show just the centre dot (no circle).
 
 #### V3:
 
-Same as V3 but also:
+Same as V2 but also:
 - [ ] Widen from the four-state region to all of Germany (division-restricted) and re-run, sanity
       checking counts and a few crossings.
 - [ ] (optional) Map each crossing point to a %-distance along its rail segment
