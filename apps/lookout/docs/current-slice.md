@@ -319,3 +319,32 @@ Same as V5 but also:
 - [ ] (optional) Map each crossing point to a %-distance along its rail segment
       (`ST_LineLocatePoint`) to express it as an Overture Connector, and enrich the segment via a
       ConnectorReference.
+
+### Test Dataset Extraction
+
+(Cross-cutting, not tied to one version — captured now, build later.)
+
+Build a small **library of test cases**, each specified by a **bounding box** plus expected
+assertions, so we can validate a pipeline version's dedup behaviour against hand-verified truth.
+
+- **First case — Mannheim bridge area:** expect **4** crossings, and **each** crossing should lie
+  on a rail segment within that bbox. (This is the *desired* answer: it passes for V5, fails for
+  V2/V4 which report 12 — so the suite doubles as a target for the dedup work.)
+- **Interactive capture:** find the bbox interactively (e.g. read the lonboard map viewport, or a
+  small marimo UI to draw/enter a rectangle), then **append** it to a checked-in dataset.
+- **Storage: GeoJSON** (`notebooks/water_crossings/test_cases.geojson`) — a `FeatureCollection`
+  where each test case's **bbox is a Feature** (a `Polygon` rectangle) and the **assertions ride as
+  custom `properties`** on that Feature: `name`, `expected_crossings`, optional per-crossing
+  expectations, free-text `notes`. `properties` is GeoJSON's standard extension point, so the file
+  stays valid and is directly viewable in any GeoJSON tool / lonboard. If we want to assert
+  *locations*, expected crossings can be added as extra `Point` Features tagged with the case `name`.
+- **Assertion shape:** run the pipeline restricted to the bbox and check `count == expected_crossings`
+  and that every crossing's `rail_segment_id` resolves to a segment intersecting the bbox. Keep
+  assertions version-aware (the "correct" count is the V5 target; earlier versions may differ).
+
+Tasks:
+- [x] Storage format decided: **GeoJSON** — bbox as a `Polygon` Feature, assertions as custom
+      `properties` (with optional `Point` Features for expected crossing locations).
+- [ ] Add an interactive bbox-capture cell (viewport read or draw/enter) that appends a case.
+- [ ] Seed the first case: Mannheim bridge = 4 crossings, each on an in-bbox segment.
+- [ ] A small runner: for each case, run the pipeline on its bbox and assert expectations.
