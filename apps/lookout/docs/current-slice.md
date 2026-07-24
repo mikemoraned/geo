@@ -105,6 +105,7 @@ I am seeing lots of cases where overlaps are very close to each other. This make
 Some ideas:
 * do agglomerative clustering on the overlap points and then traverse the cluster tree, only keeping one for each sub-tree where all entries are within some distance of each other
 * similar but via k-means clustering of size = 3, with a max-distance limit, where we keep one example per cluster
+* bucket all items in to hexbins of some size, and we keep one example per bin
 
 #### V4:
 
