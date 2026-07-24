@@ -1,6 +1,0 @@
-[project]
-name = "splice"
-version = "0.1.0"
-description = "Splice pfaedle-generated shapes into a GTFS feed, leaving every other table untouched"
-requires-python = ">=3.13"
-dependencies = []
