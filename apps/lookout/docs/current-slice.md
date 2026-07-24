@@ -167,19 +167,73 @@ Tasks:
 
 #### V3b
 
-Same de-duplication problem, fixed at **source** instead of by clustering: `ST_LineMerge`/
-`ST_Union` contiguous rail (and/or dissolve water per body) **before** intersecting, so a
-single crossing yields one overlap component rather than one-per-segment.
-- Removes the *split-segment* cause and **correctly preserves parallel-track crossings**
-  (unconnected tracks don't line-merge) — which matches the requirement above, unlike V3.
-- Does **not** by itself merge the poly+centreline duplicate (a river's areal outline and its
-  centreline are separate features), so it may still want a light same-spot merge for that case
-  only. Worth building to compare representative counts and locations against the V3 DBSCAN approach.
-- [ ] Prototype the merge-first pipeline; compare kept-crossing counts and a few locations vs V3.
+To be built in a **new `notebooks/water_crossings/v3b.py`** — a verbatim copy of `v2.py`
+(export dir auto-resolves to `data/water/v3b/`). Leave `v2.py` untouched.
+
+Same de-duplication problem as V3, fixed at **source** instead of by clustering: line-merge
+contiguous rail **before** intersecting, so one physical crossing yields one overlap component
+rather than one-per-segment. Preferred over V3 because it **preserves parallel-track crossings**
+(unconnected tracks don't line-merge) and needs no arbitrary `eps`.
+
+**Two stages:**
+
+*Stage 1 — dedup by merging rail.* Build maximal contiguous rail lines, then intersect with
+water and reduce as in V2 (5 m filter, substantial classes, `ST_Dump` → centroids).
+- Merge with `ST_LineMerge(ST_Collect_Agg(geometry))` (collect, no noding) rather than
+  `ST_Union_Agg` if available — `ST_Union` nodes at every rail–rail junction, which is costly on
+  ~44 k segments and unnecessary (we only want to join segments sharing endpoints).
+- Still does **not** merge the poly-outline + centreline duplicate of the same river (that's two
+  *water* features, untouched by a rail merge). Left as-is in V3b (keep the line/point toggle) —
+  **deferred to V4**, which unions all water into a single area so the centreline disappears.
+
+*Stage 2 — re-attach each deduped crossing to a specific original segment* (to restore the V2
+schema: segments-with-crossing-points, and to enable the Connector idea in V4).
+
+Critique of the proposed "for each crossing, find **all** segments within N m and map onto
+**each**": mapping to *all* nearby segments re-introduces the duplication we just removed, and a
+metric N-search can grab the wrong parallel track. Refinements:
+- Attach each crossing to its **single owning** segment, not all within N. Prefer a **topological**
+  match — the deduped overlap line lies *on* the original segments by construction, so
+  `ST_Intersects` / `ST_DWithin(point, seg, small_tol)` picks the owner; break ties by nearest
+  (`min ST_Distance`). Use N only as a **small tolerance** (~2–5 m) to absorb the fact that the
+  centroid of a *curved / areal* overlap sits slightly off the polyline — not as a wide search.
+- Then project onto that segment: `frac = ST_LineLocatePoint(seg, pt)` and
+  `snapped = ST_LineInterpolatePoint(seg, frac)`. This yields an on-segment point **and** the
+  %-distance — i.e. V4's Overture Connector falls straight out of this step.
+- Output schema mirrors V2 `crossing_points` (`rail_segment_id`, `water_id`, `overlap_m`,
+  `overlap_kind`, `lat`/`lon`) plus `frac`, now deduped and segment-tied.
+
+**Edge cases:**
+- **Long bridges** (e.g. a Rhine crossing spanning several segments over ~100 m+): the physical
+  crossing legitimately touches multiple segments. **Decided:** attach the representative to the
+  **one** segment under its centroid (nearest-owning) — no per-segment breakdown; this suits the
+  downstream use.
+- Parallel tracks closer than `tol` could cross-attach; mitigate with small `tol`, or by
+  remembering which merged line a crossing came from and restricting candidate segments to that
+  line's constituents (needs carrying constituent ids through the merge).
+
+Alternatives considered: (a) dedup via the **connector graph** — group crossings on the same
+maximal degree-2 rail path + water body, keeping ids natively (no geometry merge) but needs graph
+construction, more code; (b) full `ST_Union_Agg` noding — simpler call, but costly and splits at
+junctions. Line-merge + topological re-attach is the recommended standard route.
+
+Tasks:
+- [x] Copy `v2.py` → `v3b.py`.
+- [ ] Stage 1: line-merge contiguous rail, re-run the intersect/filter/dump; compare kept-crossing
+      counts and a few locations (incl. the Mannheim bridge) vs raw V2 and vs V3 DBSCAN.
+- [ ] Stage 2: re-attach each crossing to its single owning segment (topological, small tol,
+      one-segment representative under the centroid), project to `frac` via `ST_LineLocatePoint`;
+      emit the V2-shaped `crossing_points` schema.
 
 #### V4:
 
-Same as V3 but also:
+Same as V3b but also:
+* [ ] we account for some water bodies being represented both as a centre-line and an area by doing a union of all water bodies into a single area, which should have the effect of the centre-line disappearing.
+
+
+#### V5:
+
+Same as V4 but also:
 - [ ] Widen from the four-state region to all of Germany (division-restricted) and re-run, sanity
       checking counts and a few crossings.
 - [ ] (optional) Map each crossing point to a %-distance along its rail segment
