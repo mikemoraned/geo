@@ -71,3 +71,9 @@ When doing TDD, always keep the code compiling at every step:
 
 - **Code over comments:** make code self-documenting; add comments only for non-obvious
   things; substantive docs go in `docs/`.
+- **Prefer existing libraries; don't hand-roll — especially in notebook cells.** Reach for a
+  well-known library (numpy, scipy, scikit-learn, networkx, shapely/geopandas, matplotlib,
+  lonboard's `colormap` helpers, …) instead of writing a bespoke algorithm: graph
+  traversal / union-find, clustering, colour mapping, distance/geometry maths, hashing to
+  values, etc. A cell should read as thin glue over library calls, not a mini-implementation.
+  If nothing fits, say so and get agreement before hand-rolling.

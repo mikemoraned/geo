@@ -4,6 +4,7 @@
 #     "geopandas==1.1.4",
 #     "lonboard==0.16.0",
 #     "marimo",
+#     "matplotlib==3.11.1",
 #     "numpy==2.5.1",
 #     "pyarrow==25.0.0",
 #     "scipy==1.18.0",
@@ -379,27 +380,33 @@ def _(crossing_points_count, mo, points_gdf):
 
 
 @app.cell
-def _(PROJECTED_CRS, con, crossing_points_count, merge_dist, points_gdf):
-    # V5: collapse to one crossing per (physical track, water body). Two connected-components
-    # problems, both handed to scipy (no hand-rolled union-find):
-    #   1. physical track = component of crossing segments that share an Overture connector id
-    #   2. final crossing  = component of kept parts that share a (track, water) and are within
-    #      `merge_dist` metres of each other
-    # Scoping the distance graph to (component, water) keeps parallel tracks / distinct waters apart,
-    # so `merge_dist` only splits horseshoe re-crossings (far) from island/bridge spread (close).
+def _(con, crossing_points_count, lonboard, rail_gdf, to_gdf):
+    # V5 · step 1/3 — physical tracks. Two crossing segments belong to the same physical track when
+    # they share an Overture connector id; each connected component of that graph is one track.
+    # Map: crossing segments coloured by track (grey = all rail context).
     _ = crossing_points_count  # dataflow: after the pipeline
-    import numpy as np
-    from scipy.spatial import cKDTree
-    from scipy.sparse import coo_matrix
-    from scipy.sparse.csgraph import connected_components
+    import numpy as _np
+    import scipy.sparse as _ssp
+    import scipy.sparse.csgraph as _csg
 
-    def _component_labels(n, edges):
+    def component_labels(n, edges):
         """Connected-component label (0..k-1) per node for an undirected n-node graph."""
-        e = np.asarray(edges, dtype=int).reshape(-1, 2)
-        g = coo_matrix((np.ones(len(e)), (e[:, 0], e[:, 1])), shape=(n, n))
-        return connected_components(g, directed=False)[1]
+        _e = _np.asarray(edges, dtype=int).reshape(-1, 2)
+        _m = _ssp.coo_matrix(
+            (_np.ones(len(_e)), (_e[:, 0], _e[:, 1])), shape=(n, n)
+        )
+        return _csg.connected_components(_m, directed=False)[1]
 
-    # 1) segment -> physical-track component (edge = two crossing segments share a connector id)
+    def track_colors(ids):
+        """RGB uint8 per component id — matplotlib's categorical tab20, cycled."""
+        import numpy as np
+        import matplotlib as mpl
+
+        cmap = mpl.colormaps["tab20"]
+        return (np.asarray([cmap(int(c) % 20)[:3] for c in ids]) * 255).astype(
+            "uint8"
+        )
+
     _rows = con.execute(
         "SELECT id, connectors FROM rail WHERE id IN (SELECT DISTINCT rail_id FROM crossing_points)"
     ).fetchall()
@@ -409,43 +416,148 @@ def _(PROJECTED_CRS, con, crossing_points_count, merge_dist, points_gdf):
         for _c in _conns or []:
             _cid = _c["connector_id"]
             if _cid in _seen:
-                _seg_edges.append((_seg_ix[_sid], _seg_ix[_seen[_cid]]))
+                _seg_edges.append((_seg_ix[_sid], _seen[_cid]))
             else:
-                _seen[_cid] = _sid
-    _seg_comp = _component_labels(len(_seg_ix), _seg_edges)
-    _component = {sid: int(_seg_comp[i]) for sid, i in _seg_ix.items()}
+                _seen[_cid] = _seg_ix[_sid]
+    component = {
+        sid: int(lbl)
+        for sid, lbl in zip(
+            _seg_ix, component_labels(len(_seg_ix), _seg_edges)
+        )
+    }
 
-    # 2) kept parts, with component id + metric coordinates
-    _g = points_gdf.reset_index(drop=True).copy()
-    _g["component_id"] = _g["rail_id"].map(_component)
-    _proj = _g.to_crs(PROJECTED_CRS)
-    _xy = np.column_stack(
+    seg_components_gdf = to_gdf(
+        "SELECT id, geometry AS geom FROM rail WHERE id IN (SELECT DISTINCT rail_id FROM crossing_points)"
+    )
+    seg_components_gdf["component_id"] = seg_components_gdf["id"].map(
+        component
+    )
+    _colors = track_colors(seg_components_gdf["component_id"])
+    lonboard.Map(
+        [
+            lonboard.PathLayer.from_geopandas(
+                rail_gdf[["geometry"]],
+                get_color=[220, 220, 220],
+                width_min_pixels=1,
+            ),
+            lonboard.PathLayer.from_geopandas(
+                seg_components_gdf[["geometry"]],
+                get_color=_colors,
+                width_min_pixels=3,
+            ),
+        ]
+    )
+    return component, component_labels, track_colors
+
+
+@app.cell
+def _(PROJECTED_CRS, component, lonboard, points_gdf, rail_gdf, track_colors):
+    # V5 · step 2/3 — label each kept crossing part with its physical track (component) and compute
+    # metric coordinates for the distance step. Map: crossing points in the same track colours.
+    import numpy as _np
+
+    parts_gdf = points_gdf.reset_index(drop=True).copy()
+    parts_gdf["component_id"] = parts_gdf["rail_id"].map(component)
+    _proj = parts_gdf.to_crs(PROJECTED_CRS)
+    parts_xy = _np.column_stack(
         [_proj.geometry.x.to_numpy(), _proj.geometry.y.to_numpy()]
     )
 
-    # 3) final crossing = parts linked when same (component, water) AND within merge_dist metres
+    _colors = track_colors(parts_gdf["component_id"])
+    lonboard.Map(
+        [
+            lonboard.PathLayer.from_geopandas(
+                rail_gdf[["geometry"]],
+                get_color=[220, 220, 220],
+                width_min_pixels=1,
+            ),
+            lonboard.ScatterplotLayer.from_geopandas(
+                parts_gdf[["geometry"]],
+                get_fill_color=_colors,
+                radius_units="pixels",
+                get_radius=4,
+                radius_min_pixels=4,
+                radius_max_pixels=4,
+            ),
+        ]
+    )
+    return parts_gdf, parts_xy
+
+
+@app.cell
+def _(
+    component_labels,
+    lonboard,
+    merge_dist,
+    parts_gdf,
+    parts_xy,
+    rail_gdf,
+    track_colors,
+):
+    # V5 · step 3/3 — final crossings. Link parts that share a (track, water body) and are within
+    # `merge_dist` metres (scipy cKDTree → connected components); keep one representative per group
+    # (largest overlap). Map: faint grey = input parts; coloured dots = reps, sized by parts merged.
+    import numpy as _np
+    import scipy.spatial as _sps
+
     _D = float(merge_dist.value)
     _key = (
-        _g["component_id"].astype(str) + "|" + _g["water_id"].astype(str)
+        parts_gdf["component_id"].astype(str)
+        + "|"
+        + parts_gdf["water_id"].astype(str)
     ).to_numpy()
-    _near = cKDTree(_xy).query_pairs(_D, output_type="ndarray")
-    _part_edges = (
+    _near = _sps.cKDTree(parts_xy).query_pairs(_D, output_type="ndarray")
+    _edges = (
         _near[_key[_near[:, 0]] == _key[_near[:, 1]]]
         if len(_near)
-        else np.empty((0, 2), int)
+        else _np.empty((0, 2), int)
     )
-    _g["_cluster"] = _component_labels(len(_g), _part_edges)
+    _clustered = parts_gdf.assign(
+        _cluster=component_labels(len(parts_gdf), _edges)
+    )
 
-    # one representative per cluster: the largest-overlap part, tagged with size + total length
     _stats = (
-        _g.groupby("_cluster")["overlap_m"]
+        _clustered.groupby("_cluster")["overlap_m"]
         .agg(["size", "sum"])
         .rename(columns={"size": "merged_parts", "sum": "total_overlap_m"})
         .reset_index()
     )
-    _rep = _g.loc[_g.groupby("_cluster")["overlap_m"].idxmax()]
-    reps_v5_gdf = _rep.merge(_stats, on="_cluster").drop(columns=["_cluster"])
-    (len(points_gdf), len(reps_v5_gdf), _D)
+    reps_v5_gdf = (
+        _clustered.loc[_clustered.groupby("_cluster")["overlap_m"].idxmax()]
+        .merge(_stats, on="_cluster")
+        .drop(columns=["_cluster"])
+    )
+
+    _colors = track_colors(reps_v5_gdf["component_id"])
+    _sizes = (reps_v5_gdf["merged_parts"].to_numpy() * 2 + 3).astype("float32")
+    lonboard.Map(
+        [
+            lonboard.PathLayer.from_geopandas(
+                rail_gdf[["geometry"]],
+                get_color=[220, 220, 220],
+                width_min_pixels=1,
+            ),
+            lonboard.ScatterplotLayer.from_geopandas(
+                parts_gdf[["geometry"]],
+                get_fill_color=[200, 200, 200],
+                radius_units="pixels",
+                get_radius=2,
+                radius_min_pixels=2,
+                radius_max_pixels=2,
+            ),
+            lonboard.ScatterplotLayer.from_geopandas(
+                reps_v5_gdf[["geometry"]],
+                get_fill_color=_colors,
+                stroked=True,
+                get_line_color=[0, 0, 0],
+                line_width_min_pixels=1,
+                radius_units="pixels",
+                get_radius=_sizes,
+                radius_min_pixels=3,
+                radius_max_pixels=14,
+            ),
+        ]
+    )
     return (reps_v5_gdf,)
 
 

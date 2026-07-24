@@ -312,6 +312,10 @@ Tasks:
 - [x] Refactor: replace the hand-rolled union-find + O(k²) distance loops with scipy
       (`csgraph.connected_components` + `spatial.cKDTree.query_pairs`); behaviour unchanged
       (2,568 → 2,115; Mannheim = 4).
+- [x] Split the reduction into three cells — (1) segment→physical-track components, (2) attach to
+      kept parts, (3) cluster→representatives — each rendering a lonboard map coloured by
+      physical-track component so each step is visible. Colours come from matplotlib's categorical
+      `tab20` (cycled), not a hand-rolled hash; `component_labels` is a thin scipy wrapper.
 - [x] Reduce to one crossing per `(component_id, water_id)` sub-clustered by distance `D`; keep the
       largest-`overlap_m` representative (real `rail_segment_id`, `component_id`, `water_id`, plus
       `merged_parts` and `total_overlap_m`). Emit the V2-shaped schema; export `crossing_reps.parquet`

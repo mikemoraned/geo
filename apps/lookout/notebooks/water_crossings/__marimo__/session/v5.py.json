@@ -2,7 +2,7 @@
   "version": "1",
   "metadata": {
     "marimo_version": "0.23.15",
-    "script_metadata_hash": "6082b4d64cf49e9f1c64358437c6c97f"
+    "script_metadata_hash": "53345ea3d9c4262c0a86f626fc3f7f87"
   },
   "cells": [
     {
@@ -38,7 +38,7 @@
         {
           "type": "data",
           "data": {
-            "text/html": "<pre class='text-xs'>&lt;_duckdb.DuckDBPyConnection object at 0x106452370&gt;</pre>"
+            "text/html": "<pre class='text-xs'>&lt;_duckdb.DuckDBPyConnection object at 0x177a2f6b0&gt;</pre>"
           }
         }
       ],
@@ -155,7 +155,7 @@
         {
           "type": "data",
           "data": {
-            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>Show overlap classes:</strong></span></span><marimo-ui-element object-id='emfo-0' random-id='a7f8b02a-b8d1-fd64-ca37-2e2f08884dfd'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eLINESTRING overlaps \u2014 areal water, track spans it (1246)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><marimo-ui-element object-id='emfo-1' random-id='5a8996e5-7ed9-1596-9599-4cbcbd143674'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ePOINT overlaps \u2014 linear watercourse centrelines (1322)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>V5 collapse (connector-component + distance):</strong></span></span><marimo-ui-element object-id='emfo-2' random-id='13d0fedb-24e4-9cbf-358b-97559bc5a0e9'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ecollapse to one per (physical track, water body)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><marimo-ui-element object-id='emfo-3' random-id='2d2b3389-ca6a-ec19-8395-893a45048e10'><marimo-slider data-initial-value='100' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003emerge distance within track+water (m)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-start='25' data-stop='500' data-step='25' data-steps='[]' data-debounce='false' data-disabled='false' data-orientation='&quot;horizontal&quot;' data-show-value='true' data-include-input='false' data-full-width='false'></marimo-slider></marimo-ui-element></div>"
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>Show overlap classes:</strong></span></span><marimo-ui-element object-id='emfo-0' random-id='ce39cb8e-8e65-32b6-8f3d-d642a724db61'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eLINESTRING overlaps \u2014 areal water, track spans it (1246)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><marimo-ui-element object-id='emfo-1' random-id='2e2585cc-e5e9-21df-5794-a714ff49ba34'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ePOINT overlaps \u2014 linear watercourse centrelines (1322)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>V5 collapse (connector-component + distance):</strong></span></span><marimo-ui-element object-id='emfo-2' random-id='658ea268-52ea-019f-24b4-4bc71242cc14'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ecollapse to one per (physical track, water body)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><marimo-ui-element object-id='emfo-3' random-id='9221beb4-f83f-29f3-a25f-4d161dfb3792'><marimo-slider data-initial-value='100' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003emerge distance within track+water (m)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-start='25' data-stop='500' data-step='25' data-steps='[]' data-debounce='false' data-disabled='false' data-orientation='&quot;horizontal&quot;' data-show-value='true' data-include-input='false' data-full-width='false'></marimo-slider></marimo-ui-element></div>"
           }
         }
       ],
@@ -163,12 +163,38 @@
     },
     {
       "id": "xJFY",
-      "code_hash": "e7cc6726a20e38b325de98addc5c419a",
+      "code_hash": "5a535282f9cb423656ba96d8160d3783",
       "outputs": [
         {
           "type": "data",
           "data": {
-            "application/json": "[2568, 2115, \"text/plain+float:100.0\"]"
+            "text/html": "<marimo-ui-element object-id='xJFY-0' random-id='919bf03b-7302-c4a8-5b48-d0c2cac538a6'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;17d790f5cc7240cf87707d97629939ef&quot;}' data-label='null' data-model-id='&quot;17d790f5cc7240cf87707d97629939ef&quot;'></marimo-anywidget></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "DOws",
+      "code_hash": "711c06acb338a3467a9e9dd19035107a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='DOws-0' random-id='7af3465a-048b-40fb-0865-dc7a1a05a1d9'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;c514a40046d547e08b9c02850a51b40f&quot;}' data-label='null' data-model-id='&quot;c514a40046d547e08b9c02850a51b40f&quot;'></marimo-anywidget></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "wchI",
+      "code_hash": "dc4f3b368f14d9a00dc67938b6065c13",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='wchI-0' random-id='769eeaf3-e394-05eb-4251-dbc801a36577'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;6da8c389c5bb43c896cd90d63b898fa0&quot;}' data-label='null' data-model-id='&quot;6da8c389c5bb43c896cd90d63b898fa0&quot;'></marimo-anywidget></marimo-ui-element>"
           }
         }
       ],
@@ -181,7 +207,7 @@
         {
           "type": "data",
           "data": {
-            "text/html": "<marimo-ui-element object-id='Hstk-0' random-id='a9613da8-1d67-60c6-bd69-cb9e0301494f'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;9eed0c60a6174f3cae8534581c68ac2e&quot;}' data-label='null' data-model-id='&quot;9eed0c60a6174f3cae8534581c68ac2e&quot;'></marimo-anywidget></marimo-ui-element>"
+            "text/html": "<marimo-ui-element object-id='Hstk-0' random-id='06249430-d8ff-495a-eb58-e8bb4f7d2de0'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;692f8e95a7cb4ed6b9e0b76732215ca4&quot;}' data-label='null' data-model-id='&quot;692f8e95a7cb4ed6b9e0b76732215ca4&quot;'></marimo-anywidget></marimo-ui-element>"
           }
         }
       ],
@@ -194,7 +220,7 @@
         {
           "type": "data",
           "data": {
-            "application/json": "{\"rail\": 17080021, \"water\": 60344189, \"crossings\": 755704, \"crossing_points\": 203824, \"crossing_reps\": 215807}"
+            "application/json": "{\"rail\": 17080021, \"water\": 60360895, \"crossings\": 755748, \"crossing_points\": 204669, \"crossing_reps\": 215385}"
           }
         }
       ],
