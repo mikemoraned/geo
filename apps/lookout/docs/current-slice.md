@@ -127,9 +127,18 @@ one per cluster; (3) hexbin, one per bin.
 
 **Decisions:**
 - **Method:** DBSCAN in a metric CRS (`EPSG:25832`) via `sklearn.cluster.DBSCAN(eps, min_samples=1)`
-  — the standard equivalent of PostGIS `ST_ClusterDBSCAN`. `eps` exposed as a `mo.ui.slider`
-  (default **25 m** — sweet spot: 3,527 → ~1,610 reps / 54% fewer; larger `eps` barely dedups
-  more but starts single-linkage *chaining* where rail runs alongside water).
+  — the standard equivalent of PostGIS `ST_ClusterDBSCAN` (== connected components within `eps`).
+  **Precompute** representatives at a discrete set of radii
+  `EPS_VALUES = (5,10,15,20,25,30,40,50,75,100,150,200)`, union into one `reps_all` frame with an
+  `eps` column; a `mo.ui.slider(steps=EPS_VALUES)` just *filters* to a level (no clustering on
+  drag). Reductions from 3,527 points: 2,090 @5 m, 1,547 @25, **1,415 @100 (default)**, 1,380 @150,
+  1,336 @200. Single-linkage *chaining* sets in early where rail runs alongside water — largest
+  cluster is 12 @5 m but 64 by `eps` ≥ 15 m — so a smaller `eps` keeps near/parallel crossings
+  more distinct. **But** the Mannheim spot-check (below) shows a single real crossing's overlaps
+  can spread ~100 m, so correct merging needs the *large* end of the range — hence the default is
+  **100 m**.
+  (NB: an earlier hand-rolled union-find gave ~1,610/largest-28 @25 m; that was buggy —
+  DBSCAN == scipy connected_components == 1,547/largest-64, verified in-kernel.)
 - **Scope:** purely spatial — merge crossings within `eps` regardless of `water_id` (collapses
   the poly+centreline-of-same-river case, the majority of dups). **Caveat:** this will also
   merge ~4 m-apart **parallel-track** crossings, which we want to keep — an accepted limitation
@@ -139,16 +148,22 @@ one per cluster; (3) hexbin, one per bin.
 - **Representative:** keep the **largest-`overlap_m`** crossing per cluster, at its **real
   location** (not the centroid, so it stays on rail∩water), tagged with a `cluster_size`.
 - **UI:** a `collapse near-duplicate crossings` checkbox + the `eps` slider; the map swaps the
-  full crossing set for the representatives reactively. Raw crossings stay underneath.
+  full crossing set for the selected-level representatives reactively. Raw crossings stay underneath.
 
 Tasks:
-- [ ] Copy `v2.py` → `v3.py`; add `scikit-learn` to `v3.py` deps (v2 stays clean).
-- [ ] Add a DBSCAN dedup cell producing `reps_gdf` (`eps` from slider, `min_samples=1`,
-      largest-`overlap_m` representative + `cluster_size`).
-- [ ] Wire `collapse_nearby` checkbox + `eps` slider into the map; export `crossing_reps.parquet`
-      to `data/water/v3/`.
-- [ ] Spot-check: confirm dense blobs collapse to one sensible marker and no legit distinct
-      crossings are wrongly merged (watch the chaining case at higher `eps`).
+- [x] Copy `v2.py` → `v3.py`; add `scikit-learn` to `v3.py` deps (v2 stays clean).
+- [x] Add a DBSCAN dedup cell — precomputes `reps_all` across `EPS_VALUES` (`min_samples=1`,
+      largest-`overlap_m` representative + `cluster_size`, tagged with `eps`).
+- [x] Wire `collapse_nearby` checkbox + `eps` slider (filters `reps_all`) into the map; export
+      `crossing_reps.parquet` (all `eps` levels) to `data/water/v3/`.
+- [x] Spot-check on the map: confirm dense blobs collapse to one sensible marker and no legit
+      distinct crossings are wrongly merged.
+      Finding: a real **bridge in Mannheim** only merges into a single representative at
+      **`eps` = 100 m** — the overlap areas of one physical crossing spread that far (many split
+      segments + poly-outline-and-centreline). So in practice the *larger* end of the range is
+      what's needed for correct merging; the earlier "try 5–10 m" intuition undercounts real
+      crossings. Slider now defaults to **100 m** (accepting that parallel tracks merge at that
+      radius); `EPS_VALUES` extended to 150 & 200 m in case some crossings spread even wider.
 
 #### V3b
 

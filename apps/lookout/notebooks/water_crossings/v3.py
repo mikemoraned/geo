@@ -4,7 +4,10 @@
 #     "geopandas==1.1.4",
 #     "lonboard==0.16.0",
 #     "marimo",
+#     "numpy==2.5.1",
+#     "pandas==3.0.5",
 #     "pyarrow==25.0.0",
+#     "scikit-learn==1.9.0",
 # ]
 # requires-python = ">=3.13"
 # ///
@@ -58,6 +61,11 @@ def _():
     SUBSTANTIAL_WATER_CLASSES = ("river", "canal", "fairway", "water")
     CITY_MIN_POPULATION = 50_000  # only label cities at least this big
 
+    # --- V3 de-duplication -----------------------------------------------------
+    # Precompute DBSCAN cluster representatives at each of these merge radii (metres); the map
+    # slider picks one level. min_samples=1 -> connected components within eps.
+    EPS_VALUES = (5, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200)
+
     def overture_glob(theme: str, type_: str) -> str:
         """Glob for one Overture theme/type partition: local mirror if available, else S3."""
         if USE_LOCAL:
@@ -66,6 +74,7 @@ def _():
 
     return (
         CITY_MIN_POPULATION,
+        EPS_VALUES,
         EXCLUDED_RAIL_CLASSES,
         MIN_CROSSING_M,
         PROJECTED_CRS,
@@ -324,9 +333,8 @@ def _(cities_count, crossing_points_count, to_gdf):
 
 
 @app.cell
-def _(crossing_points_count, mo, points_gdf):
-    # Toggles for which overlap classes the map draws. Referencing these `.value`s in the
-    # map cell makes it redraw reactively when a box is ticked.
+def _(EPS_VALUES, crossing_points_count, mo, points_gdf):
+    # Map controls (reactive). eps_sel picks a precomputed DBSCAN level from EPS_VALUES.
     _ = crossing_points_count  # dataflow: place after the pipeline
     _n_line = int((points_gdf["overlap_kind"] == "line").sum())
     _n_point = int((points_gdf["overlap_kind"] == "point").sum())
@@ -338,33 +346,98 @@ def _(crossing_points_count, mo, points_gdf):
         value=True,
         label=f"POINT overlaps — linear watercourse centrelines ({_n_point})",
     )
-    mo.vstack([mo.md("**Show overlap classes:**"), show_lines, show_points])
-    return show_lines, show_points
+    collapse_nearby = mo.ui.checkbox(
+        value=True, label="collapse near-duplicate crossings (DBSCAN)"
+    )
+    eps_sel = mo.ui.slider(
+        steps=list(EPS_VALUES),
+        value=100,
+        show_value=True,
+        label="merge radius (m)",
+    )
+    mo.vstack(
+        [
+            mo.md("**Show overlap classes:**"),
+            show_lines,
+            show_points,
+            mo.md("**De-duplicate crossings:**"),
+            collapse_nearby,
+            eps_sel,
+        ]
+    )
+    return collapse_nearby, eps_sel, show_lines, show_points
+
+
+@app.cell
+def _(EPS_VALUES, PROJECTED_CRS, gpd, points_gdf):
+    # V3: collapse near-duplicate crossings. One physical crossing appears many times because
+    # Overture splits rail into short segments (each intersects the water separately) and often
+    # stores a river as both an areal polygon and a centreline. Standard fix: DBSCAN in a metric
+    # CRS (EPSG:25832) with min_samples=1 (== connected components within `eps` metres).
+    # We PRECOMPUTE representatives at every eps in EPS_VALUES and union them into one frame (the
+    # `eps` column selects a level), so the slider only filters — no clustering on drag.
+    # Representative = largest-overlap crossing per cluster, at its real location, with cluster_size.
+    import numpy as np
+    import pandas as pd
+    from sklearn.cluster import DBSCAN
+
+    _proj = points_gdf.to_crs(PROJECTED_CRS)
+    _coords = np.column_stack(
+        [_proj.geometry.x.to_numpy(), _proj.geometry.y.to_numpy()]
+    )
+
+    def _reps_for(eps):
+        _lab = points_gdf.assign(
+            cluster=DBSCAN(eps=eps, min_samples=1).fit_predict(_coords)
+        )
+        _idx = _lab.groupby("cluster")["overlap_m"].idxmax()
+        _sizes = _lab.groupby("cluster").size().rename("cluster_size")
+        return (
+            _lab.loc[_idx]
+            .merge(_sizes, left_on="cluster", right_index=True)
+            .assign(eps=eps)
+        )
+
+    reps_all = gpd.GeoDataFrame(
+        pd.concat([_reps_for(e) for e in EPS_VALUES], ignore_index=True),
+        geometry="geometry",
+        crs=points_gdf.crs,
+    )
+    reps_all.groupby("eps").size()
+    return (reps_all,)
 
 
 @app.cell
 def _(
     cities_gdf,
+    collapse_nearby,
+    eps_sel,
     lonboard,
     points_gdf,
     rail_gdf,
+    reps_all,
     show_lines,
     show_points,
     water_lines_gdf,
     water_polys_gdf,
 ):
-    # Step 7 (V2): cross-check map.
+    # Step 7 (V2/V3): cross-check map.
     #   - water (blue) + rail (grey) context
-    #   - each shown crossing: a 3px centre dot, plus an open circle whose radius (metres)
-    #     is proportional to the spanned overlap length (point crossings have length 0 -> no circle)
-    #   - the show_lines / show_points toggles pick which overlap classes are drawn
+    #   - crossings: a 3px centre dot + an open circle whose radius (metres) ~ overlap length
+    #   - collapse_nearby swaps the full crossing set for the DBSCAN representatives at eps_sel
+    #   - show_lines / show_points pick which overlap classes are drawn
     #   - city markers (population >= cutoff); hover shows the name (lonboard 0.16 has no TextLayer)
+    _src = (
+        reps_all[reps_all["eps"] == eps_sel.value]
+        if collapse_nearby.value
+        else points_gdf
+    )
     _kinds = [
         k
         for k, on in (("line", show_lines.value), ("point", show_points.value))
         if on
     ]
-    _pts = points_gdf[points_gdf["overlap_kind"].isin(_kinds)]
+    _pts = _src[_src["overlap_kind"].isin(_kinds)]
 
     _layers = [
         lonboard.PolygonLayer.from_geopandas(
@@ -398,16 +471,17 @@ def _(
                 radius_min_pixels=0,
             )
         )
-        # tiny centre dot (hover shows the crossing size, kind + water class)
-        _centre_gdf = _pts[
-            [
-                "overlap_m",
-                "overlap_kind",
-                "water_class",
-                "water_subtype",
-                "geometry",
-            ]
-        ].copy()
+        # tiny centre dot (hover shows size, kind, water class, and cluster size when collapsed)
+        _cols = [
+            "overlap_m",
+            "overlap_kind",
+            "water_class",
+            "water_subtype",
+            "geometry",
+        ]
+        if "cluster_size" in _pts.columns:
+            _cols.insert(0, "cluster_size")
+        _centre_gdf = _pts[_cols].copy()
         for _c in ("overlap_kind", "water_class", "water_subtype"):
             _centre_gdf[_c] = _centre_gdf[_c].astype("string")
         _layers.append(
@@ -445,7 +519,7 @@ def _(
 
 
 @app.cell
-def _(con, crossing_points_count):
+def _(con, crossing_points_count, reps_all):
     # Export the pipeline outputs as GeoParquet (WKB, CRS 84) under data/water/<notebook stem>/.
     # DuckDB spatial writes valid GeoParquet metadata directly via FORMAT PARQUET.
     # EXPORT_DIR is derived from this notebook's own filename (v1, v2, ...) so slices
@@ -456,16 +530,25 @@ def _(con, crossing_points_count):
     _nb = Path(__file__)
     EXPORT_DIR = (_nb.parent / "../../data/water" / _nb.stem).resolve()
 
-    _ = crossing_points_count  # dataflow: run after the full pipeline
+    _ = (
+        crossing_points_count,
+        reps_all,
+    )  # dataflow: run after the full pipeline + dedup
     os.makedirs(EXPORT_DIR, exist_ok=True)
     _tables = ["rail", "water", "crossings", "crossing_points"]
     for _t in _tables:
         _path = str(EXPORT_DIR / f"{_t}.parquet")
         con.execute(f"COPY {_t} TO '{_path}' (FORMAT PARQUET)")
 
+    # DBSCAN representatives for every eps level (the `eps` column selects one), from geopandas
+    reps_all.to_parquet(EXPORT_DIR / "crossing_reps.parquet")
+
     export_manifest = {
         _t: os.path.getsize(EXPORT_DIR / f"{_t}.parquet") for _t in _tables
     }
+    export_manifest["crossing_reps"] = os.path.getsize(
+        EXPORT_DIR / "crossing_reps.parquet"
+    )
     export_manifest
     return
 
