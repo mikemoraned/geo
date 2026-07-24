@@ -94,6 +94,9 @@ Same as V1 but also:
           Done as two `ScatterplotLayer`s: a 3 px red centre dot, plus an open circle
           (`stroked`, `filled=False`) whose radius in **metres** = half the overlap length.
           Point crossings have length 0, so they show just the centre dot (no circle).
+- [x] Toggle overlap classes: each crossing carries an `overlap_kind` (`line` | `point`),
+      and `show_lines` / `show_points` `mo.ui.checkbox`es let the map hide/show LINESTRING
+      (areal-water) and POINT (linear-watercourse) overlaps independently (map redraws reactively).
 
 #### V3:
 

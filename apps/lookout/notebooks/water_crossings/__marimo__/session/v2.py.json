@@ -98,7 +98,7 @@
     },
     {
       "id": "czkn",
-      "code_hash": "716fcfe94e01cbcc3b12d2554ad9f96f",
+      "code_hash": "5890d059b6e0b2b1e45081d345595895",
       "outputs": [
         {
           "type": "data",
@@ -137,7 +137,7 @@
     },
     {
       "id": "ZabI",
-      "code_hash": "8652ac67e93304ad3d3f6976fcc94b58",
+      "code_hash": "1ac9591f34125f64025cd1dcc04edb74",
       "outputs": [
         {
           "type": "data",
@@ -149,13 +149,26 @@
       "console": []
     },
     {
-      "id": "jUdY",
-      "code_hash": "d516400cecf0531034b88a63e6334c6e",
+      "id": "NEci",
+      "code_hash": "521bfdda3108cd7bcdb0f389bd463621",
       "outputs": [
         {
           "type": "data",
           "data": {
-            "text/html": "<marimo-ui-element object-id='jUdY-0' random-id='1287ce14-a5be-0063-247f-0b78e6b94822'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;b63a560a07794607acb119a77d9dc321&quot;}' data-label='null' data-model-id='&quot;b63a560a07794607acb119a77d9dc321&quot;'></marimo-anywidget></marimo-ui-element>"
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>Show overlap classes:</strong></span></span><marimo-ui-element object-id='NEci-0' random-id='dd6daf14-0f55-ddd3-99c4-7b2f86bcb89a'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eLINESTRING overlaps \u2014 areal water, track spans it (1246)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><marimo-ui-element object-id='NEci-1' random-id='c7860ea5-2ccf-f1b3-7cc9-86f24e97d8da'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ePOINT overlaps \u2014 linear watercourse centrelines (2281)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "jUdY",
+      "code_hash": "ff1e1c16829ca7ac4bf6cddb1c844cbe",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='jUdY-0' random-id='f1b67007-bcbd-56a0-722e-287ce8e08a45'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;9e503928183f4ffcab5a414397416fc0&quot;}' data-label='null' data-model-id='&quot;9e503928183f4ffcab5a414397416fc0&quot;'></marimo-anywidget></marimo-ui-element>"
           }
         }
       ],
@@ -168,7 +181,7 @@
         {
           "type": "data",
           "data": {
-            "application/json": "{\"rail\": 13267566, \"water\": 60500063, \"crossings\": 757080, \"crossing_points\": 254261}"
+            "application/json": "{\"rail\": 13267566, \"water\": 60500063, \"crossings\": 757080, \"crossing_points\": 255239}"
           }
         }
       ],

@@ -22,7 +22,7 @@ def _():
     import geopandas as gpd
     import lonboard
 
-    return duckdb, gpd, lonboard
+    return duckdb, gpd, lonboard, mo
 
 
 @app.cell
@@ -211,7 +211,8 @@ def _(
     # parts we'd actually notice from a train:
     #   - areal-water crossings (line parts): keep when the spanned length exceeds MIN_CROSSING_M
     #   - linear-watercourse crossings (point parts, length 0): keep by substantial water class
-    # Each surviving part becomes a lat/lon centroid carrying its overlap length (0 for points).
+    # Each surviving part becomes a lat/lon centroid carrying its overlap length (0 for points)
+    # and an overlap_kind ('line' | 'point') the map can toggle on.
     _ = (crossings_count,)  # dataflow: run after crossings
     _subst = ", ".join(f"'{c}'" for c in SUBSTANTIAL_WATER_CLASSES)
     con.execute(f"""
@@ -231,6 +232,7 @@ def _(
         )
         SELECT rail_id, rail_class, water_id, water_subtype, water_class,
                overlap_m,
+               CASE WHEN part_type LIKE '%LINESTRING%' THEN 'line' ELSE 'point' END AS overlap_kind,
                ST_Centroid(part) AS geom,
                ST_X(ST_Centroid(part)) AS lon,
                ST_Y(ST_Centroid(part)) AS lat
@@ -296,7 +298,7 @@ def _(cities_count, crossing_points_count, to_gdf):
     _ = (crossing_points_count, cities_count)  # dataflow: after the pipeline
     rail_gdf = to_gdf("SELECT id, class, geometry AS geom FROM rail")
     points_gdf = to_gdf(
-        "SELECT rail_id, rail_class, water_id, water_subtype, water_class, overlap_m, lon, lat, geom FROM crossing_points"
+        "SELECT rail_id, rail_class, water_id, water_subtype, water_class, overlap_m, overlap_kind, lon, lat, geom FROM crossing_points"
     )
     cities_gdf = to_gdf("SELECT name, population, lon, lat, geom FROM cities")
     _water_crossed = """
@@ -322,84 +324,122 @@ def _(cities_count, crossing_points_count, to_gdf):
 
 
 @app.cell
+def _(crossing_points_count, mo, points_gdf):
+    # Toggles for which overlap classes the map draws. Referencing these `.value`s in the
+    # map cell makes it redraw reactively when a box is ticked.
+    _ = crossing_points_count  # dataflow: place after the pipeline
+    _n_line = int((points_gdf["overlap_kind"] == "line").sum())
+    _n_point = int((points_gdf["overlap_kind"] == "point").sum())
+    show_lines = mo.ui.checkbox(
+        value=True,
+        label=f"LINESTRING overlaps — areal water, track spans it ({_n_line})",
+    )
+    show_points = mo.ui.checkbox(
+        value=True,
+        label=f"POINT overlaps — linear watercourse centrelines ({_n_point})",
+    )
+    mo.vstack([mo.md("**Show overlap classes:**"), show_lines, show_points])
+    return show_lines, show_points
+
+
+@app.cell
 def _(
     cities_gdf,
     lonboard,
     points_gdf,
     rail_gdf,
+    show_lines,
+    show_points,
     water_lines_gdf,
     water_polys_gdf,
 ):
     # Step 7 (V2): cross-check map.
     #   - water (blue) + rail (grey) context
-    #   - each surviving crossing: a 3px centre dot, plus an open circle whose radius (metres)
+    #   - each shown crossing: a 3px centre dot, plus an open circle whose radius (metres)
     #     is proportional to the spanned overlap length (point crossings have length 0 -> no circle)
+    #   - the show_lines / show_points toggles pick which overlap classes are drawn
     #   - city markers (population >= cutoff); hover shows the name (lonboard 0.16 has no TextLayer)
-    _water_poly_layer = lonboard.PolygonLayer.from_geopandas(
-        water_polys_gdf[["geometry"]],
-        get_fill_color=[40, 120, 220, 110],
-        get_line_color=[40, 120, 220],
-    )
-    _water_line_layer = lonboard.PathLayer.from_geopandas(
-        water_lines_gdf[["geometry"]],
-        get_color=[40, 120, 220],
-        width_min_pixels=1,
-    )
-    _rail_layer = lonboard.PathLayer.from_geopandas(
-        rail_gdf[["geometry"]], get_color=[130, 130, 130], width_min_pixels=1
-    )
-    # open circle: radius in metres ~ half the spanned overlap length, drawn from the centroid
-    _overlap_circle = lonboard.ScatterplotLayer.from_geopandas(
-        points_gdf[["geometry"]],
-        stroked=True,
-        filled=False,
-        get_line_color=[220, 30, 30, 180],
-        line_width_min_pixels=1,
-        radius_units="meters",
-        get_radius=points_gdf["overlap_m"].to_numpy() / 2.0,
-        radius_min_pixels=0,
-    )
-    # tiny centre dot (hover shows the crossing size + water class)
-    _centre_gdf = points_gdf[
-        ["overlap_m", "water_class", "water_subtype", "geometry"]
-    ].copy()
-    _centre_gdf["water_class"] = _centre_gdf["water_class"].astype("string")
-    _centre_gdf["water_subtype"] = _centre_gdf["water_subtype"].astype(
-        "string"
-    )
-    _centre_layer = lonboard.ScatterplotLayer.from_geopandas(
-        _centre_gdf,
-        get_fill_color=[220, 30, 30],
-        stroked=False,
-        radius_units="pixels",
-        get_radius=3,
-        radius_min_pixels=3,
-        radius_max_pixels=3,
-    )
+    _kinds = [
+        k
+        for k, on in (("line", show_lines.value), ("point", show_points.value))
+        if on
+    ]
+    _pts = points_gdf[points_gdf["overlap_kind"].isin(_kinds)]
+
+    _layers = [
+        lonboard.PolygonLayer.from_geopandas(
+            water_polys_gdf[["geometry"]],
+            get_fill_color=[40, 120, 220, 110],
+            get_line_color=[40, 120, 220],
+        ),
+        lonboard.PathLayer.from_geopandas(
+            water_lines_gdf[["geometry"]],
+            get_color=[40, 120, 220],
+            width_min_pixels=1,
+        ),
+        lonboard.PathLayer.from_geopandas(
+            rail_gdf[["geometry"]],
+            get_color=[130, 130, 130],
+            width_min_pixels=1,
+        ),
+    ]
+
+    if len(_pts):
+        # open circle: radius in metres ~ half the spanned overlap length, drawn from the centroid
+        _layers.append(
+            lonboard.ScatterplotLayer.from_geopandas(
+                _pts[["geometry"]],
+                stroked=True,
+                filled=False,
+                get_line_color=[220, 30, 30, 180],
+                line_width_min_pixels=1,
+                radius_units="meters",
+                get_radius=_pts["overlap_m"].to_numpy() / 2.0,
+                radius_min_pixels=0,
+            )
+        )
+        # tiny centre dot (hover shows the crossing size, kind + water class)
+        _centre_gdf = _pts[
+            [
+                "overlap_m",
+                "overlap_kind",
+                "water_class",
+                "water_subtype",
+                "geometry",
+            ]
+        ].copy()
+        for _c in ("overlap_kind", "water_class", "water_subtype"):
+            _centre_gdf[_c] = _centre_gdf[_c].astype("string")
+        _layers.append(
+            lonboard.ScatterplotLayer.from_geopandas(
+                _centre_gdf,
+                get_fill_color=[220, 30, 30],
+                stroked=False,
+                radius_units="pixels",
+                get_radius=3,
+                radius_min_pixels=3,
+                radius_max_pixels=3,
+            )
+        )
+
     # city markers (hover shows the name)
     _cities_named = cities_gdf[["name", "population", "geometry"]].copy()
     _cities_named["name"] = _cities_named["name"].astype("string")
-    _city_layer = lonboard.ScatterplotLayer.from_geopandas(
-        _cities_named,
-        get_fill_color=[30, 30, 30, 220],
-        stroked=True,
-        get_line_color=[255, 255, 255],
-        line_width_min_pixels=1,
-        radius_units="pixels",
-        get_radius=5,
-        radius_min_pixels=5,
-        radius_max_pixels=5,
+    _layers.append(
+        lonboard.ScatterplotLayer.from_geopandas(
+            _cities_named,
+            get_fill_color=[30, 30, 30, 220],
+            stroked=True,
+            get_line_color=[255, 255, 255],
+            line_width_min_pixels=1,
+            radius_units="pixels",
+            get_radius=5,
+            radius_min_pixels=5,
+            radius_max_pixels=5,
+        )
     )
-    crossings_map = lonboard.Map(
-        [
-            _water_poly_layer,
-            _water_line_layer,
-            _rail_layer,
-            _overlap_circle,
-            _centre_layer,
-            _city_layer,
-        ]
-    )
+
+    crossings_map = lonboard.Map(_layers)
     crossings_map
     return
 
