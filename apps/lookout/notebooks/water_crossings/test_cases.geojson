@@ -1,0 +1,25 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mannheim rail bridge (Rhine)",
+        "expected_crossings": 4,
+        "notes": "Four parallel tracks cross the Rhine here on a single bridge over one river body."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [8.4544, 49.4783],
+            [8.4604, 49.4783],
+            [8.4604, 49.4843],
+            [8.4544, 49.4843],
+            [8.4544, 49.4783]
+          ]
+        ]
+      }
+    }
+  ]
+}

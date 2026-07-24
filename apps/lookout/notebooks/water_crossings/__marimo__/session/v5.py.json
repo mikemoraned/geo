@@ -225,6 +225,19 @@
         }
       ],
       "console": []
+    },
+    {
+      "id": "WDXE",
+      "code_hash": "b92df6073f3f7f2cf0a9e9afb8d62f81",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='WDXE-0' random-id='f3c263fe-f391-070c-d109-dcbac22e80aa'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;name&#92;&quot;:&#92;&quot;Mannheim rail bridge (Rhine)&#92;&quot;,&#92;&quot;expected&#92;&quot;:4,&#92;&quot;found&#92;&quot;:4,&#92;&quot;count_ok&#92;&quot;:true,&#92;&quot;segments_ok&#92;&quot;:true,&#92;&quot;pass&#92;&quot;:true}]&quot;' data-total-rows='1' data-total-columns='6' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='false' data-page-size='10' data-field-types='[[&quot;name&quot;,[&quot;string&quot;,&quot;str&quot;]],[&quot;expected&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;found&quot;,[&quot;integer&quot;,&quot;int64&quot;]],[&quot;count_ok&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;segments_ok&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;pass&quot;,[&quot;boolean&quot;,&quot;bool&quot;]]]' data-show-filters='true' data-show-download='true' data-show-search='true' data-show-column-summaries='false' data-show-data-types='true' data-show-page-size-selector='false' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[]' data-hidden-columns='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
     }
   ]
 }

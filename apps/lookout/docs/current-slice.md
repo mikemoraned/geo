@@ -359,6 +359,11 @@ assertions, so we can validate a pipeline version's dedup behaviour against hand
 Tasks:
 - [x] Storage format decided: **GeoJSON** — bbox as a `Polygon` Feature, assertions as custom
       `properties` (with optional `Point` Features for expected crossing locations).
-- [ ] Add an interactive bbox-capture cell (viewport read or draw/enter) that appends a case.
-- [ ] Seed the first case: Mannheim bridge = 4 crossings, each on an in-bbox segment.
-- [ ] A small runner: for each case, run the pipeline on its bbox and assert expectations.
+- [x] Seed the first case: `test_cases.geojson` with **Mannheim bridge = 4** (bbox derived from the
+      four crossing segments' extent). `notes` kept short — no slice/implementation detail.
+- [x] A small runner extracted to a local module `crossing_checks.py` (`load_cases` / `run_cases`),
+      imported into `v5.py`. Checks each case against the V5 output — reps inside the bbox count ==
+      `expected_crossings`, and each such rep's segment intersects the bbox. Mannheim passes
+      (found 4, count_ok, segments_ok).
+- [ ] Add an interactive bbox-capture cell (viewport read or draw/enter) that appends a case
+      (the Mannheim bbox was derived from data rather than drawn).

@@ -705,5 +705,23 @@ def _(con, crossing_points_count, reps_v5_gdf):
     return
 
 
+@app.cell
+def _(rail_gdf, reps_v5_gdf):
+    # Test cases: check the V5 output against the bbox cases in test_cases.geojson, using the shared
+    # `crossing_checks` module imported from this notebook's directory.
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _here = _Path(__file__).parent
+    if str(_here) not in _sys.path:
+        _sys.path.insert(0, str(_here))
+    import crossing_checks as _cc
+
+    test_cases = _cc.load_cases(_here / "test_cases.geojson")
+    test_results = _cc.run_cases(test_cases, reps_v5_gdf, rail_gdf)
+    test_results
+    return
+
+
 if __name__ == "__main__":
     app.run()
