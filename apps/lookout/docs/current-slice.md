@@ -377,3 +377,10 @@ Tasks:
       re-rendering WebGL map is what blew up Safari's memory (not the rail on a single map). Settled
       on visible-area + one map (rail kept). If memory is still tight, the three V5 step maps + main
       viz each redraw the full 44k-segment rail — those could drop to the ~1.5k crossing segments.
+- [x] Extract the capture into a reusable **`bbox_capture.py`** module (`make_capture` builds the
+      widgets, `controls` lays them out, `visible_bounds` maps view_state→bbox, `result` previews +
+      appends via `crossing_checks.add_case`) so any notebook can drop it in. `v5.py`'s two capture
+      cells are now thin wrappers. Constraint baked in: the UI elements must be **top-level notebook
+      globals** — marimo UI reactivity does *not* fire for elements held as object attributes
+      (verified in-kernel), so the module *returns* them for the notebook to bind, rather than
+      hiding them in a widget object.
