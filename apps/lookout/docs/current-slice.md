@@ -39,6 +39,8 @@ We can visualise outputs either inline in the notebook via geopandas / lonboard.
 
 ### Tasks
 
+- [ ] Set up marimo AI pairing (https://marimo.io/pair): configure marimo's AI assistant so we
+      can pair with Claude while building the notebook.
 - [ ] Turn the `notebooks/water_crossings` placeholder into a runnable marimo notebook: add
       `marimo`, `duckdb`, `geopandas`, `shapely`, `lonboard` to `pyproject.toml`; replace the
       stub `main.py` with a marimo notebook; confirm `uv run --project . marimo edit main.py` opens.
