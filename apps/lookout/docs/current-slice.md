@@ -100,12 +100,67 @@ Same as V1 but also:
 
 #### V3:
 
+To be built in a **new `notebooks/water_crossings/v3.py`** — a verbatim copy of `v2.py`
+plus the de-duplication below. Leave `v2.py` untouched.
+
 I am seeing lots of cases where overlaps are very close to each other. This makes sense as each segment is separate but could be very short, so multiple segments all interact with the same water body. I'd like to minimise close-by overlaps to just one representative example.
 
-Some ideas:
-* do agglomerative clustering on the overlap points and then traverse the cluster tree, only keeping one for each sub-tree where all entries are within some distance of each other
-* similar but via k-means clustering of size = 3, with a max-distance limit, where we keep one example per cluster
-* bucket all items in to hexbins of some size, and we keep one example per bin
+Original ideas: (1) agglomerative clustering, traverse the tree keeping one per sub-tree
+where all entries are within some distance; (2) k-means k=3 with a max-distance limit,
+one per cluster; (3) hexbin, one per bin.
+
+**Analysis (data-grounded on the four-state V2 output, 3,527 points):**
+- Root cause is threefold: Overture splits the rail line into many short **segments** (each
+  intersects the water separately); the same river is often stored as **both an areal polygon
+  and a centreline** (different `water_id`s → a line-overlap *and* a point-overlap at the same
+  spot); and **parallel/multi-track** rail doubles crossings.
+- **Requirement (added):** parallel-track crossings must be **kept distinct** — we *want* both
+  markers where an up/down line each crosses a river. This is in tension with distance-based
+  clustering: parallel tracks are only ~4 m apart, the same scale as split-segment duplicates,
+  so DBSCAN cannot separate the two by distance alone (see the scope caveat below).
+- 81% of points have a neighbour ≤ 50 m, but only ~41% of nearest neighbours share the
+  `water_id` → this is **inherently spatial**; a water-id grouping would miss ~59% of dups.
+- Idea critique: (1) is fine but is just single-linkage cut at a distance (== DBSCAN
+  `min_samples=1`), O(n²), doesn't scale to all-Germany; (2) **rejected** — k-means uses a
+  *global* k and has no distance cutoff, wrong shape; (3) standard for *display* aggregation
+  but grid-boundary artifacts, and this DuckDB build has **no H3** (only hex-encoding utils).
+
+**Decisions:**
+- **Method:** DBSCAN in a metric CRS (`EPSG:25832`) via `sklearn.cluster.DBSCAN(eps, min_samples=1)`
+  — the standard equivalent of PostGIS `ST_ClusterDBSCAN`. `eps` exposed as a `mo.ui.slider`
+  (default **25 m** — sweet spot: 3,527 → ~1,610 reps / 54% fewer; larger `eps` barely dedups
+  more but starts single-linkage *chaining* where rail runs alongside water).
+- **Scope:** purely spatial — merge crossings within `eps` regardless of `water_id` (collapses
+  the poly+centreline-of-same-river case, the majority of dups). **Caveat:** this will also
+  merge ~4 m-apart **parallel-track** crossings, which we want to keep — an accepted limitation
+  of the DBSCAN route. If preserving parallel tracks matters more than simplicity, prefer the
+  **V3b merge-first** approach, which keeps them naturally (contiguous segments line-merge per
+  track; unconnected parallel tracks stay separate).
+- **Representative:** keep the **largest-`overlap_m`** crossing per cluster, at its **real
+  location** (not the centroid, so it stays on rail∩water), tagged with a `cluster_size`.
+- **UI:** a `collapse near-duplicate crossings` checkbox + the `eps` slider; the map swaps the
+  full crossing set for the representatives reactively. Raw crossings stay underneath.
+
+Tasks:
+- [ ] Copy `v2.py` → `v3.py`; add `scikit-learn` to `v3.py` deps (v2 stays clean).
+- [ ] Add a DBSCAN dedup cell producing `reps_gdf` (`eps` from slider, `min_samples=1`,
+      largest-`overlap_m` representative + `cluster_size`).
+- [ ] Wire `collapse_nearby` checkbox + `eps` slider into the map; export `crossing_reps.parquet`
+      to `data/water/v3/`.
+- [ ] Spot-check: confirm dense blobs collapse to one sensible marker and no legit distinct
+      crossings are wrongly merged (watch the chaining case at higher `eps`).
+
+#### V3b
+
+Same de-duplication problem, fixed at **source** instead of by clustering: `ST_LineMerge`/
+`ST_Union` contiguous rail (and/or dissolve water per body) **before** intersecting, so a
+single crossing yields one overlap component rather than one-per-segment.
+- Removes the *split-segment* cause and **correctly preserves parallel-track crossings**
+  (unconnected tracks don't line-merge) — which matches the requirement above, unlike V3.
+- Does **not** by itself merge the poly+centreline duplicate (a river's areal outline and its
+  centreline are separate features), so it may still want a light same-spot merge for that case
+  only. Worth building to compare representative counts and locations against the V3 DBSCAN approach.
+- [ ] Prototype the merge-first pipeline; compare kept-crossing counts and a few locations vs V3.
 
 #### V4:
 
