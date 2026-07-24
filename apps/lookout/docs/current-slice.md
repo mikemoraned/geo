@@ -337,6 +337,38 @@ I am on train ICE 693 from Aschaffenburg Hbf to Mannheim Hbf (which is the ICE 6
 
 Also: when observing "speed" on gps on my phone, it commonly shows as "40.<something>". This seems slow for a train even interpreting as miles per hour.
 
+#### Investigation
+
+Two independent observations here.
+
+**Train number (ICE 693 shows as ICE 11).** Same cause as the 21st's observation below —
+the gtfs.de free feed labels long-distance trains by *line*, not train number; ICE 693
+runs on line ICE 11. See the 21st's Investigation for the full write-up. The timetable is
+not incomplete, just anonymised to line level. (The route-search half — not finding the
+train Ronneburg→Mannheim — is unrelated to the data and not pursued; noted there too.)
+
+**Speed reads ~"40.x", too slow for an ICE.** Not slow — a **units** mistake. The value is
+in **metres per second**, not mph or km/h. 40 m/s = 144 km/h ≈ 90 mph, a normal ICE cruise;
+it only looks wrong read as mph.
+
+The reading comes from the W3C **Geolocation API** (`navigator.geolocation.watchPosition`
+→ `position.coords.speed`), which the spec defines in m/s:
+
+> `speed` … the magnitude of the horizontal component of the … velocity **in meters per
+> second**. — [W3C Geolocation API](https://www.w3.org/TR/geolocation/#speed) /
+> [MDN `GeolocationCoordinates.speed`](https://developer.mozilla.org/en-US/docs/Web/API/GeolocationCoordinates/speed)
+
+Safari/WebKit surfaces Core Location's `CLLocation.speed` (also m/s) through this API
+unchanged, derived from the GNSS Doppler shift — hence it's nullable when there's no
+velocity solution.
+
+Our webapp captures it correctly and stores it raw, no conversion or relabelling
+(`crates/server/static/app.js:147` — `// speed (Doppler, m/s) … keep the nulls`;
+`c.speed` at `:153`). So there's **no bug**: keeping the SI value at the source is right.
+If `speed` is ever surfaced in the visualisation/UI, convert there (`× 3.6` for km/h) and
+label the unit, so the "40 looks slow" trap isn't re-hit. Field sanity check: ~0 on a
+platform, ~1.3 while walking confirms m/s.
+
 ### On train on Tuesday 21st July from Mannheim Hbf to Koblenz Hbf
 
 I am on train 08:39 from Mannheim Hbf to Koblenz Hbf, IC2569, leaving at 08:39 and arriving at 10:11. A train on this route and with these departure/arrival times is showing up in Motis when I do a [search](http://localhost:8080/?time=2026-07-21T06%3A30%3A00.000Z&fromPlace=germanygtfs_503494&toPlace=germanygtfs_309638&withFares=true&numLegAlternatives=3&fastestDirectFactor=1.5&joinInterlinedLegs=false&maxMatchingDistance=250&fromName=Mannheim%2C+Hauptbahnhof%2C+Mannheim%2C+Baden-Württemberg%2C+Germany&toName=Koblenz+Hauptbahnhof%2C+Koblenz%2C+Rhineland-Palatinate%2C+Germany) but with train id IC55.
