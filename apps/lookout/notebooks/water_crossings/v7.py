@@ -724,6 +724,66 @@ def _(con, crossing_points_count, reps_v5_gdf):
 
 
 @app.cell
+def geoarrow_export(
+    crossing_points_count,
+    rail_gdf,
+    reps_v5_gdf,
+    water_lines_gdf,
+    water_polys_gdf,
+):
+    # GeoArrow export for kepler.gl: the same layers the map shows — rail, water (polygons + lines),
+    # and the crossing reps. Written as UNCOMPRESSED Arrow IPC because kepler.gl can't yet read
+    # compressed geoarrow (github.com/keplergl/kepler.gl/issues/3279). Native geoarrow encoding, one
+    # file per geometry type, into data/water/<stem>/geoarrow/. Load each .arrow as its own layer.
+    import pyarrow as _pa
+    from pathlib import Path as _GAP
+
+    _ = (
+        crossing_points_count,
+        reps_v5_gdf,
+    )  # dataflow: after the pipeline + V5 reduction
+    _ga_nb = _GAP(__file__)
+    _ga_dir = (
+        _ga_nb.parent / "../../data/water" / _ga_nb.stem / "geoarrow"
+    ).resolve()
+    _ga_dir.mkdir(parents=True, exist_ok=True)
+
+    _reps_cols = [
+        "rail_id",
+        "water_id",
+        "water_class",
+        "water_subtype",
+        "overlap_kind",
+        "overlap_m",
+        "frac",
+        "total_overlap_m",
+        "merged_parts",
+        "component_id",
+        "geometry",
+    ]
+    _ga_exports = {
+        "rail": rail_gdf[["id", "class", "geometry"]],
+        "water_polygons": water_polys_gdf,
+        "water_lines": water_lines_gdf,
+        "crossings": reps_v5_gdf[_reps_cols],
+    }
+    geoarrow_manifest = {}
+    for _name, _gdf in _ga_exports.items():
+        _tbl = _pa.table(_gdf.to_arrow(geometry_encoding="geoarrow"))
+        _path = _ga_dir / f"{_name}.arrow"
+        with _pa.ipc.new_file(
+            str(_path), _tbl.schema
+        ) as _w:  # uncompressed Arrow IPC (Feather V2)
+            _w.write_table(_tbl)
+        geoarrow_manifest[_name] = {
+            "rows": len(_gdf),
+            "bytes": _path.stat().st_size,
+        }
+    geoarrow_manifest
+    return
+
+
+@app.cell
 def _(rail_gdf, reps_v5_gdf):
     # Test cases: check the V5 output against the bbox cases in test_cases.geojson, using the shared
     # `crossing_checks` module imported from this notebook's directory.

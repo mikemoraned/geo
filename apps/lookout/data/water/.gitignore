@@ -1,2 +1,3 @@
-# Derived GeoParquet outputs from the water_crossings notebooks (regenerable).
+# Derived GeoParquet / GeoArrow outputs from the water_crossings notebooks (regenerable).
 *.parquet
+*.arrow

@@ -412,4 +412,11 @@ This actually nicely fits with our previously optional plan to map a crossing ba
       Test viewer added (`test_viz.py` + dropdown/map/explorer-link cells) to eyeball each case;
       it surfaced that the horseshoe river's re-crossing has one tunnelled leg per track, so its
       expected count was corrected 4 → 2. Test cases renamed to be self-documenting.
-
+- [x] add an export in geoarrow format such that it can be loaded into kepler.gl
+  * this should be uncompressed geoarrow as kepler.gl doesn't yet support compressed (see https://github.com/keplergl/kepler.gl/issues/3279)
+  * this should contain all data we visualise i.e. rail, water, crossing points
+  * Added a `geoarrow_export` cell to `v7.py`: `GeoDataFrame.to_arrow(geometry_encoding="geoarrow")`
+    → uncompressed Arrow IPC (`pa.ipc.new_file`) into `data/water/v7/geoarrow/`. One `.arrow` file
+    per geometry type (kepler loads each as a layer): `rail` (180,329 linestrings), `water_polygons`
+    (1,573), `water_lines` (1,409), `crossings` (5,749 points, the V5 reps). Each carries native
+    geoarrow encoding + CRS 84 metadata.
