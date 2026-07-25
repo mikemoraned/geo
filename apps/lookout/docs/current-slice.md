@@ -325,20 +325,6 @@ Tasks:
       (Left as follow-up: add the Mannheim case to the test dataset and confirm each rep sits on an
       in-bbox segment.)
 
-#### V6:
-
-Same as V5 but also:
-- [x] Widen from the four-state region to all of Germany (division-restricted) and re-run, sanity
-      checking counts and a few crossings.
-      Built in `notebooks/water_crossings/v6.py` (clone of `v5.py`; region cell uses the Germany
-      **country** division as the single clip boundary — no per-region/state list). All-Germany
-      counts: rail 180,329, water 966,385, crossings 43,565,
-      crossing_points 8,859 (5,132 line / 3,727 point), V5 reps @100 m 7,362. Test cases pass
-      (Mannheim = 4, horseshoe = 4). Exports in `data/water/v6/`.
-- [ ] (optional) Map each crossing point to a %-distance along its rail segment
-      (`ST_LineLocatePoint`) to express it as an Overture Connector, and enrich the segment via a
-      ConnectorReference.
-
 ### Test Dataset Extraction
 
 (Cross-cutting, not tied to one version — captured now, build later.)
@@ -389,3 +375,28 @@ Tasks:
       globals** — marimo UI reactivity does *not* fire for elements held as object attributes
       (verified in-kernel), so the module *returns* them for the notebook to bind, rather than
       hiding them in a widget object.
+
+#### V6:
+
+Same as V5 but also:
+- [x] Widen from the four-state region to all of Germany (division-restricted) and re-run, sanity
+      checking counts and a few crossings.
+      Built in `notebooks/water_crossings/v6.py` (clone of `v5.py`; region cell uses the Germany
+      **country** division as the single clip boundary — no per-region/state list). All-Germany
+      counts: rail 180,329, water 966,385, crossings 43,565,
+      crossing_points 8,859 (5,132 line / 3,727 point), V5 reps @100 m 7,362. Test cases pass
+      (Mannheim = 4, horseshoe = 4). Exports in `data/water/v6/`.
+
+#### V7:
+
+I've spotted an issue in the dataset in the area around Hamburg: we are finding water crossings when the route is underwater 😀 . Looking at the [explorer](https://explore.overturemaps.org/?feature=transportation.segment.e3ce6201-156c-4765-b6b7-869885ae6c4d#18.04/53.554312/9.99713) for this region, and I can see that it has an attribute "rail_flags" which has values like `between: [0.192236095, 0.265829864] values: [is_tunnel]`. We need to process these to exclude water crossings that are in a tunnel.
+
+This actually nicely fits with our previously optional plan to map a crossing back to it's fractional position along a segment. We can use this alongside the `between` value to exclude any water crossings where it has the `is_tunnel` property.
+
+- [x] Add test-case for Hamburg asserting that no crossings should be found in the area under water (`Hamburg under water`).
+- [ ] Map each crossing point to a %-distance along its rail segment
+      (`ST_LineLocatePoint`) to express it as an Overture Connector, and enrich the segment via a
+      ConnectorReference.
+- [ ] Filter out any water crossings where `is_tunnel` property is present.
+- [ ] Look for any other properties like `is_tunnel` which indicate that we shouldn't include it as a water crossing (see schema for `RailFlag` on OvertureMaps [website](https://docs.overturemaps.org/schema/reference/transportation/types/rail_flag/))
+

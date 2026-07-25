@@ -70,6 +70,41 @@
           ]
         ]
       }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hamburg under water",
+        "expected_crossings": 0,
+        "notes": ""
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              9.9949,
+              53.55379
+            ],
+            [
+              9.99819,
+              53.55379
+            ],
+            [
+              9.99819,
+              53.55489
+            ],
+            [
+              9.9949,
+              53.55489
+            ],
+            [
+              9.9949,
+              53.55379
+            ]
+          ]
+        ]
+      }
     }
   ]
 }
