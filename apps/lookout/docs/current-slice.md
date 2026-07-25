@@ -328,8 +328,13 @@ Tasks:
 #### V6:
 
 Same as V5 but also:
-- [ ] Widen from the four-state region to all of Germany (division-restricted) and re-run, sanity
+- [x] Widen from the four-state region to all of Germany (division-restricted) and re-run, sanity
       checking counts and a few crossings.
+      Built in `notebooks/water_crossings/v6.py` (clone of `v5.py`; region cell uses the Germany
+      **country** division as the single clip boundary — no per-region/state list). All-Germany
+      counts: rail 180,329, water 966,385, crossings 43,565,
+      crossing_points 8,859 (5,132 line / 3,727 point), V5 reps @100 m 7,362. Test cases pass
+      (Mannheim = 4, horseshoe = 4). Exports in `data/water/v6/`.
 - [ ] (optional) Map each crossing point to a %-distance along its rail segment
       (`ST_LineLocatePoint`) to express it as an Overture Connector, and enrich the segment via a
       ConnectorReference.
