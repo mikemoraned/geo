@@ -149,3 +149,20 @@ with a GTFS-RT feed to make that interpolation delay-aware.
   produces correct curved rail, but importing its `shapes.txt` breaks GTFS-RT realtime; decided to give up on fixing this for now.
   Full write-up and resume steps live in `.claude/memory/motis-trips-api.md`.
 
+## minimal version of water crossings
+
+Built a dataset of where visible water bodies cross rail lines in Germany, entirely in marimo
+notebooks (no new crates) under `apps/lookout/notebooks/water_crossings/`, using DuckDB's
+`spatial` extension to read Overture GeoParquet directly, intersect rail against water in SQL,
+and visualise with lonboard. Each notebook is a self-contained version building on the last;
+outputs export to GeoParquet and to uncompressed native GeoArrow for kepler.gl.
+
+- Progressed from a four-state extract to all of Germany; added deduplication to collapse the
+  many redundant crossings down to roughly one per physical track × water body; and added a filter
+  to drop crossings the train can't actually see (tunnels, non-running track).
+- Built a small bbox test-case harness with a per-case viewer (linking to the OvertureMaps
+  explorer) to validate counts against hand-checked truth — which caught a wrong assumption.
+- **The durable learnings — where the real difficulty lay (deduplication is water-side + spatial,
+  not rail-side; a 2D intersection isn't "visible water"; Overture's representation quirks) — are
+  captured in `docs/target.md` under Learnings.**
+

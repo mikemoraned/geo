@@ -62,3 +62,36 @@ We can additionally improve accuracy by using accelerometers from devices that a
       data, but on a LAN IP (not `localhost`) the sensor API needs a secure context, so it
       requires HTTPS via a cert (`mkcert`) or a tunnel (`cloudflared`/`ngrok`).
     - An **M5 / dedicated sensor board** remains a future option.
+
+## Finding water crossings (Overture rail × water)
+
+- **The hard part is deduplication, and it's water-side + spatial, not rail-side.** A single
+  physical crossing appears many times because Overture (a) splits a rail line into many short
+  segments, (b) stores the same river as *both* an areal polygon and a centreline, and (c) has
+  parallel / multi-track rail. The intuitive fix — line-merging contiguous rail *before*
+  intersecting — barely helps, because the duplication is dominated by the water representation and
+  by nearby-but-distinct water bodies, not by rail fragmentation. What works: group crossing
+  segments into physical tracks via shared Overture **connector ids**, then merge within each
+  `(track, water body)` by distance. This keeps genuinely distinct crossings — parallel tracks, or
+  a river that horseshoes back over the *same* track — separate, which plain distance clustering
+  (DBSCAN) cannot.
+
+- **A 2D rail∩water intersection is not "water you can see from the train."** It includes rail
+  running *under* water in a tunnel (real false positives near Hamburg) and abandoned/disused track
+  where no train runs. Overture segments carry `rail_flags` with fractional `between` ranges tagging
+  `is_tunnel` / `is_covered` / `is_abandoned` / `is_disused` / `is_under_construction` (and
+  `is_bridge` — the opposite, keep it). Locating each crossing as a fraction along its segment
+  (`ST_LineLocatePoint`) lets you test membership in those ranges and drop the invisible ones. That
+  same fraction is the Overture **Connector** position, so the visibility filter and the
+  connector-mapping idea are one mechanism.
+
+- **Overture representation quirks to expect downstream:** water is modelled redundantly (polygon +
+  centreline of the same river); rail is fragmented into short segments whose **connector ids**
+  reconstruct a physical track; water polygons can have island holes that split one span into
+  several channels. Any "how many times does this line cross water" logic must account for these.
+
+- **DuckDB `spatial` reading Overture GeoParquet directly is enough** for country-scale extraction
+  and intersection (bbox-pruned, in SQL) — no heavier engine needed here — and a local Overture
+  mirror is far faster than S3. A small library of **bbox test cases with expected counts**, plus a
+  viewer linking to the OvertureMaps explorer, repeatedly caught wrong assumptions (including a
+  hand-set expected count that was itself wrong).
