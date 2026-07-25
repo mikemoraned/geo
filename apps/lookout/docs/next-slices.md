@@ -54,3 +54,19 @@ I think at this point we need to cleanly separate our bits of data processing an
 ### Tasks 
 
 ...
+
+## Slice: Enrich and use relative direction of POI
+
+### Target
+
+Enrich the water crossings dataset with an angle relative to the train line and travel direction. This allows a recommendation to be given about which direction to look relative to the train seat.
+
+## Slice: Adding POI's from images taken
+
+### Idea
+
+Assuming we have an iOS App, and it is running whilst people are taking pictures, we can support adding POI's by correlating what the position of the person was and on what line when they took the picture. We can also access the compass sensor to get the direction of the phone at the time. This allows us to establish an angle to the POI relative to the train and so remember what direction you'd need to be facing to be able to see it again.
+
+An onboard model could perhaps be used to do rough interpretation of kind of POI e.g. is it a building or a river or what.
+
+We probably don't want to go down the lines of storing the image, but perhaps there is some on-device or privacy-preserving way to to identify exactly what the POI is based on the image.
