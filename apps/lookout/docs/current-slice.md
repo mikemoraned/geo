@@ -394,9 +394,22 @@ I've spotted an issue in the dataset in the area around Hamburg: we are finding 
 This actually nicely fits with our previously optional plan to map a crossing back to it's fractional position along a segment. We can use this alongside the `between` value to exclude any water crossings where it has the `is_tunnel` property.
 
 - [x] Add test-case for Hamburg asserting that no crossings should be found in the area under water (`Hamburg under water`).
-- [ ] Map each crossing point to a %-distance along its rail segment
+- [x] Map each crossing point to a %-distance along its rail segment
       (`ST_LineLocatePoint`) to express it as an Overture Connector, and enrich the segment via a
       ConnectorReference.
-- [ ] Filter out any water crossings where `is_tunnel` property is present.
-- [ ] Look for any other properties like `is_tunnel` which indicate that we shouldn't include it as a water crossing (see schema for `RailFlag` on OvertureMaps [website](https://docs.overturemaps.org/schema/reference/transportation/types/rail_flag/))
+      Built in `notebooks/water_crossings/v7.py` (clone of `v6.py`). Each crossing gets `frac` =
+      `ST_LineLocatePoint(segment, crossing)` in the `crossing_points` step, carried through to the
+      reps — this is the crossing's Connector position along the segment. (Left as-is: rewriting the
+      segment's `connectors`/ConnectorReference array — the `frac` is the position it would carry.)
+- [x] Filter out any water crossings where `is_tunnel` property is present.
+      Drop any crossing whose `frac` falls in a `rail_flags` stretch (`between` range, or whole
+      segment when `between` is null) tagged with an excluded flag. Fixes the Hamburg underwater
+      case (2 → 0). All-Germany: crossing_points 8,859 → 6,911, reps 7,362 → 5,749.
+- [x] Look for any other properties like `is_tunnel` which indicate that we shouldn't include it as a water crossing (see schema for `RailFlag` on OvertureMaps [website](https://docs.overturemaps.org/schema/reference/transportation/types/rail_flag/))
+      `EXCLUDE_RAIL_FLAGS = (is_tunnel, is_covered, is_abandoned, is_disused,
+      is_under_construction)` — view-blocked (tunnel/covered) or no train runs (abandoned/disused/
+      under-construction). `is_bridge` is deliberately kept (elevated, visible crossing over water).
+      Test viewer added (`test_viz.py` + dropdown/map/explorer-link cells) to eyeball each case;
+      it surfaced that the horseshoe river's re-crossing has one tunnelled leg per track, so its
+      expected count was corrected 4 → 2. Test cases renamed to be self-documenting.
 
