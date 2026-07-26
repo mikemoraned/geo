@@ -93,11 +93,12 @@ One intent here is to standardis to allow multiple writer/readers, which are dif
 
 The main tasks here should be focussed on documenting these patterns and correctinh any conflicting info (e.g. in target.md) and updating the cli's like `motis_poll` and `motis_ingest` to follow them. Further sets of Tasks then need to follow these patterns.
 
-- [ ] Write `docs/medallion.md`: the layer definitions above, the root path
+- [x] Write `docs/medallion.md`: the layer definitions above, the root path
       (`~/Data/geo/lookout/medallion`, Hive-partitioned), the per-layer format rules
       (parquet append-shaped in bronze, GeoParquet 1.1 / WKB / simple features in silver,
-      PMTiles / uncompressed GeoArrow in gold), and the three-engine rule (DuckDB,
-      SedonaDB, georust must all read silver with no engine-specific handling).
+      PMTiles / uncompressed GeoArrow in gold), and the multi-engine rule (silver stays
+      independent of any one engine — currently DuckDB, SedonaDB and georust must all read
+      it with no engine-specific handling).
 - [ ] Fix conflicting statements in `docs/target.md` (which currently says "sensor data is
       persisted in sqlite") and in `.claude/memory/lookout-architecture.md` (the
       "Rust derives tables into `lookout.sqlite`, Python reads" convention) so they point
@@ -107,11 +108,12 @@ The main tasks here should be focussed on documenting these patterns and correct
       `extract_id`) and record them in `docs/medallion.md` — path layout is the schema
       here and is expensive to change later.
 - [ ] Add a small shared Rust `medallion` module (paths + layer roots + writer helpers)
-      so the CLIs don't each hand-roll path construction; `LOOKOUT_MEDALLION_ROOT` env
-      var overrides the default root (external drive move).
-- [ ] Prove the three-engine rule with a round-trip test: write one silver GeoParquet from
-      Rust, read it back from DuckDB, SedonaDB and georust, and assert identical geometry
-      + CRS. This is the check that stops silver drifting engine-specific.
+      so the CLIs don't each hand-roll path construction, including a shared clap args
+      struct giving every CLI the same `--medallion-root` flag and default.
+- [ ] Prove the multi-engine rule with a round-trip test: write one silver GeoParquet from
+      Rust, read it back from each engine in use (currently DuckDB, SedonaDB, georust), and
+      assert identical geometry + CRS. This is the check that stops silver drifting
+      engine-specific.
 - [ ] Move `motis_poll` to write into landing/bronze: keep the raw polled `TripSegment`
       batch (polylines verbatim, as received) as one parquet file per poll under a
       timestamped Hive path, rather than appending to `data/motis.sqlite`.

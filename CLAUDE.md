@@ -22,6 +22,8 @@ have to re-derive. Current notes:
   `map/trips` endpoint, enabling realtime, and the no-vehicle-GPS constraint
 - [`.claude/memory/python-conventions.md`](.claude/memory/python-conventions.md) — keep
   Python minimal, in a uv project dir, no low-level fiddliness
+- [`.claude/memory/docs-style.md`](.claude/memory/docs-style.md) — reference docs are
+  written abstractly (no component names in rules) and in dry language
 
 ## Running Claude
 
