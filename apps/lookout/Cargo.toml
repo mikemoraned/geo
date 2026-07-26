@@ -21,10 +21,45 @@ rustls = { version = "0.23", features = ["ring"] }
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
 # `bundled` compiles a pinned SQLite from source, so the recorder doesn't depend on
-# a system libsqlite3 being present or new enough.
+# a system libsqlite3 being present or new enough. It also builds SQLite with the
+# R*Tree module (`-DSQLITE_ENABLE_RTREE`), used by the transport enrichment for a
+# spatial index over the `transport` table — no separate rusqlite feature is needed.
 rusqlite = { version = "0.40", features = ["bundled"] }
+# SedonaDB: a Rust-native, DataFusion/GeoArrow spatial engine the transport `enrich`
+# bin uses in-process to read Overture transport GeoParquet from S3. Not published to
+# crates.io, so pinned to a release tag. We select `aws` (S3 object store) + the
+# pure-Rust `geo` geometry backend with default-features off, which drops the `geos`
+# backend — it links a *system* GEOS library (enable it later once GEOS is installed).
+sedona = { git = "https://github.com/apache/sedona-db", tag = "apache-sedona-db-0.4.0", default-features = false, features = ["aws", "geo"] }
+# `GeoParquetReadOptions` (S3 read options + geometry decoding) lives here, not in the
+# top-level `sedona` crate; same repo/tag so the versions line up.
+sedona-geoparquet = { git = "https://github.com/apache/sedona-db", tag = "apache-sedona-db-0.4.0" }
+# SedonaDB's query results are DataFusion `DataFrame`s; pinned to the version SedonaDB
+# builds against so the shared arrow/datafusion types line up.
+datafusion = "52.5"
+# Must match the arrow version SedonaDB/DataFusion pin, so `RecordBatch`es returned by
+# queries line up with the arrow types we decode them with.
+arrow = "57.1"
 md5 = "0.7"
 tempfile = "3"
+proptest = "1"
+# Motis `map/trips` client: progenitor-generated from the OpenAPI spec (reqwest 0.12),
+# exposes `.trips()` and `types::TripSegment`. `polyline` decodes the Google-encoded
+# segment geometry; `chrono` formats the RFC3339 query window.
+motis-openapi-progenitor = "0.4"
+polyline = "0.11"
+# Encode the decoded polyline LineString to WKB for the derived `train_segment` geom,
+# matching the `transport` table's WKB the Python visualiser reads with shapely.
+wkb = "0.9"
+# `geo-types` for the geometry types; `geo` for the algorithms over them (bounding rect,
+# scale). Pinned to 0.31 to match the version sedona-geo already resolves in the tree.
+geo-types = "0.7"
+geo = "0.31"
+# Geometry traits the `wkb` reader exposes, for inspecting decoded geometries in tests.
+geo-traits = "0.3"
+# Serialise geo-types geometries to WKT for the Overture spatial-query window.
+wkt = "0.14"
+chrono = "0.4"
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
 

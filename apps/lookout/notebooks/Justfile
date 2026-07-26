@@ -1,0 +1,2 @@
+marimo folder notebook:
+    cd {{ folder }} && uv run marimo edit {{ notebook }}.py --sandbox --no-token

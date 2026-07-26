@@ -2,6 +2,7 @@ import argparse
 import sqlite3
 
 import pytest
+import shapely
 
 import main
 
@@ -112,6 +113,181 @@ class TestSpeedColor:
     def test_returns_rgb_triple(self):
         r, g, b = main._speed_color(15.0, 0.0, 30.0)
         assert all(0 <= c <= 255 for c in (r, g, b))
+
+
+class TestTransport:
+    """The `transport` fetch/transform path: reading the enriched table and turning
+    its WKB geometry into rerun-ready, class-coloured, lat/lon geometry."""
+
+    def test_fetch_missing_table_is_empty(self):
+        conn = sqlite3.connect(":memory:")
+        assert main.fetch_transport(conn) == []
+        conn.close()
+
+    def test_fetch_reads_rows(self):
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE transport (gers_id TEXT, kind TEXT, class TEXT, geom BLOB)"
+        )
+        conn.execute(
+            "INSERT INTO transport (gers_id, kind, class, geom) VALUES ('c1', 'connector', NULL, ?)",
+            [shapely.Point(11.0, 50.0).wkb],
+        )
+        conn.commit()
+        rows = main.fetch_transport(conn)
+        conn.close()
+        assert [(r[0], r[1]) for r in rows] == [("connector", None)]
+
+    def test_class_color_maps_known_and_defaults_unknown(self):
+        assert main._class_color("tram") == main._CLASS_COLORS["tram"]
+        assert main._class_color("unknown") == main._CLASS_DEFAULT
+        assert main._class_color(None) == main._CLASS_DEFAULT
+
+    def test_segment_flips_to_lat_lon_and_colours_by_class(self):
+        geom = shapely.LineString([(11.0, 50.0), (11.1, 50.1)]).wkb
+        segments, colors, connectors = main._transport_geometry([("segment", "tram", geom)])
+        # WKB is (lon, lat); rerun wants (lat, lon).
+        assert segments == [[(50.0, 11.0), (50.1, 11.1)]]
+        assert colors == [main._CLASS_COLORS["tram"]]
+        assert connectors == []
+
+    def test_connector_point_flips_to_lat_lon(self):
+        geom = shapely.Point(11.0, 50.0).wkb
+        segments, _colors, connectors = main._transport_geometry([("connector", None, geom)])
+        assert connectors == [(50.0, 11.0)]
+        assert segments == []
+
+    def test_multilinestring_splits_into_one_polyline_per_part(self):
+        geom = shapely.MultiLineString(
+            [[(11.0, 50.0), (11.1, 50.1)], [(12.0, 51.0), (12.1, 51.1)]]
+        ).wkb
+        segments, colors, _ = main._transport_geometry([("segment", "tram", geom)])
+        assert len(segments) == 2
+        assert colors == [main._CLASS_COLORS["tram"]] * 2
+
+    def test_near_keeps_close_segments_and_drops_far_ones(self):
+        close = shapely.LineString([(11.0, 50.0), (11.01, 50.01)]).wkb
+        far = shapely.LineString([(20.0, 60.0), (20.1, 60.1)]).wkb
+        rows = [("segment", "tram", close), ("segment", "tram", far)]
+        segments, _, _ = main._transport_geometry(
+            rows, gps_lonlat=[(11.0, 50.0)], near=0.05
+        )
+        # Only the segment within 0.05 degrees of the fix survives.
+        assert segments == [[(50.0, 11.0), (50.01, 11.01)]]
+
+    def test_near_none_keeps_all_segments(self):
+        far = shapely.LineString([(20.0, 60.0), (20.1, 60.1)]).wkb
+        segments, _, _ = main._transport_geometry(
+            [("segment", "tram", far)], gps_lonlat=[(11.0, 50.0)], near=None
+        )
+        assert len(segments) == 1
+
+
+class TestTrains:
+    """The `train_segment` fetch/transform path: reading the ingested table and turning
+    its WKB legs + realtime times into interpolated, mode-coloured moving-dot samples."""
+
+    def test_fetch_missing_table_is_empty(self):
+        conn = sqlite3.connect(":memory:")
+        assert main.fetch_train_segments(conn, 0) == []
+        conn.close()
+
+    @pytest.fixture
+    def conn(self):
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE train_segment (trip_id TEXT, mode TEXT, route_color TEXT, "
+            "route_name TEXT, train_number INTEGER, departure INTEGER, arrival INTEGER, "
+            "geom BLOB)"
+        )
+        yield conn
+        conn.close()
+
+    def _insert(
+        self, conn, trip_id, mode, route_color, departure, arrival, line,
+        route_name=None, train_number=None,
+    ):
+        conn.execute(
+            "INSERT INTO train_segment "
+            "(trip_id, mode, route_color, route_name, train_number, departure, arrival, geom) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [trip_id, mode, route_color, route_name, train_number, departure, arrival, line.wkb],
+        )
+        conn.commit()
+
+    def test_fetch_windows_by_arrival(self, conn):
+        line = shapely.LineString([(11.0, 50.0), (11.0, 52.0)])
+        self._insert(conn, "old", "REGIONAL_RAIL", None, 100, 500, line)
+        self._insert(conn, "new", "REGIONAL_RAIL", None, 1000, 2000, line)
+        rows = main.fetch_train_segments(conn, cutoff_ms=600)
+        assert [r[0] for r in rows] == ["new"], "leg arriving before the cutoff is dropped"
+
+    def test_fetch_carries_train_number_into_label(self, conn):
+        line = shapely.LineString([(11.0, 50.0), (11.0, 52.0)])
+        self._insert(
+            conn, "ice", "HIGHSPEED_RAIL", None, 1000, 2000, line,
+            route_name="55", train_number=2569,
+        )
+        rows = main.fetch_train_segments(conn, cutoff_ms=0)
+        trains = main._train_samples(rows, step_s=1)
+        assert trains["ice"]["label"] == "2569"
+        assert trains["ice"]["color"] == main._MODE_COLORS["HIGHSPEED_RAIL"]
+
+    def test_hex_rgb_parses_and_rejects(self):
+        assert main._hex_rgb("ff8800") == (255, 136, 0)
+        assert main._hex_rgb("#ff8800") == (255, 136, 0)
+        assert main._hex_rgb("nope") is None
+        assert main._hex_rgb("fff") is None
+
+    def test_train_color_prefers_route_color_then_mode(self):
+        assert main._train_color("TRAM", "ff8800") == (255, 136, 0)
+        assert main._train_color("TRAM", None) == main._MODE_COLORS["TRAM"]
+        assert main._train_color("TRAM", "") == main._MODE_COLORS["TRAM"]
+        assert main._train_color("WHAT", None) == main._MODE_DEFAULT
+        # DELFI's mode separates long-distance directly — no agency needed.
+        assert main._train_color("HIGHSPEED_RAIL", None) == main._MODE_COLORS["HIGHSPEED_RAIL"]
+
+    def test_train_label_prefers_number_then_line(self):
+        assert main._train_label(2569, "55") == "2569"
+        assert main._train_label(None, "RE4") == "RE4"
+        assert main._train_label(None, None) is None
+
+    def test_train_entity_groups_by_label_but_stays_unique(self):
+        # Label groups the path; trip_id leaf keeps distinct trips from colliding.
+        assert main._train_entity("trip-a", "2569") == "trains/2569/trip-a"
+        assert main._train_entity("trip-b", None) == "trains/trip-b"
+        # Slashes/spaces in a line name don't spawn extra path levels.
+        assert main._train_entity("trip-c", "S1/S11") == "trains/S1-S11/trip-c"
+
+    def test_interpolates_position_and_flips_to_lat_lon(self):
+        # A north-running 2-point line (lon fixed at 11, lat 50→52) over [1000, 3000] ms.
+        line = shapely.LineString([(11.0, 50.0), (11.0, 52.0)])
+        rows = [("trip-1", "REGIONAL_RAIL", None, None, None, 1000, 3000, line.wkb)]
+        trains = main._train_samples(rows, step_s=1)
+        samples = trains["trip-1"]["samples"]
+        # Endpoints plus the midpoint at half the span; WKB (lon, lat) → (lat, lon).
+        assert (1.0, 50.0, 11.0) in samples  # frac 0.0 → start
+        assert (2.0, 51.0, 11.0) in samples  # frac 0.5 → midpoint
+        assert (3.0, 52.0, 11.0) in samples  # frac 1.0 → end
+        assert trains["trip-1"]["color"] == main._MODE_COLORS["REGIONAL_RAIL"]
+
+    def test_samples_are_time_ordered_across_legs(self):
+        line_a = shapely.LineString([(11.0, 50.0), (11.0, 51.0)])
+        line_b = shapely.LineString([(11.0, 51.0), (11.0, 52.0)])
+        rows = [
+            ("trip-1", "REGIONAL_RAIL", None, None, None, 3000, 4000, line_b.wkb),
+            ("trip-1", "REGIONAL_RAIL", None, None, None, 1000, 2000, line_a.wkb),
+        ]
+        trains = main._train_samples(rows, step_s=1)
+        times = [t for t, _, _ in trains["trip-1"]["samples"]]
+        assert times == sorted(times)
+        assert len(trains["trip-1"]["route"]) == 2, "one route polyline per leg"
+
+    def test_zero_duration_leg_yields_single_start_sample(self):
+        line = shapely.LineString([(11.0, 50.0), (11.0, 52.0)])
+        rows = [("trip-1", "REGIONAL_RAIL", None, None, None, 1000, 1000, line.wkb)]
+        samples = main._train_samples(rows, step_s=1)["trip-1"]["samples"]
+        assert samples == [(1.0, 50.0, 11.0)]
 
 
 class TestReportedPrefixScenario:

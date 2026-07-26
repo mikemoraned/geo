@@ -1,0 +1,204 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.23.15",
+    "script_metadata_hash": "e44161bc3a342c33698aedc1b649ec97"
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "a5480dadfdbfe88d41af58772aa86f48",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "4ec6dba74cab4f2ec5d4bdfeea823162",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "d483db05df42df90f9bf9687f2ff0115",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>&lt;_duckdb.DuckDBPyConnection object at 0x11f47c2b0&gt;</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "25f4eb75cbbe4863f20ab96eb23b02e2",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "application/json": "[[\"Baden-W\\u00fcrttemberg\", \"Hessen\", \"Rheinland-Pfalz\", \"Th\\u00fcringen\"], {\"xmin\": \"text/plain+float:6.1122591\", \"ymin\": \"text/plain+float:47.5324012\", \"xmax\": \"text/plain+float:12.6539178\", \"ymax\": \"text/plain+float:51.6577889\"}]"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "e3a6ab0cc1bf91bc6d8789d3ff66b85f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>44096</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "087961b4bdba7ed24a7894f6c981e183",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>229383</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "946219d2b103e76b973b90f25239402c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>12801</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "5890d059b6e0b2b1e45081d345595895",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>3527</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "b15ca13f98362dc62e854c904a5375bc",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>48</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "72fa43e25bee65a8abf1be591c353b1f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "1ac9591f34125f64025cd1dcc04edb74",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "application/json": "[44096, 3527, 48, 942, 521]"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "76bedf4feb324ccad1c3ea8e8cd0a7ff",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>Show overlap classes:</strong></span></span><marimo-ui-element object-id='emfo-0' random-id='c8fb5029-0b6d-39ca-fd28-01f105bc0778'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eLINESTRING overlaps \u2014 areal water, track spans it (1246)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><marimo-ui-element object-id='emfo-1' random-id='ba27a5f8-fd15-61bd-caed-75a26b16c647'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ePOINT overlaps \u2014 linear watercourse centrelines (2281)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>De-duplicate crossings:</strong></span></span><marimo-ui-element object-id='emfo-2' random-id='8b4cfb53-0bdc-4a3b-d420-44061f35cc6c'><marimo-checkbox data-initial-value='true' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003ecollapse near-duplicate crossings (DBSCAN)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-disabled='false'></marimo-checkbox></marimo-ui-element><marimo-ui-element object-id='emfo-3' random-id='890b9eb5-c4cf-6b04-ac5b-9825c7505f8e'><marimo-slider data-initial-value='9' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003emerge radius (m)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-start='0' data-stop='11' data-step='1' data-steps='[5,10,15,20,25,30,40,50,75,100,150,200]' data-debounce='false' data-disabled='false' data-orientation='&quot;horizontal&quot;' data-show-value='true' data-include-input='false' data-full-width='false'></marimo-slider></marimo-ui-element></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "KZSC",
+      "code_hash": "7ddbea24724d8873805925fcead61a34",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='KZSC-0' random-id='35aaebb4-c742-9798-1b1b-3a56a636ea45'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;eps&#92;&quot;:5,&#92;&quot;value&#92;&quot;:2090},{&#92;&quot;eps&#92;&quot;:10,&#92;&quot;value&#92;&quot;:1667},{&#92;&quot;eps&#92;&quot;:15,&#92;&quot;value&#92;&quot;:1602},{&#92;&quot;eps&#92;&quot;:20,&#92;&quot;value&#92;&quot;:1577},{&#92;&quot;eps&#92;&quot;:25,&#92;&quot;value&#92;&quot;:1547},{&#92;&quot;eps&#92;&quot;:30,&#92;&quot;value&#92;&quot;:1526},{&#92;&quot;eps&#92;&quot;:40,&#92;&quot;value&#92;&quot;:1500},{&#92;&quot;eps&#92;&quot;:50,&#92;&quot;value&#92;&quot;:1473},{&#92;&quot;eps&#92;&quot;:75,&#92;&quot;value&#92;&quot;:1437},{&#92;&quot;eps&#92;&quot;:100,&#92;&quot;value&#92;&quot;:1415}]&quot;' data-total-rows='12' data-total-columns='1' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;value&quot;,[&quot;integer&quot;,&quot;int64&quot;]]]' data-show-filters='true' data-show-download='true' data-show-search='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[[&quot;eps&quot;,[&quot;integer&quot;,&quot;int64&quot;]]]' data-hidden-columns='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "e93dcf3335e02388b1c3508184e44267",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<marimo-ui-element object-id='Hstk-0' random-id='dcf9d6b2-1572-cccf-0895-8bd0672ba011'><marimo-anywidget data-initial-value='{&quot;model_id&quot;:&quot;65522dc84a824ab4a8765c16ecf97c22&quot;}' data-label='null' data-model-id='&quot;65522dc84a824ab4a8765c16ecf97c22&quot;'></marimo-anywidget></marimo-ui-element>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "72c57f97de1a2cc4e5a540260f88c136",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "application/json": "{\"rail\": 13267566, \"water\": 60301713, \"crossings\": 755933, \"crossing_points\": 255124, \"crossing_reps\": 310769}"
+          }
+        }
+      ],
+      "console": []
+    }
+  ]
+}

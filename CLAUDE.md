@@ -9,6 +9,20 @@ geo is an umbrella monorepo for geo-related projects, containing different areas
 * `spikes/`: throwaway code used for experimentation and discovery that we keep around for reference of what was done, but code typically shouldn't be used directly
 * `tools/`: shared tools e.g. a motis-server
 
+## Memory (read before starting)
+
+Durable, non-obvious project knowledge lives in `.claude/memory/` (checked into the repo,
+not Claude Code's external memory store). Read the relevant note before working on that
+area, and add/update a note there when you learn something a future session shouldn't
+have to re-derive. Current notes:
+
+- [`.claude/memory/lookout-architecture.md`](.claude/memory/lookout-architecture.md) —
+  the lookout redis→sqlite pipeline and the "Rust derives tables, Python reads" convention
+- [`.claude/memory/motis-trips-api.md`](.claude/memory/motis-trips-api.md) — the Motis
+  `map/trips` endpoint, enabling realtime, and the no-vehicle-GPS constraint
+- [`.claude/memory/python-conventions.md`](.claude/memory/python-conventions.md) — keep
+  Python minimal, in a uv project dir, no low-level fiddliness
+
 ## Running Claude
 
 Launch Claude for an app under the safehouse sandbox with `just claude <app>`
@@ -57,3 +71,9 @@ When doing TDD, always keep the code compiling at every step:
 
 - **Code over comments:** make code self-documenting; add comments only for non-obvious
   things; substantive docs go in `docs/`.
+- **Prefer existing libraries; don't hand-roll — especially in notebook cells.** Reach for a
+  well-known library (numpy, scipy, scikit-learn, networkx, shapely/geopandas, matplotlib,
+  lonboard's `colormap` helpers, …) instead of writing a bespoke algorithm: graph
+  traversal / union-find, clustering, colour mapping, distance/geometry maths, hashing to
+  values, etc. A cell should read as thin glue over library calls, not a mini-implementation.
+  If nothing fits, say so and get agreement before hand-rolling.

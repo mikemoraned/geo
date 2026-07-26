@@ -1,0 +1,110 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mannheim: 4 parallel tracks over the Rhine (kept distinct)",
+        "expected_crossings": 4,
+        "notes": "Four parallel tracks cross the Rhine here on a single bridge over one river body."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              8.4544,
+              49.4783
+            ],
+            [
+              8.4604,
+              49.4783
+            ],
+            [
+              8.4604,
+              49.4843
+            ],
+            [
+              8.4544,
+              49.4843
+            ],
+            [
+              8.4544,
+              49.4783
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "horseshoe river re-crossing (one leg tunnelled)",
+        "expected_crossings": 2,
+        "notes": "River re-crosses each of the 2 tracks twice, but one crossing per track is where the track is tunnelled (is_tunnel), so only 2 are visible."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              7.33958,
+              49.69737
+            ],
+            [
+              7.36419,
+              49.69737
+            ],
+            [
+              7.36419,
+              49.70628
+            ],
+            [
+              7.33958,
+              49.70628
+            ],
+            [
+              7.33958,
+              49.69737
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hamburg underwater rail tunnel (no visible crossings)",
+        "expected_crossings": 0,
+        "notes": ""
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              9.9949,
+              53.55379
+            ],
+            [
+              9.99819,
+              53.55379
+            ],
+            [
+              9.99819,
+              53.55489
+            ],
+            [
+              9.9949,
+              53.55489
+            ],
+            [
+              9.9949,
+              53.55379
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
