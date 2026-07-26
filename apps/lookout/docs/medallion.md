@@ -149,7 +149,7 @@ existing directory.
 
 | dataset | partitioning | file |
 | --- | --- | --- |
-| sensor readings | `sensor=<kind>/ingested_date=<date>` | one per drain, named for its ingestion timestamp |
+| sensor readings, one dataset per sensor | `ingested_date=<date>` | one per ingestion, named for its instant |
 | third-party service samples | `polled_date=<date>` | one per poll, named for its poll timestamp |
 | upstream reference extracts | `extract_id=<id>/` then the upstream's own layout, verbatim | as produced by the extraction |
 | extract manifest | none | one row per extract: id, date, upstream release, bbox |

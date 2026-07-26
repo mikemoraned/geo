@@ -1,14 +1,16 @@
 //! End-to-end integration test for the recorder's extract path: prefill a real redis
 //! (a testcontainer) the way the server does (`LPUSH` of sample JSON), run the actual
-//! `recorder` binary to drain it into a SQLite archive, then reopen the archive and
-//! assert it holds the lossless raw rows plus the derived per-sensor rows.
+//! `recorder` binary to drain it into a medallion store, then query the store and assert
+//! it holds the lossless raw rows plus the readings interpreted from them.
 //!
 //! Requires Docker; the `_docker`-suffixed name is skipped by the no-docker profile.
 
 use std::process::Command;
 use std::time::Duration;
 
+use medallion::{Layer, Query, Root};
 use redis::aio::MultiplexedConnection;
+use serde::Deserialize;
 use shared::{Accel, AccelReading, Gps, GpsReading, Message, V1Message};
 use telemetry::{RawSample, QUEUE_KEY};
 use testcontainers::runners::AsyncRunner;
@@ -97,8 +99,20 @@ fn gps_sample(id: Uuid, t: i64, lat: f64) -> Message {
     }))
 }
 
+/// A `COUNT(*)` result.
+#[derive(Debug, Deserialize)]
+struct Counted {
+    count: i64,
+}
+
+/// One row of the gps dataset, as the assertions need it.
+#[derive(Debug, Deserialize)]
+struct Fix {
+    lat: f64,
+}
+
 #[tokio::test]
-async fn extract_queue_to_sqlite_docker() {
+async fn extract_queue_to_store_docker() {
     let (_container, url) = start_redis().await;
     let mut conn = wait_ready(&url).await;
 
@@ -111,41 +125,45 @@ async fn extract_queue_to_sqlite_docker() {
     lpush(&mut conn, &gps_sample(device, 1_700_000_000_004, 55.96)).await;
 
     // Extract via the real recorder binary, pointed at this redis, draining into a
-    // temp archive.
+    // throwaway store.
     let dir = tempfile::tempdir().expect("tempdir");
-    let db_path = dir.path().join("lookout.sqlite");
     let status = Command::new(env!("CARGO_BIN_EXE_recorder"))
-        .args(["drain", "--output"])
-        .arg(&db_path)
+        .args(["drain", "--medallion-root"])
+        .arg(dir.path())
         .env("LOOKOUT_REDIS_URL", &url)
         .status()
         .expect("run recorder");
     assert!(status.success(), "recorder exited with {status}");
 
-    // Reopen the archive and assert it holds the lossless raw rows plus the derived
-    // per-sensor rows.
-    let archive = rusqlite::Connection::open(&db_path).expect("open archive");
-    let count = |table: &str| -> i64 {
-        archive
-            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                row.get(0)
-            })
-            .expect("count")
-    };
-    assert_eq!(count("raw"), 5, "one lossless row per queued payload");
-    assert_eq!(count("accel"), 3);
-    assert_eq!(count("gps"), 2);
+    // Query the store and assert it holds the lossless payloads plus the readings
+    // interpreted from them.
+    let query = Query::new(Root::new(dir.path()));
+    for dataset in ["raw_sample", "gps_reading", "accel_reading"] {
+        query
+            .register(Layer::Bronze, dataset, dataset)
+            .await
+            .expect("register dataset");
+    }
+    let counts: Vec<Counted> = query
+        .rows(
+            "SELECT (SELECT COUNT(*) FROM raw_sample) AS count
+             UNION ALL SELECT (SELECT COUNT(*) FROM accel_reading)
+             UNION ALL SELECT (SELECT COUNT(*) FROM gps_reading)",
+        )
+        .await
+        .expect("counts");
+    assert_eq!(
+        counts.iter().map(|c| c.count).collect::<Vec<_>>(),
+        vec![5, 3, 2],
+        "one lossless row per queued payload, and the readings interpreted from them"
+    );
 
-    let lats: Vec<f64> = {
-        let mut stmt = archive
-            .prepare("SELECT lat FROM gps ORDER BY t")
-            .expect("prepare");
-        let rows = stmt
-            .query_map([], |row| row.get(0))
-            .expect("query")
-            .collect::<Result<_, _>>()
-            .expect("collect");
-        rows
-    };
-    assert_eq!(lats, vec![55.95, 55.96]);
+    let fixes: Vec<Fix> = query
+        .rows("SELECT lat FROM gps_reading ORDER BY t")
+        .await
+        .expect("gps fixes");
+    assert_eq!(
+        fixes.iter().map(|f| f.lat).collect::<Vec<_>>(),
+        vec![55.95, 55.96]
+    );
 }

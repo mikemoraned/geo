@@ -140,8 +140,13 @@ The main tasks here should be focussed on documenting these patterns and correct
       are gone with the sqlite log. Projection uses `proj4rs` (pure Rust, no system PROJ)
       via `medallion::Projector`; `visualise` still reads the old `train_segment` sqlite
       table until the task below repoints it.
-- [ ] Move `recorder drain` output to bronze: one parquet file per drain batch of raw
+- [x] Move `recorder drain` output to bronze: one parquet file per drain batch of raw
       gps/accel readings (the lossless `raw` payload stays the source of truth).
+      Note: written as four datasets — `raw_sample`, `gps_reading`, `accel_reading`,
+      `device_session` — rather than one under a `sensor=` partition, since the sensors
+      carry different columns and a dataset is one schema; `medallion.md` updated to
+      match. A drain writes in batches of 100 rather than once at the end, bounding what
+      a failed write followed by a failed requeue can lose.
 - [ ] Move the Overture extracts (`transport::enrich` rail, and the water extract from the
       water-crossings notebooks) to bronze in Overture's native shape, with an
       `extract` metadata table (extract id, date, Overture release, bounding box) and an

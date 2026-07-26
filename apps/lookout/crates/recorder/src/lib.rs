@@ -1,3 +1,3 @@
-//! The recorder's archive: a SQLite database the cli writes drained telemetry into.
+//! The recorder's datasets: the bronze telemetry the cli writes drained samples into.
 
-pub mod store;
+pub mod bronze;

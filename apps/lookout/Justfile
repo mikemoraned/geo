@@ -58,8 +58,8 @@ end_to_end_test:
 deploy:
     fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}"
 
-# Read the upstash telemetry queue into a SQLite archive, with the redis URL from
-# 1Password. No args = non-destructive view-latest; `just record drain` to drain.
+# Read the upstash telemetry queue into the bronze telemetry datasets, with the redis URL
+# from 1Password. No args = non-destructive view-latest; `just record drain` to drain.
 record *args:
     op run --env-file=deploy/lookout.env -- cargo run -p recorder -- {{args}}
 

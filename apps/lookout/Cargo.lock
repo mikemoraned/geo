@@ -5331,11 +5331,15 @@ dependencies = [
 name = "recorder"
 version = "0.1.0"
 dependencies = [
+ "arrow 57.3.1",
+ "chrono",
  "clap",
  "md5",
+ "medallion",
  "redis",
- "rusqlite",
  "rustls",
+ "serde",
+ "serde_arrow",
  "serde_json",
  "shared",
  "telemetry",
