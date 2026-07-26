@@ -7,15 +7,16 @@
 //!
 //! ```no_run
 //! use chrono::Utc;
-//! use medallion::{write_batches, Layer, Root};
+//! use medallion::{Layer, Root};
 //!
 //! # async fn example(batches: &[arrow::array::RecordBatch]) -> Result<(), Box<dyn std::error::Error>> {
-//! let path = Root::default()
+//! let now = Utc::now();
+//! Root::default()
 //!     .dataset(Layer::Bronze, "sensor_reading")
 //!     .partition("sensor", "gps")?
-//!     .date_partition("ingested_date", Utc::now().date_naive())?
-//!     .batch_file(Utc::now());
-//! write_batches(&path, batches).await?;
+//!     .date_partition("ingested_date", now.date_naive())?
+//!     .append(now, batches)
+//!     .await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -25,11 +26,13 @@ mod geo;
 mod layer;
 mod partition;
 mod path;
+mod query;
 mod write;
 
 pub use args::MedallionArgs;
-pub use geo::{wkb_field, write_geo_batches, GeoError};
+pub use geo::{projected_wkb_field, wkb_field, GeoError, Projector};
 pub use layer::Layer;
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
 pub use path::{Dataset, Root};
-pub use write::{write_batches, WriteError};
+pub use query::{Query, QueryError};
+pub use write::WriteError;

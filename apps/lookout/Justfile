@@ -78,10 +78,10 @@ poll-motis *args:
 enrich *args:
     cargo run -p transport --bin enrich -- {{args}}
 
-# Ingest the raw motis capture log (data/motis.sqlite) into lookout's derived
-# `train_segment` table: dedup re-seen legs, decode each polyline to WKB. No args =
-# defaults (data/motis.sqlite → data/lookout.sqlite); override with --motis-db /
-# --lookout-db. Idempotent, so re-running won't duplicate rows.
+# Derive the silver `train_segment` dataset from the bronze motis capture log: dedup
+# re-seen legs, decode each polyline to WKB, and add the projected geometry. No args =
+# the default medallion root; override with --medallion-root. Rewrites the partitions it
+# touches, so re-running over unchanged bronze leaves the same dataset.
 ingest-motis *args:
     cargo run -p motis --bin motis_ingest -- {{args}}
 

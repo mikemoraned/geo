@@ -20,8 +20,9 @@ use serde_json::json;
 
 use crate::client::TripDetails;
 
-/// The bronze dataset polls append to.
-const DATASET: &str = "motis_segment";
+/// The bronze dataset polls append to. Readers name it in SQL through
+/// [`medallion::Query`] rather than opening its files.
+pub const DATASET: &str = "motis_segment";
 
 /// The columns holding an instant. They travel through serde as epoch milliseconds (an
 /// `i64` carries no timezone or unit of its own), so each is declared here as a UTC
@@ -64,33 +65,33 @@ pub enum BronzeError {
 /// One polled segment, flattened: the trip it belongs to, its resolved agency and train
 /// number, its endpoints, its realtime-corrected and scheduled times, and its geometry as
 /// the encoded polyline.
-#[derive(Debug, Serialize, Deserialize)]
-struct SegmentRow {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SegmentRow {
     #[serde(with = "chrono::serde::ts_milliseconds")]
-    captured_at: DateTime<Utc>,
-    trip_id: String,
-    route_name: Option<String>,
-    train_number: Option<u32>,
-    agency_id: Option<String>,
-    agency_name: Option<String>,
-    mode: String,
-    route_color: Option<String>,
-    from_stop_id: Option<String>,
-    from_lat: f64,
-    from_lon: f64,
-    to_stop_id: Option<String>,
-    to_lat: f64,
-    to_lon: f64,
+    pub captured_at: DateTime<Utc>,
+    pub trip_id: String,
+    pub route_name: Option<String>,
+    pub train_number: Option<u32>,
+    pub agency_id: Option<String>,
+    pub agency_name: Option<String>,
+    pub mode: String,
+    pub route_color: Option<String>,
+    pub from_stop_id: Option<String>,
+    pub from_lat: f64,
+    pub from_lon: f64,
+    pub to_stop_id: Option<String>,
+    pub to_lat: f64,
+    pub to_lon: f64,
     #[serde(with = "chrono::serde::ts_milliseconds")]
-    departure: DateTime<Utc>,
+    pub departure: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
-    arrival: DateTime<Utc>,
+    pub arrival: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
-    scheduled_departure: DateTime<Utc>,
+    pub scheduled_departure: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
-    scheduled_arrival: DateTime<Utc>,
-    realtime: bool,
-    polyline: String,
+    pub scheduled_arrival: DateTime<Utc>,
+    pub realtime: bool,
+    pub polyline: String,
 }
 
 impl SegmentRow {
@@ -144,14 +145,17 @@ impl SegmentLog {
         Self { root }
     }
 
-    /// The file one poll at `captured_at` writes: `polled_date` partition, named for the
-    /// instant of the poll.
-    pub fn poll_file(&self, captured_at: DateTime<Utc>) -> Result<std::path::PathBuf, BronzeError> {
+    /// The partition a poll at `captured_at` writes into.
+    fn partition(&self, captured_at: DateTime<Utc>) -> Result<medallion::Dataset, BronzeError> {
         Ok(self
             .root
             .dataset(Layer::Bronze, DATASET)
-            .date_partition("polled_date", captured_at.date_naive())?
-            .batch_file(captured_at))
+            .date_partition("polled_date", captured_at.date_naive())?)
+    }
+
+    /// The file one poll at `captured_at` writes.
+    pub fn poll_file(&self, captured_at: DateTime<Utc>) -> Result<std::path::PathBuf, BronzeError> {
+        Ok(self.partition(captured_at)?.batch_file(captured_at))
     }
 
     /// Write one poll's `segments` as a single parquet file, returning how many rows
@@ -172,7 +176,9 @@ impl SegmentLog {
 
         let batch = serde_arrow::to_record_batch(&segment_fields()?, &rows)?;
 
-        medallion::write_batches(&self.poll_file(captured_at)?, &[batch]).await?;
+        self.partition(captured_at)?
+            .append(captured_at, &[batch])
+            .await?;
         Ok(rows.len())
     }
 }

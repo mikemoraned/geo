@@ -174,6 +174,7 @@ and region for reference data.
 | --- | --- |
 | sessions | `start_date=<date>` |
 | session fixes | `fix_date=<date>` |
+| derived transit legs | `departure_date=<date>` |
 | reference-derived geo datasets | `country=<iso3166-1 alpha-2>` |
 
 Fixes are partitioned by the date of the fix itself, not of its session, so a session

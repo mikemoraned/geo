@@ -132,9 +132,14 @@ The main tasks here should be focussed on documenting these patterns and correct
       Note: `motis::bronze::SegmentLog` writes it; rows are defined once as a serde struct
       and turned into arrow by `serde_arrow`. `crates/motis/src/store.rs` (sqlite) stays
       for now because `motis_ingest` still reads it — remove it with the ingest task.
-- [ ] Move `motis_ingest` to read that bronze poll data and write its deduped, decoded
+- [x] Move `motis_ingest` to read that bronze poll data and write its deduped, decoded
       `train_segment` output as silver GeoParquet (WKB, CRS 84, plus a pre-projected
       UTM-for-Germany column), rather than into `lookout.sqlite`.
+      Note: dedup is a plain Rust fold over the bronze rows rather than a SQL window
+      function, since the volume is small and it needs no engine. `store.rs`/`migrate.rs`
+      are gone with the sqlite log. Projection uses `proj4rs` (pure Rust, no system PROJ)
+      via `medallion::Projector`; `visualise` still reads the old `train_segment` sqlite
+      table until the task below repoints it.
 - [ ] Move `recorder drain` output to bronze: one parquet file per drain batch of raw
       gps/accel readings (the lossless `raw` payload stays the source of truth).
 - [ ] Move the Overture extracts (`transport::enrich` rail, and the water extract from the

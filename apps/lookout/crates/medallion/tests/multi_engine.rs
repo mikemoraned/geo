@@ -11,7 +11,7 @@ use std::sync::Arc;
 use arrow::array::{Array, BinaryArray, Int64Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema};
 use geo_types::{Geometry, Point};
-use medallion::{wkb_field, write_geo_batches, Layer, Root};
+use medallion::{wkb_field, Layer, Root};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
 /// Points chosen inside Germany, so the fixture is the shape silver actually holds.
@@ -81,13 +81,13 @@ fn crs_id(projjson: &serde_json::Value) -> String {
 
 /// Write the fixture into a silver partition of a throwaway store.
 async fn write_fixture(dir: &std::path::Path) -> std::path::PathBuf {
-    let path = Root::new(dir)
+    Root::new(dir)
         .dataset(Layer::Silver, "water_crossing")
         .partition("country", "DE")
         .unwrap()
-        .file("part-0");
-    write_geo_batches(&path, &[silver_batch()]).await.unwrap();
-    path
+        .rebuild_geo(&[silver_batch()])
+        .await
+        .unwrap()
 }
 
 /// georust: the parquet reader plus `wkb` decoding into `geo-types`, with the GeoParquet

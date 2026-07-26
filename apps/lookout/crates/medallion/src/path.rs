@@ -3,13 +3,20 @@
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
+use arrow::array::RecordBatch;
 use chrono::{DateTime, NaiveDate, Utc};
 
+use crate::geo::{write_geo_batches, GeoError};
 use crate::layer::Layer;
 use crate::partition::{Partition, PathError, DATE_FORMAT};
+use crate::write::{write_batches, WriteError};
 
 /// Batch file names: compact UTC, so they sort chronologically and contain no `:`.
 const BATCH_STEM_FORMAT: &str = "%Y%m%dT%H%M%SZ";
+
+/// The file a rebuilt partition holds. A partition derived wholesale is one file, so its
+/// name carries no information and never varies.
+const PARTITION_STEM: &str = "part-0";
 
 /// The root of a medallion store.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,14 +83,45 @@ impl Dataset {
         dir
     }
 
-    /// A named parquet file within [`Self::dir`].
-    pub fn file(&self, stem: &str) -> PathBuf {
-        self.dir().join(format!("{stem}.parquet"))
-    }
-
-    /// The parquet file for one write, named for the instant that write happened.
+    /// The file one batch captured at `at` lands in: a new file per write, named for the
+    /// instant of the write, so an earlier capture is never rewritten.
     pub fn batch_file(&self, at: DateTime<Utc>) -> PathBuf {
         self.file(&at.format(BATCH_STEM_FORMAT).to_string())
+    }
+
+    /// The file this partition's contents live in, replaced whenever it is rebuilt.
+    pub fn partition_file(&self) -> PathBuf {
+        self.file(PARTITION_STEM)
+    }
+
+    /// Append `batches` as the capture made at `at`, leaving earlier captures untouched.
+    pub async fn append(
+        &self,
+        at: DateTime<Utc>,
+        batches: &[RecordBatch],
+    ) -> Result<PathBuf, WriteError> {
+        let path = self.batch_file(at);
+        write_batches(&path, batches).await?;
+        Ok(path)
+    }
+
+    /// Replace this partition's contents with `batches`.
+    pub async fn rebuild(&self, batches: &[RecordBatch]) -> Result<PathBuf, WriteError> {
+        let path = self.partition_file();
+        write_batches(&path, batches).await?;
+        Ok(path)
+    }
+
+    /// Replace this partition's contents with `batches`, as GeoParquet.
+    pub async fn rebuild_geo(&self, batches: &[RecordBatch]) -> Result<PathBuf, GeoError> {
+        let path = self.partition_file();
+        write_geo_batches(&path, batches).await?;
+        Ok(path)
+    }
+
+    /// A named parquet file within [`Self::dir`].
+    fn file(&self, stem: &str) -> PathBuf {
+        self.dir().join(format!("{stem}.parquet"))
     }
 }
 
@@ -124,12 +162,12 @@ mod tests {
     }
 
     #[test]
-    fn a_named_file_sits_under_the_partition_directory_with_a_parquet_extension() {
+    fn a_partition_file_sits_under_the_partition_directory_with_a_parquet_extension() {
         let path = root()
             .dataset(Layer::Silver, "session")
             .date_partition("start_date", NaiveDate::from_ymd_opt(2026, 1, 2).unwrap())
             .unwrap()
-            .file("part-0");
+            .partition_file();
 
         assert_eq!(
             path.to_str().unwrap(),

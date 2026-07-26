@@ -52,6 +52,9 @@ object_store = "0.12"
 # arrow/parquet 57, which is what SedonaDB pins us to; 0.8 moved to 59 and its
 # `RecordBatch` would be a different type from ours.
 geoparquet = "0.7"
+# Pure-Rust proj4, for the projected geometry column silver datasets carry alongside
+# their lat/lon one. `crs-definitions` gives EPSG lookups; `geo-types` the geometry impls.
+proj4rs = { version = "0.1", features = ["crs-definitions", "geo-types"] }
 # geoarrow's Arrow-level geometry types, used to declare a WKB geometry column with its
 # CRS so the encoder can write conformant GeoParquet metadata.
 geoarrow-schema = "0.7"
