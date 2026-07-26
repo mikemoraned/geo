@@ -76,7 +76,7 @@ We also want to start standardising on representions i.e. where possible we shou
         * the metadata can be stored in a separate table I own, for example containing data of extract, unique extract id, and bounding box. the overture maps table may then only need to be enriched with the extract id as an additional column.
 * silver:
     * here parquet is optimised for fast and scalable lookup and processing. this means embedding whatever metadata possible (like bounding boxes) to make queries faster
-    * we should use [GeoParquet](https://geoparquet.org) ([v1.1.0](https://geoparquet.org/releases/v1.1.0/)) and ensure everything represents geographic concepts in the same way (WKB geometry encoding)
+    * we should use [GeoParquet](https://geoparquet.org) ([v1.1.0](https://geoparquet.org/releases/v1.1.0/)) and ensure everything represents geographic concepts in the same way ([WKB geometry encoding](https://libgeos.org/specifications/wkb/), [simple features](https://www.ogc.org/standards/sfa))
         * there is also GEOMETRY/GEOGRAPHY [geospatial types](https://parquet.apache.org/docs/file-format/types/geospatial/) but these aren't well-supported by many apps / libraries right now
     * when we are extending/subsetting OvertureMaps data and storing here, we should always follow their schemas where possible, even for our own extensions to the data. however, additional, even when we are creating our own data from scratch, we should still follow their schemas as they are likely suitable for what we are doing as well
     * when storing paths or other geo entities, we should *always* have a normalised clean lat/lon representation in a global CRS
@@ -84,7 +84,7 @@ We also want to start standardising on representions i.e. where possible we shou
         * we should ensure CRS is in the GeoParquet metadata (PROJJSON),
 * gold:
     * this is where we may produce specialised output formats, like [PMTiles](https://docs.protomaps.com/pmtiles/) / [protomaps](https://protomaps.com/about), intended to be used by live systems. This is also again where things like polylines are allowed/encouraged.
-    * where specific formats aren't appropriate, geoarrow should be used to allow easy/fast export/import
+    * where specific formats aren't appropriate, geoarrow ([v0.2](https://geoarrow.org)) should be used to allow easy/fast export/import
         * some things, like kepler.gl, don't support compressed geoarrow so we should use uncompressed for now
 
 The root where this data is stored is ~/Data/geo/lookout/medallion. If this becomes took big, then we'll move to store it on /Volumes/PRO-G40/Data/geo/lookout/medallion (my external drive). Data should be stored in Hive format.
