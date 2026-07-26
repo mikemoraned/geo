@@ -126,7 +126,79 @@ migrating silver.
 
 ## Partitioning
 
-Per-dataset Hive partition keys are the schema of this store and are expensive to change
-later, so they are pinned rather than left to each writer.
+Per-dataset Hive partition keys are part of the schema of this store and are expensive to
+change later, so they are pinned here rather than left to each writer.
 
-*(To be filled in — see the partitioning task in `current-slice.md`.)*
+### General rules
+
+- Partition keys are **snake_case**, and values contain no `/`, spaces or `=`.
+- Dates are UTC and formatted `YYYY-MM-DD`. A date key is named for the event it records
+  (`ingested_date`, `polled_date`, `fix_date`), never a bare `date`.
+- A partition key records the *coarse* value only. The full-precision timestamp is also
+  written as a column inside the file, so no reader depends on parsing paths.
+- Partitioning is chosen to make the common filter cheap, not to make directories tidy.
+  Depth is kept shallow: two keys is the normal maximum.
+- A key whose value is effectively unique per row (an id) is only used where each value
+  identifies a whole write — an extract or a run — never for row-level identifiers.
+
+### Bronze
+
+Bronze partitions on **when data was captured or ingested**, because bronze is immutable
+and written one batch at a time: every write lands in a new file, and never rewrites an
+existing directory.
+
+| dataset | partitioning | file |
+| --- | --- | --- |
+| sensor readings | `sensor=<kind>/ingested_date=<date>` | one per drain, named for its ingestion timestamp |
+| third-party service samples | `polled_date=<date>` | one per poll, named for its poll timestamp |
+| upstream reference extracts | `extract_id=<id>/` then the upstream's own layout, verbatim | as produced by the extraction |
+| extract manifest | none | one row per extract: id, date, upstream release, bbox |
+
+`extract_id` is the outermost key so that everything below it is the upstream's own
+directory layout, unaltered. A query written against the upstream source therefore works
+against an extract by changing only the root, and the extraction never has to rewrite paths
+it does not own. An extract is identified by an id rather than a date because it is the
+unit of immutability: a re-extraction is a new id, not a replacement.
+
+The extract manifest is small and always read whole, so it is left unpartitioned.
+
+This is the one place the two-key depth limit does not apply, since the depth below
+`extract_id` is the upstream's choice.
+
+### Silver
+
+Silver partitions on **what queries filter by** — overwhelmingly time for observation data,
+and region for reference data.
+
+| dataset | partitioning |
+| --- | --- |
+| sessions | `start_date=<date>` |
+| session fixes | `fix_date=<date>` |
+| reference-derived geo datasets | `country=<iso3166-1 alpha-2>` |
+
+Fixes are partitioned by the date of the fix itself, not of its session, so a session
+spanning midnight is split across two partitions; `session_id` is carried as a column and
+reassembles it.
+
+Silver transforms are idempotent: rerunning one over unchanged bronze input produces an
+identical partition, so a partition can be rebuilt rather than incrementally merged.
+
+Whether a silver dataset additionally **retains history** — superseded versions of a row, or
+validity intervals — is a per-dataset decision, and one that should be settled explicitly
+rather than by accident. It is needed when something downstream has to know what the
+dataset said at an earlier time, and unnecessary when only the current view is ever read.
+Whichever is chosen, apply it consistently across silver rather than varying it
+dataset-by-dataset. Rows carry the identifiers of the bronze inputs they derive from, so
+lineage remains traceable either way.
+
+### Gold
+
+Gold partitions on **which run or version produced the output**, and nothing is overwritten.
+
+| dataset | partitioning |
+| --- | --- |
+| evaluation results | `run_date=<date>/run_id=<id>` |
+| exports for live use | `artifact=<name>/version=<version>` |
+
+A run's configuration and input dataset versions are written as columns alongside its
+results, so a run is interpretable without reference to the code that produced it.

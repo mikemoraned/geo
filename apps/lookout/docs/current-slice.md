@@ -103,7 +103,7 @@ The main tasks here should be focussed on documenting these patterns and correct
       persisted in sqlite") and in `.claude/memory/lookout-architecture.md` (the
       "Rust derives tables into `lookout.sqlite`, Python reads" convention) so they point
       at the medallion layout, keeping sqlite explicitly as a landing/external format.
-- [ ] Define the Hive partitioning keys per dataset up front (e.g. bronze sensors by
+- [x] Define the Hive partitioning keys per dataset up front (e.g. bronze sensors by
       `dataset/ingested_at_date/`, motis polls by poll timestamp, Overture extracts by
       `extract_id`) and record them in `docs/medallion.md` — path layout is the schema
       here and is expensive to change later.
