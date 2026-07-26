@@ -126,9 +126,12 @@ The main tasks here should be focussed on documenting these patterns and correct
       runs on every `just test`. DuckDB links the system libduckdb (`brew install duckdb`,
       added to `just prerequisites`, paths in `.cargo/config.toml`) — the bundled build
       needs a C++ toolchain that isn't available in the sandbox.
-- [ ] Move `motis_poll` to write into landing/bronze: keep the raw polled `TripSegment`
+- [x] Move `motis_poll` to write into landing/bronze: keep the raw polled `TripSegment`
       batch (polylines verbatim, as received) as one parquet file per poll under a
       timestamped Hive path, rather than appending to `data/motis.sqlite`.
+      Note: `motis::bronze::SegmentLog` writes it; rows are defined once as a serde struct
+      and turned into arrow by `serde_arrow`. `crates/motis/src/store.rs` (sqlite) stays
+      for now because `motis_ingest` still reads it — remove it with the ingest task.
 - [ ] Move `motis_ingest` to read that bronze poll data and write its deduped, decoded
       `train_segment` output as silver GeoParquet (WKB, CRS 84, plus a pre-projected
       UTM-for-Germany column), rather than into `lookout.sqlite`.

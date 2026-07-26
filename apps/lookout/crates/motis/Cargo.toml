@@ -4,15 +4,20 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+arrow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 geo = { workspace = true }
 geo-types = { workspace = true }
+medallion = { workspace = true }
 motis-openapi-progenitor = { workspace = true }
 polyline = { workspace = true }
 redis = { workspace = true }
 rusqlite = { workspace = true }
 rustls = { workspace = true }
+serde = { workspace = true }
+serde_arrow = { workspace = true }
+serde_json = { workspace = true }
 shared = { workspace = true }
 telemetry = { workspace = true }
 thiserror = { workspace = true }
@@ -23,8 +28,8 @@ wkb = { workspace = true }
 
 [dev-dependencies]
 geo-traits = { workspace = true }
+parquet = { workspace = true }
 proptest = { workspace = true }
-serde_json = { workspace = true }
 tempfile = { workspace = true }
 uuid = { workspace = true }
 wiremock = "0.6"

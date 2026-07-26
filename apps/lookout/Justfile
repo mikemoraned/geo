@@ -53,10 +53,10 @@ deploy:
 record *args:
     op run --env-file=deploy/lookout.env -- cargo run -p recorder -- {{args}}
 
-# Poll Motis for train trips near recently logged GPS and append them to a raw
-# `motis` SQLite log (data/motis.sqlite). Reads the redis URL from 1Password (like
-# `record`, for the queue it polls). Runs a continuous loop; Ctrl-C to stop. Override
-# defaults with --poll-interval-secs / --window-age-mins / --zoom / --motis-url / --db.
+# Poll Motis for train trips near recently logged GPS and write each poll to the bronze
+# capture log in the medallion store. Reads the redis URL from 1Password (like `record`,
+# for the queue it polls). Runs a continuous loop; Ctrl-C to stop. Override defaults with
+# --poll-interval-secs / --window-age-mins / --zoom / --motis-url / --medallion-root.
 poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 

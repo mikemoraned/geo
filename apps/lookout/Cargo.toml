@@ -55,6 +55,10 @@ geoparquet = "0.7"
 # geoarrow's Arrow-level geometry types, used to declare a WKB geometry column with its
 # CRS so the encoder can write conformant GeoParquet metadata.
 geoarrow-schema = "0.7"
+# Serialises plain Rust structs straight into arrow `RecordBatch`es, so bronze rows are
+# defined once as a serde type rather than as hand-built column builders. Feature-gated
+# per arrow version; `arrow-57` matches our pin.
+serde_arrow = { version = "0.13", features = ["arrow-57"] }
 # DuckDB, in-process, for the multi-engine invariant test. Links the system libduckdb
 # (`brew install duckdb`) rather than compiling a bundled copy, which needs a full C++
 # toolchain and minutes of build time on every clean build.
@@ -81,7 +85,9 @@ geo = "0.31"
 geo-traits = "0.3"
 # Serialise geo-types geometries to WKT for the Overture spatial-query window.
 wkt = "0.14"
-chrono = "0.4"
+# `serde` for the ts_milliseconds adapters bronze rows use to type their instants.
+chrono = { version = "0.4", features = ["serde"] }
+medallion = { path = "crates/medallion" }
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
 
