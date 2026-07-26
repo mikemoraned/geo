@@ -107,9 +107,12 @@ The main tasks here should be focussed on documenting these patterns and correct
       `dataset/ingested_at_date/`, motis polls by poll timestamp, Overture extracts by
       `extract_id`) and record them in `docs/medallion.md` — path layout is the schema
       here and is expensive to change later.
-- [ ] Add a small shared Rust `medallion` module (paths + layer roots + writer helpers)
+- [x] Add a small shared Rust `medallion` module (paths + layer roots + writer helpers)
       so the CLIs don't each hand-roll path construction, including a shared clap args
       struct giving every CLI the same `--medallion-root` flag and default.
+      Note: built as its own `medallion` crate rather than a module in `shared`, so the
+      parquet/arrow dependencies stay off the crates that don't need them (`server` in
+      particular, which is deployed).
 - [ ] Prove the multi-engine rule with a round-trip test: write one silver GeoParquet from
       Rust, read it back from each engine in use (currently DuckDB, SedonaDB, georust), and
       assert identical geometry + CRS. This is the check that stops silver drifting

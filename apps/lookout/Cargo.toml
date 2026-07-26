@@ -40,6 +40,12 @@ datafusion = "52.5"
 # Must match the arrow version SedonaDB/DataFusion pin, so `RecordBatch`es returned by
 # queries line up with the arrow types we decode them with.
 arrow = "57.1"
+# Parquet writer for the medallion store; same version as arrow so the `RecordBatch`
+# types line up (the parquet crate re-exports arrow's).
+parquet = "57.1"
+# Resolves the home directory for the default medallion root; `std::env::home_dir` is
+# deprecated and wrong on Windows.
+dirs = "6"
 md5 = "0.7"
 tempfile = "3"
 proptest = "1"

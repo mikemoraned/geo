@@ -1,0 +1,18 @@
+[package]
+name = "medallion"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+arrow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+dirs = { workspace = true }
+parquet = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
