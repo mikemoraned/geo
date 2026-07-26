@@ -58,6 +58,8 @@ I think at this point we need to cleanly separate our bits of data processing an
     * results of runs evaluating particular predictor versions against silver datasets
     * preparations of data for live usage externally
 
+In principle, as long as we always keep everything in bronze, everything in silver and gold should be rederivable. We shouldn't aim to delete from silver/gold as that slows things down a lot rederiving things, but we can if we need to. 
+
 We also want to start standardising on representions i.e. where possible we should use parquet, but with different biases in each section:
 * bronze:
     * parquet optimised for quick append of new data; we generally never delete anything from here, and we want to make appends quick and save. The structures should be biased towards sample structure e.g. each unique poll by `motis_poll` should get a timestamp which records when the poll happened and this should be part of the folder structure.
@@ -81,6 +83,8 @@ One intent here is to standardis to allow multiple writer/readers, which are dif
 
 ### Tasks
 
+The main tasks here should be focussed on documenting these patterns and correctinh any conflicting info (e.g. in target.md) and updating the cli's like `motis_poll` and `motis_ingest` to follow them. Further sets of Tasks then need to follow these patterns.
+
 ...
 
 ## Sessionisation
@@ -100,6 +104,8 @@ We probably need to here productionise the pipeline we prototyped in apps/lookou
 ## Simple crow-flies predictor
 
 This should probably be written in Rust as this will be the beginnings of what we later embed in a live system. So, we may need to put some wrappers around it to make it easy to call from Python as part of the eval framework (see below).
+
+We should start following the [ports and adapters pattern](https://8thlight.com/insights/a-color-coded-guide-to-ports-and-adapters) with this set of changes so that, for example, the predictor is not aware if it is being driven by recorded or live GPS data.
 
 ### Tasks 
 
