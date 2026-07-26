@@ -17,7 +17,8 @@ area, and add/update a note there when you learn something a future session shou
 have to re-derive. Current notes:
 
 - [`.claude/memory/lookout-architecture.md`](.claude/memory/lookout-architecture.md) —
-  the lookout redis→sqlite pipeline and the "Rust derives tables, Python reads" convention
+  the lookout redis→sqlite pipeline as it stands, its migration to the medallion store,
+  and the "Rust derives, Python reads" convention
 - [`.claude/memory/motis-trips-api.md`](.claude/memory/motis-trips-api.md) — the Motis
   `map/trips` endpoint, enabling realtime, and the no-vehicle-GPS constraint
 - [`.claude/memory/python-conventions.md`](.claude/memory/python-conventions.md) — keep

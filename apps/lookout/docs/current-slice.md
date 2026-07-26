@@ -99,7 +99,7 @@ The main tasks here should be focussed on documenting these patterns and correct
       PMTiles / uncompressed GeoArrow in gold), and the multi-engine rule (silver stays
       independent of any one engine — currently DuckDB, SedonaDB and georust must all read
       it with no engine-specific handling).
-- [ ] Fix conflicting statements in `docs/target.md` (which currently says "sensor data is
+- [x] Fix conflicting statements in `docs/target.md` (which currently says "sensor data is
       persisted in sqlite") and in `.claude/memory/lookout-architecture.md` (the
       "Rust derives tables into `lookout.sqlite`, Python reads" convention) so they point
       at the medallion layout, keeping sqlite explicitly as a landing/external format.
