@@ -46,14 +46,18 @@ async fn mock_motis(segments_json: &str) -> MockServer {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/api/v4/map/trips"))
-        .respond_with(ResponseTemplate::new(200).set_body_raw(segments_json.as_bytes(), "application/json"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(segments_json.as_bytes(), "application/json"),
+        )
         .expect(1)
         .mount(&server)
         .await;
     // Every `trip` lookup (one per distinct tripId) resolves to the same itinerary.
     Mock::given(method("GET"))
         .and(path("/api/v4/trip"))
-        .respond_with(ResponseTemplate::new(200).set_body_raw(TRIP_FIXTURE.as_bytes(), "application/json"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(TRIP_FIXTURE.as_bytes(), "application/json"),
+        )
         .mount(&server)
         .await;
     server

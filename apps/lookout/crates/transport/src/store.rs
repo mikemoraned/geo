@@ -169,13 +169,7 @@ fn insert_row(
         conn.execute(
             "INSERT INTO transport_rtree (id, min_lon, max_lon, min_lat, max_lat)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                conn.last_insert_rowid(),
-                min_lon,
-                max_lon,
-                min_lat,
-                max_lat
-            ],
+            params![conn.last_insert_rowid(), min_lon, max_lon, min_lat, max_lat],
         )?;
     }
     Ok(changed)

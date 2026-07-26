@@ -49,7 +49,10 @@ async fn poll_once_captures_rail_from_local_motis_end_to_end() {
     let PollOutcome::Queried { segments, .. } = outcome else {
         panic!("expected a Motis query, got {outcome:?}");
     };
-    assert!(segments > 0, "expected some rail segments near Frankfurt Hbf");
+    assert!(
+        segments > 0,
+        "expected some rail segments near Frankfurt Hbf"
+    );
 
     // Inspect what landed: every stored segment is rail, and the `/trip` enrichment
     // populated an agency and at least one train number.
@@ -64,7 +67,8 @@ async fn poll_once_captures_rail_from_local_motis_end_to_end() {
         .expect("rows");
 
     assert!(
-        rows.iter().all(|(mode, _, _)| RAIL_MODES.contains(&mode.as_str())),
+        rows.iter()
+            .all(|(mode, _, _)| RAIL_MODES.contains(&mode.as_str())),
         "every stored segment should be a rail mode; got {:?}",
         rows.iter().map(|r| r.0.as_str()).collect::<Vec<_>>()
     );

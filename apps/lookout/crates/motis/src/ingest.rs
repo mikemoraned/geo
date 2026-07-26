@@ -132,7 +132,8 @@ fn read_deduped(source: &Connection) -> Result<Vec<RawSegment>, IngestError> {
             polyline: r.get(11)?,
         })
     })?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(IngestError::from)
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(IngestError::from)
 }
 
 /// Create the table if needed and append the segments idempotently, returning the
@@ -232,7 +233,11 @@ mod tests {
         let dest = Connection::open_in_memory().expect("dest");
         let outcome = ingest(source.connection(), &dest).expect("ingest");
 
-        assert_eq!(outcome.deduped, fixture.len(), "8 raw rows collapse to 4 legs");
+        assert_eq!(
+            outcome.deduped,
+            fixture.len(),
+            "8 raw rows collapse to 4 legs"
+        );
         assert_eq!(outcome.written, fixture.len());
         let count: i64 = dest
             .query_row("SELECT COUNT(*) FROM train_segment", [], |r| r.get(0))
@@ -277,17 +282,55 @@ mod tests {
         // Older capture: scheduled (realtime false), arrival 600, details not yet resolved.
         conn.execute(
             insert,
-            params![1000i64, "trip-1", "RB1", None::<String>, None::<String>, None::<String>,
-                "REGIONAL_RAIL", None::<String>, "stop-a",
-                50.0, 8.0, "stop-b", 50.1, 8.1, 500i64, 600i64, 480i64, 580i64, false, poly],
+            params![
+                1000i64,
+                "trip-1",
+                "RB1",
+                None::<String>,
+                None::<String>,
+                None::<String>,
+                "REGIONAL_RAIL",
+                None::<String>,
+                "stop-a",
+                50.0,
+                8.0,
+                "stop-b",
+                50.1,
+                8.1,
+                500i64,
+                600i64,
+                480i64,
+                580i64,
+                false,
+                poly
+            ],
         )
         .expect("older");
         // Newer capture of the same leg: realtime true, arrival delayed to 700, details resolved.
         conn.execute(
             insert,
-            params![2000i64, "trip-1", "RB1", 2569i64, "800643", "DB Fernverkehr AG",
-                "REGIONAL_RAIL", None::<String>, "stop-a",
-                50.0, 8.0, "stop-b", 50.1, 8.1, 500i64, 700i64, 480i64, 580i64, true, poly],
+            params![
+                2000i64,
+                "trip-1",
+                "RB1",
+                2569i64,
+                "800643",
+                "DB Fernverkehr AG",
+                "REGIONAL_RAIL",
+                None::<String>,
+                "stop-a",
+                50.0,
+                8.0,
+                "stop-b",
+                50.1,
+                8.1,
+                500i64,
+                700i64,
+                480i64,
+                580i64,
+                true,
+                poly
+            ],
         )
         .expect("newer");
 
@@ -342,8 +385,16 @@ mod tests {
                     departure, arrival, realtime, polyline)
                  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
                 params![
-                    1000i64, "trip-1", "RB1", "REGIONAL_RAIL", None::<String>, "stop-a",
-                    500i64, 600i64, false, "_p~iF~ps|U_ulLnnqC_mqNvxq`@"
+                    1000i64,
+                    "trip-1",
+                    "RB1",
+                    "REGIONAL_RAIL",
+                    None::<String>,
+                    "stop-a",
+                    500i64,
+                    600i64,
+                    false,
+                    "_p~iF~ps|U_ulLnnqC_mqNvxq`@"
                 ],
             )
             .expect("insert old row");

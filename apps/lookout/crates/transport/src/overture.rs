@@ -109,7 +109,10 @@ impl Overture {
     /// once and SedonaDB prunes row groups by the combined bbox covering; the
     /// `subtype = 'rail'` filter keeps only rail. Empty `bboxes` yields no rows without
     /// touching S3.
-    pub async fn rail_segments(&self, bboxes: &[Rect<f64>]) -> Result<Vec<RecordBatch>, OvertureError> {
+    pub async fn rail_segments(
+        &self,
+        bboxes: &[Rect<f64>],
+    ) -> Result<Vec<RecordBatch>, OvertureError> {
         if bboxes.is_empty() {
             return Ok(Vec::new());
         }

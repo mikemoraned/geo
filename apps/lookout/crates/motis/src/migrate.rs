@@ -24,12 +24,7 @@ pub(crate) fn ensure_enrichment_columns(conn: &Connection, table: &str) -> rusql
 /// Add `column decl` to `table` if the table exists and doesn't already have the column —
 /// a no-op when the table is absent (nothing to migrate) or the column is present.
 /// `table`/`column`/`decl` are code constants, never user input.
-fn ensure_column(
-    conn: &Connection,
-    table: &str,
-    column: &str,
-    decl: &str,
-) -> rusqlite::Result<()> {
+fn ensure_column(conn: &Connection, table: &str, column: &str, decl: &str) -> rusqlite::Result<()> {
     let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
     let names: Vec<String> = stmt
         .query_map([], |r| r.get::<_, String>(1))?

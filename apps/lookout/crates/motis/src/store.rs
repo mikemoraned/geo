@@ -106,8 +106,7 @@ fn insert_row(
 ) -> Result<(), StoreError> {
     let trip = segment.trips.first();
     let trip_id = trip.map(|t| t.trip_id.as_str()).unwrap_or_default();
-    let route_name =
-        trip.and_then(|t| t.display_name.as_deref().or(t.route_short_name.as_deref()));
+    let route_name = trip.and_then(|t| t.display_name.as_deref().or(t.route_short_name.as_deref()));
     let details = details.get(trip_id);
     let agency = details.map(|d| &d.agency);
     conn.execute(
@@ -177,8 +176,12 @@ mod tests {
     fn inserting_the_same_segment_twice_yields_two_rows() {
         let store = Store::open_in_memory().expect("open");
         let one = &fixture_segments()[..1];
-        store.insert(Utc::now(), one, &HashMap::new()).expect("first");
-        store.insert(Utc::now(), one, &HashMap::new()).expect("second");
+        store
+            .insert(Utc::now(), one, &HashMap::new())
+            .expect("first");
+        store
+            .insert(Utc::now(), one, &HashMap::new())
+            .expect("second");
         assert_eq!(count(&store), 2);
     }
 
@@ -269,8 +272,14 @@ mod tests {
         assert_eq!(mode, segment.mode.to_string());
         assert_eq!(realtime, segment.real_time);
         assert_eq!(departure, segment.departure.timestamp_millis());
-        assert_eq!(scheduled_departure, segment.scheduled_departure.timestamp_millis());
-        assert_ne!(departure, scheduled_departure, "fixture rail leg carries a delay");
+        assert_eq!(
+            scheduled_departure,
+            segment.scheduled_departure.timestamp_millis()
+        );
+        assert_ne!(
+            departure, scheduled_departure,
+            "fixture rail leg carries a delay"
+        );
         assert_eq!(polyline, segment.polyline);
         assert_eq!(from_lat, segment.from.lat);
     }
