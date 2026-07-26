@@ -4,21 +4,27 @@
 
 ### Target
 
-If other slices are done, we should have enough to put together a first minimal predictor that is based solely on crow-flies distance, and also to evaluate how good it is.
+We should now have enough to put together a first minimal predictor that is based solely on crow-flies distance, and also to evaluate how good it is.
 
 ## Straw man
 
 The essential idea here is to use our collected traces along with known water crossings to both act as source data and as measurement.
 
+### Sessionisation
+
 So, we first find all gps readings from real traces and "sessionise" them. This effectively boils down to breaking the data from the same device into sessions whenever:
 1. There is an explicit `StartSession` message
 2. There is a gap of N minutes between successive readings (N = 10 minutes probably good enough)
 
-Then, we look at any gps readings in each session that come within M metres of a known water crossing. This is where it is probably a good idea to first normalise a session to include a version of the path that has a CRS in metres (a projected CRS). Same goes for the water crossings dataset. For simplicity, since we are covering Germany, ideally it'd be good to use a single CRS for now.
+### Water crossings per session
+
+Then, we look at any gps readings in each session that come within M metres of a known water crossing. This is where it is probably a good idea to first normalise a session to include a version of the path that has a CRS in metres (a projected CRS). Same goes for the water crossings dataset. For simplicity, since we are covering Germany, it'd be enough to use a single CRS for now.
 
 Once we have some gps readings for each water crossing for each session, we minimise this to just a single example for each water crossing per trace, using the closest match. This should give us a set of water crossings per session. We treat this as our ground truth.
 
-We then implement a simple predictor which functions something like:
+### Simple crow-flies predictor
+
+We then implement a simple predictor with a prediction cycle which functions something like:
 1. Receive latest GPS reading
 2. Find all water crossings within D distance (in metres); remember this for later
 3. If we have a previous set of water crossings:
@@ -26,11 +32,17 @@ We then implement a simple predictor which functions something like:
     * for those where delta is negative (we've gotten closer) calculate velocity
     * emit prediction of wall-clock time we will pass each water crossing based on current distance to water crossing and current velocity towards it
 
-We can run this predictor for each gps reading in each session, and then assess as follows:
-* precision = for each water crossing, whenever we predicted that we would cross at time T_P, what was the actual T_A, and was it within some tolerance e.g. 30 seconds. count each of these as a boolean yes/no
-* recall = for each water crossing that was ultimately passed in a session, did we make a prediction for it?
+In this simple predictor we are not taking advantage of any speed or heading information in the GPS readings. That will be sensible to include later, but for now we can keep it simple. Later on we'll likely want to include any additional information we have in a sensor-fusion approach but for now we keep it simple.
 
-This measurement framework and predictor can both likely be improved, but we need to start with something.
+### Evaluation framework
+
+We can think of a predictor as attempting to fill in, at each prediction cycle, a 2D space where the y-axis is all the possible water crossings and the x-axis is the time at which the water will be crossed in this session. 
+
+We can run this for each gps reading in each session (each prediction cycle) and then assess as follows:
+* precision = for each water crossing, whenever we predicted that we would cross at time T_P, what was the actual T_A, and was it within some tolerance e.g. 30 seconds. Similarly, was it within some distance. Count each of these as a boolean yes/no
+* recall = for each water crossing that was really passed in a session, did we make a prediction for it?
+
+This measurement framework and predictor can both likely be improved, but it's probably enough to start with.
 
 ## Refactor to Medallion Architecture
 
@@ -44,12 +56,50 @@ I think at this point we need to cleanly separate our bits of data processing an
     * derived water crossings, represented as an enriched OvertureMaps segments and connector dataset extended/restricted to only what we need
 * gold:
     * results of runs evaluating particular predictor versions against silver datasets
+    * preparations of data for live usage externally
+
+We also want to start standardising on representions i.e. where possible we should use parquet, but with different biases in each section:
+* bronze:
+    * parquet optimised for quick append of new data; we generally never delete anything from here, and we want to make appends quick and save. The structures should be biased towards sample structure e.g. each unique poll by `motis_poll` should get a timestamp which records when the poll happened and this should be part of the folder structure.
+    * we allow storage here in compact geo formats like [polyline](https://developers.google.com/maps/documentation/utilities/polylinealgorithm) as that's the sort of formats live services use for capturing paths
+    * we store extracts from OvertureMaps here largely in the native format they use, but add metadata like when what version of overturemaps was used (in case not already present). this extract may come from a bounding-box restriction we applied so we also add that as metadata
+* silver:
+    * here parquet is optimised for fast and scalable lookup and processing. this means embedding whatever metadata possible (like bounding boxes) to make queries faster
+    * we should use GEOMETRY/GEOGRAPHY [geospatial types](https://parquet.apache.org/docs/file-format/types/geospatial/) instead of polylines and ensure everything represents geographic concepts in the same way
+* gold:
+    * this is where we may produce specialised output formats, like [PMTiles](https://docs.protomaps.com/pmtiles/) / [protomaps](https://protomaps.com/about), intended to be used by live systems. This is also again where things like polylines are allowed/encouraged.
+
+The root where this data is stored is ~/Data/geo/lookout/medallion. If this becomes took big, then we'll move to store it on /Volumes/PRO-G40/Data/geo/lookout/medallion (my external drive).
 
 ### Tasks
 
 ...
 
-## ...
+## Sessionisation
+
+### Tasks 
+
+...
+
+## Water crossings per session
+
+We probably need to here productionise the pipeline we prototyped in apps/lookout/notebooks/water_crossings/v7.py. However, it's ok to keep it as a notebook, or chain of notebooks, for now.
+
+### Tasks 
+
+...
+
+## Simple crow-flies predictor
+
+This should probably be written in Rust as this will be the beginnings of what we later embed in a live system. So, we may need to put some wrappers around it to make it easy to call from Python as part of the eval framework (see below).
+
+### Tasks 
+
+...
+
+## Evaluation framework
+
+This should be written in marimo notebooks and try to re-use as much typical evaluation libraries as possible. So, once we've defined our precision/recall definitions I'd like to plug those into standard well-supported python libraries which allows us to define things like F1-score on top.
 
 ### Tasks 
 
