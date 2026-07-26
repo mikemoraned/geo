@@ -112,7 +112,12 @@ The main tasks here should be focussed on documenting these patterns and correct
       struct giving every CLI the same `--medallion-root` flag and default.
       Note: built as its own `medallion` crate rather than a module in `shared`, so the
       parquet/arrow dependencies stay off the crates that don't need them (`server` in
-      particular, which is deployed).
+      particular, which is deployed). Writes go through `object_store`'s `LocalFileSystem`
+      + `ParquetObjectWriter` for atomicity, so `write_batches` is async.
+      For later bulk writes spanning many partitions (silver rebuilds, gold exports),
+      DataFusion's `DataFrameWriteOptions::with_partition_by` derives `key=value`
+      directories from column values — worth using there, but it generates its own file
+      names, so it doesn't fit the one-file-per-ingestion bronze writes.
 - [ ] Prove the multi-engine rule with a round-trip test: write one silver GeoParquet from
       Rust, read it back from each engine in use (currently DuckDB, SedonaDB, georust), and
       assert identical geometry + CRS. This is the check that stops silver drifting

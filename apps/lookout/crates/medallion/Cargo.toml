@@ -8,11 +8,13 @@ arrow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 dirs = { workspace = true }
+object_store = { workspace = true }
 parquet = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

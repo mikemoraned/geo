@@ -3928,9 +3928,11 @@ dependencies = [
  "chrono",
  "clap",
  "dirs",
+ "object_store",
  "parquet",
  "tempfile",
  "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]

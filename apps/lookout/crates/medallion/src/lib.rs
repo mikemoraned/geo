@@ -9,13 +9,13 @@
 //! use chrono::Utc;
 //! use medallion::{write_batches, Layer, Root};
 //!
-//! # fn example(batches: &[arrow::array::RecordBatch]) -> Result<(), Box<dyn std::error::Error>> {
+//! # async fn example(batches: &[arrow::array::RecordBatch]) -> Result<(), Box<dyn std::error::Error>> {
 //! let path = Root::default()
 //!     .dataset(Layer::Bronze, "sensor_reading")
 //!     .partition("sensor", "gps")?
 //!     .date_partition("ingested_date", Utc::now().date_naive())?
 //!     .batch_file(Utc::now());
-//! write_batches(&path, batches)?;
+//! write_batches(&path, batches).await?;
 //! # Ok(())
 //! # }
 //! ```
