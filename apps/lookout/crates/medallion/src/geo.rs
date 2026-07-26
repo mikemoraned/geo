@@ -19,7 +19,7 @@ use parquet::arrow::AsyncArrowWriter;
 use crate::write::WriteError;
 
 /// The global CRS every silver geometry is stored in, as PROJJSON — the encoding
-/// GeoParquet requires. This is the published OGC:CRS84 definition, held verbatim.
+/// GeoParquet requires. Generated from PROJ by `just crs-definitions`.
 const CRS84_PROJJSON: &str = include_str!("crs84.projjson.json");
 
 /// Failure describing a geometry column.

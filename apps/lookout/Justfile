@@ -6,9 +6,19 @@ git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git di
 
 # DuckDB is linked by the medallion multi-engine test, which reads one silver file
 # back through every engine; `.cargo/config.toml` points libduckdb-sys at the brew prefix.
+# PROJ provides `projinfo`, which generates the CRS definitions `crs-definitions` writes,
+# and `jq` formats them.
 prerequisites:
     cargo install rerun-cli --locked
-    brew install duckdb
+    brew install duckdb proj jq
+
+# Regenerate the PROJJSON CRS definitions the medallion crate embeds, from PROJ's own
+# database. GeoParquet requires the CRS as PROJJSON and nothing in the dependency tree
+# emits it, so the definitions are generated here and committed. Not part of the build:
+# run it when a definition needs adding or refreshing, and commit the result.
+crs-definitions:
+    projinfo -o PROJJSON -q "OGC:CRS84" | jq . > crates/medallion/src/crs84.projjson.json
+    projinfo -o PROJJSON -q "EPSG:25832" | jq . > crates/medallion/src/etrs89_utm32n.projjson.json
 
 # Run the server locally on http://localhost:3000 (override with PORT).
 # Log-only: LOOKOUT_REDIS_URL is unset, so received samples are logged, not queued.
