@@ -9,7 +9,10 @@ use crate::path::Root;
 #[derive(Debug, Clone, clap::Args)]
 pub struct MedallionArgs {
     /// Root of the medallion data store.
-    #[arg(long = "medallion-root", default_value_os_t = Root::default_path())]
+    ///
+    /// Global, so it is accepted wherever it reads naturally on the command line —
+    /// before a subcommand or after it.
+    #[arg(long = "medallion-root", global = true, default_value_os_t = Root::default_path())]
     pub medallion_root: PathBuf,
 }
 
@@ -27,8 +30,15 @@ mod tests {
 
     #[derive(Parser)]
     struct Cli {
+        #[command(subcommand)]
+        command: Option<Command>,
         #[command(flatten)]
         medallion: MedallionArgs,
+    }
+
+    #[derive(clap::Subcommand)]
+    enum Command {
+        Run,
     }
 
     #[test]
@@ -46,5 +56,23 @@ mod tests {
             cli.medallion.root().path(),
             PathBuf::from("/Volumes/PRO-G40/medallion")
         );
+    }
+
+    /// A CLI with subcommands takes the flag on either side of the subcommand, so the
+    /// order it is typed in never has to be remembered.
+    #[test]
+    fn the_root_is_accepted_before_or_after_a_subcommand() {
+        for args in [
+            ["a-cli", "--medallion-root", "/store", "run"],
+            ["a-cli", "run", "--medallion-root", "/store"],
+        ] {
+            let cli = Cli::parse_from(args);
+
+            assert_eq!(
+                cli.medallion.root().path(),
+                PathBuf::from("/store"),
+                "parsing {args:?}"
+            );
+        }
     }
 }
