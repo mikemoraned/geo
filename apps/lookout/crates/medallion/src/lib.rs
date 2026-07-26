@@ -21,12 +21,14 @@
 //! ```
 
 mod args;
+mod geo;
 mod layer;
 mod partition;
 mod path;
 mod write;
 
 pub use args::MedallionArgs;
+pub use geo::{wkb_field, write_geo_batches, GeoError};
 pub use layer::Layer;
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
 pub use path::{Dataset, Root};

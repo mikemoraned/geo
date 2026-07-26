@@ -4,8 +4,11 @@
 # into the binary (BUILD_GIT_HASH) so it's logged at startup and served at /version.
 git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git diff --quiet 2>/dev/null || echo -dirty)"`
 
+# DuckDB is linked by the medallion multi-engine test, which reads one silver file
+# back through every engine; `.cargo/config.toml` points libduckdb-sys at the brew prefix.
 prerequisites:
     cargo install rerun-cli --locked
+    brew install duckdb
 
 # Run the server locally on http://localhost:3000 (override with PORT).
 # Log-only: LOOKOUT_REDIS_URL is unset, so received samples are logged, not queued.

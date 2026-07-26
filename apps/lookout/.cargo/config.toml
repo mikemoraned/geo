@@ -1,0 +1,7 @@
+# `duckdb` links the system libduckdb rather than compiling a bundled copy (which needs a
+# full C++ toolchain and minutes per clean build). `libduckdb-sys` finds it via these, and
+# there is no pkg-config on this machine to fall back to. `force = false`, so an
+# already-set value — a different install prefix — still wins.
+[env]
+DUCKDB_LIB_DIR = { value = "/opt/homebrew/lib", force = false }
+DUCKDB_INCLUDE_DIR = { value = "/opt/homebrew/include", force = false }

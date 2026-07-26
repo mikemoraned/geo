@@ -48,6 +48,17 @@ parquet = { version = "57.1", features = ["object_store"] }
 # writes to a temp file and renames, so a file appears at its path only once complete.
 # 0.12 is what both parquet and datafusion depend on, so there is one version in the tree.
 object_store = "0.12"
+# GeoParquet metadata encoder (geoarrow-rs). 0.7 is the last release built against
+# arrow/parquet 57, which is what SedonaDB pins us to; 0.8 moved to 59 and its
+# `RecordBatch` would be a different type from ours.
+geoparquet = "0.7"
+# geoarrow's Arrow-level geometry types, used to declare a WKB geometry column with its
+# CRS so the encoder can write conformant GeoParquet metadata.
+geoarrow-schema = "0.7"
+# DuckDB, in-process, for the multi-engine invariant test. Links the system libduckdb
+# (`brew install duckdb`) rather than compiling a bundled copy, which needs a full C++
+# toolchain and minutes of build time on every clean build.
+duckdb = "1.105"
 # Resolves the home directory for the default medallion root; `std::env::home_dir` is
 # deprecated and wrong on Windows.
 dirs = "6"

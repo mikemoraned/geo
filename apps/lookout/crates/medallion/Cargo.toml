@@ -8,13 +8,24 @@ arrow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 dirs = { workspace = true }
+geoarrow-schema = { workspace = true }
+geoparquet = { workspace = true }
+serde_json = { workspace = true }
 object_store = { workspace = true }
 parquet = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+duckdb = { workspace = true }
+sedona = { workspace = true }
+sedona-geoparquet = { workspace = true }
+serde_json = { workspace = true }
+datafusion = { workspace = true }
+geo-traits = { workspace = true }
+geo-types = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
+wkb = { workspace = true }
 
 [lints]
 workspace = true

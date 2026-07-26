@@ -118,10 +118,14 @@ The main tasks here should be focussed on documenting these patterns and correct
       DataFusion's `DataFrameWriteOptions::with_partition_by` derives `key=value`
       directories from column values — worth using there, but it generates its own file
       names, so it doesn't fit the one-file-per-ingestion bronze writes.
-- [ ] Prove the multi-engine rule with a round-trip test: write one silver GeoParquet from
+- [x] Prove the multi-engine rule with a round-trip test: write one silver GeoParquet from
       Rust, read it back from each engine in use (currently DuckDB, SedonaDB, georust), and
       assert identical geometry + CRS. This is the check that stops silver drifting
       engine-specific.
+      Note: `crates/medallion/tests/multi_engine.rs`, in the default nextest profile so it
+      runs on every `just test`. DuckDB links the system libduckdb (`brew install duckdb`,
+      added to `just prerequisites`, paths in `.cargo/config.toml`) — the bundled build
+      needs a C++ toolchain that isn't available in the sandbox.
 - [ ] Move `motis_poll` to write into landing/bronze: keep the raw polled `TripSegment`
       batch (polylines verbatim, as received) as one parquet file per poll under a
       timestamped Hive path, rather than appending to `data/motis.sqlite`.
