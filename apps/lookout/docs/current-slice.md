@@ -537,7 +537,7 @@ Steps:
 
 ### Water crossings per session
 
-We probably need to here productionise the pipeline we prototyped in apps/lookout/notebooks/water_crossings/v7.py. However, it's ok to keep it as a notebook, or chain of notebooks, for now.
+We probably need to here productionise the pipeline we prototyped in apps/lookout/notebooks/water_crossings/v8.py. However, it's ok to keep it as a notebook, or chain of notebooks, for now.
 
 #### Tasks 
 
