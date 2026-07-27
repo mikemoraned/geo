@@ -43,7 +43,7 @@ pub use dataset::DatasetSpec;
 pub use geo::{geometries, projected_wkb_field, wkb_column, wkb_field, GeoError, Projector};
 pub use layer::Layer;
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
-pub use path::{AppendError, Dataset, Root};
+pub use path::{AppendError, Dataset, Root, Written};
 pub use query::{Query, QueryError};
 pub use rows::{fields, RowError};
 pub use write::WriteError;

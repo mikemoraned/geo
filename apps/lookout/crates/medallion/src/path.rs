@@ -5,9 +5,10 @@ use std::path::{Path, PathBuf};
 
 use arrow::array::RecordBatch;
 use chrono::{DateTime, NaiveDate, Utc};
+use datafusion::execution::SendableRecordBatchStream;
 
 use crate::dataset::DatasetSpec;
-use crate::geo::{write_geo_batches, GeoError};
+use crate::geo::{write_geo_batches, write_geo_stream, GeoError};
 use crate::partition::{Partition, PathError, DATE_FORMAT};
 use crate::rows::{batch, RowError};
 use crate::write::{write_batches, WriteError};
@@ -27,6 +28,13 @@ const BATCH_STEM_FORMAT: &str = "%Y%m%dT%H%M%SZ";
 /// The file a rebuilt partition holds. A partition derived wholesale is one file, so its
 /// name carries no information and never varies.
 const PARTITION_STEM: &str = "part-0";
+
+/// What a write left in the store.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Written {
+    pub path: PathBuf,
+    pub rows: usize,
+}
 
 /// The root of a medallion store.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -166,6 +174,17 @@ impl Dataset {
         let path = self.partition_file();
         write_geo_batches(&path, batches).await?;
         Ok(path)
+    }
+
+    /// Replace this partition's contents with a query's results, as GeoParquet, writing
+    /// them as they arrive rather than holding them all first.
+    pub async fn rebuild_geo_from(
+        &self,
+        batches: SendableRecordBatchStream,
+    ) -> Result<Written, GeoError> {
+        let path = self.partition_file();
+        let rows = write_geo_stream(&path, batches).await?;
+        Ok(Written { path, rows })
     }
 
     /// A named parquet file within [`Self::dir`].

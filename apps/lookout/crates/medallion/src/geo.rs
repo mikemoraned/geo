@@ -7,6 +7,9 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use datafusion::execution::SendableRecordBatchStream;
+use futures::StreamExt;
+
 use crate::country::Country;
 use crate::write::WriteError;
 use arrow::array::{Array, ArrayRef, BinaryArray, RecordBatch};
@@ -40,6 +43,8 @@ pub enum GeoError {
     Arrow(#[from] arrow::error::ArrowError),
     #[error("no geometry column named {0}")]
     NoSuchColumn(String),
+    #[error("reading the batches to write: {0}")]
+    DataFusion(#[from] datafusion::error::DataFusionError),
 }
 
 /// A WKB geometry field in [CRS 84](https://www.opengis.net/def/crs/OGC/1.3/CRS84), for
@@ -167,6 +172,31 @@ pub(crate) async fn write_geo_batches(
     writer.append_key_value_metadata(encoder.into_keyvalue()?);
     writer.close().await?;
     Ok(())
+}
+
+/// Write a query's results to `path` as a single GeoParquet file, as they arrive,
+/// reporting how many rows landed.
+///
+/// The schema comes from the stream rather than from a first batch, so a query matching
+/// nothing still writes a readable, correctly typed file instead of failing — a partition
+/// that legitimately holds no rows is a result, not an error.
+pub(crate) async fn write_geo_stream(
+    path: &Path,
+    mut batches: SendableRecordBatchStream,
+) -> Result<usize, GeoError> {
+    let options = GeoParquetWriterOptions::default();
+    let mut encoder = GeoParquetRecordBatchEncoder::try_new(batches.schema().as_ref(), &options)?;
+    let mut writer = crate::write::writer_at(path, encoder.target_schema())?;
+
+    let mut rows = 0;
+    while let Some(batch) = batches.next().await {
+        let batch = batch?;
+        rows += batch.num_rows();
+        writer.write(&encoder.encode_record_batch(&batch)?).await?;
+    }
+    writer.append_key_value_metadata(encoder.into_keyvalue()?);
+    writer.close().await?;
+    Ok(rows)
 }
 
 #[cfg(test)]

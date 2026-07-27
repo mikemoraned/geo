@@ -69,6 +69,10 @@ duckdb = "1.105"
 # Resolves the home directory for the default medallion root; `std::env::home_dir` is
 # deprecated and wrong on Windows.
 dirs = "6"
+# Stream combinators for writing a query's results straight through to a file, so a
+# country-scale extract is never held in memory in full. Datafusion's record-batch
+# streams are `futures::Stream`s.
+futures = "0.3"
 md5 = "0.7"
 tempfile = "3"
 proptest = "1"
