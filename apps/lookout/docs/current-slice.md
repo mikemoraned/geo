@@ -323,15 +323,31 @@ The main tasks here should be focussed on documenting these patterns and correct
         did not catch it because it compared instants a *second* apart; the new tests are two
         writes a millisecond apart, at both the path level and through `Archive`, and were
         checked by reverting the fix.
-- [ ] Decide whether partition columns should be declared with their types rather than
+- [x] Decide whether partition columns should be declared with their types rather than
       inferred. SedonaDB auto-discovers them when the reader doesn't set them
       (`listing_table_factory_infer_partitions` defaults to true), typing every one as
       `Utf8View` — so a date partition comes back as a string, and a predicate has to
       compare it as one. Establish first what a date-typed predicate actually does against
       an inferred column (prunes, silently reads everything, or errors); declare the types
       via `GeoParquetReadOptions::with_table_partition_cols` only if that shows a reason to.
-      DuckDB's half of this is settled by the `visualise` port above — it infers a date key
-      as `DATE` and prunes on it — so what remains open is SedonaDB's.
+
+      **Decided: leave them inferred.** The rule is in `medallion.md`; measured by a spike
+      (committed, then removed) rather than reasoned about:
+
+      * A date-typed predicate against SedonaDB's inferred `Utf8View` key is neither rejected
+        nor silently full-scanned. DataFusion coerces it —
+        `CAST(ingested_date AS Date32) >= Date32("2026-07-24")` reaches the scan as a
+        `full_filters` entry — and it prunes: the physical plan lists 2 of 3 files. Rows come
+        back correct. A string-typed predicate prunes identically, uncast.
+      * Declaring `Date32` changes the reported type and drops the cast, but scans the same
+        2 of 3 files. No functional difference, so nothing to buy.
+      * This rests on the `YYYY-MM-DD` format, where lexical and chronological order agree —
+        recorded in `medallion.md`, since a different date format would break the equivalence.
+      * **The corrupt-a-pruned-file technique used for DuckDB does not work against SedonaDB**
+        and would have given a false positive here. A registered table serves content cached
+        at registration: after corrupting a partition, a query selecting *only* that partition
+        still returns its row, while a fresh context cannot open the store at all. Pruning
+        evidence there has to come from the plan's `file_groups`, not from a query succeeding.
 - [ ] Delete `docs/2026-07-27-data-engineering-review.md` at the end of this slice. It is a
       dated snapshot of how this store compares to Rust data engineering practice, kept for
       the history of the decision; anything in it still worth following by then belongs in
@@ -473,9 +489,42 @@ Steps:
       by which flag. This is the first look at whether a 10-minute gap actually splits the
       recorded traces where a human would; adjust the default here if it plainly does not,
       and note the evidence rather than the preference.
-- [ ] Restore a sessions pane in `visualise/`: sessions listed with their path drawn, since
-      the tool's existing panes are how a derivation gets eyeballed and there is currently
-      no view of a trace as anything but loose points.
+- [ ] Cut `visualise/` back to **one thing: the selected sessions**. It reads silver
+      `session` and `session_fix` and nothing else — the bronze `gps_reading` /
+      `accel_reading` readers, the accel ride-quality series, and the `train_segment`
+      panes and their overview map all go. The trains were only just repointed onto the
+      store, so this deletes recent work deliberately: what makes a train pane worth
+      having is a session shown against it, and that comparison belongs to the crossings
+      and predictor steps, which will want it drawn against a session rather than against
+      loose per-device points.
+
+      Selection is by **session id, device id, or an ISO 8601 instant range** over when
+      the session was recorded — replacing `--since`'s relative window, which cannot name
+      a specific trip. Ids match by prefix, as `--devices` already does. The filters
+      combine as AND, at least one is required, and a range selects a session that
+      *overlaps* it: a selected session is always drawn whole, since a path clipped at the
+      window edge misreads as a trace that stopped there.
+
+      The `fix_date` partition predicate is exact here, unlike the bronze one it replaces:
+      fixes are partitioned by the instant they record, so the reasoning about ingestion
+      lagging capture no longer applies and the caveat in `main.py` goes with it.
+
+      The blueprint is three views:
+
+      * a **map of the full session paths**, one entity per session, drawn from
+        `session.geometry`;
+      * a **map of the fixes**, each a circle whose radius is the reported `acc`, centred
+        on the fix. Accuracy is metres and rerun's radii can be scene units, so the circle
+        is the accuracy, drawn to scale, rather than a size mapped from it. Check what the
+        rerun version in use will do about keeping the view centred on the current fix as
+        the timeline cursor moves — if the map view cannot be made to follow, say so and
+        log the current fix as its own entity rather than faking it;
+      * a **speed time series**, from `session_fix.speed`, nulls dropped rather than
+        plotted as zero.
+
+      Rewrite `README.md` and the module docstring to describe this tool rather than the
+      one being removed, and expect most of `tests/test_main.py` to go with the readers it
+      covers.
 
 ### Water crossings per session
 

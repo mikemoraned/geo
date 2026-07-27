@@ -157,6 +157,18 @@ the reasoning behind those definitions.
 - A key whose value is effectively unique per row (an id) is only used where each value
   identifies a whole write — an extract or a run — never for row-level identifiers.
 
+**Partition keys are left for the engine to discover, and their types are not declared.** A
+reader that names the dataset gets the keys back as columns and a predicate over one prunes
+whole files, without the reader having to state what it will find. The engines differ in the
+type they infer — one reports a date key as a date, another as a string — and neither needs
+help: a date-typed predicate against a string-typed key is coerced, still prunes, and returns
+the same rows, in both directions. Declaring the types buys nothing but a second place for
+the layout to be written down, and one that drifts silently when a key is renamed.
+
+This holds because dates are formatted `YYYY-MM-DD`, whose lexical and chronological order
+agree — a date key compared as a string is still ordered correctly. A partition key in a
+format without that property could not be relied on this way.
+
 ### Bronze
 
 Bronze partitions on **when data was captured or ingested**, because bronze is immutable
