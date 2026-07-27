@@ -225,7 +225,7 @@ The main tasks here should be focussed on documenting these patterns and correct
             nothing the pipeline depends on. Note v8 only runs where that extract exists:
             nothing in the repo recreates a *given* id, since a rerun of `just extract`
             makes a new one.
-- [ ] Port `visualise/` from `sqlite3` to DuckDB over the medallion store. It is the last
+- [x] Port `visualise/` from `sqlite3` to DuckDB over the medallion store. It is the last
       reader of `data/lookout.sqlite`, and the point is the engine, not just the path: the
       store is parquet that any of our engines reads, and DuckDB is the one we already use
       for ad-hoc and notebook work, so a hand-rolled reader has nothing to recommend it.
@@ -250,6 +250,31 @@ The main tasks here should be focussed on documenting these patterns and correct
       rather than a `WHERE` over a table scan, so check what a date-partition predicate
       actually does before assuming it prunes (see the partition-column typing task below —
       this is the case that motivates it).
+
+      Notes:
+
+      * **DuckDB prunes.** An inferred hive key comes back typed (`typeof(ingested_date)`
+        is `DATE`), a predicate over it appears as a `File Filters` entry, and the plan
+        reports `Scanning Files: n/m` — both asserted in the tests. One caveat: the *first*
+        file in glob order is still opened, for the schema, whether or not the filter
+        excludes its partition.
+      * `--since` filters `t` (when the reading was taken) but prunes on `ingested_date`
+        (when it was written), which is sound only because ingestion follows the reading. A
+        device whose clock runs ahead by more than the window is the exception, and its
+        readings are mistimed either way. Legs prune on `departure_date` with a day's
+        slack, since the window is over `arrival`.
+      * **shapely is gone**, and `--near` with it (that flag only filtered the dropped
+        transport pane). Route vertices and the moving dot's interpolated positions are read
+        as lat/lon out of the query, via `ST_PointN`/`ST_LineInterpolatePoint`, so nothing
+        decodes WKB here. Not by casting to DuckDB's native `LINESTRING_2D`/`POINT_2D`,
+        which is what the geometry column *looks* like it wants: that cast is unimplemented
+        for a geometry whose CRS the engine recognised, and whether it does recognise one
+        varies by writer — a duckdb-written file types the column `GEOMETRY('OGC:CRS84')`
+        and a Rust-written one plain `GEOMETRY`, from the same PROJJSON.
+      * Checked end to end against files the real writers produced (bronze from
+        `recorder::bronze::Archive`, silver from `motis::ingest`, into a scratch root),
+        since the Python tests build their fixtures with DuckDB itself and so would not
+        catch a Rust-writer/DuckDB-reader mismatch on their own.
 - [ ] Backfill existing `data/lookout.sqlite` and `data/motis.sqlite` content into bronze
       once, so history isn't stranded behind the old format.
 - [ ] Decide whether partition columns should be declared with their types rather than
@@ -259,6 +284,8 @@ The main tasks here should be focussed on documenting these patterns and correct
       compare it as one. Establish first what a date-typed predicate actually does against
       an inferred column (prunes, silently reads everything, or errors); declare the types
       via `GeoParquetReadOptions::with_table_partition_cols` only if that shows a reason to.
+      DuckDB's half of this is settled by the `visualise` port above — it infers a date key
+      as `DATE` and prunes on it — so what remains open is SedonaDB's.
 - [ ] Delete `docs/2026-07-27-data-engineering-review.md` at the end of this slice. It is a
       dated snapshot of how this store compares to Rust data engineering practice, kept for
       the history of the decision; anything in it still worth following by then belongs in

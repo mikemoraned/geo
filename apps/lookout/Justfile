@@ -87,10 +87,11 @@ extract *args:
 ingest-motis *args:
     cargo run -p motis --bin motis_ingest -- {{args}}
 
-# Convert the SQLite archive into a rerun .rrd, selecting by time window (and
+# Convert the medallion store into a rerun .rrd, selecting by time window (and
 # optionally device id prefixes). Requires --since, e.g. `just visualise --since 7d`
-# or `just visualise --since 12h --devices 77a cdf2`. Open the .rrd with `rerun`, or
-# pass `--open` to push it live to a running viewer (overriding its persisted layout).
+# or `just visualise --since 12h --devices 77a cdf2`; override the store with
+# --medallion-root. Open the .rrd with `rerun`, or pass `--open` to push it live to a
+# running viewer (overriding its persisted layout).
 visualise *args:
     uv run --project visualise python visualise/main.py {{args}}
 

@@ -1,37 +1,40 @@
-"""Convert a lookout SQLite archive into a rerun `.rrd` for visualisation.
+"""Convert the lookout medallion store into a rerun `.rrd` for visualisation.
 
-Reads the derived per-sensor tables (`accel`, `gps`), selected by a relative time
-window (`--since 7d`) and optionally by device (`--devices <uuid> ...`), and logs
-them to a rerun recording under per-device entity paths. A blueprint gives each
-selected device a map view for its speed-coloured gps track and a time-series view of
-its accel ride-quality aggregates (rms roughness, peak jolts).
+Reads the bronze sensor datasets (`gps_reading`, `accel_reading`), selected by a relative
+time window (`--since 7d`) and optionally by device (`--devices <uuid> ...`), and logs them
+to a rerun recording under per-device entity paths. A blueprint gives each selected device
+a map view for its speed-coloured gps track and a time-series view of its accel
+ride-quality aggregates (rms roughness, peak jolts).
 
-If the archive has been enriched (a `transport` table, written by `enrich`), the
-Overture rail network — segments coloured by class, plus their connectors — is logged
-as static geometry under `/transport` and given its own shared map pane.
+Where the silver `train_segment` dataset has been derived, each nearby train is also logged
+as a moving dot under `/trains/{trip_id}` — interpolated along its route by its
+realtime-corrected times, coloured by `mode`/`routeColor` and labelled by train number —
+and a shared overview map shows the trains moving alongside the gps traces over the same
+window.
 
-If it has been ingested from Motis (a `train_segment` table, written by `motis_ingest`),
-each nearby train is logged as a moving dot under `/trains/{trip_id}` — interpolated
-along its decoded route by its realtime-corrected times, coloured by `mode`/`routeColor`
-and labelled by train number — and a shared overview map shows the trains moving
-alongside the gps traces over the same window.
+Everything is read with DuckDB, the engine already used for ad-hoc and notebook work
+against this store: the store is parquet, and its silver geometry is GeoParquet, which
+DuckDB's spatial extension reads as geometry rather than as a blob to decode here.
 
 Run from `apps/lookout` via `just visualise` so the default paths resolve.
 """
 
 import argparse
+import datetime as dt
 import re
-import sqlite3
 import time
 from pathlib import Path
 
+import duckdb
 import rerun as rr
 import rerun.blueprint as rrb
-import shapely
 
 TIMELINE = "time"
-DEFAULT_DB = Path("data/lookout.sqlite")
+DEFAULT_MEDALLION_ROOT = Path("~/Data/geo/lookout/medallion").expanduser()
 DEFAULT_OUTPUT = Path("data/lookout.rrd")
+
+BRONZE = "bronze"
+SILVER = "silver"
 
 _DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 
@@ -47,50 +50,97 @@ def parse_since(text: str) -> int:
     return int(value) * _DURATION_UNITS[unit]
 
 
-def _device_filter(devices: list[str] | None) -> tuple[str, list[str]]:
-    """SQL fragment + params restricting to `devices`, or all devices if None.
+class Store:
+    """A DuckDB session over one medallion store.
 
-    Each entry matches any device id it is a *prefix* of, so a few leading
-    characters of a uuid are enough to select it.
+    A dataset is named by its layer and name — the layout `docs/medallion.md` pins — and
+    read with hive partitioning on, so its partition keys come back as typed columns that a
+    predicate can prune whole files by. Queries write `{dataset}` where they select from
+    one, and bind their values as named parameters.
     """
-    if not devices:
-        return "", []
-    terms = " OR ".join("substr(device_id, 1, length(?)) = ?" for _ in devices)
-    params = [p for prefix in devices for p in (prefix, prefix)]
-    return f" AND ({terms})", params
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.con = duckdb.connect()
+        # Spatial reads a GeoParquet geometry column as geometry rather than as a WKB blob,
+        # and provides the along-the-line interpolation the train dots are sampled with.
+        self.con.execute("INSTALL spatial; LOAD spatial;")
+
+    def rows(self, layer: str, dataset: str, sql: str, **params) -> list[tuple]:
+        """Rows of `sql` against `dataset`, which `{dataset}` in the query stands for.
+
+        A dataset that has never been written selects nothing rather than failing, so a
+        store whose trains have never been derived reads as a store with no trains.
+        """
+        directory = self.root / layer / dataset
+        if not directory.is_dir():
+            return []
+        source = "read_parquet($dataset, hive_partitioning = 1)"
+        return self.con.execute(
+            sql.format(dataset=source),
+            {"dataset": str(directory / "**" / "*.parquet"), **params},
+        ).fetchall()
 
 
-def fetch_accel(conn: sqlite3.Connection, cutoff_ms: int, devices: list[str] | None):
-    clause, params = _device_filter(devices)
-    return conn.execute(
-        f"SELECT device_id, t, rms, peak, n, x, y, z FROM accel "
-        f"WHERE t >= ?{clause} ORDER BY t",
-        [cutoff_ms, *params],
-    ).fetchall()
+# Restricts to the given device id prefixes, or to all devices when they are NULL. Each
+# prefix matches any device id it is a prefix of, so a few leading characters of a uuid are
+# enough to select it.
+_DEVICES = """
+    ($devices IS NULL
+     OR len(list_filter($devices, prefix -> starts_with(device_id, prefix))) > 0)
+"""
+
+# The window over the sensor datasets: readings taken at or after the cutoff.
+#
+# The second predicate is over `ingested_date`, the partition key, so it prunes whole files
+# rather than filtering their rows — DuckDB types an inferred hive key as `DATE` and reports
+# `Scanning Files: n/m` for a predicate over it. It is sound because a reading is ingested
+# after it is taken, so nothing inside the window sits in a partition older than the
+# window. The exception is a device whose clock runs ahead of real time by more than the
+# window, whose readings are mistimed however they are selected.
+_READING_WINDOW = f"""
+    t >= to_timestamp($cutoff_s)
+    AND ingested_date >= $cutoff_date
+    AND {_DEVICES}
+"""
+
+_ACCEL = f"""
+    SELECT device_id, epoch_ms(t) AS t, rms, peak, n
+    FROM {{dataset}}
+    WHERE {_READING_WINDOW}
+    ORDER BY t
+"""
+
+_GPS = f"""
+    SELECT device_id, epoch_ms(t) AS t, lat, lon, acc, speed
+    FROM {{dataset}}
+    WHERE {_READING_WINDOW}
+    ORDER BY t
+"""
 
 
-def fetch_gps(conn: sqlite3.Connection, cutoff_ms: int, devices: list[str] | None):
-    clause, params = _device_filter(devices)
-    return conn.execute(
-        f"SELECT device_id, t, lat, lon, acc, speed, heading FROM gps "
-        f"WHERE t >= ?{clause} ORDER BY t",
-        [cutoff_ms, *params],
-    ).fetchall()
+def _window(store: Store, dataset: str, sql: str, cutoff_ms: int, devices) -> list[tuple]:
+    """Run a windowed sensor query, binding the cutoff both ways it is used: as the instant
+    rows are compared against, and as the date partitions are pruned by."""
+    cutoff = dt.datetime.fromtimestamp(cutoff_ms / 1000.0, dt.timezone.utc)
+    return store.rows(
+        BRONZE,
+        dataset,
+        sql,
+        cutoff_s=cutoff.timestamp(),
+        cutoff_date=cutoff.date(),
+        devices=devices or None,
+    )
 
 
-def fetch_transport(conn: sqlite3.Connection):
-    """Rows `(kind, class, geom)` from the `transport` table — the Overture rail
-    segments and connectors written by `enrich`, with the geometry as a WKB blob.
+def fetch_accel(store: Store, cutoff_ms: int, devices: list[str] | None):
+    """Rows `(device_id, t, rms, peak, n)` of the bronze `accel_reading` dataset."""
+    return _window(store, "accel_reading", _ACCEL, cutoff_ms, devices)
 
-    Not time-windowed: the transport network is static enrichment, logged whole. Empty
-    when the archive has never been enriched, i.e. the table is absent.
-    """
-    exists = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'transport'"
-    ).fetchone()
-    if not exists:
-        return []
-    return conn.execute("SELECT kind, class, geom FROM transport").fetchall()
+
+def fetch_gps(store: Store, cutoff_ms: int, devices: list[str] | None):
+    """Rows `(device_id, t, lat, lon, acc, speed)` of the bronze `gps_reading` dataset."""
+    return _window(store, "gps_reading", _GPS, cutoff_ms, devices)
 
 
 def log_accel(rows) -> None:
@@ -98,22 +148,18 @@ def log_accel(rows) -> None:
     roughness and `peak` jolts / pointwork) and capture health under
     `device/{id}/samples` (`n`, the readings-per-window).
 
-    `rms`/`peak` are the accel signals that mean something at the 0.1 Hz sample rate;
-    the raw instantaneous `x,y,z` (kept in the archive as a tilt view) aliases into
-    noise and is not plotted. `n` sits on its own path because at ~600 it would dwarf
-    them — it should hold near-constant while sampling and drop toward zero where the
-    page was suspended, so it reads as a capture-health check rather than a ride
-    signal. Rows without aggregates — legacy captures predating the columns — are
-    dropped rather than shown as a misleading flat zero.
+    `rms`/`peak` are the accel signals that mean something at the 0.1 Hz sample rate; the
+    raw instantaneous `x,y,z` (kept in the dataset as a tilt view) aliases into noise and is
+    not plotted. `n` sits on its own path because at ~600 it would dwarf them — it should
+    hold near-constant while sampling and drop toward zero where the page was suspended, so
+    it reads as a capture-health check rather than a ride signal.
 
     Written column-wise with `rr.send_columns` (the natural shape for a table→rrd
     converter); `Scalars` needs the same count at every timestamp.
     """
     by_device: dict[str, list[tuple[float, float, float, int]]] = {}
-    for device_id, t, rms, peak, n, *_ in rows:
-        if rms is None or peak is None:
-            continue
-        by_device.setdefault(device_id, []).append((t / 1000.0, rms, peak, n or 0))
+    for device_id, t, rms, peak, n in rows:
+        by_device.setdefault(device_id, []).append((t / 1000.0, rms, peak, n))
 
     for device_id, samples in by_device.items():
         index = [rr.TimeColumn(TIMELINE, timestamp=[s[0] for s in samples])]
@@ -177,7 +223,7 @@ def log_gps(rows) -> None:
     into one segment per fix so each can be coloured by the speed at its start.
     """
     tracks: dict[str, list[tuple[float, float, float | None]]] = {}
-    for device_id, t, lat, lon, acc, speed, _heading in rows:
+    for device_id, t, lat, lon, acc, speed in rows:
         rr.set_time(TIMELINE, timestamp=t / 1000.0)
         # `acc` is the reported horizontal accuracy in metres; map scene units are
         # metres too, so it draws as a true-scale uncertainty circle. Omit the radius
@@ -208,88 +254,6 @@ def _log_track(device_id: str, points: list[tuple[float, float, float | None]]) 
     rr.log(path, rr.GeoLineStrings(lat_lon=segments, colors=colors), static=True)
 
 
-# Categorical colours for the rail `class`, so the map distinguishes gauges/modes.
-# Anything unmapped (including the Overture `unknown` class) falls back to grey.
-_CLASS_COLORS = {
-    "standard_gauge": (31, 119, 180),
-    "narrow_gauge": (44, 160, 44),
-    "tram": (255, 127, 14),
-    "subway": (148, 103, 189),
-    "monorail": (214, 39, 40),
-    "funicular": (140, 86, 75),
-    "light_rail": (23, 190, 207),
-}
-_CLASS_DEFAULT = (127, 127, 127)
-# Connectors are the shared junction nodes: one neutral dark dot for all of them.
-_CONNECTOR_COLOR = (40, 40, 40)
-
-
-def _class_color(rail_class: str | None) -> tuple[int, int, int]:
-    """Colour for a rail `class`, or grey for an unknown/unmapped one."""
-    return _CLASS_COLORS.get(rail_class, _CLASS_DEFAULT)
-
-
-def _linestrings(shape) -> list:
-    """The `LineString` parts of a segment geometry — one for a `LineString`, several
-    for a `MultiLineString` — so each can be logged as its own polyline."""
-    if shape.geom_type == "MultiLineString":
-        return list(shape.geoms)
-    return [shape]
-
-
-def _transport_geometry(rows, gps_lonlat=None, near=None):
-    """Transform `transport` rows into rerun-ready geometry, returning
-    `(segments, segment_colors, connectors)`.
-
-    The stored WKB is in `lon lat` (x-y) order, so every coordinate is flipped to
-    rerun's `(lat, lon)`. Segments are coloured by rail `class`. When `near` is set, a
-    segment is kept only if it comes within `near` of a gps fix — a raw **degrees**
-    distance (see the `--near` help), not true ground distance.
-    """
-    near_window = (
-        shapely.MultiPoint(gps_lonlat) if near is not None and gps_lonlat else None
-    )
-    segments: list[list[tuple[float, float]]] = []
-    segment_colors: list[tuple[int, int, int]] = []
-    connectors: list[tuple[float, float]] = []
-    for kind, rail_class, geom in rows:
-        shape = shapely.from_wkb(geom)
-        if kind == "segment":
-            for line in _linestrings(shape):
-                if near_window is not None and line.distance(near_window) > near:
-                    continue
-                segments.append([(lat, lon) for lon, lat in line.coords])
-                segment_colors.append(_class_color(rail_class))
-        elif kind == "connector":
-            connectors.append((shape.y, shape.x))
-    return segments, segment_colors, connectors
-
-
-def log_transport(rows, gps_lonlat=None, near=None) -> None:
-    """Log the Overture transport network as static geometry: rail segments as
-    `GeoLineStrings` under `transport/segments` coloured by rail `class`, and
-    connectors as `GeoPoints` under `transport/connectors`.
-
-    Static because the network is a fixed backdrop the device tracks move across, not
-    something that changes over the recording's timeline.
-    """
-    segments, segment_colors, connectors = _transport_geometry(rows, gps_lonlat, near)
-    if segments:
-        rr.log(
-            "transport/segments",
-            rr.GeoLineStrings(lat_lon=segments, colors=segment_colors),
-            static=True,
-        )
-    if connectors:
-        rr.log(
-            "transport/connectors",
-            rr.GeoPoints(
-                lat_lon=connectors, colors=[_CONNECTOR_COLOR] * len(connectors)
-            ),
-            static=True,
-        )
-
-
 # Categorical colours per transit `mode`. DELFI reports correct `route_type`, so `mode`
 # already separates long-distance (HIGHSPEED_RAIL/LONG_DISTANCE) from regional rail — a
 # train's GTFS `routeColor` still wins when the feed carries one. Unmapped → grey.
@@ -313,27 +277,82 @@ _MODE_DEFAULT = (127, 127, 127)
 # line rather than jumping stop-to-stop.
 SAMPLE_STEP_S = 10
 
+# The window over the derived legs: those still active at or after the cutoff, so the trains
+# cover the same window as the gps traces. The `departure_date` predicate prunes partitions
+# (see `_READING_WINDOW`) and allows a day's slack, since a leg departs before it arrives.
+_LEG_WINDOW = """
+    SELECT trip_id, mode, route_color, route_name, train_number, geometry,
+           epoch_ms(departure) AS departure_ms,
+           greatest(epoch_ms(arrival) - epoch_ms(departure), 0) AS span_ms
+    FROM {dataset}
+    WHERE arrival >= to_timestamp($cutoff_s)
+      AND departure_date >= $cutoff_date - INTERVAL 1 DAY
+"""
 
-def fetch_train_segments(conn: sqlite3.Connection, cutoff_ms: int):
-    """Rows `(trip_id, mode, route_color, route_name, train_number, departure, arrival,
-    geom)` from the `train_segment` table — the deduped, decoded moving-train legs written
-    by `motis_ingest`, with the geometry as a WKB `LineString` and realtime-corrected
-    `departure`/`arrival` epoch-ms times.
+# One row per leg with its route as a list of rerun `[lat, lon]` vertices. Silver geometry
+# is lon/lat (x-y) order, as simple features require, so each vertex is read out flipped.
+# Vertices are taken with the ordinary accessors rather than by casting to DuckDB's native
+# `LINESTRING_2D`, which the engine refuses for a geometry column whose CRS it recognised.
+_TRAIN_LEGS = f"""
+    WITH leg AS ({_LEG_WINDOW})
+    SELECT trip_id, mode, route_color, route_name, train_number,
+           list_transform(
+               generate_series(1, ST_NPoints(geometry)),
+               i -> [ST_Y(ST_PointN(geometry, i::INTEGER)),
+                     ST_X(ST_PointN(geometry, i::INTEGER))]
+           ) AS route
+    FROM leg
+    ORDER BY trip_id, departure_ms
+"""
 
-    Windowed to legs still active at or after the cutoff (`arrival >= cutoff`), so the
-    trains cover the same window as the gps traces. Empty when the archive has never
-    been ingested, i.e. the table is absent.
-    """
-    exists = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'train_segment'"
-    ).fetchone()
-    if not exists:
-        return []
-    return conn.execute(
-        "SELECT trip_id, mode, route_color, route_name, train_number, departure, arrival, geom "
-        "FROM train_segment WHERE arrival >= ? ORDER BY trip_id, departure",
-        [cutoff_ms],
-    ).fetchall()
+# The moving dot: each leg's position resampled at `$step_ms` along its span, plus both
+# endpoints, placed by length-normalised interpolation along the route. A leg of zero or
+# negative span yields only its start point.
+_TRAIN_POSITIONS = f"""
+    WITH leg AS ({_LEG_WINDOW}),
+         sample AS (
+           SELECT trip_id, geometry, departure_ms, span_ms,
+                  unnest(list_distinct(
+                      list_append(generate_series(0, span_ms, $step_ms), span_ms)
+                  )) AS offset_ms
+           FROM leg
+         ),
+         located AS (
+           SELECT trip_id, departure_ms + offset_ms AS t,
+                  ST_LineInterpolatePoint(
+                      geometry,
+                      CASE WHEN span_ms = 0 THEN 0.0 ELSE offset_ms::DOUBLE / span_ms END
+                  ) AS position
+           FROM sample
+         )
+    SELECT trip_id, t, ST_Y(position) AS lat, ST_X(position) AS lon
+    FROM located
+    ORDER BY trip_id, t
+"""
+
+
+def fetch_train_legs(store: Store, cutoff_ms: int):
+    """Rows `(trip_id, mode, route_color, route_name, train_number, route)` of the silver
+    `train_segment` dataset, `route` being the leg's vertices as `[lat, lon]`."""
+    return _legs(store, _TRAIN_LEGS, cutoff_ms)
+
+
+def fetch_train_positions(store: Store, cutoff_ms: int, step_s: int = SAMPLE_STEP_S):
+    """Rows `(trip_id, t, lat, lon)` sampling each leg's interpolated position every
+    `step_s` seconds."""
+    return _legs(store, _TRAIN_POSITIONS, cutoff_ms, step_ms=step_s * 1000)
+
+
+def _legs(store: Store, sql: str, cutoff_ms: int, **params) -> list[tuple]:
+    cutoff = dt.datetime.fromtimestamp(cutoff_ms / 1000.0, dt.timezone.utc)
+    return store.rows(
+        SILVER,
+        "train_segment",
+        sql,
+        cutoff_s=cutoff.timestamp(),
+        cutoff_date=cutoff.date(),
+        **params,
+    )
 
 
 def _hex_rgb(text: str) -> tuple[int, int, int] | None:
@@ -377,87 +396,60 @@ def _train_entity(trip_id: str, label: str | None) -> str:
     return f"trains/{trip_id}"
 
 
-def _interpolate_leg(line, departure_ms: int, arrival_ms: int, step_s: int):
-    """Yield `(t_seconds, lat, lon)` samples of a train's position along `line` across
-    `[departure, arrival]`, at `step_s` spacing plus both endpoints.
+def _trains(legs) -> dict:
+    """Group leg rows per trip: `{trip_id: {"entity", "color", "route": [[[lat, lon]…]…]}}`.
 
-    Position at time `T` is `line.interpolate((T - departure)/(arrival - departure))`
-    (normalised), so it follows the real track geometry once the polyline has interior
-    points. A zero/negative-duration leg yields just its start point.
-    """
-    if arrival_ms <= departure_ms:
-        start = line.interpolate(0.0, normalized=True)
-        yield (departure_ms / 1000.0, start.y, start.x)
-        return
-    span = arrival_ms - departure_ms
-    t = departure_ms
-    while t < arrival_ms:
-        point = line.interpolate((t - departure_ms) / span, normalized=True)
-        yield (t / 1000.0, point.y, point.x)
-        t += step_s * 1000
-    end = line.interpolate(1.0, normalized=True)
-    yield (arrival_ms / 1000.0, end.y, end.x)
-
-
-def _train_samples(rows, step_s: int = SAMPLE_STEP_S) -> dict:
-    """Group `train_segment` rows into per-trip animation data:
-    `{trip_id: {"color", "label", "samples": [(t_s, lat, lon)...], "route": [[(lat,
-    lon)...]...]}}`.
-
-    `samples` is the time-ordered moving-dot path across all of a trip's legs; `route`
-    is one lat/lon polyline per leg. Stored WKB is `(lon, lat)`, flipped to `(lat, lon)`.
+    A trip's colour and label come from its first leg — they identify the train, not the
+    leg — and `route` is one lat/lon polyline per leg.
     """
     trains: dict = {}
-    for trip_id, mode, route_color, route_name, train_number, departure, arrival, geom in rows:
-        line = shapely.from_wkb(geom)
+    for trip_id, mode, route_color, route_name, train_number, route in legs:
         entry = trains.setdefault(
             trip_id,
             {
+                "entity": _train_entity(trip_id, _train_label(train_number, route_name)),
                 "color": _train_color(mode, route_color),
-                "label": _train_label(train_number, route_name),
-                "samples": [],
                 "route": [],
             },
         )
-        entry["route"].append([(lat, lon) for lon, lat in line.coords])
-        entry["samples"].extend(_interpolate_leg(line, departure, arrival, step_s))
-    for entry in trains.values():
-        entry["samples"].sort()
+        entry["route"].append(route)
     return trains
 
 
-def log_trains(rows, step_s: int = SAMPLE_STEP_S) -> None:
-    """Log each trip as a moving `GeoPoints` dot that follows the timeline (interpolated
-    along its legs), plus its static route line(s) under `{entity}/route`, coloured by
-    `routeColor`/`mode`. The entity path carries the train number (falling back to the
-    line) so the dot is identifiable on hover and in the streams tree.
+def log_trains(legs, positions) -> None:
+    """Log each trip as a moving `GeoPoints` dot that follows the timeline, plus its static
+    route line(s) under `{entity}/route`, coloured by `routeColor`/`mode`. The entity path
+    carries the train number (falling back to the line) so the dot is identifiable on hover
+    and in the streams tree.
 
     The dot uses the same per-timestamp `GeoPoints` idiom as the gps cursor, so it moves
     across the shared map over the same window as the gps traces.
     """
-    for trip_id, entry in _train_samples(rows, step_s).items():
-        color = entry["color"]
-        entity = _train_entity(trip_id, entry["label"])
-        if entry["route"]:
-            rr.log(
-                f"{entity}/route",
-                rr.GeoLineStrings(lat_lon=entry["route"], colors=[color] * len(entry["route"])),
-                static=True,
-            )
-        for t_s, lat, lon in entry["samples"]:
-            rr.set_time(TIMELINE, timestamp=t_s)
-            rr.log(entity, rr.GeoPoints(lat_lon=[(lat, lon)], colors=[color]))
+    trains = _trains(legs)
+    for entry in trains.values():
+        rr.log(
+            f"{entry['entity']}/route",
+            rr.GeoLineStrings(
+                lat_lon=entry["route"], colors=[entry["color"]] * len(entry["route"])
+            ),
+            static=True,
+        )
+
+    for trip_id, t, lat, lon in positions:
+        entry = trains[trip_id]
+        rr.set_time(TIMELINE, timestamp=t / 1000.0)
+        rr.log(
+            entry["entity"],
+            rr.GeoPoints(lat_lon=[(lat, lon)], colors=[entry["color"]]),
+        )
 
 
-def build_blueprint(
-    devices: list[str], has_transport: bool, has_trains: bool = False
-) -> rrb.Blueprint:
+def build_blueprint(devices: list[str], has_trains: bool = False) -> rrb.Blueprint:
     """Per device: a static full-route map, a latest-position map that follows the
     timeline, a ride-quality time-series view (rms/peak), and a capture-health view
-    (n) — tiled in a grid. When the archive has transport data, one shared map of the
-    Overture rail network is appended alongside. When it has train data, a shared
-    overview map (root origin) shows the gps traces and the moving trains together, so
-    they share one view over the same timeline window.
+    (n) — tiled in a grid. When the store has train data, a shared overview map (root
+    origin) shows the gps traces and the moving trains together, so they share one view
+    over the same timeline window.
 
     The `track` map shows the whole journey as a static speed-coloured polyline; the
     `gps` map shows only the per-timestamp point, which moves as the timeline cursor
@@ -482,10 +474,6 @@ def build_blueprint(
         )
         for device_id in devices
     ]
-    if has_transport:
-        # The rail network (segments + connectors) is shared across devices, not
-        # per-device, so it sits as its own map pane beside the device tiles.
-        panes.append(rrb.MapView(origin="/transport", name="transport"))
     if has_trains:
         # A root-origin map so the gps device tracks and the moving trains render in one
         # shared view, over the recording's single (shared) timeline window.
@@ -509,15 +497,11 @@ def main() -> None:
         help="device id prefixes to include (default: all devices in the window)",
     )
     parser.add_argument(
-        "--near",
-        type=float,
-        default=None,
-        metavar="DEGREES",
-        help="only show rail segments within this distance of a gps fix (default: show "
-        "all). HACK: the distance is raw lon/lat degrees, not metres — a rough cut, "
-        "not true ground distance (which would need reprojecting to a metric CRS).",
+        "--medallion-root",
+        type=Path,
+        default=DEFAULT_MEDALLION_ROOT,
+        help="root of the medallion data store",
     )
-    parser.add_argument("--db", type=Path, default=DEFAULT_DB, help="input SQLite archive")
     parser.add_argument(
         "--output", type=Path, default=DEFAULT_OUTPUT, help="output .rrd recording"
     )
@@ -531,14 +515,11 @@ def main() -> None:
 
     cutoff_ms = int((time.time() - args.since) * 1000)
 
-    conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
-    try:
-        accel = fetch_accel(conn, cutoff_ms, args.devices)
-        gps = fetch_gps(conn, cutoff_ms, args.devices)
-        transport = fetch_transport(conn)
-        trains = fetch_train_segments(conn, cutoff_ms)
-    finally:
-        conn.close()
+    store = Store(args.medallion_root)
+    accel = fetch_accel(store, cutoff_ms, args.devices)
+    gps = fetch_gps(store, cutoff_ms, args.devices)
+    legs = fetch_train_legs(store, cutoff_ms)
+    positions = fetch_train_positions(store, cutoff_ms)
 
     devices = sorted({row[0] for row in accel} | {row[0] for row in gps})
     if not devices:
@@ -550,16 +531,9 @@ def main() -> None:
     rr.init("lookout")
     log_accel(accel)
     log_gps(gps)
-    if transport:
-        # `--near` filters against the gps fixes in the selected window (lon, lat);
-        # only needed, so only built, when that flag is set.
-        gps_lonlat = [(row[3], row[2]) for row in gps] if args.near is not None else None
-        log_transport(transport, gps_lonlat=gps_lonlat, near=args.near)
-    if trains:
-        log_trains(trains)
-    blueprint = build_blueprint(
-        devices, has_transport=bool(transport), has_trains=bool(trains)
-    )
+    if legs:
+        log_trains(legs, positions)
+    blueprint = build_blueprint(devices, has_trains=bool(legs))
 
     if args.open:
         # Tee to the file and a running viewer. The viewer persists a blueprint per
@@ -574,8 +548,7 @@ def main() -> None:
 
     print(
         f"wrote {where}: {len(accel)} accel + {len(gps)} gps samples "
-        f"+ {len(transport)} transport features + {len(trains)} train segments "
-        f"across {len(devices)} device(s)"
+        f"+ {len(legs)} train segments across {len(devices)} device(s)"
     )
 
 

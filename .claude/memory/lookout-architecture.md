@@ -1,21 +1,19 @@
 # lookout architecture
 
-Data pipeline (`apps/lookout`), as it stands today: phone → fly.io `server` → Upstash redis list
-(`lookout-telemetry`) → `recorder` cli drains into `data/lookout.sqlite` — a lossless
-`raw(md5,json)` table + deduped per-sensor `gps`/`accel` tables, all `INSERT OR IGNORE`.
+Data pipeline (`apps/lookout`), as it stands today: phone → fly.io `server` → Upstash redis
+list (`lookout-telemetry`) → `recorder drain` writes the bronze telemetry datasets in the
+medallion store defined in `apps/lookout/docs/medallion.md`.
 
 - `telemetry` crate owns the redis contract: `latest_samples` (non-destructive LRANGE),
   `brpop_sample`/`drain` (destructive).
-- `transport` crate's `enrich` bin derives per-(device,day) bboxes and writes an Overture
-  rail `transport` table (WKB geom + R*Tree) into the same sqlite.
-- `visualise/` (Python uv + rerun) reads the sqlite → `.rrd`.
+- `motis_poll` writes bronze `motis_segment`; `motis_ingest` derives silver `train_segment`.
+- `transport`'s `extract` bin takes point-in-time Overture extracts into bronze.
+- `visualise/` (Python uv + rerun) reads the store with DuckDB → `.rrd`.
 
-**This sqlite-centred layout is being migrated** to the layered store defined in
-`apps/lookout/docs/medallion.md`. Under that scheme redis and the sqlite dbs are
-landing/external only — a live capture format drained into bronze — and everything from
-bronze onwards is parquet, with silver as GeoParquet readable by any engine in use. Delete
-the description above once the migration lands — this note records the current pipeline,
-not its history.
+The sqlite dbs under `data/` are now history awaiting backfill, not part of the pipeline;
+nothing reads or writes them. Under the medallion scheme redis and sqlite are
+landing/external only, and everything from bronze onwards is parquet, with silver as
+GeoParquet readable by any engine in use.
 
 **Convention that guides new work:** Rust derives; Python `visualise` only reads. Rust
 writes each derivation into the medallion store rather than adding a table to the sqlite,
