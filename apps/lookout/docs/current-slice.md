@@ -147,7 +147,7 @@ The main tasks here should be focussed on documenting these patterns and correct
       carry different columns and a dataset is one schema; `medallion.md` updated to
       match. A drain writes in batches of 100 rather than once at the end, bounding what
       a failed write followed by a failed requeue can lose.
-- [ ] Move the Overture extracts (`transport::enrich` rail, and the water extract from the
+- [x] Move the Overture extracts (`transport::enrich` rail, and the water extract from the
       water-crossings notebooks) to bronze in Overture's native shape, with an
       `extract` metadata table (extract id, date, Overture release, bounding box) and an
       `extract_id` column joined onto the extracted rows.
@@ -213,13 +213,26 @@ The main tasks here should be focussed on documenting these patterns and correct
             sessions exist. `archive`, `groups` and `store` go with it, taking transport's
             last sqlite dependency; `data/lookout.sqlite`'s existing `transport` table is
             untouched and `visualise` still reads it until repointed below.
-      - [ ] Point the water-crossings notebooks at the bronze extract instead of S3 or the
+      - [x] Point the water-crossings notebooks at the bronze extract instead of S3 or the
             `/Volumes/PRO-G40` Overture mirror, so a rerun is reproducible against a
             recorded release rather than against whatever S3 currently holds. The
             `USE_LOCAL` mirror fallback goes with it.
+            Note: done as a new `v8`, not an edit of `v7` — the earlier versions are the
+            record of what was run at the time, and rewriting them to read an extract that
+            did not exist then would falsify it. v8 pins an `extract_id` and reads the
+            manifest for the release behind it, so adopting a later extract is a deliberate
+            edit. Its three test cases pass unchanged, which is what says the extract lost
+            nothing the pipeline depends on. Note v8 only runs where that extract exists:
+            nothing in the repo recreates a *given* id, since a rerun of `just extract`
+            makes a new one.
 - [ ] Point `visualise/` at the new silver/bronze parquet instead of `lookout.sqlite`,
       confirming the rerun output is unchanged — the regression check that the migration
       lost nothing.
+      Note: its `transport` table no longer has a writer, `enrich` having been removed
+      above, so that pane is frozen at whatever the last `enrich` run left. "Unchanged
+      output" is therefore only a fair check for the sensor panes; the transport pane needs
+      a new source rather than a repointing, and the derivation that would feed it is the
+      one deferred until sessions exist.
 - [ ] Backfill existing `data/lookout.sqlite` and `data/motis.sqlite` content into bronze
       once, so history isn't stranded behind the old format.
 - [ ] Decide whether partition columns should be declared with their types rather than
