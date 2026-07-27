@@ -156,6 +156,17 @@ The main tasks here should be focussed on documenting these patterns and correct
       lost nothing.
 - [ ] Backfill existing `data/lookout.sqlite` and `data/motis.sqlite` content into bronze
       once, so history isn't stranded behind the old format.
+- [ ] Decide whether partition columns should be declared with their types rather than
+      inferred. SedonaDB auto-discovers them when the reader doesn't set them
+      (`listing_table_factory_infer_partitions` defaults to true), typing every one as
+      `Utf8View` — so a date partition comes back as a string, and a predicate has to
+      compare it as one. Establish first what a date-typed predicate actually does against
+      an inferred column (prunes, silently reads everything, or errors); declare the types
+      via `GeoParquetReadOptions::with_table_partition_cols` only if that shows a reason to.
+- [ ] Delete `docs/2026-07-27-data-engineering-review.md` at the end of this slice. It is a
+      dated snapshot of how this store compares to Rust data engineering practice, kept for
+      the history of the decision; anything in it still worth following by then belongs in
+      `medallion.md` or in a task, and the rest goes stale.
 
 ### Sessionisation
 
