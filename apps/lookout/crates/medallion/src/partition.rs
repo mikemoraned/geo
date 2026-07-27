@@ -13,6 +13,8 @@ pub enum PathError {
     Key(String),
     #[error("partition value `{0}` is empty or contains a reserved character")]
     Value(String),
+    #[error("dataset `{0}` declares no partition key")]
+    Unpartitioned(String),
 }
 
 /// The left-hand side of a `key=value` partition directory: snake_case, so it is also a

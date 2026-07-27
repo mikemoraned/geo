@@ -122,8 +122,8 @@ mod tests {
     use super::*;
     use crate::layer::Layer;
 
-    const THING: DatasetSpec = DatasetSpec::new(Layer::Bronze, "thing", "kind");
-    const NOTHING: DatasetSpec = DatasetSpec::new(Layer::Silver, "nothing", "kind");
+    const THING: DatasetSpec = DatasetSpec::partitioned(Layer::Bronze, "thing", "kind");
+    const NOTHING: DatasetSpec = DatasetSpec::partitioned(Layer::Silver, "nothing", "kind");
 
     #[derive(Debug, Deserialize, PartialEq)]
     struct Row {

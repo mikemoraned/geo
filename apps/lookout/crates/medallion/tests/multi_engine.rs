@@ -82,7 +82,7 @@ fn crs_id(projjson: &serde_json::Value) -> String {
 /// Write the fixture into a silver partition of a throwaway store.
 async fn write_fixture(dir: &std::path::Path) -> std::path::PathBuf {
     const WATER_CROSSING: DatasetSpec =
-        DatasetSpec::new(Layer::Silver, "water_crossing", "country");
+        DatasetSpec::partitioned(Layer::Silver, "water_crossing", "country");
 
     Root::new(dir)
         .dataset(WATER_CROSSING)

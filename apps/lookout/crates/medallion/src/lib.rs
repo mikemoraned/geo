@@ -13,7 +13,7 @@
 //! use medallion::{DatasetSpec, Layer, Root};
 //!
 //! const GPS_READING: DatasetSpec =
-//!     DatasetSpec::new(Layer::Bronze, "gps_reading", "ingested_date");
+//!     DatasetSpec::partitioned(Layer::Bronze, "gps_reading", "ingested_date");
 //!
 //! # async fn example(rows: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
 //! let now = Utc::now();

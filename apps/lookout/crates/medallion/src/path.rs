@@ -81,8 +81,24 @@ impl Dataset {
 
     /// Append a date-valued partition under the dataset's own key, formatted `YYYY-MM-DD`.
     pub fn on_date(self, date: NaiveDate) -> Result<Self, PathError> {
-        let key = self.spec.partition_key;
+        let key = self.own_key()?;
         self.partition(key, date.format(DATE_FORMAT))
+    }
+
+    /// Append an id-valued partition under the dataset's own key, for a dataset whose
+    /// unit of writing is identified rather than dated.
+    pub fn for_id(self, id: impl Display) -> Result<Self, PathError> {
+        let key = self.own_key()?;
+        self.partition(key, id)
+    }
+
+    /// The dataset's declared partition key, or a failure naming the dataset that has
+    /// none — partitioning an unpartitioned dataset is a definition mismatch, not a path
+    /// the caller can fix by escaping something.
+    fn own_key(&self) -> Result<&'static str, PathError> {
+        self.spec
+            .partition_key
+            .ok_or_else(|| PathError::Unpartitioned(self.spec.name.to_string()))
     }
 
     /// The directory the partitions resolve to.
@@ -167,12 +183,14 @@ mod tests {
     use crate::layer::Layer;
 
     const SENSOR_READING: DatasetSpec =
-        DatasetSpec::new(Layer::Bronze, "sensor_reading", "ingested_date");
-    const SESSION: DatasetSpec = DatasetSpec::new(Layer::Silver, "session", "start_date");
+        DatasetSpec::partitioned(Layer::Bronze, "sensor_reading", "ingested_date");
+    const SESSION: DatasetSpec = DatasetSpec::partitioned(Layer::Silver, "session", "start_date");
     const MOTIS_SEGMENT: DatasetSpec =
-        DatasetSpec::new(Layer::Bronze, "motis_segment", "polled_date");
+        DatasetSpec::partitioned(Layer::Bronze, "motis_segment", "polled_date");
+    const OVERTURE_EXTRACT: DatasetSpec =
+        DatasetSpec::partitioned(Layer::Bronze, "overture_extract", "extract_id");
     const EXTRACT_MANIFEST: DatasetSpec =
-        DatasetSpec::new(Layer::Bronze, "extract_manifest", "extract_id");
+        DatasetSpec::unpartitioned(Layer::Bronze, "extract_manifest");
 
     fn root() -> Root {
         Root::new("/store")
@@ -183,6 +201,34 @@ mod tests {
         let dir = root().dataset(EXTRACT_MANIFEST).dir();
 
         assert_eq!(dir.to_str().unwrap(), "/store/bronze/extract_manifest");
+    }
+
+    /// An extract keeps the upstream's own layout below its id, so the id partition is
+    /// added under the dataset's key and the upstream's keys follow it.
+    #[test]
+    fn an_id_partition_uses_the_datasets_own_key() {
+        let dir = root()
+            .dataset(OVERTURE_EXTRACT)
+            .for_id("20260727T101500Z")
+            .unwrap()
+            .partition("theme", "transportation")
+            .unwrap()
+            .dir();
+
+        assert_eq!(
+            dir.to_str().unwrap(),
+            "/store/bronze/overture_extract/extract_id=20260727T101500Z/theme=transportation"
+        );
+    }
+
+    #[test]
+    fn an_unpartitioned_dataset_cannot_be_partitioned_under_a_key_it_does_not_have() {
+        let dataset = root().dataset(EXTRACT_MANIFEST);
+
+        assert_eq!(
+            dataset.for_id("20260727T101500Z").unwrap_err(),
+            PathError::Unpartitioned("extract_manifest".to_string())
+        );
     }
 
     #[test]

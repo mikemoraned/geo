@@ -9,36 +9,49 @@ use medallion::{DatasetSpec, Layer};
 
 /// Every payload the telemetry queue carried, verbatim. The lossless record the other
 /// telemetry datasets are interpreted from.
-pub const RAW_SAMPLE: DatasetSpec = DatasetSpec::new(Layer::Bronze, "raw_sample", "ingested_date");
+pub const RAW_SAMPLE: DatasetSpec =
+    DatasetSpec::partitioned(Layer::Bronze, "raw_sample", "ingested_date");
 
 /// GPS fixes interpreted from the payloads.
 pub const GPS_READING: DatasetSpec =
-    DatasetSpec::new(Layer::Bronze, "gps_reading", "ingested_date");
+    DatasetSpec::partitioned(Layer::Bronze, "gps_reading", "ingested_date");
 
 /// Accelerometer readings interpreted from the payloads.
 pub const ACCEL_READING: DatasetSpec =
-    DatasetSpec::new(Layer::Bronze, "accel_reading", "ingested_date");
+    DatasetSpec::partitioned(Layer::Bronze, "accel_reading", "ingested_date");
 
 /// The metadata a device announces when it starts a session.
 pub const DEVICE_SESSION: DatasetSpec =
-    DatasetSpec::new(Layer::Bronze, "device_session", "ingested_date");
+    DatasetSpec::partitioned(Layer::Bronze, "device_session", "ingested_date");
 
 /// Trip segments as polled from the transit service, duplication allowed.
 pub const MOTIS_SEGMENT: DatasetSpec =
-    DatasetSpec::new(Layer::Bronze, "motis_segment", "polled_date");
+    DatasetSpec::partitioned(Layer::Bronze, "motis_segment", "polled_date");
 
 /// One row per scheduled leg, deduped from the polled segments and carrying its geometry.
 pub const TRAIN_SEGMENT: DatasetSpec =
-    DatasetSpec::new(Layer::Silver, "train_segment", "departure_date");
+    DatasetSpec::partitioned(Layer::Silver, "train_segment", "departure_date");
+
+/// Overture Maps rows as extracted, in Overture's own shape and directory layout below
+/// the id of the extraction that fetched them.
+pub const OVERTURE_EXTRACT: DatasetSpec =
+    DatasetSpec::partitioned(Layer::Bronze, "overture_extract", "extract_id");
+
+/// One row per extraction: what it fetched, from which release, and when. The provenance
+/// [`OVERTURE_EXTRACT`]'s rows carry only the id of.
+pub const EXTRACT_MANIFEST: DatasetSpec =
+    DatasetSpec::unpartitioned(Layer::Bronze, "extract_manifest");
 
 /// Every dataset defined here, for checks that must cover all of them.
-pub const ALL: [DatasetSpec; 6] = [
+pub const ALL: [DatasetSpec; 8] = [
     RAW_SAMPLE,
     GPS_READING,
     ACCEL_READING,
     DEVICE_SESSION,
     MOTIS_SEGMENT,
     TRAIN_SEGMENT,
+    OVERTURE_EXTRACT,
+    EXTRACT_MANIFEST,
 ];
 
 #[cfg(test)]
@@ -56,6 +69,13 @@ mod tests {
         assert_eq!(names.len(), unique, "duplicate dataset name in {names:?}");
     }
 
+    /// The datasets that declare a partition key, as `(dataset name, key)`.
+    fn partition_keys() -> Vec<(&'static str, &'static str)> {
+        ALL.iter()
+            .filter_map(|dataset| Some((dataset.name, dataset.partition_key?)))
+            .collect()
+    }
+
     /// Names and keys have to meet the store's naming rules, which are otherwise only
     /// checked when a path is built — at which point a bad definition is a runtime error.
     #[test]
@@ -66,28 +86,23 @@ mod tests {
                 "{}: dataset name is not snake_case",
                 dataset.name
             );
+        }
+        for (name, key) in partition_keys() {
             assert!(
-                dataset
-                    .partition_key
-                    .parse::<medallion::PartitionKey>()
-                    .is_ok(),
-                "{}: partition key `{}` is not snake_case",
-                dataset.name,
-                dataset.partition_key
+                key.parse::<medallion::PartitionKey>().is_ok(),
+                "{name}: partition key `{key}` is not snake_case"
             );
         }
     }
 
-    /// A date-keyed partition is named for the event it records, never a bare `date`.
+    /// A date-valued key is named for the event it dates, never a bare `date`. Keys of
+    /// other kinds — an id, a region — are named for what they hold instead.
     #[test]
-    fn partition_keys_name_the_event_they_record() {
-        for dataset in ALL {
-            assert_ne!(dataset.partition_key, "date", "{}", dataset.name);
+    fn a_date_valued_partition_key_names_the_event_it_records() {
+        for (name, key) in partition_keys() {
             assert!(
-                dataset.partition_key.ends_with("_date"),
-                "{}: unexpected partition key `{}`",
-                dataset.name,
-                dataset.partition_key
+                !key.contains("date") || key.ends_with("_date"),
+                "{name}: date partition key `{key}` should be named `<event>_date`"
             );
         }
     }

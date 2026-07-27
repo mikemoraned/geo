@@ -68,7 +68,7 @@ mod tests {
     use crate::path::Root;
 
     const SENSOR_READING: DatasetSpec =
-        DatasetSpec::new(Layer::Bronze, "sensor_reading", "ingested_date");
+        DatasetSpec::partitioned(Layer::Bronze, "sensor_reading", "ingested_date");
     use arrow::array::{Int64Array, RecordBatch, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
     use chrono::{TimeZone, Utc};

@@ -173,7 +173,7 @@ The main tasks here should be focussed on documenting these patterns and correct
 
       Steps:
 
-      - [ ] Define the two datasets in `model`: the extract itself (bronze, keyed
+      - [x] Define the two datasets in `model`: the extract itself (bronze, keyed
             `extract_id`) and the manifest (bronze, unpartitioned — id, extraction
             instant, Overture release, bbox). This needs two things loosening first: the
             `model` test asserting *every* partition key ends with `_date` (it should
