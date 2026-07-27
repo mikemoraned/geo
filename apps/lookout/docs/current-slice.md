@@ -344,9 +344,138 @@ rule in `docs/medallion.md`. Concretely: a fix is identified by `(device_id, t)`
 collapse on that identity happens before any gap-splitting, since a repeated fix would
 otherwise look like a zero-gap sample and could split or merge a session wrongly.
 
-#### Tasks 
+#### The entities
 
-...
+A `session` is one contiguous run of fixes from one device; a `session_fix` is one deduped
+GPS fix within it.
+
+```mermaid
+erDiagram
+    gps_reading }o--|| session_fix : "interpreted as"
+    device_session |o--o{ session : starts
+    session ||--o{ session_fix : contains
+
+    gps_reading {
+        string device_id PK "bronze"
+        int64 t PK
+    }
+    device_session {
+        string device_id PK "bronze"
+        int64 t PK
+    }
+    session {
+        uuid session_id PK "silver, start_date"
+        string device_id FK
+        timestamp started_at "first fix"
+        timestamp ended_at "last fix"
+        int fix_count
+        string started_by "start_session | gap | first_seen"
+        int gap_seconds "threshold this run applied"
+        geometry geometry "LineString, CRS 84"
+        geometry geometry_projected "LineString, metric"
+        struct bbox
+    }
+    session_fix {
+        uuid session_id FK "silver, fix_date"
+        string device_id PK
+        int64 t PK
+        int seq "index within the session"
+        float lat
+        float lon
+        float alt
+        float acc
+        float speed
+        float heading
+        geometry geometry "Point, CRS 84"
+        geometry geometry_projected "Point, metric"
+        float implied_speed_mps "against the previous fix"
+        bool backwards_in_time
+    }
+```
+
+A fix's identity is `(device_id, t)` — the natural key it dedups bronze on. `device_id` is
+repeated on the fix rather than reached through `session_id`, so a `fix_date` partition is
+readable without joining back to a dataset partitioned by a different date.
+
+#### Tasks
+
+Decisions taken before starting, as each changes what gets built:
+
+* **Silver keeps every fix and flags the doubtful ones**, rather than filtering them out.
+  Accuracy and speed-jump thresholds are tuning constants of a consumer, not properties of
+  the data: baking one into the derivation would put it in the store, where changing it
+  means rederiving everything, and would leave the ground truth and the predictor unable to
+  disagree about what counts as a usable fix. Silver therefore carries what a filter needs
+  — reported accuracy, the speed implied by the previous fix, whether the fix goes backwards
+  in time — and each consumer draws its own line.
+* **GPS only.** Accel readings are not assigned to sessions here. The predictor in this
+  slice is crow-flies over GPS, and sessionising a sensor nothing reads would fix its shape
+  before there is a reader to fix it against. The session boundaries will be the same when
+  sensor fusion wants them.
+* **A run rebuilds every session from all of bronze**, and `session_id` is derived
+  deterministically from `(device_id, first fix instant)` rather than minted per run. The
+  newest session is always still open — more fixes for it arrive with the next drain — so a
+  run has to be able to re-derive a session it has already written and land on the same id,
+  and `medallion.md` already requires a silver transform to be idempotent. Volume is small
+  enough that rebuilding all history is affordable; if it stops being so, the fix is a
+  rebuild window, which is a change to this task and not to the datasets.
+* **It lives in `recorder`**, next to the bronze telemetry writer, driven by its own bin —
+  the shape `motis` already has with `bronze.rs` and `ingest.rs`. Sessions are a derivation
+  of the telemetry datasets, so putting them in the crate that owns those datasets keeps
+  one crate answerable for their schema on both sides.
+
+Steps:
+
+- [ ] Move the silver row structs into `model`, so a dataset's columns are declared once
+      where its layer and partitioning already are, rather than in whichever crate happens
+      to write it. `model` today names datasets but says nothing about their shape, and
+      each writer declares its own serde struct (`recorder::bronze`'s rows,
+      `motis::ingest`'s `Leg`), which leaves a reader with no typed way to read a dataset
+      it did not write. Row structs are the definition of these entities; the relations
+      between them stay documentation (the diagram above), since a foreign-key registry
+      nothing enforces at write time would not earn its keep at two datasets.
+- [ ] Define `session` and `session_fix` in `model` — the columns above, both silver,
+      partitioned `start_date` and `fix_date` as `medallion.md` already pins. A session
+      spanning midnight has its fixes split across two partitions and is reassembled by
+      `session_id`, so that column is carried on every fix.
+- [ ] Derive the session boundaries from bronze `gps_reading` and `device_session`: dedup
+      on `(device_id, t)`, order by `t`, and start a new session at an explicit
+      `StartSession` for that device or after a gap exceeding the threshold (`--gap`,
+      default 10 minutes). Two cases the rule has to answer explicitly, since both exist in
+      the recorded data: fixes with no preceding `StartSession` at all (the v0 protocol has
+      no such message) still form sessions, and a `StartSession` no fix follows produces no
+      session rather than an empty one. Record the gap threshold as a column on `session`,
+      so a session written under one threshold is still interpretable after it changes.
+- [ ] Give each session its deterministic id and write `session_fix`: one row per fix,
+      carrying `session_id`, the bronze columns, a CRS 84 point geometry and the
+      pre-projected metric one, and the flag columns above (`acc` as reported, the implied
+      speed from the previous fix in the session, and whether `t` went backwards). Implied
+      speed is metric, so it comes from the projected geometry, not from degrees.
+- [ ] Write `session` itself: one row per session with its device, start and end instants,
+      fix count, the path as a CRS 84 LineString plus its projected twin, and the bbox.
+      The bbox is what makes "which sessions could have come near this crossing" cheap, and
+      the path is what the crossings step matches against — neither should be recomputed
+      from the fixes by every reader.
+- [ ] Give `medallion` a way to **replace** a set of silver partitions in one run, since
+      everything written so far appends one file per batch and a rebuild that appends
+      duplicates its own output. DataFusion's `DataFrameWriteOptions::with_partition_by`
+      derives the `key=value` directories from a column, which fits a bulk write spanning
+      many partitions (noted already under the medallion crate task); what it does not
+      settle is what happens to a partition that exists but the rebuild no longer produces
+      any rows for. Decide that explicitly — silver permits deletion — and make the
+      behaviour the same for every silver rebuild rather than per-writer.
+- [ ] Test that a rerun over unchanged bronze produces identical partitions, and that a
+      rerun over bronze that has grown by more fixes for the open session extends that
+      session rather than creating a second one. This is the check the deterministic id and
+      the full rebuild exist to pass, and it is the one that breaks silently otherwise.
+- [ ] Add a `just sessionise` recipe, run it over the real store, and record what came out
+      — session count, duration and fix-count distributions, how many fixes are flagged and
+      by which flag. This is the first look at whether a 10-minute gap actually splits the
+      recorded traces where a human would; adjust the default here if it plainly does not,
+      and note the evidence rather than the preference.
+- [ ] Restore a sessions pane in `visualise/`: sessions listed with their path drawn, since
+      the tool's existing panes are how a derivation gets eyeballed and there is currently
+      no view of a trace as anything but loose points.
 
 ### Water crossings per session
 
