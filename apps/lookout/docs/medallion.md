@@ -117,6 +117,22 @@ permitted again. Where no specialised format fits, use
 [GeoArrow 0.2](https://geoarrow.org) for fast export/import, **uncompressed**, since
 compressed GeoArrow is not universally supported by consuming viewers.
 
+## No table format
+
+The layout above *is* the metadata: partitioning is directory names, schema is the files',
+and a partition is replaced by rewriting it. A table format — the layer that holds partition
+spec, schema history, snapshots and statistics as metadata beside the data — would add atomic
+replacement of many files at once, schema evolution, time travel, and pruning from statistics
+rather than from paths.
+
+**Deliberately not adopted.** It costs a metadata layer to understand and an engine support
+matrix to track, against a store small enough that a partition is one file and a rewrite is
+therefore already atomic. The trigger to reconsider is partition-level atomicity or schema
+evolution starting to cost debugging time. Whichever is chosen then should be judged first on
+breadth of engine support, since multi-engine readability is the rule this store is built
+around; write maturity needs verifying against the implementation's own status reporting,
+because this store would be a writer and not only a reader.
+
 ## Rederivability
 
 Provided everything is retained in bronze, **all of silver and gold is rederivable**.

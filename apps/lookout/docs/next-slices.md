@@ -1,5 +1,32 @@
 # Next Slices
 
+## Slice: make the store operable at size
+
+### Target
+
+The store's layout is settled; what it lacks is the ability to be *worked* — to re-derive
+part of history rather than all of it, and to stop accumulating files without bound. Both
+become urgent at a size we are not at yet, and both are cheaper to build before then.
+
+### Refactors / extensions
+
+- **Give the derivation CLIs a date-range argument**, so a run can ask for less than
+  everything. They currently read every partition and filter on data columns, which means
+  the partition pruning the layout provides is never exercised: re-deriving one day's output
+  costs a full scan. This is also the prerequisite for handing the work to an orchestrator
+  later, since a range is what a backfill is expressed in.
+- **Write down a compaction plan for the append-shaped layers**, before the small-file
+  problem is real rather than after. One file per ingestion is deliberate and correct at the
+  point of writing, but a dataset polled on an interval accumulates a file per poll
+  indefinitely (the sqlite backfill alone produced 1,307 in one dataset). The standard answer
+  is periodic compaction into fewer, larger files per partition; the thing to decide is what
+  triggers it and how it preserves immutability, since rewriting files is what that layer
+  forbids.
+- **Leave the engine catalog traits alone** until registering datasets by hand is genuinely
+  annoying, then add a schema provider *over* the dataset definitions rather than replacing
+  them. The definitions are plain data every engine can read; a catalog is one engine's view
+  of it, and those traits move between that engine's releases.
+
 ## Slice: embed predictor on website
 
 ### Target

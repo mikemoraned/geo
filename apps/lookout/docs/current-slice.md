@@ -348,10 +348,19 @@ The main tasks here should be focussed on documenting these patterns and correct
         at registration: after corrupting a partition, a query selecting *only* that partition
         still returns its row, while a fresh context cannot open the store at all. Pruning
         evidence there has to come from the plan's `file_groups`, not from a query succeeding.
-- [ ] Delete `docs/2026-07-27-data-engineering-review.md` at the end of this slice. It is a
+- [x] Delete `docs/2026-07-27-data-engineering-review.md` at the end of this slice. It is a
       dated snapshot of how this store compares to Rust data engineering practice, kept for
       the history of the decision; anything in it still worth following by then belongs in
       `medallion.md` or in a task, and the rest goes stale.
+      Done once the refactor it was written to guide was finished, rather than waiting for the
+      slice's remaining sections — its condition was met, and a redundant doc still reads as
+      current. What survived it: the no-table-format decision and its trigger, into
+      `medallion.md`; the date-range argument, a compaction plan and the leave-the-catalog-
+      traits-alone decision, into a "make the store operable at size" slice in
+      `next-slices.md`. Its partition-typing recommendation is the task above. The orchestration
+      survey is deliberately dropped: the conclusion was "none yet, three CLIs run by hand are
+      below the threshold", which is still true and needs no note, and any survey of what
+      exists would be restated from scratch when the threshold is actually crossed.
 
 ### Sessionisation
 
