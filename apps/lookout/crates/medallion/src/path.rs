@@ -6,10 +6,20 @@ use std::path::{Path, PathBuf};
 use arrow::array::RecordBatch;
 use chrono::{DateTime, NaiveDate, Utc};
 
+use crate::dataset::DatasetSpec;
 use crate::geo::{write_geo_batches, GeoError};
-use crate::layer::Layer;
 use crate::partition::{Partition, PathError, DATE_FORMAT};
+use crate::rows::{batch, RowError};
 use crate::write::{write_batches, WriteError};
+
+/// Failure appending rows to a dataset.
+#[derive(Debug, thiserror::Error)]
+pub enum AppendError {
+    #[error(transparent)]
+    Rows(#[from] RowError),
+    #[error(transparent)]
+    Write(#[from] WriteError),
+}
 
 /// Batch file names: compact UTC, so they sort chronologically and contain no `:`.
 const BATCH_STEM_FORMAT: &str = "%Y%m%dT%H%M%SZ";
@@ -38,12 +48,11 @@ impl Root {
         &self.0
     }
 
-    /// Start building a path into the dataset `name` within `layer`.
-    pub fn dataset(&self, layer: Layer, name: impl Into<String>) -> Dataset {
+    /// Start building a path into `dataset`.
+    pub fn dataset(&self, dataset: DatasetSpec) -> Dataset {
         Dataset {
             root: self.0.clone(),
-            layer,
-            name: name.into(),
+            spec: dataset,
             partitions: Vec::new(),
         }
     }
@@ -55,12 +64,11 @@ impl Default for Root {
     }
 }
 
-/// A location within one dataset: its layer, its name, and the partitions chosen so far.
+/// A location within one dataset: which dataset, and the partitions chosen so far.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dataset {
     root: PathBuf,
-    layer: Layer,
-    name: String,
+    spec: DatasetSpec,
     partitions: Vec<Partition>,
 }
 
@@ -71,14 +79,18 @@ impl Dataset {
         Ok(self)
     }
 
-    /// Append a date-valued partition, formatted `YYYY-MM-DD`.
-    pub fn date_partition(self, key: &str, date: NaiveDate) -> Result<Self, PathError> {
+    /// Append a date-valued partition under the dataset's own key, formatted `YYYY-MM-DD`.
+    pub fn on_date(self, date: NaiveDate) -> Result<Self, PathError> {
+        let key = self.spec.partition_key;
         self.partition(key, date.format(DATE_FORMAT))
     }
 
     /// The directory the partitions resolve to.
     pub fn dir(&self) -> PathBuf {
-        let mut dir = self.root.join(self.layer.as_str()).join(&self.name);
+        let mut dir = self
+            .root
+            .join(self.spec.layer.as_str())
+            .join(self.spec.name);
         dir.extend(self.partitions.iter().map(Partition::to_string));
         dir
     }
@@ -103,6 +115,27 @@ impl Dataset {
         let path = self.batch_file(at);
         write_batches(&path, batches).await?;
         Ok(path)
+    }
+
+    /// Append `rows` as the capture made at `at`, naming the columns holding an instant
+    /// (see [`crate::rows`]).
+    ///
+    /// Having nothing to append is not a failure: it writes no file and reports `0`, so a
+    /// capture that saw no rows of this kind leaves no empty file behind.
+    pub async fn append_rows<T>(
+        &self,
+        at: DateTime<Utc>,
+        rows: &[T],
+        instants: &[&str],
+    ) -> Result<usize, AppendError>
+    where
+        T: serde::Serialize + for<'de> serde::Deserialize<'de>,
+    {
+        if rows.is_empty() {
+            return Ok(0);
+        }
+        self.append(at, &[batch(rows, instants)?]).await?;
+        Ok(rows.len())
     }
 
     /// Replace this partition's contents with `batches`.
@@ -131,13 +164,23 @@ mod tests {
 
     use super::*;
 
+    use crate::layer::Layer;
+
+    const SENSOR_READING: DatasetSpec =
+        DatasetSpec::new(Layer::Bronze, "sensor_reading", "ingested_date");
+    const SESSION: DatasetSpec = DatasetSpec::new(Layer::Silver, "session", "start_date");
+    const MOTIS_SEGMENT: DatasetSpec =
+        DatasetSpec::new(Layer::Bronze, "motis_segment", "polled_date");
+    const EXTRACT_MANIFEST: DatasetSpec =
+        DatasetSpec::new(Layer::Bronze, "extract_manifest", "extract_id");
+
     fn root() -> Root {
         Root::new("/store")
     }
 
     #[test]
     fn an_unpartitioned_dataset_is_root_layer_name() {
-        let dir = root().dataset(Layer::Bronze, "extract_manifest").dir();
+        let dir = root().dataset(EXTRACT_MANIFEST).dir();
 
         assert_eq!(dir.to_str().unwrap(), "/store/bronze/extract_manifest");
     }
@@ -145,13 +188,10 @@ mod tests {
     #[test]
     fn partitions_are_directories_in_the_order_added() {
         let dir = root()
-            .dataset(Layer::Bronze, "sensor_reading")
+            .dataset(SENSOR_READING)
             .partition("sensor", "gps")
             .unwrap()
-            .date_partition(
-                "ingested_date",
-                NaiveDate::from_ymd_opt(2026, 7, 26).unwrap(),
-            )
+            .on_date(NaiveDate::from_ymd_opt(2026, 7, 26).unwrap())
             .unwrap()
             .dir();
 
@@ -164,8 +204,8 @@ mod tests {
     #[test]
     fn a_partition_file_sits_under_the_partition_directory_with_a_parquet_extension() {
         let path = root()
-            .dataset(Layer::Silver, "session")
-            .date_partition("start_date", NaiveDate::from_ymd_opt(2026, 1, 2).unwrap())
+            .dataset(SESSION)
+            .on_date(NaiveDate::from_ymd_opt(2026, 1, 2).unwrap())
             .unwrap()
             .partition_file();
 
@@ -179,9 +219,7 @@ mod tests {
     fn a_batch_file_is_named_for_the_instant_of_the_write() {
         let at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
 
-        let path = root()
-            .dataset(Layer::Bronze, "motis_segment")
-            .batch_file(at);
+        let path = root().dataset(MOTIS_SEGMENT).batch_file(at);
 
         assert_eq!(
             path.to_str().unwrap(),
@@ -191,7 +229,7 @@ mod tests {
 
     #[test]
     fn batch_files_from_different_instants_do_not_collide() {
-        let dataset = root().dataset(Layer::Bronze, "motis_segment");
+        let dataset = root().dataset(MOTIS_SEGMENT);
 
         let first = dataset
             .clone()
@@ -203,7 +241,7 @@ mod tests {
 
     #[test]
     fn an_invalid_partition_is_rejected_rather_than_encoded_into_the_path() {
-        let dataset = root().dataset(Layer::Bronze, "sensor_reading");
+        let dataset = root().dataset(SENSOR_READING);
 
         assert!(dataset.clone().partition("ingestedDate", "gps").is_err());
         assert!(dataset.partition("sensor", "gps/accel").is_err());

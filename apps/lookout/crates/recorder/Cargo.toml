@@ -12,6 +12,7 @@ arrow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 medallion = { workspace = true }
+model = { workspace = true }
 redis = { workspace = true }
 serde = { workspace = true }
 serde_arrow = { workspace = true }

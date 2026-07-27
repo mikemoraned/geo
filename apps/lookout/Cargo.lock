@@ -4416,6 +4416,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "model"
+version = "0.1.0"
+dependencies = [
+ "medallion",
+]
+
+[[package]]
 name = "moka"
 version = "0.12.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4443,6 +4450,7 @@ dependencies = [
  "geo-traits",
  "geo-types",
  "medallion",
+ "model",
  "motis-openapi-progenitor",
  "parquet",
  "polyline",
@@ -5336,6 +5344,7 @@ dependencies = [
  "clap",
  "md5",
  "medallion",
+ "model",
  "redis",
  "rustls",
  "serde",

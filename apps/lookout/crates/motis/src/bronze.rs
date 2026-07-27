@@ -12,21 +12,14 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use medallion::{Layer, Root};
+use medallion::Root;
 use motis_openapi_progenitor::types::TripSegment;
 use serde::{Deserialize, Serialize};
-use serde_arrow::schema::{SchemaLike, TracingOptions};
-use serde_json::json;
 
 use crate::client::TripDetails;
 
-/// The bronze dataset polls append to. Readers name it in SQL through
-/// [`medallion::Query`] rather than opening its files.
-pub const DATASET: &str = "motis_segment";
-
-/// The columns holding an instant. They travel through serde as epoch milliseconds (an
-/// `i64` carries no timezone or unit of its own), so each is declared here as a UTC
-/// millisecond timestamp rather than landing in the file as a bare integer.
+/// The columns holding an instant, declared as timestamps rather than left as the
+/// integers they travel through serde as.
 const INSTANT_COLUMNS: [&str; 5] = [
     "captured_at",
     "departure",
@@ -35,31 +28,13 @@ const INSTANT_COLUMNS: [&str; 5] = [
     "scheduled_arrival",
 ];
 
-/// The arrow schema of a [`SegmentRow`], with the instant columns typed.
-fn segment_fields() -> Result<Vec<arrow::datatypes::FieldRef>, BronzeError> {
-    let options =
-        INSTANT_COLUMNS
-            .iter()
-            .try_fold(TracingOptions::default(), |options, &name| {
-                options.overwrite(
-                    name,
-                    json!({"name": name, "data_type": "Timestamp(Millisecond, Some(\"UTC\"))"}),
-                )
-            })?;
-    Ok(Vec::<arrow::datatypes::FieldRef>::from_type::<SegmentRow>(
-        options,
-    )?)
-}
-
 /// Failure appending to the bronze capture log.
 #[derive(Debug, thiserror::Error)]
 pub enum BronzeError {
-    #[error("building the record batch: {0}")]
-    Encode(#[from] serde_arrow::Error),
     #[error("partitioning the capture log: {0}")]
     Path(#[from] medallion::PathError),
     #[error("writing the capture log: {0}")]
-    Write(#[from] medallion::WriteError),
+    Write(#[from] medallion::AppendError),
 }
 
 /// One polled segment, flattened: the trip it belongs to, its resolved agency and train
@@ -149,12 +124,14 @@ impl SegmentLog {
     fn partition(&self, captured_at: DateTime<Utc>) -> Result<medallion::Dataset, BronzeError> {
         Ok(self
             .root
-            .dataset(Layer::Bronze, DATASET)
-            .date_partition("polled_date", captured_at.date_naive())?)
+            .dataset(model::MOTIS_SEGMENT)
+            .on_date(captured_at.date_naive())?)
     }
 
-    /// The file one poll at `captured_at` writes.
-    pub fn poll_file(&self, captured_at: DateTime<Utc>) -> Result<std::path::PathBuf, BronzeError> {
+    /// The file one poll at `captured_at` writes. Readers query the dataset rather than
+    /// opening its files, so this is only the layout the tests assert on.
+    #[cfg(test)]
+    fn poll_file(&self, captured_at: DateTime<Utc>) -> Result<std::path::PathBuf, BronzeError> {
         Ok(self.partition(captured_at)?.batch_file(captured_at))
     }
 
@@ -166,20 +143,15 @@ impl SegmentLog {
         segments: &[TripSegment],
         details: &HashMap<String, TripDetails>,
     ) -> Result<usize, BronzeError> {
-        if segments.is_empty() {
-            return Ok(0);
-        }
         let rows: Vec<SegmentRow> = segments
             .iter()
             .map(|segment| SegmentRow::from_segment(captured_at, segment, details))
             .collect();
 
-        let batch = serde_arrow::to_record_batch(&segment_fields()?, &rows)?;
-
-        self.partition(captured_at)?
-            .append(captured_at, &[batch])
-            .await?;
-        Ok(rows.len())
+        Ok(self
+            .partition(captured_at)?
+            .append_rows(captured_at, &rows, &INSTANT_COLUMNS)
+            .await?)
     }
 }
 

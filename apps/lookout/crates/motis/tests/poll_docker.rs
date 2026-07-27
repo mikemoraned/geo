@@ -119,7 +119,7 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
     );
 
     // Only the rail segment is persisted, with its resolved agency and train number.
-    let captured = captured_segments(&log.poll_file(now).expect("poll file"));
+    let captured = captured_segments(&Root::new(store.path())).await;
     assert_eq!(captured.len(), rail_fixture_len());
     assert!(
         captured

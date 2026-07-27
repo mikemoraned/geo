@@ -15,32 +15,18 @@
 //! schema.
 
 use chrono::{DateTime, Utc};
-use medallion::{Dataset, Layer, Root};
+use medallion::{Dataset, DatasetSpec, Root};
 use serde::{Deserialize, Serialize};
-use serde_arrow::schema::{SchemaLike, TracingOptions};
-use serde_json::json;
 use shared::{AccelReading, GpsReading, Message, SessionStart, V0Message, V1Message};
 use telemetry::RawSample;
-
-/// Every payload, verbatim.
-const RAW_SAMPLES: &str = "raw_sample";
-
-/// Readings interpreted from the payloads.
-const GPS_READINGS: &str = "gps_reading";
-const ACCEL_READINGS: &str = "accel_reading";
-
-/// Session metadata a device announces about itself.
-const DEVICE_SESSIONS: &str = "device_session";
 
 /// Failure writing an ingestion.
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
-    #[error("building the record batch: {0}")]
-    Encode(#[from] serde_arrow::Error),
     #[error("partitioning the dataset: {0}")]
     Path(#[from] medallion::PathError),
     #[error("writing the dataset: {0}")]
-    Write(#[from] medallion::WriteError),
+    Write(#[from] medallion::AppendError),
 }
 
 /// What one ingestion wrote. Sums, so a run made of several ingestions reports its total.
@@ -140,19 +126,22 @@ impl Archive {
     /// The partition an ingestion at `ingested_at` writes `dataset` into.
     fn partition(
         &self,
-        dataset: &str,
+        dataset: DatasetSpec,
         ingested_at: DateTime<Utc>,
     ) -> Result<Dataset, ArchiveError> {
         Ok(self
             .root
-            .dataset(Layer::Bronze, dataset)
-            .date_partition("ingested_date", ingested_at.date_naive())?)
+            .dataset(dataset)
+            .on_date(ingested_at.date_naive())?)
     }
 
-    /// The file an ingestion at `ingested_at` writes `dataset` to.
-    pub fn ingestion_file(
+    /// The file an ingestion at `ingested_at` writes `dataset` to. Readers query the
+    /// dataset rather than opening its files, so this is only the layout the tests assert
+    /// on.
+    #[cfg(test)]
+    fn ingestion_file(
         &self,
-        dataset: &str,
+        dataset: DatasetSpec,
         ingested_at: DateTime<Utc>,
     ) -> Result<std::path::PathBuf, ArchiveError> {
         Ok(self
@@ -169,13 +158,13 @@ impl Archive {
     ) -> Result<Written, ArchiveError> {
         let rows = Rows::interpret(samples);
 
-        self.write_dataset(RAW_SAMPLES, ingested_at, &rows.raw, &["received_at"])
+        self.write_dataset(model::RAW_SAMPLE, ingested_at, &rows.raw, &["received_at"])
             .await?;
-        self.write_dataset(GPS_READINGS, ingested_at, &rows.gps, &["t"])
+        self.write_dataset(model::GPS_READING, ingested_at, &rows.gps, &["t"])
             .await?;
-        self.write_dataset(ACCEL_READINGS, ingested_at, &rows.accel, &["t"])
+        self.write_dataset(model::ACCEL_READING, ingested_at, &rows.accel, &["t"])
             .await?;
-        self.write_dataset(DEVICE_SESSIONS, ingested_at, &rows.devices, &["t"])
+        self.write_dataset(model::DEVICE_SESSION, ingested_at, &rows.devices, &["t"])
             .await?;
 
         Ok(Written {
@@ -189,7 +178,7 @@ impl Archive {
 
     async fn write_dataset<T>(
         &self,
-        dataset: &str,
+        dataset: DatasetSpec,
         ingested_at: DateTime<Utc>,
         rows: &[T],
         instants: &[&str],
@@ -197,12 +186,8 @@ impl Archive {
     where
         T: Serialize + for<'de> Deserialize<'de>,
     {
-        if rows.is_empty() {
-            return Ok(());
-        }
-        let batch = serde_arrow::to_record_batch(&fields::<T>(instants)?, &rows)?;
         self.partition(dataset, ingested_at)?
-            .append(ingested_at, &[batch])
+            .append_rows(ingested_at, rows, instants)
             .await?;
         Ok(())
     }
@@ -288,32 +273,10 @@ impl From<&SessionStart> for DeviceRow {
     }
 }
 
-/// The arrow schema of `T`, with `instants` typed as timestamps rather than left as the
-/// integers they travel through serde as.
-fn fields<T>(instants: &[&str]) -> Result<Vec<arrow::datatypes::FieldRef>, ArchiveError>
-where
-    T: for<'de> Deserialize<'de>,
-{
-    let options = instants
-        .iter()
-        .try_fold(TracingOptions::default(), |options, &name| {
-            options.overwrite(
-                name,
-                json!({
-                    "name": name,
-                    "data_type": "Timestamp(Millisecond, Some(\"UTC\"))",
-                    "nullable": true
-                }),
-            )
-        })?;
-    Ok(Vec::<arrow::datatypes::FieldRef>::from_type::<T>(options)?)
-}
-
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
     use medallion::Query;
-    use serde::Deserialize;
     use shared::{Accel, AccelReading, DeviceInfo, DeviceType, Gps, GpsReading, SessionStart};
     use uuid::Uuid;
 
@@ -375,23 +338,17 @@ mod tests {
         }))
     }
 
-    #[derive(Debug, Deserialize)]
-    struct Counted {
-        count: i64,
-    }
-
     /// How many rows a written dataset holds, read back through SQL.
-    async fn rows_in(root: &Root, dataset: &str) -> i64 {
+    async fn rows_in(root: &Root, dataset: DatasetSpec) -> i64 {
         let query = Query::new(root.clone());
         query
-            .register(Layer::Bronze, dataset, "d")
+            .register(dataset, "d")
             .await
             .expect("register dataset");
         query
-            .rows::<Counted>("SELECT COUNT(*) AS count FROM d")
+            .count("SELECT COUNT(*) AS count FROM d")
             .await
-            .expect("count")[0]
-            .count
+            .expect("count")
     }
 
     #[tokio::test]
@@ -420,10 +377,10 @@ mod tests {
                 unparseable: 0
             }
         );
-        assert_eq!(rows_in(&root, RAW_SAMPLES).await, 4);
-        assert_eq!(rows_in(&root, GPS_READINGS).await, 2);
-        assert_eq!(rows_in(&root, ACCEL_READINGS).await, 1);
-        assert_eq!(rows_in(&root, DEVICE_SESSIONS).await, 1);
+        assert_eq!(rows_in(&root, model::RAW_SAMPLE).await, 4);
+        assert_eq!(rows_in(&root, model::GPS_READING).await, 2);
+        assert_eq!(rows_in(&root, model::ACCEL_READING).await, 1);
+        assert_eq!(rows_in(&root, model::DEVICE_SESSION).await, 1);
     }
 
     #[tokio::test]
@@ -437,7 +394,7 @@ mod tests {
             .expect("write");
 
         let path = archive
-            .ingestion_file(GPS_READINGS, ingested_at())
+            .ingestion_file(model::GPS_READING, ingested_at())
             .expect("path");
         assert!(
             path.ends_with("bronze/gps_reading/ingested_date=2026-07-26/20260726T140530Z.parquet"),
@@ -465,7 +422,7 @@ mod tests {
 
         assert_eq!(written.raw, 1);
         assert_eq!(written.unparseable, 1);
-        assert_eq!(rows_in(&root, RAW_SAMPLES).await, 1);
+        assert_eq!(rows_in(&root, model::RAW_SAMPLE).await, 1);
     }
 
     /// A dataset with no rows is skipped, so an ingestion of only GPS leaves no empty
@@ -481,7 +438,7 @@ mod tests {
             .expect("write");
 
         assert!(!archive
-            .ingestion_file(ACCEL_READINGS, ingested_at())
+            .ingestion_file(model::ACCEL_READING, ingested_at())
             .expect("path")
             .exists());
     }
@@ -524,7 +481,7 @@ mod tests {
 
         assert_eq!(written, Written::default());
         assert!(!archive
-            .ingestion_file(RAW_SAMPLES, ingested_at())
+            .ingestion_file(model::RAW_SAMPLE, ingested_at())
             .expect("path")
             .exists());
     }

@@ -8,21 +8,15 @@
 
 use std::sync::Arc;
 
-use arrow::array::{ArrayRef, BinaryArray, RecordBatch};
+use arrow::array::{ArrayRef, RecordBatch};
 use arrow::datatypes::{FieldRef, Schema};
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use geo_types::LineString;
-use medallion::{Layer, Projector, Query, Root};
+use medallion::{Country, Projector, Query, Root};
 use serde::{Deserialize, Serialize};
-use serde_arrow::schema::{SchemaLike, TracingOptions};
-use serde_json::json;
-use wkb::writer::{write_line_string, WriteOptions};
 
 /// Precision the Motis `map/trips` polylines are encoded at.
 const POLYLINE_PRECISION: u32 = 5;
-
-/// The silver dataset this derives.
-const DATASET: &str = "train_segment";
 
 /// Lat/lon geometry, in the global CRS every silver dataset carries.
 const GEOMETRY: &str = "geometry";
@@ -30,11 +24,21 @@ const GEOMETRY: &str = "geometry";
 /// The same geometry in metres, for distance and length work.
 const PROJECTED_GEOMETRY: &str = "geometry_projected";
 
+/// The encoded geometry a leg arrives with, which the geometry columns replace.
+const POLYLINE: &str = "polyline";
+
+/// The country these segments run in, which fixes the projected geometry's CRS.
+const COUNTRY: Country = Country::Germany;
+
 /// Instant columns, declared rather than traced — see [`crate::bronze`].
 const INSTANT_COLUMNS: [&str; 2] = ["departure", "arrival"];
 
 /// The capture log under its query name.
 const CAPTURED: &str = "captured";
+
+/// The deduped legs, materialised so each partition's rows are a scan of them rather than
+/// a fresh dedup of the whole capture log.
+const DEDUPED_LEGS: &str = "deduped";
 
 /// One row per scheduled leg, newest capture kept.
 ///
@@ -74,6 +78,8 @@ pub enum IngestError {
     Wkb(#[from] wkb::error::WkbError),
     #[error("building the record batch: {0}")]
     Encode(#[from] serde_arrow::Error),
+    #[error("describing the rows: {0}")]
+    Rows(#[from] medallion::RowError),
     #[error("assembling the batch: {0}")]
     Arrow(#[from] arrow::error::ArrowError),
     #[error("geometry: {0}")]
@@ -84,9 +90,10 @@ pub enum IngestError {
     Write(#[from] medallion::WriteError),
 }
 
-/// One deduped leg as the query returns it: the derived attributes plus the still-encoded
-/// polyline the geometry columns are built from.
-#[derive(Debug, Deserialize)]
+/// One deduped leg as the query returns it: the columns the silver dataset holds, plus the
+/// still-encoded `polyline` the geometry columns are built from. The polyline itself is
+/// dropped before writing, since the geometry columns replace it.
+#[derive(Debug, Serialize, Deserialize)]
 struct Leg {
     trip_id: String,
     route_name: Option<String>,
@@ -104,43 +111,6 @@ struct Leg {
     polyline: String,
 }
 
-/// The attributes of one derived leg. The geometry columns are appended separately, since
-/// they carry GeoArrow metadata a serde type cannot express.
-#[derive(Debug, Serialize, Deserialize)]
-struct TrainSegmentRow {
-    trip_id: String,
-    route_name: Option<String>,
-    train_number: Option<u32>,
-    agency_id: Option<String>,
-    agency_name: Option<String>,
-    mode: String,
-    route_color: Option<String>,
-    realtime: bool,
-    from_stop_id: Option<String>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    departure: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    arrival: DateTime<Utc>,
-}
-
-impl From<&Leg> for TrainSegmentRow {
-    fn from(leg: &Leg) -> Self {
-        Self {
-            trip_id: leg.trip_id.clone(),
-            route_name: leg.route_name.clone(),
-            train_number: leg.train_number,
-            agency_id: leg.agency_id.clone(),
-            agency_name: leg.agency_name.clone(),
-            mode: leg.mode.clone(),
-            route_color: leg.route_color.clone(),
-            realtime: leg.realtime,
-            from_stop_id: leg.from_stop_id.clone(),
-            departure: leg.departure,
-            arrival: leg.arrival,
-        }
-    }
-}
-
 /// Derive the silver dataset from the bronze capture log in the same store.
 ///
 /// Dedup and partitioning are one SQL query each against the capture log; the polyline
@@ -148,67 +118,58 @@ impl From<&Leg> for TrainSegmentRow {
 pub async fn ingest(root: &Root) -> Result<IngestOutcome, IngestError> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(Layer::Bronze, crate::bronze::DATASET, CAPTURED)
+        .register_if_present(model::MOTIS_SEGMENT, CAPTURED)
         .await?
     {
         return Ok(IngestOutcome::default());
     }
 
-    let read: usize = query
-        .rows::<Counted>("SELECT COUNT(*) AS count FROM captured")
-        .await?
-        .first()
-        .map_or(0, |counted| counted.count as usize);
+    let read = query
+        .count("SELECT COUNT(*) AS count FROM captured")
+        .await? as usize;
 
-    let dates: Vec<DepartureDate> = query
-        .rows(&format!(
-            "SELECT DISTINCT CAST(departure AS DATE) AS date FROM ({DEDUPED}) ORDER BY date"
-        ))
+    // Dedup once into a table the per-partition queries read, rather than as a subquery
+    // they each re-run: the window sorts the whole capture log, so repeating it per
+    // partition would rescan all of history once per date.
+    query
+        .sql(&format!("CREATE TABLE {DEDUPED_LEGS} AS {DEDUPED}"))
         .await?;
 
-    let projector = Projector::new()?;
-    let mut deduped = 0;
-    for DepartureDate { date } in &dates {
-        let legs: Vec<Leg> = query
-            .rows(&format!(
-                "SELECT trip_id, route_name, train_number, agency_id, agency_name, mode,
-                        route_color, realtime, from_stop_id, departure, arrival, polyline
-                 FROM ({DEDUPED})
-                 WHERE CAST(departure AS DATE) = DATE '{date}'"
-            ))
-            .await?;
-        deduped += legs.len();
+    let legs: Vec<Leg> = query
+        .rows(&format!(
+            "SELECT trip_id, route_name, train_number, agency_id, agency_name, mode,
+                    route_color, realtime, from_stop_id, departure, arrival, polyline
+             FROM {DEDUPED_LEGS}
+             ORDER BY departure"
+        ))
+        .await?;
+    let deduped = legs.len();
 
-        root.dataset(Layer::Silver, DATASET)
-            .date_partition("departure_date", *date)?
-            .rebuild_geo(&[batch(&legs, &projector)?])
+    // Ordered by departure, so each partition's legs are one run of adjacent rows.
+    let projector = Projector::for_country(COUNTRY)?;
+    let mut partitions = 0;
+    for legs in legs.chunk_by(|a, b| a.departure.date_naive() == b.departure.date_naive()) {
+        let date = legs[0].departure.date_naive();
+        root.dataset(model::TRAIN_SEGMENT)
+            .on_date(date)?
+            .rebuild_geo(&[batch(legs, &projector)?])
             .await?;
+        partitions += 1;
     }
 
     Ok(IngestOutcome {
         read,
         deduped,
-        partitions: dates.len(),
+        partitions,
     })
 }
 
-/// A `COUNT(*)` result.
-#[derive(Debug, Deserialize)]
-struct Counted {
-    count: i64,
-}
-
-/// One date the derived dataset is partitioned by.
-#[derive(Debug, Deserialize)]
-struct DepartureDate {
-    date: NaiveDate,
-}
-
-/// Build one partition's batch: the attribute columns, then the two geometry columns.
+/// Build one partition's batch: the columns the legs carry, then the two geometry columns
+/// derived from their polylines.
 fn batch(legs: &[Leg], projector: &Projector) -> Result<RecordBatch, IngestError> {
-    let attributes: Vec<TrainSegmentRow> = legs.iter().map(TrainSegmentRow::from).collect();
-    let mut fields = attribute_fields()?;
-    let mut arrays = serde_arrow::to_arrow(&fields, &attributes)?;
+    let mut fields = medallion::fields::<Leg>(&INSTANT_COLUMNS)?;
+    let mut arrays = serde_arrow::to_arrow(&fields, legs)?;
+    drop_column(&mut fields, &mut arrays, POLYLINE);
 
     let lines = legs
         .iter()
@@ -219,39 +180,27 @@ fn batch(legs: &[Leg], projector: &Projector) -> Result<RecordBatch, IngestError
         .map(|line| projector.project(line))
         .collect::<Result<Vec<_>, _>>()?;
 
-    fields.push(medallion::wkb_field(GEOMETRY)?.into());
-    arrays.push(wkb_column(&lines)?);
-    fields.push(medallion::projected_wkb_field(PROJECTED_GEOMETRY)?.into());
-    arrays.push(wkb_column(&projected)?);
+    for (field, geometries) in [
+        (medallion::wkb_field(GEOMETRY)?, &lines),
+        (
+            medallion::projected_wkb_field(PROJECTED_GEOMETRY, COUNTRY)?,
+            &projected,
+        ),
+    ] {
+        let (field, array) = medallion::wkb_column(field, geometries)?;
+        fields.push(field);
+        arrays.push(array);
+    }
 
     Ok(RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays)?)
 }
 
-/// The arrow schema of the attribute columns, with the instant columns typed.
-fn attribute_fields() -> Result<Vec<FieldRef>, IngestError> {
-    let options =
-        INSTANT_COLUMNS
-            .iter()
-            .try_fold(TracingOptions::default(), |options, &name| {
-                options.overwrite(
-                    name,
-                    json!({"name": name, "data_type": "Timestamp(Millisecond, Some(\"UTC\"))"}),
-                )
-            })?;
-    Ok(Vec::<FieldRef>::from_type::<TrainSegmentRow>(options)?)
-}
-
-/// Encode each line as `(lon, lat)` WKB — little-endian, OGC.
-fn wkb_column(lines: &[LineString<f64>]) -> Result<ArrayRef, IngestError> {
-    let encoded = lines
-        .iter()
-        .map(|line| {
-            let mut buf = Vec::new();
-            write_line_string(&mut buf, line, &WriteOptions::default())?;
-            Ok(buf)
-        })
-        .collect::<Result<Vec<_>, wkb::error::WkbError>>()?;
-    Ok(Arc::new(BinaryArray::from_iter_values(encoded)))
+/// Remove `column` from a batch under construction, keeping fields and arrays aligned.
+fn drop_column(fields: &mut Vec<FieldRef>, arrays: &mut Vec<ArrayRef>, column: &str) {
+    if let Some(at) = fields.iter().position(|field| field.name() == column) {
+        fields.remove(at);
+        arrays.remove(at);
+    }
 }
 
 /// Decode a Google-encoded polyline to a `(lon, lat)` line.
@@ -267,7 +216,6 @@ mod tests {
     use crate::bronze::SegmentLog;
 
     use chrono::TimeZone;
-    use geo_traits::{CoordTrait, GeometryTrait, GeometryType, LineStringTrait};
     use motis_openapi_progenitor::types::TripSegment;
 
     use super::*;
@@ -288,43 +236,36 @@ mod tests {
         ingest(root).await.expect("ingest")
     }
 
-    /// The derived dataset, read back the way any other reader would: as a table.
-    async fn derived(root: &Root, sql: &str) -> Vec<RecordBatch> {
+    /// The derived dataset, registered the way any other reader would register it.
+    async fn derived(root: &Root) -> Query {
         let query = Query::new(root.clone());
         query
-            .register(Layer::Silver, DATASET, "derived")
+            .register(model::TRAIN_SEGMENT, "derived")
             .await
             .expect("register derived dataset");
-        query.sql(sql).await.expect("query derived dataset")
+        query
     }
 
-    /// The single `count` a `COUNT(*)` query returns.
-    fn count(batches: &[RecordBatch]) -> i64 {
-        batches[0]
-            .column_by_name("count")
-            .expect("count column")
-            .as_any()
-            .downcast_ref::<arrow::array::Int64Array>()
-            .expect("i64 count")
-            .value(0)
+    /// Both geometry columns of the derived dataset.
+    async fn geometry_batches(root: &Root) -> Vec<RecordBatch> {
+        derived(root)
+            .await
+            .sql(&format!(
+                "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY},
+                        ST_AsBinary({PROJECTED_GEOMETRY}) AS {PROJECTED_GEOMETRY}
+                 FROM derived ORDER BY trip_id"
+            ))
+            .await
+            .expect("query geometries")
     }
 
-    /// The line held in `column` of `batch`'s first row.
+    /// The line held in `column` of the first row of `batch`.
     fn first_line(batch: &RecordBatch, column: &str) -> Vec<(f64, f64)> {
-        let geometries = arrow::compute::cast(
-            batch.column_by_name(column).expect(column),
-            &arrow::datatypes::DataType::Binary,
-        )
-        .expect("cast to binary");
-        let geometries = geometries
-            .as_any()
-            .downcast_ref::<BinaryArray>()
-            .expect("binary column");
-        let geometry = wkb::reader::read_wkb(geometries.value(0)).expect("valid WKB");
-        let GeometryType::LineString(line) = geometry.as_type() else {
+        let geometries = medallion::geometries(batch, column).expect("geometries");
+        let geo_types::Geometry::LineString(line) = &geometries[0] else {
             panic!("{column} should hold a LineString");
         };
-        line.coords().map(|c| (c.x(), c.y())).collect()
+        line.coords().map(|c| (c.x, c.y)).collect()
     }
 
     #[tokio::test]
@@ -368,16 +309,16 @@ mod tests {
         .expect("second poll");
         ingest(&root).await.expect("ingest");
 
-        let kept = derived(
-            &root,
-            &format!(
+        let kept = derived(&root)
+            .await
+            .count(&format!(
                 "SELECT COUNT(*) AS count FROM derived WHERE realtime = {}",
                 later[0].real_time
-            ),
-        )
-        .await;
+            ))
+            .await
+            .expect("count");
         assert_eq!(
-            count(&kept),
+            kept,
             fixture().len() as i64,
             "every leg should carry the later capture's realtime flag"
         );
@@ -398,15 +339,7 @@ mod tests {
         )
         .await;
 
-        let batches = derived(
-            &root,
-            &format!(
-                "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY},
-                        ST_AsBinary({PROJECTED_GEOMETRY}) AS {PROJECTED_GEOMETRY}
-                 FROM derived ORDER BY trip_id"
-            ),
-        )
-        .await;
+        let batches = geometry_batches(&root).await;
         assert_eq!(first_line(&batches[0], GEOMETRY).len(), expected);
         assert_eq!(first_line(&batches[0], PROJECTED_GEOMETRY).len(), expected);
     }
@@ -424,15 +357,7 @@ mod tests {
         )
         .await;
 
-        let batches = derived(
-            &root,
-            &format!(
-                "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY},
-                        ST_AsBinary({PROJECTED_GEOMETRY}) AS {PROJECTED_GEOMETRY}
-                 FROM derived ORDER BY trip_id"
-            ),
-        )
-        .await;
+        let batches = geometry_batches(&root).await;
         let (lon, lat) = first_line(&batches[0], GEOMETRY)[0];
         let (easting, northing) = first_line(&batches[0], PROJECTED_GEOMETRY)[0];
 
@@ -457,12 +382,20 @@ mod tests {
             &[Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap()],
         )
         .await;
-        let rows_before = count(&derived(&root, "SELECT COUNT(*) AS count FROM derived").await);
+        let rows_before = derived(&root)
+            .await
+            .count("SELECT COUNT(*) AS count FROM derived")
+            .await
+            .expect("count");
         let second = ingest(&root).await.expect("re-ingest");
 
         assert_eq!(first, second, "the same run, run twice");
         assert_eq!(
-            count(&derived(&root, "SELECT COUNT(*) AS count FROM derived").await),
+            derived(&root)
+                .await
+                .count("SELECT COUNT(*) AS count FROM derived")
+                .await
+                .expect("count"),
             rows_before,
             "re-running rewrites the partition rather than appending to it"
         );

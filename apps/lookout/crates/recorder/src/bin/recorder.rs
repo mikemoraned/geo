@@ -148,17 +148,19 @@ async fn drain(archive: &Archive, conn: &mut redis::aio::MultiplexedConnection) 
         };
 
         if stop || batch.len() >= BATCH_SIZE {
-            match write(archive, &batch).await {
-                Some(written) => total = total + written,
-                None => {
-                    requeue(conn, &batch).await;
-                    break;
+            if !batch.is_empty() {
+                match write(archive, &batch).await {
+                    Some(written) => total = total + written,
+                    None => {
+                        requeue(conn, &batch).await;
+                        break;
+                    }
                 }
+                batch.clear();
             }
-            batch.clear();
-        }
-        if stop {
-            break;
+            if stop {
+                break;
+            }
         }
     }
     total

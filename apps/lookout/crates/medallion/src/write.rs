@@ -35,14 +35,7 @@ pub(crate) async fn write_batches(path: &Path, batches: &[RecordBatch]) -> Resul
         return Err(WriteError::Empty);
     };
 
-    let store = LocalFileSystem::new();
-    let location = ObjectPath::from_absolute_path(path).map_err(|source| WriteError::Path {
-        path: path.display().to_string(),
-        source,
-    })?;
-
-    let object_writer = ParquetObjectWriter::new(std::sync::Arc::new(store), location);
-    let mut writer = AsyncArrowWriter::try_new(object_writer, first.schema(), None)?;
+    let mut writer = writer_at(path, first.schema())?;
     for batch in batches {
         writer.write(batch).await?;
     }
@@ -50,12 +43,32 @@ pub(crate) async fn write_batches(path: &Path, batches: &[RecordBatch]) -> Resul
     Ok(())
 }
 
+/// A parquet writer onto `path`, through the store's write path: [`LocalFileSystem`]
+/// stages to a temporary sibling and renames on completion, so an interrupted write leaves
+/// nothing a reader can list or open.
+pub(crate) fn writer_at(
+    path: &Path,
+    schema: arrow::datatypes::SchemaRef,
+) -> Result<AsyncArrowWriter<ParquetObjectWriter>, WriteError> {
+    let location = ObjectPath::from_absolute_path(path).map_err(|source| WriteError::Path {
+        path: path.display().to_string(),
+        source,
+    })?;
+    let object_writer =
+        ParquetObjectWriter::new(std::sync::Arc::new(LocalFileSystem::new()), location);
+    Ok(AsyncArrowWriter::try_new(object_writer, schema, None)?)
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
+    use crate::dataset::DatasetSpec;
     use crate::layer::Layer;
     use crate::path::Root;
+
+    const SENSOR_READING: DatasetSpec =
+        DatasetSpec::new(Layer::Bronze, "sensor_reading", "ingested_date");
     use arrow::array::{Int64Array, RecordBatch, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
     use chrono::{TimeZone, Utc};
@@ -92,7 +105,7 @@ mod tests {
     async fn writing_creates_the_partition_directories_and_a_readable_parquet_file() {
         let tmp = tempfile::tempdir().unwrap();
         let path = Root::new(tmp.path())
-            .dataset(Layer::Bronze, "sensor_reading")
+            .dataset(SENSOR_READING)
             .partition("sensor", "gps")
             .unwrap()
             .batch_file(Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap());
@@ -109,7 +122,7 @@ mod tests {
     async fn multiple_batches_are_written_into_the_one_file() {
         let tmp = tempfile::tempdir().unwrap();
         let path = Root::new(tmp.path())
-            .dataset(Layer::Bronze, "sensor_reading")
+            .dataset(SENSOR_READING)
             .partition_file();
 
         write_batches(
@@ -126,7 +139,7 @@ mod tests {
     async fn writing_no_batches_is_an_error_rather_than_an_empty_file() {
         let tmp = tempfile::tempdir().unwrap();
         let path = Root::new(tmp.path())
-            .dataset(Layer::Bronze, "sensor_reading")
+            .dataset(SENSOR_READING)
             .partition_file();
 
         let err = write_batches(&path, &[]).await.unwrap_err();
@@ -139,7 +152,7 @@ mod tests {
     async fn a_failed_write_leaves_no_file_at_the_destination() {
         let tmp = tempfile::tempdir().unwrap();
         let path = Root::new(tmp.path())
-            .dataset(Layer::Bronze, "sensor_reading")
+            .dataset(SENSOR_READING)
             .partition_file();
         // Batches with differing schemas: the first is accepted, the second fails mid-write.
         let mismatched = RecordBatch::try_new(

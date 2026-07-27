@@ -57,7 +57,7 @@ async fn poll_once_captures_rail_from_local_motis_end_to_end() {
 
     // Inspect what landed: every captured segment is rail, and the `/trip` enrichment
     // populated an agency and at least one train number.
-    let rows = captured_segments(&log.poll_file(now).expect("poll file"));
+    let rows = captured_segments(&Root::new(store.path())).await;
 
     assert!(
         rows.iter().all(|s| RAIL_MODES.contains(&s.mode.as_str())),

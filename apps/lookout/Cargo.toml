@@ -91,6 +91,7 @@ wkt = "0.14"
 # `serde` for the ts_milliseconds adapters bronze rows use to type their instants.
 chrono = { version = "0.4", features = ["serde"] }
 medallion = { path = "crates/medallion" }
+model = { path = "crates/model" }
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
 

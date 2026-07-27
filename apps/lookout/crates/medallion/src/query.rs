@@ -8,7 +8,7 @@ use datafusion::arrow::array::RecordBatch;
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
-use crate::layer::Layer;
+use crate::dataset::DatasetSpec;
 use crate::path::Root;
 
 /// A failure querying the store.
@@ -23,6 +23,13 @@ pub enum QueryError {
     DataFusion(#[from] datafusion::error::DataFusionError),
     #[error("reading rows: {0}")]
     Rows(#[from] serde_arrow::Error),
+}
+
+/// The single column a counting query returns. Its name is fixed, so callers alias their
+/// count to it: `SELECT COUNT(*) AS count …`.
+#[derive(Debug, serde::Deserialize)]
+struct Counted {
+    count: i64,
 }
 
 /// A SQL session over one medallion store.
@@ -44,17 +51,12 @@ impl Query {
     /// A dataset that has never been written is not an error the caller has to
     /// distinguish by hand: [`QueryError::NoSuchDataset`] says so, and
     /// [`Self::register_if_present`] treats it as an empty table instead.
-    pub async fn register(
-        &self,
-        layer: Layer,
-        dataset: &str,
-        table: &str,
-    ) -> Result<(), QueryError> {
-        let dir = self.root.dataset(layer, dataset).dir();
+    pub async fn register(&self, dataset: DatasetSpec, table: &str) -> Result<(), QueryError> {
+        let dir = self.root.dataset(dataset).dir();
         if !dir.exists() {
             return Err(QueryError::NoSuchDataset {
-                layer: layer.as_str(),
-                dataset: dataset.to_string(),
+                layer: dataset.layer.as_str(),
+                dataset: dataset.name.to_string(),
             });
         }
         let df = self
@@ -70,11 +72,10 @@ impl Query {
     /// than a silent empty result.
     pub async fn register_if_present(
         &self,
-        layer: Layer,
-        dataset: &str,
+        dataset: DatasetSpec,
         table: &str,
     ) -> Result<bool, QueryError> {
-        match self.register(layer, dataset, table).await {
+        match self.register(dataset, table).await {
             Ok(()) => Ok(true),
             Err(QueryError::NoSuchDataset { .. }) => Ok(false),
             Err(err) => Err(err),
@@ -84,6 +85,16 @@ impl Query {
     /// Run `sql` and collect the result.
     pub async fn sql(&self, sql: &str) -> Result<Vec<RecordBatch>, QueryError> {
         Ok(self.ctx.sql(sql).await?.collect().await?)
+    }
+
+    /// Run a `SELECT COUNT(*) …` and return the count. The query must select exactly one
+    /// row of one column.
+    pub async fn count(&self, sql: &str) -> Result<i64, QueryError> {
+        Ok(self
+            .rows::<Counted>(sql)
+            .await?
+            .first()
+            .map_or(0, |counted| counted.count))
     }
 
     /// Run `sql` and deserialise the result into `T`, for queries whose columns map onto a
@@ -109,6 +120,10 @@ mod tests {
     use serde::Deserialize;
 
     use super::*;
+    use crate::layer::Layer;
+
+    const THING: DatasetSpec = DatasetSpec::new(Layer::Bronze, "thing", "kind");
+    const NOTHING: DatasetSpec = DatasetSpec::new(Layer::Silver, "nothing", "kind");
 
     #[derive(Debug, Deserialize, PartialEq)]
     struct Row {
@@ -130,7 +145,7 @@ mod tests {
             ],
         )
         .unwrap();
-        root.dataset(Layer::Bronze, "thing")
+        root.dataset(THING)
             .partition("kind", "a")
             .unwrap()
             .rebuild(&[batch])
@@ -144,10 +159,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = store_with_rows(tmp.path(), vec![1, 2, 3], vec!["a", "b", "c"]).await;
         let query = Query::new(root);
-        query
-            .register(Layer::Bronze, "thing", "thing")
-            .await
-            .unwrap();
+        query.register(THING, "thing").await.unwrap();
 
         let rows: Vec<Row> = query
             .rows("SELECT id, name FROM thing WHERE id > 1 ORDER BY id")
@@ -179,7 +191,7 @@ mod tests {
             Field::new("id", DataType::Int64, false),
             Field::new("name", DataType::Utf8, false),
         ]));
-        root.dataset(Layer::Bronze, "thing")
+        root.dataset(THING)
             .partition("kind", "b")
             .unwrap()
             .rebuild(&[RecordBatch::try_new(
@@ -194,10 +206,7 @@ mod tests {
             .unwrap();
 
         let query = Query::new(root);
-        query
-            .register(Layer::Bronze, "thing", "thing")
-            .await
-            .unwrap();
+        query.register(THING, "thing").await.unwrap();
         let rows: Vec<Row> = query
             .rows("SELECT id, name FROM thing ORDER BY id")
             .await
@@ -207,17 +216,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_count_comes_back_as_a_number() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = store_with_rows(tmp.path(), vec![1, 2, 3], vec!["a", "b", "c"]).await;
+        let query = Query::new(root);
+        query.register(THING, "thing").await.unwrap();
+
+        assert_eq!(
+            query
+                .count("SELECT COUNT(*) AS count FROM thing WHERE id > 1")
+                .await
+                .unwrap(),
+            2
+        );
+    }
+
+    #[tokio::test]
     async fn a_dataset_that_was_never_written_is_reported_as_absent() {
         let tmp = tempfile::tempdir().unwrap();
         let query = Query::new(Root::new(tmp.path()));
 
         assert!(matches!(
-            query.register(Layer::Silver, "nothing", "nothing").await,
+            query.register(NOTHING, "nothing").await,
             Err(QueryError::NoSuchDataset { .. })
         ));
-        assert!(!query
-            .register_if_present(Layer::Silver, "nothing", "nothing")
-            .await
-            .unwrap());
+        assert!(!query.register_if_present(NOTHING, "nothing").await.unwrap());
     }
 }

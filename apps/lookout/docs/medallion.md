@@ -127,7 +127,10 @@ migrating silver.
 ## Partitioning
 
 Per-dataset Hive partition keys are part of the schema of this store and are expensive to
-change later, so they are pinned here rather than left to each writer.
+change later, so they are pinned rather than left to each writer. Each dataset is defined
+once, in code, as the layer it lives in and the key it is partitioned on; readers and
+writers refer to that definition rather than repeating a name and a key. What follows is
+the reasoning behind those definitions.
 
 ### General rules
 

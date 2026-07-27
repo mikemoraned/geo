@@ -8,7 +8,7 @@
 use std::process::Command;
 use std::time::Duration;
 
-use medallion::{Layer, Query, Root};
+use medallion::{Query, Root};
 use redis::aio::MultiplexedConnection;
 use serde::Deserialize;
 use shared::{Accel, AccelReading, Gps, GpsReading, Message, V1Message};
@@ -99,12 +99,6 @@ fn gps_sample(id: Uuid, t: i64, lat: f64) -> Message {
     }))
 }
 
-/// A `COUNT(*)` result.
-#[derive(Debug, Deserialize)]
-struct Counted {
-    count: i64,
-}
-
 /// One row of the gps dataset, as the assertions need it.
 #[derive(Debug, Deserialize)]
 struct Fix {
@@ -138,28 +132,32 @@ async fn extract_queue_to_store_docker() {
     // Query the store and assert it holds the lossless payloads plus the readings
     // interpreted from them.
     let query = Query::new(Root::new(dir.path()));
-    for dataset in ["raw_sample", "gps_reading", "accel_reading"] {
+    for dataset in [model::RAW_SAMPLE, model::GPS_READING, model::ACCEL_READING] {
         query
-            .register(Layer::Bronze, dataset, dataset)
+            .register(dataset, dataset.name)
             .await
             .expect("register dataset");
     }
-    let counts: Vec<Counted> = query
-        .rows(
-            "SELECT (SELECT COUNT(*) FROM raw_sample) AS count
-             UNION ALL SELECT (SELECT COUNT(*) FROM accel_reading)
-             UNION ALL SELECT (SELECT COUNT(*) FROM gps_reading)",
-        )
-        .await
-        .expect("counts");
+    let mut counts = Vec::new();
+    for dataset in [model::RAW_SAMPLE, model::ACCEL_READING, model::GPS_READING] {
+        counts.push(
+            query
+                .count(&format!("SELECT COUNT(*) AS count FROM {}", dataset.name))
+                .await
+                .expect("count"),
+        );
+    }
     assert_eq!(
-        counts.iter().map(|c| c.count).collect::<Vec<_>>(),
+        counts,
         vec![5, 3, 2],
         "one lossless row per queued payload, and the readings interpreted from them"
     );
 
     let fixes: Vec<Fix> = query
-        .rows("SELECT lat FROM gps_reading ORDER BY t")
+        .rows(&format!(
+            "SELECT lat FROM {} ORDER BY t",
+            model::GPS_READING.name
+        ))
         .await
         .expect("gps fixes");
     assert_eq!(

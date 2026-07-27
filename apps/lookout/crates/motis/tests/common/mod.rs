@@ -87,52 +87,23 @@ pub async fn lpush(conn: &mut MultiplexedConnection, message: &Message) {
         .expect("lpush");
 }
 
-/// One row of a bronze poll file, reduced to the fields the poll tests assert on.
-#[derive(Debug)]
+/// One row of the bronze capture log, reduced to the fields the poll tests assert on.
+#[derive(Debug, serde::Deserialize)]
 pub struct CapturedSegment {
     pub mode: String,
     pub agency_name: Option<String>,
-    pub train_number: Option<i64>,
+    pub train_number: Option<u32>,
 }
 
-/// Read back the parquet file one poll wrote. Columns are cast to a single layout first,
-/// so the assertions don't depend on which string or integer width the writer chose.
-pub fn captured_segments(path: &std::path::Path) -> Vec<CapturedSegment> {
-    use arrow::array::{Array, AsArray};
-    use arrow::datatypes::{DataType, Int64Type};
-
-    let file = std::fs::File::open(path).expect("open poll file");
-    let reader = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(file)
-        .expect("parquet")
-        .build()
-        .expect("reader");
-
-    reader
-        .flat_map(|batch| {
-            let batch = batch.expect("batch");
-            let text = |name: &str| {
-                arrow::compute::cast(batch.column_by_name(name).expect(name), &DataType::Utf8)
-                    .expect("cast to utf8")
-            };
-            let mode = text("mode");
-            let agency = text("agency_name");
-            let number = arrow::compute::cast(
-                batch.column_by_name("train_number").expect("train_number"),
-                &DataType::Int64,
-            )
-            .expect("cast to i64");
-
-            (0..batch.num_rows())
-                .map(|i| CapturedSegment {
-                    mode: mode.as_string::<i32>().value(i).to_string(),
-                    agency_name: agency
-                        .is_valid(i)
-                        .then(|| agency.as_string::<i32>().value(i).to_string()),
-                    train_number: number
-                        .is_valid(i)
-                        .then(|| number.as_primitive::<Int64Type>().value(i)),
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect()
+/// Read back what a poll captured, the way any other reader would: as a table.
+pub async fn captured_segments(root: &medallion::Root) -> Vec<CapturedSegment> {
+    let query = medallion::Query::new(root.clone());
+    query
+        .register(model::MOTIS_SEGMENT, "captured")
+        .await
+        .expect("register capture log");
+    query
+        .rows("SELECT mode, agency_name, train_number FROM captured")
+        .await
+        .expect("read capture log")
 }
