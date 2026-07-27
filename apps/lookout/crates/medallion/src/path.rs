@@ -23,7 +23,11 @@ pub enum AppendError {
 }
 
 /// Batch file names: compact UTC, so they sort chronologically and contain no `:`.
-const BATCH_STEM_FORMAT: &str = "%Y%m%dT%H%M%SZ";
+///
+/// Millisecond precision, because the name is what keeps one write from landing on another:
+/// a writer that batches — a drain, a backfill — issues several writes in quick succession,
+/// and at second resolution they would collide.
+const BATCH_STEM_FORMAT: &str = "%Y%m%dT%H%M%S%3fZ";
 
 /// The file a rebuilt partition holds. A partition derived wholesale is one file, so its
 /// name carries no information and never varies.
@@ -131,12 +135,21 @@ impl Dataset {
     }
 
     /// Append `batches` as the capture made at `at`, leaving earlier captures untouched.
+    ///
+    /// A capture already written at `at` is not replaced: an append that would land on an
+    /// existing file fails instead, since these layers are immutable and the rows already
+    /// there are not this caller's to discard.
     pub async fn append(
         &self,
         at: DateTime<Utc>,
         batches: &[RecordBatch],
     ) -> Result<PathBuf, WriteError> {
         let path = self.batch_file(at);
+        if path.exists() {
+            return Err(WriteError::Exists {
+                path: path.display().to_string(),
+            });
+        }
         write_batches(&path, batches).await?;
         Ok(path)
     }
@@ -288,7 +301,7 @@ mod tests {
 
         assert_eq!(
             path.to_str().unwrap(),
-            "/store/bronze/motis_segment/20260726T140530Z.parquet"
+            "/store/bronze/motis_segment/20260726T140530000Z.parquet"
         );
     }
 
@@ -300,6 +313,20 @@ mod tests {
             .clone()
             .batch_file(Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap());
         let second = dataset.batch_file(Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 31).unwrap());
+
+        assert_ne!(first, second);
+    }
+
+    /// Writes within one second are the normal case for a writer that batches, so the name
+    /// has to separate them: at second resolution they would name one file and the second
+    /// write would land on the first.
+    #[test]
+    fn batch_files_from_instants_in_the_same_second_do_not_collide() {
+        let dataset = root().dataset(MOTIS_SEGMENT);
+        let at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
+
+        let first = dataset.clone().batch_file(at);
+        let second = dataset.batch_file(at + chrono::Duration::milliseconds(1));
 
         assert_ne!(first, second);
     }

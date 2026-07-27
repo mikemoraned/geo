@@ -23,6 +23,8 @@ pub enum WriteError {
     Parquet(#[from] parquet::errors::ParquetError),
     #[error("no batches to write")]
     Empty,
+    #[error("{path} already holds a capture, which an append must not replace")]
+    Exists { path: String },
 }
 
 /// Write `batches` to `path` as a single parquet file, taking the schema from the first.
@@ -171,6 +173,34 @@ mod tests {
             "a partial file was left at {}",
             path.display()
         );
+    }
+
+    /// These layers are immutable, so a second append at the same instant must fail rather
+    /// than replace what the first wrote. Two writes close together — a drain writing its
+    /// batches, a backfill replaying an archive — is the case this catches.
+    #[tokio::test]
+    async fn appending_where_a_capture_already_sits_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
+        let dataset = Root::new(tmp.path())
+            .dataset(SENSOR_READING)
+            .on_date(at.date_naive())
+            .unwrap();
+        let path = dataset
+            .append(at, &[batch(vec![1], vec!["a"])])
+            .await
+            .unwrap();
+
+        let err = dataset
+            .append(at, &[batch(vec![2], vec!["b"])])
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(err, WriteError::Exists { .. }),
+            "unexpected: {err}"
+        );
+        assert_eq!(rows_in(&path), 1, "the first capture must survive");
     }
 
     #[tokio::test]

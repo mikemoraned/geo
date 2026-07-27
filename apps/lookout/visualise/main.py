@@ -104,10 +104,16 @@ _READING_WINDOW = f"""
     AND {_DEVICES}
 """
 
+# `n = 0` says no readings were aggregated into the window, so its `rms`/`peak` describe
+# nothing — either the sampling was suspended, or the reading predates the aggregates being
+# captured at all and they are zero by default. Plotted, those rows read as a real flat zero,
+# so they are dropped instead. The cost is that a suspended window no longer shows in the
+# capture-health series, where its zero would have been informative.
 _ACCEL = f"""
     SELECT device_id, epoch_ms(t) AS t, rms, peak, n
     FROM {{dataset}}
     WHERE {_READING_WINDOW}
+      AND n > 0
     ORDER BY t
 """
 
@@ -151,8 +157,8 @@ def log_accel(rows) -> None:
     `rms`/`peak` are the accel signals that mean something at the 0.1 Hz sample rate; the
     raw instantaneous `x,y,z` (kept in the dataset as a tilt view) aliases into noise and is
     not plotted. `n` sits on its own path because at ~600 it would dwarf them — it should
-    hold near-constant while sampling and drop toward zero where the page was suspended, so
-    it reads as a capture-health check rather than a ride signal.
+    hold near-constant while sampling, so it reads as a capture-health check rather than a
+    ride signal. Readings that aggregated nothing are already excluded by the query.
 
     Written column-wise with `rr.send_columns` (the natural shape for a table→rrd
     converter); `Scalars` needs the same count at every timestamp.

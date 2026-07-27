@@ -275,8 +275,46 @@ The main tasks here should be focussed on documenting these patterns and correct
         `recorder::bronze::Archive`, silver from `motis::ingest`, into a scratch root),
         since the Python tests build their fixtures with DuckDB itself and so would not
         catch a Rust-writer/DuckDB-reader mismatch on their own.
-- [ ] Backfill existing `data/lookout.sqlite` and `data/motis.sqlite` content into bronze
+- [x] Backfill existing `data/lookout.sqlite` and `data/motis.sqlite` content into bronze
       once, so history isn't stranded behind the old format.
+
+      Notes:
+
+      * `just backfill` runs it: `backfill_telemetry` (from `lookout.sqlite`),
+        `backfill_segments` (from `motis.sqlite`), then `motis_ingest` over the polls that
+        adds. Both are one-shot and say so: the telemetry backfill refuses a second run
+        (its check is whether the archive's oldest payload is already in bronze — the
+        oldest being least likely to have also arrived through the queue at the
+        changeover), and the segment backfill skips polls whose file is already there.
+      * **Only `raw` is read from `lookout.sqlite`.** The readings are re-interpreted from
+        it through the same `Archive` the live drain writes, so backfilled history is shaped
+        by the current interpretation rather than by whatever wrote those older per-sensor
+        tables. That the counts come out identical (4,028 gps / 4,911 accel) is the check
+        that the re-interpretation lost nothing. `device_session` gains 15 rows where the
+        old `device` table held 2, since bronze keeps every session rather than the latest
+        per device.
+      * **`transport` is deliberately not backfilled.** It was `enrich`'s output: a subset
+        of an Overture release with no record of which release or which window, so it can't
+        be given the provenance bronze requires — and the country-wide extract supersedes
+        it anyway.
+      * `received_at` is absent for 458 payloads predating its capture, and is carried
+        through as NULL rather than filled with a stand-in (`RawRow.received_at` is now
+        `Option<i64>`; the queue's own `RawSample` still always carries one, so
+        `Archive::write` takes a `Payload` either can produce).
+      * 293 accel payloads predate the `rms`/`peak`/`n` aggregates, which `shared::Accel`
+        defaults to zero — so in bronze they are indistinguishable from a measured zero and
+        would plot as a flat-zero ride signal. `visualise` drops `n = 0` rows for that
+        reason. Making the aggregates `Option` in `shared` would model it properly and is
+        the better fix if this bites again; `raw_sample` keeps the truth either way.
+      * Found while running this: **`Dataset::append` silently overwrote** a file whose
+        instant-named path already existed, and names were only second-precision — so any
+        writer issuing several appends within one second lost all but the last. That was live
+        in `recorder drain` (batches of 100, well under a second apart), not just in the
+        backfill. Names now carry milliseconds and an append onto an existing path fails, so
+        a collision is loud and, in the drain's case, requeued. The existing collision test
+        did not catch it because it compared instants a *second* apart; the new tests are two
+        writes a millisecond apart, at both the path level and through `Archive`, and were
+        checked by reverting the fix.
 - [ ] Decide whether partition columns should be declared with their types rather than
       inferred. SedonaDB auto-discovers them when the reader doesn't set them
       (`listing_table_factory_infer_partitions` defaults to true), typing every one as

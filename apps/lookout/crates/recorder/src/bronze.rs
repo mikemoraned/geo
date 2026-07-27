@@ -20,6 +20,26 @@ use serde::{Deserialize, Serialize};
 use shared::{AccelReading, GpsReading, Message, SessionStart, V0Message, V1Message};
 use telemetry::RawSample;
 
+/// One payload to archive: the json exactly as it arrived, and the epoch millis the server
+/// stamped when it received it.
+///
+/// `received_at` is optional because a payload restored from an older archive may predate
+/// receipt times being recorded at all; a payload off the queue always carries one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Payload<'a> {
+    pub received_at: Option<i64>,
+    pub json: &'a str,
+}
+
+impl<'a> From<&'a RawSample> for Payload<'a> {
+    fn from(sample: &'a RawSample) -> Self {
+        Self {
+            received_at: Some(sample.received_at()),
+            json: sample.json(),
+        }
+    }
+}
+
 /// Failure writing an ingestion.
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
@@ -54,7 +74,7 @@ impl std::ops::Add for Written {
     }
 }
 
-/// One queue payload, exactly as it arrived.
+/// One archived payload, exactly as it arrived.
 ///
 /// Instants travel as epoch milliseconds — the form the wire carries them in — and are
 /// declared as timestamp columns by [`fields`], so no conversion can narrow them.
@@ -62,8 +82,8 @@ impl std::ops::Add for Written {
 struct RawRow {
     /// Identifies the payload, so re-ingesting the same one is recognisable downstream.
     md5: String,
-    /// When the server stamped it on receipt.
-    received_at: i64,
+    /// When the server stamped it on receipt, where that was recorded.
+    received_at: Option<i64>,
     json: String,
 }
 
@@ -149,14 +169,14 @@ impl Archive {
             .batch_file(ingested_at))
     }
 
-    /// Interpret `samples` and write them, returning what landed. Each dataset with no
+    /// Interpret `payloads` and write them, returning what landed. Each dataset with no
     /// rows is skipped, so an ingestion of only GPS leaves no empty accel file.
     pub async fn write(
         &self,
         ingested_at: DateTime<Utc>,
-        samples: &[RawSample],
+        payloads: &[Payload<'_>],
     ) -> Result<Written, ArchiveError> {
-        let rows = Rows::interpret(samples);
+        let rows = Rows::interpret(payloads);
 
         self.write_dataset(model::RAW_SAMPLE, ingested_at, &rows.raw, &["received_at"])
             .await?;
@@ -194,13 +214,13 @@ impl Archive {
 }
 
 impl Rows {
-    /// Split `samples` into the rows each dataset holds. Every payload lands in `raw`,
+    /// Split `payloads` into the rows each dataset holds. Every payload lands in `raw`,
     /// whether or not it can be interpreted.
-    fn interpret(samples: &[RawSample]) -> Self {
+    fn interpret(payloads: &[Payload<'_>]) -> Self {
         let mut rows = Self::default();
-        for sample in samples {
-            rows.raw.push(RawRow::from(sample));
-            match sample.parse() {
+        for payload in payloads {
+            rows.raw.push(RawRow::from(payload));
+            match serde_json::from_str::<Message>(payload.json) {
                 Ok(Message::Version0(V0Message::Gps(r)) | Message::Version1(V1Message::Gps(r))) => {
                     rows.gps.push(GpsRow::from(&r))
                 }
@@ -218,13 +238,12 @@ impl Rows {
     }
 }
 
-impl From<&RawSample> for RawRow {
-    fn from(sample: &RawSample) -> Self {
-        let json = sample.json();
+impl From<&Payload<'_>> for RawRow {
+    fn from(payload: &Payload<'_>) -> Self {
         Self {
-            md5: format!("{:x}", md5::compute(json)),
-            received_at: sample.received_at(),
-            json: json.to_string(),
+            md5: format!("{:x}", md5::compute(payload.json)),
+            received_at: payload.received_at,
+            json: payload.json.to_string(),
         }
     }
 }
@@ -285,6 +304,11 @@ mod tests {
     /// The instant every test ingests at, so the file it writes is predictable.
     fn ingested_at() -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap()
+    }
+
+    /// The payloads `samples` archive as, exercising the conversion the drain does.
+    fn archived(samples: &[RawSample]) -> Vec<Payload<'_>> {
+        samples.iter().map(Payload::from).collect()
     }
 
     fn queued(message: &Message) -> RawSample {
@@ -363,7 +387,7 @@ mod tests {
         ];
 
         let written = Archive::new(root.clone())
-            .write(ingested_at(), &samples)
+            .write(ingested_at(), &archived(&samples))
             .await
             .expect("write");
 
@@ -389,7 +413,10 @@ mod tests {
         let archive = Archive::new(Root::new(tmp.path()));
 
         archive
-            .write(ingested_at(), &[queued(&gps(1_700_000_000_001, 55.95))])
+            .write(
+                ingested_at(),
+                &archived(&[queued(&gps(1_700_000_000_001, 55.95))]),
+            )
             .await
             .expect("write");
 
@@ -397,7 +424,9 @@ mod tests {
             .ingestion_file(model::GPS_READING, ingested_at())
             .expect("path");
         assert!(
-            path.ends_with("bronze/gps_reading/ingested_date=2026-07-26/20260726T140530Z.parquet"),
+            path.ends_with(
+                "bronze/gps_reading/ingested_date=2026-07-26/20260726T140530000Z.parquet"
+            ),
             "unexpected path: {}",
             path.display()
         );
@@ -416,13 +445,46 @@ mod tests {
         )];
 
         let written = Archive::new(root.clone())
-            .write(ingested_at(), &samples)
+            .write(ingested_at(), &archived(&samples))
             .await
             .expect("write");
 
         assert_eq!(written.raw, 1);
         assert_eq!(written.unparseable, 1);
         assert_eq!(rows_in(&root, model::RAW_SAMPLE).await, 1);
+    }
+
+    /// A payload whose receipt was never timed is archived with that unknown, rather than
+    /// with a stand-in instant that would read as a real one.
+    #[tokio::test]
+    async fn a_payload_with_no_receipt_time_is_archived_without_one() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let json = serde_json::to_string(&gps(1_700_000_000_001, 55.95)).expect("serialize");
+
+        Archive::new(root.clone())
+            .write(
+                ingested_at(),
+                &[Payload {
+                    received_at: None,
+                    json: &json,
+                }],
+            )
+            .await
+            .expect("write");
+
+        let query = Query::new(root.clone());
+        query
+            .register(model::RAW_SAMPLE, "d")
+            .await
+            .expect("register");
+        assert_eq!(
+            query
+                .count("SELECT COUNT(*) AS count FROM d WHERE received_at IS NULL")
+                .await
+                .expect("count"),
+            1
+        );
     }
 
     /// A dataset with no rows is skipped, so an ingestion of only GPS leaves no empty
@@ -433,7 +495,10 @@ mod tests {
         let archive = Archive::new(Root::new(tmp.path()));
 
         archive
-            .write(ingested_at(), &[queued(&gps(1_700_000_000_001, 55.95))])
+            .write(
+                ingested_at(),
+                &archived(&[queued(&gps(1_700_000_000_001, 55.95))]),
+            )
             .await
             .expect("write");
 
@@ -443,19 +508,48 @@ mod tests {
             .exists());
     }
 
+    /// A drain writes a batch at a time, so consecutive ingestions fall milliseconds apart:
+    /// each must keep its own rows rather than the later one displacing the earlier.
+    #[tokio::test]
+    async fn ingestions_milliseconds_apart_both_keep_their_readings() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let archive = Archive::new(root.clone());
+
+        archive
+            .write(
+                ingested_at(),
+                &archived(&[queued(&gps(1_700_000_000_001, 55.95))]),
+            )
+            .await
+            .expect("first batch");
+        archive
+            .write(
+                ingested_at() + chrono::Duration::milliseconds(1),
+                &archived(&[queued(&gps(1_700_000_000_002, 55.96))]),
+            )
+            .await
+            .expect("second batch");
+
+        assert_eq!(rows_in(&root, model::GPS_READING).await, 2);
+    }
+
     /// Several ingestions sum, so a run made of batches reports its total.
     #[tokio::test]
     async fn what_each_ingestion_wrote_adds_up() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let archive = Archive::new(Root::new(tmp.path()));
         let first = archive
-            .write(ingested_at(), &[queued(&gps(1_700_000_000_001, 55.95))])
+            .write(
+                ingested_at(),
+                &archived(&[queued(&gps(1_700_000_000_001, 55.95))]),
+            )
             .await
             .expect("first");
         let second = archive
             .write(
                 ingested_at() + chrono::Duration::seconds(1),
-                &[queued(&gps(1_700_000_000_002, 55.96)), queued(&accel(3))],
+                &archived(&[queued(&gps(1_700_000_000_002, 55.96)), queued(&accel(3))]),
             )
             .await
             .expect("second");

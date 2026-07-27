@@ -136,6 +136,22 @@ class TestSensorQueries:
 
         assert row == ("aaaa-1", NOW_MS - MINUTE_MS, 0.42, 1.7, 600)
 
+    def test_an_accel_reading_that_aggregated_nothing_is_excluded(self, store):
+        """A reading with `n = 0` carries no ride signal — its zeroed aggregates would plot
+        as a real flat zero. Legacy readings predating the aggregates look the same."""
+        write_readings(
+            store,
+            [
+                accel("aaaa-1", NOW_MS - MINUTE_MS, rms=0.0, peak=0.0, n=0),
+                accel("aaaa-1", NOW_MS),
+            ],
+            "accel_reading",
+        )
+
+        rows = main.fetch_accel(store, NOW_MS - DAY_MS, None)
+
+        assert [row[1] for row in rows] == [NOW_MS]
+
     def test_a_reading_before_the_cutoff_is_excluded(self, store):
         write_readings(
             store,

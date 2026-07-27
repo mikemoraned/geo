@@ -7,7 +7,9 @@
 //!   - [`bronze`] — the immutable capture log of returned segments, one file per poll.
 //!   - [`poll`] — the core of one poll tick, wrapped by the `motis_poll` binary.
 //!   - [`ingest`] — dedup + decode the capture log into the silver `train_segment` dataset.
+//!   - [`backfill`] — read a pre-medallion sqlite capture log into the bronze one.
 
+pub mod backfill;
 pub mod bronze;
 pub mod client;
 pub mod ingest;

@@ -14,6 +14,7 @@ model = { workspace = true }
 motis-openapi-progenitor = { workspace = true }
 polyline = { workspace = true }
 redis = { workspace = true }
+rusqlite = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
 serde_arrow = { workspace = true }

@@ -87,6 +87,15 @@ extract *args:
 ingest-motis *args:
     cargo run -p motis --bin motis_ingest -- {{args}}
 
+# Read the pre-medallion sqlite dbs under data/ into bronze, then re-derive the silver
+# train segments over the polls that adds. Run once: the telemetry backfill refuses a
+# second run (bronze is immutable, and it would double every payload), and the segment
+# backfill skips polls already logged. Pass --medallion-root to write elsewhere.
+backfill *args:
+    cargo run --release -p recorder --bin backfill_telemetry -- {{args}}
+    cargo run --release -p motis --bin backfill_segments -- {{args}}
+    cargo run --release -p motis --bin motis_ingest -- --country DE {{args}}
+
 # Convert the medallion store into a rerun .rrd, selecting by time window (and
 # optionally device id prefixes). Requires --since, e.g. `just visualise --since 7d`
 # or `just visualise --since 12h --devices 77a cdf2`; override the store with

@@ -49,7 +49,11 @@ Raw data, extracted from landing and retained indefinitely. Three kinds:
   themes we need
 
 **Bronze is immutable and versioned, not merely append-only.** A given file, once written,
-never changes. Corrections arrive as a new version, not an edit.
+never changes. Corrections arrive as a new version, not an edit. This is enforced rather
+than trusted: an append onto a path that already holds a file fails, so two writes that
+would name the same file — a batching writer whose batches fall close together, an
+ingestion replayed twice — cannot silently replace each other's rows. Batch file names
+therefore carry millisecond precision.
 
 Format: parquet, shaped for **quick, safe appends**.
 

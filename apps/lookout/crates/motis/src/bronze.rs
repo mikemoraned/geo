@@ -129,9 +129,9 @@ impl SegmentLog {
     }
 
     /// The file one poll at `captured_at` writes. Readers query the dataset rather than
-    /// opening its files, so this is only the layout the tests assert on.
-    #[cfg(test)]
-    fn poll_file(&self, captured_at: DateTime<Utc>) -> Result<std::path::PathBuf, BronzeError> {
+    /// opening its files, so this is only needed where a poll has to be recognised as
+    /// already logged.
+    pub fn poll_file(&self, captured_at: DateTime<Utc>) -> Result<std::path::PathBuf, BronzeError> {
         Ok(self.partition(captured_at)?.batch_file(captured_at))
     }
 
@@ -148,9 +148,19 @@ impl SegmentLog {
             .map(|segment| SegmentRow::from_segment(captured_at, segment, details))
             .collect();
 
+        self.append_rows(captured_at, &rows).await
+    }
+
+    /// Write already-flattened `rows` as one poll's file, for a caller holding rows rather
+    /// than the service's own response shape.
+    pub async fn append_rows(
+        &self,
+        captured_at: DateTime<Utc>,
+        rows: &[SegmentRow],
+    ) -> Result<usize, BronzeError> {
         Ok(self
             .partition(captured_at)?
-            .append_rows(captured_at, &rows, &INSTANT_COLUMNS)
+            .append_rows(captured_at, rows, &INSTANT_COLUMNS)
             .await?)
     }
 }
@@ -190,9 +200,8 @@ mod tests {
 
         assert_eq!(written, fixture_segments().len());
         let path = log.poll_file(captured_at).expect("path");
-        assert!(
-            path.ends_with("bronze/motis_segment/polled_date=2026-07-26/20260726T140530Z.parquet")
-        );
+        assert!(path
+            .ends_with("bronze/motis_segment/polled_date=2026-07-26/20260726T140530000Z.parquet"));
         assert_eq!(read_back(&path).num_rows(), fixture_segments().len());
     }
 

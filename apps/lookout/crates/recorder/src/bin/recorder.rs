@@ -16,7 +16,7 @@ use std::time::Duration;
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use medallion::MedallionArgs;
-use recorder::bronze::{Archive, Written};
+use recorder::bronze::{Archive, Payload, Written};
 use telemetry::RawSample;
 
 /// How long to block on `BRPOP` before treating the queue as drained.
@@ -168,7 +168,8 @@ async fn drain(archive: &Archive, conn: &mut redis::aio::MultiplexedConnection) 
 
 /// Write one batch, reporting what landed, or `None` if it could not be written.
 async fn write(archive: &Archive, samples: &[RawSample]) -> Option<Written> {
-    match archive.write(Utc::now(), samples).await {
+    let payloads: Vec<Payload> = samples.iter().map(Payload::from).collect();
+    match archive.write(Utc::now(), &payloads).await {
         Ok(written) => Some(written),
         Err(err) => {
             tracing::error!(%err, count = samples.len(), "failed to write batch");
