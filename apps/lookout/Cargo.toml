@@ -21,12 +21,10 @@ rustls = { version = "0.23", features = ["ring"] }
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
 # `bundled` compiles a pinned SQLite from source, so the recorder doesn't depend on
-# a system libsqlite3 being present or new enough. It also builds SQLite with the
-# R*Tree module (`-DSQLITE_ENABLE_RTREE`), used by the transport enrichment for a
-# spatial index over the `transport` table — no separate rusqlite feature is needed.
+# a system libsqlite3 being present or new enough.
 rusqlite = { version = "0.40", features = ["bundled"] }
-# SedonaDB: a Rust-native, DataFusion/GeoArrow spatial engine the transport `enrich`
-# bin uses in-process to read Overture transport GeoParquet from S3. Not published to
+# SedonaDB: a Rust-native, DataFusion/GeoArrow spatial engine used in-process to read
+# Overture GeoParquet, and to read the store back. Not published to
 # crates.io, so pinned to a release tag. We select `aws` (S3 object store) + the
 # pure-Rust `geo` geometry backend with default-features off, which drops the `geos`
 # backend — it links a *system* GEOS library (enable it later once GEOS is installed).

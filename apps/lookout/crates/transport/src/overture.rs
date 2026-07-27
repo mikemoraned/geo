@@ -11,9 +11,6 @@ use datafusion::execution::SendableRecordBatchStream;
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
-use geo_types::{MultiPolygon, Rect};
-use wkt::ToWkt;
-
 /// Default Overture release to read. Overture publishes monthly and only keeps the
 /// most recent releases on S3, so this needs bumping as old ones age out; override
 /// with `--release`.
@@ -21,11 +18,6 @@ pub const DEFAULT_RELEASE: &str = "2026-06-17.0";
 
 /// The public Overture bucket's region; the bucket name embeds it too.
 const S3_REGION: &str = "us-west-2";
-
-/// Rail `class`es dropped when extracting: street `tram` lines aren't the transport
-/// we care about. Applied to both the segment fetch and the connector-reference
-/// subquery, so tram connectors are excluded along with tram segments.
-pub(crate) const EXCLUDED_CLASSES: &[&str] = &["tram"];
 
 /// One `theme=…/type=…` partition of an Overture release — the unit a release is laid out
 /// in, and so the unit an extract of it is read from and written back into.
@@ -182,129 +174,11 @@ impl Overture {
     pub async fn stream(&self, sql: &str) -> Result<SendableRecordBatchStream, OvertureError> {
         Ok(self.ctx.sql(sql).await?.execute_stream().await?)
     }
-
-    /// Query every **rail** `segment` whose geometry intersects any of `bboxes`,
-    /// returning `id`/`subtype`/`class`, the geometry as WKB (`ST_AsBinary`), and the
-    /// segment's bounding box flattened from Overture's `bbox` struct to
-    /// `min_lon`/`max_lon`/`min_lat`/`max_lat`. Requires [`register_segments`] first.
-    /// One query against the union of the bbox envelopes, so the partition is scanned
-    /// once and SedonaDB prunes row groups by the combined bbox covering; the
-    /// `subtype = 'rail'` filter keeps only rail. Empty `bboxes` yields no rows without
-    /// touching S3.
-    pub async fn rail_segments(
-        &self,
-        bboxes: &[Rect<f64>],
-    ) -> Result<Vec<RecordBatch>, OvertureError> {
-        if bboxes.is_empty() {
-            return Ok(Vec::new());
-        }
-        let sql = format!(
-            "SELECT id, subtype, class, ST_AsBinary(geometry) AS geometry,
-                    bbox['xmin'] AS min_lon, bbox['xmax'] AS max_lon,
-                    bbox['ymin'] AS min_lat, bbox['ymax'] AS max_lat
-             FROM segments
-             WHERE subtype = 'rail'
-               AND {class}
-               AND ST_Intersects(geometry, ST_SetSRID(ST_GeomFromWKT('{window}'), 4326))",
-            class = class_filter("class"),
-            window = bboxes_multipolygon_wkt(bboxes),
-        );
-        Ok(self.ctx.sql(&sql).await?.collect().await?)
-    }
-
-    /// Fetch the `connectors` referenced by the rail segments intersecting `bboxes`,
-    /// returning `id`, geometry as WKB, and the connector's bounding box flattened from
-    /// Overture's `bbox` struct. Requires both [`register_segments`] and
-    /// [`register_connectors`]. A connector is kept when its point falls in the same
-    /// window (so the connector partition is pruned by its bbox covering) *and* its
-    /// `id` is one of the `connector_id`s referenced by a rail segment in the window.
-    /// The connector table has unique `id`s, so the result is already deduped.
-    ///
-    /// Caveat: the spatial predicate drops the occasional referenced connector that
-    /// sits just outside the window (an endpoint of a rail segment that only clips the
-    /// box).
-    pub async fn rail_connectors(
-        &self,
-        bboxes: &[Rect<f64>],
-    ) -> Result<Vec<RecordBatch>, OvertureError> {
-        if bboxes.is_empty() {
-            return Ok(Vec::new());
-        }
-        let sql = format!(
-            "SELECT c.id, ST_AsBinary(c.geometry) AS geometry,
-                    c.bbox['xmin'] AS min_lon, c.bbox['xmax'] AS max_lon,
-                    c.bbox['ymin'] AS min_lat, c.bbox['ymax'] AS max_lat
-             FROM connectors AS c
-             WHERE ST_Intersects(c.geometry, ST_SetSRID(ST_GeomFromWKT('{window}'), 4326))
-               AND c.id IN (
-                 SELECT DISTINCT elem['connector_id']
-                 FROM (
-                   SELECT UNNEST(s.connectors) AS elem
-                   FROM segments AS s
-                   WHERE s.subtype = 'rail'
-                     AND {class}
-                     AND ST_Intersects(s.geometry, ST_SetSRID(ST_GeomFromWKT('{window}'), 4326))
-                 ) AS refs
-               )",
-            class = class_filter("s.class"),
-            window = bboxes_multipolygon_wkt(bboxes),
-        );
-        Ok(self.ctx.sql(&sql).await?.collect().await?)
-    }
-}
-
-/// A MULTIPOLYGON WKT covering every bbox, for use as a single spatial query window
-/// over all of them at once. Each [`Rect`] becomes a closed rectangular polygon (`lon
-/// lat`, x-y). Caller ensures `bboxes` is non-empty.
-fn bboxes_multipolygon_wkt(bboxes: &[Rect<f64>]) -> String {
-    let polygons = bboxes.iter().copied().map(Rect::to_polygon).collect();
-    MultiPolygon::new(polygons).wkt_string()
-}
-
-/// A SQL predicate excluding [`EXCLUDED_CLASSES`] on `column`, keeping null-class rows
-/// (`coalesce` maps a null class to `''`, which is never an excluded class). `TRUE`
-/// when nothing is excluded, so it composes into an `AND` chain unconditionally.
-fn class_filter(column: &str) -> String {
-    if EXCLUDED_CLASSES.is_empty() {
-        return "TRUE".to_string();
-    }
-    let excluded = EXCLUDED_CLASSES
-        .iter()
-        .map(|class| format!("'{class}'"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("coalesce({column}, '') NOT IN ({excluded})")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use geo_types::Coord;
-
-    fn bbox(min_lat: f64, max_lat: f64, min_lon: f64, max_lon: f64) -> Rect<f64> {
-        Rect::new(
-            Coord {
-                x: min_lon,
-                y: min_lat,
-            },
-            Coord {
-                x: max_lon,
-                y: max_lat,
-            },
-        )
-    }
-
-    #[test]
-    fn multipolygon_covers_every_bbox_as_a_closed_ring() {
-        let wkt =
-            bboxes_multipolygon_wkt(&[bbox(50.0, 51.0, 11.0, 12.0), bbox(52.0, 53.0, 13.0, 14.0)]);
-        assert_eq!(
-            wkt,
-            "MULTIPOLYGON(((12 50,12 51,11 51,11 50,12 50)),((14 52,14 53,13 53,13 52,14 52)))",
-            "one closed lon-lat rectangle ring per bbox"
-        );
-    }
-
     /// The S3 path embeds the release, theme and type, against the public `us-west-2`
     /// bucket. (A pure string check — nothing is read.)
     #[test]
@@ -340,20 +214,5 @@ mod tests {
         Release::published("2025-08-20.0")
             .read_options()
             .expect("valid anonymous S3 options");
-    }
-
-    /// The class filter excludes each configured class on the given column while a
-    /// `coalesce` keeps null-class rows.
-    #[test]
-    fn class_filter_excludes_configured_classes_keeping_nulls() {
-        assert!(
-            !EXCLUDED_CLASSES.is_empty(),
-            "expects at least one exclusion"
-        );
-        let filter = class_filter("s.class");
-        assert!(filter.starts_with("coalesce(s.class, '') NOT IN ("));
-        for class in EXCLUDED_CLASSES {
-            assert!(filter.contains(&format!("'{class}'")));
-        }
     }
 }

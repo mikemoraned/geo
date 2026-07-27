@@ -23,7 +23,11 @@ use geo_types::{Coord, Rect};
 use medallion::{Country, PartitionValue, Root};
 use serde::{Deserialize, Serialize};
 
-use crate::overture::{Overture, OvertureError, OvertureType, EXCLUDED_CLASSES};
+use crate::overture::{Overture, OvertureError, OvertureType};
+
+/// Rail `class`es left out of the extract: street `tram` lines aren't the transport we
+/// care about, and excluding them here keeps their connectors out too.
+const EXCLUDED_CLASSES: &[&str] = &["tram"];
 
 /// The format an id generated from an instant takes: compact UTC, so ids sort
 /// chronologically and carry no character a path or a column name would object to.

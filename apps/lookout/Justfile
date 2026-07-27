@@ -70,13 +70,14 @@ record *args:
 poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 
-# Enrich the SQLite archive with Overture transport data: group the `gps` fixes into
-# per-device-day bounding boxes, fetch the rail segments + connectors intersecting them
-# from public Overture Maps S3 (anonymous — no credentials), and write a `transport`
-# table. No args = defaults (data/lookout.sqlite, pinned release); override with --db /
-# --release. Idempotent, so re-running won't duplicate rows.
-enrich *args:
-    cargo run -p transport --bin enrich -- {{args}}
+# Take a point-in-time Overture extract into bronze: the country's rail segments and the
+# connectors they reference, its water, and its administrative divisions, all under one
+# extract id with a manifest row recording the release and the window. No args = defaults
+# (pinned release, --country DE, public Overture S3 — anonymous, no credentials); pass
+# --mirror <dir> to read a local copy of the release instead, and --medallion-root to
+# write elsewhere. Each run is a new extract id, never a replacement.
+extract *args:
+    cargo run --release -p transport --bin extract -- {{args}}
 
 # Derive the silver `train_segment` dataset from the bronze motis capture log: dedup
 # re-seen legs, decode each polyline to WKB, and add the projected geometry. Requires

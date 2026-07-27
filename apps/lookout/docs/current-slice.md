@@ -199,11 +199,20 @@ The main tasks here should be focussed on documenting these patterns and correct
             envelope *overlaps* the window, so water reaches to lon -4.0 against a window
             starting at 5.9: the North Sea is one polygon. Neither is a defect to fix here;
             silver clips precisely against the boundary.
-      - [ ] Repoint `enrich`'s input off sqlite: the bboxes it derives come from bronze
+      - [-] Repoint `enrich`'s input off sqlite: the bboxes it derives come from bronze
             `gps_reading`, not the `gps` table of `data/lookout.sqlite`. Leaving this on
             sqlite would re-establish the dependency this migration exists to remove.
             `transport::archive` (the sqlite reader) and `transport::store` (the sqlite
             `transport` table) both go.
+            Moot: `enrich` is removed rather than migrated. Its purpose was to fetch the
+            Overture data intersecting the observed bboxes, and the country-wide extract
+            now covers that, so migrating it would leave two ways in with nothing to
+            choose between them. The narrowing it did — Overture restricted to where we
+            have actually been — is still wanted, but it belongs to a silver derivation
+            over sessionised fixes rather than to a fetch, and is better built once
+            sessions exist. `archive`, `groups` and `store` go with it, taking transport's
+            last sqlite dependency; `data/lookout.sqlite`'s existing `transport` table is
+            untouched and `visualise` still reads it until repointed below.
       - [ ] Point the water-crossings notebooks at the bronze extract instead of S3 or the
             `/Volumes/PRO-G40` Overture mirror, so a rerun is reproducible against a
             recorded release rather than against whatever S3 currently holds. The

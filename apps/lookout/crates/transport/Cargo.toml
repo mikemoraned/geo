@@ -11,7 +11,6 @@ datafusion = { workspace = true }
 geo-types = { workspace = true }
 medallion = { workspace = true }
 model = { workspace = true }
-rusqlite = { workspace = true }
 serde = { workspace = true }
 sedona = { workspace = true }
 sedona-geoparquet = { workspace = true }
@@ -19,7 +18,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-wkt = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
