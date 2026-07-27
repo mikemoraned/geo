@@ -9,9 +9,15 @@
 //! milliseconds — an integer carrying no unit or timezone of its own — so a row type names
 //! its instant columns and they are declared as timestamps here. This is the one place
 //! that rule is expressed, so datasets cannot drift apart on the representation of time.
+//!
+//! **A variant is stored as its name.** A column whose Rust type is an enum of dataless
+//! variants is a string column rather than a union, since engines vary in what they make
+//! of a union and a stored dataset must not depend on which one reads it.
+
+use std::sync::Arc;
 
 use arrow::array::RecordBatch;
-use arrow::datatypes::FieldRef;
+use arrow::datatypes::{DataType, Field, FieldRef};
 use serde::{Deserialize, Serialize};
 use serde_arrow::schema::{SchemaLike, TracingOptions};
 use serde_json::json;
@@ -47,15 +53,32 @@ pub trait Row: Serialize + for<'de> Deserialize<'de> {
 /// Callers that append geometry columns need the fields separately; those writing rows
 /// alone can use [`batch`] instead.
 pub fn fields<T: Row>() -> Result<Vec<FieldRef>, RowError> {
-    let options = T::INSTANTS
+    let options = TracingOptions::default().enums_without_data_as_strings(true);
+    let options = T::INSTANTS.iter().try_fold(options, |options, &name| {
+        options.overwrite(
+            name,
+            json!({"name": name, "data_type": INSTANT_TYPE, "nullable": true}),
+        )
+    })?;
+    Ok(Vec::<FieldRef>::from_type::<T>(options)?
         .iter()
-        .try_fold(TracingOptions::default(), |options, &name| {
-            options.overwrite(
-                name,
-                json!({"name": name, "data_type": INSTANT_TYPE, "nullable": true}),
-            )
-        })?;
-    Ok(Vec::<FieldRef>::from_type::<T>(options)?)
+        .map(undictionary)
+        .collect())
+}
+
+/// A dictionary-encoded field as a plain field of its values.
+///
+/// Tracing a dataless enum yields a dictionary of its variant names. The encoding is a
+/// storage decision the parquet writer makes per column anyway, so it is dropped from the
+/// schema rather than being carried into it and read back differently by each engine.
+fn undictionary(field: &FieldRef) -> FieldRef {
+    match field.data_type() {
+        DataType::Dictionary(_, values) => Arc::new(
+            Field::new(field.name(), values.as_ref().clone(), field.is_nullable())
+                .with_metadata(field.metadata().clone()),
+        ),
+        _ => field.clone(),
+    }
 }
 
 /// One batch holding `rows`.
@@ -65,7 +88,7 @@ pub fn batch<T: Row>(rows: &[T]) -> Result<RecordBatch, RowError> {
 
 #[cfg(test)]
 mod tests {
-    use arrow::datatypes::{DataType, TimeUnit};
+    use arrow::datatypes::TimeUnit;
     use chrono::{DateTime, Utc};
 
     use super::*;
@@ -76,6 +99,14 @@ mod tests {
         id: i64,
         t: i64,
         name: Option<String>,
+        source: Source,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    #[serde(rename_all = "snake_case")]
+    enum Source {
+        Measured,
+        Inferred,
     }
 
     impl Row for Reading {
@@ -89,6 +120,7 @@ mod tests {
             id,
             t: 1_700_000_000_000,
             name: None,
+            source: Source::Measured,
         }
     }
 
@@ -118,7 +150,29 @@ mod tests {
         let batch = batch(&[row(1), row(2)]).unwrap();
 
         assert_eq!(batch.num_rows(), 2);
-        assert_eq!(batch.num_columns(), 3);
+        assert_eq!(batch.num_columns(), 4);
+    }
+
+    /// A union is read differently by different engines, so a dataless variant is stored
+    /// as its name instead.
+    #[test]
+    fn a_column_of_dataless_variants_is_stored_as_a_string() {
+        let fields = fields::<Reading>().unwrap();
+
+        let source = fields.iter().find(|f| f.name() == "source").unwrap();
+        assert!(
+            matches!(source.data_type(), DataType::Utf8 | DataType::LargeUtf8),
+            "expected a string column, got {:?}",
+            source.data_type()
+        );
+    }
+
+    #[test]
+    fn a_variant_round_trips_through_a_batch() {
+        let batch = batch(&[row(1)]).unwrap();
+
+        let rows: Vec<Reading> = serde_arrow::from_record_batch(&batch).unwrap();
+        assert_eq!(rows[0].source, Source::Measured);
     }
 
     /// The timestamps survive as instants, rather than being reinterpreted as some other

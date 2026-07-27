@@ -13,25 +13,29 @@
 
 mod motis;
 mod overture;
+mod session;
 mod telemetry;
 
 use medallion::DatasetSpec;
 
 pub use motis::{MotisSegmentRow, TrainSegmentRow, MOTIS_SEGMENT, TRAIN_SEGMENT};
 pub use overture::{ExtractManifestRow, EXTRACT_MANIFEST, OVERTURE_EXTRACT};
+pub use session::{Bbox, SessionFixRow, SessionId, SessionRow, StartedBy, SESSION, SESSION_FIX};
 pub use telemetry::{
     AccelReadingRow, DeviceSessionRow, GpsReadingRow, RawSampleRow, ACCEL_READING, DEVICE_SESSION,
     GPS_READING, RAW_SAMPLE,
 };
 
 /// Every dataset defined here, for checks that must cover all of them.
-pub const ALL: [DatasetSpec; 8] = [
+pub const ALL: [DatasetSpec; 10] = [
     RAW_SAMPLE,
     GPS_READING,
     ACCEL_READING,
     DEVICE_SESSION,
     MOTIS_SEGMENT,
     TRAIN_SEGMENT,
+    SESSION,
+    SESSION_FIX,
     OVERTURE_EXTRACT,
     EXTRACT_MANIFEST,
 ];
@@ -125,6 +129,8 @@ mod tests {
         check_rows_of::<DeviceSessionRow>();
         check_rows_of::<MotisSegmentRow>();
         check_rows_of::<TrainSegmentRow>();
+        check_rows_of::<SessionRow>();
+        check_rows_of::<SessionFixRow>();
         check_rows_of::<ExtractManifestRow>();
     }
 }

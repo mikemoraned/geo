@@ -459,10 +459,20 @@ Steps:
       it did not write. Row structs are the definition of these entities; the relations
       between them stay documentation (the diagram above), since a foreign-key registry
       nothing enforces at write time would not earn its keep at two datasets.
-- [ ] Define `session` and `session_fix` in `model` — the columns above, both silver,
+- [x] Define `session` and `session_fix` in `model` — the columns above, both silver,
       partitioned `start_date` and `fix_date` as `medallion.md` already pins. A session
       spanning midnight has its fixes split across two partitions and is reassembled by
       `session_id`, so that column is carried on every fix.
+      Note: `started_by` is a Rust enum, which needed a store-wide decision about how a
+      closed set of names is stored. It is a plain string column: tracing an enum yields a
+      *dictionary* of the variant names, and the dictionary is dropped from the schema
+      rather than carried into it, since the encoding is the parquet writer's business and
+      an engine reading the arrow metadata would otherwise hand back a different type than
+      one that doesn't. The rule is in `medallion.md`, alongside the instant rule that was
+      until now only expressed in code.
+      `t` is a timestamp here rather than the epoch-millis integer bronze carries, as are
+      `started_at`/`ended_at`, and `bbox` is one struct of `xmin`/`ymin`/`xmax`/`ymax`
+      following the upstream reference data's own envelope naming.
 - [ ] Derive the session boundaries from bronze `gps_reading` and `device_session`: dedup
       on `(device_id, t)`, order by `t`, and start a new session at an explicit
       `StartSession` for that device or after a gap exceeding the threshold (`--gap`,

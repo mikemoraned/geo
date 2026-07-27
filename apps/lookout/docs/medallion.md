@@ -156,6 +156,18 @@ therefore independent of any single engine: which engine a given job uses is a l
 decision, not a division in the data, and an engine can be added or dropped without
 migrating silver.
 
+## Column conventions
+
+A few representations are fixed across the whole store rather than chosen per dataset, so
+that knowing one dataset's columns is knowing them all.
+
+- **Instants are UTC timestamps at millisecond precision**, whatever integer form they
+  travel in on the way here. A column holding a time is stored as a time, never as a number
+  a reader has to be told the unit and epoch of.
+- **A value drawn from a closed set of names is stored as the name**, in a string column,
+  rather than as a code to be resolved elsewhere or as a union type the engines disagree
+  about the reading of.
+
 ## Partitioning
 
 Per-dataset Hive partition keys are part of the schema of this store and are expensive to
