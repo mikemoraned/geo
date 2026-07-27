@@ -1,11 +1,13 @@
-//! Live access to Overture Maps transportation data via SedonaDB, queried in-process
-//! against the public S3 bucket. Opens a SedonaDB context, registers the release's
-//! `theme=transportation` GeoParquet as tables (read anonymously from S3), and runs
-//! bbox-filtered queries over them.
+//! Access to Overture Maps data via SedonaDB, queried in-process against one release —
+//! either the public S3 bucket or a local mirror of it ([`Release`]). Opens a SedonaDB
+//! context, registers a release's `theme=…/type=…` GeoParquet as tables, and runs queries
+//! over them.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use arrow::array::RecordBatch;
+use datafusion::execution::SendableRecordBatchStream;
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
@@ -20,10 +22,35 @@ pub const DEFAULT_RELEASE: &str = "2026-06-17.0";
 /// The public Overture bucket's region; the bucket name embeds it too.
 const S3_REGION: &str = "us-west-2";
 
-/// Rail `class`es dropped during enrichment: street `tram` lines aren't the transport
+/// Rail `class`es dropped when extracting: street `tram` lines aren't the transport
 /// we care about. Applied to both the segment fetch and the connector-reference
 /// subquery, so tram connectors are excluded along with tram segments.
-const EXCLUDED_CLASSES: &[&str] = &["tram"];
+pub(crate) const EXCLUDED_CLASSES: &[&str] = &["tram"];
+
+/// One `theme=…/type=…` partition of an Overture release — the unit a release is laid out
+/// in, and so the unit an extract of it is read from and written back into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OvertureType {
+    pub theme: &'static str,
+    pub name: &'static str,
+}
+
+impl OvertureType {
+    const fn new(theme: &'static str, name: &'static str) -> Self {
+        Self { theme, name }
+    }
+
+    /// Roads, railways and the like; the rail subtype is what concerns us.
+    pub const SEGMENT: Self = Self::new("transportation", "segment");
+    /// The points segments join at.
+    pub const CONNECTOR: Self = Self::new("transportation", "connector");
+    /// Rivers, canals, lakes and coastline.
+    pub const WATER: Self = Self::new("base", "water");
+    /// Administrative boundaries as areas — where a country's own outline comes from.
+    pub const DIVISION_AREA: Self = Self::new("divisions", "division_area");
+    /// Administrative entities as points, localities among them.
+    pub const DIVISION: Self = Self::new("divisions", "division");
+}
 
 /// Failure opening or querying Overture.
 #[derive(Debug, thiserror::Error)]
@@ -34,71 +61,126 @@ pub enum OvertureError {
     ReadOptions(String),
 }
 
-/// A SedonaDB context pointed at one Overture release on S3.
-pub struct Overture {
-    ctx: SedonaContext,
-    release: String,
+/// Where a release is read from. A local mirror of the bucket holds the identical files
+/// under the identical layout, so it is the same release by a shorter path — which is why
+/// the id is recorded independently of the location, and provenance does not record which
+/// of the two a given extraction happened to read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Release {
+    id: String,
+    mirror: Option<PathBuf>,
 }
 
-impl Overture {
-    /// Open a SedonaDB context for `release`. No network happens until a table is
-    /// registered or queried.
-    pub fn open(release: impl Into<String>) -> Self {
+impl Release {
+    /// The release as published, read from the public S3 bucket.
+    pub fn published(id: impl Into<String>) -> Self {
         Self {
-            ctx: SedonaContext::new(),
-            release: release.into(),
+            id: id.into(),
+            mirror: None,
         }
     }
 
-    /// The S3 directory prefix for one `theme=transportation` type (`segment` |
-    /// `connector`). A trailing slash so the reader lists the partition's `.parquet`
-    /// files (a duckdb-style `/*` glob fails DataFusion's `.parquet` extension check).
-    fn transportation_path(&self, overture_type: &str) -> String {
-        format!(
-            "s3://overturemaps-{S3_REGION}/release/{}/theme=transportation/type={overture_type}/",
-            self.release
-        )
+    /// The same release read from a local mirror rooted at `path`, which contains the
+    /// release's `theme=…` directories.
+    pub fn mirrored(id: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+        Self {
+            id: id.into(),
+            mirror: Some(path.into()),
+        }
     }
 
-    /// GeoParquet read options for anonymous access to the public bucket: unsigned
-    /// requests (`aws.skip_signature`) against `us-west-2`.
-    fn s3_read_options() -> Result<GeoParquetReadOptions<'static>, OvertureError> {
+    /// The release identifier, as Overture publishes it.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    /// The directory holding one type's parquet files. A trailing slash so the reader
+    /// lists the partition's `.parquet` files (a duckdb-style `/*` glob fails
+    /// DataFusion's `.parquet` extension check).
+    fn path(&self, overture_type: OvertureType) -> String {
+        let OvertureType { theme, name } = overture_type;
+        match &self.mirror {
+            Some(root) => format!("{}/theme={theme}/type={name}/", root.display()),
+            None => format!(
+                "s3://overturemaps-{S3_REGION}/release/{}/theme={theme}/type={name}/",
+                self.id
+            ),
+        }
+    }
+
+    /// Read options for this location: anonymous, unsigned requests against the public
+    /// bucket; nothing special for a mirror, which is just files on disk.
+    fn read_options(&self) -> Result<GeoParquetReadOptions<'static>, OvertureError> {
+        if self.mirror.is_some() {
+            return Ok(GeoParquetReadOptions::default());
+        }
         let options = HashMap::from([
             ("aws.skip_signature".to_string(), "true".to_string()),
             ("aws.region".to_string(), S3_REGION.to_string()),
         ]);
         GeoParquetReadOptions::from_table_options(options).map_err(OvertureError::ReadOptions)
     }
+}
 
-    /// Register the release's `segment` GeoParquet as a queryable table `segments`,
-    /// read anonymously from S3. Replaces any existing registration of that name.
+/// A SedonaDB context pointed at one Overture release.
+pub struct Overture {
+    ctx: SedonaContext,
+    release: Release,
+}
+
+impl Overture {
+    /// Open a SedonaDB context for `release`. Nothing is read until a table is registered
+    /// or queried.
+    pub fn open(release: Release) -> Self {
+        Self {
+            ctx: SedonaContext::new(),
+            release,
+        }
+    }
+
+    /// The release this reads.
+    pub fn release(&self) -> &Release {
+        &self.release
+    }
+
+    /// Register the release's `segment` GeoParquet as a queryable table `segments`.
+    /// Replaces any existing registration of that name.
     pub async fn register_segments(&self) -> Result<(), OvertureError> {
-        self.register_transportation("segment", "segments").await
+        self.register(OvertureType::SEGMENT, "segments").await
     }
 
-    /// Register the release's `connector` GeoParquet as a queryable table
-    /// `connectors`, read anonymously from S3.
+    /// Register the release's `connector` GeoParquet as a queryable table `connectors`.
     pub async fn register_connectors(&self) -> Result<(), OvertureError> {
-        self.register_transportation("connector", "connectors")
-            .await
+        self.register(OvertureType::CONNECTOR, "connectors").await
     }
 
-    /// Register one `theme=transportation` type's GeoParquet (read anonymously from
-    /// S3) as a queryable table `table`. Replaces any existing registration of it.
-    async fn register_transportation(
+    /// Register one type's GeoParquet as a queryable table `table`. Replaces any
+    /// existing registration of it.
+    pub async fn register(
         &self,
-        overture_type: &str,
+        overture_type: OvertureType,
         table: &str,
     ) -> Result<(), OvertureError> {
         let df = self
             .ctx
             .read_parquet(
-                self.transportation_path(overture_type),
-                Self::s3_read_options()?,
+                self.release.path(overture_type),
+                self.release.read_options()?,
             )
             .await?;
         self.ctx.ctx.register_table(table, df.into_view())?;
         Ok(())
+    }
+
+    /// Run `sql` over the registered tables and collect the result.
+    pub async fn sql(&self, sql: &str) -> Result<Vec<RecordBatch>, OvertureError> {
+        Ok(self.ctx.sql(sql).await?.collect().await?)
+    }
+
+    /// Run `sql` over the registered tables, streaming the results rather than collecting
+    /// them, for queries whose answer is too large to hold.
+    pub async fn stream(&self, sql: &str) -> Result<SendableRecordBatchStream, OvertureError> {
+        Ok(self.ctx.sql(sql).await?.execute_stream().await?)
     }
 
     /// Query every **rail** `segment` whose geometry intersects any of `bboxes`,
@@ -223,22 +305,41 @@ mod tests {
         );
     }
 
-    /// The S3 glob embeds the release and the transportation type, against the public
-    /// `us-west-2` bucket. (A pure string check — no network.)
+    /// The S3 path embeds the release, theme and type, against the public `us-west-2`
+    /// bucket. (A pure string check — nothing is read.)
     #[test]
-    fn transportation_path_targets_the_release_partition() {
-        let overture = Overture::open("2025-08-20.0");
+    fn a_published_release_reads_from_the_public_bucket() {
+        let release = Release::published("2025-08-20.0");
+
         assert_eq!(
-            overture.transportation_path("segment"),
+            release.path(OvertureType::SEGMENT),
             "s3://overturemaps-us-west-2/release/2025-08-20.0/theme=transportation/type=segment/"
+        );
+    }
+
+    /// A mirror is the same layout under a local root, so only the prefix differs.
+    #[test]
+    fn a_mirrored_release_reads_the_same_layout_from_disk() {
+        let release = Release::mirrored("2025-08-20.0", "/mirror/2025-08-20.0");
+
+        assert_eq!(
+            release.path(OvertureType::WATER),
+            "/mirror/2025-08-20.0/theme=base/type=water/"
+        );
+        assert_eq!(
+            release.id(),
+            "2025-08-20.0",
+            "the id is the release, not the path"
         );
     }
 
     /// The anonymous read options are accepted (the option names are validated by
     /// `from_table_options`, which errors on typos).
     #[test]
-    fn s3_read_options_are_valid() {
-        Overture::s3_read_options().expect("valid anonymous S3 options");
+    fn published_read_options_are_valid() {
+        Release::published("2025-08-20.0")
+            .read_options()
+            .expect("valid anonymous S3 options");
     }
 
     /// The class filter excludes each configured class on the given column while a

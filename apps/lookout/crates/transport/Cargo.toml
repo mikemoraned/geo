@@ -8,6 +8,8 @@ arrow = { workspace = true }
 clap = { workspace = true }
 datafusion = { workspace = true }
 geo-types = { workspace = true }
+medallion = { workspace = true }
+model = { workspace = true }
 rusqlite = { workspace = true }
 sedona = { workspace = true }
 sedona-geoparquet = { workspace = true }

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use transport::{
     archive::Archive,
-    overture::{Overture, DEFAULT_RELEASE},
+    overture::{Overture, Release, DEFAULT_RELEASE},
     store::Store,
 };
 
@@ -62,7 +62,7 @@ async fn main() {
         return;
     }
     let bboxes: Vec<_> = groups.iter().map(|g| g.bbox).collect();
-    let overture = Overture::open(&args.release);
+    let overture = Overture::open(Release::published(&args.release));
     overture
         .register_segments()
         .await
