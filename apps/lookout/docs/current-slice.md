@@ -225,14 +225,31 @@ The main tasks here should be focussed on documenting these patterns and correct
             nothing the pipeline depends on. Note v8 only runs where that extract exists:
             nothing in the repo recreates a *given* id, since a rerun of `just extract`
             makes a new one.
-- [ ] Point `visualise/` at the new silver/bronze parquet instead of `lookout.sqlite`,
-      confirming the rerun output is unchanged — the regression check that the migration
-      lost nothing.
-      Note: its `transport` table no longer has a writer, `enrich` having been removed
-      above, so that pane is frozen at whatever the last `enrich` run left. "Unchanged
-      output" is therefore only a fair check for the sensor panes; the transport pane needs
-      a new source rather than a repointing, and the derivation that would feed it is the
-      one deferred until sessions exist.
+- [ ] Port `visualise/` from `sqlite3` to DuckDB over the medallion store. It is the last
+      reader of `data/lookout.sqlite`, and the point is the engine, not just the path: the
+      store is parquet that any of our engines reads, and DuckDB is the one we already use
+      for ad-hoc and notebook work, so a hand-rolled reader has nothing to recommend it.
+      DuckDB also reads the silver GeoParquet geometry directly, which drops the
+      WKB-blob-to-shapely step the sqlite reader needs.
+
+      Its four tables do not migrate alike, and that is most of the work:
+
+      * `gps` and `accel` become bronze `gps_reading` / `accel_reading`. Straightforward,
+        and these are what "the rerun output is unchanged" can actually be checked against.
+      * `train_segment` becomes the silver dataset of that name — already written, already
+        GeoParquet.
+      * `transport` has no writer at all now `enrich` is gone, so that pane cannot be
+        repointed, only re-sourced. **Drop it**, along with its map pane and the blueprint
+        entry for it, and restore it once the silver rail derivation exists. Keeping
+        `visualise` on sqlite for this one table would hold the whole file's sqlite reader
+        open to serve a pane whose data stops ageing anyway, and the restored pane will
+        read the silver dataset rather than the old `transport` shape, so the code being
+        deleted is not the code that comes back.
+
+      The `--since` window and `--devices` filter are predicates over Hive partitions here
+      rather than a `WHERE` over a table scan, so check what a date-partition predicate
+      actually does before assuming it prunes (see the partition-column typing task below —
+      this is the case that motivates it).
 - [ ] Backfill existing `data/lookout.sqlite` and `data/motis.sqlite` content into bronze
       once, so history isn't stranded behind the old format.
 - [ ] Decide whether partition columns should be declared with their types rather than
