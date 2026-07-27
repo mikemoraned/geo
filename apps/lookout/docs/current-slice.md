@@ -151,6 +151,48 @@ The main tasks here should be focussed on documenting these patterns and correct
       water-crossings notebooks) to bronze in Overture's native shape, with an
       `extract` metadata table (extract id, date, Overture release, bounding box) and an
       `extract_id` column joined onto the extracted rows.
+
+      Decisions taken before starting, as each changes what gets built:
+
+      * **One extraction covers both rail and water**, not one per theme. The two are
+        joined to each other (the crossings pipeline range-joins rail envelopes against
+        water envelopes), so a single `extract_id` keeps that join within one provenance
+        record and one release. `extract_id` is the outermost key, with Overture's own
+        `theme=`/`type=` layout below it, so both themes sit under the one extraction.
+      * **The extraction window is the country, not the observed bboxes.** `enrich`
+        currently derives per-`(device, UTC day)` bboxes and fetches only what intersects
+        them; the notebooks extract Germany-wide from the country division's boundary. One
+        extraction serving both has to use the wider window, so the window is the country
+        bbox and the manifest records it. Narrowing to observed bboxes stays available to
+        the silver derivations, which is where a query-shaped subset belongs.
+      * **Bronze keeps Overture's rows verbatim.** `overture.rs` today flattens Overture's
+        `bbox` struct into `min_lon`/`max_lon`/`min_lat`/`max_lat` and converts geometry
+        with `ST_AsBinary`. That is silver shaping and does not belong in the bronze
+        extract — it moves to the derivation that reads the extract. The only column bronze
+        adds is `extract_id`.
+
+      Steps:
+
+      - [ ] Define the two datasets in `model`: the extract itself (bronze, keyed
+            `extract_id`) and the manifest (bronze, unpartitioned — id, extraction
+            instant, Overture release, bbox). This needs two things loosening first: the
+            `model` test asserting *every* partition key ends with `_date` (it should
+            assert that date-valued keys name their event, not that all keys are dates),
+            and `medallion::Dataset`, which offers `on_date` but no way to partition on an
+            id.
+      - [ ] Extract both themes to bronze under one `extract_id`: `theme=transportation`
+            rail segments and their connectors, and `theme=base` water, each restricted to
+            the country window and written in Overture's shape plus `extract_id`. Write
+            the manifest row for the extraction.
+      - [ ] Repoint `enrich`'s input off sqlite: the bboxes it derives come from bronze
+            `gps_reading`, not the `gps` table of `data/lookout.sqlite`. Leaving this on
+            sqlite would re-establish the dependency this migration exists to remove.
+            `transport::archive` (the sqlite reader) and `transport::store` (the sqlite
+            `transport` table) both go.
+      - [ ] Point the water-crossings notebooks at the bronze extract instead of S3 or the
+            `/Volumes/PRO-G40` Overture mirror, so a rerun is reproducible against a
+            recorded release rather than against whatever S3 currently holds. The
+            `USE_LOCAL` mirror fallback goes with it.
 - [ ] Point `visualise/` at the new silver/bronze parquet instead of `lookout.sqlite`,
       confirming the rerun output is unchanged — the regression check that the migration
       lost nothing.
