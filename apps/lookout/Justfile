@@ -79,9 +79,10 @@ enrich *args:
     cargo run -p transport --bin enrich -- {{args}}
 
 # Derive the silver `train_segment` dataset from the bronze motis capture log: dedup
-# re-seen legs, decode each polyline to WKB, and add the projected geometry. No args =
-# the default medallion root; override with --medallion-root. Rewrites the partitions it
-# touches, so re-running over unchanged bronze leaves the same dataset.
+# re-seen legs, decode each polyline to WKB, and add the projected geometry. Requires
+# --country (the ISO code fixing the projected CRS), e.g. `just ingest-motis --country DE`;
+# override the store with --medallion-root. Rewrites the partitions it touches, so
+# re-running over unchanged bronze leaves the same dataset.
 ingest-motis *args:
     cargo run -p motis --bin motis_ingest -- {{args}}
 

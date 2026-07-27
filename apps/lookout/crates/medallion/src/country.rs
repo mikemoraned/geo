@@ -6,15 +6,54 @@
 //! comparable. This is where that choice is made, so a dataset states which country's
 //! geometry it holds and never picks a zone of its own.
 
+use std::fmt::{self, Display};
+use std::str::FromStr;
+
 /// A country whose geometry the store can hold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Country {
     Germany,
 }
 
+/// A code naming no country the store knows.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("unknown country `{code}`; known: {known}", known = Country::codes())]
+pub struct UnknownCountry {
+    code: String,
+}
+
+impl FromStr for Country {
+    type Err = UnknownCountry;
+
+    /// Parses an ISO 3166-1 alpha-2 code, in either case.
+    fn from_str(code: &str) -> Result<Self, Self::Err> {
+        Country::ALL
+            .into_iter()
+            .find(|country| country.code().eq_ignore_ascii_case(code))
+            .ok_or_else(|| UnknownCountry {
+                code: code.to_string(),
+            })
+    }
+}
+
+impl Display for Country {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.code().fmt(f)
+    }
+}
+
 impl Country {
     /// Every country the store knows, for checks that must cover all of them.
     pub const ALL: [Country; 1] = [Country::Germany];
+
+    /// The codes of every known country, for an error that lists the choices.
+    pub fn codes() -> String {
+        Country::ALL
+            .iter()
+            .map(|country| country.code())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 
     /// The ISO 3166-1 alpha-2 code, as used in a `country=` partition.
     pub fn code(self) -> &'static str {
@@ -60,6 +99,25 @@ mod tests {
             );
             assert_eq!(projjson["type"], "ProjectedCRS", "{country:?}");
         }
+    }
+
+    /// Round-trips through the code, so a country named on a command line is the one its
+    /// partition is named for.
+    #[test]
+    fn a_country_parses_from_its_own_code_in_either_case() {
+        for country in Country::ALL {
+            assert_eq!(country.code().parse(), Ok(country));
+            assert_eq!(country.code().to_lowercase().parse(), Ok(country));
+            assert_eq!(country.to_string(), country.code());
+        }
+    }
+
+    #[test]
+    fn an_unknown_code_is_rejected_with_the_known_ones() {
+        let err = "ZZ".parse::<Country>().unwrap_err();
+
+        assert!(err.to_string().contains("ZZ"), "{err}");
+        assert!(err.to_string().contains("DE"), "{err}");
     }
 
     #[test]

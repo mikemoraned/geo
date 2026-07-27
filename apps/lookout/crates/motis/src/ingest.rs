@@ -27,9 +27,6 @@ const PROJECTED_GEOMETRY: &str = "geometry_projected";
 /// The encoded geometry a leg arrives with, which the geometry columns replace.
 const POLYLINE: &str = "polyline";
 
-/// The country these segments run in, which fixes the projected geometry's CRS.
-const COUNTRY: Country = Country::Germany;
-
 /// Instant columns, declared rather than traced — see [`crate::bronze`].
 const INSTANT_COLUMNS: [&str; 2] = ["departure", "arrival"];
 
@@ -113,9 +110,12 @@ struct Leg {
 
 /// Derive the silver dataset from the bronze capture log in the same store.
 ///
+/// `country` is the one these segments run in: it fixes the CRS of the projected geometry
+/// column, since the projected zone is chosen per country.
+///
 /// Dedup and partitioning are one SQL query each against the capture log; the polyline
 /// decoding and projection either query does not express happen per partition in Rust.
-pub async fn ingest(root: &Root) -> Result<IngestOutcome, IngestError> {
+pub async fn ingest(root: &Root, country: Country) -> Result<IngestOutcome, IngestError> {
     let query = Query::new(root.clone());
     if !query
         .register_if_present(model::MOTIS_SEGMENT, CAPTURED)
@@ -146,13 +146,13 @@ pub async fn ingest(root: &Root) -> Result<IngestOutcome, IngestError> {
     let deduped = legs.len();
 
     // Ordered by departure, so each partition's legs are one run of adjacent rows.
-    let projector = Projector::for_country(COUNTRY)?;
+    let projector = Projector::for_country(country)?;
     let mut partitions = 0;
     for legs in legs.chunk_by(|a, b| a.departure.date_naive() == b.departure.date_naive()) {
         let date = legs[0].departure.date_naive();
         root.dataset(model::TRAIN_SEGMENT)
             .on_date(date)?
-            .rebuild_geo(&[batch(legs, &projector)?])
+            .rebuild_geo(&[batch(legs, &projector, country)?])
             .await?;
         partitions += 1;
     }
@@ -166,7 +166,11 @@ pub async fn ingest(root: &Root) -> Result<IngestOutcome, IngestError> {
 
 /// Build one partition's batch: the columns the legs carry, then the two geometry columns
 /// derived from their polylines.
-fn batch(legs: &[Leg], projector: &Projector) -> Result<RecordBatch, IngestError> {
+fn batch(
+    legs: &[Leg],
+    projector: &Projector,
+    country: Country,
+) -> Result<RecordBatch, IngestError> {
     let mut fields = medallion::fields::<Leg>(&INSTANT_COLUMNS)?;
     let mut arrays = serde_arrow::to_arrow(&fields, legs)?;
     drop_column(&mut fields, &mut arrays, POLYLINE);
@@ -183,7 +187,7 @@ fn batch(legs: &[Leg], projector: &Projector) -> Result<RecordBatch, IngestError
     for (field, geometries) in [
         (medallion::wkb_field(GEOMETRY)?, &lines),
         (
-            medallion::projected_wkb_field(PROJECTED_GEOMETRY, COUNTRY)?,
+            medallion::projected_wkb_field(PROJECTED_GEOMETRY, country)?,
             &projected,
         ),
     ] {
@@ -233,7 +237,7 @@ mod tests {
                 .await
                 .expect("append poll");
         }
-        ingest(root).await.expect("ingest")
+        ingest(root, Country::Germany).await.expect("ingest")
     }
 
     /// The derived dataset, registered the way any other reader would register it.
@@ -307,7 +311,7 @@ mod tests {
         )
         .await
         .expect("second poll");
-        ingest(&root).await.expect("ingest");
+        ingest(&root, Country::Germany).await.expect("ingest");
 
         let kept = derived(&root)
             .await
@@ -387,7 +391,7 @@ mod tests {
             .count("SELECT COUNT(*) AS count FROM derived")
             .await
             .expect("count");
-        let second = ingest(&root).await.expect("re-ingest");
+        let second = ingest(&root, Country::Germany).await.expect("re-ingest");
 
         assert_eq!(first, second, "the same run, run twice");
         assert_eq!(
@@ -405,7 +409,9 @@ mod tests {
     async fn an_empty_capture_log_derives_nothing() {
         let tmp = tempfile::tempdir().expect("tempdir");
 
-        let outcome = ingest(&Root::new(tmp.path())).await.expect("ingest");
+        let outcome = ingest(&Root::new(tmp.path()), Country::Germany)
+            .await
+            .expect("ingest");
 
         assert_eq!(
             outcome,
