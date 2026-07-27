@@ -539,9 +539,131 @@ Steps:
 
 We probably need to here productionise the pipeline we prototyped in apps/lookout/notebooks/water_crossings/v8.py. However, it's ok to keep it as a notebook, or chain of notebooks, for now.
 
-#### Tasks 
+#### The entities
 
-...
+A `water_crossing` is one place a train can see water — the collapsed representative of the
+intersection parts between a stretch of physical track and one water body. A
+`session_crossing` is the ground truth: that crossing having been passed in that session,
+at the instant of the nearest fix.
+
+```mermaid
+erDiagram
+    overture_extract |o--o{ water_crossing : "derived from"
+    water_crossing ||--o{ session_crossing : "passed in"
+    session ||--o{ session_crossing : passes
+    session_fix |o--|| session_crossing : "nearest fix"
+
+    water_crossing {
+        string crossing_id PK "silver, country"
+        string water_id FK "overture"
+        string water_subtype
+        string water_class
+        string track_id "canonical id of the connected rail component"
+        string rail_id "segment of the representative part"
+        string rail_class
+        string overlap_kind "line | point"
+        float overlap_m "representative part"
+        float total_overlap_m "summed over merged parts"
+        int merged_parts
+        float frac "position along rail_id"
+        geometry geometry "Point, CRS 84"
+        geometry geometry_projected "Point, metric"
+        string extract_id FK "provenance"
+        float merge_distance_m "tuning this run applied"
+        float min_crossing_m
+    }
+    session_crossing {
+        uuid session_id PK "silver, crossed_date"
+        string crossing_id PK
+        string device_id
+        timestamp crossed_at "t of the nearest fix"
+        float distance_m "nearest fix to crossing"
+        int fixes_within
+        float match_radius_m "threshold this run applied"
+    }
+```
+
+#### Tasks
+
+Decisions taken before starting, as each changes what gets built:
+
+* **The notebook stays the pipeline; only the write becomes Rust.** v9 keeps v8's DuckDB
+  SQL and its maps, and hands the finished tables to a small Rust extension module (PyO3 /
+  maturin) that takes GeoArrow in and writes the silver GeoParquet. Silver then has one
+  writer implementation rather than a Rust one and a Python one that must agree on WKB, CRS
+  metadata, partition layout and replacement semantics — which is what the multi-engine rule
+  in `medallion.md` would otherwise be trusting two codebases to hold up. The notebook does
+  not learn the store's layout: it names a dataset and passes rows.
+* **`crossing_id` is deterministic from `(water_id, track_id)`**, so ground truth recorded
+  by one run and predictions made by another refer to the same crossing. This needs
+  `track_id` to be canonical first: the component label today is a scipy
+  `connected_components` output whose numbering depends on row order, so it becomes a value
+  derived from the component's members (e.g. its lexically smallest Overture segment id).
+  Ids are then stable across a rerun on the same extract, and across a re-extraction that
+  did not change the segments involved.
+* **The collapsed set is the dataset, with its tuning as columns.** One row per collapsed
+  crossing, carrying the merge distance, minimum overlap and excluded rail flags it was
+  built under — the shape `session.gap_seconds` already uses. This is deliberately unlike
+  the "keep every fix, flag the doubtful" rule for sessions: there the thresholds belong to
+  a consumer, whereas here the collapse *is* the definition of a crossing, and ground truth
+  and predictions must count the same things or precision and recall mean nothing.
+  Retuning is a rebuild, and the columns say which tuning a given row was built under.
+* **Matching is pure distance**, as the straw man states: any fix within M metres of a
+  crossing, nearest fix wins per `(session, crossing)`. A crossing on a parallel line within
+  M metres will be recorded as passed when it was not; the fix for that is map-matching the
+  session to track, which is a slice of its own and not needed to get a first
+  precision/recall number.
+
+Steps:
+
+- [ ] Build the Python-facing writer: a maturin-built extension module wrapping `medallion`,
+      exposing "write these rows into this dataset, replacing the partitions they cover".
+      Input is an Arrow C stream (via the PyCapsule interface, so a DuckDB or pyarrow table
+      passes with no copy), with geometry as GeoArrow, which the module converts to the WKB
+      + PROJJSON silver requires. It depends on the silver-replace primitive from the
+      sessionisation section — build that first rather than a second way to overwrite.
+      Nothing new about the store is decided here: the module refuses a dataset it cannot
+      find in `model` and a schema that does not match that dataset's row struct, so a
+      notebook cannot invent a silver dataset or drift its columns.
+- [ ] Define `water_crossing` and `session_crossing` in `model`: the columns above, both
+      silver. `water_crossing` is reference-derived, so it partitions `country=DE` as
+      `medallion.md` pins; `session_crossing` partitions `crossed_date`, the date of the
+      nearest fix, so the same key means the same thing as `fix_date` next door.
+- [ ] Make the rail component id canonical in the crossings pipeline, replacing the scipy
+      label with a value derived from the component's members, and derive `crossing_id` from
+      `(water_id, track_id)`. Assert what the id is for: two runs over the same extract
+      produce the same ids, and a change to the merge distance — which moves representative
+      points and merges different parts — does not change the id of a crossing whose track
+      and water are unchanged.
+- [ ] Write `v9.py`: v8's pipeline through to the collapsed representatives, plus the
+      canonical ids, writing `water_crossing` to silver through the new module instead of
+      exporting to `data/water/<version>/`. Both geometries are written, the projected one
+      in the country's zone (EPSG:25832 for DE, from `medallion::Country`, not a constant in
+      the notebook). The maps and the interactive collapse controls stay — they are how the
+      output is judged — but the parquet/GeoArrow export cells go, since the store now holds
+      the result. As with v8, this is a new version rather than an edit of v8: v8 is the
+      record of what was run against that extract.
+- [ ] Keep `crossing_checks.py` and `test_cases.geojson` running, but **against the silver
+      dataset read back**, not against the in-memory `reps_v5_gdf`. That is what makes the
+      cases a check on the productionised artefact rather than on the notebook's own state,
+      and it is the check that the GeoArrow → WKB round trip through the new module did not
+      move or drop anything. Record the result: the cases pass unchanged for v8, so any
+      difference here is a regression in the write path, not in the definition.
+- [ ] Derive `session_crossing`: join `session_fix` to `water_crossing` on projected
+      distance within M metres (`--match-radius`, default to be chosen below), and reduce to
+      the nearest fix per `(session_id, crossing_id)`. Prune with the session bbox before the
+      distance join — that is what `session.bbox` was written for. Carry `fixes_within` (how
+      many fixes of the session fell inside the radius), since a single fix inside the radius
+      and twenty are different evidence that the crossing was really passed, and the
+      evaluation step will want to say so.
+- [ ] Add a `just crossings` recipe, run the whole thing over the real store, and record what
+      came out: crossings in DE, how many sessions matched any crossing, crossings per session
+      and the distribution of `distance_m` and `fixes_within`. Choose M from that distribution
+      rather than in advance — the elbow between fixes that pass over a crossing and fixes that
+      merely pass near one is the thing being looked for, and note the evidence for whatever is
+      chosen. If a large share of sessions match nothing, say so plainly here: the crow-flies
+      predictor cannot be evaluated against ground truth that is mostly empty, and that finding
+      belongs before the predictor is built, not after.
 
 ### Simple crow-flies predictor
 
