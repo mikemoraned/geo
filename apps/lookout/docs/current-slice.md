@@ -165,6 +165,12 @@ The main tasks here should be focussed on documenting these patterns and correct
         extraction serving both has to use the wider window, so the window is the country
         bbox and the manifest records it. Narrowing to observed bboxes stays available to
         the silver derivations, which is where a query-shaped subset belongs.
+      * **`theme=divisions` is extracted too**, though it is neither rail nor water. The
+        country window itself is derived from the `division_area` country boundary, so an
+        extraction that doesn't record it can't be re-derived from what it stored; the
+        notebooks additionally clip against that boundary and label with `division`
+        localities. Leaving divisions out would keep a live S3 dependency in the notebooks
+        and defeat the point of recording a release.
       * **Bronze keeps Overture's rows verbatim.** `overture.rs` today flattens Overture's
         `bbox` struct into `min_lon`/`max_lon`/`min_lat`/`max_lat` and converts geometry
         with `ST_AsBinary`. That is silver shaping and does not belong in the bronze
@@ -180,10 +186,19 @@ The main tasks here should be focussed on documenting these patterns and correct
             assert that date-valued keys name their event, not that all keys are dates),
             and `medallion::Dataset`, which offers `on_date` but no way to partition on an
             id.
-      - [ ] Extract both themes to bronze under one `extract_id`: `theme=transportation`
+      - [x] Extract both themes to bronze under one `extract_id`: `theme=transportation`
             rail segments and their connectors, and `theme=base` water, each restricted to
             the country window and written in Overture's shape plus `extract_id`. Write
             the manifest row for the extraction.
+            Note: `transport::extract`, driven by the `extract` bin, which takes the
+            release from the bucket or from `--mirror`. Two caveats the extract carries,
+            both inherent to restricting by envelope rather than by boundary. Connectors
+            are kept only where the connector's own point falls in the window, so ~0.4% of
+            those a kept rail segment references (2,017 of 464,555 for DE) are absent —
+            endpoints of segments clipping the frontier. And a row is kept when its
+            envelope *overlaps* the window, so water reaches to lon -4.0 against a window
+            starting at 5.9: the North Sea is one polygon. Neither is a defect to fix here;
+            silver clips precisely against the boundary.
       - [ ] Repoint `enrich`'s input off sqlite: the bboxes it derives come from bronze
             `gps_reading`, not the `gps` table of `data/lookout.sqlite`. Leaving this on
             sqlite would re-establish the dependency this migration exists to remove.
