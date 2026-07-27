@@ -293,6 +293,14 @@ The main tasks here should be focussed on documenting these patterns and correct
         that the re-interpretation lost nothing. `device_session` gains 15 rows where the
         old `device` table held 2, since bronze keeps every session rather than the latest
         per device.
+      * The archive and the queue could have overlapped, which the run itself could not have
+        told us: the refusal check tests only the oldest payload, and `recorder`'s default
+        `view-latest` archives without removing anything from the queue, so a payload could
+        have arrived by both routes. Measured after the run, bronze happened to hold 9,154
+        rows for 9,154 distinct md5s and 4,108 gps rows for 4,108 distinct `(device_id, t)` —
+        a snapshot, not an invariant, and not something a derivation may build on. The rule
+        this is an instance of now sits in `medallion.md`: bronze tolerates a repeated
+        observation, so deduping is the reader's job.
       * **`transport` is deliberately not backfilled.** It was `enrich`'s output: a subset
         of an Overture release with no record of which release or which window, so it can't
         be given the provenance bronze requires — and the country-wide extract supersedes
@@ -330,6 +338,11 @@ The main tasks here should be focussed on documenting these patterns and correct
       `medallion.md` or in a task, and the rest goes stale.
 
 ### Sessionisation
+
+Sessionisation reads bronze, so it **dedups rather than assumes distinct readings** — see the
+rule in `docs/medallion.md`. Concretely: a fix is identified by `(device_id, t)`, and the
+collapse on that identity happens before any gap-splitting, since a repeated fix would
+otherwise look like a zero-gap sample and could split or merge a session wrongly.
 
 #### Tasks 
 

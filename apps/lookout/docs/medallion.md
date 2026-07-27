@@ -55,6 +55,15 @@ would name the same file — a batching writer whose batches fall close together
 ingestion replayed twice — cannot silently replace each other's rows. Batch file names
 therefore carry millisecond precision.
 
+**Bronze tolerates the same observation arriving more than once, so deduping is the reader's
+job.** Nothing here rejects a repeat: an ingestion cannot rewrite an earlier file to merge
+into it, a payload may reach the store by more than one route, and a re-run or a later
+backfill of the same source can land it again. Overlapping samples of a live service are
+duplicated deliberately. Every row therefore carries what identifies the observation it
+holds — a content hash, or the natural key of the reading — and each derivation collapses on
+that identity before it does anything else. A derivation must not assume a distinct set of
+observations because the store currently happens to contain one.
+
 Format: parquet, shaped for **quick, safe appends**.
 
 - The structure is biased towards samples rather than entities: each poll or drain is
