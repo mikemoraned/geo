@@ -24,6 +24,13 @@ const CRS84_PROJJSON: &str = include_str!("crs84.projjson.json");
 /// EPSG code of CRS 84's underlying geographic system.
 const CRS84_EPSG: u16 = 4326;
 
+/// The column a silver dataset holds its lat/lon geometry in. Named the same everywhere,
+/// so a reader finds the geometry of a dataset without knowing which one it is.
+pub const GEOMETRY: &str = "geometry";
+
+/// The column holding the same geometry in metres, for distance and length work.
+pub const PROJECTED_GEOMETRY: &str = "geometry_projected";
+
 /// Failure describing a geometry column.
 #[derive(Debug, thiserror::Error)]
 pub enum GeoError {

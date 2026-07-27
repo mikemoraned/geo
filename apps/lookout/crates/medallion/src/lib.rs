@@ -6,21 +6,34 @@
 //! flag and default.
 //!
 //! A dataset is passed around as a [`DatasetSpec`], which carries its layer and partition
-//! key; the datasets themselves are defined by whoever owns the data, not here.
+//! key, and its columns are the [`Row`] type declared alongside it; the datasets
+//! themselves are defined by whoever owns the data, not here.
 //!
 //! ```no_run
 //! use chrono::Utc;
-//! use medallion::{DatasetSpec, Layer, Root};
+//! use medallion::{DatasetSpec, Layer, Root, Row};
+//! use serde::{Deserialize, Serialize};
 //!
-//! const GPS_READING: DatasetSpec =
-//!     DatasetSpec::partitioned(Layer::Bronze, "gps_reading", "ingested_date");
+//! #[derive(Serialize, Deserialize)]
+//! struct GpsReadingRow {
+//!     device_id: String,
+//!     t: i64,
+//!     lat: f64,
+//!     lon: f64,
+//! }
 //!
-//! # async fn example(rows: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+//! impl Row for GpsReadingRow {
+//!     const DATASET: DatasetSpec =
+//!         DatasetSpec::partitioned(Layer::Bronze, "gps_reading", "ingested_date");
+//!     const INSTANTS: &'static [&'static str] = &["t"];
+//! }
+//!
+//! # async fn example(rows: &[GpsReadingRow]) -> Result<(), Box<dyn std::error::Error>> {
 //! let now = Utc::now();
 //! Root::default()
-//!     .dataset(GPS_READING)
+//!     .rows_of::<GpsReadingRow>()
 //!     .on_date(now.date_naive())?
-//!     .append_rows(now, rows, &["t"])
+//!     .append_rows(now, rows)
 //!     .await?;
 //! # Ok(())
 //! # }
@@ -40,10 +53,13 @@ mod write;
 pub use args::MedallionArgs;
 pub use country::{Country, UnknownCountry};
 pub use dataset::DatasetSpec;
-pub use geo::{geometries, projected_wkb_field, wkb_column, wkb_field, GeoError, Projector};
+pub use geo::{
+    geometries, projected_wkb_field, wkb_column, wkb_field, GeoError, Projector, GEOMETRY,
+    PROJECTED_GEOMETRY,
+};
 pub use layer::Layer;
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
 pub use path::{AppendError, Dataset, Root, Written};
 pub use query::{Query, QueryError};
-pub use rows::{fields, RowError};
+pub use rows::{fields, Row, RowError};
 pub use write::WriteError;

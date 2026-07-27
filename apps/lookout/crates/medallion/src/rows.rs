@@ -1,19 +1,22 @@
 //! Turning plain Rust rows into the arrow batches the store writes.
 //!
-//! Rows are defined once as a serde type and converted here, so a dataset's schema is its
-//! Rust type rather than a set of hand-built column builders.
+//! A dataset's rows are one serde type implementing [`Row`], which carries the dataset the
+//! rows belong to and which of its columns hold an instant. A writer therefore states a
+//! dataset's schema by naming its row type, and a reader of a dataset it did not write has
+//! the same type to read it back through.
 //!
 //! **Instants are UTC millisecond timestamps.** They travel through serde as epoch
-//! milliseconds — an integer carrying no unit or timezone of its own — so every writer
-//! names its instant columns and they are declared as timestamps here. This is the one
-//! place that rule is expressed, so datasets cannot drift apart on the representation of
-//! time.
+//! milliseconds — an integer carrying no unit or timezone of its own — so a row type names
+//! its instant columns and they are declared as timestamps here. This is the one place
+//! that rule is expressed, so datasets cannot drift apart on the representation of time.
 
 use arrow::array::RecordBatch;
 use arrow::datatypes::FieldRef;
 use serde::{Deserialize, Serialize};
 use serde_arrow::schema::{SchemaLike, TracingOptions};
 use serde_json::json;
+
+use crate::dataset::DatasetSpec;
 
 /// How an instant column is stored, whatever integer the row type carries it as.
 const INSTANT_TYPE: &str = "Timestamp(Millisecond, Some(\"UTC\"))";
@@ -25,15 +28,26 @@ pub enum RowError {
     Schema(#[from] serde_arrow::Error),
 }
 
-/// The arrow schema of `T`, with `instants` declared as timestamp columns.
+/// One dataset's rows: the columns it holds, and where those rows live.
+///
+/// A dataset whose rows carry geometry declares only its other columns here, since a
+/// geometry column is built as arrow rather than traced from a Rust type; the writer
+/// appends it to [`fields`]' output.
+pub trait Row: Serialize + for<'de> Deserialize<'de> {
+    /// The dataset these rows make up.
+    const DATASET: DatasetSpec;
+
+    /// The columns holding an instant, declared as timestamps rather than left as the
+    /// integers they travel through serde as.
+    const INSTANTS: &'static [&'static str] = &[];
+}
+
+/// The arrow schema of `T`, with its instant columns declared as timestamps.
 ///
 /// Callers that append geometry columns need the fields separately; those writing rows
 /// alone can use [`batch`] instead.
-pub fn fields<T>(instants: &[&str]) -> Result<Vec<FieldRef>, RowError>
-where
-    T: for<'de> Deserialize<'de>,
-{
-    let options = instants
+pub fn fields<T: Row>() -> Result<Vec<FieldRef>, RowError> {
+    let options = T::INSTANTS
         .iter()
         .try_fold(TracingOptions::default(), |options, &name| {
             options.overwrite(
@@ -44,15 +58,9 @@ where
     Ok(Vec::<FieldRef>::from_type::<T>(options)?)
 }
 
-/// One batch holding `rows`, with `instants` declared as timestamp columns.
-pub fn batch<T>(rows: &[T], instants: &[&str]) -> Result<RecordBatch, RowError>
-where
-    T: Serialize + for<'de> Deserialize<'de>,
-{
-    Ok(serde_arrow::to_record_batch(
-        &fields::<T>(instants)?,
-        &rows,
-    )?)
+/// One batch holding `rows`.
+pub fn batch<T: Row>(rows: &[T]) -> Result<RecordBatch, RowError> {
+    Ok(serde_arrow::to_record_batch(&fields::<T>()?, &rows)?)
 }
 
 #[cfg(test)]
@@ -61,16 +69,23 @@ mod tests {
     use chrono::{DateTime, Utc};
 
     use super::*;
+    use crate::layer::Layer;
 
     #[derive(Debug, Serialize, Deserialize)]
-    struct Row {
+    struct Reading {
         id: i64,
         t: i64,
         name: Option<String>,
     }
 
-    fn row(id: i64) -> Row {
-        Row {
+    impl Row for Reading {
+        const DATASET: DatasetSpec =
+            DatasetSpec::partitioned(Layer::Bronze, "reading", "ingested_date");
+        const INSTANTS: &'static [&'static str] = &["t"];
+    }
+
+    fn row(id: i64) -> Reading {
+        Reading {
             id,
             t: 1_700_000_000_000,
             name: None,
@@ -79,7 +94,7 @@ mod tests {
 
     #[test]
     fn a_named_instant_column_is_typed_as_a_utc_millisecond_timestamp() {
-        let fields = fields::<Row>(&["t"]).unwrap();
+        let fields = fields::<Reading>().unwrap();
 
         let t = fields.iter().find(|f| f.name() == "t").unwrap();
         assert_eq!(
@@ -88,11 +103,11 @@ mod tests {
         );
     }
 
-    /// A column not named as an instant keeps the type its Rust field has, so the rule
-    /// applies only where a writer asks for it.
+    /// A column the row type does not name as an instant keeps the type its Rust field
+    /// has, so the rule applies only where the row type asks for it.
     #[test]
     fn other_integer_columns_are_left_alone() {
-        let fields = fields::<Row>(&["t"]).unwrap();
+        let fields = fields::<Reading>().unwrap();
 
         let id = fields.iter().find(|f| f.name() == "id").unwrap();
         assert_eq!(id.data_type(), &DataType::Int64);
@@ -100,7 +115,7 @@ mod tests {
 
     #[test]
     fn rows_become_a_batch_of_the_same_length() {
-        let batch = batch(&[row(1), row(2)], &["t"]).unwrap();
+        let batch = batch(&[row(1), row(2)]).unwrap();
 
         assert_eq!(batch.num_rows(), 2);
         assert_eq!(batch.num_columns(), 3);
@@ -110,9 +125,9 @@ mod tests {
     /// unit on the way in.
     #[test]
     fn an_instant_round_trips_through_a_batch() {
-        let batch = batch(&[row(1)], &["t"]).unwrap();
+        let batch = batch(&[row(1)]).unwrap();
 
-        let rows: Vec<Row> = serde_arrow::from_record_batch(&batch).unwrap();
+        let rows: Vec<Reading> = serde_arrow::from_record_batch(&batch).unwrap();
         assert_eq!(
             DateTime::from_timestamp_millis(rows[0].t),
             DateTime::<Utc>::from_timestamp_millis(1_700_000_000_000)

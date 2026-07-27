@@ -10,7 +10,7 @@ use datafusion::execution::SendableRecordBatchStream;
 use crate::dataset::DatasetSpec;
 use crate::geo::{write_geo_batches, write_geo_stream, GeoError};
 use crate::partition::{Partition, PathError, DATE_FORMAT};
-use crate::rows::{batch, RowError};
+use crate::rows::{batch, Row, RowError};
 use crate::write::{write_batches, WriteError};
 
 /// Failure appending rows to a dataset.
@@ -67,6 +67,12 @@ impl Root {
             spec: dataset,
             partitions: Vec::new(),
         }
+    }
+
+    /// Start building a path into the dataset `T`'s rows make up, for a writer that names
+    /// the rows it holds rather than the dataset they belong to.
+    pub fn rows_of<T: Row>(&self) -> Dataset {
+        self.dataset(T::DATASET)
     }
 }
 
@@ -154,24 +160,19 @@ impl Dataset {
         Ok(path)
     }
 
-    /// Append `rows` as the capture made at `at`, naming the columns holding an instant
-    /// (see [`crate::rows`]).
+    /// Append `rows` as the capture made at `at`.
     ///
     /// Having nothing to append is not a failure: it writes no file and reports `0`, so a
     /// capture that saw no rows of this kind leaves no empty file behind.
-    pub async fn append_rows<T>(
+    pub async fn append_rows<T: Row>(
         &self,
         at: DateTime<Utc>,
         rows: &[T],
-        instants: &[&str],
-    ) -> Result<usize, AppendError>
-    where
-        T: serde::Serialize + for<'de> serde::Deserialize<'de>,
-    {
+    ) -> Result<usize, AppendError> {
         if rows.is_empty() {
             return Ok(0);
         }
-        self.append(at, &[batch(rows, instants)?]).await?;
+        self.append(at, &[batch(rows)?]).await?;
         Ok(rows.len())
     }
 

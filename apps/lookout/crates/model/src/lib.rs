@@ -1,46 +1,28 @@
-//! The datasets lookout holds, and where each one lives in the store.
+//! The datasets lookout holds: where each one lives in the store, and what columns it has.
 //!
 //! Every dataset is defined once here, so a writer and a reader of the same data agree on
-//! its layer and partitioning by referring to the same value rather than by each spelling
-//! out a name and a key. `docs/medallion.md` describes the layout in prose; this is its
-//! executable form.
+//! its layer, partitioning and shape by referring to the same values rather than by each
+//! spelling out a name, a key and a struct of its own. `docs/medallion.md` describes the
+//! layout in prose; this is its executable form.
+//!
+//! A dataset's columns are a [`medallion::Row`] type declared beside its
+//! [`medallion::DatasetSpec`]. Geometry columns are the exception: they are built as arrow
+//! rather than traced from a Rust type, so a row type declares the dataset's other columns
+//! and the writer appends [`medallion::GEOMETRY`] and [`medallion::PROJECTED_GEOMETRY`] to
+//! them.
 
-use medallion::{DatasetSpec, Layer};
+mod motis;
+mod overture;
+mod telemetry;
 
-/// Every payload the telemetry queue carried, verbatim. The lossless record the other
-/// telemetry datasets are interpreted from.
-pub const RAW_SAMPLE: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "raw_sample", "ingested_date");
+use medallion::DatasetSpec;
 
-/// GPS fixes interpreted from the payloads.
-pub const GPS_READING: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "gps_reading", "ingested_date");
-
-/// Accelerometer readings interpreted from the payloads.
-pub const ACCEL_READING: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "accel_reading", "ingested_date");
-
-/// The metadata a device announces when it starts a session.
-pub const DEVICE_SESSION: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "device_session", "ingested_date");
-
-/// Trip segments as polled from the transit service, duplication allowed.
-pub const MOTIS_SEGMENT: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "motis_segment", "polled_date");
-
-/// One row per scheduled leg, deduped from the polled segments and carrying its geometry.
-pub const TRAIN_SEGMENT: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Silver, "train_segment", "departure_date");
-
-/// Overture Maps rows as extracted, in Overture's own shape and directory layout below
-/// the id of the extraction that fetched them.
-pub const OVERTURE_EXTRACT: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "overture_extract", "extract_id");
-
-/// One row per extraction: what it fetched, from which release, and when. The provenance
-/// [`OVERTURE_EXTRACT`]'s rows carry only the id of.
-pub const EXTRACT_MANIFEST: DatasetSpec =
-    DatasetSpec::unpartitioned(Layer::Bronze, "extract_manifest");
+pub use motis::{MotisSegmentRow, TrainSegmentRow, MOTIS_SEGMENT, TRAIN_SEGMENT};
+pub use overture::{ExtractManifestRow, EXTRACT_MANIFEST, OVERTURE_EXTRACT};
+pub use telemetry::{
+    AccelReadingRow, DeviceSessionRow, GpsReadingRow, RawSampleRow, ACCEL_READING, DEVICE_SESSION,
+    GPS_READING, RAW_SAMPLE,
+};
 
 /// Every dataset defined here, for checks that must cover all of them.
 pub const ALL: [DatasetSpec; 8] = [
@@ -56,6 +38,9 @@ pub const ALL: [DatasetSpec; 8] = [
 
 #[cfg(test)]
 mod tests {
+    use arrow::datatypes::DataType;
+    use medallion::Row;
+
     use super::*;
 
     /// Two datasets sharing a name would share a directory, and so silently merge.
@@ -105,5 +90,41 @@ mod tests {
                 "{name}: date partition key `{key}` should be named `<event>_date`"
             );
         }
+    }
+
+    /// A row type describes a dataset defined here, and every column it calls an instant
+    /// is a column it has — a name matching nothing would leave that column silently
+    /// stored as the integer it travels as.
+    fn check_rows_of<T: Row>() {
+        assert!(
+            ALL.contains(&T::DATASET),
+            "{} is not among the datasets defined here",
+            T::DATASET.name
+        );
+
+        let fields = medallion::fields::<T>().expect("describe the rows");
+        for instant in T::INSTANTS {
+            let field = fields
+                .iter()
+                .find(|field| field.name() == instant)
+                .unwrap_or_else(|| panic!("{}: no column named `{instant}`", T::DATASET.name));
+            assert!(
+                matches!(field.data_type(), DataType::Timestamp(..)),
+                "{}: `{instant}` is {:?}, not a timestamp",
+                T::DATASET.name,
+                field.data_type()
+            );
+        }
+    }
+
+    #[test]
+    fn every_row_type_describes_a_dataset_and_names_its_own_instant_columns() {
+        check_rows_of::<RawSampleRow>();
+        check_rows_of::<GpsReadingRow>();
+        check_rows_of::<AccelReadingRow>();
+        check_rows_of::<DeviceSessionRow>();
+        check_rows_of::<MotisSegmentRow>();
+        check_rows_of::<TrainSegmentRow>();
+        check_rows_of::<ExtractManifestRow>();
     }
 }

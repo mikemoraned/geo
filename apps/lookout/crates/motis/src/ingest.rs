@@ -8,27 +8,16 @@
 
 use std::sync::Arc;
 
-use arrow::array::{ArrayRef, RecordBatch};
-use arrow::datatypes::{FieldRef, Schema};
+use arrow::array::RecordBatch;
+use arrow::datatypes::Schema;
 use chrono::{DateTime, Utc};
 use geo_types::LineString;
-use medallion::{Country, Projector, Query, Root};
+use medallion::{Country, Projector, Query, Root, GEOMETRY, PROJECTED_GEOMETRY};
+use model::TrainSegmentRow;
 use serde::{Deserialize, Serialize};
 
 /// Precision the Motis `map/trips` polylines are encoded at.
 const POLYLINE_PRECISION: u32 = 5;
-
-/// Lat/lon geometry, in the global CRS every silver dataset carries.
-const GEOMETRY: &str = "geometry";
-
-/// The same geometry in metres, for distance and length work.
-const PROJECTED_GEOMETRY: &str = "geometry_projected";
-
-/// The encoded geometry a leg arrives with, which the geometry columns replace.
-const POLYLINE: &str = "polyline";
-
-/// Instant columns, declared rather than traced — see [`crate::bronze`].
-const INSTANT_COLUMNS: [&str; 2] = ["departure", "arrival"];
 
 /// The capture log under its query name.
 const CAPTURED: &str = "captured";
@@ -88,8 +77,7 @@ pub enum IngestError {
 }
 
 /// One deduped leg as the query returns it: the columns the silver dataset holds, plus the
-/// still-encoded `polyline` the geometry columns are built from. The polyline itself is
-/// dropped before writing, since the geometry columns replace it.
+/// still-encoded `polyline` the geometry columns are built from.
 #[derive(Debug, Serialize, Deserialize)]
 struct Leg {
     trip_id: String,
@@ -106,6 +94,24 @@ struct Leg {
     #[serde(with = "chrono::serde::ts_milliseconds")]
     arrival: DateTime<Utc>,
     polyline: String,
+}
+
+impl From<&Leg> for TrainSegmentRow {
+    fn from(leg: &Leg) -> Self {
+        Self {
+            trip_id: leg.trip_id.clone(),
+            route_name: leg.route_name.clone(),
+            train_number: leg.train_number,
+            agency_id: leg.agency_id.clone(),
+            agency_name: leg.agency_name.clone(),
+            mode: leg.mode.clone(),
+            route_color: leg.route_color.clone(),
+            realtime: leg.realtime,
+            from_stop_id: leg.from_stop_id.clone(),
+            departure: leg.departure,
+            arrival: leg.arrival,
+        }
+    }
 }
 
 /// Derive the silver dataset from the bronze capture log in the same store.
@@ -150,7 +156,7 @@ pub async fn ingest(root: &Root, country: Country) -> Result<IngestOutcome, Inge
     let mut partitions = 0;
     for legs in legs.chunk_by(|a, b| a.departure.date_naive() == b.departure.date_naive()) {
         let date = legs[0].departure.date_naive();
-        root.dataset(model::TRAIN_SEGMENT)
+        root.rows_of::<TrainSegmentRow>()
             .on_date(date)?
             .rebuild_geo(&[batch(legs, &projector, country)?])
             .await?;
@@ -164,16 +170,16 @@ pub async fn ingest(root: &Root, country: Country) -> Result<IngestOutcome, Inge
     })
 }
 
-/// Build one partition's batch: the columns the legs carry, then the two geometry columns
-/// derived from their polylines.
+/// Build one partition's batch: the columns the dataset holds, then the two geometry
+/// columns derived from the legs' polylines.
 fn batch(
     legs: &[Leg],
     projector: &Projector,
     country: Country,
 ) -> Result<RecordBatch, IngestError> {
-    let mut fields = medallion::fields::<Leg>(&INSTANT_COLUMNS)?;
-    let mut arrays = serde_arrow::to_arrow(&fields, legs)?;
-    drop_column(&mut fields, &mut arrays, POLYLINE);
+    let rows: Vec<TrainSegmentRow> = legs.iter().map(TrainSegmentRow::from).collect();
+    let mut fields = medallion::fields::<TrainSegmentRow>()?;
+    let mut arrays = serde_arrow::to_arrow(&fields, &rows)?;
 
     let lines = legs
         .iter()
@@ -197,14 +203,6 @@ fn batch(
     }
 
     Ok(RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays)?)
-}
-
-/// Remove `column` from a batch under construction, keeping fields and arrays aligned.
-fn drop_column(fields: &mut Vec<FieldRef>, arrays: &mut Vec<ArrayRef>, column: &str) {
-    if let Some(at) = fields.iter().position(|field| field.name() == column) {
-        fields.remove(at);
-        arrays.remove(at);
-    }
 }
 
 /// Decode a Google-encoded polyline to a `(lon, lat)` line.

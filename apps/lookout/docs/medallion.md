@@ -96,9 +96,12 @@ and scalable lookup — embed whatever metadata makes queries faster e.g. boundi
   [simple features](https://www.ogc.org/standards/sfa). Parquet's native
   [GEOMETRY/GEOGRAPHY types](https://parquet.apache.org/docs/file-format/types/geospatial/)
   are not used, as engine support for them remains limited.
-- A clean lat/lon geometry in a global CRS (CRS 84) is always present.
+- A clean lat/lon geometry in a global CRS (CRS 84) is always present, in a column named
+  the same across every dataset, so a reader finds a dataset's geometry without knowing
+  which dataset it is.
 - A column in the projected CRS most appropriate to the entity may additionally be
-  pre-computed, since metric distance calculations must not be performed in degrees. Use
+  pre-computed, since metric distance calculations must not be performed in degrees. It is
+  likewise named the same across every dataset. Use
   **one projected zone per country**: several UTM zones may cover a country, but a single
   zone keeps every geometry within that country directly comparable.
 - CRS is recorded in the GeoParquet metadata as PROJJSON.
@@ -157,9 +160,12 @@ migrating silver.
 
 Per-dataset Hive partition keys are part of the schema of this store and are expensive to
 change later, so they are pinned rather than left to each writer. Each dataset is defined
-once, in code, as the layer it lives in and the key it is partitioned on; readers and
-writers refer to that definition rather than repeating a name and a key. What follows is
-the reasoning behind those definitions.
+once, in code, as the layer it lives in, the key it is partitioned on and the columns it
+holds; readers and writers refer to that definition rather than repeating a name, a key or
+a struct of their own — which is what gives a reader a typed way into a dataset it did not
+write. Geometry columns are the exception to that definition, as they are built as arrow
+rather than derived from a row type. What follows is the reasoning behind those
+definitions.
 
 ### General rules
 

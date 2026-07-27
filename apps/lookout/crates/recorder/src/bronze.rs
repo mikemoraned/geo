@@ -15,8 +15,8 @@
 //! schema.
 
 use chrono::{DateTime, Utc};
-use medallion::{Dataset, DatasetSpec, Root};
-use serde::{Deserialize, Serialize};
+use medallion::{Dataset, DatasetSpec, Root, Row};
+use model::{AccelReadingRow, DeviceSessionRow, GpsReadingRow, RawSampleRow};
 use shared::{AccelReading, GpsReading, Message, SessionStart, V0Message, V1Message};
 use telemetry::RawSample;
 
@@ -74,61 +74,13 @@ impl std::ops::Add for Written {
     }
 }
 
-/// One archived payload, exactly as it arrived.
-///
-/// Instants travel as epoch milliseconds — the form the wire carries them in — and are
-/// declared as timestamp columns by [`fields`], so no conversion can narrow them.
-#[derive(Debug, Serialize, Deserialize)]
-struct RawRow {
-    /// Identifies the payload, so re-ingesting the same one is recognisable downstream.
-    md5: String,
-    /// When the server stamped it on receipt, where that was recorded.
-    received_at: Option<i64>,
-    json: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct GpsRow {
-    device_id: String,
-    t: i64,
-    lat: f64,
-    lon: f64,
-    alt: Option<f64>,
-    acc: f64,
-    speed: Option<f64>,
-    heading: Option<f64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct AccelRow {
-    device_id: String,
-    t: i64,
-    rms: f64,
-    peak: f64,
-    n: u32,
-    x: Option<f64>,
-    y: Option<f64>,
-    z: Option<f64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct DeviceRow {
-    device_id: String,
-    t: i64,
-    device_type: String,
-    platform: String,
-    user_agent: String,
-    os: Option<String>,
-    os_version: Option<String>,
-}
-
 /// The rows one ingestion interpreted, before they are written.
 #[derive(Debug, Default)]
 struct Rows {
-    raw: Vec<RawRow>,
-    gps: Vec<GpsRow>,
-    accel: Vec<AccelRow>,
-    devices: Vec<DeviceRow>,
+    raw: Vec<RawSampleRow>,
+    gps: Vec<GpsReadingRow>,
+    accel: Vec<AccelReadingRow>,
+    devices: Vec<DeviceSessionRow>,
     unparseable: usize,
 }
 
@@ -178,14 +130,10 @@ impl Archive {
     ) -> Result<Written, ArchiveError> {
         let rows = Rows::interpret(payloads);
 
-        self.write_dataset(model::RAW_SAMPLE, ingested_at, &rows.raw, &["received_at"])
-            .await?;
-        self.write_dataset(model::GPS_READING, ingested_at, &rows.gps, &["t"])
-            .await?;
-        self.write_dataset(model::ACCEL_READING, ingested_at, &rows.accel, &["t"])
-            .await?;
-        self.write_dataset(model::DEVICE_SESSION, ingested_at, &rows.devices, &["t"])
-            .await?;
+        self.write_dataset(ingested_at, &rows.raw).await?;
+        self.write_dataset(ingested_at, &rows.gps).await?;
+        self.write_dataset(ingested_at, &rows.accel).await?;
+        self.write_dataset(ingested_at, &rows.devices).await?;
 
         Ok(Written {
             raw: rows.raw.len(),
@@ -196,18 +144,13 @@ impl Archive {
         })
     }
 
-    async fn write_dataset<T>(
+    async fn write_dataset<T: Row>(
         &self,
-        dataset: DatasetSpec,
         ingested_at: DateTime<Utc>,
         rows: &[T],
-        instants: &[&str],
-    ) -> Result<(), ArchiveError>
-    where
-        T: Serialize + for<'de> Deserialize<'de>,
-    {
-        self.partition(dataset, ingested_at)?
-            .append_rows(ingested_at, rows, instants)
+    ) -> Result<(), ArchiveError> {
+        self.partition(T::DATASET, ingested_at)?
+            .append_rows(ingested_at, rows)
             .await?;
         Ok(())
     }
@@ -219,17 +162,17 @@ impl Rows {
     fn interpret(payloads: &[Payload<'_>]) -> Self {
         let mut rows = Self::default();
         for payload in payloads {
-            rows.raw.push(RawRow::from(payload));
+            rows.raw.push(raw_row(payload));
             match serde_json::from_str::<Message>(payload.json) {
                 Ok(Message::Version0(V0Message::Gps(r)) | Message::Version1(V1Message::Gps(r))) => {
-                    rows.gps.push(GpsRow::from(&r))
+                    rows.gps.push(gps_row(&r))
                 }
                 Ok(
                     Message::Version0(V0Message::Acceleration(r))
                     | Message::Version1(V1Message::Acceleration(r)),
-                ) => rows.accel.push(AccelRow::from(&r)),
+                ) => rows.accel.push(accel_row(&r)),
                 Ok(Message::Version1(V1Message::StartSession(s))) => {
-                    rows.devices.push(DeviceRow::from(&s))
+                    rows.devices.push(device_session_row(&s))
                 }
                 Err(_) => rows.unparseable += 1,
             }
@@ -238,57 +181,50 @@ impl Rows {
     }
 }
 
-impl From<&Payload<'_>> for RawRow {
-    fn from(payload: &Payload<'_>) -> Self {
-        Self {
-            md5: format!("{:x}", md5::compute(payload.json)),
-            received_at: payload.received_at,
-            json: payload.json.to_string(),
-        }
+/// The archived form of a payload: its json verbatim, keyed on the md5 of that json.
+fn raw_row(payload: &Payload<'_>) -> RawSampleRow {
+    RawSampleRow {
+        md5: format!("{:x}", md5::compute(payload.json)),
+        received_at: payload.received_at,
+        json: payload.json.to_string(),
     }
 }
 
-impl From<&GpsReading> for GpsRow {
-    fn from(r: &GpsReading) -> Self {
-        Self {
-            device_id: r.id.to_string(),
-            t: r.t,
-            lat: r.gps.lat,
-            lon: r.gps.lon,
-            alt: r.gps.alt,
-            acc: r.gps.acc,
-            speed: r.gps.speed,
-            heading: r.gps.heading,
-        }
+fn gps_row(reading: &GpsReading) -> GpsReadingRow {
+    GpsReadingRow {
+        device_id: reading.id.to_string(),
+        t: reading.t,
+        lat: reading.gps.lat,
+        lon: reading.gps.lon,
+        alt: reading.gps.alt,
+        acc: reading.gps.acc,
+        speed: reading.gps.speed,
+        heading: reading.gps.heading,
     }
 }
 
-impl From<&AccelReading> for AccelRow {
-    fn from(r: &AccelReading) -> Self {
-        Self {
-            device_id: r.id.to_string(),
-            t: r.t,
-            rms: r.accel.rms,
-            peak: r.accel.peak,
-            n: r.accel.n,
-            x: r.accel.x,
-            y: r.accel.y,
-            z: r.accel.z,
-        }
+fn accel_row(reading: &AccelReading) -> AccelReadingRow {
+    AccelReadingRow {
+        device_id: reading.id.to_string(),
+        t: reading.t,
+        rms: reading.accel.rms,
+        peak: reading.accel.peak,
+        n: reading.accel.n,
+        x: reading.accel.x,
+        y: reading.accel.y,
+        z: reading.accel.z,
     }
 }
 
-impl From<&SessionStart> for DeviceRow {
-    fn from(s: &SessionStart) -> Self {
-        Self {
-            device_id: s.id.to_string(),
-            t: s.t,
-            device_type: s.device.device_type.as_str().to_string(),
-            platform: s.device.platform.clone(),
-            user_agent: s.device.user_agent.clone(),
-            os: s.device.os.clone(),
-            os_version: s.device.os_version.clone(),
-        }
+fn device_session_row(start: &SessionStart) -> DeviceSessionRow {
+    DeviceSessionRow {
+        device_id: start.id.to_string(),
+        t: start.t,
+        device_type: start.device.device_type.as_str().to_string(),
+        platform: start.device.platform.clone(),
+        user_agent: start.device.user_agent.clone(),
+        os: start.device.os.clone(),
+        os_version: start.device.os_version.clone(),
     }
 }
 

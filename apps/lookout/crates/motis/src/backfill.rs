@@ -13,7 +13,9 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 use medallion::Root;
 
-use crate::bronze::{BronzeError, SegmentLog, SegmentRow};
+use model::MotisSegmentRow;
+
+use crate::bronze::{BronzeError, SegmentLog};
 
 /// The logged segments, oldest poll first, so a partial run has covered a prefix of the
 /// history rather than an arbitrary subset.
@@ -81,8 +83,11 @@ pub async fn backfill(db: &Path, root: &Root) -> Result<Outcome, BackfillError> 
     Ok(outcome)
 }
 
+/// One poll as the old log holds it: the instant it was made, and the segments it saw.
+type Poll = (DateTime<Utc>, Vec<MotisSegmentRow>);
+
 /// The logged rows, grouped into their polls and ordered oldest first.
-fn read(db: &Path) -> Result<Vec<(DateTime<Utc>, Vec<SegmentRow>)>, BackfillError> {
+fn read(db: &Path) -> Result<Vec<Poll>, BackfillError> {
     let conn =
         rusqlite::Connection::open_with_flags(db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(|source| BackfillError::Open {
@@ -92,7 +97,7 @@ fn read(db: &Path) -> Result<Vec<(DateTime<Utc>, Vec<SegmentRow>)>, BackfillErro
 
     let mut statement = conn.prepare(SEGMENTS)?;
     let rows = statement.query_map([], |row| {
-        Ok(SegmentRow {
+        Ok(MotisSegmentRow {
             captured_at: instant(row.get(0)?)?,
             trip_id: row.get(1)?,
             route_name: row.get(2)?,
@@ -117,7 +122,7 @@ fn read(db: &Path) -> Result<Vec<(DateTime<Utc>, Vec<SegmentRow>)>, BackfillErro
     })?;
 
     // Rows arrive ordered by poll, so each change of `captured_at` starts a new poll.
-    let mut polls: Vec<(DateTime<Utc>, Vec<SegmentRow>)> = Vec::new();
+    let mut polls: Vec<Poll> = Vec::new();
     for row in rows {
         let segment = row?;
         let captured_at = segment.captured_at;

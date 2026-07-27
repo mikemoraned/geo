@@ -13,20 +13,10 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use medallion::Root;
+use model::MotisSegmentRow;
 use motis_openapi_progenitor::types::TripSegment;
-use serde::{Deserialize, Serialize};
 
 use crate::client::TripDetails;
-
-/// The columns holding an instant, declared as timestamps rather than left as the
-/// integers they travel through serde as.
-const INSTANT_COLUMNS: [&str; 5] = [
-    "captured_at",
-    "departure",
-    "arrival",
-    "scheduled_departure",
-    "scheduled_arrival",
-];
 
 /// Failure appending to the bronze capture log.
 #[derive(Debug, thiserror::Error)]
@@ -37,75 +27,43 @@ pub enum BronzeError {
     Write(#[from] medallion::AppendError),
 }
 
-/// One polled segment, flattened: the trip it belongs to, its resolved agency and train
-/// number, its endpoints, its realtime-corrected and scheduled times, and its geometry as
-/// the encoded polyline.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SegmentRow {
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub captured_at: DateTime<Utc>,
-    pub trip_id: String,
-    pub route_name: Option<String>,
-    pub train_number: Option<u32>,
-    pub agency_id: Option<String>,
-    pub agency_name: Option<String>,
-    pub mode: String,
-    pub route_color: Option<String>,
-    pub from_stop_id: Option<String>,
-    pub from_lat: f64,
-    pub from_lon: f64,
-    pub to_stop_id: Option<String>,
-    pub to_lat: f64,
-    pub to_lon: f64,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub departure: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub arrival: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub scheduled_departure: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub scheduled_arrival: DateTime<Utc>,
-    pub realtime: bool,
-    pub polyline: String,
-}
+/// One polled segment as the store holds it: the trip it belongs to, its resolved agency
+/// and train number, its endpoints, its times and its geometry as the encoded polyline.
+fn segment_row(
+    captured_at: DateTime<Utc>,
+    segment: &TripSegment,
+    details: &HashMap<String, TripDetails>,
+) -> MotisSegmentRow {
+    let trip = segment.trips.first();
+    let trip_id = trip.map(|t| t.trip_id.as_str()).unwrap_or_default();
+    let details = details.get(trip_id);
+    let agency = details.map(|d| &d.agency);
 
-impl SegmentRow {
-    fn from_segment(
-        captured_at: DateTime<Utc>,
-        segment: &TripSegment,
-        details: &HashMap<String, TripDetails>,
-    ) -> Self {
-        let trip = segment.trips.first();
-        let trip_id = trip.map(|t| t.trip_id.as_str()).unwrap_or_default();
-        let details = details.get(trip_id);
-        let agency = details.map(|d| &d.agency);
-
-        Self {
-            captured_at,
-            trip_id: trip_id.to_string(),
-            route_name: trip.and_then(|t| {
-                t.display_name
-                    .clone()
-                    .or_else(|| t.route_short_name.clone())
-            }),
-            train_number: details.and_then(|d| d.train_number.map(|n| n.get())),
-            agency_id: agency.and_then(|a| a.id.clone()),
-            agency_name: agency.and_then(|a| a.name.clone()),
-            mode: segment.mode.to_string(),
-            route_color: segment.route_color.clone(),
-            from_stop_id: segment.from.stop_id.clone(),
-            from_lat: segment.from.lat,
-            from_lon: segment.from.lon,
-            to_stop_id: segment.to.stop_id.clone(),
-            to_lat: segment.to.lat,
-            to_lon: segment.to.lon,
-            departure: segment.departure,
-            arrival: segment.arrival,
-            scheduled_departure: segment.scheduled_departure,
-            scheduled_arrival: segment.scheduled_arrival,
-            realtime: segment.real_time,
-            polyline: segment.polyline.clone(),
-        }
+    MotisSegmentRow {
+        captured_at,
+        trip_id: trip_id.to_string(),
+        route_name: trip.and_then(|t| {
+            t.display_name
+                .clone()
+                .or_else(|| t.route_short_name.clone())
+        }),
+        train_number: details.and_then(|d| d.train_number.map(|n| n.get())),
+        agency_id: agency.and_then(|a| a.id.clone()),
+        agency_name: agency.and_then(|a| a.name.clone()),
+        mode: segment.mode.to_string(),
+        route_color: segment.route_color.clone(),
+        from_stop_id: segment.from.stop_id.clone(),
+        from_lat: segment.from.lat,
+        from_lon: segment.from.lon,
+        to_stop_id: segment.to.stop_id.clone(),
+        to_lat: segment.to.lat,
+        to_lon: segment.to.lon,
+        departure: segment.departure,
+        arrival: segment.arrival,
+        scheduled_departure: segment.scheduled_departure,
+        scheduled_arrival: segment.scheduled_arrival,
+        realtime: segment.real_time,
+        polyline: segment.polyline.clone(),
     }
 }
 
@@ -124,7 +82,7 @@ impl SegmentLog {
     fn partition(&self, captured_at: DateTime<Utc>) -> Result<medallion::Dataset, BronzeError> {
         Ok(self
             .root
-            .dataset(model::MOTIS_SEGMENT)
+            .rows_of::<MotisSegmentRow>()
             .on_date(captured_at.date_naive())?)
     }
 
@@ -143,9 +101,9 @@ impl SegmentLog {
         segments: &[TripSegment],
         details: &HashMap<String, TripDetails>,
     ) -> Result<usize, BronzeError> {
-        let rows: Vec<SegmentRow> = segments
+        let rows: Vec<MotisSegmentRow> = segments
             .iter()
-            .map(|segment| SegmentRow::from_segment(captured_at, segment, details))
+            .map(|segment| segment_row(captured_at, segment, details))
             .collect();
 
         self.append_rows(captured_at, &rows).await
@@ -156,11 +114,11 @@ impl SegmentLog {
     pub async fn append_rows(
         &self,
         captured_at: DateTime<Utc>,
-        rows: &[SegmentRow],
+        rows: &[MotisSegmentRow],
     ) -> Result<usize, BronzeError> {
         Ok(self
             .partition(captured_at)?
-            .append_rows(captured_at, rows, &INSTANT_COLUMNS)
+            .append_rows(captured_at, rows)
             .await?)
     }
 }
@@ -218,7 +176,7 @@ mod tests {
             .expect("append");
 
         let batch = read_back(&log.poll_file(captured_at).expect("path"));
-        let rows: Vec<SegmentRow> = serde_arrow::from_record_batch(&batch).expect("read rows");
+        let rows: Vec<MotisSegmentRow> = serde_arrow::from_record_batch(&batch).expect("read rows");
         assert_eq!(
             rows.iter().map(|r| &r.polyline).collect::<Vec<_>>(),
             segments.iter().map(|s| &s.polyline).collect::<Vec<_>>(),

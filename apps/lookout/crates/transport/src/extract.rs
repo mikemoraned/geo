@@ -21,7 +21,7 @@ use arrow::array::{Array, Float64Array};
 use chrono::{DateTime, Utc};
 use geo_types::{Coord, Rect};
 use medallion::{Country, PartitionValue, Root};
-use serde::{Deserialize, Serialize};
+use model::ExtractManifestRow;
 
 use crate::overture::{Overture, OvertureError, OvertureType};
 
@@ -83,27 +83,6 @@ pub enum ExtractError {
     #[error("{country} has no boundary in release {release}, so its window is unknown")]
     NoCountryBoundary { country: Country, release: String },
 }
-
-/// One row of the manifest: what an extraction took, and from where.
-///
-/// The window is stored as four numbers rather than as a geometry because it is provenance
-/// — the answer to "what was this restricted to" — and a reader checking whether an extract
-/// covers an area of interest compares numbers.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ExtractionRow {
-    pub extract_id: String,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub extracted_at: DateTime<Utc>,
-    pub release: String,
-    pub country: String,
-    pub min_lon: f64,
-    pub min_lat: f64,
-    pub max_lon: f64,
-    pub max_lat: f64,
-}
-
-/// The columns of the manifest holding an instant.
-const MANIFEST_INSTANTS: [&str; 1] = ["extracted_at"];
 
 /// What one extraction produced.
 #[derive(Debug, Clone, PartialEq)]
@@ -256,7 +235,7 @@ impl<'a> Extractor<'a> {
         at: DateTime<Utc>,
         window: &Rect<f64>,
     ) -> Result<(), ExtractError> {
-        let row = ExtractionRow {
+        let row = ExtractManifestRow {
             extract_id: id.to_string(),
             extracted_at: at,
             release: self.overture.release().id().to_string(),
@@ -267,8 +246,8 @@ impl<'a> Extractor<'a> {
             max_lat: window.max().y,
         };
         self.root
-            .dataset(model::EXTRACT_MANIFEST)
-            .append_rows(at, &[row], &MANIFEST_INSTANTS)
+            .rows_of::<ExtractManifestRow>()
+            .append_rows(at, &[row])
             .await?;
         Ok(())
     }

@@ -451,7 +451,7 @@ Decisions taken before starting, as each changes what gets built:
 
 Steps:
 
-- [ ] Move the silver row structs into `model`, so a dataset's columns are declared once
+- [x] Move the silver row structs into `model`, so a dataset's columns are declared once
       where its layer and partitioning already are, rather than in whichever crate happens
       to write it. `model` today names datasets but says nothing about their shape, and
       each writer declares its own serde struct (`recorder::bronze`'s rows,
