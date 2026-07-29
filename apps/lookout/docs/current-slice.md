@@ -9,6 +9,7 @@ I'd like to use a series of Spikes to show this is possible by incrementally bui
 ### Notes & Gotchas (hardware realities)
 
 - **Toolchain = Xtensa `std` path.** ESP32-PICO-V3-02 is Xtensa: install the fork via `espup`, scaffold from `esp-idf-template` (target `xtensa-esp32-espidf`), flash + log with `espflash flash --monitor`. Confirms the "std not no_std" call.
+- **`LIBCLANG_PATH` must point at the Xtensa clang** (`~/.rustup/toolchains/esp/xtensa-esp32-elf-clang/*/esp-clang/lib`, set by espup's `~/export-esp.sh`). Without it `esp-idf-sys`'s bindgen step dies with `unknown target triple 'xtensa'`, but only after a full ESP-IDF build — the cause ends up a long way up the log.
 - **De-risk Crux first.** Before Spike 2, confirm `crux_core` compiles for `xtensa-esp32-espidf`. It's only built/tested against std targets (WASM/iOS/Android); cheap to learn now if it doesn't.
 - **HOLD pin (G4) HIGH at startup**, or the device shuts off the moment it's on battery instead of USB. Set it in the first lines of shell init. (PLUS2 has **no AXP192** — do not reuse AXP192 I²C power-init from StickC *Plus* examples.)
 - **GPS on UART1/UART2, never UART0** (UART0 is the USB console). Grove port = G32/G33; wire GPS TX → Stick RX. Defaults: 115200 8N1, NMEA 0183.
@@ -31,10 +32,10 @@ We should build a series of spikes in apps/lookout/spikes/m5. Each of these shou
 ### Tasks
 
 **Spike 0 — Toolchain + flash**
-- [ ] Install Xtensa toolchain via `espup`, scaffold `spikes/m5/spike0-hello` from `esp-idf-template` targeting `xtensa-esp32-espidf`
-- [ ] Enable PSRAM in sdkconfig
-- [ ] Hold G4 HIGH in the first lines of shell init so the device stays on under battery
-- [ ] Log "hello" over serial via `espflash flash --monitor`; confirm it survives unplugging USB
+- [x] Install Xtensa toolchain via `espup`, scaffold `spikes/m5/spike0-hello` from `esp-idf-template` targeting `xtensa-esp32-espidf`
+- [x] Enable PSRAM in sdkconfig — stock quad-SPI settings are enough; ESP-IDF identifies the PICO-V3-02 itself and reports the full 2MB (`psram: 2097152 bytes`), no pin overrides needed
+- [x] Hold G4 HIGH in the first lines of shell init so the device stays on under battery
+- [x] Log "hello" over serial via `espflash flash --monitor`; confirm it survives unplugging USB — LED keeps blinking on battery, so the G4 HOLD holds
 
 **Crux de-risk (before Spike 2)**
 - [ ] Confirm `crux_core` compiles for `xtensa-esp32-espidf`; record the outcome and any workaround in the notes above
