@@ -657,6 +657,17 @@ Steps:
       journey — its point was that a report splits inside the gap threshold, and it still
       makes it.
 
+      Run over the real store on 2026-07-29, against the 41-session run recorded above:
+      **31 sessions**, the same 4108 samples, and `sum(sample_count)` equal to them — the
+      rule moves samples between sessions and drops none. `start_session` stays at 15 and
+      `first_seen` at 3, while `gap` falls from 23 to 13, so ten stubs were taken in; the
+      other five announcements had no stub in front of them. Single-sample sessions fall
+      from 15 to 5, and no session now starts within a lead of the next one on the same
+      device, so those five are lone fixes followed by silence rather than the artefact.
+      Durations: median 9.2 → **25.7 min**, under a minute 18 → 8. Samples per session:
+      median 17 → **89**. On 2026-07-22, nine sessions become five, each announced journey
+      one sample longer than before.
+
 - [ ] Sweep the partition level above the dates too, so a rebuild that no longer produces
       any rows for a country does not leave that country's directory standing. Replacing a
       set of partitions deletes the dated ones within one country today, which is the
