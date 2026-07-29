@@ -1,0 +1,3 @@
+# The ESP-IDF checkout and its toolchains (~4.3G), shared by every spike here via
+# `ESP_IDF_TOOLS_INSTALL_DIR = "custom:../.embuild/espressif"`. Recreated on first build.
+/.embuild
