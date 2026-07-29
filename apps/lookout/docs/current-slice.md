@@ -628,7 +628,7 @@ Steps:
       above on its first outing. What rerun is actually good for is the thing a notebook
       map cannot show: a timeline of a prediction changing as samples arrive. That is
       where `visualise/` goes, refocused, under the predictor section below.
-- [ ] Let a reported session start absorb the sample that immediately precedes it, so a
+- [x] Let a reported session start absorb the sample that immediately precedes it, so a
       journey is one session rather than a one-sample session followed by the real one.
       The evidence is every journey recorded on 2026-07-22: a single sample arrives, is
       attributed to `gap` because a long silence precedes it, and 6–13 seconds later the
@@ -641,6 +641,21 @@ Steps:
       of that journey), and that moving the start moves the session's id with it, since the
       id derives from the first sample's instant. Absorbing is the honest fix rather than
       dropping the short sessions: the sample is a real observation of that journey.
+      Note: a reported start now reaches back by a `Lead`, `--lead-secs`, default 60 s —
+      comfortably above the observed 6–13 s spread while far below the gap threshold, so it
+      can only ever take in something a silence had just separated. What it absorbs is the
+      *whole* preceding session, and only when that session began inside the window: a
+      journey that has been running longer than the lead is a journey, however soon the next
+      announcement follows it, and taking its tail samples would be worse than leaving the
+      pair split. So several samples before a report are all absorbed, and the first of them
+      becomes `seq` 0. `session` records `lead_seconds` beside `gap_seconds` for the same
+      reason the gap is recorded. The absorbed session's id moves with its start, as the
+      task expected; a rerun still lands on the same id, since the id follows from the
+      samples rather than from the run. One existing test had to change rather than being
+      kept: it asserted that a report splits a session one minute old, which is exactly the
+      case the lead now claims, so it was rewritten with a session old enough to be a
+      journey — its point was that a report splits inside the gap threshold, and it still
+      makes it.
 
 - [ ] Sweep the partition level above the dates too, so a rebuild that no longer produces
       any rows for a country does not leave that country's directory standing. Replacing a

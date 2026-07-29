@@ -6,7 +6,7 @@ use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 use medallion::MedallionArgs;
-use recorder::sessions::{sessions, Gap};
+use recorder::sessions::{sessions, Gap, Lead};
 use recorder::silver;
 use transport::countries::CountryAreas;
 
@@ -16,6 +16,10 @@ struct Args {
     /// How long a device may go unheard before the silence separates two sessions.
     #[arg(long, default_value_t = Gap::default().as_seconds() / 60)]
     gap_mins: u32,
+    /// How long before reporting a session a device may already have been fixing its
+    /// position: samples this close ahead of a report open the session it reports.
+    #[arg(long, default_value_t = Lead::default().as_seconds())]
+    lead_secs: u32,
     #[command(flatten)]
     medallion: MedallionArgs,
 }
@@ -31,11 +35,12 @@ async fn main() {
     let args = Args::parse();
     let root = args.medallion.root();
     let gap = Gap::new(chrono::Duration::minutes(i64::from(args.gap_mins)));
+    let lead = Lead::new(chrono::Duration::seconds(i64::from(args.lead_secs)));
 
     let countries = CountryAreas::newest(&root)
         .await
         .expect("read the country areas of the newest extract");
-    let derived = sessions(&root, gap).await.expect("derive sessions");
+    let derived = sessions(&root, gap, lead).await.expect("derive sessions");
     let outcome = silver::write(&root, &derived, &countries)
         .await
         .expect("write sessions");
@@ -49,6 +54,7 @@ async fn main() {
         sample_partitions_removed = outcome.sample_partitions.removed,
         unplaceable = outcome.unplaceable,
         gap_mins = args.gap_mins,
+        lead_secs = args.lead_secs,
         medallion_root = %args.medallion.medallion_root.display(),
         "derived sessions"
     );

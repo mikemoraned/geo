@@ -11,7 +11,7 @@ use geo_types::Point;
 use medallion::{Countries, Country, Query, Root};
 use model::{DeviceId, SessionId};
 use recorder::bronze::{Archive, Payload};
-use recorder::sessions::{sessions, Gap};
+use recorder::sessions::{sessions, Gap, Lead};
 use recorder::silver;
 use serde::Deserialize;
 use shared::{Gps, GpsReading, Message, V1Message};
@@ -79,7 +79,7 @@ async fn drain(root: &Root, at: DateTime<Utc>, messages: &[Message]) {
 
 /// Derive every session in the store and write both silver datasets.
 async fn sessionise(root: &Root) -> silver::WriteOutcome {
-    let derived = sessions(root, Gap::default())
+    let derived = sessions(root, Gap::default(), Lead::default())
         .await
         .expect("derive sessions");
     silver::write(root, &derived, &Germany)

@@ -89,7 +89,9 @@ ingest-motis *args:
 
 # Derive the silver `session` and `session_sample` datasets from the bronze telemetry:
 # dedup the GPS readings, split each device's into sessions at a `StartSession` or a
-# silence longer than --gap-mins (default 10), and write each session's path and samples
+# silence longer than --gap-mins (default 10) — a `StartSession` also claiming the samples
+# taken up to --lead-secs (default 60) before it, which a device fixing its position ahead
+# of announcing produces — and write each session's path and samples
 # with their projected geometry. Each session's country — and so the zone it is projected
 # into — comes from where it started, against the country areas of the newest Overture
 # extract, so `just extract` has to have been run. Override the store with

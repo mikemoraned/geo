@@ -123,6 +123,9 @@ pub struct SessionRow {
     /// The gap threshold the run that derived this session applied, so a session derived
     /// under one threshold is still interpretable once the default changes.
     pub gap_seconds: u32,
+    /// How far back of the report that began it the same run let a session reach, for the
+    /// samples a device takes before announcing. Interpretable for the same reason.
+    pub lead_seconds: u32,
     pub bbox: Bbox,
 }
 

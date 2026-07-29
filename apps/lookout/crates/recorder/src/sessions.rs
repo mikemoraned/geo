@@ -85,6 +85,45 @@ impl Default for Gap {
     }
 }
 
+/// How long before reporting a session a device may already have been fixing its position.
+///
+/// A device fixes where it is before it announces that it is recording, so the first sample
+/// of a journey can arrive seconds ahead of the announcement. Left alone it opens a session
+/// of its own — the silence before it is long — and the announcement then starts a second
+/// one moments later, splitting one journey in two.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Lead(Duration);
+
+impl Lead {
+    pub fn new(before: Duration) -> Self {
+        Self(before)
+    }
+
+    /// The window in whole seconds, as a session records the one it was derived under.
+    pub fn as_seconds(self) -> u32 {
+        self.0.num_seconds().try_into().unwrap_or(u32::MAX)
+    }
+
+    /// Whether a session that began at `started_at` is close enough behind the report at
+    /// `announced_at` to be the same journey.
+    ///
+    /// The whole session has to fall inside the window, not just its last sample: a journey
+    /// that has been running longer than this is a journey, and its samples are not the
+    /// device warming up for the announcement that happens to follow them.
+    fn reaches(self, announced_at: DateTime<Utc>, started_at: DateTime<Utc>) -> bool {
+        started_at >= announced_at - self.0
+    }
+}
+
+impl Default for Lead {
+    /// Comfortably above the observed spread — a device announces within seconds of its
+    /// first fix — while far below the gap threshold, so it can only ever absorb something
+    /// that a silence had just separated.
+    fn default() -> Self {
+        Self(Duration::minutes(1))
+    }
+}
+
 /// One GPS sample, deduped out of bronze.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sample {
@@ -115,9 +154,10 @@ struct SessionStart {
 pub struct Session {
     pub device_id: DeviceId,
     pub started_by: StartedBy,
-    /// The threshold this session was split at, carried so a session derived under one
-    /// threshold stays interpretable after the default changes.
+    /// The thresholds this session was derived under, carried so a session split under one
+    /// pair stays interpretable after the defaults change.
     pub gap: Gap,
+    pub lead: Lead,
     pub samples: Vec<Sample>,
 }
 
@@ -150,7 +190,7 @@ impl Session {
 ///
 /// A store holding no samples yet derives no sessions rather than failing: the datasets
 /// are written by a separate drain, which may not have run.
-pub async fn sessions(root: &Root, gap: Gap) -> Result<Vec<Session>, SessionError> {
+pub async fn sessions(root: &Root, gap: Gap, lead: Lead) -> Result<Vec<Session>, SessionError> {
     let query = Query::new(root.clone());
     if !query
         .register_if_present(model::GPS_READING, SAMPLES)
@@ -176,7 +216,7 @@ pub async fn sessions(root: &Root, gap: Gap) -> Result<Vec<Session>, SessionErro
                 .get(&device[0].device_id)
                 .map(Vec::as_slice)
                 .unwrap_or_default();
-            split(device, started, gap)
+            split(device, started, gap, lead)
         })
         .collect())
 }
@@ -191,6 +231,28 @@ fn started_by_device(starts: Vec<SessionStart>) -> HashMap<DeviceId, Vec<DateTim
         })
 }
 
+/// The samples an announced session takes over from the one before it, leaving nothing
+/// behind: the previous session is removed when it is absorbed, since every sample of it
+/// belongs to the journey being announced.
+///
+/// Nothing is absorbed where the sample opening the session was not announced, or where the
+/// previous session had been running longer than the lead window — that one is a journey in
+/// its own right, however soon the next announcement follows it.
+fn absorbed(sessions: &mut Vec<Session>, announced_at: DateTime<Utc>, lead: Lead) -> Vec<Sample> {
+    let precedes_report = sessions
+        .last()
+        .is_some_and(|previous| lead.reaches(announced_at, previous.started_at()));
+
+    if precedes_report {
+        sessions
+            .pop()
+            .expect("a session was just read from the end")
+            .samples
+    } else {
+        Vec::new()
+    }
+}
+
 /// Split one device's `samples` into sessions, given the instants it reported a session
 /// `started` at, both in time order.
 ///
@@ -198,13 +260,18 @@ fn started_by_device(starts: Vec<SessionStart>) -> HashMap<DeviceId, Vec<DateTim
 /// follows produces nothing. A device that reports no start at all — as the earliest
 /// protocol version could not — still produces sessions: its first sample starts one, and
 /// a silence starts each of the rest.
-fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap) -> Vec<Session> {
+///
+/// A reported start also reaches *backwards*: a session that began within [`Lead`] of it is
+/// the same journey, fixed before it was announced, so its samples open the announced
+/// session rather than standing as one of their own.
+fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap, lead: Lead) -> Vec<Session> {
     let mut sessions: Vec<Session> = Vec::new();
     let mut unclaimed = started;
     let mut previous: Option<DateTime<Utc>> = None;
 
     for sample in samples {
         let claimed = unclaimed.partition_point(|start| *start <= sample.t);
+        let announced_at = unclaimed[..claimed].first().copied();
         unclaimed = &unclaimed[claimed..];
 
         // A reported start is explicit, so it outranks both of the inferred reasons.
@@ -217,12 +284,21 @@ fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap) -> Vec<Session
         previous = Some(sample.t);
 
         match started_by {
-            Some(started_by) => sessions.push(Session {
-                device_id: sample.device_id.clone(),
-                started_by,
-                gap,
-                samples: vec![sample.clone()],
-            }),
+            Some(started_by) => {
+                // A sample that was not reported begins a session on its own evidence, so
+                // there is nothing behind it to take.
+                let mut samples = announced_at
+                    .map(|announced_at| absorbed(&mut sessions, announced_at, lead))
+                    .unwrap_or_default();
+                samples.push(sample.clone());
+                sessions.push(Session {
+                    device_id: sample.device_id.clone(),
+                    started_by,
+                    gap,
+                    lead,
+                    samples,
+                });
+            }
             // The first sample always starts a session, so by here one is running.
             None => sessions
                 .last_mut()
@@ -314,11 +390,17 @@ mod tests {
     /// The same, at the threshold a test names rather than the default one.
     async fn derived_at(tmp: &tempfile::TempDir, messages: &[Message], gap: Gap) -> Vec<Session> {
         let root = store(tmp, messages).await;
-        sessions(&root, gap).await.expect("derive sessions")
+        sessions(&root, gap, Lead::default())
+            .await
+            .expect("derive sessions")
     }
 
     fn minutes(n: i64) -> Duration {
         Duration::minutes(n)
+    }
+
+    fn seconds(n: i64) -> Duration {
+        Duration::seconds(n)
     }
 
     /// The earliest protocol version reported no session start at all, so samples with
@@ -390,7 +472,9 @@ mod tests {
     }
 
     /// A reported start splits regardless of the interval, since it is the device saying
-    /// so rather than an inference about it.
+    /// so rather than an inference about it. The session it interrupts has been running
+    /// longer than the lead window, so it is a journey of its own rather than samples taken
+    /// on the way to the announcement.
     #[tokio::test]
     async fn a_session_start_within_the_threshold_starts_a_session() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -400,8 +484,9 @@ mod tests {
             &tmp,
             &[
                 gps(id, start(), 52.5),
-                session_start(id, start() + minutes(1)),
                 gps(id, start() + minutes(2), 52.6),
+                session_start(id, start() + minutes(3)),
+                gps(id, start() + minutes(4), 52.7),
             ],
         )
         .await;
@@ -409,10 +494,89 @@ mod tests {
         assert_eq!(
             sessions
                 .iter()
-                .map(|session| session.started_by)
+                .map(|session| (session.started_by, session.samples.len()))
                 .collect::<Vec<_>>(),
-            [StartedBy::FirstSeen, StartedBy::StartSession]
+            [(StartedBy::FirstSeen, 2), (StartedBy::StartSession, 1)]
         );
+    }
+
+    /// A device fixes its position before it announces, so the sample that arrives seconds
+    /// ahead of a report belongs to the session that report begins — not to a session of
+    /// its own, which is what the silence before it would otherwise make.
+    #[tokio::test]
+    async fn a_sample_taken_just_before_a_report_opens_the_session_it_reports() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let id = device(1);
+
+        let sessions = derived(
+            &tmp,
+            &[
+                gps(id, start(), 52.5),
+                session_start(id, start() + seconds(8)),
+                gps(id, start() + seconds(14), 52.6),
+                gps(id, start() + seconds(20), 52.7),
+            ],
+        )
+        .await;
+
+        assert_eq!(sessions.len(), 1, "one journey, not a stub and a journey");
+        assert_eq!(sessions[0].started_by, StartedBy::StartSession);
+        assert_eq!(sessions[0].samples.len(), 3);
+        assert_eq!(
+            sessions[0].started_at(),
+            start(),
+            "the absorbed sample is the first thing recorded of the journey"
+        );
+    }
+
+    /// Reaching back is bounded: a lone sample long before a report is its own session, as
+    /// nothing connects the two.
+    #[tokio::test]
+    async fn a_sample_long_before_a_report_stays_its_own_session() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let id = device(1);
+
+        let sessions = derived(
+            &tmp,
+            &[
+                gps(id, start(), 52.5),
+                session_start(id, start() + minutes(30)),
+                gps(id, start() + minutes(30) + seconds(6), 52.6),
+            ],
+        )
+        .await;
+
+        assert_eq!(
+            sessions
+                .iter()
+                .map(|session| (session.started_by, session.samples.len()))
+                .collect::<Vec<_>>(),
+            [(StartedBy::FirstSeen, 1), (StartedBy::StartSession, 1)]
+        );
+    }
+
+    /// Every sample a device took before announcing goes with the announcement, not just
+    /// the last of them.
+    #[tokio::test]
+    async fn several_samples_before_a_report_all_open_the_session_it_reports() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let id = device(1);
+
+        let sessions = derived(
+            &tmp,
+            &[
+                gps(id, start(), 52.5),
+                gps(id, start() + seconds(5), 52.6),
+                gps(id, start() + seconds(10), 52.7),
+                session_start(id, start() + seconds(12)),
+                gps(id, start() + seconds(18), 52.8),
+            ],
+        )
+        .await;
+
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].samples.len(), 4);
+        assert_eq!(sessions[0].started_at(), start());
     }
 
     /// A device that reports a start before its first sample has that session attributed to
@@ -515,7 +679,7 @@ mod tests {
     async fn a_store_with_no_samples_derives_no_sessions() {
         let tmp = tempfile::tempdir().expect("tempdir");
 
-        let derived = sessions(&Root::new(tmp.path()), Gap::default())
+        let derived = sessions(&Root::new(tmp.path()), Gap::default(), Lead::default())
             .await
             .expect("derive sessions");
 

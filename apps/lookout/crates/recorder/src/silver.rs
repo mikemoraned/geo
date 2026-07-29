@@ -210,6 +210,7 @@ fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::
         sample_count: samples.len().try_into().unwrap_or(u32::MAX),
         started_by: session.started_by,
         gap_seconds: session.gap.as_seconds(),
+        lead_seconds: session.lead.as_seconds(),
         bbox: envelope(&path),
     };
 
@@ -323,7 +324,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::bronze::{Archive, Payload};
-    use crate::sessions::{sessions, Gap};
+    use crate::sessions::{sessions, Gap, Lead};
 
     use super::*;
 
@@ -406,7 +407,7 @@ mod tests {
         let root = Root::new(tmp.path());
         drain(&root, messages).await;
 
-        let derived = sessions(&root, Gap::default())
+        let derived = sessions(&root, Gap::default(), Lead::default())
             .await
             .expect("derive sessions");
         let outcome = write(&root, &derived, &germany())
@@ -591,7 +592,7 @@ mod tests {
         ];
 
         let (root, first) = written(&tmp, &messages).await;
-        let derived = sessions(&root, Gap::default())
+        let derived = sessions(&root, Gap::default(), Lead::default())
             .await
             .expect("derive sessions");
         let second = write(&root, &derived, &germany())
@@ -808,7 +809,7 @@ mod tests {
 
         // At a threshold longer than the silence they are one session, starting on the
         // first date only.
-        let derived = sessions(&root, Gap::new(Duration::hours(2)))
+        let derived = sessions(&root, Gap::new(Duration::hours(2)), Lead::default())
             .await
             .expect("derive sessions");
         let second = write(&root, &derived, &germany())
@@ -833,7 +834,7 @@ mod tests {
         let id = Uuid::from_u128(1);
         let root = Root::new(tmp.path());
         drain(&root, &[gps(id, at(9, 0, 0), 52.5, 13.4)]).await;
-        let derived = sessions(&root, Gap::default())
+        let derived = sessions(&root, Gap::default(), Lead::default())
             .await
             .expect("derive sessions");
 
