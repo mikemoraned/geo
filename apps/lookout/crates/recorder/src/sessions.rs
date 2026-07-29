@@ -64,6 +64,11 @@ impl Gap {
         Self(silence)
     }
 
+    /// The threshold in whole seconds, as a session records the one it was derived under.
+    pub fn as_seconds(self) -> u32 {
+        self.0.num_seconds().try_into().unwrap_or(u32::MAX)
+    }
+
     /// Whether `interval` is long enough to separate two sessions. An interval of exactly
     /// the threshold is not: the threshold is the longest silence a session survives.
     fn separates(self, interval: Duration) -> bool {
@@ -109,6 +114,9 @@ struct SessionStart {
 pub struct Session {
     pub device_id: DeviceId,
     pub started_by: StartedBy,
+    /// The threshold this session was split at, carried so a session derived under one
+    /// threshold stays interpretable after the default changes.
+    pub gap: Gap,
     pub samples: Vec<Sample>,
 }
 
@@ -201,6 +209,7 @@ fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap) -> Vec<Session
             Some(started_by) => sessions.push(Session {
                 device_id: sample.device_id.clone(),
                 started_by,
+                gap,
                 samples: vec![sample.clone()],
             }),
             // The first sample always starts a session, so by here one is running.

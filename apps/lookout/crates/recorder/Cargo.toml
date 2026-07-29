@@ -12,6 +12,7 @@ arrow = { workspace = true }
 chrono = { workspace = true }
 geo = { workspace = true }
 geo-types = { workspace = true }
+geo-traits = { workspace = true }
 clap = { workspace = true }
 medallion = { workspace = true }
 model = { workspace = true }

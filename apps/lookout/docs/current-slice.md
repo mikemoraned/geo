@@ -509,11 +509,19 @@ Steps:
       reader holding only the boundaries can name a session without reading the store.
       Building a batch of rows plus its geometry columns moved into `medallion` as
       `geo_batch`, since `motis::ingest` was already doing it by hand.
-- [ ] Write `session` itself: one row per session with its device, start and end
+- [x] Write `session` itself: one row per session with its device, start and end
       instants, sample count, the path as a CRS 84 LineString plus its projected twin,
       and the bbox. The bbox is what makes "which sessions could have come near this
       crossing" cheap, and the path is what the crossings step matches against — neither
       should be recomputed from the samples by every reader.
+      Note: the bbox is in lat/lon, matching the geometry the upstream reference data
+      puts its own envelopes in, so a bbox-to-bbox prune compares like with like. A
+      session of a single sample stands still rather than having no path: its point is
+      repeated, since a LineString of one coordinate is malformed under simple features.
+      Both datasets are written by one call, which projects each session once — the
+      sample rows and the session path need the same projected points. The gap threshold
+      a session was derived under travels on the `Session` itself rather than being
+      passed to the writer, so the column cannot disagree with the split it describes.
 - [ ] Give `medallion` a way to **replace** a set of silver partitions in one run, since
       everything written so far appends one file per batch and a rebuild that appends
       duplicates its own output. DataFusion's `DataFrameWriteOptions::with_partition_by`
