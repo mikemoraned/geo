@@ -621,44 +621,13 @@ Steps:
       26.5 m/s (~95 km/h, a train) with p99 190 m/s and max 3538 m/s, and 104 samples
       (2.5%) over 100 m/s. A fifth of the samples are ones some consumer will want to
       discard, and none of them had to be discarded here.
-- [ ] Cut `visualise/` back to **one thing: the selected sessions**. It reads silver
-      `session` and `session_sample` and nothing else — the bronze `gps_reading` /
-      `accel_reading` readers, the accel ride-quality series, and the `train_segment`
-      panes and their overview map all go. The trains were only just repointed onto the
-      store, so this deletes recent work deliberately: what makes a train pane worth
-      having is a session shown against it, and that comparison belongs to the crossings
-      and predictor steps, which will want it drawn against a session rather than against
-      loose per-device points.
-
-      Selection is by **session id, device id, or an ISO 8601 instant range** over when
-      the session was recorded — replacing `--since`'s relative window, which cannot name
-      a specific trip. Ids match by prefix, as `--devices` already does. The filters
-      combine as AND, at least one is required, and a range selects a session that
-      *overlaps* it: a selected session is always drawn whole, since a path clipped at the
-      window edge misreads as a trace that stopped there.
-
-      The `sample_date` partition predicate is exact here, unlike the bronze one it
-      replaces: samples are partitioned by the instant they record, so the reasoning
-      about ingestion lagging capture no longer applies and the caveat in `main.py` goes
-      with it.
-
-      The blueprint is three views:
-
-      * a **map of the full session paths**, one entity per session, drawn from
-        `session.geometry`;
-      * a **map of the samples**, each a circle whose radius is the reported `acc`,
-        centred on the sample. Accuracy is metres and rerun's radii can be scene units,
-        so the circle is the accuracy, drawn to scale, rather than a size mapped from
-        it. Check what the rerun version in use will do about keeping the view centred
-        on the current sample as the timeline cursor moves — if the map view cannot be
-        made to follow, say so and log the current sample as its own entity rather than
-        faking it;
-      * a **speed time series**, from `session_sample.speed`, nulls dropped rather than
-        plotted as zero.
-
-      Rewrite `README.md` and the module docstring to describe this tool rather than the
-      one being removed, and expect most of `tests/test_main.py` to go with the readers it
-      covers.
+- [-] Cut `visualise/` back to **one thing: the selected sessions**.
+      Moot: `notebooks/sessions/v1.py` now does the looking-at-sessions this described —
+      a day's paths, a session's samples as accuracy circles to scale — in a few cells of
+      geopandas over the same silver datasets, and it found the announcement artefact
+      above on its first outing. What rerun is actually good for is the thing a notebook
+      map cannot show: a timeline of a prediction changing as samples arrive. That is
+      where `visualise/` goes, refocused, under the predictor section below.
 - [ ] Let a reported session start absorb the sample that immediately precedes it, so a
       journey is one session rather than a one-sample session followed by the real one.
       The evidence is every journey recorded on 2026-07-22: a single sample arrives, is
@@ -829,6 +798,38 @@ We should start following the [ports and adapters pattern](https://8thlight.com/
 #### Tasks 
 
 ...
+
+- [ ] Repoint `visualise/` at **the predictor, replayed**: drive it with a session's
+      samples in order and record what it said after each one, then log the whole run to
+      rerun so the timeline scrubs through a prediction changing as the evidence arrives.
+      This replaces the tool as it stands, which draws recorded data — the notebook does
+      that better, and a static map cannot show a prediction being revised. The point of
+      rerun here is time: at each sample, where the predictor thought each crossing was
+      and when it expected to reach it, against where the session actually went.
+
+      What each step of the replay has to log, so the timeline reads as a claim being
+      tested rather than a set of dots:
+
+      * the **session so far** — the path up to the current sample, and the current sample
+        itself, so the map shows what the predictor had been told when it spoke;
+      * the **crossings it is predicting**, each with the instant it expects them to be
+        passed. A prediction is a place and a time, so the natural form is the crossing
+        drawn on the map and its predicted instant as a series per crossing — a line that
+        should converge on the actual passing instant as the train approaches, and whose
+        wandering is the thing worth watching;
+      * the **error against the ground truth**, from `session_crossing`: predicted instant
+        minus actual, per crossing, as a series that should trend to zero. This is the
+        precision measure of the evaluation section made visible, so the two should agree
+        on what counts as a hit rather than defining it twice.
+
+      The replay is the recorded-data adapter of the ports-and-adapters split above, so
+      the predictor sees a stream of samples and nothing about where they came from. That
+      is what makes this the same code path a live feed will drive later.
+
+      Everything the tool does today goes: the bronze `gps_reading` / `accel_reading`
+      readers, the accel ride-quality series, and the `train_segment` panes. Rewrite
+      `README.md` and the module docstring to describe this tool rather than the one being
+      replaced, and expect most of `tests/test_main.py` to go with the readers it covers.
 
 ### Evaluation framework
 
