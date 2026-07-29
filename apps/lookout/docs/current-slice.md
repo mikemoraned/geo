@@ -541,11 +541,20 @@ Steps:
       is the part that actually needed deciding. `motis::ingest` moved onto the same call;
       `transport::extract` did not, since its partitions are per-extract streams rather
       than a dated rebuild.
-- [ ] Test that a rerun over unchanged bronze produces identical partitions, and that a
+- [x] Test that a rerun over unchanged bronze produces identical partitions, and that a
       rerun over bronze that has grown by more samples for the open session extends that
       session rather than creating a second one. This is the check the deterministic id
       and the full rebuild exist to pass, and it is the one that breaks silently
       otherwise.
+      Note: in `crates/recorder/tests/sessionise.rs`, driving bronze through the archive
+      the drain writes with. "Identical" is checked as the partition files present, their
+      sizes, and every row a reader gets back including geometry — not byte equality:
+      GeoParquet's file metadata lists a dataset's geometry columns as a map, which
+      serialises in a different key order from one write to the next while nothing about
+      the data varies. Two further reruns are covered: a repeated sample from a re-sent
+      queue tail changes nothing, and samples after a silence longer than the threshold
+      start a second session while leaving the first untouched. Both a random
+      `session_id` and a disabled dedup were confirmed to fail these tests.
 - [ ] Add a `just sessionise` recipe, run it over the real store, and record what came
       out — session count, duration and sample-count distributions, how many samples are
       flagged and by which flag. This is the first look at whether a 10-minute gap
