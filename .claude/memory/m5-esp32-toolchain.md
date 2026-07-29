@@ -33,6 +33,19 @@ startup log (sizes, probe results) so one flash round-trip answers the question.
 - `esp-idf-svc` binds the **legacy** I²C driver (`W i2c: This driver is an old driver …`);
   worth resolving when reading the BM8563 RTC.
 
+## A crate that depends on esp-idf cannot be host-tested
+
+`esp-idf-sys`'s build script aborts with `Unsupported target 'aarch64-apple-darwin'`, so
+there is no "just build the lib for the host" escape hatch. Anything that needs to run or
+be tested on the laptop — notably the Crux core — must live in its own crate with no
+`esp-idf-*` dependency, which the shell crate then depends on. Verified by building one
+core for `xtensa-esp32-espidf` and testing the same source on the host.
+
+`crux_core` 0.19.0 itself is fine on-target: a full `App` with `#[effect]`, `Command` and
+`Core` compiles for `xtensa-esp32-espidf`. It requires rustc 1.90, which the `esp` channel
+(1.90.0-nightly) satisfies. A Rust shell imports the core directly, so the `typegen`
+feature stays off.
+
 ## Project shape
 
 Each spike is its own cargo workspace (`[workspace]` in its `Cargo.toml`) so the

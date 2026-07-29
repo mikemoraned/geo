@@ -10,7 +10,8 @@ I'd like to use a series of Spikes to show this is possible by incrementally bui
 
 - **Toolchain = Xtensa `std` path.** ESP32-PICO-V3-02 is Xtensa: install the fork via `espup`, scaffold from `esp-idf-template` (target `xtensa-esp32-espidf`), flash + log with `espflash flash --monitor`. Confirms the "std not no_std" call.
 - **`LIBCLANG_PATH` must point at the Xtensa clang** (`~/.rustup/toolchains/esp/xtensa-esp32-elf-clang/*/esp-clang/lib`, set by espup's `~/export-esp.sh`). Without it `esp-idf-sys`'s bindgen step dies with `unknown target triple 'xtensa'`, but only after a full ESP-IDF build — the cause ends up a long way up the log.
-- **De-risk Crux first.** Before Spike 2, confirm `crux_core` compiles for `xtensa-esp32-espidf`. It's only built/tested against std targets (WASM/iOS/Android); cheap to learn now if it doesn't.
+- **Crux is confirmed on-target** (`crux_core` 0.19.0, needs rustc 1.90 — the `esp` channel is 1.90.0-nightly, so fine). A full `App` with `#[effect]`, `Command` and `Core` builds for `xtensa-esp32-espidf`; no typegen feature needed for a Rust shell.
+- **Split core and shell into separate crates.** `esp-idf-sys`'s build script aborts with `Unsupported target 'aarch64-apple-darwin'`, so *any* crate depending on `esp-idf-svc` can never be built or tested on the host. Host-testability — the reason Crux is here at all — therefore requires the core to be its own esp-free crate that the shell crate depends on. Verified both halves against the same core code.
 - **HOLD pin (G4) HIGH at startup**, or the device shuts off the moment it's on battery instead of USB. Set it in the first lines of shell init. (PLUS2 has **no AXP192** — do not reuse AXP192 I²C power-init from StickC *Plus* examples.)
 - **GPS on UART1/UART2, never UART0** (UART0 is the USB console). Grove port = G32/G33; wire GPS TX → Stick RX. Defaults: 115200 8N1, NMEA 0183.
 - **Display needs an offset.** ST7789V2 135×240 sits inside a larger address window — give `mipidsi` the correct column/row offset or the image shifts/wraps. Pull exact display pins + offset from M5's schematic / Arduino board def; don't guess.
@@ -38,7 +39,7 @@ We should build a series of spikes in apps/lookout/spikes/m5. Each of these shou
 - [x] Log "hello" over serial via `espflash flash --monitor`; confirm it survives unplugging USB — LED keeps blinking on battery, so the G4 HOLD holds
 
 **Crux de-risk (before Spike 2)**
-- [ ] Confirm `crux_core` compiles for `xtensa-esp32-espidf`; record the outcome and any workaround in the notes above
+- [x] Confirm `crux_core` compiles for `xtensa-esp32-espidf`; record the outcome and any workaround in the notes above — it does; the workaround needed is the core/shell crate split, recorded above. Spike 2 should be laid out as `spike2-crux/core` (esp-free, host-tested) + `spike2-crux/shell` (esp-idf).
 
 **Spike 1 — Hello on screen**
 - [ ] Pull exact ST7789V2 pins + column/row offset from M5's schematic / Arduino board def (don't guess)
