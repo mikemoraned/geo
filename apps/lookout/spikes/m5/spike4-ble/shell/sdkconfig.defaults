@@ -1,0 +1,52 @@
+# Rust often needs a bit of an extra main task stack size compared to C (the default is 3K)
+#
+# Raised well above the template's 8192: Rust allocates a function's whole frame on entry,
+# and `main` here holds the display's pixel buffer, the UART read buffer, and the driver
+# structs at once. 8192 overflowed, which surfaced as a corrupted pointer inside whichever
+# ESP-IDF call happened to be deepest rather than as a stack error. Spike 3 left only ~6.5KB
+# spare at 32768, and this spike adds the BLE handles on top, so it goes up again — the
+# startup log reports what was actually used.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=49152
+
+# Increase a bit these stack sizes as they are also a bit too small by default
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+CONFIG_FREERTOS_IDLE_TASK_STACKSIZE=4096
+
+# You might have to increase this further if you spawn your own Rust threads 
+# that allocate large stack variables; or better yet - use 
+# `std::thread::Builder::new().stack_size(XXX)` for spawning
+CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT=4096
+
+# PSRAM is deliberately **off** here, unlike the earlier spikes.
+#
+# Spike 0 enabled it on the assumption that "crux_core + serde + NimBLE want the headroom".
+# That was never measured, and it is not true: main peaks around 26KB against ~126KB of free
+# internal DRAM, so PSRAM buys nothing here and is one less thing in the picture.
+#
+# It was also suspected of causing the memory corruption this spike hit. It is not: the same
+# crash occurs with PSRAM off. Kept off because it is unnecessary, not as a fix.
+#
+# If a later spike genuinely needs PSRAM, add it back deliberately and keep it out of the
+# general heap (`heap_caps_malloc` with `MALLOC_CAP_SPIRAM`) rather than via `USE_MALLOC`.
+# CONFIG_SPIRAM is not set
+
+# `esp32-nimble` needs the NimBLE host stack rather than Bluedroid, which is the default.
+# Leaving Bluedroid enabled builds the wrong stack and the BLE calls find nothing.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_BLE_ENABLED=y
+CONFIG_BT_BLUEDROID_ENABLED=n
+CONFIG_BT_NIMBLE_ENABLED=y
+
+# GATT server callbacks (`on_connect`, `on_disconnect`) run on the NimBLE **host** task, not
+# on main, and its default stack is 4096 — small enough that logging from a callback can
+# overflow it. That arrives as a `Double exception` with a corrupted backtrace, because the
+# exception handler has no stack left to report on, and it only happens when a client
+# connects or disconnects. Raising main's stack does nothing for this.
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=8192
+
+# A watchpoint on the last words of every task's stack traps an overflow at the instant it
+# happens and names the task, rather than letting it corrupt a neighbour and fail later
+# somewhere unrelated. Kept on: these spikes hit stack overflow twice, and both times it
+# presented as a fault in innocent code — once inside an SPI driver, once as a `Double
+# exception` with an unusable backtrace.
+CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK=y

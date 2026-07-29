@@ -36,6 +36,58 @@ startup log (sizes, probe results) so one flash round-trip answers the question.
   the device boot-loops on a confusing secondary assert in `SpiDriver::drop`.
 - `esp-idf-svc` binds the **legacy** I²C driver (`W i2c: This driver is an old driver …`);
   worth resolving when reading the BM8563 RTC.
+- **Grove UART: the Stick's RX is G33** (G32 is the other side), confirmed by listening on
+  both at once. Community sources say G32 — they are wrong, and picking wrong looks exactly
+  like a dead peripheral.
+- **The main task needs far more stack than the template's 8192.** A shell with a display
+  buffer, a UART buffer and a Crux core whose model embeds a parser peaked at ~26KB, so
+  `CONFIG_ESP_MAIN_TASK_STACK_SIZE=32768`. Rust commits a function's whole frame on entry, so
+  the size is set by everything `main` declares, not by what has run yet. An overflow does
+  **not** report itself — it surfaces as a corrupted pointer inside whatever ESP-IDF call is
+  deepest at the time, which sends you debugging innocent code. Log
+  `uxTaskGetStackHighWaterMark(null)` at startup so there is a number to look at.
+- **Never log from an `esp32-nimble` GATT callback.** They run on the NimBLE host task, whose
+  default stack is 4096 (`CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE`), and Debug-formatting a
+  connection descriptor through the ESP logger overflows it. Keep callbacks to an atomic store
+  and report from the main loop. Note it looks like it crashes *while idle*, because the host
+  retries connections in the background and fires the callbacks unprompted.
+- **Turn on `CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK`.** Stack overflow has been the cause of
+  every hard-to-diagnose crash on this board so far, and it never presents as one: it lands as
+  a fault in whatever code is nearby (an SPI driver once, `memcpy` reading rodata another
+  time, with an instruction-fetch-from-data `EXCCAUSE 2`). The watchpoint traps it at the
+  moment of overflow and names the task.
+- **`UartConfig`'s default `rx_fifo_size` is 256 bytes** (`UART_FIFO_SIZE * 2`) — too small
+  for a GNSS receiver that bursts ~1.5KB of sentences once a second. Overruns are silent:
+  they splice two sentences together so the checksum fails. 4096 is comfortable.
+
+## Crux + BLE reboots the device (unresolved)
+
+With `esp32-nimble` running, the device reboots every 4s–7min, always inside `crux_core` 0.19's
+per-effect `Command`/crossbeam machinery: a null `&self` in `CommandContext::clone`, or endless
+recursion through `posix_memalign`. Without BLE (spike 3) the identical core runs indefinitely.
+
+Measurement rules out stack overflow (watchpoint silent, high-water constant), both task
+stacks, heap exhaustion and fragmentation (free heap and largest block flat to the byte up to
+the crash), heap overrun (comprehensive poisoning silent), PSRAM, allocation volume, and
+whether the model is boxed. Don't re-run those. Details, and the four confidently wrong
+diagnoses, are in `apps/lookout/spikes/m5/spike4-ble/README.md`.
+
+Untried: an older `crux_core`, dropping crux from the device shell, a minimal repro.
+
+## The GPS/BDS Unit v1.1 (AT6668)
+
+115200 8N1, NMEA 0183 **4.1**, multi-constellation (`$GN*` with per-system
+`$GP/GL/GA/BD/GQ GSV`). Its `RMC` carries a trailing mode/navigational-status pair that plain
+0183 examples lack, and leaves the course field empty when stationary — fixtures written from
+0183 documentation rather than from a capture get both wrong.
+
+- It reports true UTC date and time in `ZDA`/`RMC` **before it has any position fix**, so the
+  wall clock can be set from the receiver without waiting for a fix, and without the BM8563.
+- `$GPTXT,01,01,01,ANTENNA OPEN` appears continuously **even with a good fix** — external
+  antenna monitoring on a unit using its internal one, not a fault. Don't chase it.
+- Noise characteristics, and what they mean for the predictor, are in the "Deploy predictor
+  on M5 device" slice in `apps/lookout/docs/next-slices.md`.
+- Captures are gitignored (`*.nmea`): a fix records where and when someone was.
 
 ## A crate that depends on esp-idf cannot be host-tested
 
