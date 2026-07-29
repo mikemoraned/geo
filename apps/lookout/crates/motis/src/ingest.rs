@@ -71,6 +71,8 @@ pub enum IngestError {
     Path(#[from] medallion::PathError),
     #[error("writing the dataset: {0}")]
     Write(#[from] medallion::WriteError),
+    #[error("replacing the partitions: {0}")]
+    Replace(#[from] medallion::ReplaceError),
 }
 
 /// One deduped leg as the query returns it: the columns the silver dataset holds, plus the
@@ -150,20 +152,24 @@ pub async fn ingest(root: &Root, country: Country) -> Result<IngestOutcome, Inge
 
     // Ordered by departure, so each partition's legs are one run of adjacent rows.
     let projector = Projector::for_country(country)?;
-    let mut partitions = 0;
-    for legs in legs.chunk_by(|a, b| a.departure.date_naive() == b.departure.date_naive()) {
-        let date = legs[0].departure.date_naive();
-        root.rows_of::<TrainSegmentRow>()
-            .on_date(date)?
-            .replace_with_geo(&[batch(legs, &projector, country)?])
-            .await?;
-        partitions += 1;
-    }
+    let days = legs
+        .chunk_by(|a, b| a.departure.date_naive() == b.departure.date_naive())
+        .map(|legs| {
+            Ok((
+                legs[0].departure.date_naive(),
+                batch(legs, &projector, country)?,
+            ))
+        })
+        .collect::<Result<Vec<_>, IngestError>>()?;
+    let replaced = root
+        .rows_of::<TrainSegmentRow>()
+        .replace_dates_geo(&days)
+        .await?;
 
     Ok(IngestOutcome {
         read,
         deduped,
-        partitions,
+        partitions: replaced.written,
     })
 }
 

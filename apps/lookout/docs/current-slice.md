@@ -522,7 +522,7 @@ Steps:
       sample rows and the session path need the same projected points. The gap threshold
       a session was derived under travels on the `Session` itself rather than being
       passed to the writer, so the column cannot disagree with the split it describes.
-- [ ] Give `medallion` a way to **replace** a set of silver partitions in one run, since
+- [x] Give `medallion` a way to **replace** a set of silver partitions in one run, since
       everything written so far appends one file per batch and a rebuild that appends
       duplicates its own output. DataFusion's `DataFrameWriteOptions::with_partition_by`
       derives the `key=value` directories from a column, which fits a bulk write spanning
@@ -530,6 +530,17 @@ Steps:
       settle is what happens to a partition that exists but the rebuild no longer produces
       any rows for. Decide that explicitly — silver permits deletion — and make the
       behaviour the same for every silver rebuild rather than per-writer.
+      Note: `Dataset::replace_dates_geo` takes the whole dataset's batches keyed by date,
+      writes one file per date and **deletes** every other partition under the dataset's
+      own key. A partition the derivation no longer produces rows for is a claim it has
+      withdrawn, and a reader has no way to tell one from a current partition. The sweep
+      is bounded by the dataset's own partition key, so a directory under another key, or
+      a file, is not this dataset's to remove. `DataFusion`'s `with_partition_by` was not
+      used: the batches are already grouped per partition in memory, it would not name
+      the file `part-0.parquet`, and it settles nothing about the stale partitions, which
+      is the part that actually needed deciding. `motis::ingest` moved onto the same call;
+      `transport::extract` did not, since its partitions are per-extract streams rather
+      than a dated rebuild.
 - [ ] Test that a rerun over unchanged bronze produces identical partitions, and that a
       rerun over bronze that has grown by more samples for the open session extends that
       session rather than creating a second one. This is the check the deterministic id

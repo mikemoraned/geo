@@ -59,7 +59,7 @@ pub use geo::{
 };
 pub use layer::Layer;
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
-pub use path::{AppendError, Dataset, Root, Written};
+pub use path::{AppendError, Dataset, ReplaceError, Replaced, Root, Written};
 pub use query::{Query, QueryError};
 pub use rows::{fields, Row, RowError};
 pub use write::WriteError;

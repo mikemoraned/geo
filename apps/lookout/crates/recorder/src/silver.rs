@@ -11,10 +11,10 @@
 //! produces rows for, since it re-derives every session from all of bronze.
 
 use arrow::array::RecordBatch;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
-use medallion::{Country, Projector, Root, Row, GEOMETRY, PROJECTED_GEOMETRY};
+use medallion::{Country, Projector, Replaced, Root, Row, GEOMETRY, PROJECTED_GEOMETRY};
 use model::{Bbox, SessionRow, SessionSampleRow};
 
 use crate::sessions::Session;
@@ -23,9 +23,9 @@ use crate::sessions::Session;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct WriteOutcome {
     pub sessions: usize,
-    pub session_partitions: usize,
+    pub session_partitions: Replaced,
     pub samples: usize,
-    pub sample_partitions: usize,
+    pub sample_partitions: Replaced,
 }
 
 /// A failure writing the sessions.
@@ -35,6 +35,8 @@ pub enum SilverError {
     Geo(#[from] medallion::GeoError),
     #[error("partitioning the dataset: {0}")]
     Path(#[from] medallion::PathError),
+    #[error("replacing the partitions: {0}")]
+    Replace(#[from] medallion::ReplaceError),
 }
 
 /// One session's row, the path its geometry columns hold, and its samples.
@@ -80,7 +82,7 @@ async fn write_sessions(
     root: &Root,
     placed: &[Placed],
     country: Country,
-) -> Result<usize, SilverError> {
+) -> Result<Replaced, SilverError> {
     let mut placed: Vec<&Placed> = placed.iter().collect();
     placed.sort_by_key(|session| session.row.started_at);
 
@@ -107,7 +109,7 @@ async fn write_samples(
     root: &Root,
     placed: &[Placed],
     country: Country,
-) -> Result<usize, SilverError> {
+) -> Result<Replaced, SilverError> {
     // Sessions run concurrently across devices and cross midnight, so the samples are
     // ordered by instant to gather each date's into one adjacent run.
     let mut samples: Vec<&Located> = placed
@@ -130,7 +132,8 @@ async fn write_samples(
     .await
 }
 
-/// Replace one partition per date the rows fall on, reporting how many that was.
+/// Replace this dataset's partitions with one per date the rows fall on, reporting what
+/// that left in the store.
 ///
 /// `rows` are ordered by the date `date_of` reads, so each partition's rows are one
 /// adjacent run rather than a scan of all of them.
@@ -139,21 +142,18 @@ async fn write_dates<T, R, D, B>(
     rows: &[&T],
     date_of: D,
     batch_of: B,
-) -> Result<usize, SilverError>
+) -> Result<Replaced, SilverError>
 where
     R: Row,
-    D: Fn(&T) -> chrono::NaiveDate,
+    D: Fn(&T) -> NaiveDate,
     B: Fn(&[&T]) -> Result<RecordBatch, SilverError>,
 {
-    let mut partitions = 0;
-    for day in rows.chunk_by(|a, b| date_of(a) == date_of(b)) {
-        root.rows_of::<R>()
-            .on_date(date_of(day[0]))?
-            .replace_with_geo(&[batch_of(day)?])
-            .await?;
-        partitions += 1;
-    }
-    Ok(partitions)
+    let days = rows
+        .chunk_by(|a, b| date_of(a) == date_of(b))
+        .map(|day| Ok((date_of(day[0]), batch_of(day)?)))
+        .collect::<Result<Vec<_>, SilverError>>()?;
+
+    Ok(root.rows_of::<R>().replace_dates_geo(&days).await?)
 }
 
 /// One session placed on the map: its row and path, and its samples' rows and points.
@@ -483,7 +483,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(outcome.sample_partitions, 2);
+        assert_eq!(outcome.sample_partitions.written, 2);
         let rows = rows(&root).await;
         assert_eq!(rows.len(), 2);
         assert_eq!(
@@ -647,8 +647,8 @@ mod tests {
         )
         .await;
 
-        assert_eq!(outcome.session_partitions, 1);
-        assert_eq!(outcome.sample_partitions, 2);
+        assert_eq!(outcome.session_partitions.written, 1);
+        assert_eq!(outcome.sample_partitions.written, 2);
         assert!(root
             .path()
             .join("silver/session/start_date=2026-07-26")
@@ -720,6 +720,47 @@ mod tests {
             first_line(&batches[0], GEOMETRY),
             [(13.4, 52.5), (13.4, 52.5)]
         );
+    }
+
+    /// The gap threshold moves a session's start into another day, so the partition the
+    /// earlier run wrote is no longer produced — and does not survive the run that
+    /// replaced it.
+    #[tokio::test]
+    async fn a_partition_a_rerun_no_longer_produces_is_removed() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let id = Uuid::from_u128(1);
+        let midnight = Utc.with_ymd_and_hms(2026, 7, 27, 0, 0, 0).unwrap();
+
+        // Two samples an hour apart over midnight: at the default threshold they are two
+        // sessions, one starting on each date.
+        let (root, first) = written(
+            &tmp,
+            &[
+                gps(id, midnight - Duration::minutes(30), 52.5, 13.4),
+                gps(id, midnight + Duration::minutes(30), 52.6, 13.4),
+            ],
+        )
+        .await;
+        assert_eq!(first.sessions, 2);
+        assert_eq!(first.session_partitions.written, 2);
+
+        // At a threshold longer than the silence they are one session, starting on the
+        // first date only.
+        let derived = sessions(&root, Gap::new(Duration::hours(2)))
+            .await
+            .expect("derive sessions");
+        let second = write(&root, &derived, Country::Germany)
+            .await
+            .expect("write again");
+
+        assert_eq!(second.sessions, 1);
+        assert_eq!(second.session_partitions.written, 1);
+        assert_eq!(second.session_partitions.removed, 1);
+        assert!(!root
+            .path()
+            .join("silver/session/start_date=2026-07-27")
+            .exists());
+        assert_eq!(session_rows(&root).await.len(), 1);
     }
 
     #[tokio::test]

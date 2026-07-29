@@ -246,6 +246,11 @@ reassembles it.
 Silver transforms are idempotent: rerunning one over unchanged bronze input produces an
 identical partition, so a partition can be rebuilt rather than incrementally merged.
 
+A rebuild replaces the whole of what it derives, so a partition that exists but the rebuild
+produces no rows for is deleted rather than left standing: a partition no derivation claims
+is indistinguishable, to a reader, from a current one. Deletion is bounded by the dataset's
+own partition key, so it never reaches a directory written under another one.
+
 Whether a silver dataset additionally **retains history** — superseded versions of a row, or
 validity intervals — is a per-dataset decision, and one that should be settled explicitly
 rather than by accident. It is needed when something downstream has to know what the

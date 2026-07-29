@@ -1,5 +1,6 @@
 //! Building paths into the store: `<root>/<layer>/<dataset>/<key=value>…/<file>.parquet`.
 
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
@@ -32,6 +33,36 @@ const BATCH_STEM_FORMAT: &str = "%Y%m%dT%H%M%S%3fZ";
 /// The file a wholly derived partition holds. Such a partition is one file, so its name
 /// carries no information and never varies.
 const PARTITION_STEM: &str = "part-0";
+
+/// Failure replacing a dataset's partitions.
+#[derive(Debug, thiserror::Error)]
+pub enum ReplaceError {
+    #[error(transparent)]
+    Geo(#[from] GeoError),
+    #[error(transparent)]
+    Path(#[from] PathError),
+    #[error("listing the partitions of {path}: {source}")]
+    List {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("removing the partition {path}: {source}")]
+    Remove {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+/// What replacing a dataset's partitions did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Replaced {
+    /// Partitions the run wrote.
+    pub written: usize,
+    /// Partitions the run no longer produces rows for, and so deleted.
+    pub removed: usize,
+}
 
 /// What a write left in the store.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -201,6 +232,82 @@ impl Dataset {
         Ok(Written { path, rows })
     }
 
+    /// Replace this dataset's partitions with one file per dated batch, as GeoParquet.
+    ///
+    /// A partition the run produces no rows for is **deleted**: a silver dataset is derived
+    /// wholesale from its source, so a partition left standing is a claim the derivation no
+    /// longer makes, and a reader has no way to tell it apart from a current one. Only
+    /// directories under this dataset's own partition key are considered, so nothing
+    /// outside what this dataset writes is ever removed.
+    pub async fn replace_dates_geo(
+        &self,
+        days: &[(NaiveDate, RecordBatch)],
+    ) -> Result<Replaced, ReplaceError> {
+        let mut written = HashSet::new();
+        for (date, batch) in days {
+            let partition = self.clone().on_date(*date)?;
+            partition
+                .replace_with_geo(std::slice::from_ref(batch))
+                .await?;
+            written.insert(partition.dir());
+        }
+
+        let removed = self.remove_partitions_except(&written).await?;
+        Ok(Replaced {
+            written: written.len(),
+            removed,
+        })
+    }
+
+    /// Delete every partition of this dataset except `keep`, reporting how many went.
+    async fn remove_partitions_except(
+        &self,
+        keep: &HashSet<PathBuf>,
+    ) -> Result<usize, ReplaceError> {
+        let key = self.own_key()?;
+        let dir = self.dir();
+        let mut entries = match tokio::fs::read_dir(&dir).await {
+            Ok(entries) => entries,
+            // A dataset nothing has been written to yet has no partitions to sweep.
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+            Err(source) => {
+                return Err(ReplaceError::List {
+                    path: dir.display().to_string(),
+                    source,
+                })
+            }
+        };
+
+        let mut removed = 0;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|source| ReplaceError::List {
+                path: dir.display().to_string(),
+                source,
+            })?
+        {
+            let path = entry.path();
+            let is_stale = path.is_dir()
+                && !keep.contains(&path)
+                && entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(&format!("{key}="));
+            if is_stale {
+                tokio::fs::remove_dir_all(&path)
+                    .await
+                    .map_err(|source| ReplaceError::Remove {
+                        path: path.display().to_string(),
+                        source,
+                    })?;
+                removed += 1;
+            }
+        }
+
+        Ok(removed)
+    }
+
     /// A named parquet file within [`Self::dir`].
     fn file(&self, stem: &str) -> PathBuf {
         self.dir().join(format!("{stem}.parquet"))
@@ -338,6 +445,150 @@ mod tests {
 
         assert!(dataset.clone().partition("ingestedDate", "gps").is_err());
         assert!(dataset.partition("sensor", "gps/accel").is_err());
+    }
+
+    /// One row of a dataset whose only column is a point, so the batch is writable as
+    /// GeoParquet the way a real silver batch is.
+    fn geo_batch() -> RecordBatch {
+        let field = crate::geo::wkb_field("geometry").expect("field");
+        let (field, array) =
+            crate::geo::wkb_column(field, &[geo_types::Point::new(13.4, 52.5)]).expect("column");
+        RecordBatch::try_new(
+            std::sync::Arc::new(arrow::datatypes::Schema::new(vec![field])),
+            vec![array],
+        )
+        .expect("batch")
+    }
+
+    fn date(day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 7, day).unwrap()
+    }
+
+    /// The partition directories of `dataset`, by name.
+    fn partitions_of(dataset: &Dataset) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dataset.dir())
+            .expect("dataset dir")
+            .map(|entry| entry.expect("entry").file_name().to_string_lossy().into())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[tokio::test]
+    async fn replacing_writes_one_partition_per_date() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dataset = Root::new(tmp.path()).dataset(SESSION);
+
+        let replaced = dataset
+            .replace_dates_geo(&[(date(26), geo_batch()), (date(27), geo_batch())])
+            .await
+            .expect("replace");
+
+        assert_eq!(
+            replaced,
+            Replaced {
+                written: 2,
+                removed: 0
+            }
+        );
+        assert_eq!(
+            partitions_of(&dataset),
+            ["start_date=2026-07-26", "start_date=2026-07-27"]
+        );
+    }
+
+    /// A silver dataset is derived wholesale, so a partition the run no longer produces
+    /// rows for is a claim the derivation has withdrawn — it goes rather than lingering as
+    /// something a reader cannot tell from current.
+    #[tokio::test]
+    async fn a_partition_the_run_no_longer_produces_rows_for_is_deleted() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dataset = Root::new(tmp.path()).dataset(SESSION);
+        dataset
+            .replace_dates_geo(&[(date(26), geo_batch()), (date(27), geo_batch())])
+            .await
+            .expect("first run");
+
+        let replaced = dataset
+            .replace_dates_geo(&[(date(26), geo_batch())])
+            .await
+            .expect("second run");
+
+        assert_eq!(
+            replaced,
+            Replaced {
+                written: 1,
+                removed: 1
+            }
+        );
+        assert_eq!(partitions_of(&dataset), ["start_date=2026-07-26"]);
+    }
+
+    #[tokio::test]
+    async fn replacing_a_dataset_with_nothing_leaves_no_partitions() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dataset = Root::new(tmp.path()).dataset(SESSION);
+        dataset
+            .replace_dates_geo(&[(date(26), geo_batch())])
+            .await
+            .expect("first run");
+
+        let replaced = dataset.replace_dates_geo(&[]).await.expect("second run");
+
+        assert_eq!(
+            replaced,
+            Replaced {
+                written: 0,
+                removed: 1
+            }
+        );
+        assert!(partitions_of(&dataset).is_empty());
+    }
+
+    /// The sweep is bounded by the dataset's own partition key, so anything else sharing
+    /// the directory — another key, a file — is not this dataset's to delete.
+    #[tokio::test]
+    async fn only_this_datasets_own_partitions_are_swept() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dataset = Root::new(tmp.path()).dataset(SESSION);
+        dataset
+            .replace_dates_geo(&[(date(26), geo_batch())])
+            .await
+            .expect("first run");
+        std::fs::create_dir(dataset.dir().join("region=de")).expect("other partition");
+        std::fs::write(dataset.dir().join("NOTES.md"), "kept").expect("stray file");
+
+        let replaced = dataset
+            .replace_dates_geo(&[(date(27), geo_batch())])
+            .await
+            .expect("second run");
+
+        assert_eq!(replaced.removed, 1, "only the dated partition goes");
+        assert_eq!(
+            partitions_of(&dataset),
+            ["NOTES.md", "region=de", "start_date=2026-07-27"]
+        );
+    }
+
+    /// A dataset nothing has been written to yet has no partitions to sweep, rather than a
+    /// missing directory to fail on.
+    #[tokio::test]
+    async fn replacing_a_dataset_that_does_not_exist_yet_writes_it() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        let replaced = Root::new(tmp.path())
+            .dataset(SESSION)
+            .replace_dates_geo(&[(date(26), geo_batch())])
+            .await
+            .expect("replace");
+
+        assert_eq!(
+            replaced,
+            Replaced {
+                written: 1,
+                removed: 0
+            }
+        );
     }
 
     #[test]

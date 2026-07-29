@@ -24,12 +24,12 @@ serde = { workspace = true }
 serde_arrow = { workspace = true }
 parquet = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 wkb = { workspace = true }
 
 [dev-dependencies]
 duckdb = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true }
 
 [lints]
 workspace = true
