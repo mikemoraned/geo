@@ -46,9 +46,9 @@ We should build a series of spikes in apps/lookout/spikes/m5. Each of these shou
 - [x] Drive the display with `mipidsi` + `embedded-graphics` and print "hello" correctly positioned — offset 52,40 confirmed correct on the panel. SPI had to drop to 26MHz: the panel isn't on SPI2's IOMUX pins, so the GPIO matrix caps it at 80MHz/3 and M5GFX's 40MHz boot-loops.
 
 **Spike 2 — Crux on device**
-- [ ] Core holding `now` in its model, with host-side tests on the laptop
-- [ ] Rust shell imports the core directly (no typegen/FFI), ticks once/sec and renders the view model to the screen
-- [ ] Source time from BM8563 RTC (I²C) or esp-idf system time
+- [x] Core holding `now` in its model, with host-side tests on the laptop — `spike2-crux/core`, 4 tests green via `just test`
+- [x] Rust shell imports the core directly (no typegen/FFI), ticks once/sec and renders the view model to the screen — confirmed on the panel
+- [x] Source time from BM8563 RTC (I²C) or esp-idf system time — took esp-idf `SystemTime`, which counts from the epoch at boot: it ticks correctly but isn't a real date. The RTC wasn't worth wiring up because spike 3's GNSS fix carries true UTC anyway.
 
 **Spike 3 — GPS in**
 - [ ] Wire GPS to the Grove port (G32/G33, TX → Stick RX) on UART1/UART2 and print raw NMEA over serial, shell only
