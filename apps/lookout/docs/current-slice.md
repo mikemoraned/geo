@@ -580,17 +580,47 @@ Steps:
       the sweep removes dated partitions within a country, not the countries themselves —
       left as the cleanup task at the end of this section.
 
-- [ ] Add a `just sessionise` recipe, run it over the real store, and record what came
+- [x] Add a `just sessionise` recipe, run it over the real store, and record what came
       out — session count, duration and sample-count distributions, how many samples are
       flagged and by which flag. This is the first look at whether a 10-minute gap
       actually splits the recorded traces where a human would; adjust the default here
       if it plainly does not, and note the evidence rather than the preference.
       Note: the recipe and the `sessionise` bin are in — threshold as `--gap-mins`
       (units in the name, as the other recipes have them), defaulting to `Gap::default()`
-      so the flag and the code cannot drift. `--country` is provisional: the task above
-      replaces it with a per-session derivation. The run over the real store is still
-      outstanding: the sandbox cannot read `~/Data`, so the numbers have to come from a
-      shell that can.
+      so the flag and the code cannot drift.
+
+      The first run over the real store, at the 10-minute default, on 2026-07-29: 41
+      sessions from 3 devices over 4108 samples and 11 days, none unplaceable. Split by 23
+      silences, 15 announcements and 3 first-ever samples (one per device). Durations:
+      median 9.2 min, p90 67.7 min, max 209 min — but 18 of the 41 run under a minute and
+      15 hold a single sample. Samples per session: median 17, p90 223, max 966.
+
+      **The 10-minute default stays**, on this evidence: the longest silence it kept inside
+      a session is 9.4 min and 50 steps exceed 5 min, so a 5-minute threshold would break
+      about 50 journeys in half, while the kept distribution is otherwise tight (p90 19 s,
+      p99 5.0 min) — nothing suggests separate journeys are being welded together. What
+      this run cannot show is whether a *longer* threshold would rejoin journeys the 23
+      silences split; that needs deriving at two thresholds and comparing, worth doing only
+      if the crossings step turns out to care. Nor can it show whether the splits land
+      where a human would put them, which is a judgement about the paths themselves — the
+      session viewer below is what that gets checked against, so the default is settled on
+      the distributions for now and open to what the maps show.
+
+      What the run does flag is the tiny sessions: the 15 single-sample sessions track the
+      15 announcements one for one. Looking at a single day in the notebook says why, and
+      it is not what the totals suggested: the device fixes its position *before* it
+      announces, so that lone fix follows a long silence, opens a `gap` session of its own,
+      and the announcement starts the real session 6–13 seconds later. That is a derivation
+      artefact rather than a fact about the recordings — see the absorption task below.
+      Silver keeps every sample by rule either way, but the ground truth should not count a
+      crossing as passed on the strength of one sample, so the crossings step still has to
+      say what it does with sessions that small.
+
+      The doubt-flagging columns earn their place: reported accuracy is median 4.8 m but
+      p90 1570 m and max 21.8 km, with 848 samples (21%) over 50 m; implied speed is median
+      26.5 m/s (~95 km/h, a train) with p99 190 m/s and max 3538 m/s, and 104 samples
+      (2.5%) over 100 m/s. A fifth of the samples are ones some consumer will want to
+      discard, and none of them had to be discarded here.
 - [ ] Cut `visualise/` back to **one thing: the selected sessions**. It reads silver
       `session` and `session_sample` and nothing else — the bronze `gps_reading` /
       `accel_reading` readers, the accel ride-quality series, and the `train_segment`
@@ -629,6 +659,20 @@ Steps:
       Rewrite `README.md` and the module docstring to describe this tool rather than the
       one being removed, and expect most of `tests/test_main.py` to go with the readers it
       covers.
+- [ ] Let a reported session start absorb the sample that immediately precedes it, so a
+      journey is one session rather than a one-sample session followed by the real one.
+      The evidence is every journey recorded on 2026-07-22: a single sample arrives, is
+      attributed to `gap` because a long silence precedes it, and 6–13 seconds later the
+      device announces the session that carries the remaining 128–966 samples. The
+      one-sample sessions are an artefact of a device fixing its position before it
+      announces, not of anything a reader would call a session. Choose the lead time from
+      the observed spread rather than in advance, and settle three things it raises: what
+      happens when several samples precede the announcement, whether the absorbed sample
+      becomes `seq` 0 of the announced session (it should — it is the first thing recorded
+      of that journey), and that moving the start moves the session's id with it, since the
+      id derives from the first sample's instant. Absorbing is the honest fix rather than
+      dropping the short sessions: the sample is a real observation of that journey.
+
 - [ ] Sweep the partition level above the dates too, so a rebuild that no longer produces
       any rows for a country does not leave that country's directory standing. Replacing a
       set of partitions deletes the dated ones within one country today, which is the
@@ -763,6 +807,9 @@ Steps:
       for. Carry `samples_within` (how many samples of the session fell inside the
       radius), since a single sample inside the radius and twenty are different evidence
       that the crossing was really passed, and the evaluation step will want to say so.
+      Say explicitly what happens to a session too small to be evidence of anything: over
+      a third of the recorded sessions hold a single sample (see the sessionise run above),
+      so a crossing can be "passed" by a session that never moved.
 - [ ] Add a `just crossings` recipe, run the whole thing over the real store, and record
       what came out: crossings in DE, how many sessions matched any crossing, crossings
       per session and the distribution of `distance_m` and `samples_within`. Choose M
