@@ -14,6 +14,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
+use geo_types::Point;
 use medallion::{Query, Root};
 use model::{DeviceId, SessionId, StartedBy};
 use serde::{Deserialize, Serialize};
@@ -127,6 +128,16 @@ impl Session {
             .first()
             .expect("a session is built from the sample that starts it")
             .t
+    }
+
+    /// Where the session began: the position of its first sample. Which country that is
+    /// in decides the zone its projected geometry is written in.
+    pub fn started_from(&self) -> Point<f64> {
+        let first = self
+            .samples
+            .first()
+            .expect("a session is built from the sample that starts it");
+        Point::new(first.lon, first.lat)
     }
 
     /// What identifies this session wherever it is written or read.

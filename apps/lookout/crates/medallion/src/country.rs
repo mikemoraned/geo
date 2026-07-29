@@ -9,6 +9,18 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
+use geo_types::Point;
+
+/// Somewhere that can say which country a place is in.
+///
+/// A projected zone is chosen per country, so anything writing projected geometry has to
+/// know the country of each thing it writes. That is a property of where the thing is, not
+/// of the run that wrote it, so it is looked up rather than passed down.
+pub trait Countries {
+    /// The country containing `point`, or `None` where that is no country the store knows.
+    fn containing(&self, point: Point<f64>) -> Option<Country>;
+}
+
 /// A country whose geometry the store can hold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Country {

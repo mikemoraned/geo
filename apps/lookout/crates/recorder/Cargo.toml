@@ -25,6 +25,7 @@ md5 = { workspace = true }
 rusqlite = { workspace = true }
 shared = { workspace = true }
 telemetry = { workspace = true }
+transport = { workspace = true }
 
 [dev-dependencies]
 uuid = { workspace = true }

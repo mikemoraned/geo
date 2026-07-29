@@ -96,6 +96,7 @@ medallion = { path = "crates/medallion" }
 model = { path = "crates/model" }
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
+transport = { path = "crates/transport" }
 
 [workspace.lints.clippy]
 all = "warn"

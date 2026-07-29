@@ -555,11 +555,42 @@ Steps:
       queue tail changes nothing, and samples after a silence longer than the threshold
       start a second session while leaving the first untouched. Both a random
       `session_id` and a disabled dedup were confirmed to fail these tests.
+- [x] Derive a session's country rather than being told it. The projected CRS is chosen
+      per country, so today every writer is handed `--country` and every session in a run
+      gets the same one — a fact about the run, not about the session. Decide it from
+      where the session's first sample falls: the country whose area contains that point.
+      Only Germany is supported, which covers everything recorded so far, so this is
+      about where the decision is made rather than about supporting more countries yet.
+      Two things to settle: where the containment lookup lives (the bronze Overture
+      `division_area` rows carry real country areas and extend for free as more extracts
+      are taken, but make sessionisation depend on an extract having been made), and what
+      happens to a session starting outside every known country — it can have no
+      projected geometry, so it is either excluded and counted or the run fails.
+      Note: `transport::countries::CountryAreas` loads the `division_area` rows of
+      subtype `country` from the newest extract, and `medallion::Countries` is the trait
+      the writers ask through — so `medallion` states the question, `transport` answers it
+      from Overture, and `recorder` depends on neither's data model. Sessionisation now
+      needs an extract to have been taken, and says so rather than assuming a country. A
+      session starting outside every known country is counted as `unplaceable` and left
+      unwritten: there is no zone to project it into, and the nearest one would put its
+      geometry in the wrong metres. This forced a partitioning change — `session` and
+      `session_sample` now sit under `country=<iso>` above their date — because a file
+      states one CRS for its projected column, so rows of two countries cannot share one.
+      A country whose sessions all disappear leaves an empty `country=` directory behind:
+      the sweep removes dated partitions within a country, not the countries themselves —
+      left as the cleanup task at the end of this section.
+
 - [ ] Add a `just sessionise` recipe, run it over the real store, and record what came
       out — session count, duration and sample-count distributions, how many samples are
       flagged and by which flag. This is the first look at whether a 10-minute gap
       actually splits the recorded traces where a human would; adjust the default here
       if it plainly does not, and note the evidence rather than the preference.
+      Note: the recipe and the `sessionise` bin are in — threshold as `--gap-mins`
+      (units in the name, as the other recipes have them), defaulting to `Gap::default()`
+      so the flag and the code cannot drift. `--country` is provisional: the task above
+      replaces it with a per-session derivation. The run over the real store is still
+      outstanding: the sandbox cannot read `~/Data`, so the numbers have to come from a
+      shell that can.
 - [ ] Cut `visualise/` back to **one thing: the selected sessions**. It reads silver
       `session` and `session_sample` and nothing else — the bronze `gps_reading` /
       `accel_reading` readers, the accel ride-quality series, and the `train_segment`
@@ -598,6 +629,17 @@ Steps:
       Rewrite `README.md` and the module docstring to describe this tool rather than the
       one being removed, and expect most of `tests/test_main.py` to go with the readers it
       covers.
+- [ ] Sweep the partition level above the dates too, so a rebuild that no longer produces
+      any rows for a country does not leave that country's directory standing. Replacing a
+      set of partitions deletes the dated ones within one country today, which is the
+      level the caller names; the level it does not name is the one that goes stale. A
+      reader listing what countries the store holds sessions for should see the answer the
+      last run produced, not the union of every run so far.
+
+- [ ] Give `motis_ingest` the same treatment: a captured leg's country is a property of
+      where it runs, not of the run that ingested it, so derive it from the leg's own
+      geometry rather than from `--country`. Same lookup the sessions use, so the two
+      cannot disagree about where a place is.
 
 ### Water crossings per session
 

@@ -51,7 +51,7 @@ mod rows;
 mod write;
 
 pub use args::MedallionArgs;
-pub use country::{Country, UnknownCountry};
+pub use country::{Countries, Country, UnknownCountry};
 pub use dataset::DatasetSpec;
 pub use geo::{
     geo_batch, geometries, projected_wkb_field, wkb_column, wkb_field, GeoError, Projector,

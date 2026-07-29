@@ -87,6 +87,17 @@ extract *args:
 ingest-motis *args:
     cargo run -p motis --bin motis_ingest -- {{args}}
 
+# Derive the silver `session` and `session_sample` datasets from the bronze telemetry:
+# dedup the GPS readings, split each device's into sessions at a `StartSession` or a
+# silence longer than --gap-mins (default 10), and write each session's path and samples
+# with their projected geometry. Each session's country — and so the zone it is projected
+# into — comes from where it started, against the country areas of the newest Overture
+# extract, so `just extract` has to have been run. Override the store with
+# --medallion-root. Re-derives every session from all of bronze, so a rerun replaces what
+# the last one wrote rather than adding to it.
+sessionise *args:
+    cargo run --release -p recorder --bin sessionise -- {{args}}
+
 # Read the pre-medallion sqlite dbs under data/ into bronze, then re-derive the silver
 # train segments over the polls that adds. Run once: the telemetry backfill refuses a
 # second run (bronze is immutable, and it would double every payload), and the segment

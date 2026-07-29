@@ -64,6 +64,15 @@ pub struct Replaced {
     pub removed: usize,
 }
 
+impl std::ops::AddAssign for Replaced {
+    /// Accumulates what several runs over one dataset did, for a caller replacing its
+    /// partitions in more than one pass.
+    fn add_assign(&mut self, other: Self) {
+        self.written += other.written;
+        self.removed += other.removed;
+    }
+}
+
 /// What a write left in the store.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Written {
@@ -148,6 +157,16 @@ impl Dataset {
         self.spec
             .partition_key
             .ok_or_else(|| PathError::Unpartitioned(self.spec.name.to_string()))
+    }
+
+    /// The layer this dataset lives in.
+    pub fn layer(&self) -> &'static str {
+        self.spec.layer.as_str()
+    }
+
+    /// The dataset's name.
+    pub fn name(&self) -> &'static str {
+        self.spec.name
     }
 
     /// The directory the partitions resolve to.

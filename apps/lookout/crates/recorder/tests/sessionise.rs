@@ -7,7 +7,8 @@
 //! grown adds the new samples to the session they belong to rather than starting another.
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
-use medallion::{Country, Query, Root};
+use geo_types::Point;
+use medallion::{Countries, Country, Query, Root};
 use model::{DeviceId, SessionId};
 use recorder::bronze::{Archive, Payload};
 use recorder::sessions::{sessions, Gap};
@@ -15,6 +16,16 @@ use recorder::silver;
 use serde::Deserialize;
 use shared::{Gps, GpsReading, Message, V1Message};
 use uuid::Uuid;
+
+/// These samples are all in Germany, which the containment lookup would say of the real
+/// country areas; the tests here are about what a rerun leaves behind, not about placing.
+struct Germany;
+
+impl Countries for Germany {
+    fn containing(&self, _point: Point<f64>) -> Option<Country> {
+        Some(Country::Germany)
+    }
+}
 
 /// One session as the store holds it.
 #[derive(Debug, Deserialize, PartialEq)]
@@ -71,7 +82,7 @@ async fn sessionise(root: &Root) -> silver::WriteOutcome {
     let derived = sessions(root, Gap::default())
         .await
         .expect("derive sessions");
-    silver::write(root, &derived, Country::Germany)
+    silver::write(root, &derived, &Germany)
         .await
         .expect("write sessions")
 }

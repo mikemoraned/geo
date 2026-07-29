@@ -1,7 +1,9 @@
 //! Sessions: one contiguous run of GPS samples from one device, and the samples within it.
 //!
-//! The two are separate datasets because they are partitioned by different dates. A sample is
-//! partitioned by when it was recorded and a session by when it started, so a session
+//! Both live under a `country=` partition, since the CRS of a projected geometry column is
+//! stated once per file and the zone is chosen per country. Below that they are separate
+//! datasets because they are partitioned by different dates: a sample by when it was
+//! recorded and a session by when it started, so a session
 //! crossing midnight has its samples split over two partitions and is reassembled by
 //! `session_id` — which is therefore carried on every sample, along with `device_id`, so a
 //! partition of samples is readable without joining back to the sessions.

@@ -9,15 +9,27 @@
 //! session by the instant it began — so a session crossing midnight has its samples split
 //! over two partitions while itself living in one. A run rebuilds every partition it
 //! produces rows for, since it re-derives every session from all of bronze.
+//!
+//! Both sit under a `country=` partition, because the projected column's CRS is declared
+//! per file and the zone is chosen per country: rows of two countries cannot share a file
+//! and state one CRS truthfully. Which country a session is in follows from where it
+//! started, so a session whose start is in no country the store knows is left unwritten —
+//! there is no zone to project it into — and counted.
 
 use arrow::array::RecordBatch;
+use std::collections::HashMap;
+
 use chrono::{DateTime, NaiveDate, Utc};
 use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
-use medallion::{Country, Projector, Replaced, Root, Row, GEOMETRY, PROJECTED_GEOMETRY};
+use medallion::{Countries, Country, Projector, Replaced, Root, Row, GEOMETRY, PROJECTED_GEOMETRY};
 use model::{Bbox, SessionRow, SessionSampleRow};
 
 use crate::sessions::Session;
+
+/// The partition key each dataset is laid out by above its date, since a file's projected
+/// geometry states one CRS and the zone is chosen per country.
+const COUNTRY: &str = "country";
 
 /// What one write did, per dataset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -26,6 +38,8 @@ pub struct WriteOutcome {
     pub session_partitions: Replaced,
     pub samples: usize,
     pub sample_partitions: Replaced,
+    /// Sessions starting outside every country the store knows, and so not written.
+    pub unplaceable: usize,
 }
 
 /// A failure writing the sessions.
@@ -56,25 +70,40 @@ struct Located {
 
 /// Write `sessions` and their samples to the silver datasets under `root`.
 ///
-/// `country` is the one these sessions were recorded in: it fixes the CRS of the projected
-/// geometry columns, since the projected zone is chosen per country.
+/// Each session's country is looked up from where it started, since that fixes the CRS of
+/// its projected geometry. A session starting where `countries` knows no country is
+/// reported as unplaceable rather than written.
 pub async fn write(
     root: &Root,
     sessions: &[Session],
-    country: Country,
+    countries: &impl Countries,
 ) -> Result<WriteOutcome, SilverError> {
-    let projector = Projector::for_country(country)?;
-    let placed = sessions
-        .iter()
-        .map(|session| place(session, &projector))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut outcome = WriteOutcome::default();
+    let mut by_country: HashMap<Country, Vec<&Session>> = HashMap::new();
+    for session in sessions {
+        match countries.containing(session.started_from()) {
+            Some(country) => by_country.entry(country).or_default().push(session),
+            None => outcome.unplaceable += 1,
+        }
+    }
 
-    Ok(WriteOutcome {
-        sessions: placed.len(),
-        session_partitions: write_sessions(root, &placed, country).await?,
-        samples: placed.iter().map(|session| session.samples.len()).sum(),
-        sample_partitions: write_samples(root, &placed, country).await?,
-    })
+    for (country, sessions) in by_country {
+        let projector = Projector::for_country(country)?;
+        let placed = sessions
+            .iter()
+            .map(|session| place(session, &projector))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        outcome.sessions += placed.len();
+        outcome.samples += placed
+            .iter()
+            .map(|session| session.samples.len())
+            .sum::<usize>();
+        outcome.session_partitions += write_sessions(root, &placed, country).await?;
+        outcome.sample_partitions += write_samples(root, &placed, country).await?;
+    }
+
+    Ok(outcome)
 }
 
 /// Write one row per session, partitioned by the date it began.
@@ -88,6 +117,7 @@ async fn write_sessions(
 
     write_dates::<_, SessionRow, _, _>(
         root,
+        country,
         &placed,
         |session| session.row.started_at.date_naive(),
         |day| {
@@ -120,6 +150,7 @@ async fn write_samples(
 
     write_dates::<_, SessionSampleRow, _, _>(
         root,
+        country,
         &samples,
         |sample| sample.row.t.date_naive(),
         |day| {
@@ -132,13 +163,14 @@ async fn write_samples(
     .await
 }
 
-/// Replace this dataset's partitions with one per date the rows fall on, reporting what
+/// Replace one country's partitions with one per date the rows fall on, reporting what
 /// that left in the store.
 ///
 /// `rows` are ordered by the date `date_of` reads, so each partition's rows are one
 /// adjacent run rather than a scan of all of them.
 async fn write_dates<T, R, D, B>(
     root: &Root,
+    country: Country,
     rows: &[&T],
     date_of: D,
     batch_of: B,
@@ -153,7 +185,11 @@ where
         .map(|day| Ok((date_of(day[0]), batch_of(day)?)))
         .collect::<Result<Vec<_>, SilverError>>()?;
 
-    Ok(root.rows_of::<R>().replace_dates_geo(&days).await?)
+    Ok(root
+        .rows_of::<R>()
+        .partition(COUNTRY, country)?
+        .replace_dates_geo(&days)
+        .await?)
 }
 
 /// One session placed on the map: its row and path, and its samples' rows and points.
@@ -291,6 +327,28 @@ mod tests {
 
     use super::*;
 
+    /// Every place is in Germany, which is where these samples are.
+    struct Everywhere(Country);
+
+    impl Countries for Everywhere {
+        fn containing(&self, _point: Point<f64>) -> Option<Country> {
+            Some(self.0)
+        }
+    }
+
+    /// Nowhere is in any country the store knows.
+    struct Nowhere;
+
+    impl Countries for Nowhere {
+        fn containing(&self, _point: Point<f64>) -> Option<Country> {
+            None
+        }
+    }
+
+    fn germany() -> Everywhere {
+        Everywhere(Country::Germany)
+    }
+
     /// A degree of latitude is about this many metres, near enough to check that a speed
     /// came out of the projected geometry rather than out of degrees.
     const METRES_PER_DEGREE_LATITUDE: f64 = 111_320.0;
@@ -326,8 +384,7 @@ mod tests {
 
     /// Derive and write the sessions `messages` make, through the same archive the drain
     /// writes bronze with.
-    async fn written(tmp: &tempfile::TempDir, messages: &[Message]) -> (Root, WriteOutcome) {
-        let root = Root::new(tmp.path());
+    async fn drain(root: &Root, messages: &[Message]) {
         let json: Vec<String> = messages
             .iter()
             .map(|message| serde_json::to_string(message).expect("serialize"))
@@ -343,11 +400,16 @@ mod tests {
             .write(at(9, 0, 0), &payloads)
             .await
             .expect("archive");
+    }
+
+    async fn written(tmp: &tempfile::TempDir, messages: &[Message]) -> (Root, WriteOutcome) {
+        let root = Root::new(tmp.path());
+        drain(&root, messages).await;
 
         let derived = sessions(&root, Gap::default())
             .await
             .expect("derive sessions");
-        let outcome = write(&root, &derived, Country::Germany)
+        let outcome = write(&root, &derived, &germany())
             .await
             .expect("write sessions");
         (root, outcome)
@@ -532,7 +594,7 @@ mod tests {
         let derived = sessions(&root, Gap::default())
             .await
             .expect("derive sessions");
-        let second = write(&root, &derived, Country::Germany)
+        let second = write(&root, &derived, &germany())
             .await
             .expect("write again");
 
@@ -651,7 +713,7 @@ mod tests {
         assert_eq!(outcome.sample_partitions.written, 2);
         assert!(root
             .path()
-            .join("silver/session/start_date=2026-07-26")
+            .join("silver/session/country=DE/start_date=2026-07-26")
             .exists());
     }
 
@@ -749,7 +811,7 @@ mod tests {
         let derived = sessions(&root, Gap::new(Duration::hours(2)))
             .await
             .expect("derive sessions");
-        let second = write(&root, &derived, Country::Germany)
+        let second = write(&root, &derived, &germany())
             .await
             .expect("write again");
 
@@ -758,16 +820,59 @@ mod tests {
         assert_eq!(second.session_partitions.removed, 1);
         assert!(!root
             .path()
-            .join("silver/session/start_date=2026-07-27")
+            .join("silver/session/country=DE/start_date=2026-07-27")
             .exists());
         assert_eq!(session_rows(&root).await.len(), 1);
+    }
+
+    /// A session starting where no known country is has no zone to be projected into, so
+    /// it is reported rather than written into some other country's metres.
+    #[tokio::test]
+    async fn a_session_outside_every_known_country_is_not_written() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let id = Uuid::from_u128(1);
+        let root = Root::new(tmp.path());
+        drain(&root, &[gps(id, at(9, 0, 0), 52.5, 13.4)]).await;
+        let derived = sessions(&root, Gap::default())
+            .await
+            .expect("derive sessions");
+
+        let outcome = write(&root, &derived, &Nowhere).await.expect("write");
+
+        assert_eq!(
+            outcome,
+            WriteOutcome {
+                unplaceable: 1,
+                ..WriteOutcome::default()
+            }
+        );
+        assert!(!root.path().join("silver").exists());
+    }
+
+    /// The country a session is in decides which zone its geometry is written in, so it
+    /// names a partition rather than being a column of the file.
+    #[tokio::test]
+    async fn a_session_is_written_under_the_country_it_started_in() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let id = Uuid::from_u128(1);
+
+        let (root, _) = written(&tmp, &[gps(id, at(9, 0, 0), 52.5, 13.4)]).await;
+
+        assert!(root
+            .path()
+            .join("silver/session/country=DE/start_date=2026-07-26")
+            .exists());
+        assert!(root
+            .path()
+            .join("silver/session_sample/country=DE/sample_date=2026-07-26")
+            .exists());
     }
 
     #[tokio::test]
     async fn no_sessions_write_nothing() {
         let tmp = tempfile::tempdir().expect("tempdir");
 
-        let outcome = write(&Root::new(tmp.path()), &[], Country::Germany)
+        let outcome = write(&Root::new(tmp.path()), &[], &germany())
             .await
             .expect("write nothing");
 

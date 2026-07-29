@@ -9,7 +9,7 @@ use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
 use crate::dataset::DatasetSpec;
-use crate::path::Root;
+use crate::path::{Dataset, Root};
 
 /// A failure querying the store.
 #[derive(Debug, thiserror::Error)]
@@ -52,11 +52,17 @@ impl Query {
     /// distinguish by hand: [`QueryError::NoSuchDataset`] says so, and
     /// [`Self::register_if_present`] treats it as an empty table instead.
     pub async fn register(&self, dataset: DatasetSpec, table: &str) -> Result<(), QueryError> {
-        let dir = self.root.dataset(dataset).dir();
+        self.register_at(&self.root.dataset(dataset), table).await
+    }
+
+    /// Register one partition of a dataset under `table`, for a dataset whose partitions
+    /// hold different schemas and so cannot be read as a single table.
+    pub async fn register_at(&self, dataset: &Dataset, table: &str) -> Result<(), QueryError> {
+        let dir = dataset.dir();
         if !dir.exists() {
             return Err(QueryError::NoSuchDataset {
-                layer: dataset.layer.as_str(),
-                dataset: dataset.name.to_string(),
+                layer: dataset.layer(),
+                dataset: dataset.name().to_string(),
             });
         }
         let df = self
