@@ -55,6 +55,22 @@ I think at this point we need to cleanly separate our bits of data processing an
 
 ...
 
+## Slice: Spikes on Device Support
+
+### Target
+
+Ultimately I'd like to be able to run the live predictor as an app installed on my ["M5StickC PLUS2"](https://shop.m5stack.com/products/m5stickc-plus2-esp32-mini-iot-development-kit?variant=44269818216705) with a ["GPS/BDS Unit v1.1 (AT6668)"](https://shop.m5stack.com/products/gps-bds-unit-v1-1-at6668?variant=45727253692673).
+
+I'd like to use a series of Spikes to show this is possible by incrementally building a small app that can show current time + GPS reading (lat, lon) on the screen and exposed over BLE.
+
+### Straw Man
+
+We should build a series of spikes in apps/lookout/spikes/m5. Each of these should be standalone but incrementally build on what was learned the previous:
+1. a simple "hello world" which runs and prints "hello" on screen (using `std` and not `no_std`)
+2. have [crux[(https://redbadger.github.io/crux/) running on device, showing current time on screen, updating once per second
+3. integrate GPS unit, have it send a GPS Fix to the crux core, and get it showing current time + latest lat/lon on screen
+4. have the latest lat/lon exposed as a sample stream over Bluetooth LE
+
 ## Slice: Enrich and use relative direction of POI
 
 ### Target
