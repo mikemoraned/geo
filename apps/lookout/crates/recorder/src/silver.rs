@@ -87,6 +87,7 @@ pub async fn write(
         }
     }
 
+    let derived: Vec<Country> = by_country.keys().copied().collect();
     for (country, sessions) in by_country {
         let projector = Projector::for_country(country)?;
         let placed = sessions
@@ -102,6 +103,19 @@ pub async fn write(
         outcome.session_partitions += write_sessions(root, &placed, country).await?;
         outcome.sample_partitions += write_samples(root, &placed, country).await?;
     }
+
+    // Each dataset's dated partitions were swept within their country as they were written;
+    // the countries themselves can only be swept here, where every one the run derived is
+    // known. A run derives all of bronze, so a country missing from `derived` is one the
+    // store no longer holds sessions for.
+    outcome.session_partitions.removed += root
+        .rows_of::<SessionRow>()
+        .retain_partitions(COUNTRY, &derived)
+        .await?;
+    outcome.sample_partitions.removed += root
+        .rows_of::<SessionSampleRow>()
+        .retain_partitions(COUNTRY, &derived)
+        .await?;
 
     Ok(outcome)
 }
@@ -866,6 +880,31 @@ mod tests {
         assert!(root
             .path()
             .join("silver/session_sample/country=DE/sample_date=2026-07-26")
+            .exists());
+    }
+
+    /// A country the run no longer derives any session for does not linger: the store holds
+    /// what the last run produced, down to which countries it produced anything in.
+    #[tokio::test]
+    async fn a_country_a_rerun_derives_nothing_in_is_removed() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let id = Uuid::from_u128(1);
+        let (root, first) = written(&tmp, &[gps(id, at(9, 0, 0), 52.5, 13.4)]).await;
+        assert_eq!(first.sessions, 1);
+        assert!(root.path().join("silver/session/country=DE").exists());
+
+        let derived = sessions(&root, Gap::default(), Lead::default())
+            .await
+            .expect("derive sessions");
+        let outcome = write(&root, &derived, &Nowhere).await.expect("write again");
+
+        assert_eq!(outcome.unplaceable, 1);
+        assert_eq!(outcome.session_partitions.removed, 1);
+        assert_eq!(outcome.sample_partitions.removed, 1);
+        assert!(!root.path().join("silver/session/country=DE").exists());
+        assert!(!root
+            .path()
+            .join("silver/session_sample/country=DE")
             .exists());
     }
 

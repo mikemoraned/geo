@@ -254,8 +254,13 @@ identical partition, so a partition can be rebuilt rather than incrementally mer
 
 A rebuild replaces the whole of what it derives, so a partition that exists but the rebuild
 produces no rows for is deleted rather than left standing: a partition no derivation claims
-is indistinguishable, to a reader, from a current one. Deletion is bounded by the dataset's
-own partition key, so it never reaches a directory written under another one.
+is indistinguishable, to a reader, from a current one. Deletion is bounded by the partition
+key being swept, so it never reaches a directory written under another one.
+
+That applies at every level a dataset is partitioned by, not only the innermost. Sweeping a
+level requires knowing every value the run produced for it, so it is done where that is
+known — which means a rebuild that covers only part of a dataset must not sweep, since the
+part it did not derive would read as a part that produced nothing.
 
 Whether a silver dataset additionally **retains history** — superseded versions of a row, or
 validity intervals — is a per-dataset decision, and one that should be settled explicitly

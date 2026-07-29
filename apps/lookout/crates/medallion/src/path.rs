@@ -271,19 +271,40 @@ impl Dataset {
             written.insert(partition.dir());
         }
 
-        let removed = self.remove_partitions_except(&written).await?;
+        let removed = self.sweep(self.own_key()?, &written).await?;
         Ok(Replaced {
             written: written.len(),
             removed,
         })
     }
 
-    /// Delete every partition of this dataset except `keep`, reporting how many went.
-    async fn remove_partitions_except(
+    /// Delete every partition under `key` whose value is not among `values`, reporting how
+    /// many went.
+    ///
+    /// This is the level above [`Self::replace_dates_geo`], which sweeps within one value of
+    /// `key` because that is the level it is given. A caller that knows every value the run
+    /// produced sweeps the level itself, so a value the run no longer produces anything for
+    /// leaves nothing behind — and a reader listing what values a dataset holds sees the
+    /// answer the last run gave rather than the union of every run so far.
+    ///
+    /// It follows that the caller has to have derived the whole dataset: a run over some of
+    /// the values would read as a run that produced nothing for the rest.
+    pub async fn retain_partitions<V: Display>(
         &self,
-        keep: &HashSet<PathBuf>,
+        key: &str,
+        values: &[V],
     ) -> Result<usize, ReplaceError> {
-        let key = self.own_key()?;
+        let keep = values
+            .iter()
+            .map(|value| Ok(self.dir().join(Partition::new(key, value)?.to_string())))
+            .collect::<Result<HashSet<PathBuf>, PathError>>()?;
+
+        self.sweep(key, &keep).await
+    }
+
+    /// Delete every directory of this dataset named for `key` except `keep`, reporting how
+    /// many went.
+    async fn sweep(&self, key: &str, keep: &HashSet<PathBuf>) -> Result<usize, ReplaceError> {
         let dir = self.dir();
         let mut entries = match tokio::fs::read_dir(&dir).await {
             Ok(entries) => entries,
@@ -587,6 +608,73 @@ mod tests {
             partitions_of(&dataset),
             ["NOTES.md", "region=de", "start_date=2026-07-27"]
         );
+    }
+
+    /// A value the run no longer produces rows for leaves nothing behind at the level above
+    /// the dates, which is the level its caller names rather than this one.
+    #[tokio::test]
+    async fn a_value_the_run_no_longer_names_is_swept_from_the_level_above() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dataset = Root::new(tmp.path()).dataset(SESSION);
+        for country in ["DE", "FR"] {
+            dataset
+                .clone()
+                .partition("country", country)
+                .expect("country")
+                .replace_dates_geo(&[(date(26), geo_batch())])
+                .await
+                .expect("write");
+        }
+
+        let removed = dataset
+            .retain_partitions("country", &["DE"])
+            .await
+            .expect("retain");
+
+        assert_eq!(removed, 1);
+        assert_eq!(partitions_of(&dataset), ["country=DE"]);
+    }
+
+    /// Retaining nothing empties the dataset: a run that derived no values claims none.
+    #[tokio::test]
+    async fn retaining_no_values_sweeps_every_partition_of_the_level() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dataset = Root::new(tmp.path()).dataset(SESSION);
+        dataset
+            .clone()
+            .partition("country", "DE")
+            .expect("country")
+            .replace_dates_geo(&[(date(26), geo_batch())])
+            .await
+            .expect("write");
+
+        let removed = dataset
+            .retain_partitions::<&str>("country", &[])
+            .await
+            .expect("retain");
+
+        assert_eq!(removed, 1);
+        assert!(partitions_of(&dataset).is_empty());
+    }
+
+    /// The sweep is bounded by the key it is given, so a partition of the dataset's own
+    /// dated key is not something a sweep of another level removes.
+    #[tokio::test]
+    async fn retaining_one_key_leaves_partitions_of_another_alone() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dataset = Root::new(tmp.path()).dataset(SESSION);
+        dataset
+            .replace_dates_geo(&[(date(26), geo_batch())])
+            .await
+            .expect("write");
+
+        let removed = dataset
+            .retain_partitions("country", &["DE"])
+            .await
+            .expect("retain");
+
+        assert_eq!(removed, 0);
+        assert_eq!(partitions_of(&dataset), ["start_date=2026-07-26"]);
     }
 
     /// A dataset nothing has been written to yet has no partitions to sweep, rather than a
