@@ -361,6 +361,49 @@ The main tasks here should be focussed on documenting these patterns and correct
       survey is deliberately dropped: the conclusion was "none yet, three CLIs run by hand are
       below the threshold", which is still true and needs no note, and any survey of what
       exists would be restated from scratch when the threshold is actually crossed.
+- [ ] Refuse to delete or overwrite outside the layers that permit it. Silver rebuilds
+      replace whole partitions and sweep the ones a run no longer produces, and every
+      `Dataset` offers those methods whatever layer it names — so
+      `root.dataset(RAW_SAMPLE).retain_partitions(…)` compiles today and would take bronze
+      with it. Bronze and landing are the only data in the store that cannot be re-derived,
+      so the rule that they are append-only should be something the code enforces rather
+      than something every caller remembers: check the layer on the replacing and sweeping
+      paths and fail with a typed error, and test it over `model::ALL` so a bronze dataset
+      added later is covered without anyone thinking about it. Append already refuses to
+      land on an existing file, so this closes the remaining door.
+      Considered and not done: routing deletions into a `<root>/.deleted/<layer>/…` trash
+      directory instead of removing them. It is the right shape if reversible deletion is
+      ever wanted — a rename is atomic and free, and the trash must sit *outside* the layer
+      directories or a reader globbing `silver/**/*.parquet` would read deleted partitions
+      back — but with bronze undeletable and silver cheap to rebuild there is nothing left
+      for it to save.
+- [ ] Host the store in the repo, at `apps/lookout/data/medallion`, so bronze is versioned
+      with the code that wrote it. `data/` already tracks the pre-medallion `lookout.sqlite`
+      and `motis.sqlite` — the same sensor data in its old form — so moving the store out to
+      `~/Data` quietly lost that versioning, and git gives back the undelete that a
+      versioned filesystem was wanted for. Bronze suits it: its files are immutable and
+      append-only, so each blob is stored once and never re-stored as a modification.
+      Ignore `silver/` and `gold/` (derivable by definition) and `bronze/overture_extract/`
+      (1.5 GB), but **keep `bronze/extract_manifest/`**: it is a few rows naming the release
+      and window each extract took, and since Overture releases are public and immutable an
+      extract is re-derivable from its manifest row, which the sensor data is not.
+
+      **The repo store is the default**, not an opt-in: `Root::default_path` resolves to it
+      and `--medallion-root` remains the way to point somewhere else, so nothing needs an
+      env var or a per-recipe flag to work on the normal store. The default is found by
+      **walking up from the working directory for the workspace marker**, as cargo does, and
+      taking `data/medallion` under it. A plain relative `data/medallion` would be less code
+      but silently creates a second store whenever a binary runs from another directory,
+      which is exactly the accident this task exists to prevent. Finding no marker is an
+      error naming what was looked for, not a fallback to a guess — a store in the wrong
+      place is worse than a run that refuses to start. Note that `medallion.md` and
+      `MedallionArgs`' tests both name the old `~/Data` path, and moving the store means
+      copying bronze across and re-deriving silver rather than moving it whole.
+
+      Everything except the extracts is 20 MB over ~1300 files today, against 19 MB of
+      sqlite already tracked; `motis_segment` is 17 MB of it and the only one that grows
+      with use, so it is the one to watch. This also puts the store inside what the sandbox
+      can read, so a run and its checks stop needing a shell outside it.
 
 ### Sessionisation
 
@@ -668,12 +711,21 @@ Steps:
       median 17 → **89**. On 2026-07-22, nine sessions become five, each announced journey
       one sample longer than before.
 
-- [ ] Sweep the partition level above the dates too, so a rebuild that no longer produces
+- [x] Sweep the partition level above the dates too, so a rebuild that no longer produces
       any rows for a country does not leave that country's directory standing. Replacing a
       set of partitions deletes the dated ones within one country today, which is the
       level the caller names; the level it does not name is the one that goes stale. A
       reader listing what countries the store holds sessions for should see the answer the
       last run produced, not the union of every run so far.
+      Note: `Dataset::retain_partitions(key, values)` deletes every partition under `key`
+      whose value is not among those given, and `silver::write` calls it once per dataset
+      after the loop, where every country the run derived is known. The level below is still
+      swept by `replace_dates_geo`, which only ever sees one country because that is the
+      level it is handed — so the two sweeps together leave exactly what the run produced.
+      This puts a condition on the caller, now written into `medallion.md`: a run that
+      derives only part of a dataset must not sweep, since the part it skipped would read as
+      a part that produced nothing. Today every run covers all of bronze, so the condition
+      holds; a `--since`-style flag would break it.
 
 - [ ] Give `motis_ingest` the same treatment: a captured leg's country is a property of
       where it runs, not of the run that ingested it, so derive it from the leg's own
