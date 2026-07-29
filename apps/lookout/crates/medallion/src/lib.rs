@@ -57,7 +57,7 @@ pub use geo::{
     geo_batch, geometries, projected_wkb_field, wkb_column, wkb_field, GeoError, Projector,
     GEOMETRY, PROJECTED_GEOMETRY,
 };
-pub use layer::Layer;
+pub use layer::{AppendOnly, Layer};
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
 pub use path::{AppendError, Dataset, ReplaceError, Replaced, Root, Written};
 pub use query::{Query, QueryError};

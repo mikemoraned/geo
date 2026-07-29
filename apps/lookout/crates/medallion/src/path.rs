@@ -10,6 +10,7 @@ use datafusion::execution::SendableRecordBatchStream;
 
 use crate::dataset::DatasetSpec;
 use crate::geo::{write_geo_batches, write_geo_stream, GeoError};
+use crate::layer::AppendOnly;
 use crate::partition::{Partition, PathError, DATE_FORMAT};
 use crate::rows::{batch, Row, RowError};
 use crate::write::{write_batches, WriteError};
@@ -39,6 +40,8 @@ const PARTITION_STEM: &str = "part-0";
 pub enum ReplaceError {
     #[error(transparent)]
     Geo(#[from] GeoError),
+    #[error(transparent)]
+    AppendOnly(#[from] AppendOnly),
     #[error(transparent)]
     Path(#[from] PathError),
     #[error("listing the partitions of {path}: {source}")]
@@ -159,6 +162,22 @@ impl Dataset {
             .ok_or_else(|| PathError::Unpartitioned(self.spec.name.to_string()))
     }
 
+    /// Whether this dataset's data may be replaced or deleted, as its layer decides.
+    ///
+    /// Checked on every path that replaces or deletes, so the append-only rule of the layers
+    /// holding observations is enforced here rather than remembered by each caller. Appends
+    /// need no such check: one refuses to land on a file that already exists.
+    fn permit_replacement(&self) -> Result<(), AppendOnly> {
+        if self.spec.layer.permits_replacement() {
+            Ok(())
+        } else {
+            Err(AppendOnly {
+                layer: self.layer(),
+                dataset: self.name().to_string(),
+            })
+        }
+    }
+
     /// The layer this dataset lives in.
     pub fn layer(&self) -> &'static str {
         self.spec.layer.as_str()
@@ -228,6 +247,7 @@ impl Dataset {
 
     /// Replace this partition's contents with `batches`.
     pub async fn replace_with(&self, batches: &[RecordBatch]) -> Result<PathBuf, WriteError> {
+        self.permit_replacement()?;
         let path = self.partition_file();
         write_batches(&path, batches).await?;
         Ok(path)
@@ -235,6 +255,7 @@ impl Dataset {
 
     /// Replace this partition's contents with `batches`, as GeoParquet.
     pub async fn replace_with_geo(&self, batches: &[RecordBatch]) -> Result<PathBuf, GeoError> {
+        self.permit_replacement().map_err(WriteError::from)?;
         let path = self.partition_file();
         write_geo_batches(&path, batches).await?;
         Ok(path)
@@ -246,6 +267,7 @@ impl Dataset {
         &self,
         batches: SendableRecordBatchStream,
     ) -> Result<Written, GeoError> {
+        self.permit_replacement().map_err(WriteError::from)?;
         let path = self.partition_file();
         let rows = write_geo_stream(&path, batches).await?;
         Ok(Written { path, rows })
@@ -262,6 +284,7 @@ impl Dataset {
         &self,
         days: &[(NaiveDate, RecordBatch)],
     ) -> Result<Replaced, ReplaceError> {
+        self.permit_replacement()?;
         let mut written = HashSet::new();
         for (date, batch) in days {
             let partition = self.clone().on_date(*date)?;
@@ -305,6 +328,7 @@ impl Dataset {
     /// Delete every directory of this dataset named for `key` except `keep`, reporting how
     /// many went.
     async fn sweep(&self, key: &str, keep: &HashSet<PathBuf>) -> Result<usize, ReplaceError> {
+        self.permit_replacement()?;
         let dir = self.dir();
         let mut entries = match tokio::fs::read_dir(&dir).await {
             Ok(entries) => entries,
@@ -675,6 +699,42 @@ mod tests {
 
         assert_eq!(removed, 0);
         assert_eq!(partitions_of(&dataset), ["start_date=2026-07-26"]);
+    }
+
+    /// The layers holding what was observed cannot be re-derived, so replacing or sweeping
+    /// one is refused here rather than left to every caller to avoid.
+    #[tokio::test]
+    async fn an_append_only_layer_refuses_to_be_replaced_or_swept() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let observed = Root::new(tmp.path()).dataset(SENSOR_READING);
+        let at = Utc.with_ymd_and_hms(2026, 7, 26, 9, 0, 0).unwrap();
+        observed
+            .clone()
+            .on_date(date(26))
+            .expect("date")
+            .append(at, &[geo_batch()])
+            .await
+            .expect("append");
+
+        let replaced = observed.replace_dates_geo(&[(date(26), geo_batch())]).await;
+        let swept = observed
+            .retain_partitions("ingested_date", &["2026-07-26"])
+            .await;
+        let overwritten = observed
+            .clone()
+            .on_date(date(26))
+            .expect("date")
+            .replace_with(&[geo_batch()])
+            .await;
+
+        assert!(matches!(replaced, Err(ReplaceError::AppendOnly(_))));
+        assert!(matches!(swept, Err(ReplaceError::AppendOnly(_))));
+        assert!(matches!(overwritten, Err(WriteError::AppendOnly(_))));
+        assert_eq!(
+            partitions_of(&observed),
+            ["ingested_date=2026-07-26"],
+            "the appended partition is still there"
+        );
     }
 
     /// A dataset nothing has been written to yet has no partitions to sweep, rather than a

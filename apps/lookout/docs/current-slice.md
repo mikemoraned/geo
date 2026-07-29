@@ -361,7 +361,7 @@ The main tasks here should be focussed on documenting these patterns and correct
       survey is deliberately dropped: the conclusion was "none yet, three CLIs run by hand are
       below the threshold", which is still true and needs no note, and any survey of what
       exists would be restated from scratch when the threshold is actually crossed.
-- [ ] Refuse to delete or overwrite outside the layers that permit it. Silver rebuilds
+- [x] Refuse to delete or overwrite outside the layers that permit it. Silver rebuilds
       replace whole partitions and sweep the ones a run no longer produces, and every
       `Dataset` offers those methods whatever layer it names — so
       `root.dataset(RAW_SAMPLE).retain_partitions(…)` compiles today and would take bronze
@@ -371,6 +371,14 @@ The main tasks here should be focussed on documenting these patterns and correct
       paths and fail with a typed error, and test it over `model::ALL` so a bronze dataset
       added later is covered without anyone thinking about it. Append already refuses to
       land on an existing file, so this closes the remaining door.
+      Note: the rule lives on `Layer` as `permits_replacement`, true for silver and gold
+      only, and `Dataset` checks it on every replacing and sweeping path — so a dataset
+      inherits it from the layer it is placed in rather than restating it, and a bronze
+      dataset added later is covered by construction. `model` additionally spells out which
+      datasets a rebuild may replace, so putting an observation dataset in a layer that
+      permits replacement fails there rather than the first time something sweeps it. The
+      guard caught a real caller immediately: `query`'s test fixture wrote its bronze rows
+      with `replace_with`, which now refuses, and appends instead.
       Considered and not done: routing deletions into a `<root>/.deleted/<layer>/…` trash
       directory instead of removing them. It is the right shape if reversible deletion is
       ever wanted — a rename is atomic and free, and the trash must sit *outside* the layer

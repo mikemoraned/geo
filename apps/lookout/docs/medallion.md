@@ -55,6 +55,13 @@ would name the same file — a batching writer whose batches fall close together
 ingestion replayed twice — cannot silently replace each other's rows. Batch file names
 therefore carry millisecond precision.
 
+The same enforcement covers the other direction: **the layers holding observations refuse to
+be replaced or swept at all.** Nothing derives them, so nothing can put them back, and the
+operations a derived layer needs — replacing a partition, deleting the partitions a rebuild
+no longer produces — are refused for them rather than left to each caller to avoid. Which
+layers those are is a property of the layer, so a dataset placed in one inherits the rule
+instead of restating it.
+
 **Bronze tolerates the same observation arriving more than once, so deduping is the reader's
 job.** Nothing here rejects a repeat: an ingestion cannot rewrite an earlier file to merge
 into it, a payload may reach the store by more than one route, and a re-run or a later

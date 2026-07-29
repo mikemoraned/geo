@@ -9,7 +9,25 @@ pub enum Layer {
     Gold,
 }
 
+/// An attempt to replace or delete data in a layer that only ever grows.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{dataset} is in {layer}, which is append-only: its data cannot be replaced or deleted")]
+pub struct AppendOnly {
+    pub layer: &'static str,
+    pub dataset: String,
+}
+
 impl Layer {
+    /// Whether a dataset in this layer may have its data replaced or deleted.
+    ///
+    /// Landing and bronze are the record of what was observed. Nothing derives them, so
+    /// nothing can put them back, and they only ever grow. Silver and gold are derived
+    /// wholesale from them, so replacing a partition of one costs a rerun at most — which is
+    /// what lets a rebuild replace what it no longer produces.
+    pub fn permits_replacement(self) -> bool {
+        matches!(self, Layer::Silver | Layer::Gold)
+    }
+
     /// The directory name this layer occupies under the root.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -24,6 +42,15 @@ impl Layer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The layers holding what was observed refuse replacement; the derived ones permit it.
+    #[test]
+    fn only_the_derived_layers_permit_replacement() {
+        assert!(!Layer::Landing.permits_replacement());
+        assert!(!Layer::Bronze.permits_replacement());
+        assert!(Layer::Silver.permits_replacement());
+        assert!(Layer::Gold.permits_replacement());
+    }
 
     #[test]
     fn directory_names_are_the_layer_names() {

@@ -62,6 +62,24 @@ mod tests {
         assert_eq!(names.len(), unique, "duplicate dataset name in {names:?}");
     }
 
+    /// Which datasets a rebuild may replace, and so which a bug could destroy the only copy
+    /// of: the derived ones and no others.
+    ///
+    /// Written out rather than derived from the layer, so adding a dataset that holds
+    /// observations to a layer that permits replacement fails here instead of the first time
+    /// something sweeps it.
+    #[test]
+    fn only_the_derived_datasets_may_be_replaced() {
+        let mut replaceable: Vec<&str> = ALL
+            .iter()
+            .filter(|dataset| dataset.layer.permits_replacement())
+            .map(|dataset| dataset.name)
+            .collect();
+        replaceable.sort_unstable();
+
+        assert_eq!(replaceable, ["session", "session_sample", "train_segment"]);
+    }
+
     /// The datasets that declare a partition key, as `(dataset name, key)`.
     fn partition_keys() -> Vec<(&'static str, &'static str)> {
         ALL.iter()

@@ -123,6 +123,7 @@ mod tests {
 
     use arrow::array::{Int64Array, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
+    use chrono::{TimeZone, Utc};
     use serde::Deserialize;
 
     use super::*;
@@ -154,7 +155,10 @@ mod tests {
         root.dataset(THING)
             .partition("kind", "a")
             .unwrap()
-            .replace_with(&[batch])
+            .append(
+                Utc.with_ymd_and_hms(2026, 7, 26, 9, 0, 0).unwrap(),
+                &[batch],
+            )
             .await
             .unwrap();
         root
@@ -200,14 +204,17 @@ mod tests {
         root.dataset(THING)
             .partition("kind", "b")
             .unwrap()
-            .replace_with(&[RecordBatch::try_new(
-                schema,
-                vec![
-                    Arc::new(Int64Array::from(vec![2])),
-                    Arc::new(StringArray::from(vec!["b"])),
-                ],
+            .append(
+                Utc.with_ymd_and_hms(2026, 7, 26, 9, 0, 0).unwrap(),
+                &[RecordBatch::try_new(
+                    schema,
+                    vec![
+                        Arc::new(Int64Array::from(vec![2])),
+                        Arc::new(StringArray::from(vec!["b"])),
+                    ],
+                )
+                .unwrap()],
             )
-            .unwrap()])
             .await
             .unwrap();
 
