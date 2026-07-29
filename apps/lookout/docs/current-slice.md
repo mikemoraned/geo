@@ -51,10 +51,10 @@ We should build a series of spikes in apps/lookout/spikes/m5. Each of these shou
 - [x] Source time from BM8563 RTC (I²C) or esp-idf system time — took esp-idf `SystemTime`, which counts from the epoch at boot: it ticks correctly but isn't a real date. The RTC wasn't worth wiring up because spike 3's GNSS fix carries true UTC anyway.
 
 **Spike 3 — GPS in**
-- [ ] Wire GPS to the Grove port (G32/G33, TX → Stick RX) on UART1/UART2 and print raw NMEA over serial, shell only
-- [ ] Parse `$GN*` `RMC` + `GGA` with the `nmea` crate; feed a recorded NMEA replay for desk iteration
-- [ ] Emit `GnssFix { lat, lon, .. }` into the core and render time + lat/lon on screen
-- [ ] Field-check a real cold-start fix with sky view (~23s), running off a USB-C power bank
+- [x] Wire GPS to the Grove port (G32/G33, TX → Stick RX) on UART1/UART2 and print raw NMEA over serial, shell only — done differently: rather than pick a pin, the shell opens G32 on UART1 and G33 on UART2 at once and keeps whichever carries NMEA, since sources disagree on which is RX and the wrong choice looks exactly like a dead receiver. **It is G33.** Also needed `rx_fifo_size(4096)`: the default 256 silently spliced sentences together.
+- [x] Parse `$GN*` `RMC` + `GGA` with the `nmea` crate; feed a recorded NMEA replay for desk iteration — parsing done in the **core**, not the shell as the straw man had it, so its tests run on the laptop (13 green). Fixtures are captured off the receiver via `just capture`, with the position replaced on the fix-carrying ones; raw captures are gitignored as movement traces. The first attempt at these was hand-written from 0183 docs and got the `RMC` field count wrong — the unit speaks NMEA 4.1.
+- [x] Emit `GnssFix { lat, lon, .. }` into the core and render time + lat/lon on screen — confirmed on the panel. Needed the main task stack raised to 32K: the model embeds the `nmea` accumulator, which overflowed the template's 8K and surfaced as a corrupt pointer inside an unrelated SPI call.
+- [x] Field-check a real cold-start fix with sky view (~23s), running off a USB-C power bank — real fix outdoors. `ANTENNA OPEN` shows continuously even with a good fix, so it is antenna monitoring rather than a fault. Held still, fix quality dominates noise (HDOP 2.4/8 sats ≈ 1.8m wander; HDOP 4.4/6 sats ≈ 4.5 m/s of phantom motion *and* a false 4-knot speed) — carried into the "Deploy predictor on M5 device" slice.
 
 **Spike 4 — BLE out**
 - [ ] `esp32-nimble` GATT service exposing lat/lon as a characteristic with notify
