@@ -130,34 +130,50 @@ def _(mo, read_silver):
 
 @app.cell
 def _(mo, sessions):
-    # The day everything below is limited to: the UTC date a session started on, which is
-    # also the partition it lives in. `ALL_DAYS` keeps the unfiltered view one option away.
+    # What everything below is limited to. The day is the UTC date a session started on,
+    # which is also the partition it lives in; the device is the leading characters of its id,
+    # since a full uuid is unreadable in a dropdown and six characters separate the devices
+    # that have recorded so far. Either filter set to its `ALL_` option stands aside.
     ALL_DAYS = "all days"
+    ALL_DEVICES = "all devices"
+    DEVICE_PREFIX = 6
 
     day = mo.ui.dropdown(
         options=[ALL_DAYS, *sorted(sessions["day"].unique())],
         value=ALL_DAYS,
         label="Day",
     )
-    day
-    return ALL_DAYS, day
-
-
-@app.cell
-def _(ALL_DAYS, day, sessions):
-    sessions_on_day = (
-        sessions
-        if day.value == ALL_DAYS
-        else sessions[sessions["day"] == day.value]
+    device = mo.ui.dropdown(
+        options=[
+            ALL_DEVICES,
+            *sorted(sessions["device_id"].str[:DEVICE_PREFIX].unique()),
+        ],
+        value=ALL_DEVICES,
+        label="Device",
     )
-    return (sessions_on_day,)
+    mo.hstack([day, device], justify="start", gap=2)
+    return ALL_DAYS, ALL_DEVICES, day, device
 
 
 @app.cell
-def _(mo, sessions_on_day):
+def _(ALL_DAYS, ALL_DEVICES, day, device, sessions):
+    # Each filter narrows in turn, so either one left at its `ALL_` option simply does not
+    # narrow — rather than being expressed as a mask that has to cover the whole frame.
+    _chosen = sessions
+    if day.value != ALL_DAYS:
+        _chosen = _chosen[_chosen["day"] == day.value]
+    if device.value != ALL_DEVICES:
+        _chosen = _chosen[_chosen["device_id"].str.startswith(device.value)]
+
+    chosen_sessions = _chosen
+    return (chosen_sessions,)
+
+
+@app.cell
+def _(chosen_sessions, mo):
     # Pick a session to see its samples below.
     session_table = mo.ui.table(
-        sessions_on_day.drop(columns=["geometry", "projected"]),
+        chosen_sessions.drop(columns=["geometry", "projected"]),
         selection="single",
         page_size=10,
     )
@@ -166,13 +182,13 @@ def _(mo, sessions_on_day):
 
 
 @app.cell
-def _(mo, sessions_on_day, show):
-    # Every path of the selected day at once, one colour per session from a matplotlib
-    # colormap: the shape of what was recorded, and where the split between one session and
-    # the next falls. No legend — a day can hold enough sessions to bury the map — so the
-    # session is named in the tooltip.
-    mo.md("No sessions on this day.") if sessions_on_day.empty else show(
-        sessions_on_day.drop(columns=["projected"]).explore(
+def _(chosen_sessions, mo, show):
+    # Every chosen path at once, one colour per session from a matplotlib colormap: the shape
+    # of what was recorded, and where the split between one session and the next falls. No
+    # legend — a day can hold enough sessions to bury the map — so the session is named in the
+    # tooltip.
+    mo.md("No sessions match.") if chosen_sessions.empty else show(
+        chosen_sessions.drop(columns=["projected"]).explore(
             column="session_id",
             categorical=True,
             cmap="turbo",
