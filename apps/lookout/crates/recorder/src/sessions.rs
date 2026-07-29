@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
 use medallion::{Query, Root};
-use model::{DeviceId, StartedBy};
+use model::{DeviceId, SessionId, StartedBy};
 use serde::{Deserialize, Serialize};
 
 /// The deduped samples under their query name.
@@ -110,6 +110,21 @@ pub struct Session {
     pub device_id: DeviceId,
     pub started_by: StartedBy,
     pub samples: Vec<Sample>,
+}
+
+impl Session {
+    /// When the session began: the instant of its first sample.
+    pub fn started_at(&self) -> DateTime<Utc> {
+        self.samples
+            .first()
+            .expect("a session is built from the sample that starts it")
+            .t
+    }
+
+    /// What identifies this session wherever it is written or read.
+    pub fn id(&self) -> SessionId {
+        SessionId::of(&self.device_id, self.started_at())
+    }
 }
 
 /// Derive every session in the store, oldest first within each device.

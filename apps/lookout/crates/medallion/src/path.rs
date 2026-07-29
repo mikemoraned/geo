@@ -29,8 +29,8 @@ pub enum AppendError {
 /// and at second resolution they would collide.
 const BATCH_STEM_FORMAT: &str = "%Y%m%dT%H%M%S%3fZ";
 
-/// The file a rebuilt partition holds. A partition derived wholesale is one file, so its
-/// name carries no information and never varies.
+/// The file a wholly derived partition holds. Such a partition is one file, so its name
+/// carries no information and never varies.
 const PARTITION_STEM: &str = "part-0";
 
 /// What a write left in the store.
@@ -135,7 +135,7 @@ impl Dataset {
         self.file(&at.format(BATCH_STEM_FORMAT).to_string())
     }
 
-    /// The file this partition's contents live in, replaced whenever it is rebuilt.
+    /// The file this partition's contents live in, replaced whenever they are derived again.
     pub fn partition_file(&self) -> PathBuf {
         self.file(PARTITION_STEM)
     }
@@ -177,14 +177,14 @@ impl Dataset {
     }
 
     /// Replace this partition's contents with `batches`.
-    pub async fn rebuild(&self, batches: &[RecordBatch]) -> Result<PathBuf, WriteError> {
+    pub async fn replace_with(&self, batches: &[RecordBatch]) -> Result<PathBuf, WriteError> {
         let path = self.partition_file();
         write_batches(&path, batches).await?;
         Ok(path)
     }
 
     /// Replace this partition's contents with `batches`, as GeoParquet.
-    pub async fn rebuild_geo(&self, batches: &[RecordBatch]) -> Result<PathBuf, GeoError> {
+    pub async fn replace_with_geo(&self, batches: &[RecordBatch]) -> Result<PathBuf, GeoError> {
         let path = self.partition_file();
         write_geo_batches(&path, batches).await?;
         Ok(path)
@@ -192,7 +192,7 @@ impl Dataset {
 
     /// Replace this partition's contents with a query's results, as GeoParquet, writing
     /// them as they arrive rather than holding them all first.
-    pub async fn rebuild_geo_from(
+    pub async fn replace_with_geo_stream(
         &self,
         batches: SendableRecordBatchStream,
     ) -> Result<Written, GeoError> {

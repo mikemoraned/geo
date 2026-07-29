@@ -11,9 +11,10 @@ use datafusion::execution::SendableRecordBatchStream;
 use futures::StreamExt;
 
 use crate::country::Country;
+use crate::rows::{fields, Row, RowError};
 use crate::write::WriteError;
 use arrow::array::{Array, ArrayRef, BinaryArray, RecordBatch};
-use arrow::datatypes::{DataType, Field, FieldRef};
+use arrow::datatypes::{DataType, Field, FieldRef, Schema};
 use geoarrow_schema::{Crs, Metadata, WkbType};
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
 
@@ -52,6 +53,10 @@ pub enum GeoError {
     NoSuchColumn(String),
     #[error("reading the batches to write: {0}")]
     DataFusion(#[from] datafusion::error::DataFusionError),
+    #[error(transparent)]
+    Row(#[from] RowError),
+    #[error("building the columns: {0}")]
+    Encode(#[from] serde_arrow::Error),
 }
 
 /// A WKB geometry field in [CRS 84](https://www.opengis.net/def/crs/OGC/1.3/CRS84), for
@@ -128,6 +133,32 @@ where
         Arc::new(field),
         Arc::new(BinaryArray::from_iter_values(encoded)),
     ))
+}
+
+/// One batch of `rows` with `geometry` appended as WKB columns.
+///
+/// A dataset whose rows carry geometry declares its other columns as a [`Row`] type and its
+/// geometry here, since a geometry column is built as arrow rather than traced from a Rust
+/// type. Each entry pairs a field from [`wkb_field`] or [`projected_wkb_field`] with one
+/// geometry per row, in the rows' order.
+pub fn geo_batch<T, G>(rows: &[T], geometry: &[(Field, &[G])]) -> Result<RecordBatch, GeoError>
+where
+    T: Row,
+    G: geo_traits::GeometryTrait<T = f64>,
+{
+    let mut columns = fields::<T>()?;
+    let mut arrays = serde_arrow::to_arrow(&columns, rows)?;
+
+    for (field, geometries) in geometry {
+        let (field, array) = wkb_column(field.clone(), geometries)?;
+        columns.push(field);
+        arrays.push(array);
+    }
+
+    Ok(RecordBatch::try_new(
+        Arc::new(Schema::new(columns)),
+        arrays,
+    )?)
 }
 
 /// The geometries held in `column` of `batch`.

@@ -6,10 +6,7 @@
 //! Silver holds one current row per leg, so a run rewrites each `departure_date` partition
 //! it touches: re-running over unchanged bronze produces an identical dataset.
 
-use std::sync::Arc;
-
 use arrow::array::RecordBatch;
-use arrow::datatypes::Schema;
 use chrono::{DateTime, Utc};
 use geo_types::LineString;
 use medallion::{Country, Projector, Query, Root, GEOMETRY, PROJECTED_GEOMETRY};
@@ -158,7 +155,7 @@ pub async fn ingest(root: &Root, country: Country) -> Result<IngestOutcome, Inge
         let date = legs[0].departure.date_naive();
         root.rows_of::<TrainSegmentRow>()
             .on_date(date)?
-            .rebuild_geo(&[batch(legs, &projector, country)?])
+            .replace_with_geo(&[batch(legs, &projector, country)?])
             .await?;
         partitions += 1;
     }
@@ -178,9 +175,6 @@ fn batch(
     country: Country,
 ) -> Result<RecordBatch, IngestError> {
     let rows: Vec<TrainSegmentRow> = legs.iter().map(TrainSegmentRow::from).collect();
-    let mut fields = medallion::fields::<TrainSegmentRow>()?;
-    let mut arrays = serde_arrow::to_arrow(&fields, &rows)?;
-
     let lines = legs
         .iter()
         .map(|leg| decode_polyline(&leg.polyline))
@@ -190,19 +184,16 @@ fn batch(
         .map(|line| projector.project(line))
         .collect::<Result<Vec<_>, _>>()?;
 
-    for (field, geometries) in [
-        (medallion::wkb_field(GEOMETRY)?, &lines),
-        (
-            medallion::projected_wkb_field(PROJECTED_GEOMETRY, country)?,
-            &projected,
-        ),
-    ] {
-        let (field, array) = medallion::wkb_column(field, geometries)?;
-        fields.push(field);
-        arrays.push(array);
-    }
-
-    Ok(RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays)?)
+    Ok(medallion::geo_batch(
+        &rows,
+        &[
+            (medallion::wkb_field(GEOMETRY)?, lines.as_slice()),
+            (
+                medallion::projected_wkb_field(PROJECTED_GEOMETRY, country)?,
+                projected.as_slice(),
+            ),
+        ],
+    )?)
 }
 
 /// Decode a Google-encoded polyline to a `(lon, lat)` line.

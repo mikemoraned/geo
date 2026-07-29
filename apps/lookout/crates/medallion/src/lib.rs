@@ -54,8 +54,8 @@ pub use args::MedallionArgs;
 pub use country::{Country, UnknownCountry};
 pub use dataset::DatasetSpec;
 pub use geo::{
-    geometries, projected_wkb_field, wkb_column, wkb_field, GeoError, Projector, GEOMETRY,
-    PROJECTED_GEOMETRY,
+    geo_batch, geometries, projected_wkb_field, wkb_column, wkb_field, GeoError, Projector,
+    GEOMETRY, PROJECTED_GEOMETRY,
 };
 pub use layer::Layer;
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};

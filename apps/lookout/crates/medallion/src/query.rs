@@ -148,7 +148,7 @@ mod tests {
         root.dataset(THING)
             .partition("kind", "a")
             .unwrap()
-            .rebuild(&[batch])
+            .replace_with(&[batch])
             .await
             .unwrap();
         root
@@ -194,7 +194,7 @@ mod tests {
         root.dataset(THING)
             .partition("kind", "b")
             .unwrap()
-            .rebuild(&[RecordBatch::try_new(
+            .replace_with(&[RecordBatch::try_new(
                 schema,
                 vec![
                     Arc::new(Int64Array::from(vec![2])),

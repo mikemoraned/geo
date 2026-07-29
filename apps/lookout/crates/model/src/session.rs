@@ -17,6 +17,7 @@ use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use medallion::{DatasetSpec, Layer, PartitionValue, PathError, Row};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::device::DeviceId;
 
@@ -26,6 +27,10 @@ pub const SESSION: DatasetSpec = DatasetSpec::partitioned(Layer::Silver, "sessio
 /// The samples making up the sessions, one row per deduped bronze reading.
 pub const SESSION_SAMPLE: DatasetSpec =
     DatasetSpec::partitioned(Layer::Silver, "session_sample", "sample_date");
+
+/// The namespace session ids are minted in, so an id derived here cannot collide with a
+/// name-based id derived from the same values for anything else.
+const SESSION_NAMESPACE: Uuid = Uuid::from_u128(0x8f9c_1d3a_6b47_4e21_9a05_c7d8_e2f4_1b60);
 
 /// Identifies one session, on the session and on each of its samples.
 ///
@@ -42,6 +47,16 @@ impl SessionId {
         let id = id.into();
         PartitionValue::new(id.clone())?;
         Ok(Self(id))
+    }
+
+    /// The id of the session `device` began at `started_at`.
+    ///
+    /// A name-based UUID over exactly what identifies the session, so any run — or any
+    /// reader wanting to name a session it has only the boundaries of — arrives at the
+    /// same id without consulting what has already been written.
+    pub fn of(device: &DeviceId, started_at: DateTime<Utc>) -> Self {
+        let name = format!("{device}/{}", started_at.timestamp_millis());
+        Self(Uuid::new_v5(&SESSION_NAMESPACE, name.as_bytes()).to_string())
     }
 }
 
@@ -140,8 +155,6 @@ pub struct SessionSampleRow {
     /// what the vehicle could do is the mark of a bad sample, so this is carried rather than
     /// used here to discard one.
     pub implied_speed_mps: Option<f64>,
-    /// Whether this sample is timed before the sample preceding it in the session.
-    pub backwards_in_time: bool,
 }
 
 impl Row for SessionSampleRow {
@@ -212,6 +225,40 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["xmin", "ymin", "xmax", "ymax"]
         );
+    }
+
+    /// A session is identified by the device and the instant it began, so the same session
+    /// re-derived from grown bronze keeps the id already written against it.
+    #[test]
+    fn an_id_is_the_same_for_the_same_device_and_start() {
+        let device = DeviceId::new("device-a").expect("device id");
+        let started_at = DateTime::from_timestamp_millis(1_700_000_000_000).expect("instant");
+
+        assert_eq!(
+            SessionId::of(&device, started_at),
+            SessionId::of(&device, started_at)
+        );
+    }
+
+    /// Two sessions that differ in either part of that identity are different sessions.
+    #[test]
+    fn an_id_differs_by_device_and_by_start() {
+        let a = DeviceId::new("device-a").expect("device id");
+        let b = DeviceId::new("device-b").expect("device id");
+        let started_at = DateTime::from_timestamp_millis(1_700_000_000_000).expect("instant");
+        let later = started_at + chrono::Duration::milliseconds(1);
+
+        assert_ne!(SessionId::of(&a, started_at), SessionId::of(&b, started_at));
+        assert_ne!(SessionId::of(&a, started_at), SessionId::of(&a, later));
+    }
+
+    /// A derived id has to survive the same partition-naming rule an existing one is
+    /// checked against, since both name the same things.
+    #[test]
+    fn a_derived_id_could_name_a_partition() {
+        let id = SessionId::of(&DeviceId::new("device-a").expect("device id"), Utc::now());
+
+        assert_eq!(SessionId::new(id.to_string()).expect("valid id"), id);
     }
 
     /// An id names a partition wherever a reader lays one out by it, so one that could not

@@ -415,7 +415,6 @@ erDiagram
         geometry geometry "Point, CRS 84"
         geometry geometry_projected "Point, metric"
         float implied_speed_mps "against the previous sample"
-        bool backwards_in_time
     }
 ```
 
@@ -433,9 +432,8 @@ Decisions taken before starting, as each changes what gets built:
   properties of the data: baking one into the derivation would put it in the store,
   where changing it means rederiving everything, and would leave the ground truth and
   the predictor unable to disagree about what counts as a usable sample. Silver
-  therefore carries what a filter needs — reported accuracy, the speed implied by the
-  previous sample, whether the sample goes backwards in time — and each consumer draws
-  its own line.
+  therefore carries what a filter needs — reported accuracy and the speed implied by the
+  previous sample — and each consumer draws its own line.
 * **GPS only.** Accel readings are not assigned to sessions here. The predictor in this
   slice is crow-flies over GPS, and sessionising a sensor nothing reads would fix its shape
   before there is a reader to fix it against. The session boundaries will be the same when
@@ -496,12 +494,21 @@ Steps:
       over the reported values rather than an arbitrary row of the group, since two rows
       sharing `(device_id, t)` but disagreeing on what was measured would otherwise let
       a rerun pick differently.
-- [ ] Give each session its deterministic id and write `session_sample`: one row per
+- [x] Give each session its deterministic id and write `session_sample`: one row per
       sample, carrying `session_id`, the bronze columns, a CRS 84 point geometry and the
       pre-projected metric one, and the flag columns above (`acc` as reported, the
       implied speed from the previous sample in the session, and whether `t` went
       backwards). Implied speed is metric, so it comes from the projected geometry, not
       from degrees.
+      Note: `backwards_in_time` is dropped rather than written. Samples are ordered by
+      `t` before they are split, so within a session `t` never decreases and the flag
+      could only ever be false — a column a reader would reasonably mistake for evidence
+      that no clock stepped backwards. Detecting one needs the order the samples
+      *arrived*, which bronze `gps_reading` does not carry; the flag can come back with
+      it. The id is a name-based UUID over `(device_id, first sample instant)`, so a
+      reader holding only the boundaries can name a session without reading the store.
+      Building a batch of rows plus its geometry columns moved into `medallion` as
+      `geo_batch`, since `motis::ingest` was already doing it by hand.
 - [ ] Write `session` itself: one row per session with its device, start and end
       instants, sample count, the path as a CRS 84 LineString plus its projected twin,
       and the bbox. The bbox is what makes "which sessions could have come near this

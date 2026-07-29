@@ -185,7 +185,7 @@ impl<'a> Extractor<'a> {
             .for_id(id)?
             .partition("theme", overture_type.theme)?
             .partition("type", overture_type.name)?
-            .rebuild_geo_from(stream)
+            .replace_with_geo_stream(stream)
             .await?
             .rows)
     }

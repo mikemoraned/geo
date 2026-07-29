@@ -88,7 +88,7 @@ async fn write_fixture(dir: &std::path::Path) -> std::path::PathBuf {
         .dataset(WATER_CROSSING)
         .partition("country", "DE")
         .unwrap()
-        .rebuild_geo(&[silver_batch()])
+        .replace_with_geo(&[silver_batch()])
         .await
         .unwrap()
 }
