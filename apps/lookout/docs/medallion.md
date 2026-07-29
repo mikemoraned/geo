@@ -183,7 +183,7 @@ definitions.
 
 - Partition keys are **snake_case**, and values contain no `/`, spaces or `=`.
 - Dates are UTC and formatted `YYYY-MM-DD`. A date key is named for the event it records
-  (`ingested_date`, `polled_date`, `fix_date`), never a bare `date`.
+  (`ingested_date`, `polled_date`, `sample_date`), never a bare `date`.
 - A partition key records the *coarse* value only. The full-precision timestamp is also
   written as a column inside the file, so no reader depends on parsing paths.
 - Partitioning is chosen to make the common filter cheap, not to make directories tidy.
@@ -235,11 +235,11 @@ and region for reference data.
 | dataset | partitioning |
 | --- | --- |
 | sessions | `start_date=<date>` |
-| session fixes | `fix_date=<date>` |
+| session samples | `sample_date=<date>` |
 | derived transit legs | `departure_date=<date>` |
 | reference-derived geo datasets | `country=<iso3166-1 alpha-2>` |
 
-Fixes are partitioned by the date of the fix itself, not of its session, so a session
+Samples are partitioned by the date of the sample itself, not of its session, so a session
 spanning midnight is split across two partitions; `session_id` is carried as a column and
 reassembles it.
 

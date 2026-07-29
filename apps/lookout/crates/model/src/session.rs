@@ -1,13 +1,13 @@
-//! Sessions: one contiguous run of GPS fixes from one device, and the fixes within it.
+//! Sessions: one contiguous run of GPS samples from one device, and the samples within it.
 //!
-//! The two are separate datasets because they are partitioned by different dates. A fix is
+//! The two are separate datasets because they are partitioned by different dates. A sample is
 //! partitioned by when it was recorded and a session by when it started, so a session
-//! crossing midnight has its fixes split over two partitions and is reassembled by
-//! `session_id` — which is therefore carried on every fix, along with `device_id`, so a
-//! partition of fixes is readable without joining back to the sessions.
+//! crossing midnight has its samples split over two partitions and is reassembled by
+//! `session_id` — which is therefore carried on every sample, along with `device_id`, so a
+//! partition of samples is readable without joining back to the sessions.
 //!
-//! Both datasets **keep every fix and flag the doubtful ones** rather than filtering. What
-//! counts as a usable fix is a threshold of whoever is reading — a ground truth and a
+//! Both datasets **keep every sample and flag the doubtful ones** rather than filtering. What
+//! counts as a usable sample is a threshold of whoever is reading — a ground truth and a
 //! predictor are entitled to disagree about it — so the columns a filter needs are carried
 //! and the line is drawn by the consumer, not baked into the store.
 
@@ -18,14 +18,16 @@ use chrono::{DateTime, Utc};
 use medallion::{DatasetSpec, Layer, PartitionValue, PathError, Row};
 use serde::{Deserialize, Serialize};
 
-/// One contiguous run of fixes from one device.
+use crate::device::DeviceId;
+
+/// One contiguous run of samples from one device.
 pub const SESSION: DatasetSpec = DatasetSpec::partitioned(Layer::Silver, "session", "start_date");
 
-/// The fixes making up the sessions, one row per deduped bronze reading.
-pub const SESSION_FIX: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Silver, "session_fix", "fix_date");
+/// The samples making up the sessions, one row per deduped bronze reading.
+pub const SESSION_SAMPLE: DatasetSpec =
+    DatasetSpec::partitioned(Layer::Silver, "session_sample", "sample_date");
 
-/// Identifies one session, on the session and on each of its fixes.
+/// Identifies one session, on the session and on each of its samples.
 ///
 /// Derived from what the session *is* rather than minted per run, so a run that re-derives
 /// a session it has already written lands on the same id and rewrites it in place.
@@ -61,21 +63,21 @@ impl Display for SessionId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StartedBy {
-    /// The device announced a new session.
+    /// The device reported the start of a session.
     StartSession,
-    /// The interval since the previous fix exceeded the threshold.
+    /// The interval since the previous sample exceeded the threshold.
     Gap,
-    /// The first fix recorded for this device, with nothing before it. Sessions begin this
-    /// way where the device sent no session announcement at all.
+    /// The first sample recorded for this device, with nothing before it. Sessions begin this
+    /// way where the device reported no session start at all.
     FirstSeen,
 }
 
-/// The envelope of a session's fixes, in the same axis names the upstream reference data
+/// The envelope of a session's samples, in the same axis names the upstream reference data
 /// uses for its own envelopes.
 ///
 /// It is stored rather than derived on read because "which sessions could have come near
 /// this place" is the question sessions are searched by, and answering it should not
-/// require opening the fixes.
+/// require opening the samples.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Bbox {
     pub xmin: f64,
@@ -91,15 +93,15 @@ pub struct Bbox {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionRow {
     pub session_id: SessionId,
-    pub device_id: String,
-    /// The first fix in the session.
+    pub device_id: DeviceId,
+    /// The first sample in the session.
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub started_at: DateTime<Utc>,
-    /// The last fix in the session. A session is only closed in the sense that no later
-    /// fix has been recorded yet: the most recent one grows as more arrive.
+    /// The last sample in the session. A session is only closed in the sense that no later
+    /// sample has been recorded yet: the most recent one grows as more arrive.
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub ended_at: DateTime<Utc>,
-    pub fix_count: u32,
+    pub sample_count: u32,
     pub started_by: StartedBy,
     /// The gap threshold the run that derived this session applied, so a session derived
     /// under one threshold is still interpretable once the default changes.
@@ -112,19 +114,19 @@ impl Row for SessionRow {
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
 }
 
-/// One fix within a session: the reading as the device reported it, plus what a reader
+/// One sample within a session: the reading as the device reported it, plus what a reader
 /// needs to judge whether to trust it.
 ///
-/// A fix is identified by `(device_id, t)`, the identity it is deduped from bronze on. Its
+/// A sample is identified by `(device_id, t)`, the identity it is deduped from bronze on. Its
 /// position is held in [`medallion::GEOMETRY`] and [`medallion::PROJECTED_GEOMETRY`] as a
 /// Point, which the writer appends as geometry columns.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SessionFixRow {
+pub struct SessionSampleRow {
     pub session_id: SessionId,
-    pub device_id: String,
+    pub device_id: DeviceId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub t: DateTime<Utc>,
-    /// Where the fix falls in its session, counting from zero.
+    /// Where the sample falls in its session, counting from zero.
     pub seq: u32,
     pub lat: f64,
     pub lon: f64,
@@ -133,17 +135,17 @@ pub struct SessionFixRow {
     pub acc: f64,
     pub speed: Option<f64>,
     pub heading: Option<f64>,
-    /// The speed the step from the previous fix in the session implies, in metres per
-    /// second — absent for the first fix, which has no previous one. A value far above
-    /// what the vehicle could do is the mark of a bad fix, so this is carried rather than
+    /// The speed the step from the previous sample in the session implies, in metres per
+    /// second — absent for the first sample, which has no previous one. A value far above
+    /// what the vehicle could do is the mark of a bad sample, so this is carried rather than
     /// used here to discard one.
     pub implied_speed_mps: Option<f64>,
-    /// Whether this fix is timed before the fix preceding it in the session.
+    /// Whether this sample is timed before the sample preceding it in the session.
     pub backwards_in_time: bool,
 }
 
-impl Row for SessionFixRow {
-    const DATASET: DatasetSpec = SESSION_FIX;
+impl Row for SessionSampleRow {
+    const DATASET: DatasetSpec = SESSION_SAMPLE;
     const INSTANTS: &'static [&'static str] = &["t"];
 }
 
@@ -165,7 +167,7 @@ mod tests {
     }
 
     /// An id is stored as the string it reads as, not as the shape its Rust type happens
-    /// to be — a reader joining fixes to sessions compares ids as values.
+    /// to be — a reader joining samples to sessions compares ids as values.
     #[test]
     fn an_id_is_a_string_column() {
         assert!(matches!(
@@ -173,7 +175,15 @@ mod tests {
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionFixRow>("session_id"),
+            column::<SessionSampleRow>("session_id"),
+            DataType::Utf8 | DataType::LargeUtf8
+        ));
+        assert!(matches!(
+            column::<SessionRow>("device_id"),
+            DataType::Utf8 | DataType::LargeUtf8
+        ));
+        assert!(matches!(
+            column::<SessionSampleRow>("device_id"),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }

@@ -2,3 +2,4 @@
 
 pub mod backfill;
 pub mod bronze;
+pub mod sessions;

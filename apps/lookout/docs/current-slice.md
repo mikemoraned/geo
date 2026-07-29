@@ -209,7 +209,7 @@ The main tasks here should be focussed on documenting these patterns and correct
             now covers that, so migrating it would leave two ways in with nothing to
             choose between them. The narrowing it did — Overture restricted to where we
             have actually been — is still wanted, but it belongs to a silver derivation
-            over sessionised fixes rather than to a fetch, and is better built once
+            over sessionised samples rather than to a fetch, and is better built once
             sessions exist. `archive`, `groups` and `store` go with it, taking transport's
             last sqlite dependency; `data/lookout.sqlite`'s existing `transport` table is
             untouched and `visualise` still reads it until repointed below.
@@ -364,21 +364,22 @@ The main tasks here should be focussed on documenting these patterns and correct
 
 ### Sessionisation
 
-Sessionisation reads bronze, so it **dedups rather than assumes distinct readings** — see the
-rule in `docs/medallion.md`. Concretely: a fix is identified by `(device_id, t)`, and the
-collapse on that identity happens before any gap-splitting, since a repeated fix would
-otherwise look like a zero-gap sample and could split or merge a session wrongly.
+Sessionisation reads bronze, so it **dedups rather than assumes distinct readings** —
+see the rule in `docs/medallion.md`. Concretely: a sample is identified by `(device_id,
+t)`, and the collapse on that identity happens before any gap-splitting, since a
+repeated sample would otherwise look like a zero-gap sample and could split or merge a
+session wrongly.
 
 #### The entities
 
-A `session` is one contiguous run of fixes from one device; a `session_fix` is one deduped
-GPS fix within it.
+A `session` is one contiguous run of samples from one device; a `session_sample` is one
+deduped GPS sample within it.
 
 ```mermaid
 erDiagram
-    gps_reading }o--|| session_fix : "interpreted as"
+    gps_reading }o--|| session_sample : "interpreted as"
     device_session |o--o{ session : starts
-    session ||--o{ session_fix : contains
+    session ||--o{ session_sample : contains
 
     gps_reading {
         string device_id PK "bronze"
@@ -391,17 +392,17 @@ erDiagram
     session {
         uuid session_id PK "silver, start_date"
         string device_id FK
-        timestamp started_at "first fix"
-        timestamp ended_at "last fix"
-        int fix_count
+        timestamp started_at "first sample"
+        timestamp ended_at "last sample"
+        int sample_count
         string started_by "start_session | gap | first_seen"
         int gap_seconds "threshold this run applied"
         geometry geometry "LineString, CRS 84"
         geometry geometry_projected "LineString, metric"
         struct bbox
     }
-    session_fix {
-        uuid session_id FK "silver, fix_date"
+    session_sample {
+        uuid session_id FK "silver, sample_date"
         string device_id PK
         int64 t PK
         int seq "index within the session"
@@ -413,37 +414,40 @@ erDiagram
         float heading
         geometry geometry "Point, CRS 84"
         geometry geometry_projected "Point, metric"
-        float implied_speed_mps "against the previous fix"
+        float implied_speed_mps "against the previous sample"
         bool backwards_in_time
     }
 ```
 
-A fix's identity is `(device_id, t)` — the natural key it dedups bronze on. `device_id` is
-repeated on the fix rather than reached through `session_id`, so a `fix_date` partition is
-readable without joining back to a dataset partitioned by a different date.
+A sample's identity is `(device_id, t)` — the natural key it dedups bronze on.
+`device_id` is repeated on the sample rather than reached through `session_id`, so a
+`sample_date` partition is readable without joining back to a dataset partitioned by a
+different date.
 
 #### Tasks
 
 Decisions taken before starting, as each changes what gets built:
 
-* **Silver keeps every fix and flags the doubtful ones**, rather than filtering them out.
-  Accuracy and speed-jump thresholds are tuning constants of a consumer, not properties of
-  the data: baking one into the derivation would put it in the store, where changing it
-  means rederiving everything, and would leave the ground truth and the predictor unable to
-  disagree about what counts as a usable fix. Silver therefore carries what a filter needs
-  — reported accuracy, the speed implied by the previous fix, whether the fix goes backwards
-  in time — and each consumer draws its own line.
+* **Silver keeps every sample and flags the doubtful ones**, rather than filtering them
+  out. Accuracy and speed-jump thresholds are tuning constants of a consumer, not
+  properties of the data: baking one into the derivation would put it in the store,
+  where changing it means rederiving everything, and would leave the ground truth and
+  the predictor unable to disagree about what counts as a usable sample. Silver
+  therefore carries what a filter needs — reported accuracy, the speed implied by the
+  previous sample, whether the sample goes backwards in time — and each consumer draws
+  its own line.
 * **GPS only.** Accel readings are not assigned to sessions here. The predictor in this
   slice is crow-flies over GPS, and sessionising a sensor nothing reads would fix its shape
   before there is a reader to fix it against. The session boundaries will be the same when
   sensor fusion wants them.
 * **A run rebuilds every session from all of bronze**, and `session_id` is derived
-  deterministically from `(device_id, first fix instant)` rather than minted per run. The
-  newest session is always still open — more fixes for it arrive with the next drain — so a
-  run has to be able to re-derive a session it has already written and land on the same id,
-  and `medallion.md` already requires a silver transform to be idempotent. Volume is small
-  enough that rebuilding all history is affordable; if it stops being so, the fix is a
-  rebuild window, which is a change to this task and not to the datasets.
+  deterministically from `(device_id, first sample instant)` rather than minted per run.
+  The newest session is always still open — more samples for it arrive with the next
+  drain — so a run has to be able to re-derive a session it has already written and land
+  on the same id, and `medallion.md` already requires a silver transform to be
+  idempotent. Volume is small enough that rebuilding all history is affordable; if it
+  stops being so, the fix is a rebuild window, which is a change to this task and not to
+  the datasets.
 * **It lives in `recorder`**, next to the bronze telemetry writer, driven by its own bin —
   the shape `motis` already has with `bronze.rs` and `ingest.rs`. Sessions are a derivation
   of the telemetry datasets, so putting them in the crate that owns those datasets keeps
@@ -459,10 +463,10 @@ Steps:
       it did not write. Row structs are the definition of these entities; the relations
       between them stay documentation (the diagram above), since a foreign-key registry
       nothing enforces at write time would not earn its keep at two datasets.
-- [x] Define `session` and `session_fix` in `model` — the columns above, both silver,
-      partitioned `start_date` and `fix_date` as `medallion.md` already pins. A session
-      spanning midnight has its fixes split across two partitions and is reassembled by
-      `session_id`, so that column is carried on every fix.
+- [x] Define `session` and `session_sample` in `model` — the columns above, both silver,
+      partitioned `start_date` and `sample_date` as `medallion.md` already pins. A session
+      spanning midnight has its samples split across two partitions and is reassembled by
+      `session_id`, so that column is carried on every sample.
       Note: `started_by` is a Rust enum, which needed a store-wide decision about how a
       closed set of names is stored. It is a plain string column: tracing an enum yields a
       *dictionary* of the variant names, and the dictionary is dropped from the schema
@@ -473,24 +477,36 @@ Steps:
       `t` is a timestamp here rather than the epoch-millis integer bronze carries, as are
       `started_at`/`ended_at`, and `bbox` is one struct of `xmin`/`ymin`/`xmax`/`ymax`
       following the upstream reference data's own envelope naming.
-- [ ] Derive the session boundaries from bronze `gps_reading` and `device_session`: dedup
-      on `(device_id, t)`, order by `t`, and start a new session at an explicit
+- [x] Derive the session boundaries from bronze `gps_reading` and `device_session`:
+      dedup on `(device_id, t)`, order by `t`, and start a new session at an explicit
       `StartSession` for that device or after a gap exceeding the threshold (`--gap`,
-      default 10 minutes). Two cases the rule has to answer explicitly, since both exist in
-      the recorded data: fixes with no preceding `StartSession` at all (the v0 protocol has
-      no such message) still form sessions, and a `StartSession` no fix follows produces no
-      session rather than an empty one. Record the gap threshold as a column on `session`,
-      so a session written under one threshold is still interpretable after it changes.
-- [ ] Give each session its deterministic id and write `session_fix`: one row per fix,
-      carrying `session_id`, the bronze columns, a CRS 84 point geometry and the
-      pre-projected metric one, and the flag columns above (`acc` as reported, the implied
-      speed from the previous fix in the session, and whether `t` went backwards). Implied
-      speed is metric, so it comes from the projected geometry, not from degrees.
-- [ ] Write `session` itself: one row per session with its device, start and end instants,
-      fix count, the path as a CRS 84 LineString plus its projected twin, and the bbox.
-      The bbox is what makes "which sessions could have come near this crossing" cheap, and
-      the path is what the crossings step matches against — neither should be recomputed
-      from the fixes by every reader.
+      default 10 minutes). Two cases the rule has to answer explicitly, since both exist
+      in the recorded data: samples with no preceding `StartSession` at all (the v0
+      protocol has no such message) still form sessions, and a `StartSession` no sample
+      follows produces no session rather than an empty one. Record the gap threshold as
+      a column on `session`, so a session written under one threshold is still
+      interpretable after it changes. Note: `recorder::sessions` derives the boundaries
+      and holds them in memory; writing them, and with them the `gap_seconds` column,
+      belongs to the two tasks below. The `--gap` flag arrives with the bin, so the
+      threshold is a `Gap` argument for now. Two rules the task left open, both decided
+      here and tested: an interval of *exactly* the threshold does not split (the
+      threshold is the longest silence a session survives), and a reported session start
+      outranks both inferred reasons, so a sample following one is `start_session` even
+      when it also follows a long silence. Dedup keeps the first row of a total order
+      over the reported values rather than an arbitrary row of the group, since two rows
+      sharing `(device_id, t)` but disagreeing on what was measured would otherwise let
+      a rerun pick differently.
+- [ ] Give each session its deterministic id and write `session_sample`: one row per
+      sample, carrying `session_id`, the bronze columns, a CRS 84 point geometry and the
+      pre-projected metric one, and the flag columns above (`acc` as reported, the
+      implied speed from the previous sample in the session, and whether `t` went
+      backwards). Implied speed is metric, so it comes from the projected geometry, not
+      from degrees.
+- [ ] Write `session` itself: one row per session with its device, start and end
+      instants, sample count, the path as a CRS 84 LineString plus its projected twin,
+      and the bbox. The bbox is what makes "which sessions could have come near this
+      crossing" cheap, and the path is what the crossings step matches against — neither
+      should be recomputed from the samples by every reader.
 - [ ] Give `medallion` a way to **replace** a set of silver partitions in one run, since
       everything written so far appends one file per batch and a rebuild that appends
       duplicates its own output. DataFusion's `DataFrameWriteOptions::with_partition_by`
@@ -500,16 +516,17 @@ Steps:
       any rows for. Decide that explicitly — silver permits deletion — and make the
       behaviour the same for every silver rebuild rather than per-writer.
 - [ ] Test that a rerun over unchanged bronze produces identical partitions, and that a
-      rerun over bronze that has grown by more fixes for the open session extends that
-      session rather than creating a second one. This is the check the deterministic id and
-      the full rebuild exist to pass, and it is the one that breaks silently otherwise.
-- [ ] Add a `just sessionise` recipe, run it over the real store, and record what came out
-      — session count, duration and fix-count distributions, how many fixes are flagged and
-      by which flag. This is the first look at whether a 10-minute gap actually splits the
-      recorded traces where a human would; adjust the default here if it plainly does not,
-      and note the evidence rather than the preference.
+      rerun over bronze that has grown by more samples for the open session extends that
+      session rather than creating a second one. This is the check the deterministic id
+      and the full rebuild exist to pass, and it is the one that breaks silently
+      otherwise.
+- [ ] Add a `just sessionise` recipe, run it over the real store, and record what came
+      out — session count, duration and sample-count distributions, how many samples are
+      flagged and by which flag. This is the first look at whether a 10-minute gap
+      actually splits the recorded traces where a human would; adjust the default here
+      if it plainly does not, and note the evidence rather than the preference.
 - [ ] Cut `visualise/` back to **one thing: the selected sessions**. It reads silver
-      `session` and `session_fix` and nothing else — the bronze `gps_reading` /
+      `session` and `session_sample` and nothing else — the bronze `gps_reading` /
       `accel_reading` readers, the accel ride-quality series, and the `train_segment`
       panes and their overview map all go. The trains were only just repointed onto the
       store, so this deletes recent work deliberately: what makes a train pane worth
@@ -524,21 +541,23 @@ Steps:
       *overlaps* it: a selected session is always drawn whole, since a path clipped at the
       window edge misreads as a trace that stopped there.
 
-      The `fix_date` partition predicate is exact here, unlike the bronze one it replaces:
-      fixes are partitioned by the instant they record, so the reasoning about ingestion
-      lagging capture no longer applies and the caveat in `main.py` goes with it.
+      The `sample_date` partition predicate is exact here, unlike the bronze one it
+      replaces: samples are partitioned by the instant they record, so the reasoning
+      about ingestion lagging capture no longer applies and the caveat in `main.py` goes
+      with it.
 
       The blueprint is three views:
 
       * a **map of the full session paths**, one entity per session, drawn from
         `session.geometry`;
-      * a **map of the fixes**, each a circle whose radius is the reported `acc`, centred
-        on the fix. Accuracy is metres and rerun's radii can be scene units, so the circle
-        is the accuracy, drawn to scale, rather than a size mapped from it. Check what the
-        rerun version in use will do about keeping the view centred on the current fix as
-        the timeline cursor moves — if the map view cannot be made to follow, say so and
-        log the current fix as its own entity rather than faking it;
-      * a **speed time series**, from `session_fix.speed`, nulls dropped rather than
+      * a **map of the samples**, each a circle whose radius is the reported `acc`,
+        centred on the sample. Accuracy is metres and rerun's radii can be scene units,
+        so the circle is the accuracy, drawn to scale, rather than a size mapped from
+        it. Check what the rerun version in use will do about keeping the view centred
+        on the current sample as the timeline cursor moves — if the map view cannot be
+        made to follow, say so and log the current sample as its own entity rather than
+        faking it;
+      * a **speed time series**, from `session_sample.speed`, nulls dropped rather than
         plotted as zero.
 
       Rewrite `README.md` and the module docstring to describe this tool rather than the
@@ -551,17 +570,17 @@ We probably need to here productionise the pipeline we prototyped in apps/lookou
 
 #### The entities
 
-A `water_crossing` is one place a train can see water — the collapsed representative of the
-intersection parts between a stretch of physical track and one water body. A
-`session_crossing` is the ground truth: that crossing having been passed in that session,
-at the instant of the nearest fix.
+A `water_crossing` is one place a train can see water — the collapsed representative of
+the intersection parts between a stretch of physical track and one water body. A
+`session_crossing` is the ground truth: that crossing having been passed in that
+session, at the instant of the nearest sample.
 
 ```mermaid
 erDiagram
     overture_extract |o--o{ water_crossing : "derived from"
     water_crossing ||--o{ session_crossing : "passed in"
     session ||--o{ session_crossing : passes
-    session_fix |o--|| session_crossing : "nearest fix"
+    session_sample |o--|| session_crossing : "nearest sample"
 
     water_crossing {
         string crossing_id PK "silver, country"
@@ -586,9 +605,9 @@ erDiagram
         uuid session_id PK "silver, crossed_date"
         string crossing_id PK
         string device_id
-        timestamp crossed_at "t of the nearest fix"
-        float distance_m "nearest fix to crossing"
-        int fixes_within
+        timestamp crossed_at "t of the nearest sample"
+        float distance_m "nearest sample to crossing"
+        int samples_within
         float match_radius_m "threshold this run applied"
     }
 ```
@@ -611,18 +630,19 @@ Decisions taken before starting, as each changes what gets built:
   derived from the component's members (e.g. its lexically smallest Overture segment id).
   Ids are then stable across a rerun on the same extract, and across a re-extraction that
   did not change the segments involved.
-* **The collapsed set is the dataset, with its tuning as columns.** One row per collapsed
-  crossing, carrying the merge distance, minimum overlap and excluded rail flags it was
-  built under — the shape `session.gap_seconds` already uses. This is deliberately unlike
-  the "keep every fix, flag the doubtful" rule for sessions: there the thresholds belong to
-  a consumer, whereas here the collapse *is* the definition of a crossing, and ground truth
-  and predictions must count the same things or precision and recall mean nothing.
-  Retuning is a rebuild, and the columns say which tuning a given row was built under.
-* **Matching is pure distance**, as the straw man states: any fix within M metres of a
-  crossing, nearest fix wins per `(session, crossing)`. A crossing on a parallel line within
-  M metres will be recorded as passed when it was not; the fix for that is map-matching the
-  session to track, which is a slice of its own and not needed to get a first
-  precision/recall number.
+* **The collapsed set is the dataset, with its tuning as columns.** One row per
+  collapsed crossing, carrying the merge distance, minimum overlap and excluded rail
+  flags it was built under — the shape `session.gap_seconds` already uses. This is
+  deliberately unlike the "keep every sample, flag the doubtful" rule for sessions:
+  there the thresholds belong to a consumer, whereas here the collapse *is* the
+  definition of a crossing, and ground truth and predictions must count the same things
+  or precision and recall mean nothing. Retuning is a rebuild, and the columns say which
+  tuning a given row was built under.
+* **Matching is pure distance**, as the straw man states: any sample within M metres of
+  a crossing, nearest sample wins per `(session, crossing)`. A crossing on a parallel
+  line within M metres will be recorded as passed when it was not; the fix for that is
+  map-matching the session to track, which is a slice of its own and not needed to get a
+  first precision/recall number.
 
 Steps:
 
@@ -638,7 +658,7 @@ Steps:
 - [ ] Define `water_crossing` and `session_crossing` in `model`: the columns above, both
       silver. `water_crossing` is reference-derived, so it partitions `country=DE` as
       `medallion.md` pins; `session_crossing` partitions `crossed_date`, the date of the
-      nearest fix, so the same key means the same thing as `fix_date` next door.
+      nearest sample, so the same key means the same thing as `sample_date` next door.
 - [ ] Make the rail component id canonical in the crossings pipeline, replacing the scipy
       label with a value derived from the component's members, and derive `crossing_id` from
       `(water_id, track_id)`. Assert what the id is for: two runs over the same extract
@@ -659,21 +679,22 @@ Steps:
       and it is the check that the GeoArrow → WKB round trip through the new module did not
       move or drop anything. Record the result: the cases pass unchanged for v8, so any
       difference here is a regression in the write path, not in the definition.
-- [ ] Derive `session_crossing`: join `session_fix` to `water_crossing` on projected
-      distance within M metres (`--match-radius`, default to be chosen below), and reduce to
-      the nearest fix per `(session_id, crossing_id)`. Prune with the session bbox before the
-      distance join — that is what `session.bbox` was written for. Carry `fixes_within` (how
-      many fixes of the session fell inside the radius), since a single fix inside the radius
-      and twenty are different evidence that the crossing was really passed, and the
-      evaluation step will want to say so.
-- [ ] Add a `just crossings` recipe, run the whole thing over the real store, and record what
-      came out: crossings in DE, how many sessions matched any crossing, crossings per session
-      and the distribution of `distance_m` and `fixes_within`. Choose M from that distribution
-      rather than in advance — the elbow between fixes that pass over a crossing and fixes that
-      merely pass near one is the thing being looked for, and note the evidence for whatever is
-      chosen. If a large share of sessions match nothing, say so plainly here: the crow-flies
-      predictor cannot be evaluated against ground truth that is mostly empty, and that finding
-      belongs before the predictor is built, not after.
+- [ ] Derive `session_crossing`: join `session_sample` to `water_crossing` on projected
+      distance within M metres (`--match-radius`, default to be chosen below), and
+      reduce to the nearest sample per `(session_id, crossing_id)`. Prune with the
+      session bbox before the distance join — that is what `session.bbox` was written
+      for. Carry `samples_within` (how many samples of the session fell inside the
+      radius), since a single sample inside the radius and twenty are different evidence
+      that the crossing was really passed, and the evaluation step will want to say so.
+- [ ] Add a `just crossings` recipe, run the whole thing over the real store, and record
+      what came out: crossings in DE, how many sessions matched any crossing, crossings
+      per session and the distribution of `distance_m` and `samples_within`. Choose M
+      from that distribution rather than in advance — the elbow between samples that
+      pass over a crossing and samples that merely pass near one is the thing being
+      looked for, and note the evidence for whatever is chosen. If a large share of
+      sessions match nothing, say so plainly here: the crow-flies predictor cannot be
+      evaluated against ground truth that is mostly empty, and that finding belongs
+      before the predictor is built, not after.
 
 ### Simple crow-flies predictor
 

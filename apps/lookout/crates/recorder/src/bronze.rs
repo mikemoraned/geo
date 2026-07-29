@@ -192,7 +192,7 @@ fn raw_row(payload: &Payload<'_>) -> RawSampleRow {
 
 fn gps_row(reading: &GpsReading) -> GpsReadingRow {
     GpsReadingRow {
-        device_id: reading.id.to_string(),
+        device_id: reading.id.into(),
         t: reading.t,
         lat: reading.gps.lat,
         lon: reading.gps.lon,
@@ -205,7 +205,7 @@ fn gps_row(reading: &GpsReading) -> GpsReadingRow {
 
 fn accel_row(reading: &AccelReading) -> AccelReadingRow {
     AccelReadingRow {
-        device_id: reading.id.to_string(),
+        device_id: reading.id.into(),
         t: reading.t,
         rms: reading.accel.rms,
         peak: reading.accel.peak,
@@ -218,7 +218,7 @@ fn accel_row(reading: &AccelReading) -> AccelReadingRow {
 
 fn device_session_row(start: &SessionStart) -> DeviceSessionRow {
     DeviceSessionRow {
-        device_id: start.id.to_string(),
+        device_id: start.id.into(),
         t: start.t,
         device_type: start.device.device_type.as_str().to_string(),
         platform: start.device.platform.clone(),

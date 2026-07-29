@@ -7,12 +7,14 @@
 use medallion::{DatasetSpec, Layer, Row};
 use serde::{Deserialize, Serialize};
 
+use crate::device::DeviceId;
+
 /// Every payload the telemetry queue carried, verbatim. The lossless record the other
 /// telemetry datasets are interpreted from.
 pub const RAW_SAMPLE: DatasetSpec =
     DatasetSpec::partitioned(Layer::Bronze, "raw_sample", "ingested_date");
 
-/// GPS fixes interpreted from the payloads.
+/// GPS samples interpreted from the payloads.
 pub const GPS_READING: DatasetSpec =
     DatasetSpec::partitioned(Layer::Bronze, "gps_reading", "ingested_date");
 
@@ -42,10 +44,10 @@ impl Row for RawSampleRow {
     const INSTANTS: &'static [&'static str] = &["received_at"];
 }
 
-/// One GPS fix as the device reported it.
+/// One GPS sample as the device reported it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GpsReadingRow {
-    pub device_id: String,
+    pub device_id: DeviceId,
     pub t: i64,
     pub lat: f64,
     pub lon: f64,
@@ -64,7 +66,7 @@ impl Row for GpsReadingRow {
 /// sample within it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AccelReadingRow {
-    pub device_id: String,
+    pub device_id: DeviceId,
     pub t: i64,
     pub rms: f64,
     pub peak: f64,
@@ -82,7 +84,7 @@ impl Row for AccelReadingRow {
 /// One session start: which device began recording, when, and what it is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceSessionRow {
-    pub device_id: String,
+    pub device_id: DeviceId,
     pub t: i64,
     pub device_type: String,
     pub platform: String,

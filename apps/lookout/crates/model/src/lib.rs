@@ -11,6 +11,7 @@
 //! and the writer appends [`medallion::GEOMETRY`] and [`medallion::PROJECTED_GEOMETRY`] to
 //! them.
 
+mod device;
 mod motis;
 mod overture;
 mod session;
@@ -18,9 +19,12 @@ mod telemetry;
 
 use medallion::DatasetSpec;
 
+pub use device::{DeviceId, EmptyDeviceId};
 pub use motis::{MotisSegmentRow, TrainSegmentRow, MOTIS_SEGMENT, TRAIN_SEGMENT};
 pub use overture::{ExtractManifestRow, EXTRACT_MANIFEST, OVERTURE_EXTRACT};
-pub use session::{Bbox, SessionFixRow, SessionId, SessionRow, StartedBy, SESSION, SESSION_FIX};
+pub use session::{
+    Bbox, SessionId, SessionRow, SessionSampleRow, StartedBy, SESSION, SESSION_SAMPLE,
+};
 pub use telemetry::{
     AccelReadingRow, DeviceSessionRow, GpsReadingRow, RawSampleRow, ACCEL_READING, DEVICE_SESSION,
     GPS_READING, RAW_SAMPLE,
@@ -35,7 +39,7 @@ pub const ALL: [DatasetSpec; 10] = [
     MOTIS_SEGMENT,
     TRAIN_SEGMENT,
     SESSION,
-    SESSION_FIX,
+    SESSION_SAMPLE,
     OVERTURE_EXTRACT,
     EXTRACT_MANIFEST,
 ];
@@ -130,7 +134,7 @@ mod tests {
         check_rows_of::<MotisSegmentRow>();
         check_rows_of::<TrainSegmentRow>();
         check_rows_of::<SessionRow>();
-        check_rows_of::<SessionFixRow>();
+        check_rows_of::<SessionSampleRow>();
         check_rows_of::<ExtractManifestRow>();
     }
 }
