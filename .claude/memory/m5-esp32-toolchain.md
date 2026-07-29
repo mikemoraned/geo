@@ -30,6 +30,10 @@ startup log (sizes, probe results) so one flash round-trip answers the question.
   pin and cuts power. There is no AXP192 on the PLUS2, so StickC *Plus* power-init code
   does not apply.
 - Red LED is G19, active-low — the only liveness signal once USB (and the console) is gone.
+- **Display SPI tops out at 26MHz, not the 40MHz M5GFX quotes.** The panel (SCLK 13, MOSI
+  15, CS 5, DC 14, RST 12, backlight 27) is not on SPI2's IOMUX pins, so it routes through
+  the GPIO matrix, which ESP-IDF caps at 80MHz/3. Over that, `spi_bus_add_device` fails and
+  the device boot-loops on a confusing secondary assert in `SpiDriver::drop`.
 - `esp-idf-svc` binds the **legacy** I²C driver (`W i2c: This driver is an old driver …`);
   worth resolving when reading the BM8563 RTC.
 

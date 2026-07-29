@@ -42,8 +42,8 @@ We should build a series of spikes in apps/lookout/spikes/m5. Each of these shou
 - [x] Confirm `crux_core` compiles for `xtensa-esp32-espidf`; record the outcome and any workaround in the notes above — it does; the workaround needed is the core/shell crate split, recorded above. Spike 2 should be laid out as `spike2-crux/core` (esp-free, host-tested) + `spike2-crux/shell` (esp-idf).
 
 **Spike 1 — Hello on screen**
-- [ ] Pull exact ST7789V2 pins + column/row offset from M5's schematic / Arduino board def (don't guess)
-- [ ] Drive the display with `mipidsi` + `embedded-graphics` and print "hello" correctly positioned
+- [x] Pull exact ST7789V2 pins + column/row offset from M5's schematic / Arduino board def (don't guess) — from M5GFX's `board_M5StickCPlus2`: SCLK 13, MOSI 15, CS 5, DC 14, RST 12, backlight 27, SPI2 @40MHz, 135x240 offset 52,40, inverted. Differs from the original StickC *Plus* (DC 23, RST 18).
+- [x] Drive the display with `mipidsi` + `embedded-graphics` and print "hello" correctly positioned — offset 52,40 confirmed correct on the panel. SPI had to drop to 26MHz: the panel isn't on SPI2's IOMUX pins, so the GPIO matrix caps it at 80MHz/3 and M5GFX's 40MHz boot-loops.
 
 **Spike 2 — Crux on device**
 - [ ] Core holding `now` in its model, with host-side tests on the laptop
