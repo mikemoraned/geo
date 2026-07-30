@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/*", "spikes/m5/spike3-gnss/core"]
+# Spike cores are deliberately absent: each declares its own `[workspace]` and carries its
+# own lock, because it has to build for the device alongside a shell this workspace cannot
+# contain, and pins crux to a version the app does not. Listing one here as well leaves
+# cargo with two roots for the same directory and it refuses to load either.
+members = ["crates/*"]
 resolver = "2"
 
 [workspace.dependencies]

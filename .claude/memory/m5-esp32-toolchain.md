@@ -107,7 +107,12 @@ feature stays off.
 ## Project shape
 
 Each spike is its own cargo workspace (`[workspace]` in its `Cargo.toml`) so the
-host-targeted lookout workspace above it doesn't try to claim it. `esp-idf-template`'s
+host-targeted lookout workspace above it doesn't try to claim it. **A spike crate must
+therefore never also appear in the app workspace's `members`** — the two together give cargo
+two roots for one directory, and it then refuses to load *either*, so every `cargo` command in
+`apps/lookout` fails with "multiple workspace roots found in the same workspace" (including
+`just test`, which is how it goes unnoticed: the spike's own `just test` still works). A spike
+core is reached through its own Justfile, never the app workspace. `esp-idf-template`'s
 `[patch.crates-io]` git-HEAD pins are unnecessary — released `esp-idf-svc` 0.52.1 builds
 fine, and edition 2024 works on the nightly-based `esp` channel. `Cargo.lock` **is**
 committed, against the template's default: the spikes are kept as reference and have to

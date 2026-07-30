@@ -72,6 +72,12 @@ enrich *args:
 ingest-motis *args:
     cargo run -p motis --bin motis_ingest -- {{args}}
 
+# Pack the silver water crossings into the flat point buffer the M5 device scans, in
+# gold. No args = defaults (the v8 notebook export → data/gold/crossings.pointset);
+# override with --input / --output, or restrict with --bbox west,south,east,north.
+pack-crossings *args:
+    cargo run -p crossings --bin pack_crossings -- {{args}}
+
 # Convert the SQLite archive into a rerun .rrd, selecting by time window (and
 # optionally device id prefixes). Requires --since, e.g. `just visualise --since 7d`
 # or `just visualise --since 12h --devices 77a cdf2`. Open the .rrd with `rerun`, or
