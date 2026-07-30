@@ -60,6 +60,14 @@ startup log (sizes, probe results) so one flash round-trip answers the question.
   for a GNSS receiver that bursts ~1.5KB of sentences once a second. Overruns are silent:
   they splice two sentences together so the checksum fails. 4096 is comfortable.
 
+## The Xtensa backend crashes at random; just build again
+
+`rustc` occasionally dies with `SIGSEGV` inside LLVM's Xtensa backend — seen as deeply
+repeated `XtensaSizeReduce::ReduceMBB` frames, which reads as the compiler exhausting its own
+stack rather than anything wrong with the code. **Re-running the identical build succeeds.**
+Don't go looking for the offending source: an unchanged `just build` that failed and then
+passed is the same input twice.
+
 ## Pin `crux_core` to `=0.16.2` on device
 
 With `esp32-nimble` running, `crux_core` 0.19 reboots the device every 4s–7min, always inside
