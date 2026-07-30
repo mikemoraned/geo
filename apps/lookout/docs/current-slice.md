@@ -85,7 +85,7 @@ We also want to start standardising on representions i.e. where possible we shou
     * where specific formats aren't appropriate, geoarrow ([v0.2](https://geoarrow.org)) should be used to allow easy/fast export/import
         * some things, like kepler.gl, don't support compressed geoarrow so we should use uncompressed for now
 
-The root where this data is stored is ~/Data/geo/lookout/medallion. If this becomes took big, then we'll move to store it on /Volumes/PRO-G40/Data/geo/lookout/medallion (my external drive). Data should be stored in Hive format.
+The root where this data is stored is `data/medallion` in the repo, so the layers that cannot be re-derived are versioned with the code that wrote them; `--medallion-root` points a run elsewhere, at the external drive `/Volumes/PRO-G40/Data/geo/lookout/medallion` if it outgrows the repo. Data should be stored in Hive format.
 
 One intent here is to standardis to allow multiple writer/readers, which are different engines, as appropriate i.e. Duckdb, SedonaDB, georust. Any file in silver must be readable by all three engines with no engine-specific handling.
 
@@ -94,7 +94,8 @@ One intent here is to standardis to allow multiple writer/readers, which are dif
 The main tasks here should be focussed on documenting these patterns and correctinh any conflicting info (e.g. in target.md) and updating the cli's like `motis_poll` and `motis_ingest` to follow them. Further sets of Tasks then need to follow these patterns.
 
 - [x] Write `docs/medallion.md`: the layer definitions above, the root path
-      (`~/Data/geo/lookout/medallion`, Hive-partitioned), the per-layer format rules
+      (Hive-partitioned; `data/medallion` in the repo since the store moved there), the
+      per-layer format rules
       (parquet append-shaped in bronze, GeoParquet 1.1 / WKB / simple features in silver,
       PMTiles / uncompressed GeoArrow in gold), and the multi-engine rule (silver stays
       independent of any one engine — currently DuckDB, SedonaDB and georust must all read
@@ -408,7 +409,7 @@ The main tasks here should be focussed on documenting these patterns and correct
       checks over `ALL` move onto that. `Query::register` becomes generic. The runtime check
       and its error stay: they are what a type-erased path still needs, and deleting them
       would trade one guarantee for another rather than adding to it.
-- [ ] Host the store in the repo, at `apps/lookout/data/medallion`, so bronze is versioned
+- [x] Host the store in the repo, at `apps/lookout/data/medallion`, so bronze is versioned
       with the code that wrote it. `data/` already tracks the pre-medallion `lookout.sqlite`
       and `motis.sqlite` — the same sensor data in its old form — so moving the store out to
       `~/Data` quietly lost that versioning, and git gives back the undelete that a
@@ -435,6 +436,14 @@ The main tasks here should be focussed on documenting these patterns and correct
       sqlite already tracked; `motis_segment` is 17 MB of it and the only one that grows
       with use, so it is the one to watch. This also puts the store inside what the sandbox
       can read, so a run and its checks stop needing a shell outside it.
+      Note: the area and the wiring are in place; the data itself is copied across by hand,
+      so bronze appears in git in one deliberate commit rather than as a side effect of a
+      refactor. `data/medallion/.gitignore` states what is versioned. `Root::default_path`
+      walks up for the workspace manifest and `MedallionArgs::root` is fallible, so a binary
+      run outside the repo says it cannot find a store instead of inventing one; the flag
+      stayed the way to name another. The Python readers walk up the same way rather than
+      each holding a path — `visualise/main.py` and the sessions notebook, edited through
+      the live kernel rather than on disk.
 
 ### Sessionisation
 

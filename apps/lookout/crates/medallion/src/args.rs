@@ -2,23 +2,32 @@
 
 use std::path::PathBuf;
 
-use crate::path::Root;
+use crate::path::{Root, StoreNotFound};
 
 /// Flattened into each CLI's own args struct, so the flag name and default are identical
 /// everywhere the store is read or written.
 #[derive(Debug, Clone, clap::Args)]
 pub struct MedallionArgs {
-    /// Root of the medallion data store.
+    /// Root of the medallion data store. Defaults to `data/medallion` in the repo this was
+    /// run from.
     ///
     /// Global, so it is accepted wherever it reads naturally on the command line —
     /// before a subcommand or after it.
-    #[arg(long = "medallion-root", global = true, default_value_os_t = Root::default_path())]
-    pub medallion_root: PathBuf,
+    #[arg(long = "medallion-root", global = true)]
+    pub medallion_root: Option<PathBuf>,
 }
 
 impl MedallionArgs {
-    pub fn root(&self) -> Root {
-        Root::new(self.medallion_root.clone())
+    /// The store to work on: the one named, or the repo's own.
+    ///
+    /// Working out the default can fail — a binary run from outside the repo has no store to
+    /// find — which is why this is fallible rather than defaulting to a path that may be the
+    /// wrong one. The flag then says where the store is.
+    pub fn root(&self) -> Result<Root, StoreNotFound> {
+        match &self.medallion_root {
+            Some(path) => Ok(Root::new(path.clone())),
+            None => Ok(Root::new(Root::default_path()?)),
+        }
     }
 }
 
@@ -41,11 +50,19 @@ mod tests {
         Run,
     }
 
+    /// Given nothing, the store is the repo's own — which the tests themselves run inside,
+    /// so the walk up for the workspace finds it.
     #[test]
-    fn the_root_defaults_to_the_documented_location() {
+    fn the_root_defaults_to_the_store_in_the_repo() {
         let cli = Cli::parse_from(["a-cli"]);
 
-        assert_eq!(cli.medallion.root(), Root::default());
+        let root = cli.medallion.root().expect("locate the store");
+        assert!(
+            root.path().ends_with("data/medallion"),
+            "unexpected default: {}",
+            root.path().display()
+        );
+        assert!(root.path().is_absolute());
     }
 
     #[test]
@@ -53,7 +70,7 @@ mod tests {
         let cli = Cli::parse_from(["a-cli", "--medallion-root", "/Volumes/PRO-G40/medallion"]);
 
         assert_eq!(
-            cli.medallion.root().path(),
+            cli.medallion.root().expect("the named store").path(),
             PathBuf::from("/Volumes/PRO-G40/medallion")
         );
     }
@@ -69,7 +86,7 @@ mod tests {
             let cli = Cli::parse_from(args);
 
             assert_eq!(
-                cli.medallion.root().path(),
+                cli.medallion.root().expect("the named store").path(),
                 PathBuf::from("/store"),
                 "parsing {args:?}"
             );

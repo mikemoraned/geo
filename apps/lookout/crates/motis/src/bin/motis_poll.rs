@@ -60,13 +60,14 @@ async fn main() {
         .init();
 
     let args = Args::parse();
+    let root = args.medallion.root().expect("locate the medallion store");
 
     // rustls needs a process-global crypto provider before any `rediss://` connection.
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("install rustls crypto provider");
 
-    let log = SegmentLog::new(args.medallion.root());
+    let log = SegmentLog::new(root.clone());
     let client = MotisClient::new(&args.motis_url);
     let mut window = PositionWindow::new(Duration::from_secs(args.window_age_mins * 60));
     let config = PollConfig {
@@ -84,7 +85,7 @@ async fn main() {
 
     tracing::info!(
         motis_url = %args.motis_url,
-        medallion_root = %args.medallion.medallion_root.display(),
+        medallion_root = %root.path().display(),
         poll_interval_secs = args.poll_interval_secs,
         window_age_mins = args.window_age_mins,
         recent_lookback_mins = args.recent_lookback_mins,

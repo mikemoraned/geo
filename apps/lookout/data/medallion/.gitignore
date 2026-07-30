@@ -1,0 +1,13 @@
+# The medallion store. `docs/medallion.md` describes the layout; what is versioned here and
+# what is not follows from which layers can be re-derived.
+#
+# Landing and bronze are the record of what was observed: nothing derives them, so they are
+# kept, and git is what makes a deletion recoverable.
+
+# Derived wholesale from bronze, in seconds, by `just sessionise` and `just ingest-motis`.
+/silver/
+/gold/
+
+# Point-in-time extracts of Overture: 1.5 GB, and re-derivable — `bronze/extract_manifest`
+# records the release and window each one took, and an Overture release never changes.
+/bronze/overture_extract/

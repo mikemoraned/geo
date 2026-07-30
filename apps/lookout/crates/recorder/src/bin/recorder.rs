@@ -60,6 +60,7 @@ async fn main() {
         .init();
 
     let args = Args::parse();
+    let root = args.medallion.root().expect("locate the medallion store");
     // Default to the non-destructive view-latest when no subcommand is given.
     let command = args.command.unwrap_or(Command::ViewLatest {
         limit: DEFAULT_LIMIT,
@@ -70,7 +71,7 @@ async fn main() {
         .install_default()
         .expect("install rustls crypto provider");
 
-    let archive = Archive::new(args.medallion.root());
+    let archive = Archive::new(root.clone());
 
     let url = std::env::var("LOOKOUT_REDIS_URL")
         .expect("LOOKOUT_REDIS_URL must be set — run via `just record`");
@@ -89,7 +90,7 @@ async fn main() {
         accel = written.accel,
         devices = written.devices,
         unparseable = written.unparseable,
-        medallion_root = %args.medallion.medallion_root.display(),
+        medallion_root = %root.path().display(),
         "wrote telemetry"
     );
 }

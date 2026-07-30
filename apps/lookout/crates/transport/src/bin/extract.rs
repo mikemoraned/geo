@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let at = Utc::now();
     let id = ExtractId::at(at);
-    let root = args.medallion.root();
+    let root = args.medallion.root().expect("locate the medallion store");
     let overture = Overture::open(release);
 
     tracing::info!(

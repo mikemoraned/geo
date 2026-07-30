@@ -92,11 +92,15 @@ impl Root {
         Self(path.into())
     }
 
-    /// `~/Data/geo/lookout/medallion`, used when no root is given.
-    pub fn default_path() -> PathBuf {
-        dirs::home_dir()
-            .unwrap_or_default()
-            .join("Data/geo/lookout/medallion")
+    /// The store in the repo this was run from: `data/medallion` under the workspace root.
+    ///
+    /// Kept in the repo so the layers that cannot be re-derived are versioned alongside the
+    /// code that wrote them. The workspace is found by walking up from the working directory
+    /// for the manifest that declares it, as cargo does, rather than by resolving a relative
+    /// path against wherever a binary happens to have been started — that would quietly make
+    /// a second store instead of finding the one that exists.
+    pub fn default_path() -> Result<PathBuf, StoreNotFound> {
+        Ok(workspace_root()?.join(STORE_IN_REPO))
     }
 
     pub fn path(&self) -> &Path {
@@ -119,10 +123,37 @@ impl Root {
     }
 }
 
-impl Default for Root {
-    fn default() -> Self {
-        Self::new(Self::default_path())
-    }
+/// Where the store sits within the repo.
+const STORE_IN_REPO: &str = "data/medallion";
+
+/// The manifest naming the workspace, and the section that makes it one.
+const WORKSPACE_MANIFEST: &str = "Cargo.toml";
+const WORKSPACE_SECTION: &str = "[workspace]";
+
+/// No workspace above the working directory, and so nowhere the store could be.
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "no {WORKSPACE_MANIFEST} declaring {WORKSPACE_SECTION} at or above {from}, so the store's \
+     location cannot be worked out; pass --medallion-root to say where it is"
+)]
+pub struct StoreNotFound {
+    pub from: String,
+}
+
+/// The workspace the working directory sits in.
+fn workspace_root() -> Result<PathBuf, StoreNotFound> {
+    let from = std::env::current_dir().unwrap_or_default();
+    let declares_workspace = |dir: &Path| {
+        std::fs::read_to_string(dir.join(WORKSPACE_MANIFEST))
+            .is_ok_and(|manifest| manifest.contains(WORKSPACE_SECTION))
+    };
+
+    from.ancestors()
+        .find(|dir| declares_workspace(dir))
+        .map(Path::to_path_buf)
+        .ok_or_else(|| StoreNotFound {
+            from: from.display().to_string(),
+        })
 }
 
 /// A location within one dataset: which dataset, and the partitions chosen so far.
@@ -805,12 +836,14 @@ mod tests {
         );
     }
 
+    /// The default store is the repo's own, found by walking up rather than by guessing a
+    /// path relative to wherever this was run.
     #[test]
-    fn the_default_root_is_an_absolute_path_under_the_home_directory() {
-        let default = Root::default_path();
+    fn the_default_root_is_the_store_in_the_repo() {
+        let default = Root::default_path().expect("locate the store");
 
         assert!(
-            default.ends_with("Data/geo/lookout/medallion"),
+            default.ends_with("data/medallion"),
             "unexpected default root: {}",
             default.display()
         );
@@ -819,5 +852,22 @@ mod tests {
             "default root should be absolute: {}",
             default.display()
         );
+        assert!(
+            default.starts_with(workspace_root().expect("locate the workspace")),
+            "the store should sit in the workspace: {}",
+            default.display()
+        );
+    }
+
+    /// The workspace is the one this crate belongs to, whichever of its directories a test
+    /// happens to run in.
+    #[test]
+    fn the_workspace_is_found_by_walking_up_from_the_working_directory() {
+        let workspace = workspace_root().expect("locate the workspace");
+
+        assert!(workspace.join("Cargo.toml").exists());
+        assert!(std::fs::read_to_string(workspace.join("Cargo.toml"))
+            .expect("read the manifest")
+            .contains(WORKSPACE_SECTION));
     }
 }

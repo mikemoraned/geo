@@ -33,8 +33,9 @@ async fn main() {
         .init();
 
     let args = Args::parse();
+    let root = args.medallion.root().expect("locate the medallion store");
 
-    let outcome = match backfill(&args.db, &args.medallion.root()).await {
+    let outcome = match backfill(&args.db, &root).await {
         Ok(outcome) => outcome,
         Err(err) => {
             tracing::error!(%err, "nothing was backfilled");
@@ -48,7 +49,7 @@ async fn main() {
         written = outcome.written,
         skipped = outcome.skipped,
         db = %args.db.display(),
-        medallion_root = %args.medallion.medallion_root.display(),
+        medallion_root = %root.path().display(),
         "backfilled motis segments"
     );
 }

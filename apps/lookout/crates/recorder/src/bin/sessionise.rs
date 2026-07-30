@@ -33,7 +33,7 @@ async fn main() {
         .init();
 
     let args = Args::parse();
-    let root = args.medallion.root();
+    let root = args.medallion.root().expect("locate the medallion store");
     let gap = Gap::new(chrono::Duration::minutes(i64::from(args.gap_mins)));
     let lead = Lead::new(chrono::Duration::seconds(i64::from(args.lead_secs)));
 
@@ -55,7 +55,7 @@ async fn main() {
         unplaceable = outcome.unplaceable,
         gap_mins = args.gap_mins,
         lead_secs = args.lead_secs,
-        medallion_root = %args.medallion.medallion_root.display(),
+        medallion_root = %root.path().display(),
         "derived sessions"
     );
 }

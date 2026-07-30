@@ -8,24 +8,34 @@ landing → bronze → silver → gold, getting more derived and more query-shap
 ## Root
 
 ```
-~/Data/geo/lookout/medallion/<layer>/<dataset>/<hive partitions>/*.parquet
+<root>/<layer>/<dataset>/<hive partitions>/*.parquet
 ```
 
 Everything is stored in Hive format (`key=value` directory names), so a layer can be
 queried with a glob and the partition keys come back as columns.
 
-If this outgrows the internal disk it moves to
-`/Volumes/PRO-G40/Data/geo/lookout/medallion` — so **nothing hard-codes the root**.
+**The store lives in the repo, at `data/medallion`.** The layers holding observations cannot
+be re-derived, so they are versioned alongside the code that wrote them, and a deletion is
+recoverable from history rather than only from a backup. What is versioned and what is not is
+stated in that directory's own `.gitignore`: the derived layers are ignored, as are the
+upstream reference extracts, which are large and re-derivable from the manifest recording
+what each one took.
 
-Every CLI that reads or writes the store takes it as a common argument:
+The root is found by walking up from the working directory for the manifest declaring the
+workspace, as cargo does, rather than resolved as a path relative to wherever a binary was
+started — that would quietly make a second store instead of finding the one that exists.
+Finding no workspace is an error saying so, not a fallback: a store in the wrong place is
+worse than a run that refuses to start.
+
+Every CLI that reads or writes the store can still be pointed elsewhere:
 
 ```
---medallion-root <PATH>   [default: ~/Data/geo/lookout/medallion]
+--medallion-root <PATH>
 ```
 
-The same flag name and default are used everywhere, from a shared clap args struct rather
-than each binary declaring its own. A run against the external drive, or against a
-throwaway root in a test, is then a single explicit argument recorded in the command.
+The same flag name is used everywhere, from a shared clap args struct rather than each binary
+declaring its own. A run against an external drive, or against a throwaway root in a test, is
+then a single explicit argument recorded in the command.
 
 ## Layers
 

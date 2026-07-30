@@ -18,17 +18,26 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    from pathlib import Path
+
     import marimo as mo
     import duckdb
     import geopandas as gpd
 
-    return duckdb, gpd, mo
+    return Path, duckdb, gpd, mo
 
 
 @app.cell
-def _():
-    # The medallion store `just sessionise` writes into.
-    MEDALLION_ROOT = "~/Data/geo/lookout/medallion"
+def _(Path):
+    # The medallion store `just sessionise` writes into: the one in the repo, found by walking
+    # up for the workspace the way the Rust CLIs do, so this notebook and they always read the
+    # same store however deep the working directory is.
+    MEDALLION_ROOT = next(
+        parent / "data/medallion"
+        for parent in Path.cwd().resolve().parents
+        if (parent / "Cargo.toml").is_file()
+        and "[workspace]" in (parent / "Cargo.toml").read_text()
+    )
 
     # The CRS the store's projected geometry is in: one zone per country, and everything
     # recorded so far is in Germany. Distances and buffers in metres come from this column.

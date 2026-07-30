@@ -30,7 +30,14 @@ import rerun as rr
 import rerun.blueprint as rrb
 
 TIMELINE = "time"
-DEFAULT_MEDALLION_ROOT = Path("~/Data/geo/lookout/medallion").expanduser()
+# The store in the repo, found by walking up for the workspace the way the Rust CLIs do, so
+# this reads whatever they last wrote however deep the working directory is.
+DEFAULT_MEDALLION_ROOT = next(
+    parent / "data/medallion"
+    for parent in Path.cwd().resolve().parents
+    if (parent / "Cargo.toml").is_file()
+    and "[workspace]" in (parent / "Cargo.toml").read_text()
+)
 DEFAULT_OUTPUT = Path("data/lookout.rrd")
 
 BRONZE = "bronze"

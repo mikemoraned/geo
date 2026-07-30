@@ -28,8 +28,9 @@ async fn main() {
         .init();
 
     let args = Args::parse();
+    let root = args.medallion.root().expect("locate the medallion store");
 
-    let outcome = ingest(&args.medallion.root(), args.country)
+    let outcome = ingest(&root, args.country)
         .await
         .expect("derive train segments");
 
@@ -38,7 +39,7 @@ async fn main() {
         deduped = outcome.deduped,
         partitions = outcome.partitions,
         country = %args.country,
-        medallion_root = %args.medallion.medallion_root.display(),
+        medallion_root = %root.path().display(),
         "derived train segments"
     );
 }

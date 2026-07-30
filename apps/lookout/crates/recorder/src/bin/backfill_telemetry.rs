@@ -35,9 +35,10 @@ async fn main() {
         .init();
 
     let args = Args::parse();
+    let root = args.medallion.root().expect("locate the medallion store");
 
     // Refusing to run is an expected outcome, not a crash: report why and stop.
-    let outcome = match backfill(&args.db, &args.medallion.root(), Utc::now()).await {
+    let outcome = match backfill(&args.db, &root, Utc::now()).await {
         Ok(outcome) => outcome,
         Err(err) => {
             tracing::error!(%err, "nothing was backfilled");
@@ -54,7 +55,7 @@ async fn main() {
         unparseable = outcome.written.unparseable,
         undated = outcome.undated,
         db = %args.db.display(),
-        medallion_root = %args.medallion.medallion_root.display(),
+        medallion_root = %root.path().display(),
         "backfilled telemetry"
     );
 }
