@@ -3,6 +3,8 @@
 //! shell so they can be tested on the laptop — the GPS needs sky view and a ~23s cold
 //! start, which makes on-device iteration slow.
 
+pub mod pointset;
+
 use chrono::{DateTime, NaiveTime, Utc};
 use crux_core::{
     App, Command,

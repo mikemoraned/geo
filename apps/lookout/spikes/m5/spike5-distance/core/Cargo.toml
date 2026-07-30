@@ -21,3 +21,6 @@ serde = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
 nmea = "0.7"
 thiserror = "2"
+# Casts the packed crossings buffer's columns in place. Small and no_std-friendly, and its
+# checked casts turn a misaligned buffer into an error rather than a fault on Xtensa.
+bytemuck = "1"
