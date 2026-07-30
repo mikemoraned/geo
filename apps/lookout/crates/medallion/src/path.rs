@@ -261,14 +261,24 @@ impl Dataset {
         Ok(path)
     }
 
-    /// Replace this partition's contents with a query's results, as GeoParquet, writing
-    /// them as they arrive rather than holding them all first.
-    pub async fn replace_with_geo_stream(
+    /// Append a query's results as the capture made at `at`, as GeoParquet, writing them as
+    /// they arrive rather than holding them all first.
+    ///
+    /// A capture already written at `at` is not replaced, and a query matching nothing still
+    /// writes a readable, correctly typed file rather than failing — a partition that
+    /// legitimately holds no rows is a result.
+    pub async fn append_geo_stream(
         &self,
+        at: DateTime<Utc>,
         batches: SendableRecordBatchStream,
     ) -> Result<Written, GeoError> {
-        self.permit_replacement().map_err(WriteError::from)?;
-        let path = self.partition_file();
+        let path = self.batch_file(at);
+        if path.exists() {
+            return Err(WriteError::Exists {
+                path: path.display().to_string(),
+            }
+            .into());
+        }
         let rows = write_geo_stream(&path, batches).await?;
         Ok(Written { path, rows })
     }
@@ -524,6 +534,16 @@ mod tests {
         .expect("batch")
     }
 
+    /// `batch` as the stream a query would have produced it as.
+    async fn stream_of(batch: RecordBatch) -> SendableRecordBatchStream {
+        let ctx = datafusion::prelude::SessionContext::new();
+        ctx.read_batch(batch)
+            .expect("read batch")
+            .execute_stream()
+            .await
+            .expect("stream")
+    }
+
     fn date(day: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 7, day).unwrap()
     }
@@ -699,6 +719,33 @@ mod tests {
 
         assert_eq!(removed, 0);
         assert_eq!(partitions_of(&dataset), ["start_date=2026-07-26"]);
+    }
+
+    /// An append-only layer still takes a streamed write, which is how a query's results
+    /// reach bronze: what it may not do is land on a capture already written.
+    #[tokio::test]
+    async fn an_append_only_layer_takes_a_stream_but_not_twice() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let partition = Root::new(tmp.path())
+            .dataset(SENSOR_READING)
+            .on_date(date(26))
+            .expect("date");
+        let at = Utc.with_ymd_and_hms(2026, 7, 26, 9, 0, 0).unwrap();
+
+        let written = partition
+            .append_geo_stream(at, stream_of(geo_batch()).await)
+            .await
+            .expect("append a stream");
+        let again = partition
+            .append_geo_stream(at, stream_of(geo_batch()).await)
+            .await;
+
+        assert_eq!(written.rows, 1);
+        assert_eq!(written.path, partition.batch_file(at));
+        assert!(matches!(
+            again,
+            Err(GeoError::Write(WriteError::Exists { .. }))
+        ));
     }
 
     /// The layers holding what was observed cannot be re-derived, so replacing or sweeping

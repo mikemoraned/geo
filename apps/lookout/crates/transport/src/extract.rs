@@ -149,7 +149,9 @@ impl<'a> Extractor<'a> {
                 referenced_connectors(&in_window(""), &rail),
             ),
         ] {
-            let written = self.write(&id, overture_type, table, &predicate).await?;
+            let written = self
+                .write(&id, at, overture_type, table, &predicate)
+                .await?;
             tracing::info!(
                 theme = overture_type.theme,
                 r#type = overture_type.name,
@@ -169,6 +171,7 @@ impl<'a> Extractor<'a> {
     async fn write(
         &self,
         id: &ExtractId,
+        at: DateTime<Utc>,
         overture_type: OvertureType,
         table: &str,
         predicate: &str,
@@ -185,7 +188,7 @@ impl<'a> Extractor<'a> {
             .for_id(id)?
             .partition("theme", overture_type.theme)?
             .partition("type", overture_type.name)?
-            .replace_with_geo_stream(stream)
+            .append_geo_stream(at, stream)
             .await?
             .rows)
     }

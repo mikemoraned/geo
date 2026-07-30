@@ -385,6 +385,29 @@ The main tasks here should be focussed on documenting these patterns and correct
       directories or a reader globbing `silver/**/*.parquet` would read deleted partitions
       back — but with bronze undeletable and silver cheap to rebuild there is nothing left
       for it to save.
+- [ ] Make replacing an append-only dataset **fail to compile**, not fail at runtime. The
+      check above is a backstop: it turns a destructive bug into an error, but only once the
+      line runs, and a caller has no way to know it is holding something it must not replace
+      until it tries. The layer of a dataset is fixed at its definition, so this is knowable
+      statically.
+      The evidence for doing this properly rather than partially: the runtime check landed on
+      a codebase where `transport::extract` was already replacing a *bronze* dataset —
+      `overture_extract` — so the check turned a working extract into a run that fails at the
+      first write. Nothing caught it, because the test covering that path needs Docker and
+      the sandbox profile skips it. A compile error would have been unmissable.
+      **Make `DatasetSpec` generic over its layer**: marker types per layer, a `LayerKind`
+      trait carrying the `Layer` value, and a `Derived` trait implemented only by silver and
+      gold. `DatasetSpec<Bronze>` then constructs without naming its layer twice,
+      `Root::dataset` and `Root::rows_of` return `Dataset<L>`, and the replacing and sweeping
+      methods live in an `impl<L: Derived>` block — so replacing bronze is a missing method
+      rather than an error value. `Row` carries the layer as an associated type, with
+      `const DATASET: DatasetSpec<Self::Layer>`.
+      What it costs, so it is not a surprise mid-change: `model::ALL` is one array and cannot
+      hold specs of different layers, so it needs a type-erased view — a plain
+      `DatasetInfo { layer, name, partition_key }` built by a `const fn` on the spec — and the
+      checks over `ALL` move onto that. `Query::register` becomes generic. The runtime check
+      and its error stay: they are what a type-erased path still needs, and deleting them
+      would trade one guarantee for another rather than adding to it.
 - [ ] Host the store in the repo, at `apps/lookout/data/medallion`, so bronze is versioned
       with the code that wrote it. `data/` already tracks the pre-medallion `lookout.sqlite`
       and `motis.sqlite` — the same sensor data in its old form — so moving the store out to
