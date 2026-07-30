@@ -1,47 +1,5 @@
 # Next Slices
 
-## Slice: Spike on device support for distance lookup
-
-### Target
-
-Ultimately we are going to need to be able to do distance lookups on an M5 device between a current GPS-derived lat/lon and some sort of database of static lat/lon points. This slice is about doing one or more spikes which show this is possible given the size/speed constraints of the device. 
-
-This should be based on a dataset of water crossings in silver which is transformed to something in gold we can then load onto a device.
-
-### Technical approach (from design discussion)
-
-**Brute force, no index.** One GPS fix at ~1 Hz against a static point set. Even 50k points (~400 KB) scans in single-digit ms at 240 MHz — well inside the budget. A k-d tree isn't worth it at this scale.
-
-**Single global CRS, unprojected — WGS84 lat/lon (EPSG:4326).** Keep points in lat/lon; no on-device projection, no zone limits, works anywhere. Distance is **haversine**, computed in **f32** (the ESP32 FPU is single-precision; f64 is software-emulated). At 1 Hz brute force the cost is irrelevant, so we take the exact great-circle distance and skip approximations. Output is metres, straight into both consumers below. (The predictor's projected metre-CRS stays an offline/evaluation concern; the device just emits metre distances from lat/lon.)
-
-**Store lat/lon as f32 (or i32 1e-7°).** Raw f32 degrees give ~0.5–2.5 m resolution, under GPS noise; use i32 at 1e-7° (~1 cm, fits i32) if you want more.
-
-**Flat packed buffer, built in gold — no on-device Arrow or rkyv.** Parallel columns `lat[]`/`lon[]`/`id[]`; on device (std) load via `std::fs` or `include_bytes!` and zero-copy cast with `bytemuck`/`zerocopy` (mind 4-byte alignment).
-
-**One scan, two consumers:** display top-N-closest and the predictor's "within D metres" come from the same pass.
-
-**Lives in the Crux core** — pure compute, no effects, so untouched by the `crux_core =0.16.2` pin.
-
-#### Rejected / deferred
-
-- **PMTiles** — a map-tile rendering format, not a query index. Only relevant if we later draw a map.
-- **k-d tree (kiddo)** — deferred; only worth it at far larger counts/rates. If needed: precompute 3D unit-vectors (keeps it global, no projection) and ship the tree offline via rkyv.
-- **arrow-rs on device** — the columnar *layout* is good, the *crate* is heavy analytical machinery. Arrow/Parquet on the gold side only.
-
-#### Open questions
-
-- Actual size of the crossings set (sets scan-time headroom; approach holds regardless).
-
-### Straw Man
-
-As part of Spikes on Device Support (see completed-slices.md) we have apps/lookout/spikes/m5/spike3-gnss. We should base a spike5+ in this which:
-* Can load and display everything spike3 can + show distance from a random set of lat/lon points. We should show the top N closest from current position, such that all N fit on screen, alongside the distance (in metres or km) to each
-* Can do same, but based on a dataset of real water crossings
-
-### Tasks
-
-...
-
 ## Slice: minimal predictor and evaluation framework 
 
 ### Target
