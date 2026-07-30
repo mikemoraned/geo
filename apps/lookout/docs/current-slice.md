@@ -44,7 +44,15 @@ A Rust CLI that reads the silver crossings GeoParquet and writes the gold device
 following the `transport`/`enrich` shape (a crate with `src/bin/`, clap args, a `just` recipe),
 and keeping to the "Rust derives, Python reads" convention.
 
-- [ ] Measure the actual crossings set: count and bbox of `data/water/v7/crossing_reps.parquet`, so the scan-time headroom is a measured number rather than the "even 50k points" assumption above
+**Input is the notebook's `data/water/<vN>/crossing_reps.parquet`, not the medallion silver
+dataset.** The `lookout-slice-minimal-live` branch is well ahead of this one and has moved
+crossings into a medallion silver `water_crossing` dataset (`crates/model/src/crossing.rs`),
+but that dataset is defined and not yet written. This slice's question is device feasibility,
+not pipeline shape, so it takes the file that exists today; switching the packer's reader when
+medallion lands is a contained change. Note `CrossingId` there is a string, which the device
+buffer cannot hold — the id-representation task has to survive that move.
+
+- [x] Measure the actual crossings set: count and bbox of `data/water/v7/crossing_reps.parquet`, so the scan-time headroom is a measured number rather than the "even 50k points" assumption above — measured on **v8**, since no v7 output exists and v8 is the current notebook (on the `lookout-slice-minimal-live` branch). **5,749 crossings**, all Points in EPSG:4326, bbox lon 6.08–15.03 / lat 47.43–54.92 (Germany). That is ~9× smaller than the 50k the approach was sized against: **67 KB at 12 bytes/point**, so the buffer is `include_bytes!`-sized and brute force is settled. The parquet already carries plain `lat`/`lon` float columns beside the WKB geometry. f32 degrees round-trip to **≤0.21 m** over this set (well under GPS noise), so f32 wins and i32 1e-7° isn't needed.
 - [ ] Scaffold the crate and `src/bin/` packer with clap args for input parquet, output path, and an optional bbox filter; add a `just` recipe for it
 - [ ] Read the silver GeoParquet and project it to (lat, lon, id) — decoding the WKB point geometry the notebook writes, and failing with a `thiserror` variant on anything that isn't a point
 - [ ] Decide what `id` is (dense u32 index into a side table vs. a hash of the Overture id) — the device only needs enough to name a crossing on screen
