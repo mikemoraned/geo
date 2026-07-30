@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/*", "spikes/m5/spike3-gnss/core"]
 resolver = "2"
 
 [workspace.dependencies]

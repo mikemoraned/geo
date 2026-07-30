@@ -55,6 +55,66 @@ I think at this point we need to cleanly separate our bits of data processing an
 
 ...
 
+## Slice: Deploy predictor on M5 device
+
+### Target
+
+Run the real predictor on the M5StickC PLUS2, fed by its own GPS unit rather than by replayed
+traces — the point the device spikes were building towards.
+
+### Constraint inherited from the device spikes: `crux_core` is pinned
+
+**`crux_core` must stay pinned at `=0.16.2` on device.** On 0.19, Crux + BLE reboots the
+M5 every 4 seconds to 7 minutes, always inside crux's per-effect `Command`/crossbeam machinery.
+Pinning 0.16.2 fixes it — 30 minutes stable with a client connected and a real fix — but the
+cause was never identified, only avoided; it is some change between 0.17 and 0.19. Stack
+overflow, both task stacks, heap exhaustion, fragmentation, heap overrun, PSRAM, allocation
+volume and model placement were all ruled out by measurement. Evidence and the four wrong
+diagnoses are in `apps/lookout/spikes/m5/spike4-ble/README.md`.
+
+Two consequences for this slice:
+
+- The predictor core has to compile against 0.16.2's API (one extra associated type,
+  `type Capabilities = ()`), so don't adopt newer crux features in the shared core.
+- If a newer crux becomes necessary, the work is bisecting 0.17/0.18 to find the change (one
+  flash and a 15-minute soak each), or dropping crux from the device shell — which would
+  forfeit the shared-core argument that justified Crux in the first place.
+
+### What the spikes already established
+
+The spikes leave a working skeleton to hang the predictor on: `apps/lookout/spikes/m5`, with
+a Crux core split from an esp-idf shell so the core stays testable on the laptop. The
+predictor should *be* that core. See `.claude/memory/m5-esp32-toolchain.md` for the board's
+gotchas (power hold, panel offset, RX pin, stack size, UART buffer).
+
+### Notes & Gotchas (what the on-device GNSS actually behaves like)
+
+Measured on the GPS/BDS unit (AT6668) with the receiver deliberately held still:
+
+- **Good geometry** (8 satellites, HDOP 2.4): position wanders ~1.8m horizontally over 12s,
+  and differencing consecutive one-second fixes implies ~1.0 m/s of motion. The receiver's
+  own Doppler-derived speed is far more honest at 0.04–0.91 knots (≤0.5 m/s).
+- **Poor geometry** (6 satellites, HDOP 4.4): position wanders ~4.5 m/s, *and* the reported
+  speed claims 4.13 knots. In poor conditions the Doppler speed lies too.
+
+So a predictor that derives velocity by differencing distance-to-crossing between successive
+readings — as the minimal predictor's straw man does — will be dominated by noise at these
+scales, and a stationary device can appear to be closing on a crossing fast enough to emit
+confident nonsense. Two responses, both wanted here:
+
+1. Prefer the receiver's reported speed over position-differencing, and/or difference over a
+   longer baseline than one reading.
+2. **Gate on fix quality.** HDOP and satellite count are the difference between ~0.2 m/s and
+   ~4.5 m/s of phantom motion, so the on-device predictor needs them as inputs, not just
+   lat/lon. `RMC`/`GGA` carry both.
+
+A train at speed should swamp this noise, but approach and departure — exactly when a crossing
+prediction is being refined — are the low-speed regime where it bites. Worth checking whether
+the same holds for the phone traces before assuming it is device-specific.
+
+Also: the receiver reports true UTC in `ZDA`/`RMC` before it has any position fix, so
+wall-clock time needs neither NTP nor the BM8563 RTC.
+
 ## Slice: Enrich and use relative direction of POI
 
 ### Target

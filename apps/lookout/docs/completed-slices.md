@@ -166,3 +166,35 @@ outputs export to GeoParquet and to uncompressed native GeoArrow for kepler.gl.
   not rail-side; a 2D intersection isn't "visible water"; Overture's representation quirks) — are
   captured in `docs/target.md` under Learnings.**
 
+## Spikes on Device Support
+
+Showed that the pieces a live predictor would depend on can each run on an M5StickC PLUS2 with
+an AT6668 GPS unit — enough to say it looks feasible, not that it works. Five standalone spikes
+in `apps/lookout/spikes/m5/` build on each other: toolchain and flash, screen, Crux on device,
+GPS in, BLE out. The end state shows time and lat/lon on the panel and publishes position over
+BLE; no prediction logic exists yet. New crates on device: `esp-idf-svc`, `mipidsi` +
+`embedded-graphics`, `nmea`, `esp32-nimble`, and `crux_core`.
+
+- **Core and shell must be separate crates.** `esp-idf-sys`'s build script aborts on a host
+  target, so anything depending on it can never be tested off-device — and host-testability was
+  the whole reason for Crux. Each spike from 2 onward is an esp-free `core/` plus an esp-idf
+  `shell/`, with the shell importing the core directly (no typegen or bridge; those are for
+  non-Rust shells).
+- **The shell only carries out effects.** The core owns what the screen says and, in spike 4,
+  the BLE payload and the decision of when publishing is worthwhile — all asserted in host
+  tests. This is the division the predictor wants: predictions as effects.
+- **NMEA parsing lives in the core**, against sentences captured off the real receiver, because
+  a GPS needs sky view and a slow cold start so deskbound iteration is the norm. Fixtures
+  written from NMEA 0183 documentation were wrong — the unit speaks 4.1. Raw captures are
+  gitignored: a fix records where and when someone was.
+- **`crux_core` is pinned to `=0.16.2` on device.** On 0.19, Crux plus BLE rebooted the board
+  every few minutes from inside crux's per-effect machinery. The pin fixes it; the cause was
+  never identified, only avoided.
+- **Hardware facts worth not re-deriving** — the power-hold pin, panel offset and bus ceiling,
+  which Grove pin is RX, UART buffer sizing, and that stack overflow on this board always
+  presents as a fault in unrelated code — are in `.claude/memory/m5-esp32-toolchain.md`.
+- **GNSS noise is worse than the predictor's straw man assumes**: held still with poor
+  satellite geometry, the receiver reported metres-per-second of phantom motion and a false
+  multi-knot speed. Carried into the new "Deploy predictor on M5 device" slice, along with the
+  crux pin as a constraint on the shared core.
+

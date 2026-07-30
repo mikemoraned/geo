@@ -1,0 +1,19 @@
+# Spike 1 recipes. Run from `apps/lookout/spikes/m5/spike1-display`.
+#
+# espup writes `~/export-esp.sh` to put the Xtensa clang on LIBCLANG_PATH; resolving it
+# here instead means the recipes work in a shell that hasn't sourced it. Without it the
+# esp-idf-sys bindgen step fails with `unknown target triple 'xtensa'`.
+export LIBCLANG_PATH := `ls -d "$HOME"/.rustup/toolchains/esp/xtensa-esp32-elf-clang/*/esp-clang/lib | tail -1`
+
+# espflash selects the serial port itself; set ESPFLASH_PORT to pin it to one device.
+
+build:
+    cargo build
+
+# Flash and then tail the serial console. Ctrl-C to leave the monitor.
+flash: build
+    espflash flash --monitor target/xtensa-esp32-espidf/debug/spike1-display
+
+# Tail the serial console of whatever is already flashed.
+monitor:
+    espflash monitor

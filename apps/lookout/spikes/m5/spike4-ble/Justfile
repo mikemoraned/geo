@@ -1,0 +1,26 @@
+# Spike 4 recipes. Run from `apps/lookout/spikes/m5/spike4-ble`.
+#
+# espup writes `~/export-esp.sh` to put the Xtensa clang on LIBCLANG_PATH; resolving it
+# here instead means the recipes work in a shell that hasn't sourced it. Without it the
+# esp-idf-sys bindgen step fails with `unknown target triple 'xtensa'`.
+export LIBCLANG_PATH := `ls -d "$HOME"/.rustup/toolchains/esp/xtensa-esp32-elf-clang/*/esp-clang/lib | tail -1`
+
+# Run the core's tests on the laptop — the reason core and shell are separate crates.
+test:
+    cd core && cargo test
+
+build:
+    cd shell && cargo build
+
+# Flash and then tail the serial console. Ctrl-C to leave the monitor.
+flash: build
+    cd shell && espflash flash --monitor target/xtensa-esp32-espidf/debug/spike4-shell
+
+# Tail the serial console of whatever is already flashed.
+monitor:
+    cd shell && espflash monitor
+
+# Capture sentences from a real fix into a file, to replace the core's hand-written test
+# fixtures. Needs sky view. Ctrl-C when you have enough.
+capture out="captured.nmea":
+    cd shell && espflash monitor | grep --line-buffered -o '\$G.*' | tee ../{{out}}
