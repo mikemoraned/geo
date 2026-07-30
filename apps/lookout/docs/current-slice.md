@@ -828,6 +828,8 @@ Steps:
 
 We probably need to here productionise the pipeline we prototyped in apps/lookout/notebooks/water_crossings/v8.py. However, it's ok to keep it as a notebook, or chain of notebooks, for now.
 
+### Water crossings per session
+
 #### The entities
 
 A `water_crossing` is one place a train can see water — the collapsed representative of
@@ -906,6 +908,22 @@ Decisions taken before starting, as each changes what gets built:
 
 Steps:
 
+- [ ] Name the processing recipes for the layer they write, and add one recipe per layer that
+      runs them all — so bringing a copy of the store up to date is `just silver` rather than
+      remembering which derivations exist and what order they go in.
+      A recipe reading bronze and writing silver takes a `silver-` prefix: `ingest-motis`
+      becomes `silver-motis-ingest`, `sessionise` becomes `silver-sessionise`, and the
+      crossings derivation joins them under the same rule. `just silver` runs the lot, in an
+      order that respects what depends on what — both current derivations need an extract to
+      have been taken, since that is where the country areas come from, and the crossings step
+      needs the sessions. Re-running is already safe: a silver derivation replaces what it
+      produces, which is what makes an aggregate recipe worth having at all.
+      `bronze` is the same idea but a smaller set than it looks: `record drain` and `extract`
+      write bronze and belong in it, while `poll-motis` is a loop that runs until stopped and
+      `backfill` is a one-off over the pre-medallion sqlite, so neither belongs in a recipe
+      meaning "bring bronze up to date". Say which is which rather than sweeping them all in.
+      Recipes that do not move data between layers — `test`, `serve`, `claude` — keep their
+      names.
 - [ ] Build the Python-facing writer: a maturin-built extension module wrapping `medallion`,
       exposing "write these rows into this dataset, replacing the partitions they cover".
       Input is an Arrow C stream (via the PyCapsule interface, so a DuckDB or pyarrow table
