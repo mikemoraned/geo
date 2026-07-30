@@ -24,3 +24,7 @@ thiserror = "2"
 # Casts the packed crossings buffer's columns in place. Small and no_std-friendly, and its
 # checked casts turn a misaligned buffer into an error rather than a fault on Xtensa.
 bytemuck = "1"
+# Great-circle distance, generic over the float type so the scan stays f32 — the ESP32 FPU is
+# single-precision and f64 there is emulated. `default-features = false` drops earcutr, spade
+# and rayon: triangulation and a thread pool have no business on this board.
+geo = { version = "0.31", default-features = false }

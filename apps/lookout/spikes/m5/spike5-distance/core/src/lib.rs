@@ -4,6 +4,7 @@
 //! start, which makes on-device iteration slow.
 
 pub mod pointset;
+pub mod scan;
 
 use chrono::{DateTime, NaiveTime, Utc};
 use crux_core::{
