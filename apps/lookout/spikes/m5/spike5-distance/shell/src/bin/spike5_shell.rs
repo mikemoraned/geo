@@ -22,7 +22,7 @@ use mipidsi::{
     models::ST7789,
     options::{ColorInversion, Orientation, Rotation},
 };
-use spike5_core::{Effect, Event, Gnss, ViewModel};
+use spike5_core::{Effect, Event, Gnss, NEAREST_ON_SCREEN, ViewModel};
 
 /// Panel geometry and wiring, from M5GFX's `board_M5StickCPlus2`. See spike 1 for why the
 /// offset matters and why the bus runs at 26MHz rather than M5GFX's nominal 40MHz.
@@ -31,6 +31,16 @@ const HEIGHT: u16 = 240;
 const OFFSET_X: u16 = 52;
 const OFFSET_Y: u16 = 40;
 const SPI_BAUDRATE: u32 = 26;
+/// `FONT_10X20` is ten pixels wide, so a 135-pixel panel holds thirteen characters, and each
+/// line is written padded to that width — the display has no concept of erasing, so a shorter
+/// line would leave the tail of the last one behind it.
+const CHARACTERS_PER_LINE: usize = 13;
+const LINE_HEIGHT: i32 = 22;
+const MARGIN_X: i32 = 4;
+/// Baselines, not tops: the fix occupies four lines from here, and the crossings start below
+/// a gap wide enough to read as a separate block.
+const FIRST_LINE_Y: i32 = 24;
+const CROSSINGS_Y: i32 = 130;
 
 /// The GPS/BDS Unit v1.1 (AT6668) talks NMEA 0183 at 115200 8N1.
 const GNSS_BAUDRATE: u32 = 115200;
@@ -202,12 +212,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // long enough to lose incoming NMEA, so unchanged views are skipped.
                     let view = core.view();
                     if shown.as_ref() != Some(&view) {
-                        for (line, y) in
-                            [(&view.clock, 30), (&view.latitude, 60), (&view.longitude, 85)]
-                        {
-                            Text::new(line, Point::new(8, y), style)
-                                .draw(&mut display)
-                                .expect("draw view model");
+                        let fix = [
+                            (view.clock.as_str(), FIRST_LINE_Y),
+                            (view.latitude.as_str(), FIRST_LINE_Y + LINE_HEIGHT),
+                            (view.longitude.as_str(), FIRST_LINE_Y + 2 * LINE_HEIGHT),
+                            (view.within.as_str(), FIRST_LINE_Y + 3 * LINE_HEIGHT),
+                        ];
+                        // The list shortens as well as changes — from five crossings to none
+                        // when a fix is lost — so every line it can occupy is written every
+                        // time, blank where there is nothing, or the last one stays on screen.
+                        let nearest = (0..NEAREST_ON_SCREEN).map(|index| {
+                            (
+                                view.nearest.get(index).map_or("", String::as_str),
+                                CROSSINGS_Y + index as i32 * LINE_HEIGHT,
+                            )
+                        });
+
+                        for (line, y) in fix.into_iter().chain(nearest) {
+                            Text::new(
+                                &format!("{line:width$}", width = CHARACTERS_PER_LINE),
+                                Point::new(MARGIN_X, y),
+                                style,
+                            )
+                            .draw(&mut display)
+                            .expect("draw view model");
                         }
                         shown = Some(view);
                     }
