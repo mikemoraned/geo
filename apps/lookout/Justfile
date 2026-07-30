@@ -58,16 +58,25 @@ end_to_end_test:
 deploy:
     fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}"
 
+# Bring bronze up to date: drain the telemetry queue, then take a fresh Overture extract.
+# The other bronze writer is deliberately not here — `bronze-poll-motis` runs until stopped.
+# Note that the extract is a new extract id and ~1.5 GB every time, so this is a heavier
+# recipe than draining alone; pass --medallion-root (or any other flag) through to both.
+bronze *args:
+    just bronze-record drain {{args}}
+    just bronze-extract {{args}}
+
 # Read the upstash telemetry queue into the bronze telemetry datasets, with the redis URL
-# from 1Password. No args = non-destructive view-latest; `just record drain` to drain.
-record *args:
+# from 1Password. No args = non-destructive view-latest; `just bronze-record drain` to drain.
+bronze-record *args:
     op run --env-file=deploy/lookout.env -- cargo run -p recorder -- {{args}}
 
 # Poll Motis for train trips near recently logged GPS and write each poll to the bronze
-# capture log in the medallion store. Reads the redis URL from 1Password (like `record`,
-# for the queue it polls). Runs a continuous loop; Ctrl-C to stop. Override defaults with
+# capture log in the medallion store. Reads the redis URL from 1Password (like
+# `bronze-record`, for the queue it polls). Runs a continuous loop; Ctrl-C to stop.
+# Override defaults with
 # --poll-interval-secs / --window-age-mins / --zoom / --motis-url / --medallion-root.
-poll-motis *args:
+bronze-poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 
 # Take a point-in-time Overture extract into bronze: the country's rail segments and the
@@ -76,16 +85,24 @@ poll-motis *args:
 # (pinned release, --country DE, public Overture S3 — anonymous, no credentials); pass
 # --mirror <dir> to read a local copy of the release instead, and --medallion-root to
 # write elsewhere. Each run is a new extract id, never a replacement.
-extract *args:
+bronze-extract *args:
     cargo run --release -p transport --bin extract -- {{args}}
+
+# Re-derive every silver dataset from bronze, in dependency order. Each derivation replaces
+# what it produces, so this is safe to re-run and is the way to bring a copy of the store up
+# to date. All of them need an Overture extract to have been taken (that is where the
+# country areas come from), so run `just bronze-extract` first on a store without one.
+silver *args:
+    just silver-sessionise {{args}}
+    just silver-motis-ingest {{args}}
 
 # Derive the silver `train_segment` dataset from the bronze motis capture log: dedup
 # re-seen legs, decode each polyline to WKB, and add the projected geometry. Requires
 # Each leg's country — and so the zone it is projected into — comes from where it starts,
-# against the country areas of the newest Overture extract, so `just extract` has to have
-# been run. Override the store with --medallion-root. Rewrites the partitions it touches, so
-# re-running over unchanged bronze leaves the same dataset.
-ingest-motis *args:
+# against the country areas of the newest Overture extract, so `just bronze-extract` has to
+# have been run. Override the store with --medallion-root. Rewrites the partitions it
+# touches, so re-running over unchanged bronze leaves the same dataset.
+silver-motis-ingest *args:
     cargo run -p motis --bin motis_ingest -- {{args}}
 
 # Derive the silver `session` and `session_sample` datasets from the bronze telemetry:
@@ -95,20 +112,11 @@ ingest-motis *args:
 # of announcing produces — and write each session's path and samples
 # with their projected geometry. Each session's country — and so the zone it is projected
 # into — comes from where it started, against the country areas of the newest Overture
-# extract, so `just extract` has to have been run. Override the store with
+# extract, so `just bronze-extract` has to have been run. Override the store with
 # --medallion-root. Re-derives every session from all of bronze, so a rerun replaces what
 # the last one wrote rather than adding to it.
-sessionise *args:
+silver-sessionise *args:
     cargo run --release -p recorder --bin sessionise -- {{args}}
-
-# Read the pre-medallion sqlite dbs under data/ into bronze, then re-derive the silver
-# train segments over the polls that adds. Run once: the telemetry backfill refuses a
-# second run (bronze is immutable, and it would double every payload), and the segment
-# backfill skips polls already logged. Pass --medallion-root to write elsewhere.
-backfill *args:
-    cargo run --release -p recorder --bin backfill_telemetry -- {{args}}
-    cargo run --release -p motis --bin backfill_segments -- {{args}}
-    cargo run --release -p motis --bin motis_ingest -- --country DE {{args}}
 
 # Convert the medallion store into a rerun .rrd, selecting by time window (and
 # optionally device id prefixes). Requires --since, e.g. `just visualise --since 7d`

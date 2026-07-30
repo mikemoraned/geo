@@ -29,7 +29,7 @@ def _():
 
 @app.cell
 def _(Path):
-    # The medallion store `just sessionise` writes into: the one in the repo, found by walking
+    # The medallion store `just silver-sessionise` writes into: the one in the repo, found by walking
     # up for the workspace the way the Rust CLIs do, so this notebook and they always read the
     # same store however deep the working directory is.
     MEDALLION_ROOT = next(

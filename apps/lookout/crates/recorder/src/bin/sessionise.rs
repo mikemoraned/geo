@@ -1,6 +1,6 @@
 //! `sessionise`: derive the silver `session` and `session_sample` datasets from the bronze
 //! telemetry. A thin wrapper around [`recorder::sessions`] and [`recorder::silver`]; run via
-//! `just sessionise`.
+//! `just silver-sessionise`.
 
 use clap::Parser;
 use tracing_subscriber::EnvFilter;

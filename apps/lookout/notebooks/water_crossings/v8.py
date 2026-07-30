@@ -32,7 +32,7 @@ def _():
 def _():
     # The bronze Overture extract this notebook reads, pinned. A rerun is meant to see exactly
     # what the last run saw, so moving to a newer extract is a deliberate edit here rather than
-    # something that happens on its own. `just extract` writes them; the release each covers and
+    # something that happens on its own. `just bronze-extract` writes them; the release each covers and
     # the window it was restricted to are in the manifest, read below.
     EXTRACT_ID = "20260727T193628Z"
     MEDALLION_ROOT = "~/Data/geo/lookout/medallion"

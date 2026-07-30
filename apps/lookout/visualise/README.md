@@ -6,7 +6,7 @@ selecting by a relative time window and optionally by device, and logs them unde
 per-device entity paths with a blueprint: a map view for each device's gps track and a
 time-series view for its accel aggregates.
 
-Where the silver `train_segment` dataset has been derived (by `just ingest-motis`), each
+Where the silver `train_segment` dataset has been derived (by `just silver-motis-ingest`), each
 train is also logged as a moving dot interpolated along its route, under
 `/trains/{label}/{trip_id}`, plus a shared overview map showing the trains and the gps
 traces together.

@@ -1,6 +1,6 @@
 # sessions
 
-Looking at the silver `session` and `session_sample` datasets `just sessionise` derives.
+Looking at the silver `session` and `session_sample` datasets `just silver-sessionise` derives.
 
 `v1.py` reads them with DuckDB (spatial, so a GeoParquet geometry column comes back as
 geometry), turns them into GeoDataFrames in lat/lon, and draws them with

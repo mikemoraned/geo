@@ -3,7 +3,7 @@
 //! writes the returned segments to the bronze capture log, one parquet file per poll.
 //!
 //! This is a thin loop around [`motis::poll::poll_once`] — argument parsing, redis and
-//! store setup, the tick timer, and logging. Run via `just poll-motis`; Ctrl-C stops
+//! store setup, the tick timer, and logging. Run via `just bronze-poll-motis`; Ctrl-C stops
 //! cleanly.
 
 use std::time::Duration;
@@ -78,7 +78,7 @@ async fn main() {
     };
 
     let url = std::env::var("LOOKOUT_REDIS_URL")
-        .expect("LOOKOUT_REDIS_URL must be set — run via `just poll-motis`");
+        .expect("LOOKOUT_REDIS_URL must be set — run via `just bronze-poll-motis`");
     let mut conn = telemetry::connect(&url)
         .await
         .expect("connect to telemetry redis");

@@ -1,6 +1,6 @@
 //! `motis_ingest`: derive the silver `train_segment` dataset from the bronze motis
 //! capture log. A thin wrapper around [`motis::ingest::ingest`]; run via
-//! `just ingest-motis`.
+//! `just silver-motis-ingest`.
 
 use clap::Parser;
 use tracing_subscriber::EnvFilter;

@@ -10,9 +10,10 @@ medallion store defined in `apps/lookout/docs/medallion.md`.
 - `transport`'s `extract` bin takes point-in-time Overture extracts into bronze.
 - `visualise/` (Python uv + rerun) reads the store with DuckDB → `.rrd`.
 
-The sqlite dbs under `data/` are not part of the pipeline: nothing reads or writes them, and
-`just backfill` has copied their history into bronze (re-interpreting the readings from the
-lossless `raw` table rather than copying the derived ones). Under the medallion scheme redis and sqlite are
+The sqlite dbs under `data/` are not part of the pipeline: nothing reads or writes them.
+Their history was copied into bronze once (re-interpreted from the lossless `raw` table
+rather than copied from the derived ones) and the one-shot backfill CLIs that did it have
+since been deleted. Under the medallion scheme redis and sqlite are
 landing/external only, and everything from bronze onwards is parquet, with silver as
 GeoParquet readable by any engine in use.
 

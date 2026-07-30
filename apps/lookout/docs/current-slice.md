@@ -908,7 +908,7 @@ Decisions taken before starting, as each changes what gets built:
 
 Steps:
 
-- [ ] Name the processing recipes for the layer they write, and add one recipe per layer that
+- [x] Name the processing recipes for the layer they write, and add one recipe per layer that
       runs them all — so bringing a copy of the store up to date is `just silver` rather than
       remembering which derivations exist and what order they go in.
       A recipe reading bronze and writing silver takes a `silver-` prefix: `ingest-motis`
@@ -924,6 +924,22 @@ Steps:
       meaning "bring bronze up to date". Say which is which rather than sweeping them all in.
       Recipes that do not move data between layers — `test`, `serve`, `claude` — keep their
       names.
+      Note: the bronze writers took the prefix too, not just the aggregate — `bronze-record`,
+      `bronze-poll-motis`, `bronze-extract` — since a rule that names half the writers for
+      their layer is a rule a reader has to remember the exceptions to. `just bronze` is
+      `bronze-record drain` then `bronze-extract`, and both aggregates pass their args through
+      (`just silver --medallion-root X`) rather than being argument-less dependencies, since
+      pointing a rebuild at another store is the reason to run the aggregate at all.
+      `visualise` keeps its name: it reads silver and writes an `.rrd` outside the store, so
+      it is not a derivation.
+      **`backfill` is gone rather than renamed**, and with it `backfill_telemetry`,
+      `backfill_segments` and both `backfill` modules — it was a one-off over the
+      pre-medallion sqlite, it has been run, and a recipe that must never be run again is
+      worse than no recipe. That took the last `rusqlite` dependency out of the workspace.
+      The sqlite files under `data/` are left in place: nothing reads them, but they are the
+      only copy of the pre-medallion form and deleting tracked data is a separate call.
+      Checked by running `just silver` over the real store: 31 sessions / 4108 samples and
+      5178 legs over 4 partitions, the same numbers the individual runs recorded above.
 - [ ] Build the Python-facing writer: a maturin-built extension module wrapping `medallion`,
       exposing "write these rows into this dataset, replacing the partitions they cover".
       Input is an Arrow C stream (via the PyCapsule interface, so a DuckDB or pyarrow table
@@ -967,7 +983,8 @@ Steps:
       Say explicitly what happens to a session too small to be evidence of anything: over
       a third of the recorded sessions hold a single sample (see the sessionise run above),
       so a crossing can be "passed" by a session that never moved.
-- [ ] Add a `just crossings` recipe, run the whole thing over the real store, and record
+- [ ] Add a `just silver-crossings` recipe (under the naming rule above, and joining
+      `just silver`), run the whole thing over the real store, and record
       what came out: crossings in DE, how many sessions matched any crossing, crossings
       per session and the distribution of `distance_m` and `samples_within`. Choose M
       from that distribution rather than in advance — the elbow between samples that
