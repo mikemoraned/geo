@@ -386,7 +386,7 @@ The main tasks here should be focussed on documenting these patterns and correct
       directories or a reader globbing `silver/**/*.parquet` would read deleted partitions
       back — but with bronze undeletable and silver cheap to rebuild there is nothing left
       for it to save.
-- [ ] Make replacing an append-only dataset **fail to compile**, not fail at runtime. The
+- [x] Make replacing an append-only dataset **fail to compile**, not fail at runtime. The
       check above is a backstop: it turns a destructive bug into an error, but only once the
       line runs, and a caller has no way to know it is holding something it must not replace
       until it tries. The layer of a dataset is fixed at its definition, so this is knowable
@@ -409,6 +409,19 @@ The main tasks here should be focussed on documenting these patterns and correct
       checks over `ALL` move onto that. `Query::register` becomes generic. The runtime check
       and its error stay: they are what a type-erased path still needs, and deleting them
       would trade one guarantee for another rather than adding to it.
+      Note: done as described, and the runtime check did *not* stay — with the layer in the
+      spec's type there is no untyped way into a `Dataset`, so the check and its error were
+      unreachable and went. `layers::{Landing,Bronze,Silver,Gold}` are plain unit structs
+      implementing `LayerKind`, `Replaceable` is implemented for silver and gold, and the
+      replacing and sweeping methods live in `impl<L: Replaceable> Dataset<L>`. `Row` carries
+      its layer as an associated type, so both `root.dataset(RAW_SAMPLE)` and
+      `root.rows_of::<GpsReadingRow>()` refuse at compile time — checked by writing the calls
+      and reading the errors, then deleting the file. `model::ALL` became `[DatasetInfo; 10]`
+      as expected. Two things fell out that are worth keeping: `silver::write_dates` now
+      states `R: Row<Layer = layers::Silver>` in its signature, so a generic writer says which
+      datasets it is for, and the test asserting the old runtime refusal was deleted rather
+      than rewritten — a compile error is not something a test can assert without pulling in
+      a compile-fail harness, and the guarantee is stronger than the test it replaces.
 - [x] Host the store in the repo, at `apps/lookout/data/medallion`, so bronze is versioned
       with the code that wrote it. `data/` already tracks the pre-medallion `lookout.sqlite`
       and `motis.sqlite` — the same sensor data in its old form — so moving the store out to

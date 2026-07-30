@@ -1,7 +1,7 @@
 //! The Overture extracts and the manifest recording what each extraction took.
 
 use chrono::{DateTime, Utc};
-use medallion::{DatasetSpec, Layer, Row};
+use medallion::{layers, DatasetSpec, Row};
 use serde::{Deserialize, Serialize};
 
 /// Overture Maps rows as extracted, in Overture's own shape and directory layout below
@@ -9,13 +9,13 @@ use serde::{Deserialize, Serialize};
 ///
 /// The rows have no row type here: they keep whatever columns the release's own schema
 /// gives them, plus the `extract_id` joining them to [`ExtractManifestRow`].
-pub const OVERTURE_EXTRACT: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "overture_extract", "extract_id");
+pub const OVERTURE_EXTRACT: DatasetSpec<layers::Bronze> =
+    DatasetSpec::partitioned("overture_extract", "extract_id");
 
 /// One row per extraction: what it fetched, from which release, and when. The provenance
 /// [`OVERTURE_EXTRACT`]'s rows carry only the id of.
-pub const EXTRACT_MANIFEST: DatasetSpec =
-    DatasetSpec::unpartitioned(Layer::Bronze, "extract_manifest");
+pub const EXTRACT_MANIFEST: DatasetSpec<layers::Bronze> =
+    DatasetSpec::unpartitioned("extract_manifest");
 
 /// One row of the manifest: what an extraction took, and from where.
 ///
@@ -36,6 +36,7 @@ pub struct ExtractManifestRow {
 }
 
 impl Row for ExtractManifestRow {
-    const DATASET: DatasetSpec = EXTRACT_MANIFEST;
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = EXTRACT_MANIFEST;
     const INSTANTS: &'static [&'static str] = &["extracted_at"];
 }

@@ -17,7 +17,7 @@ mod overture;
 mod session;
 mod telemetry;
 
-use medallion::DatasetSpec;
+use medallion::DatasetInfo;
 
 pub use device::{DeviceId, EmptyDeviceId};
 pub use motis::{MotisSegmentRow, TrainSegmentRow, MOTIS_SEGMENT, TRAIN_SEGMENT};
@@ -31,17 +31,20 @@ pub use telemetry::{
 };
 
 /// Every dataset defined here, for checks that must cover all of them.
-pub const ALL: [DatasetSpec; 10] = [
-    RAW_SAMPLE,
-    GPS_READING,
-    ACCEL_READING,
-    DEVICE_SESSION,
-    MOTIS_SEGMENT,
-    TRAIN_SEGMENT,
-    SESSION,
-    SESSION_SAMPLE,
-    OVERTURE_EXTRACT,
-    EXTRACT_MANIFEST,
+///
+/// Held as [`DatasetInfo`] rather than as the specs themselves: a spec carries its layer in
+/// its type, so datasets of different layers cannot sit in one array.
+pub const ALL: [DatasetInfo; 10] = [
+    RAW_SAMPLE.info(),
+    GPS_READING.info(),
+    ACCEL_READING.info(),
+    DEVICE_SESSION.info(),
+    MOTIS_SEGMENT.info(),
+    TRAIN_SEGMENT.info(),
+    SESSION.info(),
+    SESSION_SAMPLE.info(),
+    OVERTURE_EXTRACT.info(),
+    EXTRACT_MANIFEST.info(),
 ];
 
 #[cfg(test)]
@@ -123,7 +126,7 @@ mod tests {
     /// stored as the integer it travels as.
     fn check_rows_of<T: Row>() {
         assert!(
-            ALL.contains(&T::DATASET),
+            ALL.contains(&T::DATASET.info()),
             "{} is not among the datasets defined here",
             T::DATASET.name
         );

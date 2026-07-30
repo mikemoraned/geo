@@ -4,27 +4,27 @@
 //! one dataset per sensor. Sensors are split rather than sharing one under a `sensor=`
 //! partition because they carry different columns, and a dataset is one schema.
 
-use medallion::{DatasetSpec, Layer, Row};
+use medallion::{layers, DatasetSpec, Row};
 use serde::{Deserialize, Serialize};
 
 use crate::device::DeviceId;
 
 /// Every payload the telemetry queue carried, verbatim. The lossless record the other
 /// telemetry datasets are interpreted from.
-pub const RAW_SAMPLE: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "raw_sample", "ingested_date");
+pub const RAW_SAMPLE: DatasetSpec<layers::Bronze> =
+    DatasetSpec::partitioned("raw_sample", "ingested_date");
 
 /// GPS samples interpreted from the payloads.
-pub const GPS_READING: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "gps_reading", "ingested_date");
+pub const GPS_READING: DatasetSpec<layers::Bronze> =
+    DatasetSpec::partitioned("gps_reading", "ingested_date");
 
 /// Accelerometer readings interpreted from the payloads.
-pub const ACCEL_READING: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "accel_reading", "ingested_date");
+pub const ACCEL_READING: DatasetSpec<layers::Bronze> =
+    DatasetSpec::partitioned("accel_reading", "ingested_date");
 
 /// The metadata a device announces when it starts a session.
-pub const DEVICE_SESSION: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "device_session", "ingested_date");
+pub const DEVICE_SESSION: DatasetSpec<layers::Bronze> =
+    DatasetSpec::partitioned("device_session", "ingested_date");
 
 /// One archived payload, exactly as it arrived.
 ///
@@ -40,7 +40,8 @@ pub struct RawSampleRow {
 }
 
 impl Row for RawSampleRow {
-    const DATASET: DatasetSpec = RAW_SAMPLE;
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = RAW_SAMPLE;
     const INSTANTS: &'static [&'static str] = &["received_at"];
 }
 
@@ -58,7 +59,8 @@ pub struct GpsReadingRow {
 }
 
 impl Row for GpsReadingRow {
-    const DATASET: DatasetSpec = GPS_READING;
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = GPS_READING;
     const INSTANTS: &'static [&'static str] = &["t"];
 }
 
@@ -77,7 +79,8 @@ pub struct AccelReadingRow {
 }
 
 impl Row for AccelReadingRow {
-    const DATASET: DatasetSpec = ACCEL_READING;
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = ACCEL_READING;
     const INSTANTS: &'static [&'static str] = &["t"];
 }
 
@@ -94,6 +97,7 @@ pub struct DeviceSessionRow {
 }
 
 impl Row for DeviceSessionRow {
-    const DATASET: DatasetSpec = DEVICE_SESSION;
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = DEVICE_SESSION;
     const INSTANTS: &'static [&'static str] = &["t"];
 }

@@ -11,7 +11,7 @@ use std::sync::Arc;
 use arrow::array::{Array, BinaryArray, Int64Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema};
 use geo_types::{Geometry, Point};
-use medallion::{wkb_field, DatasetSpec, Layer, Root};
+use medallion::{layers, wkb_field, DatasetSpec, Root};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
 /// Points chosen inside Germany, so the fixture is the shape silver actually holds.
@@ -81,8 +81,8 @@ fn crs_id(projjson: &serde_json::Value) -> String {
 
 /// Write the fixture into a silver partition of a throwaway store.
 async fn write_fixture(dir: &std::path::Path) -> std::path::PathBuf {
-    const WATER_CROSSING: DatasetSpec =
-        DatasetSpec::partitioned(Layer::Silver, "water_crossing", "country");
+    const WATER_CROSSING: DatasetSpec<layers::Silver> =
+        DatasetSpec::partitioned("water_crossing", "country");
 
     Root::new(dir)
         .dataset(WATER_CROSSING)

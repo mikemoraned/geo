@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, NaiveDate, Utc};
 use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
+use medallion::layers;
 use medallion::{Countries, Country, Projector, Replaced, Root, Row, GEOMETRY, PROJECTED_GEOMETRY};
 use model::{Bbox, SessionRow, SessionSampleRow};
 
@@ -190,7 +191,9 @@ async fn write_dates<T, R, D, B>(
     batch_of: B,
 ) -> Result<Replaced, SilverError>
 where
-    R: Row,
+    // The rows go to a dataset a rebuild may replace — which every silver dataset is, and
+    // nothing holding observations is.
+    R: Row<Layer = layers::Silver>,
     D: Fn(&T) -> NaiveDate,
     B: Fn(&[&T]) -> Result<RecordBatch, SilverError>,
 {

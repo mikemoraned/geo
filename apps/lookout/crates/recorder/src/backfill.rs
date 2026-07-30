@@ -205,7 +205,7 @@ mod tests {
         path
     }
 
-    async fn rows_in(root: &Root, dataset: DatasetSpec) -> i64 {
+    async fn rows_in<L: medallion::LayerKind>(root: &Root, dataset: DatasetSpec<L>) -> i64 {
         let query = Query::new(root.clone());
         query.register(dataset, "d").await.expect("register");
         query

@@ -17,18 +17,18 @@ use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use medallion::{DatasetSpec, Layer, PartitionValue, PathError, Row};
+use medallion::{layers, DatasetSpec, PartitionValue, PathError, Row};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::device::DeviceId;
 
 /// One contiguous run of samples from one device.
-pub const SESSION: DatasetSpec = DatasetSpec::partitioned(Layer::Silver, "session", "start_date");
+pub const SESSION: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("session", "start_date");
 
 /// The samples making up the sessions, one row per deduped bronze reading.
-pub const SESSION_SAMPLE: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Silver, "session_sample", "sample_date");
+pub const SESSION_SAMPLE: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("session_sample", "sample_date");
 
 /// The namespace session ids are minted in, so an id derived here cannot collide with a
 /// name-based id derived from the same values for anything else.
@@ -130,7 +130,8 @@ pub struct SessionRow {
 }
 
 impl Row for SessionRow {
-    const DATASET: DatasetSpec = SESSION;
+    type Layer = layers::Silver;
+    const DATASET: DatasetSpec<Self::Layer> = SESSION;
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
 }
 
@@ -163,7 +164,8 @@ pub struct SessionSampleRow {
 }
 
 impl Row for SessionSampleRow {
-    const DATASET: DatasetSpec = SESSION_SAMPLE;
+    type Layer = layers::Silver;
+    const DATASET: DatasetSpec<Self::Layer> = SESSION_SAMPLE;
     const INSTANTS: &'static [&'static str] = &["t"];
 }
 

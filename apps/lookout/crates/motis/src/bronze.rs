@@ -79,7 +79,10 @@ impl SegmentLog {
     }
 
     /// The partition a poll at `captured_at` writes into.
-    fn partition(&self, captured_at: DateTime<Utc>) -> Result<medallion::Dataset, BronzeError> {
+    fn partition(
+        &self,
+        captured_at: DateTime<Utc>,
+    ) -> Result<medallion::Dataset<medallion::layers::Bronze>, BronzeError> {
         Ok(self
             .root
             .rows_of::<MotisSegmentRow>()

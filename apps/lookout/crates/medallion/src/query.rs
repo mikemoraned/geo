@@ -9,6 +9,7 @@ use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
 use crate::dataset::DatasetSpec;
+use crate::layer::LayerKind;
 use crate::path::{Dataset, Root};
 
 /// A failure querying the store.
@@ -51,13 +52,21 @@ impl Query {
     /// A dataset that has never been written is not an error the caller has to
     /// distinguish by hand: [`QueryError::NoSuchDataset`] says so, and
     /// [`Self::register_if_present`] treats it as an empty table instead.
-    pub async fn register(&self, dataset: DatasetSpec, table: &str) -> Result<(), QueryError> {
+    pub async fn register<L: LayerKind>(
+        &self,
+        dataset: DatasetSpec<L>,
+        table: &str,
+    ) -> Result<(), QueryError> {
         self.register_at(&self.root.dataset(dataset), table).await
     }
 
     /// Register one partition of a dataset under `table`, for a dataset whose partitions
     /// hold different schemas and so cannot be read as a single table.
-    pub async fn register_at(&self, dataset: &Dataset, table: &str) -> Result<(), QueryError> {
+    pub async fn register_at<L: LayerKind>(
+        &self,
+        dataset: &Dataset<L>,
+        table: &str,
+    ) -> Result<(), QueryError> {
         let dir = dataset.dir();
         if !dir.exists() {
             return Err(QueryError::NoSuchDataset {
@@ -76,9 +85,9 @@ impl Query {
     /// Register `dataset` if it exists, reporting whether it did. A dataset with no files
     /// yet leaves `table` unregistered, so a query naming it is a planning error rather
     /// than a silent empty result.
-    pub async fn register_if_present(
+    pub async fn register_if_present<L: LayerKind>(
         &self,
-        dataset: DatasetSpec,
+        dataset: DatasetSpec<L>,
         table: &str,
     ) -> Result<bool, QueryError> {
         match self.register(dataset, table).await {
@@ -127,10 +136,10 @@ mod tests {
     use serde::Deserialize;
 
     use super::*;
-    use crate::layer::Layer;
+    use crate::layer::layers;
 
-    const THING: DatasetSpec = DatasetSpec::partitioned(Layer::Bronze, "thing", "kind");
-    const NOTHING: DatasetSpec = DatasetSpec::partitioned(Layer::Silver, "nothing", "kind");
+    const THING: DatasetSpec<layers::Bronze> = DatasetSpec::partitioned("thing", "kind");
+    const NOTHING: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("nothing", "kind");
 
     #[derive(Debug, Deserialize, PartialEq)]
     struct Row {

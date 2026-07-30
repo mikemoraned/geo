@@ -9,13 +9,63 @@ pub enum Layer {
     Gold,
 }
 
-/// An attempt to replace or delete data in a layer that only ever grows.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("{dataset} is in {layer}, which is append-only: its data cannot be replaced or deleted")]
-pub struct AppendOnly {
-    pub layer: &'static str,
-    pub dataset: String,
+/// The layers as types, so a dataset carries its layer in its own type and the operations a
+/// layer does not permit are not there to call.
+///
+/// A marker names the same layer as the [`Layer`] variant it shares its name with; the
+/// variant is what a path or an error message is built from, the marker is what a dataset
+/// definition is written in terms of.
+pub mod layers {
+    use super::{Layer, LayerKind, Replaceable};
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Landing;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Bronze;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Silver;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Gold;
+
+    impl LayerKind for Landing {
+        const LAYER: Layer = Layer::Landing;
+    }
+
+    impl LayerKind for Bronze {
+        const LAYER: Layer = Layer::Bronze;
+    }
+
+    impl LayerKind for Silver {
+        const LAYER: Layer = Layer::Silver;
+    }
+
+    impl LayerKind for Gold {
+        const LAYER: Layer = Layer::Gold;
+    }
+
+    impl Replaceable for Silver {}
+
+    impl Replaceable for Gold {}
 }
+
+/// A layer, as a type. Implemented by each marker in [`layers`].
+///
+/// The supertraits are what the markers are: plain unit types carrying no data, so a dataset
+/// parameterised by one is as copyable and comparable as the definition it stands for.
+pub trait LayerKind: Copy + std::fmt::Debug + PartialEq + Eq + std::hash::Hash {
+    /// The layer this type stands for.
+    const LAYER: Layer;
+}
+
+/// A layer whose data may be replaced or deleted: silver and gold, and nothing else.
+///
+/// The operations that rewrite or remove a partition are implemented only for datasets in
+/// these layers, so replacing what cannot be re-derived is a missing method rather than an
+/// error to handle — see [`Layer::permits_replacement`] for why the line falls here.
+pub trait Replaceable: LayerKind {}
 
 impl Layer {
     /// Whether a dataset in this layer may have its data replaced or deleted.
@@ -50,6 +100,26 @@ mod tests {
         assert!(!Layer::Bronze.permits_replacement());
         assert!(Layer::Silver.permits_replacement());
         assert!(Layer::Gold.permits_replacement());
+    }
+
+    /// The markers stand for the same layers the variants do, and only the derived ones are
+    /// replaceable — the same split, expressed in types.
+    #[test]
+    fn the_markers_agree_with_the_variants() {
+        assert_eq!(layers::Landing::LAYER, Layer::Landing);
+        assert_eq!(layers::Bronze::LAYER, Layer::Bronze);
+        assert_eq!(layers::Silver::LAYER, Layer::Silver);
+        assert_eq!(layers::Gold::LAYER, Layer::Gold);
+
+        fn replaceable<L: Replaceable>() -> Layer {
+            L::LAYER
+        }
+        for layer in [
+            replaceable::<layers::Silver>(),
+            replaceable::<layers::Gold>(),
+        ] {
+            assert!(layer.permits_replacement());
+        }
     }
 
     #[test]

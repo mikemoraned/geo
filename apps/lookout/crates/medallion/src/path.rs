@@ -10,7 +10,7 @@ use datafusion::execution::SendableRecordBatchStream;
 
 use crate::dataset::DatasetSpec;
 use crate::geo::{write_geo_batches, write_geo_stream, GeoError};
-use crate::layer::AppendOnly;
+use crate::layer::{LayerKind, Replaceable};
 use crate::partition::{Partition, PathError, DATE_FORMAT};
 use crate::rows::{batch, Row, RowError};
 use crate::write::{write_batches, WriteError};
@@ -40,8 +40,6 @@ const PARTITION_STEM: &str = "part-0";
 pub enum ReplaceError {
     #[error(transparent)]
     Geo(#[from] GeoError),
-    #[error(transparent)]
-    AppendOnly(#[from] AppendOnly),
     #[error(transparent)]
     Path(#[from] PathError),
     #[error("listing the partitions of {path}: {source}")]
@@ -108,7 +106,7 @@ impl Root {
     }
 
     /// Start building a path into `dataset`.
-    pub fn dataset(&self, dataset: DatasetSpec) -> Dataset {
+    pub fn dataset<L: LayerKind>(&self, dataset: DatasetSpec<L>) -> Dataset<L> {
         Dataset {
             root: self.0.clone(),
             spec: dataset,
@@ -118,7 +116,7 @@ impl Root {
 
     /// Start building a path into the dataset `T`'s rows make up, for a writer that names
     /// the rows it holds rather than the dataset they belong to.
-    pub fn rows_of<T: Row>(&self) -> Dataset {
+    pub fn rows_of<T: Row>(&self) -> Dataset<T::Layer> {
         self.dataset(T::DATASET)
     }
 }
@@ -157,14 +155,18 @@ fn workspace_root() -> Result<PathBuf, StoreNotFound> {
 }
 
 /// A location within one dataset: which dataset, and the partitions chosen so far.
+///
+/// `L` is the dataset's layer, so what can be done to it follows from where it lives: the
+/// operations that rewrite or delete are implemented for [`Replaceable`] layers only, and a
+/// bronze dataset simply does not have them.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Dataset {
+pub struct Dataset<L> {
     root: PathBuf,
-    spec: DatasetSpec,
+    spec: DatasetSpec<L>,
     partitions: Vec<Partition>,
 }
 
-impl Dataset {
+impl<L: LayerKind> Dataset<L> {
     /// Append a Hive partition, validating the key and value against the store's rules.
     pub fn partition(mut self, key: &str, value: impl Display) -> Result<Self, PathError> {
         self.partitions.push(Partition::new(key, value)?);
@@ -193,25 +195,9 @@ impl Dataset {
             .ok_or_else(|| PathError::Unpartitioned(self.spec.name.to_string()))
     }
 
-    /// Whether this dataset's data may be replaced or deleted, as its layer decides.
-    ///
-    /// Checked on every path that replaces or deletes, so the append-only rule of the layers
-    /// holding observations is enforced here rather than remembered by each caller. Appends
-    /// need no such check: one refuses to land on a file that already exists.
-    fn permit_replacement(&self) -> Result<(), AppendOnly> {
-        if self.spec.layer.permits_replacement() {
-            Ok(())
-        } else {
-            Err(AppendOnly {
-                layer: self.layer(),
-                dataset: self.name().to_string(),
-            })
-        }
-    }
-
     /// The layer this dataset lives in.
     pub fn layer(&self) -> &'static str {
-        self.spec.layer.as_str()
+        L::LAYER.as_str()
     }
 
     /// The dataset's name.
@@ -221,10 +207,7 @@ impl Dataset {
 
     /// The directory the partitions resolve to.
     pub fn dir(&self) -> PathBuf {
-        let mut dir = self
-            .root
-            .join(self.spec.layer.as_str())
-            .join(self.spec.name);
+        let mut dir = self.root.join(L::LAYER.as_str()).join(self.spec.name);
         dir.extend(self.partitions.iter().map(Partition::to_string));
         dir
     }
@@ -276,22 +259,6 @@ impl Dataset {
         Ok(rows.len())
     }
 
-    /// Replace this partition's contents with `batches`.
-    pub async fn replace_with(&self, batches: &[RecordBatch]) -> Result<PathBuf, WriteError> {
-        self.permit_replacement()?;
-        let path = self.partition_file();
-        write_batches(&path, batches).await?;
-        Ok(path)
-    }
-
-    /// Replace this partition's contents with `batches`, as GeoParquet.
-    pub async fn replace_with_geo(&self, batches: &[RecordBatch]) -> Result<PathBuf, GeoError> {
-        self.permit_replacement().map_err(WriteError::from)?;
-        let path = self.partition_file();
-        write_geo_batches(&path, batches).await?;
-        Ok(path)
-    }
-
     /// Append a query's results as the capture made at `at`, as GeoParquet, writing them as
     /// they arrive rather than holding them all first.
     ///
@@ -314,6 +281,33 @@ impl Dataset {
         Ok(Written { path, rows })
     }
 
+    /// A named parquet file within [`Self::dir`].
+    fn file(&self, stem: &str) -> PathBuf {
+        self.dir().join(format!("{stem}.parquet"))
+    }
+}
+
+/// What may be done to a dataset only where its layer permits data to be replaced.
+///
+/// These are the operations a rebuild needs: rewriting a partition, and deleting the
+/// partitions a run no longer produces. They exist for silver and gold, so
+/// `root.rows_of::<RawSampleRow>().replace_dates_geo(…)` is not a call that can be written —
+/// bronze and landing hold what was observed, and nothing can derive that back.
+impl<L: Replaceable> Dataset<L> {
+    /// Replace this partition's contents with `batches`.
+    pub async fn replace_with(&self, batches: &[RecordBatch]) -> Result<PathBuf, WriteError> {
+        let path = self.partition_file();
+        write_batches(&path, batches).await?;
+        Ok(path)
+    }
+
+    /// Replace this partition's contents with `batches`, as GeoParquet.
+    pub async fn replace_with_geo(&self, batches: &[RecordBatch]) -> Result<PathBuf, GeoError> {
+        let path = self.partition_file();
+        write_geo_batches(&path, batches).await?;
+        Ok(path)
+    }
+
     /// Replace this dataset's partitions with one file per dated batch, as GeoParquet.
     ///
     /// A partition the run produces no rows for is **deleted**: a silver dataset is derived
@@ -325,7 +319,6 @@ impl Dataset {
         &self,
         days: &[(NaiveDate, RecordBatch)],
     ) -> Result<Replaced, ReplaceError> {
-        self.permit_replacement()?;
         let mut written = HashSet::new();
         for (date, batch) in days {
             let partition = self.clone().on_date(*date)?;
@@ -369,7 +362,6 @@ impl Dataset {
     /// Delete every directory of this dataset named for `key` except `keep`, reporting how
     /// many went.
     async fn sweep(&self, key: &str, keep: &HashSet<PathBuf>) -> Result<usize, ReplaceError> {
-        self.permit_replacement()?;
         let dir = self.dir();
         let mut entries = match tokio::fs::read_dir(&dir).await {
             Ok(entries) => entries,
@@ -412,11 +404,6 @@ impl Dataset {
 
         Ok(removed)
     }
-
-    /// A named parquet file within [`Self::dir`].
-    fn file(&self, stem: &str) -> PathBuf {
-        self.dir().join(format!("{stem}.parquet"))
-    }
 }
 
 #[cfg(test)]
@@ -425,17 +412,17 @@ mod tests {
 
     use super::*;
 
-    use crate::layer::Layer;
+    use crate::layer::layers;
 
-    const SENSOR_READING: DatasetSpec =
-        DatasetSpec::partitioned(Layer::Bronze, "sensor_reading", "ingested_date");
-    const SESSION: DatasetSpec = DatasetSpec::partitioned(Layer::Silver, "session", "start_date");
-    const MOTIS_SEGMENT: DatasetSpec =
-        DatasetSpec::partitioned(Layer::Bronze, "motis_segment", "polled_date");
-    const OVERTURE_EXTRACT: DatasetSpec =
-        DatasetSpec::partitioned(Layer::Bronze, "overture_extract", "extract_id");
-    const EXTRACT_MANIFEST: DatasetSpec =
-        DatasetSpec::unpartitioned(Layer::Bronze, "extract_manifest");
+    const SENSOR_READING: DatasetSpec<layers::Bronze> =
+        DatasetSpec::partitioned("sensor_reading", "ingested_date");
+    const SESSION: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("session", "start_date");
+    const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
+        DatasetSpec::partitioned("motis_segment", "polled_date");
+    const OVERTURE_EXTRACT: DatasetSpec<layers::Bronze> =
+        DatasetSpec::partitioned("overture_extract", "extract_id");
+    const EXTRACT_MANIFEST: DatasetSpec<layers::Bronze> =
+        DatasetSpec::unpartitioned("extract_manifest");
 
     fn root() -> Root {
         Root::new("/store")
@@ -580,7 +567,7 @@ mod tests {
     }
 
     /// The partition directories of `dataset`, by name.
-    fn partitions_of(dataset: &Dataset) -> Vec<String> {
+    fn partitions_of<L: LayerKind>(dataset: &Dataset<L>) -> Vec<String> {
         let mut names: Vec<String> = std::fs::read_dir(dataset.dir())
             .expect("dataset dir")
             .map(|entry| entry.expect("entry").file_name().to_string_lossy().into())
@@ -777,42 +764,6 @@ mod tests {
             again,
             Err(GeoError::Write(WriteError::Exists { .. }))
         ));
-    }
-
-    /// The layers holding what was observed cannot be re-derived, so replacing or sweeping
-    /// one is refused here rather than left to every caller to avoid.
-    #[tokio::test]
-    async fn an_append_only_layer_refuses_to_be_replaced_or_swept() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let observed = Root::new(tmp.path()).dataset(SENSOR_READING);
-        let at = Utc.with_ymd_and_hms(2026, 7, 26, 9, 0, 0).unwrap();
-        observed
-            .clone()
-            .on_date(date(26))
-            .expect("date")
-            .append(at, &[geo_batch()])
-            .await
-            .expect("append");
-
-        let replaced = observed.replace_dates_geo(&[(date(26), geo_batch())]).await;
-        let swept = observed
-            .retain_partitions("ingested_date", &["2026-07-26"])
-            .await;
-        let overwritten = observed
-            .clone()
-            .on_date(date(26))
-            .expect("date")
-            .replace_with(&[geo_batch()])
-            .await;
-
-        assert!(matches!(replaced, Err(ReplaceError::AppendOnly(_))));
-        assert!(matches!(swept, Err(ReplaceError::AppendOnly(_))));
-        assert!(matches!(overwritten, Err(WriteError::AppendOnly(_))));
-        assert_eq!(
-            partitions_of(&observed),
-            ["ingested_date=2026-07-26"],
-            "the appended partition is still there"
-        );
     }
 
     /// A dataset nothing has been written to yet has no partitions to sweep, rather than a

@@ -65,12 +65,13 @@ would name the same file — a batching writer whose batches fall close together
 ingestion replayed twice — cannot silently replace each other's rows. Batch file names
 therefore carry millisecond precision.
 
-The same enforcement covers the other direction: **the layers holding observations refuse to
-be replaced or swept at all.** Nothing derives them, so nothing can put them back, and the
+The same enforcement covers the other direction: **the layers holding observations cannot be
+replaced or swept at all.** Nothing derives them, so nothing can put them back, and the
 operations a derived layer needs — replacing a partition, deleting the partitions a rebuild
-no longer produces — are refused for them rather than left to each caller to avoid. Which
-layers those are is a property of the layer, so a dataset placed in one inherits the rule
-instead of restating it.
+no longer produces — do not exist for them. A dataset's layer is part of its type, so those
+operations are offered only where the layer permits them and writing one against an
+observation dataset does not compile. A dataset placed in a layer inherits the rule instead
+of restating it, and there is no call to review or error to handle.
 
 **Bronze tolerates the same observation arriving more than once, so deduping is the reader's
 job.** Nothing here rejects a repeat: an ingestion cannot rewrite an earlier file to merge

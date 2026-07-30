@@ -96,11 +96,11 @@ impl Archive {
     }
 
     /// The partition an ingestion at `ingested_at` writes `dataset` into.
-    fn partition(
+    fn partition<L: medallion::LayerKind>(
         &self,
-        dataset: DatasetSpec,
+        dataset: DatasetSpec<L>,
         ingested_at: DateTime<Utc>,
-    ) -> Result<Dataset, ArchiveError> {
+    ) -> Result<Dataset<L>, ArchiveError> {
         Ok(self
             .root
             .dataset(dataset)
@@ -111,9 +111,9 @@ impl Archive {
     /// dataset rather than opening its files, so this is only the layout the tests assert
     /// on.
     #[cfg(test)]
-    fn ingestion_file(
+    fn ingestion_file<L: medallion::LayerKind>(
         &self,
-        dataset: DatasetSpec,
+        dataset: DatasetSpec<L>,
         ingested_at: DateTime<Utc>,
     ) -> Result<std::path::PathBuf, ArchiveError> {
         Ok(self
@@ -299,7 +299,7 @@ mod tests {
     }
 
     /// How many rows a written dataset holds, read back through SQL.
-    async fn rows_in(root: &Root, dataset: DatasetSpec) -> i64 {
+    async fn rows_in<L: medallion::LayerKind>(root: &Root, dataset: DatasetSpec<L>) -> i64 {
         let query = Query::new(root.clone());
         query
             .register(dataset, "d")

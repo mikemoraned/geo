@@ -25,8 +25,6 @@ pub enum WriteError {
     Empty,
     #[error("{path} already holds a capture, which an append must not replace")]
     Exists { path: String },
-    #[error(transparent)]
-    AppendOnly(#[from] crate::layer::AppendOnly),
 }
 
 /// Write `batches` to `path` as a single parquet file, taking the schema from the first.
@@ -68,11 +66,11 @@ mod tests {
     use std::sync::Arc;
 
     use crate::dataset::DatasetSpec;
-    use crate::layer::Layer;
+    use crate::layer::layers;
     use crate::path::Root;
 
-    const SENSOR_READING: DatasetSpec =
-        DatasetSpec::partitioned(Layer::Bronze, "sensor_reading", "ingested_date");
+    const SENSOR_READING: DatasetSpec<layers::Bronze> =
+        DatasetSpec::partitioned("sensor_reading", "ingested_date");
     use arrow::array::{Int64Array, RecordBatch, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
     use chrono::{TimeZone, Utc};

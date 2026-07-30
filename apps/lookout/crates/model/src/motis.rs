@@ -1,16 +1,16 @@
 //! The transit datasets: segments as polled, and the scheduled legs derived from them.
 
 use chrono::{DateTime, Utc};
-use medallion::{DatasetSpec, Layer, Row};
+use medallion::{layers, DatasetSpec, Row};
 use serde::{Deserialize, Serialize};
 
 /// Trip segments as polled from the transit service, duplication allowed.
-pub const MOTIS_SEGMENT: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Bronze, "motis_segment", "polled_date");
+pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
+    DatasetSpec::partitioned("motis_segment", "polled_date");
 
 /// One row per scheduled leg, deduped from the polled segments and carrying its geometry.
-pub const TRAIN_SEGMENT: DatasetSpec =
-    DatasetSpec::partitioned(Layer::Silver, "train_segment", "departure_date");
+pub const TRAIN_SEGMENT: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("train_segment", "departure_date");
 
 /// One polled segment, flattened: the trip it belongs to, its resolved agency and train
 /// number, its endpoints, its realtime-corrected and scheduled times, and its geometry as
@@ -48,7 +48,8 @@ pub struct MotisSegmentRow {
 }
 
 impl Row for MotisSegmentRow {
-    const DATASET: DatasetSpec = MOTIS_SEGMENT;
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = MOTIS_SEGMENT;
     const INSTANTS: &'static [&'static str] = &[
         "captured_at",
         "departure",
@@ -85,6 +86,7 @@ pub struct TrainSegmentRow {
 }
 
 impl Row for TrainSegmentRow {
-    const DATASET: DatasetSpec = TRAIN_SEGMENT;
+    type Layer = layers::Silver;
+    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT;
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
 }

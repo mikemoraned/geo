@@ -23,6 +23,7 @@ use serde_arrow::schema::{SchemaLike, TracingOptions};
 use serde_json::json;
 
 use crate::dataset::DatasetSpec;
+use crate::layer::LayerKind;
 
 /// How an instant column is stored, whatever integer the row type carries it as.
 const INSTANT_TYPE: &str = "Timestamp(Millisecond, Some(\"UTC\"))";
@@ -40,8 +41,11 @@ pub enum RowError {
 /// geometry column is built as arrow rather than traced from a Rust type; the writer
 /// appends it to [`fields`]' output.
 pub trait Row: Serialize + for<'de> Deserialize<'de> {
+    /// The layer the dataset lives in, which decides what may be done to it.
+    type Layer: LayerKind;
+
     /// The dataset these rows make up.
-    const DATASET: DatasetSpec;
+    const DATASET: DatasetSpec<Self::Layer>;
 
     /// The columns holding an instant, declared as timestamps rather than left as the
     /// integers they travel through serde as.
@@ -92,7 +96,6 @@ mod tests {
     use chrono::{DateTime, Utc};
 
     use super::*;
-    use crate::layer::Layer;
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Reading {
@@ -110,8 +113,9 @@ mod tests {
     }
 
     impl Row for Reading {
-        const DATASET: DatasetSpec =
-            DatasetSpec::partitioned(Layer::Bronze, "reading", "ingested_date");
+        type Layer = crate::layer::layers::Bronze;
+        const DATASET: DatasetSpec<Self::Layer> =
+            DatasetSpec::partitioned("reading", "ingested_date");
         const INSTANTS: &'static [&'static str] = &["t"];
     }
 

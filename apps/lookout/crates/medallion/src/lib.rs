@@ -52,12 +52,12 @@ mod write;
 
 pub use args::MedallionArgs;
 pub use country::{Countries, Country, UnknownCountry};
-pub use dataset::DatasetSpec;
+pub use dataset::{DatasetInfo, DatasetSpec};
 pub use geo::{
     geo_batch, geometries, projected_wkb_field, wkb_column, wkb_field, GeoError, Projector,
     GEOMETRY, PROJECTED_GEOMETRY,
 };
-pub use layer::{AppendOnly, Layer};
+pub use layer::{layers, Layer, LayerKind, Replaceable};
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
 pub use path::{AppendError, Dataset, ReplaceError, Replaced, Root, Written};
 pub use query::{Query, QueryError};
