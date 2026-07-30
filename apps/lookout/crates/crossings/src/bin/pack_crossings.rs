@@ -3,10 +3,11 @@
 
 use std::collections::BTreeSet;
 use std::error::Error;
+use std::fs;
 use std::path::PathBuf;
 
 use clap::Parser;
-use crossings::{Bbox, id, silver};
+use crossings::{Bbox, Point, id, pointset, silver};
 
 /// The water_crossings notebook's representative-point export: one row per crossing.
 const DEFAULT_INPUT: &str = "data/water/v8/crossing_reps.parquet";
@@ -54,11 +55,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let ids = id::assign(&crossings)?;
+    let points: Vec<_> = crossings
+        .iter()
+        .zip(&ids)
+        .map(|(crossing, id)| Point::of(crossing, *id))
+        .collect();
+
+    let packed = pointset::pack(&points)?;
+    if let Some(directory) = args.output.parent() {
+        fs::create_dir_all(directory)?;
+    }
+    fs::write(&args.output, &packed)?;
 
     tracing::info!(
         crossings = crossings.len(),
         distinct = ids.iter().collect::<BTreeSet<_>>().len(),
-        "read crossings",
+        bytes = packed.len(),
+        "packed crossings",
     );
 
     Ok(())

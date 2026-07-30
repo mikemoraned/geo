@@ -38,6 +38,11 @@ impl CrossingId {
     pub fn get(&self) -> u32 {
         self.0
     }
+
+    /// An id read back from a packed buffer, where only the number itself survives.
+    pub fn from_bits(id: u32) -> Self {
+        Self(id)
+    }
 }
 
 impl Display for CrossingId {

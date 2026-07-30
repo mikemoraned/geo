@@ -6,8 +6,10 @@
 
 pub mod bbox;
 pub mod id;
+pub mod pointset;
 pub mod silver;
 
 pub use bbox::{Bbox, BboxError};
 pub use id::{Collision, CrossingId};
+pub use pointset::{FormatError, Point};
 pub use silver::{Crossing, ReadError};
