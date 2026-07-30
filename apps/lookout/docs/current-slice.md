@@ -797,7 +797,7 @@ Steps:
       dated partitions within a country and countries the run no longer produces, so the
       dated directories a pre-`country=` run left at the top level are not its to remove —
       clear `silver/train_segment` before re-deriving there.
-- [ ] Fill in `notebooks/sessions/v2.py`: what `v1` shows, plus the trains recorded the same
+- [x] Fill in `notebooks/sessions/v2.py`: what `v1` shows, plus the trains recorded the same
       day. Seeing a trace against the timetabled legs beside it is how "was this journey on
       that train" stops being a guess, and it is the comparison the crossings and predictor
       steps will want — drawn against a session rather than against loose points.
@@ -820,6 +820,11 @@ Steps:
       datasets carry, through a library nearest-join rather than a hand-rolled one. Draw them
       so the eye can tell which is which: the trains thin and muted, the sessions strong,
       since the question being asked is always "which of these is my trace near".
+      Note: legs sharing a stretch of track collapse to one line carrying a `legs_here` count,
+      since a stretch is used by a leg per trip and drawing the same geometry eighty times
+      costs eighty times as much while saying nothing more. On 2026-07-21, within 500 m of one
+      device's sessions: 775 legs on 214 stretches, of 1394 recorded that day, and the nearest
+      sit at 0.0 m — the trace ran along the track, which is the answer the map exists to give.
 
 We probably need to here productionise the pipeline we prototyped in apps/lookout/notebooks/water_crossings/v8.py. However, it's ok to keep it as a notebook, or chain of notebooks, for now.
 
