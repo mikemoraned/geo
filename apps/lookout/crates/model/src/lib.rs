@@ -15,6 +15,7 @@ mod device;
 mod motis;
 mod overture;
 mod session;
+mod silver;
 mod telemetry;
 
 use medallion::DatasetInfo;
@@ -22,6 +23,7 @@ use medallion::DatasetInfo;
 pub use device::{DeviceId, EmptyDeviceId};
 pub use motis::{MotisSegmentRow, TrainSegmentRow, MOTIS_SEGMENT, TRAIN_SEGMENT};
 pub use overture::{ExtractManifestRow, EXTRACT_MANIFEST, OVERTURE_EXTRACT};
+pub use silver::{silver_target, TargetError};
 pub use session::{
     Bbox, SessionId, SessionRow, SessionSampleRow, StartedBy, SESSION, SESSION_SAMPLE,
 };

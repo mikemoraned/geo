@@ -53,6 +53,9 @@ proj4rs = { version = "0.1", features = ["crs-definitions", "geo-types"] }
 # geoarrow's Arrow-level geometry types, used to declare a WKB geometry column with its
 # CRS so the encoder can write conformant GeoParquet metadata.
 geoarrow-schema = "0.7"
+# The array side of the same geoarrow release: converts a geometry column handed in from
+# outside Rust into the WKB silver stores, whichever encoding the caller's engine produced.
+geoarrow-array = "0.7"
 # Serialises plain Rust structs straight into arrow `RecordBatch`es, so bronze rows are
 # defined once as a serde type rather than as hand-built column builders. Feature-gated
 # per arrow version; `arrow-57` matches our pin.
@@ -89,6 +92,12 @@ geo-traits = "0.3"
 wkt = "0.14"
 # `serde` for the ts_milliseconds adapters bronze rows use to type their instants.
 chrono = { version = "0.4", features = ["serde"] }
+# Python bindings for the store, so a derivation written as a notebook writes silver
+# through the same code a Rust one does. `pyo3-arrow` accepts an arrow table from any
+# python library implementing the PyCapsule interface; 0.16 is the release built against
+# arrow 57, so the batches it hands over are our `RecordBatch`.
+pyo3 = "0.28"
+pyo3-arrow = "0.16"
 medallion = { path = "crates/medallion" }
 model = { path = "crates/model" }
 shared = { path = "crates/shared" }

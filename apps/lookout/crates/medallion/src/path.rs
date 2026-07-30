@@ -48,12 +48,23 @@ pub enum ReplaceError {
         #[source]
         source: std::io::Error,
     },
+    #[error(transparent)]
+    Write(#[from] WriteError),
     #[error("removing the partition {path}: {source}")]
     Remove {
         path: String,
         #[source]
         source: std::io::Error,
     },
+}
+
+/// Whether a partition's file holds geometry, and so which encoder writes it. A dataset
+/// with no geometry column cannot be written as GeoParquet, which describes the geometry
+/// columns of the file it is writing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Encoding {
+    Geo,
+    Plain,
 }
 
 /// What replacing a dataset's partitions did.
@@ -319,12 +330,31 @@ impl<L: Replaceable> Dataset<L> {
         &self,
         days: &[(NaiveDate, RecordBatch)],
     ) -> Result<Replaced, ReplaceError> {
+        self.replace_dates_as(days, Encoding::Geo).await
+    }
+
+    /// Replace this dataset's partitions with one file per dated batch, as plain parquet,
+    /// for a dataset holding no geometry. Sweeps as [`Self::replace_dates_geo`] does.
+    pub async fn replace_dates(
+        &self,
+        days: &[(NaiveDate, RecordBatch)],
+    ) -> Result<Replaced, ReplaceError> {
+        self.replace_dates_as(days, Encoding::Plain).await
+    }
+
+    async fn replace_dates_as(
+        &self,
+        days: &[(NaiveDate, RecordBatch)],
+        encoding: Encoding,
+    ) -> Result<Replaced, ReplaceError> {
         let mut written = HashSet::new();
         for (date, batch) in days {
             let partition = self.clone().on_date(*date)?;
-            partition
-                .replace_with_geo(std::slice::from_ref(batch))
-                .await?;
+            let batch = std::slice::from_ref(batch);
+            match encoding {
+                Encoding::Geo => partition.replace_with_geo(batch).await.map(|_| ())?,
+                Encoding::Plain => partition.replace_with(batch).await.map(|_| ())?,
+            }
             written.insert(partition.dir());
         }
 

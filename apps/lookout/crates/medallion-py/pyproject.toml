@@ -1,0 +1,26 @@
+[build-system]
+requires = ["maturin>=1.14,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "lookout-medallion"
+version = "0.1.0"
+description = "Write the lookout medallion store from python"
+requires-python = ">=3.13"
+classifiers = ["Private :: Do Not Upload"]
+
+[tool.maturin]
+# Linking against libpython is what an extension module must not do; the feature is enabled
+# here rather than in Cargo.toml so `cargo check --workspace` still builds this crate.
+features = ["pyo3/extension-module"]
+module-name = "lookout_medallion"
+
+[dependency-groups]
+dev = [
+    "duckdb==1.5.5",
+    "geopandas==1.1.4",
+    "pyarrow==25.0.0",
+    "pytest>=9",
+    # DuckDB reads a tz-aware timestamp column back through pytz.
+    "pytz>=2025.2",
+]

@@ -127,6 +127,26 @@ and scalable lookup — embed whatever metadata makes queries faster e.g. boundi
   when creating a dataset from scratch, as a mature upstream schema generally already fits
   the requirement.
 
+#### Writing silver from another language
+
+A derivation prototyped outside the language the store's writers are written in — a notebook,
+typically — writes through **one implementation of the silver format, not one per language**.
+The format is a set of rules a second implementation would have to restate and then keep in
+step: geometry encoding, CRS metadata, column types, partition layout, and what a rebuild does
+to a partition it no longer produces.
+
+The way in is therefore a binding over that implementation rather than a library for writing
+these files. It takes a table in a language-neutral columnar form, so rows cross the boundary
+without being copied through the calling language's objects, and it is given a dataset name
+rather than a path: the definition of that dataset supplies the columns the table is checked
+against and the layout it is written in. A table whose columns are not the dataset's, or that
+names a dataset outside the layer a derivation may replace, is refused.
+
+The columns a table must carry are the dataset's own, its geometry columns, and the columns the
+partition values are read from — the latter being written into the path and not into the file.
+Each column is converted to the type the definition states, so which engine built the table
+does not change what is stored.
+
 ### gold
 
 Outputs, not inputs: the results of evaluating a particular version of a derivation

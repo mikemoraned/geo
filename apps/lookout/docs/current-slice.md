@@ -940,7 +940,7 @@ Steps:
       only copy of the pre-medallion form and deleting tracked data is a separate call.
       Checked by running `just silver` over the real store: 31 sessions / 4108 samples and
       5178 legs over 4 partitions, the same numbers the individual runs recorded above.
-- [ ] Build the Python-facing writer: a maturin-built extension module wrapping `medallion`,
+- [x] Build the Python-facing writer: a maturin-built extension module wrapping `medallion`,
       exposing "write these rows into this dataset, replacing the partitions they cover".
       Input is an Arrow C stream (via the PyCapsule interface, so a DuckDB or pyarrow table
       passes with no copy), with geometry as GeoArrow, which the module converts to the WKB
@@ -949,6 +949,44 @@ Steps:
       Nothing new about the store is decided here: the module refuses a dataset it cannot
       find in `model` and a schema that does not match that dataset's row struct, so a
       notebook cannot invent a silver dataset or drift its columns.
+      Note: `crates/medallion-py`, module `lookout_medallion`, one function —
+      `write_silver(dataset, table, root=None)`. The mechanics are `medallion::write_table`,
+      which is where the type-erased work lives (check the columns, cast each to the type the
+      definition states, re-encode geometry to WKB, group by the partition columns, write); the
+      name-to-definition lookup is `model::silver_target`, since `medallion` holds no list of
+      datasets. Input is `pyo3_arrow::PyTable`, so anything with `__arrow_c_stream__` passes —
+      a pyarrow table and a DuckDB relation are both tested.
+
+      Four things the task left open, decided here:
+
+      * **The partition columns are columns of the table**, named by the layout and written
+        into the path rather than into the file — `country` and the dataset's date key. A Rust
+        writer derives those values instead (a country from a lookup, a date from an instant),
+        but both produce the same file, since a partition value is never a column of it either
+        way.
+      * **The layout follows from the definition** rather than being declared a third time: a
+        dataset carrying projected geometry is partitioned by country first, because a file
+        states one CRS for that column. So `country=` for a reference-derived dataset,
+        `country=/<key>=<date>` for dated geometry, and `<key>=<date>` for dated rows without
+        it — which is `medallion.md`'s silver table, derived rather than restated.
+      * **Every silver dataset is nameable, not only the crossings ones.** Which derivation
+        owns which dataset is a matter of which one runs, exactly as it is in Rust; what the
+        store enforces is the layer. This is also what makes the writer testable today — the
+        python tests drive it through `train_segment` — rather than only once the crossings
+        datasets exist. A bronze dataset is refused, and a test over `model::ALL` holds both
+        halves of that.
+      * **The CRS a column claims is not read.** Silver states the CRS of each geometry
+        column, so coordinates are taken to be in it and the field is stamped accordingly. A
+        column declaring no encoding at all is taken as WKB, which is what an engine with no
+        geometry type of its own hands over.
+
+      Fallout worth knowing: `Dataset::replace_dates` (plain parquet) joins
+      `replace_dates_geo`, since the GeoParquet encoder refuses a schema with no geometry
+      column and `session_crossing` will have none. `just test-python` now runs both python
+      suites; uv builds the extension with maturin on first run, so nothing needs installing.
+      A marimo `--sandbox` notebook can depend on it through inline script metadata plus a
+      `[tool.uv.sources]` path — checked with a throwaway script, and recorded in the crate's
+      README for the v9 task.
 - [ ] Define `water_crossing` and `session_crossing` in `model`: the columns above, both
       silver. `water_crossing` is reference-derived, so it partitions `country=DE` as
       `medallion.md` pins; `session_crossing` partitions `crossed_date`, the date of the

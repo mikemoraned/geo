@@ -35,18 +35,20 @@ build:
     cargo build --release -p server
 
 # Run all tests: the Rust workspace (incl _docker tests — requires Docker) and the
-# Python visualise tests.
+# Python ones.
 test: test-python
     cargo nextest run --workspace
 
 # Run tests without Docker: the no-docker profile skips _docker-named tests. Still
-# runs the Python visualise tests (they need no Docker).
+# runs the Python tests (they need no Docker).
 test-no-docker: test-python
     cargo nextest run --workspace --profile no-docker
 
-# Run the Python visualise tests.
+# Run the Python tests: the visualise tool, and the store's python writer driven from
+# pyarrow and DuckDB (uv builds the extension module with maturin on the first run).
 test-python:
     uv run --directory visualise pytest -q
+    uv run --directory crates/medallion-py pytest -q
 
 # Run the end_to_end tests against real services (release mode), with real
 # credentials injected from 1Password. Hits the real upstash redis.

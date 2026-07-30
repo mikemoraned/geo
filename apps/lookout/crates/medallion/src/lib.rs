@@ -48,6 +48,7 @@ mod partition;
 mod path;
 mod query;
 mod rows;
+mod table;
 mod write;
 
 pub use args::MedallionArgs;
@@ -62,4 +63,5 @@ pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
 pub use path::{AppendError, Dataset, ReplaceError, Replaced, Root, Written};
 pub use query::{Query, QueryError};
 pub use rows::{fields, Row, RowError};
+pub use table::{write_table, Geometry, SilverTarget, TableError, TableWritten};
 pub use write::WriteError;
