@@ -1,11 +1,12 @@
 //! `pack_crossings`: read the silver water-crossings GeoParquet and write the flat point
 //! buffer the M5 device scans.
 
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::path::PathBuf;
 
 use clap::Parser;
-use crossings::{Bbox, silver};
+use crossings::{Bbox, id, silver};
 
 /// The water_crossings notebook's representative-point export: one row per crossing.
 const DEFAULT_INPUT: &str = "data/water/v8/crossing_reps.parquet";
@@ -52,7 +53,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         None => read,
     };
 
-    tracing::info!(crossings = crossings.len(), "read crossings");
+    let ids = id::assign(&crossings)?;
+
+    tracing::info!(
+        crossings = crossings.len(),
+        distinct = ids.iter().collect::<BTreeSet<_>>().len(),
+        "read crossings",
+    );
 
     Ok(())
 }

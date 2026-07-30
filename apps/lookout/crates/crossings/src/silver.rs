@@ -7,7 +7,7 @@
 use std::fs::File;
 use std::path::Path;
 
-use arrow::array::{Array, BinaryArray, RecordBatch, StringArray};
+use arrow::array::{Array, BinaryArray, Float64Array, RecordBatch, StringArray};
 use arrow::compute::cast;
 use arrow::datatypes::DataType;
 use geo_traits::{CoordTrait, GeometryTrait, GeometryType, PointTrait};
@@ -20,6 +20,10 @@ const IDENTITY: [&str; 2] = [RAIL_ID, WATER_ID];
 const RAIL_ID: &str = "rail_id";
 const WATER_ID: &str = "water_id";
 const GEOMETRY: &str = "geometry";
+/// Where along the track the crossing sits. Part of a crossing's identity, because one body
+/// of water can meet the same stretch of track many times over — a meandering river crosses
+/// a single segment more than a dozen times in this dataset.
+const FRAC: &str = "frac";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReadError {
@@ -55,11 +59,14 @@ pub enum ReadError {
     NotAPoint { row: usize },
 }
 
-/// One crossing, as silver holds it: what meets what, and where.
+/// One crossing, as silver holds it: what meets what, where along the track, and where on
+/// the globe.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Crossing {
     pub rail_id: String,
     pub water_id: String,
+    /// How far along `rail_id` the crossing sits, from 0 at its start to 1 at its end.
+    pub frac: f64,
     /// Longitude in `x`, latitude in `y`, in WGS84 degrees.
     pub position: Coord<f64>,
 }
@@ -95,6 +102,7 @@ fn read_batch(batch: &RecordBatch, crossings: &mut Vec<Crossing>) -> Result<(), 
         .try_into()
         .expect("one array per identity column, just collected");
     let geometries = geometries(batch)?;
+    let fracs = fracs(batch)?;
 
     for row in 0..batch.num_rows() {
         let at = |column: &str| ReadError::Null {
@@ -110,6 +118,10 @@ fn read_batch(batch: &RecordBatch, crossings: &mut Vec<Crossing>) -> Result<(), 
                 .is_valid(row)
                 .then(|| water_ids.value(row).to_string())
                 .ok_or_else(|| at(WATER_ID))?,
+            frac: fracs
+                .is_valid(row)
+                .then(|| fracs.value(row))
+                .ok_or_else(|| at(FRAC))?,
             position: geometries
                 .is_valid(row)
                 .then(|| point(geometries.value(row), first_row + row))
@@ -141,6 +153,14 @@ fn strings(batch: &RecordBatch, column: &str) -> Result<StringArray, ReadError> 
         .as_any()
         .downcast_ref::<StringArray>()
         .expect("cast to Utf8 yields a StringArray")
+        .clone())
+}
+
+fn fracs(batch: &RecordBatch) -> Result<Float64Array, ReadError> {
+    Ok(cast_column(batch, FRAC, &DataType::Float64)?
+        .as_any()
+        .downcast_ref::<Float64Array>()
+        .expect("cast to Float64 yields a Float64Array")
         .clone())
 }
 
@@ -183,6 +203,7 @@ mod tests {
     const WATER: &str = "e597395d-c46d-3b24-a45f-e85abefc2fb5";
     const LON: f64 = 13.548209;
     const LAT: f64 = 51.617567;
+    const FRACTION: f64 = 0.128044;
 
     fn wkb(geometry: &Geometry<f64>) -> Vec<u8> {
         let mut written = Vec::new();
@@ -205,6 +226,10 @@ mod tests {
         RecordBatch::try_from_iter(vec![
             (RAIL_ID, Arc::new(ids(RAIL)) as _),
             (WATER_ID, Arc::new(ids(WATER)) as _),
+            (
+                FRAC,
+                Arc::new(Float64Array::from(vec![FRACTION; rows])) as _,
+            ),
             (GEOMETRY, Arc::new(geometries) as _),
         ])
         .expect("build a batch")
@@ -229,6 +254,7 @@ mod tests {
             vec![Crossing {
                 rail_id: RAIL.to_string(),
                 water_id: WATER.to_string(),
+                frac: FRACTION,
                 position: coord! { x: LON, y: LAT },
             }]
         );
@@ -242,6 +268,7 @@ mod tests {
         let batch = RecordBatch::try_from_iter(vec![
             (RAIL_ID, Arc::new(LargeStringArray::from(vec![RAIL])) as _),
             (WATER_ID, Arc::new(LargeStringArray::from(vec![WATER])) as _),
+            (FRAC, Arc::new(Float64Array::from(vec![FRACTION])) as _),
             (
                 GEOMETRY,
                 Arc::new(BinaryArray::from_vec(vec![&wkb(

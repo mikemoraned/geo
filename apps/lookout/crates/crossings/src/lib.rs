@@ -5,7 +5,9 @@
 //! that is this crate's whole job.
 
 pub mod bbox;
+pub mod id;
 pub mod silver;
 
 pub use bbox::{Bbox, BboxError};
+pub use id::{Collision, CrossingId};
 pub use silver::{Crossing, ReadError};

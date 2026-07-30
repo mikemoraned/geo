@@ -8,6 +8,7 @@ arrow = { workspace = true }
 clap = { workspace = true }
 geo-traits = { workspace = true }
 geo-types = { workspace = true }
+md5 = { workspace = true }
 parquet = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
