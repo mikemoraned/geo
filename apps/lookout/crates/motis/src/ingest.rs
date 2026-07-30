@@ -7,9 +7,13 @@
 //! it touches: re-running over unchanged bronze produces an identical dataset.
 
 use arrow::array::RecordBatch;
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
-use geo_types::LineString;
-use medallion::{Country, Projector, Query, Root, GEOMETRY, PROJECTED_GEOMETRY};
+use geo_types::{LineString, Point};
+use medallion::{
+    Countries, Country, Projector, Query, Root, COUNTRY, GEOMETRY, PROJECTED_GEOMETRY,
+};
 use model::TrainSegmentRow;
 use serde::{Deserialize, Serialize};
 
@@ -44,10 +48,12 @@ const DEDUPED: &str = "
 pub struct IngestOutcome {
     /// Rows read from the capture log.
     pub read: usize,
-    /// Distinct legs after dedup, which is also the rows written.
+    /// Distinct legs after dedup.
     pub deduped: usize,
     /// Partitions rewritten.
     pub partitions: usize,
+    /// Legs starting outside every country the store knows, and so not written.
+    pub unplaceable: usize,
 }
 
 /// A failure deriving the dataset.
@@ -115,12 +121,13 @@ impl From<&Leg> for TrainSegmentRow {
 
 /// Derive the silver dataset from the bronze capture log in the same store.
 ///
-/// `country` is the one these segments run in: it fixes the CRS of the projected geometry
-/// column, since the projected zone is chosen per country.
+/// The country each leg runs in is looked up from where it starts, since that fixes the CRS
+/// of its projected geometry — a property of the leg rather than of the run that ingested it.
+/// A leg starting outside every country the store knows is reported rather than written.
 ///
 /// Dedup and partitioning are one SQL query each against the capture log; the polyline
 /// decoding and projection either query does not express happen per partition in Rust.
-pub async fn ingest(root: &Root, country: Country) -> Result<IngestOutcome, IngestError> {
+pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOutcome, IngestError> {
     let query = Query::new(root.clone());
     if !query
         .register_if_present(model::MOTIS_SEGMENT, CAPTURED)
@@ -148,43 +155,89 @@ pub async fn ingest(root: &Root, country: Country) -> Result<IngestOutcome, Inge
              ORDER BY departure"
         ))
         .await?;
-    let deduped = legs.len();
 
-    // Ordered by departure, so each partition's legs are one run of adjacent rows.
+    let mut outcome = IngestOutcome {
+        read,
+        deduped: legs.len(),
+        ..IngestOutcome::default()
+    };
+    let mut by_country: HashMap<Country, Vec<Route>> = HashMap::new();
+    for leg in &legs {
+        let route = Route::of(leg)?;
+        match countries.containing(route.starts_from()) {
+            Some(country) => by_country.entry(country).or_default().push(route),
+            None => outcome.unplaceable += 1,
+        }
+    }
+
+    let derived: Vec<Country> = by_country.keys().copied().collect();
+    for (country, routes) in by_country {
+        outcome.partitions += write(root, &routes, country).await?;
+    }
+
+    // The dated partitions of each country were swept as they were written; the countries
+    // themselves can only be swept here, where every one this run derived is known.
+    root.rows_of::<TrainSegmentRow>()
+        .retain_partitions(COUNTRY, &derived)
+        .await?;
+
+    Ok(outcome)
+}
+
+/// Write one country's legs, a partition per departure date, under that country.
+async fn write(root: &Root, routes: &[Route], country: Country) -> Result<usize, IngestError> {
     let projector = Projector::for_country(country)?;
-    let days = legs
-        .chunk_by(|a, b| a.departure.date_naive() == b.departure.date_naive())
-        .map(|legs| {
+    // Ordered by departure, so each partition's legs are one run of adjacent rows.
+    let days = routes
+        .chunk_by(|a, b| a.row.departure.date_naive() == b.row.departure.date_naive())
+        .map(|routes| {
             Ok((
-                legs[0].departure.date_naive(),
-                batch(legs, &projector, country)?,
+                routes[0].row.departure.date_naive(),
+                batch(routes, &projector, country)?,
             ))
         })
         .collect::<Result<Vec<_>, IngestError>>()?;
-    let replaced = root
-        .rows_of::<TrainSegmentRow>()
-        .replace_dates_geo(&days)
-        .await?;
 
-    Ok(IngestOutcome {
-        read,
-        deduped,
-        partitions: replaced.written,
-    })
+    Ok(root
+        .rows_of::<TrainSegmentRow>()
+        .partition(COUNTRY, country)?
+        .replace_dates_geo(&days)
+        .await?
+        .written)
+}
+
+/// One leg with its polyline decoded: the row the dataset holds, and the line it ran along.
+struct Route {
+    row: TrainSegmentRow,
+    line: LineString<f64>,
+}
+
+impl Route {
+    fn of(leg: &Leg) -> Result<Self, IngestError> {
+        Ok(Self {
+            row: TrainSegmentRow::from(leg),
+            line: decode_polyline(&leg.polyline)?,
+        })
+    }
+
+    /// Where the leg starts, which decides the zone its projected geometry is written in.
+    fn starts_from(&self) -> Point<f64> {
+        self.line
+            .points()
+            .next()
+            .expect("a polyline decodes to at least one point")
+    }
 }
 
 /// Build one partition's batch: the columns the dataset holds, then the two geometry
 /// columns derived from the legs' polylines.
 fn batch(
-    legs: &[Leg],
+    routes: &[Route],
     projector: &Projector,
     country: Country,
 ) -> Result<RecordBatch, IngestError> {
-    let rows: Vec<TrainSegmentRow> = legs.iter().map(TrainSegmentRow::from).collect();
-    let lines = legs
-        .iter()
-        .map(|leg| decode_polyline(&leg.polyline))
-        .collect::<Result<Vec<_>, _>>()?;
+    let rows: Vec<TrainSegmentRow> = routes.iter().map(|route| route.row.clone()).collect();
+    let lines: Vec<LineString<f64>> = routes.iter().map(|route| route.line.clone()).collect();
     let projected = lines
         .iter()
         .map(|line| projector.project(line))
@@ -219,6 +272,29 @@ mod tests {
 
     use super::*;
 
+    /// The fixture's legs all run in Germany, which the real country areas would say of
+    /// them; these tests are about dedup and geometry, not about placing.
+    struct Everywhere(Country);
+
+    impl Countries for Everywhere {
+        fn containing(&self, _point: Point<f64>) -> Option<Country> {
+            Some(self.0)
+        }
+    }
+
+    /// Nowhere is in any country the store knows.
+    struct Nowhere;
+
+    impl Countries for Nowhere {
+        fn containing(&self, _point: Point<f64>) -> Option<Country> {
+            None
+        }
+    }
+
+    fn germany() -> Everywhere {
+        Everywhere(Country::Germany)
+    }
+
     fn fixture() -> Vec<TripSegment> {
         serde_json::from_str(include_str!("../tests/fixtures/trips.json")).expect("parse fixture")
     }
@@ -232,7 +308,7 @@ mod tests {
                 .await
                 .expect("append poll");
         }
-        ingest(root, Country::Germany).await.expect("ingest")
+        ingest(root, &germany()).await.expect("ingest")
     }
 
     /// The derived dataset, registered the way any other reader would register it.
@@ -306,7 +382,7 @@ mod tests {
         )
         .await
         .expect("second poll");
-        ingest(&root, Country::Germany).await.expect("ingest");
+        ingest(&root, &germany()).await.expect("ingest");
 
         let kept = derived(&root)
             .await
@@ -386,7 +462,7 @@ mod tests {
             .count("SELECT COUNT(*) AS count FROM derived")
             .await
             .expect("count");
-        let second = ingest(&root, Country::Germany).await.expect("re-ingest");
+        let second = ingest(&root, &germany()).await.expect("re-ingest");
 
         assert_eq!(first, second, "the same run, run twice");
         assert_eq!(
@@ -400,21 +476,62 @@ mod tests {
         );
     }
 
+    /// The country a leg runs in decides which zone its geometry is written in, so it names a
+    /// partition above the departure date rather than being a parameter of the run.
+    #[tokio::test]
+    async fn a_leg_is_written_under_the_country_it_starts_in() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+
+        ingest_polls(
+            &root,
+            &[Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap()],
+        )
+        .await;
+
+        let partitions: Vec<_> = std::fs::read_dir(root.path().join("silver/train_segment"))
+            .expect("dataset dir")
+            .map(|entry| {
+                entry
+                    .expect("entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        assert_eq!(partitions, ["country=DE"]);
+    }
+
+    /// A leg starting outside every known country has no zone to be projected into, so it is
+    /// reported rather than written into some other country's metres.
+    #[tokio::test]
+    async fn a_leg_outside_every_known_country_is_not_written() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let log = SegmentLog::new(root.clone());
+        log.append(
+            Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
+            &fixture(),
+            &Map::new(),
+        )
+        .await
+        .expect("append poll");
+
+        let outcome = ingest(&root, &Nowhere).await.expect("ingest");
+
+        assert_eq!(outcome.unplaceable, fixture().len());
+        assert_eq!(outcome.partitions, 0);
+        assert!(!root.path().join("silver").exists());
+    }
+
     #[tokio::test]
     async fn an_empty_capture_log_derives_nothing() {
         let tmp = tempfile::tempdir().expect("tempdir");
 
-        let outcome = ingest(&Root::new(tmp.path()), Country::Germany)
+        let outcome = ingest(&Root::new(tmp.path()), &germany())
             .await
             .expect("ingest");
 
-        assert_eq!(
-            outcome,
-            IngestOutcome {
-                read: 0,
-                deduped: 0,
-                partitions: 0
-            }
-        );
+        assert_eq!(outcome, IngestOutcome::default());
     }
 }

@@ -254,7 +254,7 @@ and region for reference data.
 | --- | --- |
 | sessions | `country=<iso3166-1 alpha-2>/start_date=<date>` |
 | session samples | `country=<iso3166-1 alpha-2>/sample_date=<date>` |
-| derived transit legs | `departure_date=<date>` |
+| derived transit legs | `country=<iso3166-1 alpha-2>/departure_date=<date>` |
 | reference-derived geo datasets | `country=<iso3166-1 alpha-2>` |
 
 Samples are partitioned by the date of the sample itself, not of its session, so a session

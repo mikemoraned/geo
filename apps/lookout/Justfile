@@ -81,8 +81,9 @@ extract *args:
 
 # Derive the silver `train_segment` dataset from the bronze motis capture log: dedup
 # re-seen legs, decode each polyline to WKB, and add the projected geometry. Requires
-# --country (the ISO code fixing the projected CRS), e.g. `just ingest-motis --country DE`;
-# override the store with --medallion-root. Rewrites the partitions it touches, so
+# Each leg's country — and so the zone it is projected into — comes from where it starts,
+# against the country areas of the newest Overture extract, so `just extract` has to have
+# been run. Override the store with --medallion-root. Rewrites the partitions it touches, so
 # re-running over unchanged bronze leaves the same dataset.
 ingest-motis *args:
     cargo run -p motis --bin motis_ingest -- {{args}}

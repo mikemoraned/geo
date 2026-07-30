@@ -4476,6 +4476,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "transport",
  "uuid",
  "wiremock",
  "wkb",

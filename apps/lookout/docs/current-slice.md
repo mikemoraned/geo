@@ -780,10 +780,17 @@ Steps:
       a part that produced nothing. Today every run covers all of bronze, so the condition
       holds; a `--since`-style flag would break it.
 
-- [ ] Give `motis_ingest` the same treatment: a captured leg's country is a property of
+- [x] Give `motis_ingest` the same treatment: a captured leg's country is a property of
       where it runs, not of the run that ingested it, so derive it from the leg's own
       geometry rather than from `--country`. Same lookup the sessions use, so the two
       cannot disagree about where a place is.
+      Note: the country comes from the first point of the leg's own decoded polyline, through
+      the same `CountryAreas`, and `train_segment` gained a `country=` partition above its
+      departure date for the reason the session datasets have one — a file states one CRS for
+      its projected column. A leg starting outside every known country is counted as
+      `unplaceable` rather than written. `--country` is gone from `motis_ingest`, which now
+      needs an extract to have been taken, and the partition key both writers use is
+      `medallion::COUNTRY` rather than a string each spells for itself.
 
 ### Water crossings per session
 

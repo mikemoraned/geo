@@ -11,6 +11,12 @@ use std::str::FromStr;
 
 use geo_types::Point;
 
+/// The partition key a dataset carrying projected geometry is laid out by above its own key.
+///
+/// A file states one CRS for its projected column and the zone is chosen per country, so rows
+/// of two countries cannot share a file. Named here so every dataset spells it the same.
+pub const COUNTRY: &str = "country";
+
 /// Somewhere that can say which country a place is in.
 ///
 /// A projected zone is chosen per country, so anything writing projected geometry has to

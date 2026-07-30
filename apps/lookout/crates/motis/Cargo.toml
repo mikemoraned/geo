@@ -20,6 +20,7 @@ serde = { workspace = true }
 serde_arrow = { workspace = true }
 serde_json = { workspace = true }
 shared = { workspace = true }
+transport = { workspace = true }
 telemetry = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

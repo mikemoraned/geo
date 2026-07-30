@@ -23,14 +23,12 @@ use chrono::{DateTime, NaiveDate, Utc};
 use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
 use medallion::layers;
-use medallion::{Countries, Country, Projector, Replaced, Root, Row, GEOMETRY, PROJECTED_GEOMETRY};
+use medallion::{
+    Countries, Country, Projector, Replaced, Root, Row, COUNTRY, GEOMETRY, PROJECTED_GEOMETRY,
+};
 use model::{Bbox, SessionRow, SessionSampleRow};
 
 use crate::sessions::Session;
-
-/// The partition key each dataset is laid out by above its date, since a file's projected
-/// geometry states one CRS and the zone is chosen per country.
-const COUNTRY: &str = "country";
 
 /// What one write did, per dataset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

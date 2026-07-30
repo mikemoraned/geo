@@ -5,16 +5,13 @@
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
-use medallion::{Country, MedallionArgs};
+use medallion::MedallionArgs;
 use motis::ingest::ingest;
+use transport::countries::CountryAreas;
 
 #[derive(Parser)]
 #[command(about = "Derive the silver train_segment dataset from the bronze motis capture log")]
 struct Args {
-    /// ISO 3166-1 alpha-2 code of the country the captured segments run in. It fixes the
-    /// CRS of the derived projected geometry, so it is stated rather than assumed.
-    #[arg(long)]
-    country: Country,
     #[command(flatten)]
     medallion: MedallionArgs,
 }
@@ -30,7 +27,10 @@ async fn main() {
     let args = Args::parse();
     let root = args.medallion.root().expect("locate the medallion store");
 
-    let outcome = ingest(&root, args.country)
+    let countries = CountryAreas::newest(&root)
+        .await
+        .expect("read the country areas of the newest extract");
+    let outcome = ingest(&root, &countries)
         .await
         .expect("derive train segments");
 
@@ -38,7 +38,7 @@ async fn main() {
         read = outcome.read,
         deduped = outcome.deduped,
         partitions = outcome.partitions,
-        country = %args.country,
+        unplaceable = outcome.unplaceable,
         medallion_root = %root.path().display(),
         "derived train segments"
     );
