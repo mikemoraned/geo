@@ -1008,12 +1008,32 @@ Steps:
       caches the built wheel against the extension crate's own sources, so a change to the Rust
       crates it wraps does not invalidate it — the two new datasets were reported missing by a
       module built before they existed. The recipe now forces the rebuild.
-- [ ] Make the rail component id canonical in the crossings pipeline, replacing the scipy
+- [x] Make the rail component id canonical in the crossings pipeline, replacing the scipy
       label with a value derived from the component's members, and derive `crossing_id` from
       `(water_id, track_id)`. Assert what the id is for: two runs over the same extract
       produce the same ids, and a change to the merge distance — which moves representative
       points and merges different parts — does not change the id of a crossing whose track
       and water are unchanged.
+      Note: the derivation is `notebooks/water_crossings/crossing_ids.py`, beside the
+      notebooks that import it, as `crossing_checks` and `bbox_capture` already are. **v9 is
+      what adopts it** — the change cannot land in v8 without falsifying the record of what
+      was run — so the pipeline still labels components with scipy's numbering until the task
+      below.
+      A track is named by the lexically smallest segment in its component. Grouping is still
+      scipy's `connected_components`; what changes is that its labels are used only to group
+      and never to name. `crossing_id` is a **composite**, `<water_id>:<track_id>`, rather
+      than a name-based UUID as `SessionId` is: both parts are already columns of the row, so
+      hashing them would hide what the id is made of while saying nothing more, and a
+      prediction that fails to match its ground truth is read by eye. The separator is a
+      character the store's partition rule permits, since an id is a candidate partition key.
+      The assertions the task asks for, in `notebooks/water_crossings/tests/`: shuffling the
+      segments leaves every track id unchanged (which is exactly what scipy's own labels fail),
+      a track keeps its name when a re-extraction adds another track elsewhere, and a crossing
+      id follows from the water and the track alone — nothing about the representative part
+      reaches it, which is why retuning the collapse cannot move it.
+      This gives the notebook directory a test home it did not have: a `dev` dependency group
+      pinned to the versions the notebooks name, `testpaths = ["tests"]` so the visualiser
+      module next door is not collected as a suite, and a third line in `just test-python`.
 - [ ] Write `v9.py`: v8's pipeline through to the collapsed representatives, plus the
       canonical ids, writing `water_crossing` to silver through the new module instead of
       exporting to `data/water/<version>/`. Both geometries are written, the projected one
