@@ -16,6 +16,15 @@ build:
 flash: build
     cd shell && espflash flash --monitor target/xtensa-esp32-espidf/debug/spike5-shell
 
+# The same, in release. Worth having for a spike that is measuring how long something takes:
+# the dev profile carries `debug-assertions` and `overflow-checks`, which put a branch on
+# every arithmetic operation in the scan, and builds at `opt-level = "z"` rather than "s".
+build-release:
+    cd shell && cargo build --release
+
+flash-release: build-release
+    cd shell && espflash flash --monitor target/xtensa-esp32-espidf/release/spike5-shell
+
 # Tail the serial console of whatever is already flashed.
 monitor:
     cd shell && espflash monitor
