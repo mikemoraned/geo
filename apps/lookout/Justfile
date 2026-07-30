@@ -78,6 +78,13 @@ ingest-motis *args:
 pack-crossings *args:
     cargo run -p crossings --bin pack_crossings -- {{args}}
 
+# Regenerate the made-up crossings spike 5 carries in flash: as many as the real German
+# set holds, over the same extent, reproducible from the seed. Override with --count /
+# --bbox / --seed. The spike embeds the file, so it has to be rebuilt and reflashed after.
+random-crossings *args:
+    cargo run -p crossings --bin random_crossings -- \
+        --output spikes/m5/spike5-distance/core/src/random-crossings.pointset {{args}}
+
 # Convert the SQLite archive into a rerun .rrd, selecting by time window (and
 # optionally device id prefixes). Requires --since, e.g. `just visualise --since 7d`
 # or `just visualise --since 12h --devices 77a cdf2`. Open the .rrd with `rerun`, or

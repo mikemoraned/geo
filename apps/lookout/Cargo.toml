@@ -49,6 +49,11 @@ arrow = "57.1"
 # arrow, so it carries the same version.
 parquet = "57.1"
 md5 = "0.7"
+rand = "0.10"
+# ChaCha is specified to produce the same stream for the same seed across versions and
+# platforms, which `StdRng` deliberately does not promise — so a seeded dataset stays the
+# same dataset.
+rand_chacha = "0.10"
 tempfile = "3"
 proptest = "1"
 # Motis `map/trips` client: progenitor-generated from the OpenAPI spec (reqwest 0.12),
