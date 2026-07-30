@@ -791,6 +791,12 @@ Steps:
       `unplaceable` rather than written. `--country` is gone from `motis_ingest`, which now
       needs an extract to have been taken, and the partition key both writers use is
       `medallion::COUNTRY` rather than a string each spells for itself.
+      Run over the real store on 2026-07-30: 60,243 captured rows dedup to 5178 legs over
+      1182 trips, all of them placed, written as `country=DE` over four `departure_date`
+      partitions. Note for a store that already holds the old layout: the sweep removes
+      dated partitions within a country and countries the run no longer produces, so the
+      dated directories a pre-`country=` run left at the top level are not its to remove —
+      clear `silver/train_segment` before re-deriving there.
 
 ### Water crossings per session
 
