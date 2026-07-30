@@ -11,7 +11,8 @@
 use medallion::{Geometry, RowError, SilverTarget};
 
 use crate::{
-    SessionRow, SessionSampleRow, TrainSegmentRow, SESSION, SESSION_SAMPLE, TRAIN_SEGMENT,
+    SessionCrossingRow, SessionRow, SessionSampleRow, TrainSegmentRow, WaterCrossingRow, SESSION,
+    SESSION_CROSSING, SESSION_SAMPLE, TRAIN_SEGMENT, WATER_CROSSING,
 };
 
 /// A failure naming a dataset to write to.
@@ -30,7 +31,7 @@ type Definition = fn() -> Result<SilverTarget, RowError>;
 ///
 /// The name comes from the dataset's own definition rather than being spelled again here, so
 /// renaming a dataset moves its entry with it.
-const TARGETS: [(&str, Definition); 3] = [
+const TARGETS: [(&str, Definition); 5] = [
     (SESSION.name, || {
         SilverTarget::of::<SessionRow>(Geometry::LatLonAndProjected)
     }),
@@ -39,6 +40,12 @@ const TARGETS: [(&str, Definition); 3] = [
     }),
     (TRAIN_SEGMENT.name, || {
         SilverTarget::of::<TrainSegmentRow>(Geometry::LatLonAndProjected)
+    }),
+    (WATER_CROSSING.name, || {
+        SilverTarget::of::<WaterCrossingRow>(Geometry::LatLonAndProjected)
+    }),
+    (SESSION_CROSSING.name, || {
+        SilverTarget::of::<SessionCrossingRow>(Geometry::Absent)
     }),
 ];
 

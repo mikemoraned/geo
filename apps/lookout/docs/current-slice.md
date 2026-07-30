@@ -987,10 +987,27 @@ Steps:
       A marimo `--sandbox` notebook can depend on it through inline script metadata plus a
       `[tool.uv.sources]` path — checked with a throwaway script, and recorded in the crate's
       README for the v9 task.
-- [ ] Define `water_crossing` and `session_crossing` in `model`: the columns above, both
+- [x] Define `water_crossing` and `session_crossing` in `model`: the columns above, both
       silver. `water_crossing` is reference-derived, so it partitions `country=DE` as
       `medallion.md` pins; `session_crossing` partitions `crossed_date`, the date of the
       nearest sample, so the same key means the same thing as `sample_date` next door.
+      Note: `model::crossing`, the columns as the diagram has them. `crossing_id` is a
+      `CrossingId` newtype for the reason `SessionId` is one — it is a candidate partition key
+      wherever a reader lays one out by it, so a value that could not name a partition is
+      refused at construction. It carries no `of()` constructor: the id is derived from
+      `(water_id, track_id)` by the pipeline that has those, which is the notebook, and a Rust
+      derivation nothing calls would be a second answer to the same question. `overlap_kind` is
+      an enum stored as its name, as `started_by` is.
+      Both are nameable from python, which is what the two new python tests write them through —
+      and they are the first datasets to exercise two layouts the earlier ones do not:
+      `water_crossing` is partitioned by country alone, and `session_crossing` is dated with no
+      country level at all, since the country partition exists for the projected column's CRS
+      and it has no geometry. That rule is now stated in `medallion.md` rather than left to be
+      inferred from the datasets that happen to exist.
+      Found while doing this: `just test-python` was testing a **stale** extension module. uv
+      caches the built wheel against the extension crate's own sources, so a change to the Rust
+      crates it wraps does not invalidate it — the two new datasets were reported missing by a
+      module built before they existed. The recipe now forces the rebuild.
 - [ ] Make the rail component id canonical in the crossings pipeline, replacing the scipy
       label with a value derived from the component's members, and derive `crossing_id` from
       `(water_id, track_id)`. Assert what the id is for: two runs over the same extract

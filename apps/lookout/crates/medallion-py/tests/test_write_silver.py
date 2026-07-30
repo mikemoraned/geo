@@ -161,12 +161,85 @@ class TestRewriting:
         assert rows == [(1,)]
 
 
+class TestTheCrossingDatasets:
+    """The two layouts the sessions and legs do not exercise: a dataset partitioned by
+    country alone, and a dated one carrying no geometry at all."""
+
+    def test_a_water_crossing_lands_under_its_country(self, store):
+        point = shapely.Point(BERLIN)
+        table = pa.table(
+            {
+                "crossing_id": pa.array(["w1-t1"], pa.string()),
+                "water_id": pa.array(["water-1"], pa.string()),
+                "water_subtype": pa.array(["river"], pa.string()),
+                "water_class": pa.array(["river"], pa.string()),
+                "track_id": pa.array(["track-1"], pa.string()),
+                "rail_id": pa.array(["rail-1"], pa.string()),
+                "rail_class": pa.array(["rail"], pa.string()),
+                "overlap_kind": pa.array(["line"], pa.string()),
+                "overlap_m": pa.array([42.0], pa.float64()),
+                "total_overlap_m": pa.array([58.0], pa.float64()),
+                "merged_parts": pa.array([2], pa.uint32()),
+                "frac": pa.array([0.5], pa.float64()),
+                "extract_id": pa.array(["20260727T193628Z"], pa.string()),
+                "merge_distance_m": pa.array([25.0], pa.float64()),
+                "min_crossing_m": pa.array([5.0], pa.float64()),
+                "geometry": pa.array([shapely.to_wkb(point)], pa.binary()),
+                "geometry_projected": pa.array(
+                    [shapely.to_wkb(shapely.Point(BERLIN_UTM32N))], pa.binary()
+                ),
+                "country": pa.array(["DE"], pa.string()),
+            }
+        )
+
+        written = lookout_medallion.write_silver(
+            "water_crossing", table, root=str(store)
+        )
+
+        assert written.rows == 1
+        assert (store / "silver/water_crossing/country=DE/part-0.parquet").exists()
+        rows = read(
+            store,
+            "SELECT overlap_kind, geometry FROM read_parquet("
+            "'{store}/silver/water_crossing/**/*.parquet')",
+        )
+        assert rows[0][0] == "line"
+        assert shapely.from_wkb(bytes(rows[0][1])).coords[0] == BERLIN
+
+    def test_a_session_crossing_is_dated_and_holds_no_geometry(self, store):
+        table = pa.table(
+            {
+                "session_id": pa.array(["s1"], pa.string()),
+                "crossing_id": pa.array(["w1-t1"], pa.string()),
+                "device_id": pa.array(["device-a"], pa.string()),
+                "crossed_at": pa.array(["2026-07-21T09:14:00Z"], pa.string()).cast(
+                    pa.timestamp("ms", tz="UTC")
+                ),
+                "distance_m": pa.array([12.5], pa.float64()),
+                "samples_within": pa.array([4], pa.uint32()),
+                "match_radius_m": pa.array([50.0], pa.float64()),
+                "crossed_date": pa.array(["2026-07-21"], pa.string()).cast(pa.date32()),
+            }
+        )
+
+        written = lookout_medallion.write_silver(
+            "session_crossing", table, root=str(store)
+        )
+
+        assert written.rows == 1
+        assert (
+            store / "silver/session_crossing/crossed_date=2026-07-21/part-0.parquet"
+        ).exists()
+
+
 class TestWhatIsRefused:
     def test_a_dataset_the_store_does_not_define(self, store):
         table = leg_table(["a"], ["2026-07-21"], ["DE"])
 
-        with pytest.raises(ValueError, match="water_crossing"):
-            lookout_medallion.write_silver("water_crossing", table, root=str(store))
+        with pytest.raises(ValueError, match="crossing_candidates"):
+            lookout_medallion.write_silver(
+                "crossing_candidates", table, root=str(store)
+            )
 
     def test_a_bronze_dataset(self, store):
         """Bronze is what cannot be re-derived, and a table write replaces."""

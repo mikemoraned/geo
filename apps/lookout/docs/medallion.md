@@ -276,16 +276,19 @@ and region for reference data.
 | session samples | `country=<iso3166-1 alpha-2>/sample_date=<date>` |
 | derived transit legs | `country=<iso3166-1 alpha-2>/departure_date=<date>` |
 | reference-derived geo datasets | `country=<iso3166-1 alpha-2>` |
+| observations matched against reference data | `<event>_date=<date>` |
 
 Samples are partitioned by the date of the sample itself, not of its session, so a session
 spanning midnight is split across two partitions; `session_id` is carried as a column and
-reassembles it.
+reassembles it. A dataset recording that an observation met a piece of reference data uses the
+date the two met, so the same key means the same thing as it does on the observation itself.
 
 Observation data is partitioned by country above its date because a projected geometry
 column states one CRS for the whole file and the zone is chosen per country: rows of two
 countries cannot share a file and describe their metres truthfully. The country is the one
 the observation is in, looked up from the reference data's own areas, not a parameter of the
-run that derived it.
+run that derived it. It follows that a dataset holding no geometry has no country level:
+the level exists for the projected column's CRS, and nothing else needs it.
 
 Silver transforms are idempotent: rerunning one over unchanged bronze input produces an
 identical partition, so a partition can be rebuilt rather than incrementally merged.

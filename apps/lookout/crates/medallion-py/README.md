@@ -48,5 +48,8 @@ script metadata, with the path resolved relative to the notebook:
 `uv` builds it with maturin, so nothing needs installing first:
 
 ```
-uv run --directory crates/medallion-py pytest -q     # or `just test-python`, from apps/lookout
+just test-python        # from apps/lookout
 ```
+
+That forces the extension to be rebuilt, since uv caches the wheel against this crate's own
+sources and would otherwise not notice a change to the rust crates it wraps.

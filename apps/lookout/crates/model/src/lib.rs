@@ -11,6 +11,7 @@
 //! and the writer appends [`medallion::GEOMETRY`] and [`medallion::PROJECTED_GEOMETRY`] to
 //! them.
 
+mod crossing;
 mod device;
 mod motis;
 mod overture;
@@ -20,6 +21,10 @@ mod telemetry;
 
 use medallion::DatasetInfo;
 
+pub use crossing::{
+    CrossingId, OverlapKind, SessionCrossingRow, WaterCrossingRow, SESSION_CROSSING,
+    WATER_CROSSING,
+};
 pub use device::{DeviceId, EmptyDeviceId};
 pub use motis::{MotisSegmentRow, TrainSegmentRow, MOTIS_SEGMENT, TRAIN_SEGMENT};
 pub use overture::{ExtractManifestRow, EXTRACT_MANIFEST, OVERTURE_EXTRACT};
@@ -36,7 +41,7 @@ pub use telemetry::{
 ///
 /// Held as [`DatasetInfo`] rather than as the specs themselves: a spec carries its layer in
 /// its type, so datasets of different layers cannot sit in one array.
-pub const ALL: [DatasetInfo; 10] = [
+pub const ALL: [DatasetInfo; 12] = [
     RAW_SAMPLE.info(),
     GPS_READING.info(),
     ACCEL_READING.info(),
@@ -45,6 +50,8 @@ pub const ALL: [DatasetInfo; 10] = [
     TRAIN_SEGMENT.info(),
     SESSION.info(),
     SESSION_SAMPLE.info(),
+    WATER_CROSSING.info(),
+    SESSION_CROSSING.info(),
     OVERTURE_EXTRACT.info(),
     EXTRACT_MANIFEST.info(),
 ];
@@ -82,7 +89,16 @@ mod tests {
             .collect();
         replaceable.sort_unstable();
 
-        assert_eq!(replaceable, ["session", "session_sample", "train_segment"]);
+        assert_eq!(
+            replaceable,
+            [
+                "session",
+                "session_crossing",
+                "session_sample",
+                "train_segment",
+                "water_crossing"
+            ]
+        );
     }
 
     /// The datasets that declare a partition key, as `(dataset name, key)`.
@@ -158,6 +174,8 @@ mod tests {
         check_rows_of::<TrainSegmentRow>();
         check_rows_of::<SessionRow>();
         check_rows_of::<SessionSampleRow>();
+        check_rows_of::<WaterCrossingRow>();
+        check_rows_of::<SessionCrossingRow>();
         check_rows_of::<ExtractManifestRow>();
     }
 }

@@ -45,10 +45,12 @@ test-no-docker: test-python
     cargo nextest run --workspace --profile no-docker
 
 # Run the Python tests: the visualise tool, and the store's python writer driven from
-# pyarrow and DuckDB (uv builds the extension module with maturin on the first run).
+# pyarrow and DuckDB (uv builds the extension module with maturin; nothing to install first).
+# The rebuild is forced because uv caches the built wheel against the extension crate's own
+# sources — a change to the rust crates it wraps would otherwise be tested as the last build.
 test-python:
     uv run --directory visualise pytest -q
-    uv run --directory crates/medallion-py pytest -q
+    uv run --directory crates/medallion-py --reinstall-package lookout-medallion pytest -q
 
 # Run the end_to_end tests against real services (release mode), with real
 # credentials injected from 1Password. Hits the real upstash redis.
