@@ -113,6 +113,10 @@ pub struct ViewModel {
     pub clock: String,
     pub latitude: String,
     pub longitude: String,
+    /// Satellites and HDOP. On a train the panel is the only output — the serial console
+    /// needs a laptop — and without this there is no way to tell a jittering distance from a
+    /// jittering fix.
+    pub quality: String,
     /// How many crossings are inside [`WITHIN_METRES`] — the predictor's half of the scan,
     /// shown so that both halves are visible on the panel.
     pub within: String,
@@ -132,18 +136,22 @@ impl Gnss {
             return;
         }
 
-        let (Some(latitude), Some(longitude)) = (model.sentences.latitude, model.sentences.longitude)
+        let (Some(latitude), Some(longitude)) =
+            (model.sentences.latitude, model.sentences.longitude)
         else {
             return;
         };
 
-        if let (Ok(latitude), Ok(longitude)) = (Latitude::new(latitude), Longitude::new(longitude)) {
+        if let (Ok(latitude), Ok(longitude)) = (Latitude::new(latitude), Longitude::new(longitude))
+        {
             let fix = GnssFix {
                 latitude,
                 longitude,
                 at: model.sentences.fix_time,
             };
-            let moved = model.fix.map(|last| last.latitude != fix.latitude || last.longitude != fix.longitude);
+            let moved = model
+                .fix
+                .map(|last| last.latitude != fix.latitude || last.longitude != fix.longitude);
             model.fix = Some(fix);
 
             // Sentences arrive a dozen a second and most repeat the same position, so the
@@ -162,7 +170,10 @@ impl Gnss {
         model.nearby = carried::crossings().ok().map(|crossings| {
             scan::nearby(
                 &crossings,
-                Point::new(fix.longitude.degrees() as f32, fix.latitude.degrees() as f32),
+                Point::new(
+                    fix.longitude.degrees() as f32,
+                    fix.latitude.degrees() as f32,
+                ),
                 NEAREST_ON_SCREEN,
                 WITHIN_METRES,
             )
@@ -222,6 +233,11 @@ impl App for Gnss {
                 .fix
                 .map(|fix| format!("{:.5}", fix.longitude.degrees()))
                 .unwrap_or_default(),
+            quality: match (model.sentences.num_of_fix_satellites, model.sentences.hdop) {
+                (Some(satellites), Some(hdop)) => format!("{satellites}sat h{hdop:.1}"),
+                (Some(satellites), None) => format!("{satellites}sat"),
+                _ => String::new(),
+            },
             within: match (&model.fix, &model.nearby) {
                 (None, _) => String::new(),
                 (Some(_), None) => NO_CROSSINGS.to_string(),
@@ -264,8 +280,7 @@ mod tests {
     ///
     /// They encode a fix at 50.5N 8.5E and a second slightly north-east of it.
     const RMC_FIX: &str = "GNRMC,204329.00,A,5030.00000,N,00830.00000,E,4.13,79.94,290726,,,A,V";
-    const GGA_FIX: &str =
-        "GNGGA,204329.00,5030.00000,N,00830.00000,E,1,06,4.4,262.46,M,45.12,M,,";
+    const GGA_FIX: &str = "GNGGA,204329.00,5030.00000,N,00830.00000,E,1,06,4.4,262.46,M,45.12,M,,";
     const GGA_LATER: &str =
         "GNGGA,204330.00,5030.00600,N,00830.00900,E,1,06,4.4,262.46,M,45.12,M,,";
     /// A stationary receiver leaves the course field **empty** (the `0.08,,` here) because
@@ -414,6 +429,25 @@ mod tests {
     /// line does not wrap, it runs off the side.
     const CHARACTERS_PER_LINE: usize = 13;
 
+    /// Both are needed to read a jittering distance: 8 satellites at HDOP 2.4 wanders about a
+    /// metre, 6 at HDOP 4.4 wanders metres a second and lies about its speed too.
+    #[test]
+    fn the_fix_reports_how_good_it_is() {
+        let core = core();
+
+        core.process_event(Event::Sentence(sentence(GGA_FIX)));
+
+        assert_eq!(core.view().quality, "6sat h4.4");
+    }
+
+    /// The widest it can get is still a line: two digits of satellites and a two-digit HDOP.
+    #[test]
+    fn the_quality_line_fits_at_its_widest() {
+        let widest = format!("{}sat h{:.1}", 12, 99.9);
+
+        assert!(widest.chars().count() <= CHARACTERS_PER_LINE, "{widest:?}");
+    }
+
     #[test]
     fn nothing_is_said_about_crossings_until_there_is_a_fix() {
         let core = core();
@@ -465,9 +499,15 @@ mod tests {
         core.process_event(Event::Sentence(sentence(GGA_FIX)));
         let view = core.view();
 
-        for line in [&view.clock, &view.latitude, &view.longitude, &view.within]
-            .into_iter()
-            .chain(view.nearest.iter())
+        for line in [
+            &view.clock,
+            &view.latitude,
+            &view.longitude,
+            &view.quality,
+            &view.within,
+        ]
+        .into_iter()
+        .chain(view.nearest.iter())
         {
             assert!(
                 line.chars().count() <= CHARACTERS_PER_LINE,
@@ -481,7 +521,16 @@ mod tests {
     /// format for.
     #[test]
     fn no_distance_can_make_a_line_too_long() {
-        for metres in [0.0, 999.4, 999.6, 1_000.0, 99_949.0, 100_000.0, 999_999.0, 20_015_000.0] {
+        for metres in [
+            0.0,
+            999.4,
+            999.6,
+            1_000.0,
+            99_949.0,
+            100_000.0,
+            999_999.0,
+            20_015_000.0,
+        ] {
             let line = line(&Near {
                 crossing: crate::pointset::Point {
                     id: u32::MAX,

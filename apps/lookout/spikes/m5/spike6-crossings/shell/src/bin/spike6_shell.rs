@@ -37,9 +37,10 @@ const SPI_BAUDRATE: u32 = 26;
 const CHARACTERS_PER_LINE: usize = 13;
 const LINE_HEIGHT: i32 = 22;
 const MARGIN_X: i32 = 4;
-/// Baselines, not tops: the fix occupies four lines from here, and the crossings start below
-/// a gap wide enough to read as a separate block.
-const FIRST_LINE_Y: i32 = 24;
+/// Baselines, not tops: the fix and its quality occupy five lines from here, and the
+/// crossings start below a gap wide enough to read as a separate block. The last of them
+/// lands at 218, clear of a 240-pixel panel.
+const FIRST_LINE_Y: i32 = 20;
 const CROSSINGS_Y: i32 = 130;
 
 /// The GPS/BDS Unit v1.1 (AT6668) talks NMEA 0183 at 115200 8N1.
@@ -228,9 +229,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if !view.nearest.is_empty()
                         && shown.as_ref().map(|last| &last.nearest) != Some(&view.nearest)
                     {
+                        // Heap alongside the timing so one field run answers the footprint
+                        // question too: the columns are never copied out of flash, so this
+                        // should sit flat however many scans have run.
                         log::info!(
-                            "scanned {crossings} crossings in {}us",
+                            "scanned {crossings} crossings in {}us; {} free heap, {} bytes of stack never used",
                             absorbing.as_micros(),
+                            unsafe { esp_idf_svc::sys::esp_get_free_heap_size() },
+                            unsafe {
+                                esp_idf_svc::sys::uxTaskGetStackHighWaterMark(std::ptr::null_mut())
+                            },
                         );
                     }
                     if shown.as_ref() != Some(&view) {
@@ -238,7 +246,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             (view.clock.as_str(), FIRST_LINE_Y),
                             (view.latitude.as_str(), FIRST_LINE_Y + LINE_HEIGHT),
                             (view.longitude.as_str(), FIRST_LINE_Y + 2 * LINE_HEIGHT),
-                            (view.within.as_str(), FIRST_LINE_Y + 3 * LINE_HEIGHT),
+                            (view.quality.as_str(), FIRST_LINE_Y + 3 * LINE_HEIGHT),
+                            (view.within.as_str(), FIRST_LINE_Y + 4 * LINE_HEIGHT),
                         ];
                         // The list shortens as well as changes — from five crossings to none
                         // when a fix is lost — so every line it can occupy is written every

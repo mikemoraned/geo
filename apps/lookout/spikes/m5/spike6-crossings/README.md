@@ -39,6 +39,28 @@ radii.
 They are, as it happens, five crossings of the same braid of the Elbe a couple of kilometres
 north of the station — which is what the dataset should say about Dresden.
 
+## What the panel shows
+
+```
+20:43:29        clock, from the fix's own UTC
+51.05821        latitude
+13.73410        longitude
+8sat h2.4       satellites and HDOP
+3 in 5km        crossings within 5km — the predictor's half of the scan
+
+2620a9 2.3km    the five nearest, nearest first
+6ad4b6 2.3km
+0ea207 2.3km
+e6c631 2.3km
+4efedc 2.4km
+```
+
+Fix quality is on the panel, not just in the log, because in the field the panel is the only
+output — the serial console needs a laptop. Without it there is no way to tell a distance that
+is jittering from a *fix* that is jittering, and spike 3 measured how much that matters: 8
+satellites at HDOP 2.4 wanders about a metre, but 6 at HDOP 4.4 wanders 4.5 m/s and reports a
+false 4-knot speed with it.
+
 ## The lat/lon representation held up
 
 `f32` degrees were chosen on a measured ≤0.21 m round-trip error over this set. Against real
