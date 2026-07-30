@@ -797,8 +797,29 @@ Steps:
       dated partitions within a country and countries the run no longer produces, so the
       dated directories a pre-`country=` run left at the top level are not its to remove —
       clear `silver/train_segment` before re-deriving there.
-
-### Water crossings per session
+- [ ] Fill in `notebooks/sessions/v2.py`: what `v1` shows, plus the trains recorded the same
+      day. Seeing a trace against the timetabled legs beside it is how "was this journey on
+      that train" stops being a guess, and it is the comparison the crossings and predictor
+      steps will want — drawn against a session rather than against loose points.
+      A new notebook rather than an edit of `v1`, as `water_crossings` does it: `v1` stays
+      the record of what was looked at when the sessions were first derived.
+      It reads `train_segment` through the same `read_silver`, which already returns both
+      geometry columns. **The same day means the same partition date**: a leg is shown with a
+      session when its `departure_date` equals the session's `start_date`. That is the simple
+      reading rather than the exact one — a session starting at 23:50 and a leg departing at
+      00:10 are one journey to a reader and different days to the store — and taking it
+      deliberately is enough until something needs better.
+      The thing to design around is volume: 2026-07-22 holds 1835 legs against 9 sessions, so
+      drawing a day of trains raw would bury the traces. **Narrow the legs to those within a
+      distance of a session that is showing**, and make that follow the filters rather than
+      being fixed: whichever day and device are selected decides which sessions are on the
+      map, and only the legs running near one of *those* are drawn. The distance is a control
+      of its own, since what counts as "near" is the question being explored — a few hundred
+      metres to see which line a trace actually ran along, kilometres to see what else was
+      moving nearby. Distances are metric, so the test is on the projected geometry both
+      datasets carry, through a library nearest-join rather than a hand-rolled one. Draw them
+      so the eye can tell which is which: the trains thin and muted, the sessions strong,
+      since the question being asked is always "which of these is my trace near".
 
 We probably need to here productionise the pipeline we prototyped in apps/lookout/notebooks/water_crossings/v8.py. However, it's ok to keep it as a notebook, or chain of notebooks, for now.
 
