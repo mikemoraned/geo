@@ -5,7 +5,7 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use clap::Parser;
-use crossings::Bbox;
+use crossings::{Bbox, silver};
 
 /// The water_crossings notebook's representative-point export: one row per crossing.
 const DEFAULT_INPUT: &str = "data/water/v8/crossing_reps.parquet";
@@ -42,6 +42,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         bbox = args.bbox.map(|bbox| bbox.to_string()),
         "packing crossings",
     );
+
+    let read = silver::read(&args.input)?;
+    let crossings: Vec<_> = match args.bbox {
+        Some(window) => read
+            .into_iter()
+            .filter(|crossing| window.contains(crossing.position.x, crossing.position.y))
+            .collect(),
+        None => read,
+    };
+
+    tracing::info!(crossings = crossings.len(), "read crossings");
 
     Ok(())
 }

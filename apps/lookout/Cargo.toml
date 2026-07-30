@@ -44,6 +44,10 @@ datafusion = "52.5"
 # Must match the arrow version SedonaDB/DataFusion pin, so `RecordBatch`es returned by
 # queries line up with the arrow types we decode them with.
 arrow = "57.1"
+# Read a GeoParquet file directly, with no engine in front of it: the crossings packer wants
+# a few columns off local disk, which is `parquet`'s own reader. Released in lockstep with
+# arrow, so it carries the same version.
+parquet = "57.1"
 md5 = "0.7"
 tempfile = "3"
 proptest = "1"

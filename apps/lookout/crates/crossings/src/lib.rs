@@ -5,5 +5,7 @@
 //! that is this crate's whole job.
 
 pub mod bbox;
+pub mod silver;
 
 pub use bbox::{Bbox, BboxError};
+pub use silver::{Crossing, ReadError};
