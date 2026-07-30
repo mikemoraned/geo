@@ -20,6 +20,13 @@ NimBLE running — but because the predictor this core is a step towards does. B
 costs one associated type (`type Capabilities = ()`, dropped in later versions) and a `_caps`
 argument to `update`. Spike 4's README has the evidence.
 
+## The console
+
+Spike 3 echoed every NMEA sentence, so a monitor session doubled as a capture. This one does
+not: a dozen-plus sentences a second bury the one line worth reading, which is how long a scan
+took. Fixtures for the core's tests came from spike 3 and have not changed, so nothing is lost
+— go back to `spike3-gnss` and its `just capture` if more are needed.
+
 ## The point set
 
 Comes from `just pack-crossings` in `apps/lookout` — see `crates/crossings/README.md` for the

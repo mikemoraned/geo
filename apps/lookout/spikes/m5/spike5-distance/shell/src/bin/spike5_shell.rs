@@ -1,4 +1,4 @@
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use chrono::{DateTime, Utc};
 use crux_core::Core;
@@ -172,11 +172,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stack_unused = unsafe { esp_idf_svc::sys::uxTaskGetStackHighWaterMark(std::ptr::null_mut()) };
     log::info!("core up; {stack_unused} bytes of main task stack never used");
 
+    // Reported at boot because it is the one thing about the built-in crossings that can be
+    // checked without a fix — and because a set that fails to load here never will.
+    let crossings = match spike5_core::carried::crossings() {
+        Ok(carried) => carried.len(),
+        Err(unreadable) => {
+            log::error!("built-in crossings unreadable: {unreadable}");
+            0
+        }
+    };
+    log::info!("carrying {crossings} crossings");
+
     let mut ticked = Instant::now();
     // NMEA sentences arrive split across reads, so bytes accumulate here until a newline.
     let mut pending = String::new();
     // What the panel currently shows, so an unchanged view model costs no SPI traffic.
     let mut shown: Option<ViewModel> = None;
+    // How long the last sentence took the core to absorb. Read when the nearest crossings
+    // turn out to have changed, which is exactly when that sentence included a scan.
+    let mut absorbing = Duration::ZERO;
 
     loop {
         let read = gnss.read(&mut bytes, READ_TIMEOUT.ticks()).unwrap_or(0);
@@ -187,12 +201,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let sentence: String = pending.drain(..=end).collect();
             let sentence = sentence.trim().to_string();
 
-            // Echoed verbatim so a monitor session doubles as a capture: the core's tests
-            // currently run on hand-written sentences, and this is where real ones come
-            // from. `just capture` saves the console to a file.
-            log::info!("{sentence}");
-
+            let started = Instant::now();
             effects.extend(core.process_event(Event::Sentence(sentence)));
+            absorbing = started.elapsed();
         }
 
         if ticked.elapsed().as_secs() >= 1 {
@@ -211,6 +222,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // which change nothing on screen. Redrawing each one holds the SPI bus
                     // long enough to lose incoming NMEA, so unchanged views are skipped.
                     let view = core.view();
+                    // The core only scans when the position moves, so a changed list of
+                    // crossings dates the scan to the sentence just absorbed — which is what
+                    // makes that timing the scan's, rather than a whole loop's.
+                    if !view.nearest.is_empty()
+                        && shown.as_ref().map(|last| &last.nearest) != Some(&view.nearest)
+                    {
+                        log::info!(
+                            "scanned {crossings} crossings in {}us",
+                            absorbing.as_micros(),
+                        );
+                    }
                     if shown.as_ref() != Some(&view) {
                         let fix = [
                             (view.clock.as_str(), FIRST_LINE_Y),

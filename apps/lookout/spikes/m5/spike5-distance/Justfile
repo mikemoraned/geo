@@ -19,8 +19,3 @@ flash: build
 # Tail the serial console of whatever is already flashed.
 monitor:
     cd shell && espflash monitor
-
-# Capture sentences from a real fix into a file, to replace the core's test fixtures.
-# Needs sky view. Ctrl-C when you have enough.
-capture out="captured.nmea":
-    cd shell && espflash monitor | grep --line-buffered -o '\$G.*' | tee ../{{out}}
