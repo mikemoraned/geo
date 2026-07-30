@@ -3,10 +3,10 @@
 Spike 3's GNSS core and screen, plus a BLE GATT service that notifies each new position to a
 subscribed client. Completes the slice: time + lat/lon on the screen *and* over BLE.
 
-> **This spike crashes intermittently and the cause is unresolved.** BLE works — position is
-> readable and notifying in a BLE explorer — but the device reboots anywhere from 4 seconds to
-> 7 minutes in. See [Known issue](#known-issue-intermittent-reboot-with-ble-enabled). Do not
-> build the predictor on this arrangement until it is understood.
+> **`crux_core` is pinned to `=0.16.2` deliberately.** On 0.19 this spike reboots every
+> 4s–7min once BLE is enabled; on 0.16.2 it runs indefinitely. The cause was never identified,
+> only avoided — see [Known issue](#known-issue-intermittent-reboot-with-ble-enabled) before
+> changing that pin.
 
 ```sh
 just test      # run the core's tests on the laptop
@@ -53,9 +53,20 @@ exactly the logic worth testing off-device.
 
 ## Known issue: intermittent reboot with BLE enabled
 
-The device reboots on its own, between 4 seconds and 7 minutes after boot, with or without a
-client connected. Spike 3 — the same core, display and GNSS code without Bluetooth — runs
-indefinitely, so enabling BLE is what introduces it.
+**Status: avoided by pinning `crux_core = "=0.16.2"`. Cause unidentified.**
+
+On `crux_core` 0.19 the device reboots on its own between 4 seconds and 7 minutes after boot,
+with or without a client connected. Spike 3 — the same core, display and GNSS code without
+Bluetooth — runs indefinitely, so enabling BLE is what brings it out.
+
+On 0.16.2 the same spike ran 30 minutes with a client connected *and* a real fix, so both the
+`render` and `Broadcast` effect paths were exercised. The port between the two versions is a
+single associated type (`type Capabilities = ()`), which later versions dropped — the
+`#[effect]` API is otherwise identical, so the pin costs almost nothing today.
+
+What that narrows it to: something introduced between 0.17 and 0.19. Bisecting those two would
+locate it precisely, at one flash and a 15-minute soak each; not done, because the pin already
+unblocks the work and we are not reporting it.
 
 **The fault is always inside crux's per-effect machinery.** Two signatures, both reproducible:
 
@@ -86,17 +97,15 @@ each one allocates channels, an `Arc` and a slab entry — so this path runs con
 | Allocation churn | Cutting events ~15x (only `RMC`/`GGA` reach the core) did not stop it |
 | Model on the fragmented heap | Same crash with the core un-boxed, back on main's stack as in spike 3 |
 
-**Not yet tried**, roughly in order of expected value:
-
-1. An older `crux_core` (pre-0.19 `Command` rework) — cheap, and would confirm or clear the
-   effect machinery.
-2. Removing crux from this shell entirely, calling the parse/format logic directly. Proves BLE
-   is innocent, but leaves "Crux + BLE" — the combination the predictor needs — unproven.
-3. A minimal reproduction: BLE plus a timer-driven synthetic fix, no UART, no display.
-
 Guesses that were confidently wrong along the way, recorded so they are not re-run: logging
 from GATT callbacks, PSRAM, allocation volume, and the boxed model. Each looked plausible and
-each was contradicted by the next crash.
+each was contradicted by the next crash. The version pin was the fifth hypothesis and the
+first that held.
+
+If the pin ever has to move — a later spike wanting newer crux — the untried options are
+bisecting 0.17/0.18 to find the change, pre-`Command` crux 0.10 (a real port: custom
+capabilities instead of `#[effect]`), or dropping crux from the device shell, which would
+forfeit the shared-core argument that put it here.
 
 ## Notes
 

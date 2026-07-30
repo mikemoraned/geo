@@ -28,7 +28,10 @@ esp-idf-svc = { version = "0.52.1", features = ["critical-section"] }
 mipidsi = "0.10.0"
 embedded-graphics = "0.8.2"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
-crux_core = "0.19.0"
+# Pinned while investigating the intermittent reboot: see README "Known issue". 0.19 and 0.16
+# share the same `#[effect]` API, so this is a near drop-in test of whether the fault is a
+# regression in the newer Command/crossbeam internals.
+crux_core = "=0.16.2"
 # Imported directly, not over FFI: a Rust shell needs no typegen or bridge.
 spike4-core = { path = "../core" }
 esp32-nimble = "0.12.0"

@@ -60,19 +60,21 @@ startup log (sizes, probe results) so one flash round-trip answers the question.
   for a GNSS receiver that bursts ~1.5KB of sentences once a second. Overruns are silent:
   they splice two sentences together so the checksum fails. 4096 is comfortable.
 
-## Crux + BLE reboots the device (unresolved)
+## Pin `crux_core` to `=0.16.2` on device
 
-With `esp32-nimble` running, the device reboots every 4s–7min, always inside `crux_core` 0.19's
-per-effect `Command`/crossbeam machinery: a null `&self` in `CommandContext::clone`, or endless
-recursion through `posix_memalign`. Without BLE (spike 3) the identical core runs indefinitely.
+With `esp32-nimble` running, `crux_core` 0.19 reboots the device every 4s–7min, always inside
+its per-effect `Command`/crossbeam machinery: a null `&self` in `CommandContext::clone`, or
+endless recursion through `posix_memalign`. Without BLE the identical core runs indefinitely.
 
-Measurement rules out stack overflow (watchpoint silent, high-water constant), both task
+**0.16.2 is stable** (30 min, client connected, real fix). The port is one associated type —
+`type Capabilities = ()`, which later versions dropped — and the `#[effect]` API is otherwise
+identical. The cause was never found, only avoided: it is a change between 0.17 and 0.19.
+
+Measurement ruled out stack overflow (watchpoint silent, high-water constant), both task
 stacks, heap exhaustion and fragmentation (free heap and largest block flat to the byte up to
 the crash), heap overrun (comprehensive poisoning silent), PSRAM, allocation volume, and
 whether the model is boxed. Don't re-run those. Details, and the four confidently wrong
-diagnoses, are in `apps/lookout/spikes/m5/spike4-ble/README.md`.
-
-Untried: an older `crux_core`, dropping crux from the device shell, a minimal repro.
+diagnoses that preceded the pin, are in `apps/lookout/spikes/m5/spike4-ble/README.md`.
 
 ## The GPS/BDS Unit v1.1 (AT6668)
 

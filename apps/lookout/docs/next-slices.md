@@ -62,19 +62,23 @@ I think at this point we need to cleanly separate our bits of data processing an
 Run the real predictor on the M5StickC PLUS2, fed by its own GPS unit rather than by replayed
 traces — the point the device spikes were building towards.
 
-### Blocker inherited from the device spikes
+### Constraint inherited from the device spikes: `crux_core` is pinned
 
-**Crux + BLE reboots the device intermittently** (4 seconds to 7 minutes), always inside
-`crux_core`'s per-effect `Command`/crossbeam machinery. Spike 3 — the same core, display and
-GNSS without Bluetooth — is stable, so it is the combination that fails. Stack overflow, both
-task stacks, heap exhaustion, fragmentation, heap overrun, PSRAM and allocation volume are all
-ruled out by measurement; the evidence and the eliminated hypotheses are in
-`apps/lookout/spikes/m5/spike4-ble/README.md`.
+**`crux_core` must stay pinned at `=0.16.2` on device.** On 0.19, Crux + BLE reboots the
+M5 every 4 seconds to 7 minutes, always inside crux's per-effect `Command`/crossbeam machinery.
+Pinning 0.16.2 fixes it — 30 minutes stable with a client connected and a real fix — but the
+cause was never identified, only avoided; it is some change between 0.17 and 0.19. Stack
+overflow, both task stacks, heap exhaustion, fragmentation, heap overrun, PSRAM, allocation
+volume and model placement were all ruled out by measurement. Evidence and the four wrong
+diagnoses are in `apps/lookout/spikes/m5/spike4-ble/README.md`.
 
-This has to be settled before a predictor runs on the device, because `App::update` returns a
-`Command` per event and that is the path that fails. The untried options are an older
-`crux_core`, dropping crux from the device shell (which would forfeit the shared-core
-argument), or a minimal reproduction. Deciding between them is part of this slice.
+Two consequences for this slice:
+
+- The predictor core has to compile against 0.16.2's API (one extra associated type,
+  `type Capabilities = ()`), so don't adopt newer crux features in the shared core.
+- If a newer crux becomes necessary, the work is bisecting 0.17/0.18 to find the change (one
+  flash and a 15-minute soak each), or dropping crux from the device shell — which would
+  forfeit the shared-core argument that justified Crux in the first place.
 
 ### What the spikes already established
 

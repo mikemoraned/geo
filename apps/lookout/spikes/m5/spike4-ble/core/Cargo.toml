@@ -10,7 +10,10 @@ edition = "2024"
 rust-version = "1.90"
 
 [dependencies]
-crux_core = "0.19.0"
+# Pinned while investigating the intermittent reboot: see README "Known issue". 0.19 and 0.16
+# share the same `#[effect]` API, so this is a near drop-in test of whether the fault is a
+# regression in the newer Command/crossbeam internals.
+crux_core = "=0.16.2"
 serde = { version = "1", features = ["derive"] }
 # `default-features = false` drops chrono's `clock` feature, and with it `iana-time-zone`,
 # which has no business on the device. The core is handed the time rather than reading it.

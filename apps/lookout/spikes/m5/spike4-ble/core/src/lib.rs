@@ -153,8 +153,16 @@ impl App for Gnss {
     type Model = Model;
     type ViewModel = ViewModel;
     type Effect = Effect;
+    /// Unused: side-effects are described by the returned `Command`. The associated type is
+    /// required by this crux version and was dropped in later ones.
+    type Capabilities = ();
 
-    fn update(&self, event: Event, model: &mut Model) -> Command<Effect, Event> {
+    fn update(
+        &self,
+        event: Event,
+        model: &mut Model,
+        _caps: &(),
+    ) -> Command<Effect, Event> {
         match event {
             Event::Tick(now) => {
                 model.now = Some(now);
