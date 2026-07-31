@@ -1026,6 +1026,9 @@ Steps:
       hashing them would hide what the id is made of while saying nothing more, and a
       prediction that fails to match its ground truth is read by eye. The separator is a
       character the store's partition rule permits, since an id is a candidate partition key.
+      **Superseded by the first run of v9 below**: `(water_id, track_id)` turned out not to
+      identify a crossing, so the id gained the place the two meet. The composite form and the
+      reasons for it stand.
       The assertions the task asks for, in `notebooks/water_crossings/tests/`: shuffling the
       segments leaves every track id unchanged (which is exactly what scipy's own labels fail),
       a track keeps its name when a re-extraction adds another track elsewhere, and a crossing
@@ -1034,7 +1037,7 @@ Steps:
       This gives the notebook directory a test home it did not have: a `dev` dependency group
       pinned to the versions the notebooks name, `testpaths = ["tests"]` so the visualiser
       module next door is not collected as a suite, and a third line in `just test-python`.
-- [ ] Write `v9.py`: v8's pipeline through to the collapsed representatives, plus the
+- [x] Write `v9.py`: v8's pipeline through to the collapsed representatives, plus the
       canonical ids, writing `water_crossing` to silver through the new module instead of
       exporting to `data/water/<version>/`. Both geometries are written, the projected one
       in the country's zone (EPSG:25832 for DE, from `medallion::Country`, not a constant in
@@ -1042,6 +1045,41 @@ Steps:
       output is judged — but the parquet/GeoArrow export cells go, since the store now holds
       the result. As with v8, this is a new version rather than an edit of v8: v8 is the
       record of what was run against that extract.
+
+      **Running it refuted the slice's decision that `crossing_id` follows from
+      `(water_id, track_id)`.** That pair is not unique: 393 pairs hold between 2 and 13
+      crossings, 1011 rows in all, because the collapse merges parts *within* a distance — a
+      line following a valley crosses the river beside it again and again, and those are
+      separate sightings rather than one. Adding `rail_id` does not settle it either; the
+      thirteen lie on a single segment. So a crossing is now named by **where** the two meet as
+      well: `<water_id>:<track_id>:<rail_id>@<frac>`, the position written to six decimal
+      places — a centimetre on a 10 km segment, fixed width so ids compare as strings.
+      Position rather than an ordinal along the track, so a crossing that appears or disappears
+      does not renumber its neighbours. What this cannot survive is a retune that moves which
+      part represents a crossing, since the position is that part's; a crossing whose merged
+      parts are unchanged keeps its id.
+
+      The write is a **run button**, not something the collapse sliders do — a slider that
+      silently replaced a silver dataset on every drag would be a trap. `mo.running_in_notebook()`
+      gates it, so running the notebook as a script writes without asking, which is what the
+      recipe below will drive.
+
+      Run over the real store on 2026-07-31, at the pinned extract `20260727T193628Z` and the
+      default tuning (merge 100 m, min crossing 5 m): **5749 crossings in DE, 5749 distinct
+      ids**, over 2916 tracks and 2982 water bodies — 3143 line overlaps and 2606 point ones.
+      By water class: 4479 river, 875 canal, 158 water, 61 stream, 41 pond, 27 lake. Median
+      `merged_parts` is 1 and the largest crossing merges 45 parts. The file is GeoParquet
+      1.1.0 with both geometries as WKB, `geometry` in OGC:CRS84 and `geometry_projected` in
+      EPSG:25832 — the zone read from the store through the module rather than named in the
+      notebook, which is what stops the two disagreeing.
+
+      Two traps found in passing. The stale-wheel one bites notebooks too: a run picked up a
+      `lookout_medallion` built before `projected_crs` existed, because uv caches the built
+      wheel against the extension crate's own sources — `--reinstall-package lookout-medallion`
+      is needed after touching the rust crates it wraps, and the recipe below must carry it.
+      And the pipeline cannot run under the sandbox as it stands: DuckDB installs its spatial
+      extension into `$HOME/.duckdb`, which is not writable there, so this run was made with
+      `HOME` pointed at a scratch directory.
 - [ ] Keep `crossing_checks.py` and `test_cases.geojson` running, but **against the silver
       dataset read back**, not against the in-memory `reps_v5_gdf`. That is what makes the
       cases a check on the productionised artefact rather than on the notebook's own state,

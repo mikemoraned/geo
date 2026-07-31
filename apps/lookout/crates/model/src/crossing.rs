@@ -35,9 +35,13 @@ pub const SESSION_CROSSING: DatasetSpec<layers::Silver> =
 
 /// Identifies one crossing, on the crossing and on every record of it having been passed.
 ///
-/// Derived from what the crossing *is* — the water and the stretch of track that meet — so a
-/// ground truth recorded by one run and a prediction made by another refer to the same
-/// crossing, and a rerun over the same reference data lands on the same ids.
+/// Derived from what the crossing *is* — the water, the stretch of track, and where along that
+/// track the two meet — so a ground truth recorded by one run and a prediction made by another
+/// refer to the same crossing, and a rerun over the same reference data lands on the same ids.
+///
+/// The place is part of the identity because one track crosses one body of water more than
+/// once: a line following a valley crosses the river beside it repeatedly, and those are
+/// separate sightings rather than one.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct CrossingId(String);

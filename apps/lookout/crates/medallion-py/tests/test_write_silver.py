@@ -20,6 +20,7 @@ import lookout_medallion
 BERLIN = (13.404954, 52.520008)
 FRANKFURT = (8.682127, 50.110924)
 BERLIN_UTM32N = (798809.63, 5828000.60)
+PROJECTED_CRS = "EPSG:25832"
 FRANKFURT_UTM32N = (477271.45, 5551012.24)
 
 
@@ -275,3 +276,15 @@ class TestWhatIsRefused:
             lookout_medallion.write_silver("train_segment", table, root=str(store))
 
         assert not (store / "silver").exists()
+
+
+class TestTheProjectedCrs:
+    def test_a_country_names_the_zone_the_store_projects_it_into(self):
+        assert lookout_medallion.projected_crs("DE") == PROJECTED_CRS
+
+    def test_the_code_is_read_in_either_case(self):
+        assert lookout_medallion.projected_crs("de") == PROJECTED_CRS
+
+    def test_a_country_the_store_does_not_know(self):
+        with pytest.raises(ValueError, match="ZZ"):
+            lookout_medallion.projected_crs("ZZ")

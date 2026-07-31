@@ -52,4 +52,9 @@ just test-python        # from apps/lookout
 ```
 
 That forces the extension to be rebuilt, since uv caches the wheel against this crate's own
-sources and would otherwise not notice a change to the rust crates it wraps.
+sources and would otherwise not notice a change to the rust crates it wraps. A notebook run
+needs the same, for the same reason:
+
+```
+uv run --no-project --reinstall-package lookout-medallion <notebook>.py
+```

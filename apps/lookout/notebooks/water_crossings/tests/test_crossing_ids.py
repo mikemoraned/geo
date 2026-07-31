@@ -8,7 +8,13 @@ import random
 
 import pytest
 
-from crossing_ids import SEPARATOR, crossing_id, crossing_ids, track_ids
+from crossing_ids import (
+    POSITION,
+    SEPARATOR,
+    crossing_id,
+    crossing_ids,
+    track_ids,
+)
 
 # A connector shared by two segments joins them; `c9` is on one segment only.
 SEGMENTS = [
@@ -66,33 +72,56 @@ class TestNamingATrack:
 
 
 class TestNamingACrossing:
-    def test_the_same_water_and_track_name_the_same_crossing(self):
-        assert crossing_id("water-1", "seg-a") == crossing_id("water-1", "seg-a")
+    def test_the_same_place_names_the_same_crossing(self):
+        assert crossing_id("water-1", "seg-a", "seg-a", 0.5) == crossing_id(
+            "water-1", "seg-a", "seg-a", 0.5
+        )
 
     def test_a_different_water_or_track_is_a_different_crossing(self):
-        assert crossing_id("water-1", "seg-a") != crossing_id("water-2", "seg-a")
-        assert crossing_id("water-1", "seg-a") != crossing_id("water-1", "seg-b")
+        assert crossing_id("water-1", "seg-a", "seg-a", 0.5) != crossing_id(
+            "water-2", "seg-a", "seg-a", 0.5
+        )
+        assert crossing_id("water-1", "seg-a", "seg-a", 0.5) != crossing_id(
+            "water-1", "seg-b", "seg-b", 0.5
+        )
 
-    def test_an_id_does_not_depend_on_the_part_that_represents_the_crossing(self):
-        """Retuning the collapse moves the representative part and merges different parts.
+    def test_one_track_crossing_one_water_twice_is_two_crossings(self):
+        """A line following a valley crosses the river beside it again and again, and those
+        are separate sightings — on the recorded extract, up to 13 of them, all on one
+        segment. Without the position they would all be the same crossing."""
+        assert crossing_id("water-1", "seg-a", "seg-a", 0.2) != crossing_id(
+            "water-1", "seg-a", "seg-a", 0.8
+        )
 
-        The crossing itself is unchanged by that, so its id has to be — which holds because
-        nothing about a part reaches the id.
-        """
-        assert crossing_id("water-1", "seg-a") == crossing_id("water-1", "seg-a")
-        assert crossing_ids(["water-1", "water-1"], ["seg-a", "seg-a"]) == [
-            crossing_id("water-1", "seg-a")
-        ] * 2
+    def test_the_position_is_read_against_its_own_segment(self):
+        """Each segment is parameterised on its own, so halfway along one is not halfway
+        along another — which is why the segment is in the id beside the position."""
+        assert crossing_id("water-1", "seg-a", "seg-a", 0.5) != crossing_id(
+            "water-1", "seg-a", "seg-b", 0.5
+        )
+
+    def test_the_position_is_written_to_a_fixed_width(self):
+        assert crossing_id("w", "t", "r", 0.5).endswith("@0.500000")
+        assert crossing_id("w", "t", "r", 1 / 3).endswith("@0.333333")
+
+    def test_a_neighbouring_crossing_coming_or_going_leaves_an_id_alone(self):
+        """The name is the place, not a position in a list, so a crossing that appears or
+        disappears on the same track does not rename the ones around it — which numbering
+        them 0, 1, 2 along the track would."""
+        alone = crossing_ids(["w"], ["t"], ["r"], [0.2])
+        with_a_neighbour = crossing_ids(["w", "w"], ["t", "t"], ["r", "r"], [0.2, 0.8])
+
+        assert with_a_neighbour[0] == alone[0]
 
     def test_ids_are_paired_up_positionally(self):
-        assert crossing_ids(["w1", "w2"], ["t1", "t2"]) == [
-            crossing_id("w1", "t1"),
-            crossing_id("w2", "t2"),
+        assert crossing_ids(["w1", "w2"], ["t1", "t2"], ["r1", "r2"], [0.1, 0.2]) == [
+            crossing_id("w1", "t1", "r1", 0.1),
+            crossing_id("w2", "t2", "r2", 0.2),
         ]
 
     @pytest.mark.parametrize("reserved", ["/", " ", "="])
     def test_an_id_could_name_a_partition(self, reserved):
         """The store's rule for a value that names a directory, since an id is a candidate
         key for one wherever a reader lays a dataset out by it."""
-        assert reserved not in SEPARATOR
-        assert reserved not in crossing_id("08f2a5c1", "08f2a5c2")
+        assert reserved not in SEPARATOR + POSITION
+        assert reserved not in crossing_id("08f2a5c1", "08f2a5c2", "08f2a5c3", 0.5)

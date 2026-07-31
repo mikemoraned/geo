@@ -23,7 +23,7 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use medallion::{Root, TableError};
+use medallion::{Country, Root, TableError, UnknownCountry};
 use model::TargetError;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -85,6 +85,20 @@ fn write_silver(
     })
 }
 
+/// The CRS a country's projected geometry is stored in, as an authority string a python
+/// geometry library takes (`"EPSG:25832"`).
+///
+/// One zone per country, chosen by the store: a caller preparing the projected column asks
+/// rather than naming a zone of its own, so what it projects into and what the file declares
+/// cannot disagree.
+#[pyfunction]
+fn projected_crs(country: &str) -> PyResult<String> {
+    let country: Country = country
+        .parse()
+        .map_err(|err: UnknownCountry| PyValueError::new_err(err.to_string()))?;
+    Ok(format!("EPSG:{}", country.projected_epsg()))
+}
+
 /// The runtime the store's async writers run on: one per process, since a call arrives on
 /// whichever thread python is on and building a runtime per call would cost more than the
 /// write.
@@ -121,6 +135,7 @@ fn table_error(err: TableError) -> PyErr {
 #[pymodule]
 fn lookout_medallion(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(write_silver, module)?)?;
+    module.add_function(wrap_pyfunction!(projected_crs, module)?)?;
     module.add_class::<Written>()?;
     Ok(())
 }
