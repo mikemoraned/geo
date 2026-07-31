@@ -1080,12 +1080,26 @@ Steps:
       And the pipeline cannot run under the sandbox as it stands: DuckDB installs its spatial
       extension into `$HOME/.duckdb`, which is not writable there, so this run was made with
       `HOME` pointed at a scratch directory.
-- [ ] Keep `crossing_checks.py` and `test_cases.geojson` running, but **against the silver
+- [x] Keep `crossing_checks.py` and `test_cases.geojson` running, but **against the silver
       dataset read back**, not against the in-memory `reps_v5_gdf`. That is what makes the
       cases a check on the productionised artefact rather than on the notebook's own state,
       and it is the check that the GeoArrow → WKB round trip through the new module did not
       move or drop anything. Record the result: the cases pass unchanged for v8, so any
       difference here is a regression in the write path, not in the definition.
+      Note: v9 reads `water_crossing` back with DuckDB into `silver_crossings_gdf` and the
+      cases run against that. **The per-case visualiser and the case-capture tool moved onto
+      it too** — a map that draws the frame in memory while the cases check the file would let
+      the two disagree, and the point of the cases is that what you look at is what was
+      recorded. That needed the read-back to carry `lon`/`lat` as columns as well as geometry,
+      since the capture tool filters by the map's visible bounds rather than by a predicate.
+      Everything downstream of the write therefore depends on it, so in the notebook the
+      checks stay empty until the write button is pressed; the maps that judge the *tuning*
+      still draw the in-memory collapse, which is what they are for.
+      Run over the real store on 2026-07-31, all three cases passing on both counts:
+      Mannheim's four parallel tracks over the Rhine kept distinct (4 of 4), the horseshoe
+      river re-crossing with one leg tunnelled (2 of 2), and the Hamburg underwater tunnel
+      contributing nothing (0 of 0). Unchanged from v8, which is what says the write path
+      moved and dropped nothing. The write itself reported 5749 rows into one partition.
 - [ ] Derive `session_crossing`: join `session_sample` to `water_crossing` on projected
       distance within M metres (`--match-radius`, default to be chosen below), and
       reduce to the nearest sample per `(session_id, crossing_id)`. Prune with the

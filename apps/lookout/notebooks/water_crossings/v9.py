@@ -784,12 +784,42 @@ def _(
     written_crossings = lookout_medallion.write_silver(
         "water_crossing", crossings_table, root=str(MEDALLION_ROOT)
     )
+    # A script run is how the dataset gets rebuilt, so it says what it did; in the notebook
+    # the value below is the cell's output already.
+    if not mo.running_in_notebook():
+        print(written_crossings)
     written_crossings
     return (crossings_table,)
 
 
 @app.cell
-def _(rail_gdf, reps_v5_gdf):
+def _(MEDALLION_ROOT, con, crossings_table, gpd):
+    # What actually landed in the store, read back through an engine that had no part in
+    # writing it. Everything below checks or draws this rather than the frame in memory: the
+    # cases are a check on the dataset the predictor and the ground truth will read, so a
+    # crossing the write dropped or moved has to show up here.
+    _ = crossings_table  # dataflow: after the write
+    _written = con.execute(f"""
+        SELECT crossing_id, water_id, water_class, water_subtype, track_id, rail_id,
+               overlap_kind, overlap_m, total_overlap_m, merged_parts, frac,
+               -- the position as plain numbers too, for the case-capture tool, which filters
+               -- by the map's visible bounds rather than by a geometry predicate
+               ST_X(geometry) AS lon, ST_Y(geometry) AS lat,
+               ST_AsWKB(geometry) AS wkb
+        FROM read_parquet('{MEDALLION_ROOT}/silver/water_crossing/**/*.parquet')
+    """).fetchdf()
+    silver_crossings_gdf = gpd.GeoDataFrame(
+        _written.drop(columns=["wkb"]),
+        geometry=gpd.GeoSeries.from_wkb(
+            _written.pop("wkb").map(bytes), crs="EPSG:4326"
+        ),
+    )
+    len(silver_crossings_gdf)
+    return (silver_crossings_gdf,)
+
+
+@app.cell
+def _(mo, rail_gdf, silver_crossings_gdf):
     import sys as _sys
     from pathlib import Path as _Path
 
@@ -799,7 +829,9 @@ def _(rail_gdf, reps_v5_gdf):
     import crossing_checks as _cc
 
     test_cases = _cc.load_cases(_here / "test_cases.geojson")
-    test_results = _cc.run_cases(test_cases, reps_v5_gdf, rail_gdf)
+    test_results = _cc.run_cases(test_cases, silver_crossings_gdf, rail_gdf)
+    if not mo.running_in_notebook():
+        print(test_results.to_string(index=False))
     test_results
     return
 
@@ -845,7 +877,7 @@ def test_pick(mo):
 def test_view(
     rail_gdf,
     raw_crossings_gdf,
-    reps_v5_gdf,
+    silver_crossings_gdf,
     test_case_pick,
     test_viz,
     viz_cases,
@@ -856,7 +888,7 @@ def test_view(
     test_viz.case_view(
         _case,
         rail_gdf,
-        reps_v5_gdf,
+        silver_crossings_gdf,
         water_polys_gdf=water_polys_gdf,
         water_lines_gdf=water_lines_gdf,
         raw_gdf=raw_crossings_gdf,
@@ -865,7 +897,7 @@ def test_view(
 
 
 @app.cell
-def _(cities_gdf, rail_gdf, reps_v5_gdf):
+def _(cities_gdf, rail_gdf, silver_crossings_gdf):
     import importlib as _il
     import sys as _sys
     from pathlib import Path as _Path
@@ -881,7 +913,7 @@ def _(cities_gdf, rail_gdf, reps_v5_gdf):
 
     cases_path = _nbdir / "test_cases.geojson"
     capture_map, case_name, case_expected, refresh_button, append_button = (
-        bbox_capture.make_capture(reps_v5_gdf, rail_gdf, cities_gdf)
+        bbox_capture.make_capture(silver_crossings_gdf, rail_gdf, cities_gdf)
     )
     bbox_capture.controls(
         capture_map, case_name, case_expected, refresh_button, append_button
@@ -906,7 +938,7 @@ def _(
     case_name,
     cases_path,
     refresh_button,
-    reps_v5_gdf,
+    silver_crossings_gdf,
 ):
     bbox_capture.result(
         capture_map,
@@ -914,7 +946,7 @@ def _(
         case_expected,
         refresh_button,
         append_button,
-        reps_v5_gdf,
+        silver_crossings_gdf,
         cases_path,
     )
     return
