@@ -1,0 +1,6 @@
+/.vscode
+/.embuild
+/target
+
+# Cargo.lock is committed, against the esp-idf-template default: these spikes are kept as
+# reference, so they need to still build when someone comes back to them.
