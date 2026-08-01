@@ -71,11 +71,11 @@ pub struct SilverTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Layout {
     /// `country=<iso>` — reference-derived geo data, one file per country.
-    ByCountry,
+    Country,
     /// `<key>=<date>` — dated rows carrying no geometry.
-    ByDate(&'static str),
+    Date(&'static str),
     /// `country=<iso>/<key>=<date>` — dated geometry.
-    ByCountryAndDate(&'static str),
+    CountryAndDate(&'static str),
 }
 
 /// The suffix a date-valued partition key ends with, as `docs/medallion.md` requires.
@@ -182,9 +182,9 @@ impl SilverTarget {
     /// The columns the partition values are read from, outermost first.
     fn partition_columns(&self) -> Result<Vec<&'static str>, TableError> {
         Ok(match self.layout()? {
-            Layout::ByCountry => vec![COUNTRY],
-            Layout::ByDate(key) => vec![key],
-            Layout::ByCountryAndDate(key) => vec![COUNTRY, key],
+            Layout::Country => vec![COUNTRY],
+            Layout::Date(key) => vec![key],
+            Layout::CountryAndDate(key) => vec![COUNTRY, key],
         })
     }
 
@@ -195,11 +195,11 @@ impl SilverTarget {
             .ok_or(TableError::Unpartitioned(self.spec.name))?;
 
         match (key, self.geometry) {
-            (COUNTRY, _) => Ok(Layout::ByCountry),
+            (COUNTRY, _) => Ok(Layout::Country),
             (key, Geometry::LatLonAndProjected) if key.ends_with(DATE_KEY_SUFFIX) => {
-                Ok(Layout::ByCountryAndDate(key))
+                Ok(Layout::CountryAndDate(key))
             }
-            (key, Geometry::Absent) if key.ends_with(DATE_KEY_SUFFIX) => Ok(Layout::ByDate(key)),
+            (key, Geometry::Absent) if key.ends_with(DATE_KEY_SUFFIX) => Ok(Layout::Date(key)),
             (key, _) => Err(TableError::UnsupportedLayout {
                 dataset: self.spec.name,
                 key: key.to_string(),
@@ -229,12 +229,12 @@ pub async fn write_table(
 
     let columns = translate(target, &table)?;
     let written = match target.layout()? {
-        Layout::ByCountry => write_by_country(root, target, &table, &columns, None).await?,
-        Layout::ByDate(key) => {
+        Layout::Country => write_by_country(root, target, &table, &columns, None).await?,
+        Layout::Date(key) => {
             let days = days(target, &dates_of(target, &table, key)?, &columns, None)?;
             replace_dates(&root.dataset(target.spec), target, &days).await?
         }
-        Layout::ByCountryAndDate(key) => {
+        Layout::CountryAndDate(key) => {
             write_by_country(root, target, &table, &columns, Some(key)).await?
         }
     };

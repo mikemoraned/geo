@@ -98,8 +98,10 @@ chrono = { version = "0.4", features = ["serde"] }
 # arrow 57, so the batches it hands over are our `RecordBatch`.
 pyo3 = "0.28"
 pyo3-arrow = "0.16"
+crossings = { path = "crates/crossings" }
 medallion = { path = "crates/medallion" }
 model = { path = "crates/model" }
+recorder = { path = "crates/recorder" }
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
 transport = { path = "crates/transport" }

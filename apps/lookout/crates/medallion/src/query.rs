@@ -33,6 +33,18 @@ struct Counted {
     count: i64,
 }
 
+/// Whether `dir` holds any file, at any depth below it.
+///
+/// A directory of empty directories is what a swept dataset leaves, and reads the same as one
+/// that was never written.
+fn holds_files(dir: &std::path::Path) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            entry.path().is_dir() && holds_files(&entry.path()) || entry.path().is_file()
+        })
+    })
+}
+
 /// A SQL session over one medallion store.
 pub struct Query {
     root: Root,
@@ -62,13 +74,17 @@ impl Query {
 
     /// Register one partition of a dataset under `table`, for a dataset whose partitions
     /// hold different schemas and so cannot be read as a single table.
+    ///
+    /// A dataset holding no files is absent, whether it was never written or a rebuild has
+    /// since swept every partition away: both leave a reader with nothing to read, and the
+    /// directory a sweep leaves behind is not something a caller should have to know about.
     pub async fn register_at<L: LayerKind>(
         &self,
         dataset: &Dataset<L>,
         table: &str,
     ) -> Result<(), QueryError> {
         let dir = dataset.dir();
-        if !dir.exists() {
+        if !holds_files(&dir) {
             return Err(QueryError::NoSuchDataset {
                 layer: dataset.layer(),
                 dataset: dataset.name().to_string(),
@@ -262,6 +278,19 @@ mod tests {
             query.register(NOTHING, "nothing").await,
             Err(QueryError::NoSuchDataset { .. })
         ));
+        assert!(!query.register_if_present(NOTHING, "nothing").await.unwrap());
+    }
+
+    /// A rebuild that produces nothing sweeps every partition and leaves the dataset's own
+    /// directory standing. That is not a dataset a reader can read, so it reads as absent
+    /// rather than as a schema the engine cannot infer.
+    #[tokio::test]
+    async fn a_dataset_swept_empty_is_reported_as_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = Root::new(tmp.path());
+        std::fs::create_dir_all(root.dataset(NOTHING).dir()).unwrap();
+        let query = Query::new(root);
+
         assert!(!query.register_if_present(NOTHING, "nothing").await.unwrap());
     }
 }

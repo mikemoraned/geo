@@ -1100,7 +1100,7 @@ Steps:
       river re-crossing with one leg tunnelled (2 of 2), and the Hamburg underwater tunnel
       contributing nothing (0 of 0). Unchanged from v8, which is what says the write path
       moved and dropped nothing. The write itself reported 5749 rows into one partition.
-- [ ] Derive `session_crossing`: join `session_sample` to `water_crossing` on projected
+- [x] Derive `session_crossing`: join `session_sample` to `water_crossing` on projected
       distance within M metres (`--match-radius`, default to be chosen below), and
       reduce to the nearest sample per `(session_id, crossing_id)`. Prune with the
       session bbox before the distance join — that is what `session.bbox` was written
@@ -1110,6 +1110,36 @@ Steps:
       Say explicitly what happens to a session too small to be evidence of anything: over
       a third of the recorded sessions hold a single sample (see the sessionise run above),
       so a crossing can be "passed" by a session that never moved.
+      Note: a new `crossings` crate, since this is the join of two things neither `recorder`
+      nor `transport` owns — `matching` holds the rule, `silver` reads both datasets and
+      writes, and the `match_crossings` bin drives it. `--match-radius-m`, provisionally 150 m
+      (a train at 100 km/h sampled every ten seconds leaves 280 m between fixes, so the
+      nearest one to a crossing is easily over a hundred metres away); **the radius is chosen
+      properly in the task below**, from the distribution a run produces.
+
+      **A small session is written, not filtered.** A single sample within the radius is a
+      real observation of having been near a crossing, and `samples_within` is what says how
+      thin the evidence is — one sample and twenty are both recorded, and the evaluation
+      weighs them. Filtering here would put a consumer's threshold in the store, which is the
+      rule the sessions already follow.
+
+      Matching is per country, since a distance is only a distance within one projected zone,
+      but the output is partitioned by `crossed_date` alone: it carries no geometry, so it
+      needs no country level. Each session is matched only against the crossings inside its
+      own envelope grown by the radius — the stored `bbox`, grown on the sphere with
+      `Haversine.destination` rather than by treating a degree as a fixed number of metres.
+
+      First run over the real store on 2026-07-31, at 150 m: 31 sessions and 5749 crossings
+      in, **133 passes over 14 sessions and 100 distinct crossings**, in 4 dated partitions.
+      So 17 of 31 sessions matched nothing at all. Distances: min 0.2 m, median 67.9 m, p90
+      131.3 m, max 148.6 m — the distribution runs right up to the radius, which is the sign
+      that 150 m is not obviously enough rather than obviously too much. 96 of the 133 passes
+      rest on a single sample; passes per matching session run 1 to 34, median 5.5.
+
+      Found while writing the test for it: a dataset whose partitions have all been swept
+      leaves its own directory standing, and `Query` treated that as present and then failed
+      with the engine's "can't infer schema for zero objects". A dataset holding no files now
+      reads as absent, whether it was never written or has been emptied.
 - [ ] Add a `just silver-crossings` recipe (under the naming rule above, and joining
       `just silver`), run the whole thing over the real store, and record
       what came out: crossings in DE, how many sessions matched any crossing, crossings
