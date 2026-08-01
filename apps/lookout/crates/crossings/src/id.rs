@@ -144,10 +144,12 @@ mod tests {
 
     fn crossing(rail_id: &str, water_id: &str, frac: f64) -> Crossing {
         Crossing {
+            crossing_id: format!("{water_id}:{rail_id}@{frac}").parse().expect("id"),
             rail_id: rail_id.to_string(),
             water_id: water_id.to_string(),
             frac,
             position: coord! { x: 13.548209, y: 51.617567 },
+            extract_id: "20260727T193628Z".to_string(),
         }
     }
 

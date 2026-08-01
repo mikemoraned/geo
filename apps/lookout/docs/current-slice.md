@@ -1290,7 +1290,7 @@ Steps:
       the workspace; that is the separate formatting commit after this one. Note the tree was
       not uniformly formatted either way beforehand: main's crate arrived formatted under the
       2024 style and the rest under 2021, so this settles it rather than churning it.
-- [ ] **Repoint the packer off the notebook export**, onto the silver `water_crossing`
+- [x] **Repoint the packer off the notebook export**, onto the silver `water_crossing`
       dataset. It reads `data/water/v8/crossing_reps.parquet` because that dataset did not
       exist when it was written; this branch now writes it, and it carries every column the
       packer's reader wants. This comes before the id task because it is what puts
@@ -1304,6 +1304,22 @@ Steps:
       which is the honest control anyway — what a device can hold is a window, not a border.
       Also: the gitignored export stops being an input, so nothing regenerable is read from
       outside the store.
+
+      Note: run over the real store, it packs **5,749 crossings to 5,749 distinct ids and
+      69,000 bytes** — the same figures the crate's README records from the export, which is
+      what says the repoint lost nothing. The `--input` flag is gone, replaced by
+      `--medallion-root` like every other reader; the run logs the `extract_id`s the packed
+      crossings came from, since the buffer format itself has no room for provenance.
+
+      The **output moved into the store** as well as the input, which the task did not say and
+      the tree made obvious once both sides met: `data/gold/` sat beside `data/medallion/`,
+      outside the store whose gold layer it belonged in. It is now
+      `gold/artifact=crossings/version=<run instant>/crossings.pointset`, which is the layout
+      `medallion.md` already specified for exports for live use — this is the store's first
+      gold writer, so the rule had never been exercised. Two consequences, both wanted: a
+      rerun adds a version rather than overwriting the file a device may be holding, and
+      `medallion.md` now says how a *file* artefact sits in that layout, since what it cannot
+      carry as a column has to go to the run's log instead.
 - [ ] **Make the device id a function of the ground truth id.** The two currently name
       different things, so a device prediction cannot be matched to a laptop ground truth —
       which is the whole reason main's crate derives an id rather than using row order. This

@@ -1,34 +1,35 @@
-//! `pack_crossings`: read the silver water-crossings GeoParquet and write the flat point
-//! buffer the M5 device scans.
+//! `pack_crossings`: read the silver water crossings out of the store and write the flat
+//! point buffer the M5 device scans.
 
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
+use chrono::Utc;
 use clap::Parser;
 use crossings::{Bbox, Point, id, pointset, silver};
+use medallion::MedallionArgs;
 
-/// The water_crossings notebook's representative-point export: one row per crossing.
-const DEFAULT_INPUT: &str = "data/water/v8/crossing_reps.parquet";
-/// Gold, and regenerable from silver — gitignored like the notebook's own outputs.
-const DEFAULT_OUTPUT: &str = "data/gold/crossings.pointset";
+/// What the packed buffer is called in gold, and the file each version of it holds.
+const ARTIFACT: &str = "crossings";
+const FILE: &str = "crossings.pointset";
 
 #[derive(Parser)]
 #[command(about = "Pack silver water crossings into the M5 device's point buffer")]
 struct Args {
-    /// GeoParquet to read the crossings from.
-    #[arg(long, default_value = DEFAULT_INPUT)]
-    input: PathBuf,
-    /// Where to write the packed buffer.
-    #[arg(long, default_value = DEFAULT_OUTPUT)]
-    output: PathBuf,
+    #[command(flatten)]
+    medallion: MedallionArgs,
+    /// Where to write the packed buffer. Defaults to the store's own gold layer.
+    #[arg(long)]
+    output: Option<PathBuf>,
     /// Keep only crossings inside this `west,south,east,north` window. Omit to keep them all.
     #[arg(long)]
     bbox: Option<Bbox>,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -37,15 +38,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     let args = Args::parse();
+    let root = args.medallion.root()?;
+    let output = match args.output {
+        Some(path) => path,
+        None => root.gold_artefact(ARTIFACT, Utc::now(), FILE)?,
+    };
 
     tracing::info!(
-        input = %args.input.display(),
-        output = %args.output.display(),
+        medallion_root = %root.path().display(),
+        output = %output.display(),
         bbox = args.bbox.map(|bbox| bbox.to_string()),
         "packing crossings",
     );
 
-    let read = silver::read(&args.input)?;
+    let read = silver::read(&root).await?;
     let crossings: Vec<_> = match args.bbox {
         Some(window) => read
             .into_iter()
@@ -62,14 +68,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect();
 
     let packed = pointset::pack(&points)?;
-    if let Some(directory) = args.output.parent() {
+    if let Some(directory) = output.parent() {
         fs::create_dir_all(directory)?;
     }
-    fs::write(&args.output, &packed)?;
+    fs::write(&output, &packed)?;
 
     tracing::info!(
         crossings = crossings.len(),
         distinct = ids.iter().collect::<BTreeSet<_>>().len(),
+        // Which extraction of the reference data the packed crossings came from, so a buffer
+        // on a device can be traced back to a release. The format itself has no room for it.
+        extracts = ?crossings
+            .iter()
+            .map(|crossing| crossing.extract_id.as_str())
+            .collect::<BTreeSet<_>>(),
         bytes = packed.len(),
         "packed crossings",
     );
@@ -79,8 +91,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use chrono::TimeZone;
     use clap::CommandFactory;
+
+    use super::*;
 
     #[test]
     fn the_arguments_are_well_formed() {
@@ -91,9 +105,25 @@ mod tests {
     fn the_defaults_need_no_arguments() {
         let args = Args::parse_from(["pack_crossings"]);
 
-        assert_eq!(args.input, PathBuf::from(DEFAULT_INPUT));
-        assert_eq!(args.output, PathBuf::from(DEFAULT_OUTPUT));
+        assert_eq!(args.output, None);
         assert_eq!(args.bbox, None);
+    }
+
+    /// The buffer belongs in the store it was derived from, under the run that produced it,
+    /// so pointing a run at another store moves the output with it and a rerun leaves the
+    /// last one where a device that holds it can still be traced to it.
+    #[test]
+    fn the_default_output_is_a_versioned_gold_artefact_of_whichever_store_is_read() {
+        let args = Args::parse_from(["pack_crossings", "--medallion-root", "/somewhere/store"]);
+        let root = args.medallion.root().unwrap();
+        let run = Utc.with_ymd_and_hms(2026, 8, 1, 19, 48, 57).unwrap();
+
+        assert_eq!(
+            root.gold_artefact(ARTIFACT, run, FILE).unwrap(),
+            PathBuf::from(
+                "/somewhere/store/gold/artifact=crossings/version=20260801T194857000Z/crossings.pointset"
+            )
+        );
     }
 
     #[test]

@@ -4,7 +4,7 @@ Turns the silver water-crossings dataset into the flat point buffer the M5 devic
 
 ```sh
 just gold-pack-crossings                                   # defaults, from the repo root's apps/lookout
-just gold-pack-crossings --input <parquet> --output <file>
+just gold-pack-crossings --medallion-root <store> --output <file>
 just gold-pack-crossings --bbox 13.0,50.9,14.5,51.9        # west,south,east,north
 ```
 
@@ -90,7 +90,17 @@ reflash.
 
 ## Input
 
-Currently the water-crossings notebook's export (`data/water/<version>/crossing_reps.parquet`).
-Position is read from the WKB `geometry` column and never from the `lat`/`lon` columns that
-export also carries — the medallion silver `water_crossing` dataset this will move to keeps
-position only in the geometry, so depending on those columns would break on arrival.
+The silver `water_crossing` dataset, read through `medallion` like every other reader of the
+store. Position comes from the `geometry` column, which is where that dataset keeps it.
+
+**Every country the store holds is packed**, rather than one named by a flag: the buffer holds
+lat/lon and the device's scan takes a great-circle distance, so the per-country projected zone
+the dataset is partitioned by never reaches the device — which in any case does not know which
+country it will be switched on in. `--bbox` is the way to restrict, and is the honest control:
+what a device can hold is a window, not a border.
+
+## Output
+
+`<store>/gold/crossings.pointset` — inside the store, in the layer that exists to produce
+formats for something outside it. Gold is derivable, so it is not versioned; `--output` names
+somewhere else.

@@ -152,9 +152,11 @@ silver-water-crossings:
 silver-session-crossings *args:
     cargo run --release -p session_crossings --bin match_crossings -- {{args}}
 
-# Pack the silver water crossings into the flat point buffer the M5 device scans, in
-# gold. No args = defaults (the v8 notebook export → data/gold/crossings.pointset);
-# override with --input / --output, or restrict with --bbox west,south,east,north.
+# Pack the silver water crossings into the flat point buffer the M5 device scans, written to
+# the store's own gold layer (<store>/gold/crossings.pointset). Every country the store holds
+# is packed, since the device does not know where it will be switched on; restrict with
+# --bbox west,south,east,north. Override the store with --medallion-root, the file with
+# --output.
 gold-pack-crossings *args:
     cargo run -p crossings --bin pack_crossings -- {{args}}
 

@@ -10,7 +10,7 @@ use datafusion::execution::SendableRecordBatchStream;
 
 use crate::dataset::DatasetSpec;
 use crate::geo::{GeoError, write_geo_batches, write_geo_stream};
-use crate::layer::{LayerKind, Replaceable};
+use crate::layer::{Layer, LayerKind, Replaceable};
 use crate::partition::{DATE_FORMAT, Partition, PathError};
 use crate::rows::{Row, RowError, batch};
 use crate::write::{WriteError, write_batches};
@@ -130,7 +130,34 @@ impl Root {
     pub fn rows_of<T: Row>(&self) -> Dataset<T::Layer> {
         self.dataset(T::DATASET)
     }
+
+    /// Where the file `name` of the gold artefact `artifact`, as produced by a run at `run`,
+    /// belongs.
+    ///
+    /// Gold is the layer that produces formats for something outside the store to consume — a
+    /// packed buffer, a tile archive — so these are files in a format of their own rather than
+    /// datasets an engine reads, and they still sit inside the store rather than beside it.
+    /// The run is what versions them: a device holding one of these has no way to say which
+    /// run produced it, so a rerun adds a version beside the last rather than replacing it.
+    pub fn gold_artefact(
+        &self,
+        artifact: &str,
+        run: DateTime<Utc>,
+        name: &str,
+    ) -> Result<PathBuf, PathError> {
+        let version = run.format(BATCH_STEM_FORMAT).to_string();
+        Ok(self
+            .0
+            .join(Layer::Gold.as_str())
+            .join(Partition::new(ARTIFACT, artifact)?.to_string())
+            .join(Partition::new(VERSION, version)?.to_string())
+            .join(name))
+    }
 }
+
+/// How a gold artefact is laid out: what it is, and which run produced it.
+const ARTIFACT: &str = "artifact";
+const VERSION: &str = "version";
 
 /// Where the store sits within the repo.
 const STORE_IN_REPO: &str = "data/medallion";
@@ -507,6 +534,41 @@ mod tests {
             dir.to_str().unwrap(),
             "/store/bronze/sensor_reading/sensor=gps/ingested_date=2026-07-26"
         );
+    }
+
+    /// A gold artefact is a file rather than a dataset, and is laid out by what it is and by
+    /// the run that produced it — so a rerun adds a version beside the last.
+    #[test]
+    fn a_gold_artefact_is_named_by_what_it_is_and_versioned_by_its_run() {
+        let root = Root::new("/store");
+        let run = |minute| Utc.with_ymd_and_hms(2026, 8, 1, 19, minute, 57).unwrap();
+
+        let first = root
+            .gold_artefact("crossings", run(48), "crossings.pointset")
+            .unwrap();
+        let second = root
+            .gold_artefact("crossings", run(52), "crossings.pointset")
+            .unwrap();
+
+        assert_eq!(
+            first.to_str().unwrap(),
+            "/store/gold/artifact=crossings/version=20260801T194857000Z/crossings.pointset"
+        );
+        assert_ne!(first, second);
+    }
+
+    /// The layout is directory names, so a name that would not survive one is refused here
+    /// rather than producing a path that reads as something else.
+    #[test]
+    fn a_gold_artefact_whose_name_could_not_be_a_partition_is_refused() {
+        let root = Root::new("/store");
+        let run = Utc.with_ymd_and_hms(2026, 8, 1, 19, 48, 57).unwrap();
+
+        assert!(
+            root.gold_artefact("water/crossings", run, "buffer")
+                .is_err()
+        );
+        assert!(root.gold_artefact("", run, "buffer").is_err());
     }
 
     #[test]

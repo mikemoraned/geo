@@ -303,10 +303,12 @@ mod tests {
     #[test]
     fn a_point_carries_its_crossings_position() {
         let crossing = Crossing {
+            crossing_id: "water:rail@0.5".parse().expect("id"),
             rail_id: "rail".to_string(),
             water_id: "water".to_string(),
             frac: 0.5,
             position: coord! { x: RUHLAND.0, y: RUHLAND.1 },
+            extract_id: "20260727T193628Z".to_string(),
         };
         let id = CrossingId::of(&Key::from(&crossing));
 
