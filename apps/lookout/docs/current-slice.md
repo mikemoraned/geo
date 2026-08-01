@@ -1366,6 +1366,10 @@ Steps:
       than as a side effect of this.
       The store has to be re-derived before a pack run works: the dataset written before this
       has no such column, and the packer says so rather than inventing one.
+      Re-derived on 2026-08-01: 5,749 rows into one partition, the notebook's three cases
+      passing unchanged, and **the write itself is the uniqueness evidence** — 5,749 crossings
+      landed without the store refusing one, so no two share either name. The pack that
+      follows is 5,749 crossings in 69,000 bytes, as before.
 - [x] Check the merged tree builds and passes: `just build`, `just test-no-docker`, and both
       crossings recipes run against the real store.
       `just build` clean, and **`just test` passes outside the sandbox** — the docker and
@@ -1377,10 +1381,9 @@ Steps:
       the sandbox settles that half.
       `just silver-session-crossings` over the real store: 31 sessions against 5,749 crossings,
       16 sessions matched, 165 passes over 5 partitions at a 250 m radius.
-      `just gold-pack-crossings` **is blocked on a re-derivation, as expected** — the stored
-      `water_crossing` predates `crossing_short_id`, and the packer says which column is
-      missing rather than inventing one. Run `just silver-water-crossings` outside the sandbox
-      and it packs; that is the one part of this check still outstanding.
+      `just silver-water-crossings` and `just gold-pack-crossings`, run outside the sandbox
+      once the short-id column landed: 5,749 crossings derived and 5,749 packed into 69,000
+      bytes, from extract `20260727T193628Z`.
 
 ### Simple crow-flies predictor
 
