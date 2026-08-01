@@ -4,7 +4,7 @@
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use server::{build_app, AppState, GIT_HASH};
+use server::{AppState, GIT_HASH, build_app};
 use tower::ServiceExt; // for `oneshot`
 
 fn static_dir() -> String {

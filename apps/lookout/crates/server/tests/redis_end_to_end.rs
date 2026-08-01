@@ -8,7 +8,7 @@
 //! injects `LOOKOUT_REDIS_URL` from 1Password and builds in `--release`.
 
 use redis::aio::MultiplexedConnection;
-use server::queue::{RedisSink, SampleSink, QUEUE_KEY};
+use server::queue::{QUEUE_KEY, RedisSink, SampleSink};
 use shared::{Accel, AccelReading, Message, V1Message};
 use telemetry::RawSample;
 use uuid::Uuid;

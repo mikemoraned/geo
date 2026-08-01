@@ -6,7 +6,7 @@ use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 use medallion::MedallionArgs;
-use recorder::sessions::{sessions, Gap, Lead};
+use recorder::sessions::{Gap, Lead, sessions};
 use recorder::silver;
 use transport::countries::CountryAreas;
 

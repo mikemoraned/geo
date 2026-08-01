@@ -9,10 +9,10 @@ use std::time::Duration;
 
 use redis::aio::MultiplexedConnection;
 use shared::{Accel, AccelReading, Message, V1Message};
-use telemetry::{brpop_sample, latest_samples, RawSample, QUEUE_KEY};
+use telemetry::{QUEUE_KEY, RawSample, brpop_sample, latest_samples};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
-use testcontainers_modules::redis::{Redis, REDIS_PORT};
+use testcontainers_modules::redis::{REDIS_PORT, Redis};
 use uuid::Uuid;
 
 async fn start_redis() -> (ContainerAsync<Redis>, String) {
@@ -42,9 +42,9 @@ async fn wait_ready(url: &str) -> MultiplexedConnection {
                 .query_async::<String>(&mut conn)
                 .await
                 .is_ok()
-            {
-                return conn;
-            }
+        {
+            return conn;
+        }
         assert!(
             std::time::Instant::now() < deadline,
             "redis not ready in 30s"

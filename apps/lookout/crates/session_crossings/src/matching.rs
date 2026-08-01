@@ -95,11 +95,7 @@ pub fn passes(
 }
 
 /// The crossings one session passed.
-fn passes_of(
-    session: &Session,
-    crossings: &[Crossing],
-    radius: Radius,
-) -> Vec<SessionCrossingRow> {
+fn passes_of(session: &Session, crossings: &[Crossing], radius: Radius) -> Vec<SessionCrossingRow> {
     let reachable = grown(session.envelope, radius);
     crossings
         .iter()
@@ -109,11 +105,7 @@ fn passes_of(
 }
 
 /// One crossing as a session passed it, or `None` where no sample came within the radius.
-fn passed(
-    session: &Session,
-    crossing: &Crossing,
-    radius: Radius,
-) -> Option<SessionCrossingRow> {
+fn passed(session: &Session, crossing: &Crossing, radius: Radius) -> Option<SessionCrossingRow> {
     let within: Vec<(f64, &Sample)> = session
         .samples
         .iter()

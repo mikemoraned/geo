@@ -9,12 +9,12 @@
 use chrono::{DateTime, TimeZone, Utc};
 use geo_types::Point;
 use medallion::{
-    geo_batch, projected_wkb_field, wkb_field, Countries, Country, Projector, Query, Root, COUNTRY,
-    GEOMETRY, PROJECTED_GEOMETRY,
+    COUNTRY, Countries, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Query, Root, geo_batch,
+    projected_wkb_field, wkb_field,
 };
 use model::{CrossingId, OverlapKind, WaterCrossingRow};
 use recorder::bronze::{Archive, Payload};
-use recorder::sessions::{sessions, Gap, Lead};
+use recorder::sessions::{Gap, Lead, sessions};
 use recorder::silver;
 use serde::Deserialize;
 use shared::{Gps, GpsReading, Message, V1Message};
@@ -291,10 +291,11 @@ async fn passes_are_partitioned_by_the_date_they_happened_on() {
         .await
         .expect("derive");
 
-    assert!(tmp
-        .path()
-        .join("silver/session_crossing/crossed_date=2026-07-22/part-0.parquet")
-        .exists());
+    assert!(
+        tmp.path()
+            .join("silver/session_crossing/crossed_date=2026-07-22/part-0.parquet")
+            .exists()
+    );
 }
 
 /// A session of one sample can still pass a crossing it sat beside, and says so with the one

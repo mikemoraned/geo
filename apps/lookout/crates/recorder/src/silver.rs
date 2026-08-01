@@ -24,7 +24,7 @@ use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
 use medallion::layers;
 use medallion::{
-    Countries, Country, Projector, Replaced, Root, Row, COUNTRY, GEOMETRY, PROJECTED_GEOMETRY,
+    COUNTRY, Countries, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Replaced, Root, Row,
 };
 use model::{Bbox, SessionRow, SessionSampleRow};
 
@@ -339,7 +339,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::bronze::{Archive, Payload};
-    use crate::sessions::{sessions, Gap, Lead};
+    use crate::sessions::{Gap, Lead, sessions};
 
     use super::*;
 
@@ -727,10 +727,11 @@ mod tests {
 
         assert_eq!(outcome.session_partitions.written, 1);
         assert_eq!(outcome.sample_partitions.written, 2);
-        assert!(root
-            .path()
-            .join("silver/session/country=DE/start_date=2026-07-26")
-            .exists());
+        assert!(
+            root.path()
+                .join("silver/session/country=DE/start_date=2026-07-26")
+                .exists()
+        );
     }
 
     /// The path is the line the session took, in degrees and in metres.
@@ -834,10 +835,12 @@ mod tests {
         assert_eq!(second.sessions, 1);
         assert_eq!(second.session_partitions.written, 1);
         assert_eq!(second.session_partitions.removed, 1);
-        assert!(!root
-            .path()
-            .join("silver/session/country=DE/start_date=2026-07-27")
-            .exists());
+        assert!(
+            !root
+                .path()
+                .join("silver/session/country=DE/start_date=2026-07-27")
+                .exists()
+        );
         assert_eq!(session_rows(&root).await.len(), 1);
     }
 
@@ -874,14 +877,16 @@ mod tests {
 
         let (root, _) = written(&tmp, &[gps(id, at(9, 0, 0), 52.5, 13.4)]).await;
 
-        assert!(root
-            .path()
-            .join("silver/session/country=DE/start_date=2026-07-26")
-            .exists());
-        assert!(root
-            .path()
-            .join("silver/session_sample/country=DE/sample_date=2026-07-26")
-            .exists());
+        assert!(
+            root.path()
+                .join("silver/session/country=DE/start_date=2026-07-26")
+                .exists()
+        );
+        assert!(
+            root.path()
+                .join("silver/session_sample/country=DE/sample_date=2026-07-26")
+                .exists()
+        );
     }
 
     /// A country the run no longer derives any session for does not linger: the store holds
@@ -903,10 +908,12 @@ mod tests {
         assert_eq!(outcome.session_partitions.removed, 1);
         assert_eq!(outcome.sample_partitions.removed, 1);
         assert!(!root.path().join("silver/session/country=DE").exists());
-        assert!(!root
-            .path()
-            .join("silver/session_sample/country=DE")
-            .exists());
+        assert!(
+            !root
+                .path()
+                .join("silver/session_sample/country=DE")
+                .exists()
+        );
     }
 
     #[tokio::test]

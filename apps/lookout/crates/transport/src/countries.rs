@@ -10,7 +10,7 @@
 
 use geo::Contains;
 use geo_types::{Geometry, Point};
-use medallion::{Countries, Country, Query, Root, GEOMETRY};
+use medallion::{Countries, Country, GEOMETRY, Query, Root};
 
 /// The newest extract's country areas.
 const NEWEST_EXTRACT: &str = "
@@ -91,7 +91,7 @@ impl Countries for CountryAreas {
 
 #[cfg(test)]
 mod tests {
-    use geo_types::{polygon, Geometry};
+    use geo_types::{Geometry, polygon};
 
     use super::*;
 

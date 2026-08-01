@@ -9,11 +9,11 @@ use chrono::{DateTime, NaiveDate, Utc};
 use datafusion::execution::SendableRecordBatchStream;
 
 use crate::dataset::DatasetSpec;
-use crate::geo::{write_geo_batches, write_geo_stream, GeoError};
+use crate::geo::{GeoError, write_geo_batches, write_geo_stream};
 use crate::layer::{LayerKind, Replaceable};
-use crate::partition::{Partition, PathError, DATE_FORMAT};
-use crate::rows::{batch, Row, RowError};
-use crate::write::{write_batches, WriteError};
+use crate::partition::{DATE_FORMAT, Partition, PathError};
+use crate::rows::{Row, RowError, batch};
+use crate::write::{WriteError, write_batches};
 
 /// Failure appending rows to a dataset.
 #[derive(Debug, thiserror::Error)]
@@ -401,7 +401,7 @@ impl<L: Replaceable> Dataset<L> {
                 return Err(ReplaceError::List {
                     path: dir.display().to_string(),
                     source,
-                })
+                });
             }
         };
 
@@ -847,8 +847,10 @@ mod tests {
         let workspace = workspace_root().expect("locate the workspace");
 
         assert!(workspace.join("Cargo.toml").exists());
-        assert!(std::fs::read_to_string(workspace.join("Cargo.toml"))
-            .expect("read the manifest")
-            .contains(WORKSPACE_SECTION));
+        assert!(
+            std::fs::read_to_string(workspace.join("Cargo.toml"))
+                .expect("read the manifest")
+                .contains(WORKSPACE_SECTION)
+        );
     }
 }

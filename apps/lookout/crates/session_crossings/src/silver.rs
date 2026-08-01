@@ -12,11 +12,11 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use geo_types::{Point, Rect};
-use medallion::{Country, Query, Replaced, Root, COUNTRY};
+use medallion::{COUNTRY, Country, Query, Replaced, Root};
 use model::{Bbox, CrossingId, DeviceId, SessionCrossingRow, SessionId};
 use serde::Deserialize;
 
-use crate::matching::{passes, Crossing, Radius, Sample, Session};
+use crate::matching::{Crossing, Radius, Sample, Session, passes};
 
 /// What one run derived.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -78,10 +78,7 @@ struct StoredCrossing {
 ///
 /// A country the store holds no sessions or no crossings for contributes nothing rather than
 /// failing: a store can legitimately hold sessions in a country no extract has covered yet.
-pub async fn derive(
-    root: &Root,
-    radius: Radius,
-) -> Result<MatchOutcome, CrossingError> {
+pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, CrossingError> {
     let query = Query::new(root.clone());
     if !query.register_if_present(model::SESSION, "session").await? {
         return Err(CrossingError::Missing {

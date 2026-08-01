@@ -52,16 +52,16 @@ mod table;
 mod write;
 
 pub use args::MedallionArgs;
-pub use country::{Countries, Country, UnknownCountry, COUNTRY};
+pub use country::{COUNTRY, Countries, Country, UnknownCountry};
 pub use dataset::{DatasetInfo, DatasetSpec};
 pub use geo::{
-    geo_batch, geometries, projected_wkb_field, wkb_column, wkb_field, GeoError, Projector,
-    GEOMETRY, PROJECTED_GEOMETRY,
+    GEOMETRY, GeoError, PROJECTED_GEOMETRY, Projector, geo_batch, geometries, projected_wkb_field,
+    wkb_column, wkb_field,
 };
-pub use layer::{layers, Layer, LayerKind, Replaceable};
+pub use layer::{Layer, LayerKind, Replaceable, layers};
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
 pub use path::{AppendError, Dataset, ReplaceError, Replaced, Root, Written};
 pub use query::{Query, QueryError};
-pub use rows::{batch, fields, Row, RowError};
-pub use table::{write_table, Geometry, SilverTarget, TableError, TableWritten};
+pub use rows::{Row, RowError, batch, fields};
+pub use table::{Geometry, SilverTarget, TableError, TableWritten, write_table};
 pub use write::WriteError;

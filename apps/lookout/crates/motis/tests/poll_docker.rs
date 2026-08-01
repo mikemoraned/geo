@@ -11,11 +11,11 @@ mod common;
 use std::time::Duration;
 
 use chrono::Utc;
-use common::{captured_segments, gps, lpush, start_redis, wait_ready, RAIL_MODES};
+use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready};
 use medallion::Root;
 use motis::bronze::SegmentLog;
 use motis::client::MotisClient;
-use motis::poll::{poll_once, PollConfig, PollOutcome};
+use motis::poll::{PollConfig, PollOutcome, poll_once};
 use motis::window::PositionWindow;
 use shared::{Accel, AccelReading, Message, V1Message};
 use uuid::Uuid;

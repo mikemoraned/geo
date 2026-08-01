@@ -17,7 +17,7 @@ use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use medallion::{layers, DatasetSpec, PartitionValue, PathError, Row};
+use medallion::{DatasetSpec, PartitionValue, PathError, Row, layers};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

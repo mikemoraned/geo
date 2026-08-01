@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use server::queue::RedisSink;
-use server::{build_app, AppState};
+use server::{AppState, build_app};
 
 fn static_dir() -> String {
     std::env::var("LOOKOUT_STATIC_DIR")

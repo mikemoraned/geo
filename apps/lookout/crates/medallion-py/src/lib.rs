@@ -68,7 +68,9 @@ fn write_silver(
     let target = model::silver_target(dataset).map_err(target_error)?;
     let root = match root {
         Some(path) => Root::new(path),
-        None => Root::new(Root::default_path().map_err(|err| PyRuntimeError::new_err(err.to_string()))?),
+        None => {
+            Root::new(Root::default_path().map_err(|err| PyRuntimeError::new_err(err.to_string()))?)
+        }
     };
     let (batches, _) = table.into_inner();
 

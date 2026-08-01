@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use geo_types::{LineString, Point};
 use medallion::{
-    Countries, Country, Projector, Query, Root, COUNTRY, GEOMETRY, PROJECTED_GEOMETRY,
+    COUNTRY, Countries, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Query, Root,
 };
 use model::TrainSegmentRow;
 use serde::{Deserialize, Serialize};

@@ -14,8 +14,8 @@ use tracing_subscriber::EnvFilter;
 
 use medallion::MedallionArgs;
 use motis::bronze::SegmentLog;
-use motis::client::{MotisClient, DEFAULT_BASE_URL};
-use motis::poll::{poll_once, PollConfig, PollOutcome};
+use motis::client::{DEFAULT_BASE_URL, MotisClient};
+use motis::poll::{PollConfig, PollOutcome, poll_once};
 use motis::window::PositionWindow;
 
 const DEFAULT_POLL_INTERVAL_SECS: u64 = 30;

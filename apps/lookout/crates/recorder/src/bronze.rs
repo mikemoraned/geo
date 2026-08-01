@@ -438,10 +438,12 @@ mod tests {
             .await
             .expect("write");
 
-        assert!(!archive
-            .ingestion_file(model::ACCEL_READING, ingested_at())
-            .expect("path")
-            .exists());
+        assert!(
+            !archive
+                .ingestion_file(model::ACCEL_READING, ingested_at())
+                .expect("path")
+                .exists()
+        );
     }
 
     /// A drain writes a batch at a time, so consecutive ingestions fall milliseconds apart:
@@ -510,9 +512,11 @@ mod tests {
         let written = archive.write(ingested_at(), &[]).await.expect("write");
 
         assert_eq!(written, Written::default());
-        assert!(!archive
-            .ingestion_file(model::RAW_SAMPLE, ingested_at())
-            .expect("path")
-            .exists());
+        assert!(
+            !archive
+                .ingestion_file(model::RAW_SAMPLE, ingested_at())
+                .expect("path")
+                .exists()
+        );
     }
 }

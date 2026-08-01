@@ -2,11 +2,11 @@ pub mod queue;
 
 use std::sync::Arc;
 
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::Router;
 use axum::extract::State;
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 use axum::routing::{any, get};
-use axum::Router;
 use shared::Message as TelemetryMessage;
 use std::time::{SystemTime, UNIX_EPOCH};
 use telemetry::RawSample;
@@ -58,9 +58,10 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
                 // re-sends the un-acked tail instead of losing samples that looked
                 // sent. Withhold the ack on a transient failure so it's retried.
                 if let Ingest::Accepted = handle_sample(&state, &text).await
-                    && socket.send(Message::Text(ACK.into())).await.is_err() {
-                        break;
-                    }
+                    && socket.send(Message::Text(ACK.into())).await.is_err()
+                {
+                    break;
+                }
             }
             Message::Close(_) => break,
             _ => {}

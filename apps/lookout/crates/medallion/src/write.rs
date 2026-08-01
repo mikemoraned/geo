@@ -5,8 +5,8 @@ use std::path::Path;
 use arrow::array::RecordBatch;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
-use parquet::arrow::async_writer::ParquetObjectWriter;
 use parquet::arrow::AsyncArrowWriter;
+use parquet::arrow::async_writer::ParquetObjectWriter;
 
 /// Failure writing a parquet file into the store.
 #[derive(Debug, thiserror::Error)]

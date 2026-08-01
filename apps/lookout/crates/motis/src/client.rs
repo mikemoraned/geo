@@ -6,8 +6,8 @@ use std::num::NonZeroU32;
 use chrono::{DateTime, Duration, Timelike, Utc};
 use geo_types::Rect;
 use motis_openapi_progenitor::{
-    types::{Itinerary, TripSegment},
     Client,
+    types::{Itinerary, TripSegment},
 };
 
 /// Where the local Motis server listens unless overridden. Uses `127.0.0.1` rather than

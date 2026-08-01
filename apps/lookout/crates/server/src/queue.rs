@@ -4,8 +4,8 @@
 //! `LPUSH`es onto the shared queue; connection + key live in the `telemetry` crate.
 
 use async_trait::async_trait;
-use redis::aio::MultiplexedConnection;
 use redis::RedisError;
+use redis::aio::MultiplexedConnection;
 use telemetry::RawSample;
 
 pub use telemetry::QUEUE_KEY;

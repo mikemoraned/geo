@@ -22,19 +22,18 @@ mod telemetry;
 use medallion::DatasetInfo;
 
 pub use crossing::{
-    CrossingId, OverlapKind, SessionCrossingRow, WaterCrossingRow, SESSION_CROSSING,
-    WATER_CROSSING,
+    CrossingId, OverlapKind, SESSION_CROSSING, SessionCrossingRow, WATER_CROSSING, WaterCrossingRow,
 };
 pub use device::{DeviceId, EmptyDeviceId};
-pub use motis::{MotisSegmentRow, TrainSegmentRow, MOTIS_SEGMENT, TRAIN_SEGMENT};
-pub use overture::{ExtractManifestRow, EXTRACT_MANIFEST, OVERTURE_EXTRACT};
-pub use silver::{silver_target, TargetError};
+pub use motis::{MOTIS_SEGMENT, MotisSegmentRow, TRAIN_SEGMENT, TrainSegmentRow};
+pub use overture::{EXTRACT_MANIFEST, ExtractManifestRow, OVERTURE_EXTRACT};
 pub use session::{
-    Bbox, SessionId, SessionRow, SessionSampleRow, StartedBy, SESSION, SESSION_SAMPLE,
+    Bbox, SESSION, SESSION_SAMPLE, SessionId, SessionRow, SessionSampleRow, StartedBy,
 };
+pub use silver::{TargetError, silver_target};
 pub use telemetry::{
-    AccelReadingRow, DeviceSessionRow, GpsReadingRow, RawSampleRow, ACCEL_READING, DEVICE_SESSION,
-    GPS_READING, RAW_SAMPLE,
+    ACCEL_READING, AccelReadingRow, DEVICE_SESSION, DeviceSessionRow, GPS_READING, GpsReadingRow,
+    RAW_SAMPLE, RawSampleRow,
 };
 
 /// Every dataset defined here, for checks that must cover all of them.

@@ -11,7 +11,7 @@ use datafusion::execution::SendableRecordBatchStream;
 use futures::StreamExt;
 
 use crate::country::Country;
-use crate::rows::{fields, Row, RowError};
+use crate::rows::{Row, RowError, fields};
 use crate::write::WriteError;
 use arrow::array::{Array, ArrayRef, BinaryArray, RecordBatch};
 use arrow::datatypes::{DataType, Field, FieldRef, Schema};

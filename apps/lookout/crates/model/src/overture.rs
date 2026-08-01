@@ -1,7 +1,7 @@
 //! The Overture extracts and the manifest recording what each extraction took.
 
 use chrono::{DateTime, Utc};
-use medallion::{layers, DatasetSpec, Row};
+use medallion::{DatasetSpec, Row, layers};
 use serde::{Deserialize, Serialize};
 
 /// Overture Maps rows as extracted, in Overture's own shape and directory layout below

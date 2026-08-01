@@ -161,8 +161,11 @@ mod tests {
 
         assert_eq!(written, fixture_segments().len());
         let path = log.poll_file(captured_at).expect("path");
-        assert!(path
-            .ends_with("bronze/motis_segment/polled_date=2026-07-26/20260726T140530000Z.parquet"));
+        assert!(
+            path.ends_with(
+                "bronze/motis_segment/polled_date=2026-07-26/20260726T140530000Z.parquet"
+            )
+        );
         assert_eq!(read_back(&path).num_rows(), fixture_segments().len());
     }
 

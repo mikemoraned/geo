@@ -1,7 +1,7 @@
 //! The transit datasets: segments as polled, and the scheduled legs derived from them.
 
 use chrono::{DateTime, Utc};
-use medallion::{layers, DatasetSpec, Row};
+use medallion::{DatasetSpec, Row, layers};
 use serde::{Deserialize, Serialize};
 
 /// Trip segments as polled from the transit service, duplication allowed.

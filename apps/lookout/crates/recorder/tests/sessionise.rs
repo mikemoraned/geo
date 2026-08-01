@@ -11,7 +11,7 @@ use geo_types::Point;
 use medallion::{Countries, Country, Query, Root};
 use model::{DeviceId, SessionId};
 use recorder::bronze::{Archive, Payload};
-use recorder::sessions::{sessions, Gap, Lead};
+use recorder::sessions::{Gap, Lead, sessions};
 use recorder::silver;
 use serde::Deserialize;
 use shared::{Gps, GpsReading, Message, V1Message};

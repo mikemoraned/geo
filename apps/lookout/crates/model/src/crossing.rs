@@ -19,7 +19,7 @@ use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use medallion::{layers, DatasetSpec, PartitionValue, PathError, Row, COUNTRY};
+use medallion::{COUNTRY, DatasetSpec, PartitionValue, PathError, Row, layers};
 use serde::{Deserialize, Serialize};
 
 use crate::device::DeviceId;
@@ -204,7 +204,10 @@ mod tests {
         assert!(CrossingId::new("water/track").is_err());
         assert!(CrossingId::new("").is_err());
         assert_eq!(
-            "08b2a5c1fffffff-08f2a5c1".parse::<CrossingId>().unwrap().to_string(),
+            "08b2a5c1fffffff-08f2a5c1"
+                .parse::<CrossingId>()
+                .unwrap()
+                .to_string(),
             "08b2a5c1fffffff-08f2a5c1"
         );
     }

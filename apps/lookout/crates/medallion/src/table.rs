@@ -27,16 +27,16 @@ use std::sync::Arc;
 use arrow::array::{Array, ArrayRef, AsArray, RecordBatch, StringArray, UInt32Array};
 use arrow::datatypes::{DataType, Field, FieldRef, Schema};
 use chrono::NaiveDate;
-use geoarrow_array::cast::to_wkb;
 use geoarrow_array::GeoArrowArray;
+use geoarrow_array::cast::to_wkb;
 use geoarrow_schema::error::GeoArrowError;
 
-use crate::country::{Country, UnknownCountry, COUNTRY};
+use crate::country::{COUNTRY, Country, UnknownCountry};
 use crate::dataset::DatasetSpec;
-use crate::geo::{projected_wkb_field, wkb_field, GeoError, GEOMETRY, PROJECTED_GEOMETRY};
+use crate::geo::{GEOMETRY, GeoError, PROJECTED_GEOMETRY, projected_wkb_field, wkb_field};
 use crate::layer::layers;
-use crate::path::{Replaced, ReplaceError, Root};
-use crate::rows::{fields, Row, RowError};
+use crate::path::{ReplaceError, Replaced, Root};
+use crate::rows::{Row, RowError, fields};
 
 /// Whether a dataset carries geometry.
 ///
@@ -94,7 +94,9 @@ pub enum TableError {
         dataset: &'static str,
         columns: Vec<String>,
     },
-    #[error("{dataset}.{column} is {found}, which cannot be read as the {expected} it is stored as")]
+    #[error(
+        "{dataset}.{column} is {found}, which cannot be read as the {expected} it is stored as"
+    )]
     Untranslatable {
         dataset: &'static str,
         column: String,
@@ -118,10 +120,7 @@ pub enum TableError {
         "{dataset} is partitioned on `{key}`, which is neither `{COUNTRY}` nor a \
          `<event>{DATE_KEY_SUFFIX}` key, so a table cannot be split across its partitions"
     )]
-    UnsupportedLayout {
-        dataset: &'static str,
-        key: String,
-    },
+    UnsupportedLayout { dataset: &'static str, key: String },
     #[error("{0} is not partitioned, so a table cannot be split across its partitions")]
     Unpartitioned(&'static str),
     #[error("reading the table: {0}")]
@@ -256,9 +255,7 @@ async fn write_by_country(
 ) -> Result<Replaced, TableError> {
     let by_country = group(&countries_of(target, table)?);
     let derived: Vec<Country> = by_country.iter().map(|(country, _)| *country).collect();
-    let dates = dates
-        .map(|key| dates_of(target, table, key))
-        .transpose()?;
+    let dates = dates.map(|key| dates_of(target, table, key)).transpose()?;
     let mut written = Replaced::default();
 
     for (country, rows) in by_country {
@@ -279,8 +276,7 @@ async fn write_by_country(
                 }
             }
             Some(all) => {
-                let mine: Vec<NaiveDate> =
-                    rows.iter().map(|row| all[*row as usize]).collect();
+                let mine: Vec<NaiveDate> = rows.iter().map(|row| all[*row as usize]).collect();
                 let days = days(target, &mine, &columns, Some(country))?;
                 replace_dates(&dataset, target, &days).await?
             }
@@ -573,7 +569,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::geo::{wkb_column, Projector};
+    use crate::geo::{Projector, wkb_column};
     use crate::path::Root;
     use crate::query::Query;
 
@@ -682,10 +678,11 @@ mod tests {
 
         assert_eq!(written.rows, 2);
         assert_eq!(written.partitions.written, 1);
-        assert!(tmp
-            .path()
-            .join("silver/crossing/country=DE/part-0.parquet")
-            .exists());
+        assert!(
+            tmp.path()
+                .join("silver/crossing/country=DE/part-0.parquet")
+                .exists()
+        );
     }
 
     /// The value of a partition lives in its path, so the column it was read from is not
@@ -698,7 +695,10 @@ mod tests {
         write_table(&root, &crossings(), &[table]).await.unwrap();
 
         let query = Query::new(root);
-        query.register(CrossingRow::DATASET, "crossing").await.unwrap();
+        query
+            .register(CrossingRow::DATASET, "crossing")
+            .await
+            .unwrap();
         let batches = query.sql("SELECT * FROM crossing").await.unwrap();
 
         let columns: Vec<&str> = batches[0]
@@ -731,9 +731,14 @@ mod tests {
         write_table(&root, &crossings(), &[table]).await.unwrap();
 
         let query = Query::new(root);
-        query.register(CrossingRow::DATASET, "crossing").await.unwrap();
+        query
+            .register(CrossingRow::DATASET, "crossing")
+            .await
+            .unwrap();
         let batches = query
-            .sql(&format!("SELECT {GEOMETRY}, {PROJECTED_GEOMETRY} FROM crossing"))
+            .sql(&format!(
+                "SELECT {GEOMETRY}, {PROJECTED_GEOMETRY} FROM crossing"
+            ))
             .await
             .unwrap();
 
@@ -768,8 +773,14 @@ mod tests {
             .unwrap();
 
         let query = Query::new(root);
-        query.register(CrossingRow::DATASET, "crossing").await.unwrap();
-        let batches = query.sql(&format!("SELECT {GEOMETRY} FROM crossing")).await.unwrap();
+        query
+            .register(CrossingRow::DATASET, "crossing")
+            .await
+            .unwrap();
+        let batches = query
+            .sql(&format!("SELECT {GEOMETRY} FROM crossing"))
+            .await
+            .unwrap();
         assert_eq!(
             crate::geo::geometries(&batches[0], GEOMETRY).unwrap(),
             vec![geo_types::Geometry::Point(berlin())]
@@ -804,7 +815,10 @@ mod tests {
         write_table(&root, &crossings(), &[viewed]).await.unwrap();
 
         let query = Query::new(root);
-        query.register(CrossingRow::DATASET, "crossing").await.unwrap();
+        query
+            .register(CrossingRow::DATASET, "crossing")
+            .await
+            .unwrap();
         let rows: Vec<CrossingRow> = query
             .rows("SELECT crossing_id, overlap_m FROM crossing")
             .await
@@ -884,14 +898,16 @@ mod tests {
         let written = write_table(&root, &target, &[one]).await.unwrap();
 
         assert_eq!(written.partitions.removed, 1);
-        assert!(tmp
-            .path()
-            .join("silver/pass/crossed_date=2026-07-21")
-            .exists());
-        assert!(!tmp
-            .path()
-            .join("silver/pass/crossed_date=2026-07-22")
-            .exists());
+        assert!(
+            tmp.path()
+                .join("silver/pass/crossed_date=2026-07-21")
+                .exists()
+        );
+        assert!(
+            !tmp.path()
+                .join("silver/pass/crossed_date=2026-07-22")
+                .exists()
+        );
     }
 
     /// A table shaped like `pass`: no geometry, dated by a column of its own.
@@ -909,7 +925,10 @@ mod tests {
                         .with_timezone("UTC"),
                 ) as ArrayRef,
             ),
-            ("crossed_date", Arc::new(Date32Array::from(days)) as ArrayRef),
+            (
+                "crossed_date",
+                Arc::new(Date32Array::from(days)) as ArrayRef,
+            ),
         ])
         .unwrap()
     }
@@ -955,8 +974,7 @@ mod tests {
         let projector = Projector::for_country(Country::Germany).unwrap();
         let line = LineString::from(vec![berlin().0, frankfurt().0]);
         let projected = projector.project(&line).unwrap();
-        let (geometry_field, geometry) =
-            wkb_column(wkb_field(GEOMETRY).unwrap(), &[line]).unwrap();
+        let (geometry_field, geometry) = wkb_column(wkb_field(GEOMETRY).unwrap(), &[line]).unwrap();
         let (projected_field, projected_array) = wkb_column(
             projected_wkb_field(PROJECTED_GEOMETRY, Country::Germany).unwrap(),
             &[projected],
@@ -982,10 +1000,11 @@ mod tests {
 
         write_table(&root, &target, &[table]).await.unwrap();
 
-        assert!(tmp
-            .path()
-            .join("silver/track/country=DE/seen_date=2026-07-21/part-0.parquet")
-            .exists());
+        assert!(
+            tmp.path()
+                .join("silver/track/country=DE/seen_date=2026-07-21/part-0.parquet")
+                .exists()
+        );
     }
 
     /// The instant columns of a dataset stay instants: a table handing them over as
@@ -1029,7 +1048,10 @@ mod tests {
 
         let translated = translate(&target, &table).unwrap();
 
-        let expected = from_geometry.as_any().downcast_ref::<BinaryArray>().unwrap();
+        let expected = from_geometry
+            .as_any()
+            .downcast_ref::<BinaryArray>()
+            .unwrap();
         let actual = translated
             .geometry
             .as_ref()

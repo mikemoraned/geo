@@ -11,7 +11,7 @@ use std::sync::Arc;
 use arrow::array::{Array, BinaryArray, Int64Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema};
 use geo_types::{Geometry, Point};
-use medallion::{layers, wkb_field, DatasetSpec, Root};
+use medallion::{DatasetSpec, Root, layers, wkb_field};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
 /// Points chosen inside Germany, so the fixture is the shape silver actually holds.

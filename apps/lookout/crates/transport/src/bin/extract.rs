@@ -13,7 +13,7 @@ use clap::Parser;
 use medallion::{Country, MedallionArgs};
 use transport::{
     extract::{ExtractId, Extractor},
-    overture::{Overture, Release, DEFAULT_RELEASE},
+    overture::{DEFAULT_RELEASE, Overture, Release},
 };
 
 #[derive(Parser)]

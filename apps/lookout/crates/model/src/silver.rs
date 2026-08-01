@@ -11,8 +11,8 @@
 use medallion::{Geometry, RowError, SilverTarget};
 
 use crate::{
-    SessionCrossingRow, SessionRow, SessionSampleRow, TrainSegmentRow, WaterCrossingRow, SESSION,
-    SESSION_CROSSING, SESSION_SAMPLE, TRAIN_SEGMENT, WATER_CROSSING,
+    SESSION, SESSION_CROSSING, SESSION_SAMPLE, SessionCrossingRow, SessionRow, SessionSampleRow,
+    TRAIN_SEGMENT, TrainSegmentRow, WATER_CROSSING, WaterCrossingRow,
 };
 
 /// A failure naming a dataset to write to.

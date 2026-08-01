@@ -9,11 +9,11 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use server::queue::{PushError, SampleSink};
-use server::{build_app, AppState};
+use server::{AppState, build_app};
 use shared::{Accel, AccelReading, Gps, GpsReading, Message, V0Message, V1Message};
 use telemetry::RawSample;
 use tokio::net::TcpListener;
-use tokio::time::{sleep, timeout, Instant};
+use tokio::time::{Instant, sleep, timeout};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use uuid::Uuid;
 

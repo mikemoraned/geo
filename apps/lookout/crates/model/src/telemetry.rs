@@ -4,7 +4,7 @@
 //! one dataset per sensor. Sensors are split rather than sharing one under a `sensor=`
 //! partition because they carry different columns, and a dataset is one schema.
 
-use medallion::{layers, DatasetSpec, Row};
+use medallion::{DatasetSpec, Row, layers};
 use serde::{Deserialize, Serialize};
 
 use crate::device::DeviceId;
