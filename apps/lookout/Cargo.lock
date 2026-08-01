@@ -1839,22 +1839,18 @@ checksum = "61803da095bee82a81bb1a452ecc25d3b2f1416d1897eb86430c6159ef717c17"
 name = "crossings"
 version = "0.1.0"
 dependencies = [
- "chrono",
+ "arrow 57.3.1",
  "clap",
- "geo",
+ "geo-traits",
  "geo-types",
- "medallion",
- "model",
- "recorder",
- "serde",
- "serde_json",
- "shared",
- "tempfile",
+ "md5",
+ "parquet",
+ "rand 0.10.2",
+ "rand_chacha 0.10.0",
  "thiserror 2.0.18",
- "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid",
+ "wkb",
 ]
 
 [[package]]
@@ -5425,6 +5421,16 @@ checksum = "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb"
 dependencies = [
  "ppv-lite86",
  "rand_core 0.9.5",
+]
+
+[[package]]
+name = "rand_chacha"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e6af7f3e25ded52c41df4e0b1af2d047e45896c2f3281792ed68a1c243daedb"
+dependencies = [
+ "ppv-lite86",
+ "rand_core 0.10.1",
 ]
 
 [[package]]

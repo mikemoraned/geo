@@ -166,3 +166,67 @@ outputs export to GeoParquet and to uncompressed native GeoArrow for kepler.gl.
   not rail-side; a 2D intersection isn't "visible water"; Overture's representation quirks) — are
   captured in `docs/target.md` under Learnings.**
 
+## Spikes on Device Support
+
+Showed that the pieces a live predictor would depend on can each run on an M5StickC PLUS2 with
+an AT6668 GPS unit — enough to say it looks feasible, not that it works. Five standalone spikes
+in `apps/lookout/spikes/m5/` build on each other: toolchain and flash, screen, Crux on device,
+GPS in, BLE out. The end state shows time and lat/lon on the panel and publishes position over
+BLE; no prediction logic exists yet. New crates on device: `esp-idf-svc`, `mipidsi` +
+`embedded-graphics`, `nmea`, `esp32-nimble`, and `crux_core`.
+
+- **Core and shell must be separate crates.** `esp-idf-sys`'s build script aborts on a host
+  target, so anything depending on it can never be tested off-device — and host-testability was
+  the whole reason for Crux. Each spike from 2 onward is an esp-free `core/` plus an esp-idf
+  `shell/`, with the shell importing the core directly (no typegen or bridge; those are for
+  non-Rust shells).
+- **The shell only carries out effects.** The core owns what the screen says and, in spike 4,
+  the BLE payload and the decision of when publishing is worthwhile — all asserted in host
+  tests. This is the division the predictor wants: predictions as effects.
+- **NMEA parsing lives in the core**, against sentences captured off the real receiver, because
+  a GPS needs sky view and a slow cold start so deskbound iteration is the norm. Fixtures
+  written from NMEA 0183 documentation were wrong — the unit speaks 4.1. Raw captures are
+  gitignored: a fix records where and when someone was.
+- **`crux_core` is pinned to `=0.16.2` on device.** On 0.19, Crux plus BLE rebooted the board
+  every few minutes from inside crux's per-effect machinery. The pin fixes it; the cause was
+  never identified, only avoided.
+- **Hardware facts worth not re-deriving** — the power-hold pin, panel offset and bus ceiling,
+  which Grove pin is RX, UART buffer sizing, and that stack overflow on this board always
+  presents as a fault in unrelated code — are in `.claude/memory/m5-esp32-toolchain.md`.
+- **GNSS noise is worse than the predictor's straw man assumes**: held still with poor
+  satellite geometry, the receiver reported metres-per-second of phantom motion and a false
+  multi-knot speed. Carried into the new "Deploy predictor on M5 device" slice, along with the
+  crux pin as a constraint on the shared core.
+
+
+## Spike on device support for distance lookup
+
+Showed that an M5StickC PLUS2 can hold the German water crossings and find the nearest ones to
+a live GPS fix, fast enough to keep up with the receiver. A new `crossings` crate derives a
+flat point buffer from the crossings GeoParquet; three spikes under `spikes/m5/` load it, scan
+it and render the result. New dependencies: `parquet` and `rand`/`rand_chacha` on the host,
+`geo`, `bytemuck` and `battery-estimator` on device.
+
+- **A brute-force nearest-neighbour scan is enough, with about 20× headroom on time.** No
+  index at all: every fix walks the whole set, taking a great-circle distance to each of the
+  5,749 crossings, and one pass yields both the nearest few for the screen and everything
+  within a radius for the predictor. The budget is the gap between fixes — one a second, and a
+  scan must finish before the next arrives. This takes **~4.7 ms of that second**, so a k-d
+  tree or anything more advanced isn't needed.
+- **The device and the notebook agree** about which crossings are nearest Dresden and how far,
+  to 0.27 m over 2.3 km, and both count the same number within 5 km — the stricter check, since
+  a membership question flips where a distance merely wobbles. `f32` coordinates are enough.
+- **A crossing is named by what it is** — a hash of track, water and position along the track —
+  so an id survives a rebuild and a device prediction can be matched to a laptop ground truth.
+  Track and water alone are not unique: a meandering river meets one segment a dozen times.
+- **The buffer is parallel columns of coordinates and ids** behind a small header, cast in
+  place from flash rather than parsed, so a scan copies nothing. Implemented twice — packer and
+  device — kept honest by a packed file committed as a fixture.
+- **Crux puts the hardware in the shell and the meaning in the core**, for the GPS and the
+  battery alike. The shell only moves bytes — NMEA off a UART, millivolts off an ADC — handing
+  each to the core as an event; parsing a fix, scanning, and reading a voltage as a charge
+  level all happen in the core, which tests on the laptop. So a full discharge and a route's
+  worth of sentences are unit tests rather than trips to the hardware. Measure timings on
+  release, though: the dev profile is 1.7× slower.
+- **Deferred**: showing whether a crossing is closing or receding — it needs judging on a live
+  train, and there is no travel for a few weeks.

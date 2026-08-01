@@ -26,6 +26,8 @@ notes:
   and the "Rust derives, Python reads" convention
 - [`.claude/memory/motis-trips-api.md`](.claude/memory/motis-trips-api.md) — the Motis
   `map/trips` endpoint, enabling realtime, and the no-vehicle-GPS constraint
+- [`.claude/memory/m5-esp32-toolchain.md`](.claude/memory/m5-esp32-toolchain.md) — the
+  M5StickC PLUS2 spikes: why Claude can't flash, the `LIBCLANG_PATH` trap, confirmed board facts
 - [`.claude/memory/python-conventions.md`](.claude/memory/python-conventions.md) — keep
   Python minimal, in a uv project dir, no low-level fiddliness
 - [`.claude/memory/docs-style.md`](.claude/memory/docs-style.md) — reference docs are

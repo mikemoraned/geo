@@ -1,0 +1,40 @@
+# Standalone workspace: this crate targets `xtensa-esp32-espidf`, so it must not be pulled
+# into the host-targeted lookout workspace above it.
+[workspace]
+
+[package]
+name = "spike4-shell"
+version = "0.1.0"
+authors = ["Mike Moran <mike@houseofmoran.com>"]
+edition = "2024"
+resolver = "2"
+rust-version = "1.90"
+
+[[bin]]
+name = "spike4-shell"
+path = "src/bin/spike4_shell.rs"
+harness = false # do not use the built-in cargo test harness -> resolve rust-analyzer errors
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true    # Symbols are nice, and they don't increase the size on Flash
+opt-level = "z"
+
+[dependencies]
+log = "0.4"
+esp-idf-svc = { version = "0.52.1", features = ["critical-section"] }
+mipidsi = "0.10.0"
+embedded-graphics = "0.8.2"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+# Pinned while investigating the intermittent reboot: see README "Known issue". 0.19 and 0.16
+# share the same `#[effect]` API, so this is a near drop-in test of whether the fault is a
+# regression in the newer Command/crossbeam internals.
+crux_core = "=0.16.2"
+# Imported directly, not over FFI: a Rust shell needs no typegen or bridge.
+spike4-core = { path = "../core" }
+esp32-nimble = "0.12.0"
+
+[build-dependencies]
+embuild = "0.33"

@@ -1,0 +1,32 @@
+# Standalone workspace: this spike targets `xtensa-esp32-espidf`, so it must not be
+# pulled into the host-targeted lookout workspace above it.
+[workspace]
+
+[package]
+name = "spike1-display"
+version = "0.1.0"
+authors = ["Mike Moran <mike@houseofmoran.com>"]
+edition = "2024"
+resolver = "2"
+rust-version = "1.85"
+
+[[bin]]
+name = "spike1-display"
+path = "src/bin/spike1_display.rs"
+harness = false # do not use the built-in cargo test harness -> resolve rust-analyzer errors
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true    # Symbols are nice, and they don't increase the size on Flash
+opt-level = "z"
+
+[dependencies]
+log = "0.4"
+esp-idf-svc = { version = "0.52.1", features = ["critical-section"] }
+mipidsi = "0.10.0"
+embedded-graphics = "0.8.2"
+
+[build-dependencies]
+embuild = "0.33"

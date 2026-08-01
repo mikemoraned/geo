@@ -1,4 +1,8 @@
 [workspace]
+# Spike cores are deliberately absent: each declares its own `[workspace]` and carries its
+# own lock, because it has to build for the device alongside a shell this workspace cannot
+# contain, and pins crux to a version the app does not. Listing one here as well leaves
+# cargo with two roots for the same directory and it refuses to load either.
 members = ["crates/*"]
 resolver = "2"
 
@@ -35,8 +39,8 @@ datafusion = "52.5"
 # Must match the arrow version SedonaDB/DataFusion pin, so `RecordBatch`es returned by
 # queries line up with the arrow types we decode them with.
 arrow = "57.1"
-# Parquet writer for the medallion store; same version as arrow so the `RecordBatch`
-# types line up (the parquet crate re-exports arrow's). The `object_store` feature adds
+# Parquet reader/writer; same version as arrow so the `RecordBatch` types line up (the
+# parquet crate re-exports arrow's). The `object_store` feature adds
 # `ParquetObjectWriter`, which writes through an `ObjectStore` rather than a `File`.
 parquet = { version = "57.1", features = ["object_store"] }
 # Storage abstraction the medallion writer goes through: its `LocalFileSystem` stages
@@ -72,6 +76,11 @@ dirs = "6"
 # streams are `futures::Stream`s.
 futures = "0.3"
 md5 = "0.7"
+rand = "0.10"
+# ChaCha is specified to produce the same stream for the same seed across versions and
+# platforms, which `StdRng` deliberately does not promise — so a seeded dataset stays the
+# same dataset.
+rand_chacha = "0.10"
 tempfile = "3"
 proptest = "1"
 # Motis `map/trips` client: progenitor-generated from the OpenAPI spec (reqwest 0.12),

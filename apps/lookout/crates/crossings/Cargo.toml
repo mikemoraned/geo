@@ -1,27 +1,21 @@
 [package]
 name = "crossings"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-chrono = { workspace = true }
+arrow = { workspace = true }
 clap = { workspace = true }
-geo = { workspace = true }
+geo-traits = { workspace = true }
 geo-types = { workspace = true }
-medallion = { workspace = true }
-model = { workspace = true }
-serde = { workspace = true }
+md5 = { workspace = true }
+parquet = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-
-[dev-dependencies]
-recorder = { workspace = true }
-serde_json = { workspace = true }
-shared = { workspace = true }
-tempfile = { workspace = true }
-uuid = { workspace = true }
+wkb = { workspace = true }
 
 [lints]
 workspace = true

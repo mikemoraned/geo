@@ -1,0 +1,30 @@
+# Standalone workspace: this spike targets `xtensa-esp32-espidf`, so it must not be
+# pulled into the host-targeted lookout workspace above it.
+[workspace]
+
+[package]
+name = "spike0-hello"
+version = "0.1.0"
+authors = ["Mike Moran <mike@houseofmoran.com>"]
+edition = "2024"
+resolver = "2"
+rust-version = "1.85"
+
+[[bin]]
+name = "spike0-hello"
+path = "src/bin/spike0_hello.rs"
+harness = false # do not use the built-in cargo test harness -> resolve rust-analyzer errors
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true    # Symbols are nice, and they don't increase the size on Flash
+opt-level = "z"
+
+[dependencies]
+log = "0.4"
+esp-idf-svc = { version = "0.52.1", features = ["critical-section"] }
+
+[build-dependencies]
+embuild = "0.33"

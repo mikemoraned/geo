@@ -1,0 +1,12 @@
+# The ESP-IDF checkout and its toolchains (~4.3G), shared by every spike here via
+# `ESP_IDF_TOOLS_INSTALL_DIR = "custom:../.embuild/espressif"`. Recreated on first build.
+/.embuild
+
+# Build output of every crate under here, at whatever depth — spikes that split into
+# core/shell crates nest one level deeper than the per-spike .gitignore files reach.
+target/
+
+# NMEA captures from a real receiver. Deliberately not committed: a fix carries the precise
+# position and time it was taken at, and a run of them is a trace of someone's movements.
+# Test fixtures derived from a capture keep the sentence structure but shift the coordinates.
+*.nmea

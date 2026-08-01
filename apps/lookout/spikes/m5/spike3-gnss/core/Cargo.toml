@@ -1,0 +1,19 @@
+# Deliberately free of any `esp-idf-*` dependency: `esp-idf-sys`'s build script aborts on
+# a host target, so anything it touches can never be built or tested on the laptop. The
+# shell crate next door adds the device half.
+[workspace]
+
+[package]
+name = "spike3-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+
+[dependencies]
+crux_core = "0.19.0"
+serde = { version = "1", features = ["derive"] }
+# `default-features = false` drops chrono's `clock` feature, and with it `iana-time-zone`,
+# which has no business on the device. The core is handed the time rather than reading it.
+chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+nmea = "0.7"
+thiserror = "2"
