@@ -90,7 +90,7 @@ pub fn passes(
         .iter()
         .flat_map(|session| passes_of(session, crossings, radius))
         .collect();
-    passed.sort_by_key(|pass| (pass.crossed_at, pass.crossing_id.to_string()));
+    passed.sort_by(|a, b| (a.crossed_at, &a.crossing_id).cmp(&(b.crossed_at, &b.crossing_id)));
     passed
 }
 

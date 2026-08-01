@@ -135,17 +135,6 @@ impl Overture {
         &self.release
     }
 
-    /// Register the release's `segment` GeoParquet as a queryable table `segments`.
-    /// Replaces any existing registration of that name.
-    pub async fn register_segments(&self) -> Result<(), OvertureError> {
-        self.register(OvertureType::SEGMENT, "segments").await
-    }
-
-    /// Register the release's `connector` GeoParquet as a queryable table `connectors`.
-    pub async fn register_connectors(&self) -> Result<(), OvertureError> {
-        self.register(OvertureType::CONNECTOR, "connectors").await
-    }
-
     /// Register one type's GeoParquet as a queryable table `table`. Replaces any
     /// existing registration of it.
     pub async fn register(

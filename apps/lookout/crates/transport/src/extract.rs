@@ -114,23 +114,22 @@ impl<'a> Extractor<'a> {
         country: Country,
         at: DateTime<Utc>,
     ) -> Result<Extraction, ExtractError> {
-        self.overture
-            .register(OvertureType::DIVISION_AREA, "division_area")
-            .await?;
-        self.overture
-            .register(OvertureType::DIVISION, "division")
-            .await?;
-        self.overture.register_segments().await?;
-        self.overture.register_connectors().await?;
-        self.overture.register(OvertureType::WATER, "water").await?;
+        for (overture_type, table) in [
+            (OvertureType::DIVISION_AREA, "division_area"),
+            (OvertureType::DIVISION, "division"),
+            (OvertureType::SEGMENT, "segments"),
+            (OvertureType::CONNECTOR, "connectors"),
+            (OvertureType::WATER, "water"),
+        ] {
+            self.overture.register(overture_type, table).await?;
+        }
 
         let window = self.country_window(country).await?;
-        let in_window = |alias: &str| bbox_overlaps(alias, &window);
+        let in_window = bbox_overlaps(&window);
         let of_country = format!("country = '{}'", country.code());
         let rail = format!(
-            "subtype = 'rail' AND {class} AND {window}",
-            class = class_filter("class"),
-            window = in_window(""),
+            "subtype = 'rail' AND {class} AND {in_window}",
+            class = class_filter(),
         );
 
         let mut rows = Vec::new();
@@ -142,11 +141,11 @@ impl<'a> Extractor<'a> {
             ),
             (OvertureType::DIVISION, "division", of_country),
             (OvertureType::SEGMENT, "segments", rail.clone()),
-            (OvertureType::WATER, "water", in_window("")),
+            (OvertureType::WATER, "water", in_window.clone()),
             (
                 OvertureType::CONNECTOR,
                 "connectors",
-                referenced_connectors(&in_window(""), &rail),
+                referenced_connectors(&in_window, &rail),
             ),
         ] {
             let written = self
@@ -258,10 +257,10 @@ impl<'a> Extractor<'a> {
 
 /// A predicate keeping rows whose Overture `bbox` overlaps `window`. Overture stores the
 /// envelope on every row, so this prunes row groups before any geometry is decoded.
-fn bbox_overlaps(alias: &str, window: &Rect<f64>) -> String {
+fn bbox_overlaps(window: &Rect<f64>) -> String {
     format!(
-        "{alias}bbox.xmin <= {max_lon} AND {alias}bbox.xmax >= {min_lon}
-         AND {alias}bbox.ymin <= {max_lat} AND {alias}bbox.ymax >= {min_lat}",
+        "bbox.xmin <= {max_lon} AND bbox.xmax >= {min_lon}
+         AND bbox.ymin <= {max_lat} AND bbox.ymax >= {min_lat}",
         min_lon = window.min().x,
         min_lat = window.min().y,
         max_lon = window.max().x,
@@ -283,10 +282,10 @@ fn referenced_connectors(in_window: &str, rail: &str) -> String {
     )
 }
 
-/// A SQL predicate excluding [`EXCLUDED_CLASSES`] on `column`, keeping null-class rows
-/// (`coalesce` maps a null class to `''`, which is never an excluded class). `TRUE` when
-/// nothing is excluded, so it composes into an `AND` chain unconditionally.
-fn class_filter(column: &str) -> String {
+/// A SQL predicate excluding [`EXCLUDED_CLASSES`], keeping null-class rows (`coalesce` maps
+/// a null class to `''`, which is never an excluded class). `TRUE` when nothing is excluded,
+/// so it composes into an `AND` chain unconditionally.
+fn class_filter() -> String {
     if EXCLUDED_CLASSES.is_empty() {
         return "TRUE".to_string();
     }
@@ -295,7 +294,7 @@ fn class_filter(column: &str) -> String {
         .map(|class| format!("'{class}'"))
         .collect::<Vec<_>>()
         .join(", ");
-    format!("coalesce({column}, '') NOT IN ({excluded})")
+    format!("coalesce(class, '') NOT IN ({excluded})")
 }
 
 #[cfg(test)]
@@ -337,19 +336,19 @@ mod tests {
     /// rail inside it, so a row is kept when its envelope touches the window at all.
     #[test]
     fn the_window_predicate_keeps_rows_whose_envelope_overlaps_it() {
-        let predicate = bbox_overlaps("w.", &window());
+        let predicate = bbox_overlaps(&window());
 
-        assert!(predicate.contains("w.bbox.xmin <= 15.1"));
-        assert!(predicate.contains("w.bbox.xmax >= 5.8"));
-        assert!(predicate.contains("w.bbox.ymin <= 55.1"));
-        assert!(predicate.contains("w.bbox.ymax >= 47.2"));
+        assert!(predicate.contains("bbox.xmin <= 15.1"));
+        assert!(predicate.contains("bbox.xmax >= 5.8"));
+        assert!(predicate.contains("bbox.ymin <= 55.1"));
+        assert!(predicate.contains("bbox.ymax >= 47.2"));
     }
 
     /// Connectors are restricted to those a kept rail segment names, so the country's road
     /// junctions don't come along with them.
     #[test]
     fn connectors_are_restricted_to_those_rail_segments_refer_to() {
-        let predicate = referenced_connectors(&bbox_overlaps("", &window()), "subtype = 'rail'");
+        let predicate = referenced_connectors(&bbox_overlaps(&window()), "subtype = 'rail'");
 
         assert!(predicate.contains("UNNEST(s.connectors)"));
         assert!(predicate.contains("subtype = 'rail'"));
@@ -362,7 +361,7 @@ mod tests {
             !EXCLUDED_CLASSES.is_empty(),
             "expects at least one exclusion"
         );
-        let filter = class_filter("class");
+        let filter = class_filter();
 
         assert!(filter.starts_with("coalesce(class, '') NOT IN ("));
         for class in EXCLUDED_CLASSES {

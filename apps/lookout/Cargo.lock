@@ -1842,7 +1842,6 @@ dependencies = [
  "chrono",
  "clap",
  "geo-types",
- "md5",
  "medallion",
  "model",
  "rand 0.10.2",

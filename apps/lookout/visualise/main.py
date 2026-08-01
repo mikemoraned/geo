@@ -144,28 +144,34 @@ _GPS = f"""
 """
 
 
-def _window(store: Store, dataset: str, sql: str, cutoff_ms: int, devices) -> list[tuple]:
-    """Run a windowed sensor query, binding the cutoff both ways it is used: as the instant
-    rows are compared against, and as the date partitions are pruned by."""
+def _windowed(
+    store: Store, layer: str, dataset: str, sql: str, cutoff_ms: int, **params
+) -> list[tuple]:
+    """Run a windowed query, binding the cutoff both ways it is used: as the instant rows are
+    compared against, and as the date partitions are pruned by."""
     cutoff = dt.datetime.fromtimestamp(cutoff_ms / 1000.0, dt.timezone.utc)
     return store.rows(
-        BRONZE,
+        layer,
         dataset,
         sql,
         cutoff_s=cutoff.timestamp(),
         cutoff_date=cutoff.date(),
-        devices=devices or None,
+        **params,
     )
 
 
 def fetch_accel(store: Store, cutoff_ms: int, devices: list[str] | None):
     """Rows `(device_id, t, rms, peak, n)` of the bronze `accel_reading` dataset."""
-    return _window(store, "accel_reading", _ACCEL, cutoff_ms, devices)
+    return _windowed(
+        store, BRONZE, "accel_reading", _ACCEL, cutoff_ms, devices=devices or None
+    )
 
 
 def fetch_gps(store: Store, cutoff_ms: int, devices: list[str] | None):
     """Rows `(device_id, t, lat, lon, acc, speed)` of the bronze `gps_reading` dataset."""
-    return _window(store, "gps_reading", _GPS, cutoff_ms, devices)
+    return _windowed(
+        store, BRONZE, "gps_reading", _GPS, cutoff_ms, devices=devices or None
+    )
 
 
 def log_accel(rows) -> None:
@@ -359,24 +365,19 @@ _TRAIN_POSITIONS = f"""
 def fetch_train_legs(store: Store, cutoff_ms: int):
     """Rows `(trip_id, mode, route_color, route_name, train_number, route)` of the silver
     `train_segment` dataset, `route` being the leg's vertices as `[lat, lon]`."""
-    return _legs(store, _TRAIN_LEGS, cutoff_ms)
+    return _windowed(store, SILVER, "train_segment", _TRAIN_LEGS, cutoff_ms)
 
 
 def fetch_train_positions(store: Store, cutoff_ms: int, step_s: int = SAMPLE_STEP_S):
     """Rows `(trip_id, t, lat, lon)` sampling each leg's interpolated position every
     `step_s` seconds."""
-    return _legs(store, _TRAIN_POSITIONS, cutoff_ms, step_ms=step_s * 1000)
-
-
-def _legs(store: Store, sql: str, cutoff_ms: int, **params) -> list[tuple]:
-    cutoff = dt.datetime.fromtimestamp(cutoff_ms / 1000.0, dt.timezone.utc)
-    return store.rows(
+    return _windowed(
+        store,
         SILVER,
         "train_segment",
-        sql,
-        cutoff_s=cutoff.timestamp(),
-        cutoff_date=cutoff.date(),
-        **params,
+        _TRAIN_POSITIONS,
+        cutoff_ms,
+        step_ms=step_s * 1000,
     )
 
 
@@ -543,8 +544,6 @@ def main() -> None:
     store = Store(args.medallion_root)
     accel = fetch_accel(store, cutoff_ms, args.devices)
     gps = fetch_gps(store, cutoff_ms, args.devices)
-    legs = fetch_train_legs(store, cutoff_ms)
-    positions = fetch_train_positions(store, cutoff_ms)
 
     devices = sorted({row[0] for row in accel} | {row[0] for row in gps})
     if not devices:
@@ -552,6 +551,9 @@ def main() -> None:
             f"no samples in the selected window (since={args.since}s, "
             f"devices={args.devices or 'all'})"
         )
+
+    legs = fetch_train_legs(store, cutoff_ms)
+    positions = fetch_train_positions(store, cutoff_ms)
 
     rr.init("lookout")
     log_accel(accel)

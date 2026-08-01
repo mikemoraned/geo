@@ -23,10 +23,6 @@ const POLYLINE_PRECISION: u32 = 5;
 /// The capture log under its query name.
 const CAPTURED: &str = "captured";
 
-/// The deduped legs, materialised so each partition's rows are a scan of them rather than
-/// a fresh dedup of the whole capture log.
-const DEDUPED_LEGS: &str = "deduped";
-
 /// One row per scheduled leg, newest capture kept.
 ///
 /// A leg's identity is `(trip_id, from_stop_id, departure)`: `departure` alone is not
@@ -140,18 +136,11 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
         .count("SELECT COUNT(*) AS count FROM captured")
         .await? as usize;
 
-    // Dedup once into a table the per-partition queries read, rather than as a subquery
-    // they each re-run: the window sorts the whole capture log, so repeating it per
-    // partition would rescan all of history once per date.
-    query
-        .sql(&format!("CREATE TABLE {DEDUPED_LEGS} AS {DEDUPED}"))
-        .await?;
-
     let legs: Vec<Leg> = query
         .rows(&format!(
             "SELECT trip_id, route_name, train_number, agency_id, agency_name, mode,
                     route_color, realtime, from_stop_id, departure, arrival, polyline
-             FROM {DEDUPED_LEGS}
+             FROM ({DEDUPED})
              ORDER BY departure"
         ))
         .await?;

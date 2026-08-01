@@ -8,7 +8,7 @@
 //! A run derives the whole dataset from the whole of silver, and replaces what it produces, so
 //! a partition it no longer produces rows for goes with it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use geo_types::{Point, Rect};
@@ -80,26 +80,16 @@ struct StoredCrossing {
 /// failing: a store can legitimately hold sessions in a country no extract has covered yet.
 pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, CrossingError> {
     let query = Query::new(root.clone());
-    if !query.register_if_present(model::SESSION, "session").await? {
-        return Err(CrossingError::Missing {
-            dataset: model::SESSION.name,
-        });
-    }
-    if !query
-        .register_if_present(model::SESSION_SAMPLE, "session_sample")
-        .await?
-    {
-        return Err(CrossingError::Missing {
-            dataset: model::SESSION_SAMPLE.name,
-        });
-    }
-    if !query
-        .register_if_present(model::WATER_CROSSING, "water_crossing")
-        .await?
-    {
-        return Err(CrossingError::Missing {
-            dataset: model::WATER_CROSSING.name,
-        });
+    for (dataset, table) in [
+        (model::SESSION, "session"),
+        (model::SESSION_SAMPLE, "session_sample"),
+        (model::WATER_CROSSING, "water_crossing"),
+    ] {
+        if !query.register_if_present(dataset, table).await? {
+            return Err(CrossingError::Missing {
+                dataset: dataset.name,
+            });
+        }
     }
 
     let mut outcome = MatchOutcome::default();
@@ -113,13 +103,13 @@ pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, Crossin
         let country_passes = passes(&sessions, &crossings, radius);
         outcome.sessions_matched += country_passes
             .iter()
-            .map(|pass| pass.session_id.to_string())
-            .collect::<std::collections::HashSet<_>>()
+            .map(|pass| &pass.session_id)
+            .collect::<HashSet<_>>()
             .len();
         passed.extend(country_passes);
     }
 
-    passed.sort_by_key(|pass| (pass.crossed_at, pass.crossing_id.to_string()));
+    passed.sort_by(|a, b| (a.crossed_at, &a.crossing_id).cmp(&(b.crossed_at, &b.crossing_id)));
     outcome.passes = passed.len();
     outcome.partitions = write(root, &passed).await?;
     Ok(outcome)
