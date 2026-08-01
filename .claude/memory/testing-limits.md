@@ -14,4 +14,11 @@ What a passing test run does and doesn't prove when Claude runs it.
   `./target/debug/<bin> <args>` — rather than relying on tests alone. A run that fails
   later (on a missing env var, say) still proves the arguments parsed. Add a unit test for
   the parsing itself where one can be written.
+- **DuckDB's `INSTALL spatial` fails under the sandbox**: it stages the extension into
+  `~/.duckdb/extensions/…` and that write is refused, so anything running
+  `INSTALL spatial; LOAD spatial;` dies with an `IOException` naming a `.tmp-…` file. That
+  covers the `visualise` Python tests (22 of them error, the other 23 pass) and every
+  water-crossings notebook run, so `just test-python` — and therefore `just test-no-docker`
+  as a whole — cannot complete here. Run the three Python suites separately to see which
+  half is real, and have the user run the notebook recipes.
 - Say plainly, when reporting, which tests could not be run.
