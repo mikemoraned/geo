@@ -1391,59 +1391,8 @@ Steps:
       once the short-id column landed: 5,749 crossings derived and 5,749 packed into 69,000
       bytes, from extract `20260727T193628Z`.
 
-### Simple crow-flies predictor
 
-This should probably be written in Rust as this will be the beginnings of what we later embed in a live system. So, we may need to put some wrappers around it to make it easy to call from Python as part of the eval framework (see below).
 
-We should start following the [ports and adapters pattern](https://8thlight.com/insights/a-color-coded-guide-to-ports-and-adapters) with this set of changes so that, for example, the predictor is not aware if it is being driven by recorded or live GPS data.
 
-#### Tasks 
 
-...
 
-- [ ] Repoint `visualise/` at **the predictor, replayed**: drive it with a session's
-      samples in order and record what it said after each one, then log the whole run to
-      rerun so the timeline scrubs through a prediction changing as the evidence arrives.
-      This replaces the tool as it stands, which draws recorded data — the notebook does
-      that better, and a static map cannot show a prediction being revised. The point of
-      rerun here is time: at each sample, where the predictor thought each crossing was
-      and when it expected to reach it, against where the session actually went.
-
-      What each step of the replay has to log, so the timeline reads as a claim being
-      tested rather than a set of dots:
-
-      * the **session so far** — the path up to the current sample, and the current sample
-        itself, so the map shows what the predictor had been told when it spoke;
-      * the **crossings it is predicting**, each with the instant it expects them to be
-        passed. A prediction is a place and a time, so the natural form is the crossing
-        drawn on the map and its predicted instant as a series per crossing — a line that
-        should converge on the actual passing instant as the train approaches, and whose
-        wandering is the thing worth watching;
-      * the **error against the ground truth**, from `session_crossing`: predicted instant
-        minus actual, per crossing, as a series that should trend to zero. This is the
-        precision measure of the evaluation section made visible, so the two should agree
-        on what counts as a hit rather than defining it twice.
-
-      The replay is the recorded-data adapter of the ports-and-adapters split above, so
-      the predictor sees a stream of samples and nothing about where they came from. That
-      is what makes this the same code path a live feed will drive later.
-
-      Everything the tool does today goes: the bronze `gps_reading` / `accel_reading`
-      readers, the accel ride-quality series, and the `train_segment` panes. Rewrite
-      `README.md` and the module docstring to describe this tool rather than the one being
-      replaced, and expect most of `tests/test_main.py` to go with the readers it covers.
-
-### Evaluation framework
-
-This should be written in marimo notebooks and try to re-use as much typical evaluation libraries as possible. So, once we've defined our precision/recall definitions I'd like to plug those into standard well-supported python libraries which allows us to define things like F1-score on top.
-
-#### Tasks 
-
-...
-- [ ] Delete `docs/2026-08-01-evaluation.md` at the end of this slice. It is a dated
-      assessment of how to measure a predictor, written before one existed and before there
-      was any ground truth to measure against, and kept for the history of the decision.
-      Anything in it still holding by then belongs in the tasks above, in the notebooks
-      that implement the measures, or in a durable doc alongside `medallion.md`; the rest —
-      the rejected alternatives, the reasoning about metrics from other domains — goes
-      stale once a first run has actually produced numbers.
