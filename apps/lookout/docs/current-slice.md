@@ -457,6 +457,15 @@ The main tasks here should be focussed on documenting these patterns and correct
       stayed the way to name another. The Python readers walk up the same way rather than
       each holding a path — `visualise/main.py` and the sessions notebook, edited through
       the live kernel rather than on disk.
+      Correction, found when `just silver` failed on 2026-08-01: the Python walks used
+      `Path.cwd().parents`, which **excludes the working directory itself**, where Rust's
+      `ancestors()` includes it. The workspace manifest sits in `apps/lookout` and that is
+      where the recipes run, so every Python reader failed there — with a bare
+      `StopIteration`, naming nothing. They now start at the working directory and say what
+      they looked for when there is no workspace above it. The notebook that *writes* no
+      longer walks at all: `lookout_medallion` exposes `default_root()` over
+      `Root::default_path()`, so it asks the same code its writes go through and cannot read
+      one store while writing another.
 
 ### Sessionisation
 

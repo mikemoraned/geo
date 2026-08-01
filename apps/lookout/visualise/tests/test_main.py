@@ -443,3 +443,29 @@ class TestTrainIdentity:
         assert main._train_entity("trip-b", None) == "trains/trip-b"
         # Slashes/spaces in a line name don't spawn extra path levels.
         assert main._train_entity("trip-c", "S1/S11") == "trains/S1-S11/trip-c"
+
+
+class TestStoreLocation:
+    def workspace(self, directory):
+        """A directory holding a workspace manifest, as the app's own root does."""
+        (directory / "Cargo.toml").write_text('[workspace]\nmembers = ["crates/*"]\n')
+        return directory
+
+    def test_the_store_is_found_from_the_workspace_root_itself(self, tmp_path, monkeypatch):
+        root = self.workspace(tmp_path)
+        monkeypatch.chdir(root)
+        assert main._medallion_root_in_repo() == root / "data/medallion"
+
+    def test_the_store_is_found_from_below_the_workspace_root(self, tmp_path, monkeypatch):
+        root = self.workspace(tmp_path)
+        deep = root / "notebooks" / "sessions"
+        deep.mkdir(parents=True)
+        monkeypatch.chdir(deep)
+        assert main._medallion_root_in_repo() == root / "data/medallion"
+
+    def test_no_workspace_above_says_so_rather_than_stopping_short(self, tmp_path, monkeypatch):
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        monkeypatch.chdir(outside)
+        with pytest.raises(FileNotFoundError, match="Cargo.toml declaring"):
+            main._medallion_root_in_repo()

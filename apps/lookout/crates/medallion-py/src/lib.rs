@@ -101,6 +101,16 @@ fn projected_crs(country: &str) -> PyResult<String> {
     Ok(format!("EPSG:{}", country.projected_epsg()))
 }
 
+/// The store in the repo the caller is working in, as a path.
+///
+/// This is what [`write_silver`] writes into when it is not given a root, so a caller reading
+/// the store directly — with duckdb, say — asks for the path rather than working it out, and
+/// cannot end up reading one store and writing another.
+#[pyfunction]
+fn default_root() -> PyResult<PathBuf> {
+    Root::default_path().map_err(|err| PyRuntimeError::new_err(err.to_string()))
+}
+
 /// The runtime the store's async writers run on: one per process, since a call arrives on
 /// whichever thread python is on and building a runtime per call would cost more than the
 /// write.
@@ -138,6 +148,7 @@ fn table_error(err: TableError) -> PyErr {
 fn lookout_medallion(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(write_silver, module)?)?;
     module.add_function(wrap_pyfunction!(projected_crs, module)?)?;
+    module.add_function(wrap_pyfunction!(default_root, module)?)?;
     module.add_class::<Written>()?;
     Ok(())
 }

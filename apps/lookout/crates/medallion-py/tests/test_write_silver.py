@@ -288,3 +288,23 @@ class TestTheProjectedCrs:
     def test_a_country_the_store_does_not_know(self):
         with pytest.raises(ValueError, match="ZZ"):
             lookout_medallion.projected_crs("ZZ")
+
+
+class TestTheDefaultRoot:
+    def test_it_is_the_store_in_the_workspace_the_caller_is_in(self, tmp_path, monkeypatch):
+        workspace = tmp_path / "app"
+        deep = workspace / "notebooks" / "sessions"
+        deep.mkdir(parents=True)
+        (workspace / "Cargo.toml").write_text('[workspace]\nmembers = ["crates/*"]\n')
+
+        # Found from the workspace root itself, which is where a recipe runs from, and from
+        # any directory below it.
+        monkeypatch.chdir(workspace)
+        assert lookout_medallion.default_root() == workspace / "data/medallion"
+        monkeypatch.chdir(deep)
+        assert lookout_medallion.default_root() == workspace / "data/medallion"
+
+    def test_no_workspace_above_the_caller(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(RuntimeError, match="Cargo.toml"):
+            lookout_medallion.default_root()

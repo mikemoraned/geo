@@ -29,13 +29,20 @@ def _():
 @app.cell
 def _(Path):
     # The medallion store the CLIs write into: the one in the repo, found by walking up for the
-    # workspace the way they do, so this notebook always reads the store they last wrote.
-    MEDALLION_ROOT = next(
-        parent / "data/medallion"
-        for parent in Path.cwd().resolve().parents
-        if (parent / "Cargo.toml").is_file()
-        and "[workspace]" in (parent / "Cargo.toml").read_text()
-    )
+    # workspace the way they do — the starting directory included, since that is where the
+    # workspace manifest sits — so this notebook always reads the store they last wrote.
+    def medallion_root() -> Path:
+        start = Path.cwd().resolve()
+        for directory in (start, *start.parents):
+            manifest = directory / "Cargo.toml"
+            if manifest.is_file() and "[workspace]" in manifest.read_text():
+                return directory / "data/medallion"
+        raise FileNotFoundError(
+            f"no Cargo.toml declaring [workspace] at or above {start}, "
+            f"so the store's location cannot be worked out"
+        )
+
+    MEDALLION_ROOT = medallion_root()
 
     # The CRS the store's projected geometry is in: one zone per country, and everything recorded
     # so far is in Germany. Distances in metres are measured on that column.

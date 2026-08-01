@@ -30,14 +30,26 @@ import rerun as rr
 import rerun.blueprint as rrb
 
 TIMELINE = "time"
-# The store in the repo, found by walking up for the workspace the way the Rust CLIs do, so
-# this reads whatever they last wrote however deep the working directory is.
-DEFAULT_MEDALLION_ROOT = next(
-    parent / "data/medallion"
-    for parent in Path.cwd().resolve().parents
-    if (parent / "Cargo.toml").is_file()
-    and "[workspace]" in (parent / "Cargo.toml").read_text()
-)
+
+
+def _medallion_root_in_repo() -> Path:
+    """The store in the repo, found by walking up for the workspace the way the Rust CLIs do.
+
+    The walk starts at the working directory itself, which is where the workspace manifest
+    sits when a recipe is run as documented, and ends at the filesystem root.
+    """
+    start = Path.cwd().resolve()
+    for directory in (start, *start.parents):
+        manifest = directory / "Cargo.toml"
+        if manifest.is_file() and "[workspace]" in manifest.read_text():
+            return directory / "data/medallion"
+    raise FileNotFoundError(
+        f"no Cargo.toml declaring [workspace] at or above {start}, so the store's location "
+        f"cannot be worked out; pass --medallion-root to say where it is"
+    )
+
+
+DEFAULT_MEDALLION_ROOT = _medallion_root_in_repo()
 DEFAULT_OUTPUT = Path("data/lookout.rrd")
 
 BRONZE = "bronze"

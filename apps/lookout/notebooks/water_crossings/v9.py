@@ -26,34 +26,26 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
-    from pathlib import Path
-
     import marimo as mo
     import duckdb
     import geopandas as gpd
     import lonboard
     import lookout_medallion
 
-    return Path, duckdb, gpd, lonboard, lookout_medallion, mo
+    return duckdb, gpd, lonboard, lookout_medallion, mo
 
 
 @app.cell
-def _(Path, lookout_medallion):
+def _(lookout_medallion):
     # The bronze Overture extract this notebook reads, pinned. A rerun is meant to see exactly
     # what the last run saw, so moving to a newer extract is a deliberate edit here rather than
     # something that happens on its own. `just bronze-extract` writes them; the release each covers and
     # the window it was restricted to are in the manifest, read below.
     EXTRACT_ID = "20260727T193628Z"
 
-    # The medallion store in the repo, found by walking up for the workspace the way the rust
-    # CLIs do, so this notebook and they always read and write the same store however deep the
-    # working directory is.
-    MEDALLION_ROOT = next(
-        parent / "data/medallion"
-        for parent in Path.cwd().resolve().parents
-        if (parent / "Cargo.toml").is_file()
-        and "[workspace]" in (parent / "Cargo.toml").read_text()
-    )
+    # The medallion store in the repo. Asked of the store's own writer rather than worked out
+    # here, so what this notebook reads with duckdb is the store its writes land in.
+    MEDALLION_ROOT = lookout_medallion.default_root()
 
     # The country this run covers: the window the extract was taken over, and the partition the
     # crossings are written under.
