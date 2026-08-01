@@ -1140,7 +1140,7 @@ Steps:
       leaves its own directory standing, and `Query` treated that as present and then failed
       with the engine's "can't infer schema for zero objects". A dataset holding no files now
       reads as absent, whether it was never written or has been emptied.
-- [ ] Add a `just silver-crossings` recipe (under the naming rule above, and joining
+- [x] Add a `just silver-crossings` recipe (under the naming rule above, and joining
       `just silver`), run the whole thing over the real store, and record
       what came out: crossings in DE, how many sessions matched any crossing, crossings
       per session and the distribution of `distance_m` and `samples_within`. Choose M
@@ -1150,6 +1150,44 @@ Steps:
       sessions match nothing, say so plainly here: the crow-flies predictor cannot be
       evaluated against ground truth that is mostly empty, and that finding belongs
       before the predictor is built, not after.
+
+      Note: three recipes rather than one, since the two halves run on completely different
+      clocks. `silver-water-crossings` runs the notebook headlessly and takes the best part of
+      an hour — it intersects a country's rail against its water — but only changes when the
+      extract or the collapse tuning does. `silver-session-crossings` runs `match_crossings`
+      and takes seconds. `silver-crossings` runs both and joins `just silver`, so a full
+      rebuild is still one command. One wart, written into the recipe: the notebook resolves
+      the store by walking up for the workspace and a marimo script takes no arguments of
+      ours, so `--medallion-root` reaches the session half only and the water half always
+      writes the repo store.
+
+      **M = 250 m**, chosen from the distribution rather than in advance. Measured by deriving
+      at 1000 m and looking at where the nearest-sample distances stop behaving like crossings
+      that were passed. In 50 m buckets they decay — 58, 42, 33, 21, 11 — and then stop: one
+      single pass in 250–300 m, and beyond that a flat spread averaging ~8 per bucket all the
+      way to a kilometre with no structure at all. Two populations, and the elbow between them
+      is where the decay ends. The flat part is what "merely near" looks like: the density of
+      crossings around a path rather than crossings on it.
+
+      Run over the real store on 2026-08-01, at 250 m against the 5749 crossings and 31
+      sessions: **165 passes over 16 sessions and 119 distinct crossings**, in 5 dated
+      partitions. Distances min 0.2 m, median 79.2 m, p90 188.4 m, max 242.9 m. Passes per
+      matching session 1 to 41, median 5.5. `samples_within` is 1 for 80 of the 165, median 2,
+      max 12 — at 250 m and a fix every few seconds, a train crosses a river between fixes, so
+      a single sample inside the radius is the normal case rather than the doubtful one.
+
+      **Half the sessions match nothing, and that is not a problem with the matching.** 15 of
+      31 matched no crossing at 250 m; their sample counts run 1 to 151 with a median of 6,
+      against a median of 205 for the 16 that did match. Exactly one unmatched session is
+      substantial — 151 samples over 26 minutes and half a degree of longitude — and a journey
+      that crossed no water within 250 m is an ordinary thing for a journey to do. So the
+      ground truth is thin but not empty: the predictor will be evaluated against 16 sessions
+      and 165 passes, which is enough for a first precision and recall number and not enough
+      to read much into small differences.
+
+      Widening does not rescue the rest: at 1000 m only three more sessions match (19 of 31),
+      and those matches are in the flat part of the distribution — crossings near the path, not
+      passed. The way to more ground truth is more recording, not a wider radius.
 
 ### Simple crow-flies predictor
 

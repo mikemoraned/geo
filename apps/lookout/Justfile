@@ -101,6 +101,7 @@ bronze-extract *args:
 silver *args:
     just silver-sessionise {{args}}
     just silver-motis-ingest {{args}}
+    just silver-crossings {{args}}
 
 # Derive the silver `train_segment` dataset from the bronze motis capture log: dedup
 # re-seen legs, decode each polyline to WKB, and add the projected geometry. Requires
@@ -123,6 +124,33 @@ silver-motis-ingest *args:
 # the last one wrote rather than adding to it.
 silver-sessionise *args:
     cargo run --release -p recorder --bin sessionise -- {{args}}
+
+# Derive both crossing datasets: the water crossings from the Overture extract, then the
+# ones each recorded session passed. The first is the slow half — it intersects a country's
+# rail against its water and takes the best part of an hour — and it only changes when the
+# extract or the collapse tuning does, so run `silver-session-crossings` alone after a drain.
+# Args reach the session half only; see `silver-water-crossings` for why.
+silver-crossings *args:
+    just silver-water-crossings
+    just silver-session-crossings {{args}}
+
+# Derive the silver `water_crossing` dataset by running the crossings notebook headlessly:
+# every place a stretch of track meets a body of water, collapsed to one crossing per place.
+# Reads the extract the notebook pins and writes one partition per country.
+# **Writes into the repo store whichever store other recipes are pointed at**: the notebook
+# resolves the store by walking up for the workspace, and a marimo script takes no arguments
+# of ours. Pass a different store by editing the notebook, or run the notebook interactively.
+# The extension module is reinstalled because uv caches the built wheel against its own
+# sources and would not otherwise notice a change to the rust crates it wraps.
+silver-water-crossings:
+    uv run --no-project --reinstall-package lookout-medallion notebooks/water_crossings/v9.py
+
+# Derive the silver `session_crossing` dataset: the crossings each recorded session passed,
+# matched by distance from the session's samples with --match-radius-m (default 150). Needs
+# the sessions and the water crossings to have been derived. Override the store with
+# --medallion-root. Re-derives everything, so a rerun replaces what the last one wrote.
+silver-session-crossings *args:
+    cargo run --release -p crossings --bin match_crossings -- {{args}}
 
 # Convert the medallion store into a rerun .rrd, selecting by time window (and
 # optionally device id prefixes). Requires --since, e.g. `just visualise --since 7d`
