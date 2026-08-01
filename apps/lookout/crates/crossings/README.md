@@ -3,9 +3,9 @@
 Turns the silver water-crossings dataset into the flat point buffer the M5 device scans.
 
 ```sh
-just pack-crossings                                   # defaults, from the repo root's apps/lookout
-just pack-crossings --input <parquet> --output <file>
-just pack-crossings --bbox 13.0,50.9,14.5,51.9        # west,south,east,north
+just gold-pack-crossings                                   # defaults, from the repo root's apps/lookout
+just gold-pack-crossings --input <parquet> --output <file>
+just gold-pack-crossings --bbox 13.0,50.9,14.5,51.9        # west,south,east,north
 ```
 
 The device holds every crossing in RAM and brute-force scans the lot against each GPS fix, so

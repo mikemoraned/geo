@@ -1249,10 +1249,13 @@ Steps:
       even though nothing depends on either today. The crate is still edition 2021 while main's
       is 2024; the edition task below settles that for the workspace. `just test-no-docker`
       over both crates: 69 tests, all passing.
-- [ ] Name main's packer for the layer it writes: `pack-crossings` becomes
+- [x] Name main's packer for the layer it writes: `pack-crossings` becomes
       `gold-pack-crossings`, since this branch renamed every processing recipe for its layer
       and the packer's output is gold. `random-crossings` stays as it is — it regenerates a
       spike's committed fixture rather than deriving a layer.
+      Note: the name is quoted in three places outside the Justfile — the crate's README, the
+      spike 5 README that says where its fixture came from, and the comment in
+      `data/gold/.gitignore` — so it was renamed there too.
 - [ ] Move the whole workspace to **edition 2024**. Main's crate declares it where all ten
       crates on this branch declare `2021`, so the merge lands a workspace split about it —
       and forward is the direction to settle it in, rather than dragging the new crate back.

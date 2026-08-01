@@ -155,7 +155,7 @@ silver-session-crossings *args:
 # Pack the silver water crossings into the flat point buffer the M5 device scans, in
 # gold. No args = defaults (the v8 notebook export → data/gold/crossings.pointset);
 # override with --input / --output, or restrict with --bbox west,south,east,north.
-pack-crossings *args:
+gold-pack-crossings *args:
     cargo run -p crossings --bin pack_crossings -- {{args}}
 
 # Regenerate the made-up crossings spike 5 carries in flash: as many as the real German
