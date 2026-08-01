@@ -1,8 +1,14 @@
-# Current Slice: minimal predictor and evaluation framework 
+# Current Slice: Sessionisation and Water crossings per session + Refactor to Medallion
 
 ### Target
 
-We should now have enough to put together a first minimal predictor that is based solely on crow-flies distance, and also to evaluate how good it is.
+Original goal (as "minimal predictor and evaluation framework" slice): We should now have enough to put together a first minimal predictor that is based solely on crow-flies distance, and also to evaluate how good it is.
+
+Update on this as of 1st Aug:
+* As part of the separate "Spike on device support for distance lookup" we got a version of the crow-flies distance predictor deployed on an M5Stack device
+* The sessionisation and water crossing work + refactor to medallion were significant in themselves and a bit of thought is required to properly do evaluation
+
+So, based on this, I am narrowing the scope of this slice to be "Sessionisation and Water crossings per session + Refactor to Medallion". The remainder of work that would have been in here has been moved out into the "Crow-flies predictor deployed to M5 device and Rerun sim" and "Evaluation framework based on sampled sessions from myself and motis" slices.
 
 ### Straw man
 
@@ -20,7 +26,7 @@ Then, we look at any gps readings in each session that come within M metres of a
 
 Once we have some gps readings for each water crossing for each session, we minimise this to just a single example for each water crossing per trace, using the closest match. This should give us a set of water crossings per session. We treat this as our ground truth.
 
-#### Simple crow-flies predictor
+#### Simple crow-flies predictor (deferred)
 
 We then implement a simple predictor with a prediction cycle which functions something like:
 1. Receive latest GPS reading
@@ -32,7 +38,7 @@ We then implement a simple predictor with a prediction cycle which functions som
 
 In this simple predictor we are not taking advantage of any speed or heading information in the GPS readings. That will be sensible to include later, but for now we can keep it simple. Later on we'll likely want to include any additional information we have in a sensor-fusion approach but for now we keep it simple.
 
-#### Evaluation framework
+#### Evaluation framework (deferred)
 
 We can think of a predictor as attempting to fill in, at each prediction cycle, a 2D space where the y-axis is all the possible water crossings and the x-axis is the time at which the water will be crossed in this session. 
 
