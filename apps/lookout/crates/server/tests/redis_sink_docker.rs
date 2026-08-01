@@ -42,15 +42,14 @@ async fn wait_for_redis(url: &str) -> MultiplexedConnection {
     let client = redis::Client::open(url).expect("open redis client");
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
-        if let Ok(mut conn) = client.get_multiplexed_async_connection().await {
-            if redis::cmd("PING")
+        if let Ok(mut conn) = client.get_multiplexed_async_connection().await
+            && redis::cmd("PING")
                 .query_async::<String>(&mut conn)
                 .await
                 .is_ok()
             {
                 return conn;
             }
-        }
         assert!(
             Instant::now() < deadline,
             "redis did not accept connections within 30s"

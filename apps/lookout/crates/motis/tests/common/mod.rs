@@ -41,15 +41,14 @@ pub async fn wait_ready(url: &str) -> MultiplexedConnection {
     let client = redis::Client::open(url).expect("open client");
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
     loop {
-        if let Ok(mut conn) = client.get_multiplexed_async_connection().await {
-            if redis::cmd("PING")
+        if let Ok(mut conn) = client.get_multiplexed_async_connection().await
+            && redis::cmd("PING")
                 .query_async::<String>(&mut conn)
                 .await
                 .is_ok()
             {
                 return conn;
             }
-        }
         assert!(
             std::time::Instant::now() < deadline,
             "redis not ready in 30s"

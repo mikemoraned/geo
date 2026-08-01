@@ -1256,7 +1256,7 @@ Steps:
       Note: the name is quoted in three places outside the Justfile — the crate's README, the
       spike 5 README that says where its fixture came from, and the comment in
       `data/gold/.gitignore` — so it was renamed there too.
-- [ ] Move the whole workspace to **edition 2024**. Main's crate declares it where all ten
+- [x] Move the whole workspace to **edition 2024**. Main's crate declares it where all ten
       crates on this branch declare `2021`, so the merge lands a workspace split about it —
       and forward is the direction to settle it in, rather than dragging the new crate back.
       Declare it once in `[workspace.package]` and have each crate inherit
@@ -1267,6 +1267,20 @@ Steps:
       when `if let` temporaries drop and what lifetimes `impl Trait` captures. Run
       `cargo fix --edition` per crate and read what it does rather than trusting it, and keep
       it as its own commit — a mechanical edition bump has no business inside the merge.
+      Note: `cargo fix --edition` proposed exactly one code change across the ten crates —
+      `+ use<>` on a private `impl Iterator` returning `&'static str`, to keep it from
+      capturing `&self`. Nothing needs that capture withheld and the crate compiles without it,
+      so it was dropped rather than carried: the migration is Cargo.toml only. Neither the
+      `unsafe extern` nor the `if let` temporary changes bit. Run it **per crate in dependency
+      order**, not `--workspace` — a workspace run migrates crates in parallel and dependents
+      fail with `can't find crate for model` while their dependency is being rewritten.
+      What the edition does change is what clippy and rustfmt ask for. Let chains are stable in
+      2024, so `collapsible_if` now fires on five `if let … { if … }` pairs (the four redis
+      `wait_ready` helpers and the server's ack path) — taken, via `clippy --fix`. And the
+      style edition follows the edition, which reorders `use` braces case-insensitively across
+      the workspace; that is the separate formatting commit after this one. Note the tree was
+      not uniformly formatted either way beforehand: main's crate arrived formatted under the
+      2024 style and the rest under 2021, so this settles it rather than churning it.
 - [ ] **Repoint the packer off the notebook export**, onto the silver `water_crossing`
       dataset. It reads `data/water/v8/crossing_reps.parquet` because that dataset did not
       exist when it was written; this branch now writes it, and it carries every column the
