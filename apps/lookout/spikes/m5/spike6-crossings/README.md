@@ -103,14 +103,31 @@ budget most of a microsecond per point, not tens of nanoseconds.
 
 ## Footprint
 
+Measured on the release ELF with `xtensa-esp32-elf-size`:
+
 | | |
 |---|---|
-| packed set | 69,000 bytes (`12 + 12n`), in flash via `include_bytes!` |
-| scan working set | the top five and whatever is within 5 km — the columns are never copied |
+| packed set | 69,000 bytes (`12 + 12n`) |
+| firmware, flash | 764,694 bytes (539,139 text + 225,555 data) — **under 10% of the 8 MB** |
+| `.flash.rodata`, which carries the set | 212,256 bytes |
+| static RAM (`.bss`) | 7,882 bytes |
+| heap per scan | a few hundred bytes: `Near` is 16 bytes, so the five nearest cost 80 and the twenty within 5 km of Dresden 320 |
 
-Built into the binary rather than read from a filesystem: at 69 KB against 8 MB of flash the
-saving would be nothing, and a filesystem would cost a partition table, a mount at boot, and a
-way for the device to end up holding a set that disagrees with the code reading it.
+The set is **verifiably in the image**: searching the release binary for the format's magic
+finds it with a valid header — version 1, count 5,749 — at file offset `0x109f4`.
+
+Nothing copies the columns out of flash. `PointSet` borrows them where they lie, so a scan
+allocates only for what it reports, and holding a bigger set would cost flash rather than RAM.
+That is the property that makes the size question a flash question.
+
+Built into the binary rather than read from a filesystem: at 69 KB against 8 MB the saving
+would be nothing, and a filesystem would cost a partition table, a mount at boot, and a way for
+the device to end up holding a set that disagrees with the code reading it.
+
+The shell also logs free heap and stack high-water beside each scan, so a tethered run can
+confirm the figures above hold while running. That log has not been captured yet — the field
+run was deliberately untethered — and the numbers here are static ones, from the binary and
+from the code.
 
 ## The point set is regenerable, but not from this branch
 
