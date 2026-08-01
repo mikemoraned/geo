@@ -4,6 +4,8 @@
 //! between the store and them — reading the crossings out of GeoParquet files written by the
 //! same code that writes the real ones, and taking a position out of the geometry column.
 
+use std::collections::HashMap;
+
 use crossings::{Point, id, pointset, silver};
 use geo_types::Point as GeoPoint;
 use medallion::{
@@ -77,7 +79,7 @@ async fn store_with_crossings(root: &Root, country: &str, positions: &[(f64, f64
 }
 
 #[tokio::test]
-async fn a_crossing_is_read_with_its_position_and_its_silver_identity() {
+async fn a_crossing_is_read_with_its_position_and_the_name_the_store_gave_it() {
     let tmp = tempfile::tempdir().unwrap();
     let root = Root::new(tmp.path());
     store_with_crossings(&root, "DE", &[(LON, LAT)]).await;
@@ -129,14 +131,7 @@ async fn what_the_store_holds_survives_being_packed_and_read_back() {
     store_with_crossings(&root, "DE", &[(LON, LAT), (LON + 0.01, LAT + 0.01)]).await;
 
     let crossings = silver::read(&root).await.unwrap();
-    let ids = id::assign(&crossings).unwrap();
-    let points: Vec<Point> = crossings
-        .iter()
-        .zip(&ids)
-        .map(|(crossing, id)| Point::of(crossing, *id))
-        .collect();
-
-    let unpacked = pointset::unpack(&pointset::pack(&points).unwrap()).unwrap();
+    let unpacked = pointset::unpack(&packed(&crossings)).unwrap();
 
     assert_eq!(unpacked.len(), crossings.len());
     for crossing in &crossings {
@@ -146,4 +141,49 @@ async fn what_the_store_holds_survives_being_packed_and_read_back() {
             .expect("the crossing is in the buffer");
         assert_eq!(point.latitude, crossing.position.y as f32);
     }
+}
+
+/// The reason the device's id is a function of the store's: a prediction naming a crossing by
+/// its packed id can be matched to the ground truth, which names crossings the way silver
+/// does. Checked as a lookup rather than as an equality, since that is how it will be used.
+#[tokio::test]
+async fn every_packed_id_maps_back_to_exactly_one_silver_crossing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = Root::new(tmp.path());
+    let positions: Vec<(f64, f64)> = (0..50)
+        .map(|n| (LON + n as f64 * 0.001, LAT + n as f64 * 0.001))
+        .collect();
+    store_with_crossings(&root, "DE", &positions).await;
+
+    let crossings = silver::read(&root).await.unwrap();
+    let unpacked = pointset::unpack(&packed(&crossings)).unwrap();
+
+    let by_id: HashMap<u32, &CrossingId> = crossings
+        .iter()
+        .map(|crossing| {
+            (
+                id::PackedId::of(&crossing.crossing_id).get(),
+                &crossing.crossing_id,
+            )
+        })
+        .collect();
+    assert_eq!(by_id.len(), crossings.len(), "ids are distinct");
+    for point in &unpacked {
+        let crossing_id = by_id
+            .get(&point.id.get())
+            .expect("the packed id names a crossing the store holds");
+        assert_eq!(id::PackedId::of(crossing_id), point.id);
+    }
+}
+
+/// The buffer for these crossings, packed the way the bin packs it.
+fn packed(crossings: &[silver::Crossing]) -> Vec<u8> {
+    let ids = id::assign(crossings).unwrap();
+    let points: Vec<Point> = crossings
+        .iter()
+        .zip(&ids)
+        .map(|(crossing, id)| Point::of(crossing, *id))
+        .collect();
+
+    pointset::pack(&points).unwrap()
 }

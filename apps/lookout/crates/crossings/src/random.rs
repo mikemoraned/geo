@@ -9,13 +9,13 @@ use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::bbox::Bbox;
-use crate::id::{CrossingId, Key};
+use crate::id::PackedId;
 use crate::pointset::Point;
 
 /// Scattered uniformly through `window`, reproducibly for a given `seed`.
 ///
-/// Ids are derived the same way a real crossing's is, from a made-up key — so they look like
-/// what the device will eventually carry, and are as unique as the derivation makes them.
+/// Ids are derived the same way a real crossing's is, from a made-up silver id — so they look
+/// like what the device will eventually carry, and are as unique as the derivation makes them.
 pub fn points(count: usize, window: &Bbox, seed: u64) -> Vec<Point> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let (min, max) = (window.min(), window.max());
@@ -25,7 +25,11 @@ pub fn points(count: usize, window: &Bbox, seed: u64) -> Vec<Point> {
             let longitude = rng.random_range(min.x..=max.x);
             let latitude = rng.random_range(min.y..=max.y);
             Point::new(
-                CrossingId::of(&Key::new(format!("random-{index}"), "random", seed as f64)),
+                PackedId::of(
+                    &format!("random:{seed}@{index}")
+                        .parse()
+                        .expect("a made-up id names a partition"),
+                ),
                 geo_types::coord! { x: longitude, y: latitude },
             )
         })

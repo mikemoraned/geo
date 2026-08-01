@@ -1320,7 +1320,7 @@ Steps:
       rerun adds a version rather than overwriting the file a device may be holding, and
       `medallion.md` now says how a *file* artefact sits in that layout, since what it cannot
       carry as a column has to go to the run's log instead.
-- [ ] **Make the device id a function of the ground truth id.** The two currently name
+- [x] **Make the device id a function of the ground truth id.** The two currently name
       different things, so a device prediction cannot be matched to a laptop ground truth —
       which is the whole reason main's crate derives an id rather than using row order. This
       branch's `model::CrossingId` is the composite `track:water@frac`, keyed on the connected
@@ -1332,6 +1332,18 @@ Steps:
       go with that; its collision check stays, and matters more, since the pigeonhole argument
       is unchanged. Check the two agree by round-tripping: every id in a packed buffer should
       map back to exactly one silver `crossing_id`.
+      Note: done as described. `id::assign` now hashes `crossing.crossing_id`, `Key` is gone,
+      and `silver::Crossing` no longer reads `rail_id`, `water_id` or `frac` — the store has
+      already decided which combinations of those are one crossing, and the id is where it says
+      so. The round-trip is `every_packed_id_maps_back_to_exactly_one_silver_crossing`, which
+      builds the lookup a matcher would and asserts every packed id resolves through it.
+      The collision test needed a **new** colliding pair, found by search over the new
+      derivation — the old one collided under the old key and does not under this one, which is
+      itself the evidence that every id in the field has moved. Over the real store the packed
+      set is still 5,749 crossings to 5,749 distinct ids, so the narrower key costs nothing in
+      practice. Left alone deliberately: spike 6's committed `.pointset` fixture holds ids from
+      the old derivation, and it is the record of what that spike was measured against —
+      `just gold-pack-crossings --output …` regenerates it when the device work resumes.
 - [ ] Check the merged tree builds and passes: `just build`, `just test-no-docker`, and both
       crossings recipes run against the real store.
 

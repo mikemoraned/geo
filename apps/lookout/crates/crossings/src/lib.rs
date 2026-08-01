@@ -11,6 +11,6 @@ pub mod random;
 pub mod silver;
 
 pub use bbox::{Bbox, BboxError};
-pub use id::{Collision, CrossingId};
+pub use id::{Collision, PackedId};
 pub use pointset::{FormatError, Point};
 pub use silver::{Crossing, ReadError};

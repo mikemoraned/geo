@@ -25,15 +25,15 @@ pub enum ReadError {
     Missing { dataset: &'static str },
 }
 
-/// One crossing, as silver holds it: what it is called, what meets what, where along the
-/// track, where on the globe, and which extraction it came from.
+/// One crossing, as silver holds it: what the store calls it, where it is, and which
+/// extraction it came from.
+///
+/// What the crossing is *made of* — the track, the water, where along the track they meet —
+/// is not read: the store has already decided which of those combinations are one crossing,
+/// and said so in the id.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Crossing {
     pub crossing_id: CrossingId,
-    pub rail_id: String,
-    pub water_id: String,
-    /// How far along `rail_id` the crossing sits, from 0 at its start to 1 at its end.
-    pub frac: f64,
     /// Longitude in `x`, latitude in `y`, in WGS84 degrees.
     pub position: Coord<f64>,
     /// The extraction the upstream reference rows came from.
@@ -45,9 +45,6 @@ pub struct Crossing {
 #[derive(Debug, Deserialize)]
 struct StoredCrossing {
     crossing_id: CrossingId,
-    rail_id: String,
-    water_id: String,
-    frac: f64,
     extract_id: String,
     lon: f64,
     lat: f64,
@@ -67,7 +64,7 @@ pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
 
     let stored: Vec<StoredCrossing> = query
         .rows(
-            "SELECT crossing_id, rail_id, water_id, frac, extract_id,
+            "SELECT crossing_id, extract_id,
                     ST_X(geometry) AS lon, ST_Y(geometry) AS lat
              FROM water_crossing",
         )
@@ -77,9 +74,6 @@ pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
         .into_iter()
         .map(|crossing| Crossing {
             crossing_id: crossing.crossing_id,
-            rail_id: crossing.rail_id,
-            water_id: crossing.water_id,
-            frac: crossing.frac,
             position: coord! { x: crossing.lon, y: crossing.lat },
             extract_id: crossing.extract_id,
         })

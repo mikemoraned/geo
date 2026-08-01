@@ -69,14 +69,16 @@ against a GPS error budget measured in metres.
 
 ## Ids name a crossing, not a row
 
-`id` is the low 4 bytes of the md5 of `(rail_id, water_id, frac)` — what the crossing *is*,
-not where its row landed. So an id survives a rebuild of the dataset, a `--bbox` that keeps
-only part of it, and any reordering, which means a prediction made on the device and a ground
-truth derived on the laptop can name the same crossing.
+`id` is the low 4 bytes of the md5 of the crossing's **silver `crossing_id`** — the name the
+store gives it, which is itself derived from what the crossing is rather than from where its
+row landed. So an id survives a rebuild of the dataset, a `--bbox` that keeps only part of it,
+and any reordering.
 
-`frac` — how far along the rail segment the crossing sits — is part of the key because
-`(rail_id, water_id)` is **not** unique: a meandering river meets a single segment up to 13
-times in this dataset.
+Hashing the store's id rather than re-deriving one from the columns behind it is what lets a
+prediction made on the device be matched to a ground truth derived on the laptop: the two
+would otherwise be free to disagree about what one crossing is, and they did — silver keys a
+crossing on the connected *track*, where a key built from `rail_id` splits one track into a
+crossing per segment.
 
 Four bytes is few enough that two distinct crossings can collide by chance (~0.4% over 5,749
 points). A pack run detects that and fails rather than shipping one name for two crossings.

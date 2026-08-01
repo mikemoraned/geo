@@ -12,7 +12,7 @@ use std::fmt::{self, Display};
 
 use geo_types::Coord;
 
-use crate::id::CrossingId;
+use crate::id::PackedId;
 use crate::silver::Crossing;
 
 /// Names the format in the first bytes of the file, so a reader handed the wrong file says so
@@ -49,13 +49,13 @@ pub struct TooManyPoints(usize);
 /// One crossing as the device holds it: where it is, and what it is called.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Point {
-    pub id: CrossingId,
+    pub id: PackedId,
     pub latitude: f32,
     pub longitude: f32,
 }
 
 impl Point {
-    pub fn new(id: CrossingId, position: Coord<f64>) -> Self {
+    pub fn new(id: PackedId, position: Coord<f64>) -> Self {
         Self {
             id,
             latitude: position.y as f32,
@@ -63,7 +63,7 @@ impl Point {
         }
     }
 
-    pub fn of(crossing: &Crossing, id: CrossingId) -> Self {
+    pub fn of(crossing: &Crossing, id: PackedId) -> Self {
         Self::new(id, crossing.position)
     }
 }
@@ -146,7 +146,7 @@ pub fn unpack(packed: &[u8]) -> Result<Vec<Point>, FormatError> {
         .map(|row| Point {
             latitude: f32::from_le_bytes(word(latitudes, row)),
             longitude: f32::from_le_bytes(word(longitudes, row)),
-            id: CrossingId::from_bits(u32::from_le_bytes(word(ids, row))),
+            id: PackedId::from_bits(u32::from_le_bytes(word(ids, row))),
         })
         .collect())
 }
@@ -156,7 +156,6 @@ mod tests {
     use geo_types::coord;
 
     use super::*;
-    use crate::id::Key;
 
     /// A crossing near Ruhland, and one near Dresden.
     const RUHLAND: (f64, f64) = (13.548209, 51.617567);
@@ -164,7 +163,7 @@ mod tests {
 
     fn point(name: &str, (lon, lat): (f64, f64)) -> Point {
         Point::new(
-            CrossingId::of(&Key::new(name, "water", 0.5)),
+            PackedId::of(&format!("track:water@{name}").parse().expect("id")),
             coord! { x: lon, y: lat },
         )
     }
@@ -304,13 +303,10 @@ mod tests {
     fn a_point_carries_its_crossings_position() {
         let crossing = Crossing {
             crossing_id: "water:rail@0.5".parse().expect("id"),
-            rail_id: "rail".to_string(),
-            water_id: "water".to_string(),
-            frac: 0.5,
             position: coord! { x: RUHLAND.0, y: RUHLAND.1 },
             extract_id: "20260727T193628Z".to_string(),
         };
-        let id = CrossingId::of(&Key::from(&crossing));
+        let id = PackedId::of(&crossing.crossing_id);
 
         let point = Point::of(&crossing, id);
 
