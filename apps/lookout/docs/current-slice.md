@@ -473,6 +473,29 @@ The main tasks here should be focussed on documenting these patterns and correct
       `Root::default_path()`, so it asks the same code its writes go through and cannot read
       one store while writing another.
 
+- [ ] **Give `medallion` the one Rust door into the silver format, so writers stop
+      re-deriving it.** `table.rs` opens by saying there is one implementation of the silver
+      format, not one per language, and that holds for the Python path — `write_table` takes
+      a dataset's spec and applies the layout, the dated sweep, the country sweep and the
+      `Row::UNIQUE` check itself. No Rust writer goes through it. `recorder::silver`,
+      `motis::ingest` and `session_crossings::silver` each hand-roll the same sequence
+      instead: group by country, project, `chunk_by` date, `replace_dates_geo`, then
+      remember `retain_partitions(COUNTRY, …)` at the end.
+
+      The cost is that the policy is only enforced on the path nothing in Rust takes.
+      `check_unique` is reachable only from `write_table`, so a Rust writer of a dataset
+      declaring `UNIQUE` columns silently skips the check that `rows.rs` documents as
+      "enforced once where the dataset is defined rather than by each writer". The country
+      sweep is opt-in in the same way, and already inconsistent — `recorder` counts what it
+      removed into its outcome, `motis` discards the result — and forgetting it leaves a
+      stale `country=` directory that reads as current.
+
+      What is missing is only the typed door: a rows-plus-geometry entry point beside
+      `write_table` taking the `Row` type, the geometries and a `Countries` lookup, with the
+      three writers calling it and their local fan-out (including `recorder`'s generic
+      `write_dates`, which exists to serve its own two call sites) deleted. Worth doing
+      before a fourth geo silver dataset copies the sequence a fourth time.
+
 ### Sessionisation
 
 Sessionisation reads bronze, so it **dedups rather than assumes distinct readings** —
