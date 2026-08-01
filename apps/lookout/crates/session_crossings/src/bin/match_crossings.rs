@@ -1,13 +1,13 @@
 //! `match_crossings`: derive the silver `session_crossing` dataset — the crossings each
-//! recorded session passed. A thin wrapper around [`crossings::silver`]; run via
+//! recorded session passed. A thin wrapper around [`session_crossings::silver`]; run via
 //! `just silver-crossings`.
 
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
-use crossings::matching::Radius;
-use crossings::silver;
 use medallion::MedallionArgs;
+use session_crossings::matching::Radius;
+use session_crossings::silver;
 
 #[derive(Parser)]
 #[command(about = "Derive the crossings each session passed")]

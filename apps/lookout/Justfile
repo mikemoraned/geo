@@ -150,7 +150,7 @@ silver-water-crossings:
 # the sessions and the water crossings to have been derived. Override the store with
 # --medallion-root. Re-derives everything, so a rerun replaces what the last one wrote.
 silver-session-crossings *args:
-    cargo run --release -p crossings --bin match_crossings -- {{args}}
+    cargo run --release -p session_crossings --bin match_crossings -- {{args}}
 
 # Pack the silver water crossings into the flat point buffer the M5 device scans, in
 # gold. No args = defaults (the v8 notebook export → data/gold/crossings.pointset);

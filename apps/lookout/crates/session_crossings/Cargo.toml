@@ -1,0 +1,27 @@
+[package]
+name = "session_crossings"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = { workspace = true }
+clap = { workspace = true }
+geo = { workspace = true }
+geo-types = { workspace = true }
+medallion = { workspace = true }
+model = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+recorder = { workspace = true }
+serde_json = { workspace = true }
+shared = { workspace = true }
+tempfile = { workspace = true }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

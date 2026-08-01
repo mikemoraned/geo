@@ -6633,6 +6633,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "session_crossings"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "geo",
+ "geo-types",
+ "medallion",
+ "model",
+ "recorder",
+ "serde",
+ "serde_json",
+ "shared",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
