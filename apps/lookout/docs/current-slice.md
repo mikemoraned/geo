@@ -1170,3 +1170,10 @@ This should be written in marimo notebooks and try to re-use as much typical eva
 #### Tasks 
 
 ...
+- [ ] Delete `docs/2026-08-01-evaluation.md` at the end of this slice. It is a dated
+      assessment of how to measure a predictor, written before one existed and before there
+      was any ground truth to measure against, and kept for the history of the decision.
+      Anything in it still holding by then belongs in the tasks above, in the notebooks
+      that implement the measures, or in a durable doc alongside `medallion.md`; the rest —
+      the rejected alternatives, the reasoning about metrics from other domains — goes
+      stale once a first run has actually produced numbers.
