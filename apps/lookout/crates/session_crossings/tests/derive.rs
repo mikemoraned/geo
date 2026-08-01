@@ -116,6 +116,9 @@ async fn store_with_crossings(root: &Root, at_metres: &[f64]) {
         .map(|(n, _)| WaterCrossingRow {
             // The position is not among these columns: it is the geometry below.
             crossing_id: CrossingId::new(format!("water:track:rail@{n}")).expect("id"),
+            // Distinct per crossing, which is what the dataset requires of it; nothing here
+            // reads it.
+            crossing_short_id: n as u32,
             water_id: "water".into(),
             water_subtype: Some("river".into()),
             water_class: Some("river".into()),

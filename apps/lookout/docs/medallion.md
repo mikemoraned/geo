@@ -126,6 +126,15 @@ and scalable lookup — embed whatever metadata makes queries faster e.g. boundi
 - **Follow the upstream schema** when extending or subsetting a reference dataset, and also
   when creating a dataset from scratch, as a mature upstream schema generally already fits
   the requirement.
+- **A column that identifies a row is declared as such on the dataset, and the writer enforces
+  it.** Silver is where identity is decided — bronze tolerates a repeated observation, and a
+  derivation collapses on that identity to produce these rows — so a name a reader may treat as
+  identifying one row is checked once, where the dataset is defined, rather than by each writer
+  and each consumer. The check spans the dataset rather than a partition of it: which partition
+  a row lands in is a fact about how it is stored, not about what it is called. A dataset may
+  carry more than one such name, each identifying a row on its own — a second, shorter form of
+  an id for a consumer with no room for the first is the case this exists for, and it is exactly
+  the one where a collision would otherwise be discovered downstream.
 
 #### Writing silver from another language
 

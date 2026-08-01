@@ -24,6 +24,7 @@ keeps its id, which is every crossing when the tuning is unchanged, and most of 
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable, Mapping
 
 import numpy as np
@@ -95,6 +96,32 @@ def crossing_ids(
         crossing_id(water, track, rail, frac)
         for water, track, rail, frac in zip(water_ids, tracks, rails, fracs)
     ]
+
+
+# Bytes of the digest a short id is taken from, and the order they are read in. Four bytes is
+# what a device has room for beside each coordinate, and little-endian is what it casts them as.
+SHORT_ID_BYTES = 4
+SHORT_ID_ORDER = "little"
+
+
+def short_id(crossing_id: str) -> int:
+    """The four-byte name of the crossing `crossing_id` names, as an unsigned integer.
+
+    A device holds a crossing as a coordinate and a name, and has no room for the composite id
+    above — so it carries this instead. It is a hash of that id rather than a re-derivation from
+    the parts behind it, so the two cannot come to disagree about what one crossing is, and a
+    prediction made under this name can be looked up by the id it was taken from.
+
+    Four bytes is few enough that two crossings can land on one name by chance; that is the
+    store's to refuse when the dataset is written, not this function's to avoid.
+    """
+    digest = hashlib.md5(crossing_id.encode()).digest()
+    return int.from_bytes(digest[:SHORT_ID_BYTES], SHORT_ID_ORDER)
+
+
+def short_ids(ids: Iterable[str]) -> list[int]:
+    """The short name of each of `ids`, pairwise."""
+    return [short_id(crossing_id) for crossing_id in ids]
 
 
 def _shared_connectors(segments, index) -> np.ndarray:

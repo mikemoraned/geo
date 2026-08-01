@@ -135,6 +135,7 @@ fn table_error(err: TableError) -> PyErr {
     match err {
         TableError::Missing { .. }
         | TableError::Unexpected { .. }
+        | TableError::Duplicate { .. }
         | TableError::Untranslatable { .. }
         | TableError::UndatedRow { .. }
         | TableError::Country { .. }

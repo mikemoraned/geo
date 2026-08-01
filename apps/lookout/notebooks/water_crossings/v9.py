@@ -556,6 +556,12 @@ def _(
         reps_v5_gdf["rail_id"],
         reps_v5_gdf["frac"],
     )
+    # The same crossing in four bytes, for a device with no room for the id above. Minted here
+    # beside the id it hashes, so nothing downstream has to know how the two relate; the store
+    # refuses the write if two crossings land on one of them.
+    reps_v5_gdf["crossing_short_id"] = crossing_ids.short_ids(
+        reps_v5_gdf["crossing_id"]
+    )
 
     _colors = track_colors(reps_v5_gdf["track_id"])
     _sizes = (reps_v5_gdf["merged_parts"].to_numpy() * 2 + 3).astype("float32")
@@ -743,6 +749,9 @@ def _(
     crossings_table = _pa.table(
         {
             "crossing_id": _pa.array(_reps["crossing_id"], _pa.string()),
+            "crossing_short_id": _pa.array(
+                _reps["crossing_short_id"], _pa.uint32()
+            ),
             "water_id": _pa.array(_reps["water_id"], _pa.string()),
             "water_subtype": _pa.array(_reps["water_subtype"], _pa.string()),
             "water_class": _pa.array(_reps["water_class"], _pa.string()),

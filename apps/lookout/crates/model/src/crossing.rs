@@ -91,6 +91,12 @@ pub enum OverlapKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WaterCrossingRow {
     pub crossing_id: CrossingId,
+    /// The same crossing named in four bytes, for a device with no room for the id above.
+    ///
+    /// Derived from `crossing_id` and carried here rather than worked out by whoever packs a
+    /// buffer, so there is one answer to what a crossing is called on a device, and it is
+    /// checked for uniqueness where every other property of the dataset is.
+    pub crossing_short_id: u32,
     /// The water body, by its id in the upstream reference data.
     pub water_id: String,
     pub water_subtype: Option<String>,
@@ -123,6 +129,10 @@ pub struct WaterCrossingRow {
 impl Row for WaterCrossingRow {
     type Layer = layers::Silver;
     const DATASET: DatasetSpec<Self::Layer> = WATER_CROSSING;
+    /// Both names of a crossing identify it on their own: the store's, and the four bytes a
+    /// device holds instead. A short id shared by two crossings is one a device could not tell
+    /// apart, which is why it is refused here rather than at the buffer.
+    const UNIQUE: &'static [&'static str] = &["crossing_id", "crossing_short_id"];
 }
 
 /// One crossing passed in one session: when, and on what evidence.

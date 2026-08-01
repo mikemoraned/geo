@@ -50,6 +50,14 @@ pub trait Row: Serialize + for<'de> Deserialize<'de> {
     /// The columns holding an instant, declared as timestamps rather than left as the
     /// integers they travel through serde as.
     const INSTANTS: &'static [&'static str] = &[];
+
+    /// The columns no two rows of the dataset may share a value in — each one identifying a
+    /// row on its own, rather than together.
+    ///
+    /// A dataset whose rows are named states its names here, so the rule is enforced once
+    /// where the dataset is defined rather than by each writer, and a reader can take an id
+    /// to mean one row without checking.
+    const UNIQUE: &'static [&'static str] = &[];
 }
 
 /// The arrow schema of `T`, with its instant columns declared as timestamps.

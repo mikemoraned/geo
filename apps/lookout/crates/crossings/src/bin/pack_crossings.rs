@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 use clap::Parser;
-use crossings::{Bbox, Point, id, pointset, silver};
+use crossings::{Bbox, Point, pointset, silver};
 use medallion::MedallionArgs;
 
 /// What the packed buffer is called in gold, and the file each version of it holds.
@@ -60,12 +60,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         None => read,
     };
 
-    let ids = id::assign(&crossings)?;
-    let points: Vec<_> = crossings
-        .iter()
-        .zip(&ids)
-        .map(|(crossing, id)| Point::of(crossing, *id))
-        .collect();
+    let points: Vec<_> = crossings.iter().map(Point::of).collect();
 
     let packed = pointset::pack(&points)?;
     if let Some(directory) = output.parent() {
@@ -75,7 +70,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tracing::info!(
         crossings = crossings.len(),
-        distinct = ids.iter().collect::<BTreeSet<_>>().len(),
         // Which extraction of the reference data the packed crossings came from, so a buffer
         // on a device can be traced back to a release. The format itself has no room for it.
         extracts = ?crossings

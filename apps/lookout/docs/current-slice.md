@@ -1344,6 +1344,28 @@ Steps:
       practice. Left alone deliberately: spike 6's committed `.pointset` fixture holds ids from
       the old derivation, and it is the record of what that spike was measured against —
       `just gold-pack-crossings --output …` regenerates it when the device work resumes.
+
+      **Then taken one step further, on review: the short id is a column of the dataset, not
+      something the packer derives.** Hashing the store's id in the packer still left the
+      derivation outside the store, so nothing could enforce that two crossings do not share a
+      short name until a pack run happened to notice — and only that one consumer would. So
+      `water_crossing` now carries `crossing_short_id` beside `crossing_id`, minted in the
+      notebook that mints the id it hashes, and the packer reads the column. The Rust
+      derivation and its collision check are gone with it, as is `crates/crossings/src/id.rs`:
+      `PackedId` is now what the buffer calls a crossing and lives with the format, in
+      `pointset`.
+      Uniqueness moved to **the store's writer**, not the notebook: `Row::UNIQUE` names the
+      columns of a dataset that identify a row on their own, and `medallion::write_table`
+      refuses a table breaking it — over the whole dataset rather than a partition of it,
+      since which partition a row lands in is a fact about storage rather than about what the
+      row is called. `WaterCrossingRow` declares both names. So any writer of that dataset is
+      covered, in Rust or through the python binding, and `medallion.md` states the rule.
+      `crossing_id` itself was deliberately **left as the composite string**: making it an
+      md5 would trade a readable, join-stable key for a random one, and a better join key —
+      spatially ordered, fixed width — is a decision worth taking on its own evidence rather
+      than as a side effect of this.
+      The store has to be re-derived before a pack run works: the dataset written before this
+      has no such column, and the packer says so rather than inventing one.
 - [ ] Check the merged tree builds and passes: `just build`, `just test-no-docker`, and both
       crossings recipes run against the real store.
 

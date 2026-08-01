@@ -17,6 +17,8 @@ use medallion::{Query, Root};
 use model::CrossingId;
 use serde::Deserialize;
 
+use crate::pointset::PackedId;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ReadError {
     #[error("reading the store: {0}")]
@@ -34,6 +36,8 @@ pub enum ReadError {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Crossing {
     pub crossing_id: CrossingId,
+    /// The four-byte name the store gives the same crossing, which is what the device holds.
+    pub short_id: PackedId,
     /// Longitude in `x`, latitude in `y`, in WGS84 degrees.
     pub position: Coord<f64>,
     /// The extraction the upstream reference rows came from.
@@ -45,6 +49,7 @@ pub struct Crossing {
 #[derive(Debug, Deserialize)]
 struct StoredCrossing {
     crossing_id: CrossingId,
+    crossing_short_id: u32,
     extract_id: String,
     lon: f64,
     lat: f64,
@@ -64,7 +69,7 @@ pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
 
     let stored: Vec<StoredCrossing> = query
         .rows(
-            "SELECT crossing_id, extract_id,
+            "SELECT crossing_id, crossing_short_id, extract_id,
                     ST_X(geometry) AS lon, ST_Y(geometry) AS lat
              FROM water_crossing",
         )
@@ -74,6 +79,7 @@ pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
         .into_iter()
         .map(|crossing| Crossing {
             crossing_id: crossing.crossing_id,
+            short_id: PackedId::from_bits(crossing.crossing_short_id),
             position: coord! { x: crossing.lon, y: crossing.lat },
             extract_id: crossing.extract_id,
         })

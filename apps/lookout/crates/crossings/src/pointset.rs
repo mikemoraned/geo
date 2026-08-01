@@ -12,7 +12,6 @@ use std::fmt::{self, Display};
 
 use geo_types::Coord;
 
-use crate::id::PackedId;
 use crate::silver::Crossing;
 
 /// Names the format in the first bytes of the file, so a reader handed the wrong file says so
@@ -46,6 +45,32 @@ pub enum FormatError {
 #[error("{0} points is more than a u32 count can name")]
 pub struct TooManyPoints(usize);
 
+/// A crossing's id in the packed buffer: the four bytes the store gives it in
+/// `crossing_short_id`, which is all a device has room for beside a coordinate.
+///
+/// Minted where the crossing is — in the derivation that writes the dataset, which is also
+/// where two crossings landing on one of these is refused — so nothing here derives it, and
+/// there is one answer to what a crossing is called on a device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PackedId(u32);
+
+impl PackedId {
+    /// The id `bits` names: as the store holds it, or as a packed buffer gives it back.
+    pub fn from_bits(bits: u32) -> Self {
+        Self(bits)
+    }
+
+    pub fn get(&self) -> u32 {
+        self.0
+    }
+}
+
+impl Display for PackedId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:08x}", self.0)
+    }
+}
+
 /// One crossing as the device holds it: where it is, and what it is called.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Point {
@@ -63,8 +88,9 @@ impl Point {
         }
     }
 
-    pub fn of(crossing: &Crossing, id: PackedId) -> Self {
-        Self::new(id, crossing.position)
+    /// The crossing as the device holds it, under the name the store gave it.
+    pub fn of(crossing: &Crossing) -> Self {
+        Self::new(crossing.short_id, crossing.position)
     }
 }
 
@@ -161,15 +187,12 @@ mod tests {
     const RUHLAND: (f64, f64) = (13.548209, 51.617567);
     const DRESDEN: (f64, f64) = (13.733, 51.05);
 
-    fn point(name: &str, (lon, lat): (f64, f64)) -> Point {
-        Point::new(
-            PackedId::of(&format!("track:water@{name}").parse().expect("id")),
-            coord! { x: lon, y: lat },
-        )
+    fn point(id: u32, (lon, lat): (f64, f64)) -> Point {
+        Point::new(PackedId::from_bits(id), coord! { x: lon, y: lat })
     }
 
     fn points() -> Vec<Point> {
-        vec![point("ruhland", RUHLAND), point("dresden", DRESDEN)]
+        vec![point(0x292e_417a, RUHLAND), point(0x2490_bdfe, DRESDEN)]
     }
 
     /// The property the device depends on: what the packer wrote is what a reader of the
@@ -303,14 +326,14 @@ mod tests {
     fn a_point_carries_its_crossings_position() {
         let crossing = Crossing {
             crossing_id: "water:rail@0.5".parse().expect("id"),
+            short_id: PackedId::from_bits(0x292e_417a),
             position: coord! { x: RUHLAND.0, y: RUHLAND.1 },
             extract_id: "20260727T193628Z".to_string(),
         };
-        let id = PackedId::of(&crossing.crossing_id);
 
-        let point = Point::of(&crossing, id);
+        let point = Point::of(&crossing);
 
-        assert_eq!(point.id, id);
+        assert_eq!(point.id, crossing.short_id);
         assert_eq!(point.latitude, RUHLAND.1 as f32);
         assert_eq!(point.longitude, RUHLAND.0 as f32);
     }

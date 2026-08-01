@@ -6,13 +6,20 @@
 
 use std::collections::HashMap;
 
-use crossings::{Point, id, pointset, silver};
+use crossings::{PackedId, Point, pointset, silver};
 use geo_types::Point as GeoPoint;
 use medallion::{
     COUNTRY, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Root, geo_batch,
     projected_wkb_field, wkb_field,
 };
 use model::{CrossingId, OverlapKind, WaterCrossingRow};
+
+/// The four-byte name the store gives the nth crossing of a test store. Distinct per crossing,
+/// which is all the dataset promises and all the packer relies on; how the real derivation
+/// mints one is the notebook's business, not this crate's.
+fn short_id(n: usize) -> u32 {
+    0x1000_0000 + n as u32
+}
 
 /// Ruhland, where a line crosses the Schwarze Elster.
 const LON: f64 = 13.548209;
@@ -33,6 +40,7 @@ async fn store_with_crossings(root: &Root, country: &str, positions: &[(f64, f64
         .map(|(n, _)| WaterCrossingRow {
             // The position is not among these columns: it is the geometry below.
             crossing_id: CrossingId::new(format!("water:track:rail@{n}")).expect("id"),
+            crossing_short_id: short_id(n),
             water_id: "water".into(),
             water_subtype: Some("river".into()),
             water_class: Some("river".into()),
@@ -89,6 +97,7 @@ async fn a_crossing_is_read_with_its_position_and_the_name_the_store_gave_it() {
     assert_eq!(crossings.len(), 1);
     let crossing = &crossings[0];
     assert_eq!(crossing.crossing_id.to_string(), "water:track:rail@0");
+    assert_eq!(crossing.short_id, PackedId::from_bits(short_id(0)));
     assert_eq!(crossing.extract_id, EXTRACT);
     assert!((crossing.position.x - LON).abs() < 1e-9);
     assert!((crossing.position.y - LAT).abs() < 1e-9);
@@ -143,11 +152,11 @@ async fn what_the_store_holds_survives_being_packed_and_read_back() {
     }
 }
 
-/// The reason the device's id is a function of the store's: a prediction naming a crossing by
-/// its packed id can be matched to the ground truth, which names crossings the way silver
-/// does. Checked as a lookup rather than as an equality, since that is how it will be used.
+/// The reason the device's id comes from the dataset: a prediction naming a crossing by its
+/// packed id can be matched to the ground truth, which names crossings by `crossing_id`.
+/// Checked as a lookup rather than as an equality, since that is how it will be used.
 #[tokio::test]
-async fn every_packed_id_maps_back_to_exactly_one_silver_crossing() {
+async fn every_packed_id_maps_back_to_exactly_one_crossing_the_store_named() {
     let tmp = tempfile::tempdir().unwrap();
     let root = Root::new(tmp.path());
     let positions: Vec<(f64, f64)> = (0..50)
@@ -158,32 +167,23 @@ async fn every_packed_id_maps_back_to_exactly_one_silver_crossing() {
     let crossings = silver::read(&root).await.unwrap();
     let unpacked = pointset::unpack(&packed(&crossings)).unwrap();
 
-    let by_id: HashMap<u32, &CrossingId> = crossings
+    let by_id: HashMap<PackedId, &CrossingId> = crossings
         .iter()
-        .map(|crossing| {
-            (
-                id::PackedId::of(&crossing.crossing_id).get(),
-                &crossing.crossing_id,
-            )
-        })
+        .map(|crossing| (crossing.short_id, &crossing.crossing_id))
         .collect();
     assert_eq!(by_id.len(), crossings.len(), "ids are distinct");
     for point in &unpacked {
-        let crossing_id = by_id
-            .get(&point.id.get())
-            .expect("the packed id names a crossing the store holds");
-        assert_eq!(id::PackedId::of(crossing_id), point.id);
+        assert!(
+            by_id.contains_key(&point.id),
+            "the packed id {} names a crossing the store holds",
+            point.id
+        );
     }
 }
 
 /// The buffer for these crossings, packed the way the bin packs it.
 fn packed(crossings: &[silver::Crossing]) -> Vec<u8> {
-    let ids = id::assign(crossings).unwrap();
-    let points: Vec<Point> = crossings
-        .iter()
-        .zip(&ids)
-        .map(|(crossing, id)| Point::of(crossing, *id))
-        .collect();
+    let points: Vec<Point> = crossings.iter().map(Point::of).collect();
 
     pointset::pack(&points).unwrap()
 }

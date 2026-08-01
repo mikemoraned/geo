@@ -69,20 +69,19 @@ against a GPS error budget measured in metres.
 
 ## Ids name a crossing, not a row
 
-`id` is the low 4 bytes of the md5 of the crossing's **silver `crossing_id`** — the name the
-store gives it, which is itself derived from what the crossing is rather than from where its
-row landed. So an id survives a rebuild of the dataset, a `--bbox` that keeps only part of it,
-and any reordering.
+`id` is the silver `crossing_short_id` column, read rather than derived. The dataset mints it —
+the low 4 bytes of the md5 of the crossing's `crossing_id`, in the water-crossings notebook —
+and the store refuses a write in which two crossings share one, so the packer takes the column
+as given.
 
-Hashing the store's id rather than re-deriving one from the columns behind it is what lets a
-prediction made on the device be matched to a ground truth derived on the laptop: the two
-would otherwise be free to disagree about what one crossing is, and they did — silver keys a
-crossing on the connected *track*, where a key built from `rail_id` splits one track into a
-crossing per segment.
+That is what lets a prediction made on the device be matched to a ground truth derived on the
+laptop: both names of a crossing come from the same row, so nothing can come to disagree about
+what one crossing is. It also means an id survives a rebuild of the dataset, a `--bbox` that
+keeps only part of it, and any reordering, since none of those change the row.
 
 Four bytes is few enough that two distinct crossings can collide by chance (~0.4% over 5,749
-points). A pack run detects that and fails rather than shipping one name for two crossings.
-The real dataset is clean: 5,749 crossings, 5,749 distinct ids.
+points), which is why the uniqueness check exists at all. The real dataset is clean: 5,749
+crossings, 5,749 distinct ids.
 
 ## Points are written in id order
 

@@ -26,6 +26,8 @@ use std::sync::Arc;
 
 use arrow::array::{Array, ArrayRef, AsArray, RecordBatch, StringArray, UInt32Array};
 use arrow::datatypes::{DataType, Field, FieldRef, Schema};
+use arrow::row::{RowConverter, SortField};
+use arrow::util::display::{ArrayFormatter, FormatOptions};
 use chrono::NaiveDate;
 use geoarrow_array::GeoArrowArray;
 use geoarrow_array::cast::to_wkb;
@@ -60,6 +62,7 @@ pub struct SilverTarget {
     spec: DatasetSpec<layers::Silver>,
     columns: Vec<FieldRef>,
     geometry: Geometry,
+    unique: &'static [&'static str],
 }
 
 /// How a dataset's partition directories are laid out, and so which columns a table must
@@ -93,6 +96,14 @@ pub enum TableError {
     Unexpected {
         dataset: &'static str,
         columns: Vec<String>,
+    },
+    #[error("{dataset}.{column} identifies a row, but rows {first} and {second} both hold {value}")]
+    Duplicate {
+        dataset: &'static str,
+        column: String,
+        value: String,
+        first: usize,
+        second: usize,
     },
     #[error(
         "{dataset}.{column} is {found}, which cannot be read as the {expected} it is stored as"
@@ -153,6 +164,7 @@ impl SilverTarget {
             spec: R::DATASET,
             columns: fields::<R>()?,
             geometry,
+            unique: R::UNIQUE,
         })
     }
 
@@ -225,6 +237,7 @@ pub async fn write_table(
     };
     let table = arrow::compute::concat_batches(&first.schema(), table)?;
     check_columns(target, &table)?;
+    check_unique(target, &table)?;
 
     let columns = translate(target, &table)?;
     let written = match target.layout()? {
@@ -528,6 +541,41 @@ fn dates_of(
         .collect()
 }
 
+
+/// Refuse a table two of whose rows share a value in a column the dataset declares unique.
+///
+/// Checked over the whole table rather than per partition, because a name that identifies a
+/// row has to do so across the dataset — the partition a row lands in is a fact about how it
+/// is stored, not about what it is called.
+fn check_unique(target: &SilverTarget, table: &RecordBatch) -> Result<(), TableError> {
+    for column in target.unique {
+        let array = table
+            .column_by_name(column)
+            .ok_or_else(|| TableError::Missing {
+                dataset: target.name(),
+                column: column.to_string(),
+            })?;
+        let converter = RowConverter::new(vec![SortField::new(array.data_type().clone())])?;
+        let encoded = converter.convert_columns(std::slice::from_ref(array))?;
+
+        let mut seen: HashMap<Vec<u8>, usize> = HashMap::new();
+        for row in 0..array.len() {
+            if let Some(first) = seen.insert(encoded.row(row).as_ref().to_vec(), row) {
+                let shown = ArrayFormatter::try_new(array, &FormatOptions::default())?;
+                return Err(TableError::Duplicate {
+                    dataset: target.name(),
+                    column: column.to_string(),
+                    value: shown.value(row).to_string(),
+                    first,
+                    second: row,
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Fail unless the table's columns are exactly the dataset's.
 ///
 /// A missing column is named on its own, since that is what a caller has to add; extra
@@ -583,6 +631,7 @@ mod tests {
     impl Row for CrossingRow {
         type Layer = layers::Silver;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("crossing", "country");
+        const UNIQUE: &'static [&'static str] = &["crossing_id"];
     }
 
     /// Dated observations carrying no geometry: one partition per date.
@@ -1060,5 +1109,42 @@ mod tests {
             .downcast_ref::<BinaryArray>()
             .unwrap();
         assert_eq!(actual.value(0), expected.value(0));
+    }
+
+    /// An id that named two rows would let a reader take one row for another, and would let a
+    /// device holding it point at either — so the write is refused rather than stored.
+    #[tokio::test]
+    async fn a_table_naming_two_rows_the_same_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = Root::new(tmp.path());
+        let table = crossing_table(
+            &["a", "b", "a"],
+            &[berlin(), berlin(), berlin()],
+            &["DE"; 3],
+        );
+
+        let err = write_table(&root, &crossings(), &[table])
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(&err, TableError::Duplicate { column, value, first: 0, second: 2, .. }
+                if column == "crossing_id" && value == "a"),
+            "{err:?}"
+        );
+    }
+
+    /// The rule is over the dataset, not over a partition of it: two rows of one name are two
+    /// rows of one name however they are laid out.
+    #[tokio::test]
+    async fn a_repeated_id_is_refused_even_across_partitions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = Root::new(tmp.path());
+        let table = crossing_table(&["a", "a"], &[berlin(), berlin()], &["DE", "FR"]);
+
+        assert!(matches!(
+            write_table(&root, &crossings(), &[table]).await,
+            Err(TableError::Duplicate { .. })
+        ));
     }
 }

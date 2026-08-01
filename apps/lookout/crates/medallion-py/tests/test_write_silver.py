@@ -171,6 +171,7 @@ class TestTheCrossingDatasets:
         table = pa.table(
             {
                 "crossing_id": pa.array(["w1-t1"], pa.string()),
+                "crossing_short_id": pa.array([0x292E417A], pa.uint32()),
                 "water_id": pa.array(["water-1"], pa.string()),
                 "water_subtype": pa.array(["river"], pa.string()),
                 "water_class": pa.array(["river"], pa.string()),
@@ -308,3 +309,58 @@ class TestTheDefaultRoot:
         monkeypatch.chdir(tmp_path)
         with pytest.raises(RuntimeError, match="Cargo.toml"):
             lookout_medallion.default_root()
+
+
+class TestNamesThatIdentifyARow:
+    """A crossing is named twice — by the store's id and by the four bytes a device holds —
+    and either naming two crossings would let a reader take one for the other."""
+
+    def crossings(self, ids: list[str], short_ids: list[int]) -> pa.Table:
+        point = shapely.to_wkb(shapely.Point(BERLIN))
+        projected = shapely.to_wkb(shapely.Point(BERLIN_UTM32N))
+        rows = len(ids)
+        return pa.table(
+            {
+                "crossing_id": pa.array(ids, pa.string()),
+                "crossing_short_id": pa.array(short_ids, pa.uint32()),
+                "water_id": pa.array(["water-1"] * rows, pa.string()),
+                "water_subtype": pa.array(["river"] * rows, pa.string()),
+                "water_class": pa.array(["river"] * rows, pa.string()),
+                "track_id": pa.array(["track-1"] * rows, pa.string()),
+                "rail_id": pa.array(["rail-1"] * rows, pa.string()),
+                "rail_class": pa.array(["rail"] * rows, pa.string()),
+                "overlap_kind": pa.array(["line"] * rows, pa.string()),
+                "overlap_m": pa.array([42.0] * rows, pa.float64()),
+                "total_overlap_m": pa.array([58.0] * rows, pa.float64()),
+                "merged_parts": pa.array([2] * rows, pa.uint32()),
+                "frac": pa.array([0.5] * rows, pa.float64()),
+                "extract_id": pa.array(["20260727T193628Z"] * rows, pa.string()),
+                "merge_distance_m": pa.array([25.0] * rows, pa.float64()),
+                "min_crossing_m": pa.array([5.0] * rows, pa.float64()),
+                "geometry": pa.array([point] * rows, pa.binary()),
+                "geometry_projected": pa.array([projected] * rows, pa.binary()),
+                "country": pa.array(["DE"] * rows, pa.string()),
+            }
+        )
+
+    def test_two_crossings_of_one_id_are_refused(self, store):
+        table = self.crossings(["w1-t1", "w1-t1"], [1, 2])
+
+        with pytest.raises(ValueError, match="crossing_id"):
+            lookout_medallion.write_silver("water_crossing", table, root=str(store))
+
+    def test_two_crossings_of_one_short_id_are_refused(self, store):
+        table = self.crossings(["w1-t1", "w1-t2"], [7, 7])
+
+        with pytest.raises(ValueError, match="crossing_short_id"):
+            lookout_medallion.write_silver("water_crossing", table, root=str(store))
+
+    def test_distinct_names_are_written(self, store):
+        table = self.crossings(["w1-t1", "w1-t2"], [7, 8])
+
+        assert (
+            lookout_medallion.write_silver(
+                "water_crossing", table, root=str(store)
+            ).rows
+            == 2
+        )
