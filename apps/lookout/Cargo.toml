@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/*", "spikes/m5/spike3-gnss/core"]
+# Spike cores are deliberately absent: each declares its own `[workspace]` and carries its
+# own lock, because it has to build for the device alongside a shell this workspace cannot
+# contain, and pins crux to a version the app does not. Listing one here as well leaves
+# cargo with two roots for the same directory and it refuses to load either.
+members = ["crates/*"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -40,7 +44,16 @@ datafusion = "52.5"
 # Must match the arrow version SedonaDB/DataFusion pin, so `RecordBatch`es returned by
 # queries line up with the arrow types we decode them with.
 arrow = "57.1"
+# Read a GeoParquet file directly, with no engine in front of it: the crossings packer wants
+# a few columns off local disk, which is `parquet`'s own reader. Released in lockstep with
+# arrow, so it carries the same version.
+parquet = "57.1"
 md5 = "0.7"
+rand = "0.10"
+# ChaCha is specified to produce the same stream for the same seed across versions and
+# platforms, which `StdRng` deliberately does not promise — so a seeded dataset stays the
+# same dataset.
+rand_chacha = "0.10"
 tempfile = "3"
 proptest = "1"
 # Motis `map/trips` client: progenitor-generated from the OpenAPI spec (reqwest 0.12),

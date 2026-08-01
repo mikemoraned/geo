@@ -1,0 +1,30 @@
+# Deliberately free of any `esp-idf-*` dependency: `esp-idf-sys`'s build script aborts on
+# a host target, so anything it touches can never be built or tested on the laptop. The
+# shell crate next door adds the device half.
+[workspace]
+
+[package]
+name = "spike6-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+
+[dependencies]
+# Pinned: with BLE running, 0.19 reboots the board every few minutes inside its own
+# Command/crossbeam machinery, and 0.16.2 does not. Spike 4's README has the evidence. This
+# spike has no BLE, but the predictor this core is a step towards will, so it is built
+# against the version that has to work — one associated type more than later versions.
+crux_core = "=0.16.2"
+serde = { version = "1", features = ["derive"] }
+# `default-features = false` drops chrono's `clock` feature, and with it `iana-time-zone`,
+# which has no business on the device. The core is handed the time rather than reading it.
+chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+nmea = "0.7"
+thiserror = "2"
+# Casts the packed crossings buffer's columns in place. Small and no_std-friendly, and its
+# checked casts turn a misaligned buffer into an error rather than a fault on Xtensa.
+bytemuck = "1"
+# Great-circle distance, generic over the float type so the scan stays f32 — the ESP32 FPU is
+# single-precision and f64 there is emulated. `default-features = false` drops earcutr, spade
+# and rayon: triangulation and a thread pool have no business on this board.
+geo = { version = "0.31", default-features = false }
