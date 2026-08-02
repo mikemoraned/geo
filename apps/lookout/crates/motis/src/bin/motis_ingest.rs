@@ -1,6 +1,13 @@
-//! `motis_ingest`: derive the silver `train_segment` dataset from the bronze motis
-//! capture log. A thin wrapper around [`motis::ingest::ingest`]; run via
-//! `just silver-motis-ingest`.
+//! `motis_ingest`: derive the silver `train_segment` dataset from the bronze motis capture
+//! log — dedup legs seen by more than one poll, decode each polyline to WKB, and add the
+//! projected geometry.
+//!
+//! A leg's country, and so the zone it is projected into, comes from where it starts,
+//! resolved against the country areas of the newest Overture extract: a store without an
+//! extract cannot be ingested.
+//!
+//! Only the partitions the capture log covers are rewritten, so a rerun over unchanged
+//! bronze leaves the same dataset.
 
 use clap::Parser;
 use tracing_subscriber::EnvFilter;

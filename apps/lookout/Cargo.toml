@@ -33,50 +33,27 @@ clap = { version = "4", features = ["derive"] }
 # pure-Rust `geo` geometry backend with default-features off, which drops the `geos`
 # backend — it links a *system* GEOS library (enable it later once GEOS is installed).
 sedona = { git = "https://github.com/apache/sedona-db", tag = "apache-sedona-db-0.4.0", default-features = false, features = ["aws", "geo"] }
-# `GeoParquetReadOptions` (S3 read options + geometry decoding) lives here, not in the
-# top-level `sedona` crate; same repo/tag so the versions line up.
+# Same repo/tag as `sedona`, so the versions line up.
 sedona-geoparquet = { git = "https://github.com/apache/sedona-db", tag = "apache-sedona-db-0.4.0" }
-# SedonaDB's query results are DataFusion `DataFrame`s; pinned to the version SedonaDB
-# builds against so the shared arrow/datafusion types line up.
+# Everything below is pinned to the arrow generation SedonaDB builds against, so that a
+# `RecordBatch` from a query is the same type as one we build. geoparquet 0.7 is the last
+# release on arrow 57 (0.8 moved to 59); serde_arrow gates its arrow support per version.
 datafusion = "52.5"
-# Must match the arrow version SedonaDB/DataFusion pin, so `RecordBatch`es returned by
-# queries line up with the arrow types we decode them with.
 arrow = "57.1"
-# Parquet reader/writer; same version as arrow so the `RecordBatch` types line up (the
-# parquet crate re-exports arrow's). The `object_store` feature adds
-# `ParquetObjectWriter`, which writes through an `ObjectStore` rather than a `File`.
 parquet = { version = "57.1", features = ["object_store"] }
-# Storage abstraction the medallion writer goes through: its `LocalFileSystem` stages
-# writes to a temp file and renames, so a file appears at its path only once complete.
-# 0.12 is what both parquet and datafusion depend on, so there is one version in the tree.
+# `LocalFileSystem` stages writes to a temp file and renames, so a file appears at its path
+# only once complete. 0.12 is what both parquet and datafusion depend on.
 object_store = "0.12"
-# GeoParquet metadata encoder (geoarrow-rs). 0.7 is the last release built against
-# arrow/parquet 57, which is what SedonaDB pins us to; 0.8 moved to 59 and its
-# `RecordBatch` would be a different type from ours.
 geoparquet = "0.7"
-# Pure-Rust proj4, for the projected geometry column silver datasets carry alongside
-# their lat/lon one. `crs-definitions` gives EPSG lookups; `geo-types` the geometry impls.
 proj4rs = { version = "0.1", features = ["crs-definitions", "geo-types"] }
-# geoarrow's Arrow-level geometry types, used to declare a WKB geometry column with its
-# CRS so the encoder can write conformant GeoParquet metadata.
 geoarrow-schema = "0.7"
-# The array side of the same geoarrow release: converts a geometry column handed in from
-# outside Rust into the WKB silver stores, whichever encoding the caller's engine produced.
 geoarrow-array = "0.7"
-# Serialises plain Rust structs straight into arrow `RecordBatch`es, so bronze rows are
-# defined once as a serde type rather than as hand-built column builders. Feature-gated
-# per arrow version; `arrow-57` matches our pin.
 serde_arrow = { version = "0.13", features = ["arrow-57"] }
 # DuckDB, in-process, for the multi-engine invariant test. Links the system libduckdb
 # (`brew install duckdb`) rather than compiling a bundled copy, which needs a full C++
 # toolchain and minutes of build time on every clean build.
 duckdb = "1.105"
-# Resolves the home directory for the default medallion root; `std::env::home_dir` is
-# deprecated and wrong on Windows.
 dirs = "6"
-# Stream combinators for writing a query's results straight through to a file, so a
-# country-scale extract is never held in memory in full. Datafusion's record-batch
-# streams are `futures::Stream`s.
 futures = "0.3"
 md5 = "0.7"
 rand = "0.10"
@@ -86,29 +63,19 @@ rand = "0.10"
 rand_chacha = "0.10"
 tempfile = "3"
 proptest = "1"
-# Motis `map/trips` client: progenitor-generated from the OpenAPI spec (reqwest 0.12),
-# exposes `.trips()` and `types::TripSegment`. `polyline` decodes the Google-encoded
-# segment geometry; `chrono` formats the RFC3339 query window.
+# Motis `map/trips` client, progenitor-generated from the OpenAPI spec.
 motis-openapi-progenitor = "0.4"
 polyline = "0.11"
-# Encode the decoded polyline LineString to WKB for the derived `train_segment` geom,
-# matching the `transport` table's WKB the Python visualiser reads with shapely.
 wkb = "0.9"
-# `geo-types` for the geometry types; `geo` for the algorithms over them (bounding rect,
-# scale). Pinned to 0.31 to match the version sedona-geo already resolves in the tree.
 geo-types = "0.7"
+# Pinned to 0.31, the version sedona-geo already resolves in the tree.
 geo = "0.31"
-# Geometry traits the `wkb` reader exposes, for inspecting decoded geometries in tests.
 geo-traits = "0.3"
-# Serialise geo-types geometries to WKT for the Overture spatial-query window.
 wkt = "0.14"
-# `serde` for the ts_milliseconds adapters bronze rows use to type their instants.
 chrono = { version = "0.4", features = ["serde"] }
-# Python bindings for the store, so a derivation written as a notebook writes silver
-# through the same code a Rust one does. `pyo3-arrow` accepts an arrow table from any
-# python library implementing the PyCapsule interface; 0.16 is the release built against
-# arrow 57, so the batches it hands over are our `RecordBatch`.
 pyo3 = "0.28"
+# 0.16 is the pyo3-arrow release built against arrow 57, so the tables it hands over from
+# python are our `RecordBatch`.
 pyo3-arrow = "0.16"
 crossings = { path = "crates/crossings" }
 medallion = { path = "crates/medallion" }

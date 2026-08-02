@@ -24,7 +24,7 @@ This is a clean-up slice focussed on consolidating and improving what we have in
 
 #### Docs
 
-* [ ] remove unneeded documentation e.g. 
+* [x] remove unneeded documentation e.g. 
   * there is no need to add documentation to every usage of a library in Cargo.toml; only highlight things that are particularly unusual
     * find other examples like this and ask, per category, if they should be deleted
   * remove duplication e.g. we don't need docs for a cli in both the Justfile entry and in the cli code; choose one

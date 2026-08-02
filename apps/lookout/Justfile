@@ -64,85 +64,50 @@ end_to_end_test:
 deploy:
     fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}"
 
-# Report what the store holds: every dataset in every layer, plus the gold artefacts, with
-# what each one weighs and the span its partitions cover. A dataset nothing has written is
-# reported as absent, so this says what a rebuild still owes as well as what it has done.
-# Reads no rows — the counts come from the parquet footers — so it is cheap on a full store.
-# Pass --partitions to list every partition rather than the span, and --medallion-root to
-# summarise a store elsewhere.
+# Report what the store holds, layer by layer.
 summarise *args:
     cargo run -q -p summary --bin summarise -- {{args}}
 
 # Bring bronze up to date: drain the telemetry queue, then take a fresh Overture extract.
-# The other bronze writer is deliberately not here — `bronze-poll-motis` runs until stopped.
-# Note that the extract is a new extract id and ~1.5 GB every time, so this is a heavier
-# recipe than draining alone; pass --medallion-root (or any other flag) through to both.
+# `bronze-poll-motis` is deliberately not here — it runs until stopped. Args reach both.
 bronze *args:
     just bronze-record drain {{args}}
     just bronze-extract new {{args}}
 
 # Read the upstash telemetry queue into the bronze telemetry datasets, with the redis URL
-# from 1Password. No args = non-destructive view-latest; `just bronze-record drain` to drain.
+# from 1Password.
 bronze-record *args:
     op run --env-file=deploy/lookout.env -- cargo run -p recorder -- {{args}}
 
-# Poll Motis for train trips near recently logged GPS and write each poll to the bronze
-# capture log in the medallion store. Reads the redis URL from 1Password (like
-# `bronze-record`, for the queue it polls). Runs a continuous loop; Ctrl-C to stop.
-# Override defaults with
-# --poll-interval-secs / --window-age-mins / --zoom / --motis-url / --medallion-root.
+# Poll Motis for train trips near recently logged GPS and log them to bronze, with the redis
+# URL from 1Password.
 bronze-poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 
-# Fill in or take an Overture extract in bronze: the country's rail segments and the
-# connectors they reference, its water, and its administrative divisions, all under one
-# extract id with a manifest row recording the release and the window.
-#
-# No args takes the newest recorded extract again — an extract is ~1.5 GB and re-derivable,
-# so the rows are not in version control while the manifest row describing them is, and a
-# fresh clone needs them fetched. `backfill <extract_id>` names an older one; `new` takes a
-# fresh extract under a new id (pinned release and --country DE by default), which is what
-# moving to a newer Overture release means. Reads the public Overture S3 anonymously; pass
-# --mirror <dir> for a local copy of the release, and --medallion-root to work elsewhere.
+# Fill in or take an Overture extract in bronze. No args backfills the newest recorded
+# extract; `new` takes a fresh one. Reads the public Overture S3 anonymously.
 bronze-extract *args:
     cargo run --release -p transport --bin extract -- {{args}}
 
-# Re-derive every silver dataset from bronze, in dependency order. Each derivation replaces
-# what it produces, so this is safe to re-run and is the way to bring a copy of the store up
-# to date. All of them need an Overture extract to have been taken (that is where the
-# country areas come from), so run `just bronze-extract` first on a store without one.
+# Re-derive every silver dataset from bronze, in dependency order. Safe to re-run, and the
+# way to bring a copy of the store up to date. Needs `just bronze-extract` to have been run.
 silver *args:
     just silver-sessionise {{args}}
     just silver-motis-ingest {{args}}
     just silver-crossings {{args}}
 
-# Derive the silver `train_segment` dataset from the bronze motis capture log: dedup
-# re-seen legs, decode each polyline to WKB, and add the projected geometry. Requires
-# Each leg's country — and so the zone it is projected into — comes from where it starts,
-# against the country areas of the newest Overture extract, so `just bronze-extract` has to
-# have been run. Override the store with --medallion-root. Rewrites the partitions it
-# touches, so re-running over unchanged bronze leaves the same dataset.
+# Derive the silver `train_segment` dataset from the bronze motis capture log.
 silver-motis-ingest *args:
     cargo run -p motis --bin motis_ingest -- {{args}}
 
-# Derive the silver `session` and `session_sample` datasets from the bronze telemetry:
-# dedup the GPS readings, split each device's into sessions at a `StartSession` or a
-# silence longer than --gap-mins (default 10) — a `StartSession` also claiming the samples
-# taken up to --lead-secs (default 60) before it, which a device fixing its position ahead
-# of announcing produces — and write each session's path and samples
-# with their projected geometry. Each session's country — and so the zone it is projected
-# into — comes from where it started, against the country areas of the newest Overture
-# extract, so `just bronze-extract` has to have been run. Override the store with
-# --medallion-root. Re-derives every session from all of bronze, so a rerun replaces what
-# the last one wrote rather than adding to it.
+# Derive the silver `session` and `session_sample` datasets from the bronze telemetry.
 silver-sessionise *args:
     cargo run --release -p recorder --bin sessionise -- {{args}}
 
 # Derive both crossing datasets: the water crossings from the Overture extract, then the
-# ones each recorded session passed. The first is the slow half — it intersects a country's
-# rail against its water and takes the best part of an hour — and it only changes when the
-# extract or the collapse tuning does, so run `silver-session-crossings` alone after a drain.
-# Args reach the session half only; see `silver-water-crossings` for why.
+# ones each recorded session passed. The first is the slow half — the best part of an hour —
+# and only changes when the extract does, so run `silver-session-crossings` alone after a
+# drain. Args reach the session half only; see `silver-water-crossings` for why.
 silver-crossings *args:
     just silver-water-crossings
     just silver-session-crossings {{args}}
@@ -158,33 +123,22 @@ silver-crossings *args:
 silver-water-crossings:
     uv run --no-project --reinstall-package lookout-medallion notebooks/water_crossings/v9.py
 
-# Derive the silver `session_crossing` dataset: the crossings each recorded session passed,
-# matched by distance from the session's samples with --match-radius-m (default 150). Needs
-# the sessions and the water crossings to have been derived. Override the store with
-# --medallion-root. Re-derives everything, so a rerun replaces what the last one wrote.
+# Derive the silver `session_crossing` dataset: the crossings each recorded session passed.
 silver-session-crossings *args:
     cargo run --release -p session_crossings --bin match_crossings -- {{args}}
 
 # Pack the silver water crossings into the flat point buffer the M5 device scans, written to
-# the store's own gold layer (<store>/gold/crossings.pointset). Every country the store holds
-# is packed, since the device does not know where it will be switched on; restrict with
-# --bbox west,south,east,north. Override the store with --medallion-root, the file with
-# --output.
+# the store's own gold layer. See crates/crossings/README.md for the file's layout.
 gold-pack-crossings *args:
     cargo run -p crossings --bin pack_crossings -- {{args}}
 
-# Regenerate the made-up crossings spike 5 carries in flash: as many as the real German
-# set holds, over the same extent, reproducible from the seed. Override with --count /
-# --bbox / --seed. The spike embeds the file, so it has to be rebuilt and reflashed after.
+# Regenerate the made-up crossings spike 5 carries in flash.
 random-crossings *args:
     cargo run -p crossings --bin random_crossings -- \
         --output spikes/m5/spike5-distance/core/src/random-crossings.pointset {{args}}
 
-# Convert the medallion store into a rerun .rrd, selecting by time window (and
-# optionally device id prefixes). Requires --since, e.g. `just visualise --since 7d`
-# or `just visualise --since 12h --devices 77a cdf2`; override the store with
-# --medallion-root. Open the .rrd with `rerun`, or pass `--open` to push it live to a
-# running viewer (overriding its persisted layout).
+# Convert the medallion store into a rerun .rrd. Requires --since, e.g.
+# `just visualise --since 7d`; see visualise/README.md for the rest.
 visualise *args:
     uv run --project visualise python visualise/main.py {{args}}
 

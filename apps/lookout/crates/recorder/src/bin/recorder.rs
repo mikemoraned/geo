@@ -1,6 +1,6 @@
 //! Reads the upstash telemetry queue into the bronze telemetry datasets: connects via
 //! `LOOKOUT_REDIS_URL` and writes the samples it reads — the verbatim payloads plus the
-//! readings interpreted from them. Run via `just bronze-record`.
+//! readings interpreted from them.
 //!
 //! Two modes (default `view-latest`, to avoid accidental data loss while iterating):
 //!   - `view-latest`: non-destructively read the latest N samples and archive them.

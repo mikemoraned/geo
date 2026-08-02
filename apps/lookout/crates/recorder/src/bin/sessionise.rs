@@ -1,6 +1,13 @@
 //! `sessionise`: derive the silver `session` and `session_sample` datasets from the bronze
-//! telemetry. A thin wrapper around [`recorder::sessions`] and [`recorder::silver`]; run via
-//! `just silver-sessionise`.
+//! telemetry — dedup the GPS readings, split each device's into sessions, and write each
+//! session's path and samples with their projected geometry.
+//!
+//! A session's country, and so the zone its geometry is projected into, comes from where it
+//! started, resolved against the country areas of the newest Overture extract: a store
+//! without an extract cannot be sessionised.
+//!
+//! Every session is re-derived from all of bronze, so a rerun replaces what the last one
+//! wrote rather than adding to it.
 
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
