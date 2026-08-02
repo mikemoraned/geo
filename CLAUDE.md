@@ -4,15 +4,15 @@ See [README.md](README.md) for what geo is. This file covers how to work on it.
 
 geo is an umbrella monorepo for geo-related projects, containing different areas:
 * `apps/`: individual apps, e.g. `linzer`
-* `web`: a top-level website, which is a blog which lives at https://geo.houseofmoran.io
+* `web`: a top-level blog, at https://geo.houseofmoran.io
 * `questions/`: data explorations, typically in notebooks, uv-managed
-* `spikes/`: throwaway code used for experimentation and discovery that we keep around for reference of what was done, but code typically shouldn't be used directly
+* `spikes/`: throwaway code from experiments, kept as a record of what was done; don't use it directly
 * `tools/`: shared tools e.g. a motis-server
 
 ## Memory (read before starting)
 
 **Every memory belongs in this repo, in `.claude/memory/` — never in Claude Code's
-external memory store.** That covers project knowledge, working preferences and
+external memory store.** That covers project knowledge, working preferences, and
 corrections alike: anything worth remembering is worth reviewing in a diff, sharing with
 whoever else works here, and keeping in step with the code it describes. A note written
 outside the repo is invisible to all of that, so if you find one there, move it in.
@@ -81,8 +81,16 @@ When doing TDD, always keep the code compiling at every step:
 
 ## Conventions / Style
 
-<!-- geo-specific commands, invariants, and per-app notes go here as they emerge. -->
-
+- **Write all prose through the `writing-clearly-and-concisely` skill.** This is always on:
+  documentation, READMEs, commit messages, error messages, comments, and anything else a
+  human reads. Active voice, positive form, concrete language, no needless words, and none
+  of the puffery the skill lists. It needs no prompting, and applies to edits of existing
+  prose as much as to new prose. Reference docs additionally follow
+  [`.claude/memory/docs-style.md`](.claude/memory/docs-style.md).
+  - Two deliberate departures from the skill's 1918 source: **British spelling** throughout
+    (`visualise`, `colour`, `metres`), and **`data` as a singular mass noun** ("data is
+    stored"), which is what this domain's readers write. Everything else applies, including
+    the serial comma.
 - **Code over comments:** make code self-documenting; add comments only for non-obvious
   things; substantive docs go in `docs/`.
 - **Prefer existing libraries; don't hand-roll — especially in notebook cells.** Reach for a

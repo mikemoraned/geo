@@ -56,7 +56,7 @@ exactly the logic worth testing off-device.
 **Status: avoided by pinning `crux_core = "=0.16.2"`. Cause unidentified.**
 
 On `crux_core` 0.19 the device reboots on its own between 4 seconds and 7 minutes after boot,
-with or without a client connected. Spike 3 — the same core, display and GNSS code without
+with or without a client connected. Spike 3 — the same core, display, and GNSS code without
 Bluetooth — runs indefinitely, so enabling BLE is what brings it out.
 
 On 0.16.2 the same spike ran 30 minutes with a client connected *and* a real fix, so both the
@@ -83,7 +83,7 @@ posix_memalign / _DoubleExceptionVector, with crossbeam Receiver::try_recv on to
 
 The first is a null pointer dereference in a context crux has just constructed; the second is
 runaway recursion through the allocator. `App::update` returns a `Command` for every event, and
-each one allocates channels, an `Arc` and a slab entry — so this path runs constantly.
+each one allocates channels, an `Arc`, and a slab entry — so this path runs constantly.
 
 **Ruled out by measurement, not argument:**
 
@@ -97,10 +97,10 @@ each one allocates channels, an `Arc` and a slab entry — so this path runs con
 | Allocation churn | Cutting events ~15x (only `RMC`/`GGA` reach the core) did not stop it |
 | Model on the fragmented heap | Same crash with the core un-boxed, back on main's stack as in spike 3 |
 
-Guesses that were confidently wrong along the way, recorded so they are not re-run: logging
-from GATT callbacks, PSRAM, allocation volume, and the boxed model. Each looked plausible and
-each was contradicted by the next crash. The version pin was the fifth hypothesis and the
-first that held.
+Guesses confidently wrong along the way, recorded so they are not re-run: logging from GATT
+callbacks, PSRAM, allocation volume, and the boxed model. Each looked plausible and each was
+contradicted by the next crash. The version pin was the fifth hypothesis and the first that
+held.
 
 If the pin ever has to move — a later spike wanting newer crux — the untried options are
 bisecting 0.17/0.18 to find the change, pre-`Command` crux 0.10 (a real port: custom

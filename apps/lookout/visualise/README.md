@@ -1,7 +1,7 @@
 # visualise
 
-Converts the lookout medallion store into a rerun `.rrd` for visualisation. What it reads
-and logs is described in `main.py`'s docstring, which is also its `--help`.
+Converts the lookout medallion store into a rerun `.rrd` for visualisation. `main.py`'s
+docstring describes what it reads and logs, and is also its `--help`.
 
 ## Usage
 

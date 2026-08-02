@@ -3,7 +3,7 @@
 Turns the silver water-crossings dataset into the flat point buffer the M5 device scans.
 
 ```sh
-just gold-pack-crossings                                   # defaults, from the repo root's apps/lookout
+just gold-pack-crossings                                   # defaults, run from apps/lookout
 just gold-pack-crossings --medallion-root <store> --output <file>
 just gold-pack-crossings --bbox 13.0,50.9,14.5,51.9        # west,south,east,north
 ```
@@ -11,7 +11,7 @@ just gold-pack-crossings --bbox 13.0,50.9,14.5,51.9        # west,south,east,nor
 The device holds every crossing in RAM and brute-force scans the lot against each GPS fix, so
 what it needs is not a queryable dataset but a packed array of coordinates. At the measured
 size — 5,749 crossings for Germany — that is **69,000 bytes**, small enough to `include_bytes!`
-into the firmware, and small enough that an index would be a waste of the effort.
+into the firmware, and small enough that an index would waste the effort.
 
 ## The `.pointset` layout
 

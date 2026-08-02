@@ -33,8 +33,8 @@ crate reduced to I/O.
 
 The shell reads `SystemTime`, which without NTP or an RTC read counts from the epoch at
 boot — it ticks correctly but the date is not real. Reading the BM8563 RTC was the
-alternative, but spike 3's GNSS fix carries true UTC anyway, so it is the better source and
-this spike doesn't need one to prove the core/shell loop works.
+alternative; spike 3's GNSS fix carries true UTC anyway, which makes it the better source,
+and this spike needs neither to prove the core/shell loop works.
 
 `chrono` is built with `default-features = false` throughout: the default `clock` feature
 drags in `iana-time-zone`, which has no business on the device, and the core is handed its

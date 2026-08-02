@@ -123,7 +123,7 @@ then logs it as a static map backdrop.
 
 Added a second, non-GPS reference for train positions by polling a local Motis server
 for Germany and folding the results in alongside the GPS traces. The key structural fact:
-Motis' `map/trips` gives trip geometry, not vehicle GPS — a train's position at time T is
+Motis's `map/trips` gives trip geometry, not vehicle GPS — a train's position at time T is
 *interpolated* along the segment spanning T. No German open feed carries VehiclePositions,
 so realtime-corrected interpolation is the nationwide ceiling; the server was configured
 with a GTFS-RT feed to make that interpolation delay-aware.
@@ -146,8 +146,8 @@ with a GTFS-RT feed to make that interpolation delay-aware.
   `Scale`, `wkt`, `wkb`) rather than hand-rolled arithmetic.
 - **Parked (not done): pfaedle rail track geometry.** DELFI's `shapes.txt` covers only
   bus/coach, so rail interpolation still cuts corners. The pfaedle tooling was built and
-  produces correct curved rail, but importing its `shapes.txt` breaks GTFS-RT realtime; decided to give up on fixing this for now.
-  Full write-up and resume steps live in `.claude/memory/motis-trips-api.md`.
+  produces correct curved rail, but importing its `shapes.txt` breaks GTFS-RT realtime, so
+  this is parked. Full write-up and resume steps live in `.claude/memory/motis-trips-api.md`.
 
 ## minimal version of water crossings
 
@@ -190,7 +190,7 @@ BLE; no prediction logic exists yet. New crates on device: `esp-idf-svc`, `mipid
 - **`crux_core` is pinned to `=0.16.2` on device.** On 0.19, Crux plus BLE rebooted the board
   every few minutes from inside crux's per-effect machinery. The pin fixes it; the cause was
   never identified, only avoided.
-- **Hardware facts worth not re-deriving** — the power-hold pin, panel offset and bus ceiling,
+- **Hardware facts worth not re-deriving** — the power-hold pin, panel offset, and bus ceiling,
   which Grove pin is RX, UART buffer sizing, and that stack overflow on this board always
   presents as a fault in unrelated code — are in `.claude/memory/m5-esp32-toolchain.md`.
 - **GNSS noise is worse than the predictor's straw man assumes**: held still with poor
@@ -198,14 +198,13 @@ BLE; no prediction logic exists yet. New crates on device: `esp-idf-svc`, `mipid
   multi-knot speed. Carried into the new "Deploy predictor on M5 device" slice, along with the
   crux pin as a constraint on the shared core.
 
-
 ## Spike on device support for distance lookup
 
 Showed that an M5StickC PLUS2 can hold the German water crossings and find the nearest ones to
 a live GPS fix, fast enough to keep up with the receiver. A new `crossings` crate derives a
 flat point buffer from the crossings GeoParquet; three spikes under `spikes/m5/` load it, scan
-it and render the result. New dependencies: `parquet` and `rand`/`rand_chacha` on the host,
-`geo`, `bytemuck` and `battery-estimator` on device.
+it, and render the result. New dependencies: `parquet` and `rand`/`rand_chacha` on the host,
+`geo`, `bytemuck`, and `battery-estimator` on device.
 
 - **A brute-force nearest-neighbour scan is enough, with about 20× headroom on time.** No
   index at all: every fix walks the whole set, taking a great-circle distance to each of the
@@ -216,7 +215,7 @@ it and render the result. New dependencies: `parquet` and `rand`/`rand_chacha` o
 - **The device and the notebook agree** about which crossings are nearest Dresden and how far,
   to 0.27 m over 2.3 km, and both count the same number within 5 km — the stricter check, since
   a membership question flips where a distance merely wobbles. `f32` coordinates are enough.
-- **A crossing is named by what it is** — a hash of track, water and position along the track —
+- **A crossing is named by what it is** — a hash of track, water, and position along the track —
   so an id survives a rebuild and a device prediction can be matched to a laptop ground truth.
   Track and water alone are not unique: a meandering river meets one segment a dozen times.
 - **The buffer is parallel columns of coordinates and ids** behind a small header, cast in
@@ -231,7 +230,6 @@ it and render the result. New dependencies: `parquet` and `rand`/`rand_chacha` o
 - **Deferred**: showing whether a crossing is closing or receding — it needs judging on a live
   train, and there is no travel for a few weeks.
 
-
 ## Sessionisation and Water crossings per session + Refactor to Medallion
 
 Started as "minimal predictor and evaluation framework", narrowed once the crow-flies predictor
@@ -239,13 +237,13 @@ reached the M5 device under its own spike: the store refactor and the ground tru
 substantial in themselves, so the predictor and its evaluation moved to their own slices. What
 landed is a medallion-layered store, GPS traces sessionised into silver, and water crossings
 per session as ground truth. New crates: `medallion`, `medallion-py` (the `lookout_medallion`
-python module) and `session_crossings`; sqlite and `rusqlite` are gone, as are `enrich` and the
+python module), and `session_crossings`; sqlite and `rusqlite` are gone, as are `enrich` and the
 one-shot backfills.
 
 - **Every layer moved to parquet under `data/medallion` in the repo**, so bronze is versioned
   with the code that wrote it. Bronze is append-shaped and immutable, silver is GeoParquet 1.1
   with WKB and a pre-projected metric column. A round-trip test holds silver readable by
-  DuckDB, SedonaDB and georust with no engine-specific handling.
+  DuckDB, SedonaDB, and georust with no engine-specific handling.
 - **The layer is part of a dataset's type**, so replacing or sweeping a bronze partition is a
   missing method rather than a runtime error. `medallion` is the only door into the silver
   format for Rust and python alike, which is what makes the store's rules enforceable.
@@ -257,7 +255,7 @@ one-shot backfills.
 - **A reported session start absorbs the fix that precedes it**, after the first run showed
   devices fixing position seconds before announcing; that artefact was a third of the sessions.
 - **The crossings pipeline stays a notebook and only its write is Rust**, so silver has one
-  writer implementation. A crossing is named by water, track and position along it — the first
+  writer implementation. A crossing is named by water, track, and position along it — the first
   two are not unique, since a meandering river meets one segment repeatedly.
 - **The ground truth is thin but real**: 165 recorded passes, each one crossing passed in one
   session at the instant of the nearest sample, spread across 16 of the 31 sessions. Enough for

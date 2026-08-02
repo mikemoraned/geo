@@ -52,7 +52,7 @@ scheduled-service punctuality, where arriving early and arriving late are distin
 rather than symmetric error. An initial window of 30–120 seconds around a 60-second target
 is assumed and revised from the observed distribution.
 
-`Early`, `Late` and `False alarm` are all counted against the predictor. A crossing never
+`Early`, `Late`, and `False alarm` are all counted against the predictor. A crossing never
 passed in the session is the class that a definition conditioned on an actual crossing
 instant cannot express, and it is the class that most affects whether the notification is
 tolerable in use.

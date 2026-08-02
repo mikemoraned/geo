@@ -29,8 +29,8 @@ I (317306) spike5_shell: scanned 5749 crossings in 5025us
 ```
 
 **Release is 1.7× faster than dev**, and most of that is unlikely to be the opt-level — `z`
-and `s` are both size-oriented — but the `debug-assertions` and `overflow-checks` the dev
-profile turns on, which put a branch on every arithmetic operation inside the haversine.
+and `s` are both size-oriented — but rather the `debug-assertions` and `overflow-checks` the
+dev profile turns on, which put a branch on every arithmetic operation inside the haversine.
 Measure on release; the dev number is what iteration feels like, not what the device does.
 
 At 0.82 µs a crossing — about 196 cycles at 240 MHz for an f32 haversine plus the top-N

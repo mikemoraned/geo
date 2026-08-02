@@ -28,7 +28,11 @@ This is a clean-up slice focussed on consolidating and improving what we have in
   * there is no need to add documentation to every usage of a library in Cargo.toml; only highlight things that are particularly unusual
     * find other examples like this and ask, per category, if they should be deleted
   * remove duplication e.g. we don't need docs for a cli in both the Justfile entry and in the cli code; choose one
-* [ ] enable `writing-clearly-and-concisely` SKILL and do a pass over all existing documentation correcting it; ensure this SKILL is always enabled and on from now on
+* [x] enable `writing-clearly-and-concisely` SKILL and do a pass over all existing documentation correcting it; ensure this SKILL is always enabled and on from now on
+  * always-on is a rule in the repo `CLAUDE.md`, which every session loads, along with the
+    two deliberate departures from the skill: British spelling, and `data` as a mass noun
+  * `completed-slices.md` was included in the pass by request — wording only, never the
+    record of what was done, since `.claude/rules/slices.md` holds it append-only
 * [ ] extract knowledge out of claude-specific areas like .claude files and into explicit docs under docs:
   * These should be written in a style that passes `writing-clearly-and-concisely` SKILL and in additionaly should be focussed on key facts in a dispassionate technical style
   * This includes in .claude/memory:

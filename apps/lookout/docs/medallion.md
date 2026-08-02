@@ -11,15 +11,14 @@ landing → bronze → silver → gold, getting more derived and more query-shap
 <root>/<layer>/<dataset>/<hive partitions>/*.parquet
 ```
 
-Everything is stored in Hive format (`key=value` directory names), so a layer can be
-queried with a glob and the partition keys come back as columns.
+Hive format (`key=value` directory names) throughout, so a glob queries a layer and the
+partition keys come back as columns.
 
 **The store lives in the repo, at `data/medallion`.** The layers holding observations cannot
 be re-derived, so they are versioned alongside the code that wrote them, and a deletion is
-recoverable from history rather than only from a backup. What is versioned and what is not is
-stated in that directory's own `.gitignore`: the derived layers are ignored, as are the
-upstream reference extracts, which are large and re-derivable from the manifest recording
-what each one took.
+recoverable from history rather than only from a backup. That directory's own `.gitignore` states what is
+versioned: it ignores the derived layers, and the upstream reference extracts, which are
+large and re-derivable from the manifest recording what each one took.
 
 The root is found by walking up from the working directory for the manifest declaring the
 workspace, as cargo does, rather than resolved as a path relative to wherever a binary was
@@ -33,9 +32,9 @@ Every CLI that reads or writes the store can still be pointed elsewhere:
 --medallion-root <PATH>
 ```
 
-The same flag name is used everywhere, from a shared clap args struct rather than each binary
-declaring its own. A run against an external drive, or against a throwaway root in a test, is
-then a single explicit argument recorded in the command.
+Every binary takes the same flag name, from one shared args definition rather than declaring
+its own. A run against an external drive, or against a throwaway root in a test, is then a
+single explicit argument recorded in the command.
 
 ## Layers
 
@@ -104,7 +103,7 @@ Format: parquet, shaped for **quick, safe appends**.
 ### silver
 
 Cleaned, normalised, query-shaped derivations of bronze — raw readings segmented and
-normalised into standard geometries, and upstream reference data enriched, extended and
+normalised into standard geometries, and upstream reference data enriched, extended, and
 restricted to what is required.
 
 Format: **[GeoParquet 1.1.0](https://geoparquet.org/releases/v1.1.0/)**, optimised for fast
@@ -132,9 +131,9 @@ and scalable lookup — embed whatever metadata makes queries faster e.g. boundi
   identifying one row is checked once, where the dataset is defined, rather than by each writer
   and each consumer. The check spans the dataset rather than a partition of it: which partition
   a row lands in is a fact about how it is stored, not about what it is called. A dataset may
-  carry more than one such name, each identifying a row on its own — a second, shorter form of
-  an id for a consumer with no room for the first is the case this exists for, and it is exactly
-  the one where a collision would otherwise be discovered downstream.
+  carry more than one such name, each identifying a row on its own. That exists for a second,
+  shorter form of an id, meant for a consumer with no room for the first — exactly the case
+  where a collision would otherwise surface downstream.
 
 #### Writing silver
 
@@ -186,17 +185,17 @@ compressed GeoArrow is not universally supported by consuming viewers.
 
 The layout above *is* the metadata: partitioning is directory names, schema is the files',
 and a partition is replaced by rewriting it. A table format — the layer that holds partition
-spec, schema history, snapshots and statistics as metadata beside the data — would add atomic
+spec, schema history, snapshots, and statistics as metadata beside the data — would add atomic
 replacement of many files at once, schema evolution, time travel, and pruning from statistics
 rather than from paths.
 
 **Deliberately not adopted.** It costs a metadata layer to understand and an engine support
 matrix to track, against a store small enough that a partition is one file and a rewrite is
 therefore already atomic. The trigger to reconsider is partition-level atomicity or schema
-evolution starting to cost debugging time. Whichever is chosen then should be judged first on
-breadth of engine support, since multi-engine readability is the rule this store is built
-around; write maturity needs verifying against the implementation's own status reporting,
-because this store would be a writer and not only a reader.
+evolution starting to cost debugging time. Judge whichever is chosen then first on breadth
+of engine support, since multi-engine readability is the rule this store is built around, and
+verify its write maturity against the implementation's own status reporting, since this store
+would be a writer and not only a reader.
 
 ## Rederivability
 
@@ -234,8 +233,8 @@ that knowing one dataset's columns is knowing them all.
 
 Per-dataset Hive partition keys are part of the schema of this store and are expensive to
 change later, so they are pinned rather than left to each writer. Each dataset is defined
-once, in code, as the layer it lives in, the key it is partitioned on and the columns it
-holds; readers and writers refer to that definition rather than repeating a name, a key or
+once, in code, as the layer it lives in, the key it is partitioned on, and the columns it
+holds; readers and writers refer to that definition rather than repeating a name, a key, or
 a struct of their own — which is what gives a reader a typed way into a dataset it did not
 write. Geometry columns are the exception to that definition, as they are built as arrow
 rather than derived from a row type. What follows is the reasoning behind those
@@ -243,7 +242,7 @@ definitions.
 
 ### General rules
 
-- Partition keys are **snake_case**, and values contain no `/`, spaces or `=`.
+- Partition keys are **snake_case**, and values contain no `/`, spaces, or `=`.
 - Dates are UTC and formatted `YYYY-MM-DD`. A date key is named for the event it records
   (`ingested_date`, `polled_date`, `sample_date`), never a bare `date`.
 - A partition key records the *coarse* value only. The full-precision timestamp is also
@@ -335,8 +334,8 @@ known — which means a rebuild that covers only part of a dataset must not swee
 part it did not derive would read as a part that produced nothing.
 
 Whether a silver dataset additionally **retains history** — superseded versions of a row, or
-validity intervals — is a per-dataset decision, and one that should be settled explicitly
-rather than by accident. It is needed when something downstream has to know what the
+validity intervals — is a per-dataset decision, and one to settle explicitly rather than by
+accident. It is needed when something downstream has to know what the
 dataset said at an earlier time, and unnecessary when only the current view is ever read.
 Whichever is chosen, apply it consistently across silver rather than varying it
 dataset-by-dataset. Rows carry the identifiers of the bronze inputs they derive from, so

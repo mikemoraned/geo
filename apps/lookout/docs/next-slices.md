@@ -7,10 +7,10 @@
 One half of this is a clean-up / rationalisation of what we've already spiked on with the M5 device (apps/lookout/spikes/m5/spike7-battery-and-trend). The other half is turning rerun visualisation into something that shows what the predictor is doing.
 
 Effectively what I want to end up with is:
-* A core predictor defined in a CRUX wrapper, perhaps with it's central core being a state-machine
+* A core predictor defined in a CRUX wrapper, perhaps with its central core being a state-machine
 * A productionised version of the M5-deployed setup that uses that core to read live GPS readings and predict when water will be crossed
 * A rerun-based simulation that re-drives a named session (from silver/session table) as fake GPS readings through the predictor, captures the predictions, and visualises them
-  * I want to use this as way to see how the predictor is performing by live-comparing where it thinks it's going to cross water vs what water is actually there
+  * I want to use this as a way to see how the predictor is performing by live-comparing where it thinks it's going to cross water vs what water is actually there
 
 As part of this we should also be able to delete all the current `visualise` code + remove the `spikes/m5` dir.
 
@@ -20,7 +20,7 @@ As part of this we should also be able to delete all the current `visualise` cod
 
 Implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session table) and from motis (bronze/motis_segment). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
 
-Since I likely won't be in Germany for a while, if needed, we can get new motis data by live polling motis in a particular bounding box, and just watching when trains arrive.
+Since I likely won't be in Germany for a while, we can if needed get new motis data by polling motis live in a particular bounding box and watching when trains arrive.
 
 #### Tasks 
 
@@ -69,7 +69,7 @@ We now want to take our simple predictor and start applying it for real.
 
 ### Straw Man
 
-This should involve refactoring the existing lookout fly.io website so that it's sensor gathering follows the crux / ports-and-adaptors pattern. Then we can extend it to apply the predictor and visualise it in a simple way.
+This should involve refactoring the existing lookout fly.io website so that its sensor gathering follows the crux / ports-and-adaptors pattern. Then we can extend it to apply the predictor and visualise it in a simple way.
 
 This also is where we need to be publishing data about crossings for it to download client-side e.g. a PMTiles file.
 
@@ -111,7 +111,7 @@ M5 every 4 seconds to 7 minutes, always inside crux's per-effect `Command`/cross
 Pinning 0.16.2 fixes it — 30 minutes stable with a client connected and a real fix — but the
 cause was never identified, only avoided; it is some change between 0.17 and 0.19. Stack
 overflow, both task stacks, heap exhaustion, fragmentation, heap overrun, PSRAM, allocation
-volume and model placement were all ruled out by measurement. Evidence and the four wrong
+volume, and model placement were all ruled out by measurement. Evidence and the four wrong
 diagnoses are in `apps/lookout/spikes/m5/spike4-ble/README.md`.
 
 Two consequences for this slice:
@@ -161,14 +161,14 @@ wall-clock time needs neither NTP nor the BM8563 RTC.
 
 ### Target
 
-Enrich the water crossings dataset with an angle relative to the train line and travel direction. This allows a recommendation to be given about which direction to look relative to the train seat.
+Enrich the water crossings dataset with an angle relative to the train line and travel direction. That allows a recommendation about which direction to look from the train seat.
 
-## Slice: Adding POI's from images taken
+## Slice: Adding POIs from images taken
 
 ### Idea
 
-Assuming we have an iOS App, and it is running whilst people are taking pictures, we can support adding POI's by correlating what the position of the person was and on what line when they took the picture. We can also access the compass sensor to get the direction of the phone at the time. This allows us to establish an angle to the POI relative to the train and so remember what direction you'd need to be facing to be able to see it again.
+Assuming we have an iOS App, and it is running whilst people are taking pictures, we can support adding POIs by correlating what the position of the person was and on what line when they took the picture. We can also access the compass sensor to get the direction of the phone at the time. This allows us to establish an angle to the POI relative to the train and so remember what direction you'd need to be facing to be able to see it again.
 
 An onboard model could perhaps be used to do rough interpretation of kind of POI e.g. is it a building or a river or what.
 
-We probably don't want to go down the lines of storing the image, but perhaps there is some on-device or privacy-preserving way to to identify exactly what the POI is based on the image.
+We probably don't want to go down the lines of storing the image, but perhaps there is some on-device or privacy-preserving way to identify exactly what the POI is based on the image.

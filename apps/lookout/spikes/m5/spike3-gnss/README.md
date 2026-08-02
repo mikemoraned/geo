@@ -29,7 +29,7 @@ GNSS on G33 at 115200 baud
 ```
 
 The two are electrically independent, so listening on the idle one costs nothing. If
-neither sees NMEA the shell exits with a message rather than showing an empty screen —
+neither sees NMEA, the shell exits with a message rather than showing an empty screen —
 that means the unit is unplugged, unpowered, or at a different baud rate.
 
 ## Parsing lives in the core

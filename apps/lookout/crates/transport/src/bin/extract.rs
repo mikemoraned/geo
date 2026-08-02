@@ -1,5 +1,5 @@
 //! `extract`: take a point-in-time Overture extract into bronze — the country's rail,
-//! water and administrative divisions from one release, under one extract id, with a
+//! water, and administrative divisions from one release, under one extract id, with a
 //! manifest row recording what was taken.
 //!
 //! Two modes, because filling in an extract already recorded and taking a new one are
@@ -24,7 +24,7 @@ use transport::{
 };
 
 #[derive(Parser)]
-#[command(about = "Extract Overture rail, water and divisions into bronze")]
+#[command(about = "Extract Overture rail, water, and divisions into bronze")]
 struct Args {
     #[command(subcommand)]
     command: Option<Command>,
