@@ -77,7 +77,7 @@ bronze *args:
 # Read the upstash telemetry queue into the bronze telemetry datasets, with the redis URL
 # from 1Password.
 bronze-record *args:
-    op run --env-file=deploy/lookout.env -- cargo run -p recorder -- {{args}}
+    op run --env-file=deploy/lookout.env -- cargo run -p recorder --bin recorder -- {{args}}
 
 # Poll Motis for train trips near recently logged GPS and log them to bronze, with the redis
 # URL from 1Password.

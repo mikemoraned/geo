@@ -17,9 +17,11 @@ This is a clean-up slice focussed on consolidating and improving what we have in
   * [x] re-download extracts from OvertureMaps
   * [x] use summary cli to show what's in medallion now
 * [ ] update bronze:
-  * [ ] bring down latest data saved from devices that is in redis and regenerate silver/gold
+  * [ ] bring down latest data saved from devices that is in redis
+  * [ ] regenerate silver/gold
   * [ ] use summary cli to show what's in medallion now
-  * [ ] there is a new release of OvertureMaps available. Do new extracts that we need of water, stations etc, based on this new data, and regenerate silver/gold
+  * [ ] there is a new release of OvertureMaps available. Do new extracts that we need of water, stations etc, based on this new data
+  * [ ] regenerate silver/gold
   * [ ] use summary cli to show what's in medallion now
 
 #### Docs
