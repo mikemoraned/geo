@@ -64,6 +64,15 @@ end_to_end_test:
 deploy:
     fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}"
 
+# Report what the store holds: every dataset in every layer, plus the gold artefacts, with
+# what each one weighs and the span its partitions cover. A dataset nothing has written is
+# reported as absent, so this says what a rebuild still owes as well as what it has done.
+# Reads no rows — the counts come from the parquet footers — so it is cheap on a full store.
+# Pass --partitions to list every partition rather than the span, and --medallion-root to
+# summarise a store elsewhere.
+summarise *args:
+    cargo run -q -p summary --bin summarise -- {{args}}
+
 # Bring bronze up to date: drain the telemetry queue, then take a fresh Overture extract.
 # The other bronze writer is deliberately not here — `bronze-poll-motis` runs until stopped.
 # Note that the extract is a new extract id and ~1.5 GB every time, so this is a heavier

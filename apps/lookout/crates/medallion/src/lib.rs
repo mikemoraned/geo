@@ -49,6 +49,7 @@ mod partition;
 mod path;
 mod query;
 mod rows;
+pub mod summary;
 mod table;
 mod write;
 

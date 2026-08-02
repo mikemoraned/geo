@@ -8,7 +8,7 @@ This is a clean-up slice focussed on consolidating and improving what we have in
 
 #### Data
 
-* [ ] add a small summary cli which goes over all the bronze silver and gold datasets and summaries what is in them
+* [x] add a small summary cli which goes over all the bronze silver and gold datasets and summaries what is in them (`just summarise`, `--partitions` for the breakdown)
 * [x] change the `bronze-extract` recipe and the underlying `extract` cli so that it has two modes, probably as subcommands:
   * `extract backfill`: takes as an arg an existing `extract_id` (e.g. `20260727T193628Z`) and re-fetches that extract's associated release / country / window. With no id given, backfill the latest extract in the manifest
   * `extract new`: does a new extract, using the defaults as of now
@@ -26,6 +26,8 @@ This is a clean-up slice focussed on consolidating and improving what we have in
 
 * [ ] remove unneeded documentation e.g. 
   * there is no need to add documentation to every usage of a library in Cargo.toml; only highlight things that are particularly unusual
+    * find other examples like this and ask, per category, if they should be deleted
+  * remove duplication e.g. we don't need docs for a cli in both the Justfile entry and in the cli code; choose one
 * [ ] enable `writing-clearly-and-concisely` SKILL and do a pass over all existing documentation correcting it; ensure this SKILL is always enabled and on from now on
 * [ ] extract knowledge out of claude-specific areas like .claude files and into explicit docs under docs:
   * These should be written in a style that passes `writing-clearly-and-concisely` SKILL and in additionaly should be focussed on key facts in a dispassionate technical style
@@ -33,4 +35,4 @@ This is a clean-up slice focussed on consolidating and improving what we have in
     * m5-esp32-toolchain.md
     * lookout-architecture.md
     * motis-trips-api.md
-  * This documentaion should additionally extract and remove details from "### Notes & Gotchas (what the on-device GNSS actually behaves like)" in next-slices.md
+  * This documentation should additionally extract and remove details from "### Notes & Gotchas (what the on-device GNSS actually behaves like)" in next-slices.md
