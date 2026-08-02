@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use arrow::array::RecordBatch;
 use arrow::datatypes::{DataType, Field, FieldRef};
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use serde_arrow::schema::{SchemaLike, TracingOptions};
 use serde_json::json;
@@ -35,6 +36,18 @@ pub enum RowError {
     Schema(#[from] serde_arrow::Error),
 }
 
+/// Whether a dataset carries geometry.
+///
+/// Silver's geometry columns are named the same across every dataset and are built as arrow
+/// rather than traced from a row type, so a dataset says here whether it has them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Geometry {
+    /// No geometry: the dataset's rows are attributes and identifiers only.
+    Absent,
+    /// The lat/lon geometry every geo dataset carries, and its metric twin.
+    LatLonAndProjected,
+}
+
 /// One dataset's rows: the columns it holds, and where those rows live.
 ///
 /// A dataset whose rows carry geometry declares only its other columns here, since a
@@ -47,6 +60,11 @@ pub trait Row: Serialize + for<'de> Deserialize<'de> {
     /// The dataset these rows make up.
     const DATASET: DatasetSpec<Self::Layer>;
 
+    /// Whether the dataset carries the geometry columns, which decides both what a writer
+    /// must supply and how the rows are partitioned — geometry is stored in a CRS chosen per
+    /// country, and a file states one CRS for a column.
+    const GEOMETRY: Geometry = Geometry::Absent;
+
     /// The columns holding an instant, declared as timestamps rather than left as the
     /// integers they travel through serde as.
     const INSTANTS: &'static [&'static str] = &[];
@@ -58,6 +76,16 @@ pub trait Row: Serialize + for<'de> Deserialize<'de> {
     /// where the dataset is defined rather than by each writer, and a reader can take an id
     /// to mean one row without checking.
     const UNIQUE: &'static [&'static str] = &[];
+}
+
+/// A dataset partitioned by a date its own rows carry.
+///
+/// The partition key names the event the date is of (`start_date`, `departure_date`); this
+/// says which column that date is read from, so a writer no longer restates the pairing and
+/// two writers of one dataset cannot disagree about it.
+pub trait Dated: Row {
+    /// The date this row is stored under.
+    fn partition_date(&self) -> NaiveDate;
 }
 
 /// The arrow schema of `T`, with its instant columns declared as timestamps.

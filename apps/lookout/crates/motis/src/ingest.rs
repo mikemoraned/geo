@@ -6,14 +6,9 @@
 //! Silver holds one current row per leg, so a run rewrites each `departure_date` partition
 //! it touches: re-running over unchanged bronze produces an identical dataset.
 
-use arrow::array::RecordBatch;
-use std::collections::HashMap;
-
 use chrono::{DateTime, Utc};
 use geo_types::{LineString, Point};
-use medallion::{
-    COUNTRY, Countries, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Query, Root,
-};
+use medallion::{Countries, GeoRow, Query, Root};
 use model::TrainSegmentRow;
 use serde::{Deserialize, Serialize};
 
@@ -59,22 +54,8 @@ pub enum IngestError {
     Query(#[from] medallion::QueryError),
     #[error("decoding polyline: {0}")]
     Polyline(String),
-    #[error("encoding wkb: {0}")]
-    Wkb(#[from] wkb::error::WkbError),
-    #[error("building the record batch: {0}")]
-    Encode(#[from] serde_arrow::Error),
-    #[error("describing the rows: {0}")]
-    Rows(#[from] medallion::RowError),
-    #[error("assembling the batch: {0}")]
-    Arrow(#[from] arrow::error::ArrowError),
-    #[error("geometry: {0}")]
-    Geo(#[from] medallion::GeoError),
-    #[error("partitioning the dataset: {0}")]
-    Path(#[from] medallion::PathError),
     #[error("writing the dataset: {0}")]
-    Write(#[from] medallion::WriteError),
-    #[error("replacing the partitions: {0}")]
-    Replace(#[from] medallion::ReplaceError),
+    Write(#[from] medallion::TableError),
 }
 
 /// One deduped leg as the query returns it: the columns the silver dataset holds, plus the
@@ -150,98 +131,31 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
         deduped: legs.len(),
         ..IngestOutcome::default()
     };
-    let mut by_country: HashMap<Country, Vec<Route>> = HashMap::new();
+    let mut placed: Vec<GeoRow<TrainSegmentRow, LineString<f64>>> = Vec::new();
     for leg in &legs {
-        let route = Route::of(leg)?;
-        match countries.containing(route.starts_from()) {
-            Some(country) => by_country.entry(country).or_default().push(route),
+        let line = decode_polyline(&leg.polyline)?;
+        match countries.containing(starts_from(&line)) {
+            Some(country) => placed.push(GeoRow {
+                row: TrainSegmentRow::from(leg),
+                geometry: line,
+                country,
+            }),
             None => outcome.unplaceable += 1,
         }
     }
 
-    let derived: Vec<Country> = by_country.keys().copied().collect();
-    for (country, routes) in by_country {
-        outcome.partitions += write(root, &routes, country).await?;
-    }
-
-    // The dated partitions of each country were swept as they were written; the countries
-    // themselves can only be swept here, where every one this run derived is known.
-    root.rows_of::<TrainSegmentRow>()
-        .retain_partitions(COUNTRY, &derived)
-        .await?;
-
+    outcome.partitions = medallion::write_geo_rows(root, &placed)
+        .await?
+        .partitions
+        .written;
     Ok(outcome)
 }
 
-/// Write one country's legs, a partition per departure date, under that country.
-async fn write(root: &Root, routes: &[Route], country: Country) -> Result<usize, IngestError> {
-    let projector = Projector::for_country(country)?;
-    // Ordered by departure, so each partition's legs are one run of adjacent rows.
-    let days = routes
-        .chunk_by(|a, b| a.row.departure.date_naive() == b.row.departure.date_naive())
-        .map(|routes| {
-            Ok((
-                routes[0].row.departure.date_naive(),
-                batch(routes, &projector, country)?,
-            ))
-        })
-        .collect::<Result<Vec<_>, IngestError>>()?;
-
-    Ok(root
-        .rows_of::<TrainSegmentRow>()
-        .partition(COUNTRY, country)?
-        .replace_dates_geo(&days)
-        .await?
-        .written)
-}
-
-/// One leg with its polyline decoded: the row the dataset holds, and the line it ran along.
-struct Route {
-    row: TrainSegmentRow,
-    line: LineString<f64>,
-}
-
-impl Route {
-    fn of(leg: &Leg) -> Result<Self, IngestError> {
-        Ok(Self {
-            row: TrainSegmentRow::from(leg),
-            line: decode_polyline(&leg.polyline)?,
-        })
-    }
-
-    /// Where the leg starts, which decides the zone its projected geometry is written in.
-    fn starts_from(&self) -> Point<f64> {
-        self.line
-            .points()
-            .next()
-            .expect("a polyline decodes to at least one point")
-    }
-}
-
-/// Build one partition's batch: the columns the dataset holds, then the two geometry
-/// columns derived from the legs' polylines.
-fn batch(
-    routes: &[Route],
-    projector: &Projector,
-    country: Country,
-) -> Result<RecordBatch, IngestError> {
-    let rows: Vec<TrainSegmentRow> = routes.iter().map(|route| route.row.clone()).collect();
-    let lines: Vec<LineString<f64>> = routes.iter().map(|route| route.line.clone()).collect();
-    let projected = lines
-        .iter()
-        .map(|line| projector.project(line))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(medallion::geo_batch(
-        &rows,
-        &[
-            (medallion::wkb_field(GEOMETRY)?, lines.as_slice()),
-            (
-                medallion::projected_wkb_field(PROJECTED_GEOMETRY, country)?,
-                projected.as_slice(),
-            ),
-        ],
-    )?)
+/// Where a leg starts, which decides the zone its projected geometry is written in.
+fn starts_from(line: &LineString<f64>) -> Point<f64> {
+    line.points()
+        .next()
+        .expect("a polyline decodes to at least one point")
 }
 
 /// Decode a Google-encoded polyline to a `(lon, lat)` line.
@@ -256,7 +170,9 @@ mod tests {
 
     use crate::bronze::SegmentLog;
 
+    use arrow::array::RecordBatch;
     use chrono::TimeZone;
+    use medallion::{Country, GEOMETRY, PROJECTED_GEOMETRY};
     use motis_openapi_progenitor::types::TripSegment;
 
     use super::*;

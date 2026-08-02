@@ -8,7 +8,7 @@
 //! derivation owns which dataset is a matter of which one runs, exactly as it is in Rust;
 //! what the store enforces is the layer, and silver is the layer a derivation may replace.
 
-use medallion::{Geometry, RowError, SilverTarget};
+use medallion::{RowError, SilverTarget};
 
 use crate::{
     SESSION, SESSION_CROSSING, SESSION_SAMPLE, SessionCrossingRow, SessionRow, SessionSampleRow,
@@ -32,21 +32,14 @@ type Definition = fn() -> Result<SilverTarget, RowError>;
 /// The name comes from the dataset's own definition rather than being spelled again here, so
 /// renaming a dataset moves its entry with it.
 const TARGETS: [(&str, Definition); 5] = [
-    (SESSION.name, || {
-        SilverTarget::of::<SessionRow>(Geometry::LatLonAndProjected)
-    }),
-    (SESSION_SAMPLE.name, || {
-        SilverTarget::of::<SessionSampleRow>(Geometry::LatLonAndProjected)
-    }),
-    (TRAIN_SEGMENT.name, || {
-        SilverTarget::of::<TrainSegmentRow>(Geometry::LatLonAndProjected)
-    }),
-    (WATER_CROSSING.name, || {
-        SilverTarget::of::<WaterCrossingRow>(Geometry::LatLonAndProjected)
-    }),
-    (SESSION_CROSSING.name, || {
-        SilverTarget::of::<SessionCrossingRow>(Geometry::Absent)
-    }),
+    (SESSION.name, SilverTarget::of::<SessionRow>),
+    (SESSION_SAMPLE.name, SilverTarget::of::<SessionSampleRow>),
+    (TRAIN_SEGMENT.name, SilverTarget::of::<TrainSegmentRow>),
+    (WATER_CROSSING.name, SilverTarget::of::<WaterCrossingRow>),
+    (
+        SESSION_CROSSING.name,
+        SilverTarget::of::<SessionCrossingRow>,
+    ),
 ];
 
 /// The dataset called `name`, as somewhere a table can be written.

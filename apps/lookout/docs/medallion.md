@@ -136,6 +136,21 @@ and scalable lookup — embed whatever metadata makes queries faster e.g. boundi
   an id for a consumer with no room for the first is the case this exists for, and it is exactly
   the one where a collision would otherwise be discovered downstream.
 
+#### Writing silver
+
+A derivation does not assemble a silver dataset's files itself: it hands the store its rows and
+the store applies the format. Which partition a row belongs to, the CRS its geometry is
+projected into and declared in, the deletion of a partition a rebuild no longer produces, and
+the names a definition says identify a row all follow from the dataset's definition and are
+applied in one place. A writer that projected its own geometry, or that swept only the
+partitions it remembered to, would be a second implementation of the format with nothing
+holding it to the first.
+
+The projected geometry is therefore derived from the lat/lon one rather than supplied
+alongside it. The country whose zone it is written in is stated per row rather than per run:
+which entity a row belongs to is what decides where it is measured, so the rows making up one
+entity are measured in one zone wherever they individually fall.
+
 #### Writing silver from another language
 
 A derivation prototyped outside the language the store's writers are written in — a notebook,

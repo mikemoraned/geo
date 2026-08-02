@@ -10,7 +10,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use geo_types::{Point, Rect};
 use medallion::{COUNTRY, Country, Query, Replaced, Root};
 use model::{Bbox, CrossingId, DeviceId, SessionCrossingRow, SessionId};
@@ -40,9 +40,7 @@ pub enum CrossingError {
     #[error("{dataset} has not been derived yet, so there is nothing to match against")]
     Missing { dataset: &'static str },
     #[error("writing the dataset: {0}")]
-    Replace(#[from] medallion::ReplaceError),
-    #[error("building the rows: {0}")]
-    Rows(#[from] medallion::RowError),
+    Write(#[from] medallion::TableError),
 }
 
 /// One session as the store holds it: its identity and the envelope of its path.
@@ -111,7 +109,7 @@ pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, Crossin
 
     passed.sort_by(|a, b| (a.crossed_at, &a.crossing_id).cmp(&(b.crossed_at, &b.crossing_id)));
     outcome.passes = passed.len();
-    outcome.partitions = write(root, &passed).await?;
+    outcome.partitions = medallion::write_rows(root, &passed).await?.partitions;
     Ok(outcome)
 }
 
@@ -185,24 +183,4 @@ async fn crossings_in(query: &Query, country: Country) -> Result<Vec<Crossing>, 
 /// The stored envelope as a rectangle to prune against.
 fn envelope(bbox: &Bbox) -> Rect<f64> {
     Rect::new((bbox.xmin, bbox.ymin), (bbox.xmax, bbox.ymax))
-}
-
-/// Write the passes, one partition per date they happened on.
-///
-/// `passed` is ordered by instant, so each date's rows are one adjacent run.
-async fn write(root: &Root, passed: &[SessionCrossingRow]) -> Result<Replaced, CrossingError> {
-    let days = passed
-        .chunk_by(|a, b| date_of(a) == date_of(b))
-        .map(|day| Ok((date_of(&day[0]), medallion::batch(day)?)))
-        .collect::<Result<Vec<_>, medallion::RowError>>()?;
-
-    Ok(root
-        .rows_of::<SessionCrossingRow>()
-        .replace_dates(&days)
-        .await?)
-}
-
-/// The date a pass is partitioned under: the date of the nearest sample.
-fn date_of(pass: &SessionCrossingRow) -> NaiveDate {
-    pass.crossed_at.date_naive()
 }

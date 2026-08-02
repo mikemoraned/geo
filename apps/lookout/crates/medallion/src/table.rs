@@ -38,19 +38,7 @@ use crate::dataset::DatasetSpec;
 use crate::geo::{GEOMETRY, GeoError, PROJECTED_GEOMETRY, projected_wkb_field, wkb_field};
 use crate::layer::layers;
 use crate::path::{ReplaceError, Replaced, Root};
-use crate::rows::{Row, RowError, fields};
-
-/// Whether a dataset carries geometry.
-///
-/// Silver's geometry columns are named the same across every dataset and are built as arrow
-/// rather than traced from a row type, so a dataset says here whether it has them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Geometry {
-    /// No geometry: the dataset's rows are attributes and identifiers only.
-    Absent,
-    /// The lat/lon geometry every geo dataset carries, and its metric twin.
-    LatLonAndProjected,
-}
+use crate::rows::{Geometry, Row, RowError, fields};
 
 /// A silver dataset as something a table can be written to: where it lives, the columns it
 /// holds, and whether it carries geometry.
@@ -61,7 +49,7 @@ pub enum Geometry {
 pub struct SilverTarget {
     spec: DatasetSpec<layers::Silver>,
     columns: Vec<FieldRef>,
-    geometry: Geometry,
+    pub(crate) geometry: Geometry,
     unique: &'static [&'static str],
 }
 
@@ -72,7 +60,7 @@ pub struct SilverTarget {
 /// geometry is partitioned by country, because a file states one CRS for that column and the
 /// zone is chosen per country.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Layout {
+pub(crate) enum Layout {
     /// `country=<iso>` — reference-derived geo data, one file per country.
     Country,
     /// `<key>=<date>` — dated rows carrying no geometry.
@@ -134,6 +122,10 @@ pub enum TableError {
     UnsupportedLayout { dataset: &'static str, key: String },
     #[error("{0} is not partitioned, so a table cannot be split across its partitions")]
     Unpartitioned(&'static str),
+    #[error("{dataset} carries geometry, so its rows cannot be written without it")]
+    GeometryMissing { dataset: &'static str },
+    #[error("{dataset} carries no geometry, so its rows cannot be written with it")]
+    GeometryUnexpected { dataset: &'static str },
     #[error("reading the table: {0}")]
     Arrow(#[from] arrow::error::ArrowError),
     #[error("reading the geometry: {0}")]
@@ -159,13 +151,17 @@ pub struct TableWritten {
 
 impl SilverTarget {
     /// The dataset `R`'s rows make up, as somewhere a table can be written.
-    pub fn of<R: Row<Layer = layers::Silver>>(geometry: Geometry) -> Result<Self, RowError> {
+    pub fn of<R: Row<Layer = layers::Silver>>() -> Result<Self, RowError> {
         Ok(Self {
             spec: R::DATASET,
             columns: fields::<R>()?,
-            geometry,
+            geometry: R::GEOMETRY,
             unique: R::UNIQUE,
         })
+    }
+
+    pub(crate) fn spec(&self) -> DatasetSpec<layers::Silver> {
+        self.spec
     }
 
     pub fn name(&self) -> &'static str {
@@ -199,7 +195,7 @@ impl SilverTarget {
         })
     }
 
-    fn layout(&self) -> Result<Layout, TableError> {
+    pub(crate) fn layout(&self) -> Result<Layout, TableError> {
         let key = self
             .spec
             .partition_key
@@ -304,7 +300,7 @@ async fn write_by_country(
 }
 
 /// One partition per date, written with the encoder the dataset's geometry calls for.
-async fn replace_dates(
+pub(crate) async fn replace_dates(
     dataset: &crate::path::Dataset<layers::Silver>,
     target: &SilverTarget,
     days: &[(NaiveDate, RecordBatch)],
@@ -330,7 +326,7 @@ fn days(
 }
 
 /// The rows holding each distinct value, in the order the values first appear.
-fn group<T: Copy + Eq + std::hash::Hash>(values: &[T]) -> Vec<(T, Vec<u32>)> {
+pub(crate) fn group<T: Copy + Eq + std::hash::Hash>(values: &[T]) -> Vec<(T, Vec<u32>)> {
     let mut order: Vec<T> = Vec::new();
     let mut rows: HashMap<T, Vec<u32>> = HashMap::new();
     for (row, value) in values.iter().enumerate() {
@@ -541,13 +537,12 @@ fn dates_of(
         .collect()
 }
 
-
 /// Refuse a table two of whose rows share a value in a column the dataset declares unique.
 ///
 /// Checked over the whole table rather than per partition, because a name that identifies a
 /// row has to do so across the dataset — the partition a row lands in is a fact about how it
 /// is stored, not about what it is called.
-fn check_unique(target: &SilverTarget, table: &RecordBatch) -> Result<(), TableError> {
+pub(crate) fn check_unique(target: &SilverTarget, table: &RecordBatch) -> Result<(), TableError> {
     for column in target.unique {
         let array = table
             .column_by_name(column)
@@ -631,6 +626,7 @@ mod tests {
     impl Row for CrossingRow {
         type Layer = layers::Silver;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("crossing", "country");
+        const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
         const UNIQUE: &'static [&'static str] = &["crossing_id"];
     }
 
@@ -656,10 +652,11 @@ mod tests {
     impl Row for TrackRow {
         type Layer = layers::Silver;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("track", "seen_date");
+        const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     }
 
     fn crossings() -> SilverTarget {
-        SilverTarget::of::<CrossingRow>(Geometry::LatLonAndProjected).unwrap()
+        SilverTarget::of::<CrossingRow>().unwrap()
     }
 
     /// A table shaped like `crossing`: the row columns, both geometries, and the country.
@@ -939,7 +936,7 @@ mod tests {
     async fn a_partition_the_table_no_longer_covers_is_swept() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let target = SilverTarget::of::<PassRow>(Geometry::Absent).unwrap();
+        let target = SilverTarget::of::<PassRow>().unwrap();
         let both = pass_table(&["a", "b"], &["2026-07-21", "2026-07-22"]);
         write_table(&root, &target, &[both]).await.unwrap();
 
@@ -984,7 +981,7 @@ mod tests {
 
     #[test]
     fn a_dated_dataset_carrying_geometry_partitions_by_country_first() {
-        let target = SilverTarget::of::<TrackRow>(Geometry::LatLonAndProjected).unwrap();
+        let target = SilverTarget::of::<TrackRow>().unwrap();
 
         assert_eq!(
             target.partition_columns().unwrap(),
@@ -994,7 +991,7 @@ mod tests {
 
     #[test]
     fn a_dated_dataset_without_geometry_partitions_by_date_alone() {
-        let target = SilverTarget::of::<PassRow>(Geometry::Absent).unwrap();
+        let target = SilverTarget::of::<PassRow>().unwrap();
 
         assert_eq!(target.partition_columns().unwrap(), vec!["crossed_date"]);
     }
@@ -1019,7 +1016,7 @@ mod tests {
     async fn a_dated_geometry_table_lands_under_its_country() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let target = SilverTarget::of::<TrackRow>(Geometry::LatLonAndProjected).unwrap();
+        let target = SilverTarget::of::<TrackRow>().unwrap();
         let projector = Projector::for_country(Country::Germany).unwrap();
         let line = LineString::from(vec![berlin().0, frankfurt().0]);
         let projected = projector.project(&line).unwrap();
@@ -1062,7 +1059,7 @@ mod tests {
     async fn an_instant_column_keeps_its_defined_unit() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let target = SilverTarget::of::<PassRow>(Geometry::Absent).unwrap();
+        let target = SilverTarget::of::<PassRow>().unwrap();
         let table = pass_table(&["a"], &["2026-07-21"]);
         let micros = arrow::compute::cast(
             table.column_by_name("crossed_at").unwrap(),

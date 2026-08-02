@@ -16,16 +16,10 @@
 //! started, so a session whose start is in no country the store knows is left unwritten —
 //! there is no zone to project it into — and counted.
 
-use arrow::array::RecordBatch;
-use std::collections::HashMap;
-
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
-use medallion::layers;
-use medallion::{
-    COUNTRY, Countries, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Replaced, Root, Row,
-};
+use medallion::{Countries, GeoRow, Projector, Replaced, Root};
 use model::{Bbox, SessionRow, SessionSampleRow};
 
 use crate::sessions::Session;
@@ -46,172 +40,76 @@ pub struct WriteOutcome {
 pub enum SilverError {
     #[error("geometry: {0}")]
     Geo(#[from] medallion::GeoError),
-    #[error("partitioning the dataset: {0}")]
-    Path(#[from] medallion::PathError),
-    #[error("replacing the partitions: {0}")]
-    Replace(#[from] medallion::ReplaceError),
+    #[error("writing the datasets: {0}")]
+    Write(#[from] medallion::TableError),
 }
 
-/// One session's row, the path its geometry columns hold, and its samples.
+/// One session placed on the map: its row and path, and its samples' rows and points.
 struct Placed {
     row: SessionRow,
     path: LineString<f64>,
-    projected_path: LineString<f64>,
     samples: Vec<Located>,
 }
 
-/// One sample's row, with the points its geometry columns hold.
+/// One sample's row, with the point its geometry column holds.
 struct Located {
     row: SessionSampleRow,
     point: Point<f64>,
-    projected: Point<f64>,
 }
 
 /// Write `sessions` and their samples to the silver datasets under `root`.
 ///
 /// Each session's country is looked up from where it started, since that fixes the CRS of
-/// its projected geometry. A session starting where `countries` knows no country is
-/// reported as unplaceable rather than written.
+/// its projected geometry — for its samples as much as for itself, so that a session and the
+/// samples it is made of are measured in the same metres wherever they later went. A session
+/// starting where `countries` knows no country is reported as unplaceable rather than
+/// written.
 pub async fn write(
     root: &Root,
     sessions: &[Session],
     countries: &impl Countries,
 ) -> Result<WriteOutcome, SilverError> {
     let mut outcome = WriteOutcome::default();
-    let mut by_country: HashMap<Country, Vec<&Session>> = HashMap::new();
+    let mut session_rows: Vec<GeoRow<SessionRow, LineString<f64>>> = Vec::new();
+    let mut sample_rows: Vec<GeoRow<SessionSampleRow, Point<f64>>> = Vec::new();
+
     for session in sessions {
         match countries.containing(session.started_from()) {
-            Some(country) => by_country.entry(country).or_default().push(session),
             None => outcome.unplaceable += 1,
+            Some(country) => {
+                let placed = place(session, &Projector::for_country(country)?)?;
+                sample_rows.extend(placed.samples.into_iter().map(|sample| GeoRow {
+                    row: sample.row,
+                    geometry: sample.point,
+                    country,
+                }));
+                session_rows.push(GeoRow {
+                    row: placed.row,
+                    geometry: placed.path,
+                    country,
+                });
+            }
         }
     }
 
-    let derived: Vec<Country> = by_country.keys().copied().collect();
-    for (country, sessions) in by_country {
-        let projector = Projector::for_country(country)?;
-        let placed = sessions
-            .iter()
-            .map(|session| place(session, &projector))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        outcome.sessions += placed.len();
-        outcome.samples += placed
-            .iter()
-            .map(|session| session.samples.len())
-            .sum::<usize>();
-        outcome.session_partitions += write_sessions(root, &placed, country).await?;
-        outcome.sample_partitions += write_samples(root, &placed, country).await?;
-    }
-
-    // Each dataset's dated partitions were swept within their country as they were written;
-    // the countries themselves can only be swept here, where every one the run derived is
-    // known. A run derives all of bronze, so a country missing from `derived` is one the
-    // store no longer holds sessions for.
-    outcome.session_partitions.removed += root
-        .rows_of::<SessionRow>()
-        .retain_partitions(COUNTRY, &derived)
-        .await?;
-    outcome.sample_partitions.removed += root
-        .rows_of::<SessionSampleRow>()
-        .retain_partitions(COUNTRY, &derived)
-        .await?;
-
+    outcome.sessions = session_rows.len();
+    outcome.samples = sample_rows.len();
+    outcome.session_partitions = medallion::write_geo_rows(root, &session_rows)
+        .await?
+        .partitions;
+    outcome.sample_partitions = medallion::write_geo_rows(root, &sample_rows)
+        .await?
+        .partitions;
     Ok(outcome)
 }
 
-/// Write one row per session, partitioned by the date it began.
-async fn write_sessions(
-    root: &Root,
-    placed: &[Placed],
-    country: Country,
-) -> Result<Replaced, SilverError> {
-    let mut placed: Vec<&Placed> = placed.iter().collect();
-    placed.sort_by_key(|session| session.row.started_at);
-
-    write_dates::<_, SessionRow, _, _>(
-        root,
-        country,
-        &placed,
-        |session| session.row.started_at.date_naive(),
-        |day| {
-            let rows: Vec<SessionRow> = day.iter().map(|session| session.row.clone()).collect();
-            let paths: Vec<LineString<f64>> =
-                day.iter().map(|session| session.path.clone()).collect();
-            let projected: Vec<LineString<f64>> = day
-                .iter()
-                .map(|session| session.projected_path.clone())
-                .collect();
-            batch(&rows, &paths, &projected, country)
-        },
-    )
-    .await
-}
-
-/// Write one row per sample, partitioned by the date of the sample itself.
-async fn write_samples(
-    root: &Root,
-    placed: &[Placed],
-    country: Country,
-) -> Result<Replaced, SilverError> {
-    // Sessions run concurrently across devices and cross midnight, so the samples are
-    // ordered by instant to gather each date's into one adjacent run.
-    let mut samples: Vec<&Located> = placed
-        .iter()
-        .flat_map(|session| session.samples.iter())
-        .collect();
-    samples.sort_by_key(|sample| sample.row.t);
-
-    write_dates::<_, SessionSampleRow, _, _>(
-        root,
-        country,
-        &samples,
-        |sample| sample.row.t.date_naive(),
-        |day| {
-            let rows: Vec<SessionSampleRow> = day.iter().map(|sample| sample.row.clone()).collect();
-            let points: Vec<Point<f64>> = day.iter().map(|sample| sample.point).collect();
-            let projected: Vec<Point<f64>> = day.iter().map(|sample| sample.projected).collect();
-            batch(&rows, &points, &projected, country)
-        },
-    )
-    .await
-}
-
-/// Replace one country's partitions with one per date the rows fall on, reporting what
-/// that left in the store.
-///
-/// `rows` are ordered by the date `date_of` reads, so each partition's rows are one
-/// adjacent run rather than a scan of all of them.
-async fn write_dates<T, R, D, B>(
-    root: &Root,
-    country: Country,
-    rows: &[&T],
-    date_of: D,
-    batch_of: B,
-) -> Result<Replaced, SilverError>
-where
-    // The rows go to a dataset a rebuild may replace — which every silver dataset is, and
-    // nothing holding observations is.
-    R: Row<Layer = layers::Silver>,
-    D: Fn(&T) -> NaiveDate,
-    B: Fn(&[&T]) -> Result<RecordBatch, SilverError>,
-{
-    let days = rows
-        .chunk_by(|a, b| date_of(a) == date_of(b))
-        .map(|day| Ok((date_of(day[0]), batch_of(day)?)))
-        .collect::<Result<Vec<_>, SilverError>>()?;
-
-    Ok(root
-        .rows_of::<R>()
-        .partition(COUNTRY, country)?
-        .replace_dates_geo(&days)
-        .await?)
-}
-
 /// One session placed on the map: its row and path, and its samples' rows and points.
+///
+/// The projector is what makes an implied speed metres per second; the geometry columns
+/// themselves are projected by the writer, from the same country's zone.
 fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::GeoError> {
     let samples = locate(session, projector)?;
     let path = path_through(samples.iter().map(|sample| sample.point));
-    let projected_path = path_through(samples.iter().map(|sample| sample.projected));
 
     let row = SessionRow {
         session_id: session.id(),
@@ -229,12 +127,7 @@ fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::
         bbox: envelope(&path),
     };
 
-    Ok(Placed {
-        row,
-        path,
-        projected_path,
-        samples,
-    })
+    Ok(Placed { row, path, samples })
 }
 
 /// The path through `points`.
@@ -263,15 +156,18 @@ fn envelope(path: &LineString<f64>) -> Bbox {
     }
 }
 
-/// One session's samples as rows, each with its position projected.
+/// One session's samples as rows.
+///
+/// The position each row carries is in lat/lon; `projector` is here for the implied speed,
+/// which is metres per second and so is measured between the projected positions.
 fn locate(session: &Session, projector: &Projector) -> Result<Vec<Located>, medallion::GeoError> {
     let session_id = session.id();
     let mut located: Vec<Located> = Vec::with_capacity(session.samples.len());
+    let mut previous: Option<(Point<f64>, DateTime<Utc>)> = None;
 
     for (seq, sample) in session.samples.iter().enumerate() {
         let point = Point::new(sample.lon, sample.lat);
         let projected = projector.project(&point)?;
-        let previous = located.last();
         let row = SessionSampleRow {
             session_id: session_id.clone(),
             device_id: session.device_id.clone(),
@@ -284,55 +180,29 @@ fn locate(session: &Session, projector: &Projector) -> Result<Vec<Located>, meda
             speed: sample.speed,
             heading: sample.heading,
             implied_speed_mps: previous
-                .map(|previous| implied_speed(previous, projected, sample.t)),
+                .map(|previous| implied_speed(previous, (projected, sample.t))),
         };
-        located.push(Located {
-            row,
-            point,
-            projected,
-        });
+        located.push(Located { row, point });
+        previous = Some((projected, sample.t));
     }
 
     Ok(located)
 }
 
-/// The speed the step from `previous` to a sample at `t` implies, in metres per second.
+/// The speed the step between two projected positions implies, in metres per second.
 ///
 /// Samples are deduped on `(device_id, t)` before they reach here, so no two samples of a
 /// session share an instant and the interval is never zero.
-fn implied_speed(previous: &Located, projected: Point<f64>, t: DateTime<Utc>) -> f64 {
-    let seconds = (t - previous.row.t).num_milliseconds() as f64 / 1_000.0;
-    Euclidean.distance(previous.projected, projected) / seconds
-}
-
-/// One partition's batch: the rows, then the two geometry columns their positions make.
-fn batch<T, G>(
-    rows: &[T],
-    geometry: &[G],
-    projected: &[G],
-    country: Country,
-) -> Result<RecordBatch, SilverError>
-where
-    T: Row,
-    G: geo_traits::GeometryTrait<T = f64>,
-{
-    Ok(medallion::geo_batch(
-        rows,
-        &[
-            (medallion::wkb_field(GEOMETRY)?, geometry),
-            (
-                medallion::projected_wkb_field(PROJECTED_GEOMETRY, country)?,
-                projected,
-            ),
-        ],
-    )?)
+fn implied_speed(from: (Point<f64>, DateTime<Utc>), to: (Point<f64>, DateTime<Utc>)) -> f64 {
+    let seconds = (to.1 - from.1).num_milliseconds() as f64 / 1_000.0;
+    Euclidean.distance(from.0, to.0) / seconds
 }
 
 #[cfg(test)]
 mod tests {
     use arrow::array::RecordBatch;
     use chrono::{Duration, TimeZone};
-    use medallion::Query;
+    use medallion::{Country, GEOMETRY, PROJECTED_GEOMETRY, Query};
     use model::{DeviceId, SessionId};
     use serde::Deserialize;
     use shared::{Gps, GpsReading, Message, V1Message};

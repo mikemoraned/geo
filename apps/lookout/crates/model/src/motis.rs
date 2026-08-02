@@ -1,7 +1,7 @@
 //! The transit datasets: segments as polled, and the scheduled legs derived from them.
 
-use chrono::{DateTime, Utc};
-use medallion::{DatasetSpec, Row, layers};
+use chrono::{DateTime, NaiveDate, Utc};
+use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
 /// Trip segments as polled from the transit service, duplication allowed.
@@ -88,5 +88,12 @@ pub struct TrainSegmentRow {
 impl Row for TrainSegmentRow {
     type Layer = layers::Silver;
     const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT;
+    const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
+}
+
+impl Dated for TrainSegmentRow {
+    fn partition_date(&self) -> NaiveDate {
+        self.departure.date_naive()
+    }
 }

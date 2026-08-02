@@ -16,8 +16,8 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
-use chrono::{DateTime, Utc};
-use medallion::{DatasetSpec, PartitionValue, PathError, Row, layers};
+use chrono::{DateTime, NaiveDate, Utc};
+use medallion::{DatasetSpec, Dated, Geometry, PartitionValue, PathError, Row, layers};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -132,7 +132,14 @@ pub struct SessionRow {
 impl Row for SessionRow {
     type Layer = layers::Silver;
     const DATASET: DatasetSpec<Self::Layer> = SESSION;
+    const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
+}
+
+impl Dated for SessionRow {
+    fn partition_date(&self) -> NaiveDate {
+        self.started_at.date_naive()
+    }
 }
 
 /// One sample within a session: the reading as the device reported it, plus what a reader
@@ -166,7 +173,14 @@ pub struct SessionSampleRow {
 impl Row for SessionSampleRow {
     type Layer = layers::Silver;
     const DATASET: DatasetSpec<Self::Layer> = SESSION_SAMPLE;
+    const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["t"];
+}
+
+impl Dated for SessionSampleRow {
+    fn partition_date(&self) -> NaiveDate {
+        self.t.date_naive()
+    }
 }
 
 #[cfg(test)]

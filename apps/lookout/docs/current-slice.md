@@ -473,7 +473,7 @@ The main tasks here should be focussed on documenting these patterns and correct
       `Root::default_path()`, so it asks the same code its writes go through and cannot read
       one store while writing another.
 
-- [ ] **Give `medallion` the one Rust door into the silver format, so writers stop
+- [x] **Give `medallion` the one Rust door into the silver format, so writers stop
       re-deriving it.** `table.rs` opens by saying there is one implementation of the silver
       format, not one per language, and that holds for the Python path — `write_table` takes
       a dataset's spec and applies the layout, the dated sweep, the country sweep and the
@@ -495,6 +495,41 @@ The main tasks here should be focussed on documenting these patterns and correct
       three writers calling it and their local fan-out (including `recorder`'s generic
       `write_dates`, which exists to serve its own two call sites) deleted. Worth doing
       before a fourth geo silver dataset copies the sequence a fourth time.
+
+      Note: `medallion::derive` holds the two doors — `write_geo_rows` for a dated geo dataset
+      and `write_rows` for a dated one without geometry — and all three writers go through
+      them; `recorder`'s `write_dates`, `motis`'s per-country `write`, and
+      `session_crossings`' `write` are gone, along with the three hand-rolled `geo_batch`
+      builders and both `retain_partitions` calls.
+
+      Two things the task sketched differently, both because the sketch would have been weaker:
+
+      * **A row states its country; the door does not look it up.** The sketch had the door
+        take a `Countries`. But which point places a row is a fact about the entity, not about
+        the geometry in hand: a session's samples belong to the country the *session* started
+        in, so that a session and the samples it is made of are projected into one zone — a
+        door placing each row by its own geometry would split a border-crossing session's
+        samples into a zone its session is not in, and the crossings step reads the two per
+        country. `recorder` also has to know the country before the door does, since the
+        implied speed is metres per second and so needs a projector. So `GeoRow` carries
+        `country` and each writer keeps its own `unplaceable` count.
+      * **What is written is stated on the row type, not passed to the door.** `Row` gained
+        `const GEOMETRY` and a `Dated` trait supplies the date a row is partitioned under. That
+        removes the last places a writer restated the definition — which column feeds
+        `start_date`/`departure_date`, and whether the dataset has geometry at all — and lets
+        the wrong door be refused rather than silently writing a geo dataset without its
+        country partition. `model::silver`'s table of targets lost its second declaration of
+        geometry-ness with it.
+
+      The check the task existed for is now on both paths: `check_unique` runs for a Rust
+      writer, tested against a duplicate spanning two partitions. Partitions are **grouped**
+      rather than `chunk_by`-chunked, so a caller no longer has to sort its rows for them to
+      land in one file each — which changed one file in the real store: `session_sample`'s
+      2026-07-15 partition holds two sessions whose samples interleave in time, and its rows
+      are now ordered by session and `seq` rather than by instant. Same 155 rows, 12 bytes
+      different compressed. Re-deriving the whole of silver otherwise left every partition file
+      present at exactly its previous size, and the counts are unchanged (31 sessions / 4108
+      samples, 5178 legs, 165 passes).
 
 ### Sessionisation
 

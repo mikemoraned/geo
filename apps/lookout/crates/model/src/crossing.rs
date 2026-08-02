@@ -18,8 +18,8 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
-use chrono::{DateTime, Utc};
-use medallion::{COUNTRY, DatasetSpec, PartitionValue, PathError, Row, layers};
+use chrono::{DateTime, NaiveDate, Utc};
+use medallion::{COUNTRY, DatasetSpec, Dated, Geometry, PartitionValue, PathError, Row, layers};
 use serde::{Deserialize, Serialize};
 
 use crate::device::DeviceId;
@@ -129,6 +129,7 @@ pub struct WaterCrossingRow {
 impl Row for WaterCrossingRow {
     type Layer = layers::Silver;
     const DATASET: DatasetSpec<Self::Layer> = WATER_CROSSING;
+    const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     /// Both names of a crossing identify it on their own: the store's, and the four bytes a
     /// device holds instead. A short id shared by two crossings is one a device could not tell
     /// apart, which is why it is refused here rather than at the buffer.
@@ -164,6 +165,12 @@ impl Row for SessionCrossingRow {
     type Layer = layers::Silver;
     const DATASET: DatasetSpec<Self::Layer> = SESSION_CROSSING;
     const INSTANTS: &'static [&'static str] = &["crossed_at"];
+}
+
+impl Dated for SessionCrossingRow {
+    fn partition_date(&self) -> NaiveDate {
+        self.crossed_at.date_naive()
+    }
 }
 
 #[cfg(test)]
