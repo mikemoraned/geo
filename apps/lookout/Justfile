@@ -70,7 +70,7 @@ deploy:
 # recipe than draining alone; pass --medallion-root (or any other flag) through to both.
 bronze *args:
     just bronze-record drain {{args}}
-    just bronze-extract {{args}}
+    just bronze-extract new {{args}}
 
 # Read the upstash telemetry queue into the bronze telemetry datasets, with the redis URL
 # from 1Password. No args = non-destructive view-latest; `just bronze-record drain` to drain.
@@ -85,12 +85,16 @@ bronze-record *args:
 bronze-poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 
-# Take a point-in-time Overture extract into bronze: the country's rail segments and the
+# Fill in or take an Overture extract in bronze: the country's rail segments and the
 # connectors they reference, its water, and its administrative divisions, all under one
-# extract id with a manifest row recording the release and the window. No args = defaults
-# (pinned release, --country DE, public Overture S3 — anonymous, no credentials); pass
-# --mirror <dir> to read a local copy of the release instead, and --medallion-root to
-# write elsewhere. Each run is a new extract id, never a replacement.
+# extract id with a manifest row recording the release and the window.
+#
+# No args takes the newest recorded extract again — an extract is ~1.5 GB and re-derivable,
+# so the rows are not in version control while the manifest row describing them is, and a
+# fresh clone needs them fetched. `backfill <extract_id>` names an older one; `new` takes a
+# fresh extract under a new id (pinned release and --country DE by default), which is what
+# moving to a newer Overture release means. Reads the public Overture S3 anonymously; pass
+# --mirror <dir> for a local copy of the release, and --medallion-root to work elsewhere.
 bronze-extract *args:
     cargo run --release -p transport --bin extract -- {{args}}
 

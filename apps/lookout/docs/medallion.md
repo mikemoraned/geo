@@ -284,6 +284,13 @@ against an extract by changing only the root, and the extraction never has to re
 it does not own. An extract is identified by an id rather than a date because it is the
 unit of immutability: a re-extraction is a new id, not a replacement.
 
+Fetching an extract's rows a second time is not a re-extraction, though, and keeps the id it
+was first taken under: the manifest records the release and the window the extraction was
+restricted to, and an upstream release does not change, so the same request answers with the
+same rows. That is what makes the extracts re-derivable rather than versioned. It holds only
+while an extract's rows are absent — this layer has no replace, so fetching over rows that
+are already there would double them, and an extract already present is not fetched again.
+
 The extract manifest is small and always read whole, so it is left unpartitioned.
 
 This is the one place the two-key depth limit does not apply, since the depth below

@@ -9,7 +9,7 @@ This is a clean-up slice focussed on consolidating and improving what we have in
 #### Data
 
 * [ ] add a small summary cli which goes over all the bronze silver and gold datasets and summaries what is in them
-* [ ] change the `bronze-extract` recipe and the underlying `extract` cli so that it has two modes, probably as subcommands:
+* [x] change the `bronze-extract` recipe and the underlying `extract` cli so that it has two modes, probably as subcommands:
   * `extract backfill`: takes as an arg an existing `extract_id` (e.g. `20260727T193628Z`) and re-fetches that extract's associated release / country / window. With no id given, backfill the latest extract in the manifest
   * `extract new`: does a new extract, using the defaults as of now
   * the Justfile default should be `extract backfill`, so bare `just bronze-extract` backfills the latest

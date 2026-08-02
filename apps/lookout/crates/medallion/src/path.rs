@@ -192,6 +192,15 @@ fn workspace_root() -> Result<PathBuf, StoreNotFound> {
         })
 }
 
+/// Whether `dir` holds any file, at any depth below it.
+fn holds_files(dir: &Path) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            entry.path().is_dir() && holds_files(&entry.path()) || entry.path().is_file()
+        })
+    })
+}
+
 /// A location within one dataset: which dataset, and the partitions chosen so far.
 ///
 /// `L` is the dataset's layer, so what can be done to it follows from where it lives: the
@@ -248,6 +257,14 @@ impl<L: LayerKind> Dataset<L> {
         let mut dir = self.root.join(L::LAYER.as_str()).join(self.spec.name);
         dir.extend(self.partitions.iter().map(Partition::to_string));
         dir
+    }
+
+    /// Whether anything has been written here, at any depth below the partitions chosen.
+    ///
+    /// A directory of empty directories is what a swept dataset leaves, and counts as
+    /// nothing written: it reads the same as one that was never written at all.
+    pub fn holds_files(&self) -> bool {
+        holds_files(&self.dir())
     }
 
     /// The file one batch captured at `at` lands in: a new file per write, named for the
