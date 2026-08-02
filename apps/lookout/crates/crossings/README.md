@@ -3,9 +3,9 @@
 Turns the silver water-crossings dataset into the flat point buffer the M5 device scans.
 
 ```sh
-just pack-crossings                                   # defaults, from the repo root's apps/lookout
-just pack-crossings --input <parquet> --output <file>
-just pack-crossings --bbox 13.0,50.9,14.5,51.9        # west,south,east,north
+just gold-pack-crossings                                   # defaults, from the repo root's apps/lookout
+just gold-pack-crossings --medallion-root <store> --output <file>
+just gold-pack-crossings --bbox 13.0,50.9,14.5,51.9        # west,south,east,north
 ```
 
 The device holds every crossing in RAM and brute-force scans the lot against each GPS fix, so
@@ -69,18 +69,19 @@ against a GPS error budget measured in metres.
 
 ## Ids name a crossing, not a row
 
-`id` is the low 4 bytes of the md5 of `(rail_id, water_id, frac)` — what the crossing *is*,
-not where its row landed. So an id survives a rebuild of the dataset, a `--bbox` that keeps
-only part of it, and any reordering, which means a prediction made on the device and a ground
-truth derived on the laptop can name the same crossing.
+`id` is the silver `crossing_short_id` column, read rather than derived. The dataset mints it —
+the low 4 bytes of the md5 of the crossing's `crossing_id`, in the water-crossings notebook —
+and the store refuses a write in which two crossings share one, so the packer takes the column
+as given.
 
-`frac` — how far along the rail segment the crossing sits — is part of the key because
-`(rail_id, water_id)` is **not** unique: a meandering river meets a single segment up to 13
-times in this dataset.
+That is what lets a prediction made on the device be matched to a ground truth derived on the
+laptop: both names of a crossing come from the same row, so nothing can come to disagree about
+what one crossing is. It also means an id survives a rebuild of the dataset, a `--bbox` that
+keeps only part of it, and any reordering, since none of those change the row.
 
 Four bytes is few enough that two distinct crossings can collide by chance (~0.4% over 5,749
-points). A pack run detects that and fails rather than shipping one name for two crossings.
-The real dataset is clean: 5,749 crossings, 5,749 distinct ids.
+points), which is why the uniqueness check exists at all. The real dataset is clean: 5,749
+crossings, 5,749 distinct ids.
 
 ## Points are written in id order
 
@@ -90,7 +91,17 @@ reflash.
 
 ## Input
 
-Currently the water-crossings notebook's export (`data/water/<version>/crossing_reps.parquet`).
-Position is read from the WKB `geometry` column and never from the `lat`/`lon` columns that
-export also carries — the medallion silver `water_crossing` dataset this will move to keeps
-position only in the geometry, so depending on those columns would break on arrival.
+The silver `water_crossing` dataset, read through `medallion` like every other reader of the
+store. Position comes from the `geometry` column, which is where that dataset keeps it.
+
+**Every country the store holds is packed**, rather than one named by a flag: the buffer holds
+lat/lon and the device's scan takes a great-circle distance, so the per-country projected zone
+the dataset is partitioned by never reaches the device — which in any case does not know which
+country it will be switched on in. `--bbox` is the way to restrict, and is the honest control:
+what a device can hold is a window, not a border.
+
+## Output
+
+`<store>/gold/crossings.pointset` — inside the store, in the layer that exists to produce
+formats for something outside it. Gold is derivable, so it is not versioned; `--output` names
+somewhere else.

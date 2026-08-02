@@ -1,6 +1,6 @@
 //! The core of one poll tick, independent of the CLI: refresh a rolling GPS window from
 //! the latest telemetry samples, then query Motis for trips in its buffered bbox and
-//! append them to the capture log. The `motis_poll` binary is a thin loop around
+//! append them to the bronze capture log. The `motis_poll` binary is a thin loop around
 //! [`poll_once`]; tests drive it directly against a real redis and a mock Motis server.
 
 use std::collections::HashMap;
@@ -12,8 +12,8 @@ use redis::aio::MultiplexedConnection;
 use shared::{Message, V0Message, V1Message};
 use telemetry::RawSample;
 
+use crate::bronze::{BronzeError, SegmentLog};
 use crate::client::{MotisClient, MotisError, TimeWindow, TripDetails};
-use crate::store::{Store, StoreError};
 use crate::window::{Position, PositionWindow};
 
 /// Knobs for one poll tick.
@@ -34,7 +34,7 @@ pub struct PollConfig {
 pub enum PollOutcome {
     /// No GPS in the recent window, so the Motis query was skipped.
     NoRecentGps { ingested: usize },
-    /// Queried Motis and appended `segments` rows to the capture log.
+    /// Queried Motis and wrote `segments` rows to the bronze capture log.
     Queried {
         ingested: usize,
         positions: usize,
@@ -50,7 +50,7 @@ pub enum PollError {
     #[error("querying motis: {0}")]
     Motis(#[from] MotisError),
     #[error("writing capture log: {0}")]
-    Store(#[from] StoreError),
+    Log(#[from] BronzeError),
 }
 
 /// One poll: ingest the latest recent GPS into `window`, then (if any) log the Motis
@@ -59,7 +59,7 @@ pub async fn poll_once(
     now: DateTime<Utc>,
     conn: &mut MultiplexedConnection,
     client: &MotisClient,
-    store: &Store,
+    log: &SegmentLog,
     window: &mut PositionWindow,
     config: &PollConfig,
 ) -> Result<PollOutcome, PollError> {
@@ -92,7 +92,7 @@ pub async fn poll_once(
         .filter(|s| is_rail(&s.mode))
         .collect();
     let details = resolve_details(client, &segments).await;
-    let written = store.insert(now, &segments, &details)?;
+    let written = log.append(now, &segments, &details).await?;
 
     Ok(PollOutcome::Queried {
         ingested,
@@ -119,7 +119,7 @@ fn is_rail(mode: &Mode) -> bool {
 /// Resolve the [`TripDetails`] (agency + train number) of each distinct `trip_id` in
 /// `segments` via the Motis `trip` endpoint, keyed by `trip_id`. Stateless — no caching
 /// across ticks, since Motis is local and the poll interval is coarse. A trip whose lookup
-/// fails is omitted (the store writes `NULL` for its fields); the failure is logged, never
+/// fails is omitted (its row records no agency or train number); the failure is logged, never
 /// fatal, so a resolve error can't drop the segment.
 async fn resolve_details(
     client: &MotisClient,

@@ -1,21 +1,24 @@
 [package]
 name = "transport"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
 arrow = { workspace = true }
+chrono = { workspace = true }
 clap = { workspace = true }
 datafusion = { workspace = true }
+geo = { workspace = true }
 geo-types = { workspace = true }
-rusqlite = { workspace = true }
+medallion = { workspace = true }
+model = { workspace = true }
+serde = { workspace = true }
 sedona = { workspace = true }
 sedona-geoparquet = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-wkt = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -68,8 +68,11 @@ impl PositionWindow {
     /// The tight bounding box of the held positions (a lat/lon [`Rect`], `x` = lon,
     /// `y` = lat), or `None` when empty.
     pub fn bbox(&self) -> Option<Rect<f64>> {
-        let points: MultiPoint<f64> =
-            self.positions.iter().map(|p| Point::new(p.lon, p.lat)).collect();
+        let points: MultiPoint<f64> = self
+            .positions
+            .iter()
+            .map(|p| Point::new(p.lon, p.lat))
+            .collect();
         points.bounding_rect()
     }
 

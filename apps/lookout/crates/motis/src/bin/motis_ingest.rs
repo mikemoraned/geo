@@ -1,30 +1,23 @@
-//! `motis_ingest`: dedup + decode the raw `motis` capture log into the derived
-//! `train_segment` table of the `lookout` db. A thin wrapper around
-//! [`motis::ingest::ingest`]; run via `just ingest-motis`.
-
-use std::path::PathBuf;
+//! `motis_ingest`: derive the silver `train_segment` dataset from the bronze motis
+//! capture log. A thin wrapper around [`motis::ingest::ingest`]; run via
+//! `just silver-motis-ingest`.
 
 use clap::Parser;
-use rusqlite::Connection;
 use tracing_subscriber::EnvFilter;
 
+use medallion::MedallionArgs;
 use motis::ingest::ingest;
-
-const DEFAULT_MOTIS_DB: &str = "data/motis.sqlite";
-const DEFAULT_LOOKOUT_DB: &str = "data/lookout.sqlite";
+use transport::countries::CountryAreas;
 
 #[derive(Parser)]
-#[command(about = "Dedup + decode the raw motis capture log into lookout's train_segment table")]
+#[command(about = "Derive the silver train_segment dataset from the bronze motis capture log")]
 struct Args {
-    /// Raw `motis` capture db to read.
-    #[arg(long, default_value = DEFAULT_MOTIS_DB)]
-    motis_db: PathBuf,
-    /// `lookout` db to write the derived `train_segment` table into.
-    #[arg(long, default_value = DEFAULT_LOOKOUT_DB)]
-    lookout_db: PathBuf,
+    #[command(flatten)]
+    medallion: MedallionArgs,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| "motis_ingest=info".into()),
@@ -32,16 +25,21 @@ fn main() {
         .init();
 
     let args = Args::parse();
-    let source = Connection::open(&args.motis_db).expect("open motis db");
-    let dest = Connection::open(&args.lookout_db).expect("open lookout db");
+    let root = args.medallion.root().expect("locate the medallion store");
 
-    let outcome = ingest(&source, &dest).expect("ingest capture log");
+    let countries = CountryAreas::newest(&root)
+        .await
+        .expect("read the country areas of the newest extract");
+    let outcome = ingest(&root, &countries)
+        .await
+        .expect("derive train segments");
 
     tracing::info!(
+        read = outcome.read,
         deduped = outcome.deduped,
-        written = outcome.written,
-        motis_db = %args.motis_db.display(),
-        lookout_db = %args.lookout_db.display(),
-        "ingested train segments"
+        partitions = outcome.partitions,
+        unplaceable = outcome.unplaceable,
+        medallion_root = %root.path().display(),
+        "derived train segments"
     );
 }

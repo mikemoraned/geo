@@ -36,7 +36,8 @@ We can additionally improve accuracy by using accelerometers from devices that a
 
 - Use the [crux](https://redbadger.github.io/crux/) library for ports and adapters
 - Use the [iroh](https://docs.iroh.computer/quickstart) library for multi-device comms
-- sensor data is persisted in sqlite
+- data is persisted in the layered store described in [medallion.md](medallion.md): parquet
+  from bronze onwards, with sqlite only as a landing/external format for live capture
 - sensor data is visualised in https://rerun.io 
 - all code inside the centre of the architecture should be in Rust i.e. all business logic is in Rust
 - for front-end on web we should follow a single-page-app pattern and use typescript + https://www.solidjs.com

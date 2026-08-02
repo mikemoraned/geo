@@ -1,15 +1,20 @@
 # visualise
 
-Converts a lookout SQLite archive (produced by the `recorder` cli) into a rerun
-`.rrd` for visualisation. It reads the derived per-sensor tables (`accel`, `gps`),
+Converts the lookout medallion store into a rerun `.rrd` for visualisation. It reads the
+bronze sensor datasets (`gps_reading`, `accel_reading`, written by the `recorder` cli),
 selecting by a relative time window and optionally by device, and logs them under
-per-device entity paths with a blueprint: a map view for each device's gps track and
-a time-series view for its accel axes.
+per-device entity paths with a blueprint: a map view for each device's gps track and a
+time-series view for its accel aggregates.
 
-If the archive has also been enriched (a `transport` table, produced by `just enrich`),
-the Overture rail network is logged as static geometry under `/transport` — segments as
-`GeoLineStrings` coloured by rail class, connectors as `GeoPoints` — with its own shared
-map pane alongside the device tiles.
+Where the silver `train_segment` dataset has been derived (by `just silver-motis-ingest`), each
+train is also logged as a moving dot interpolated along its route, under
+`/trains/{label}/{trip_id}`, plus a shared overview map showing the trains and the gps
+traces together.
+
+Reading is done with DuckDB, the engine already used for notebook and ad-hoc work against
+this store. Its spatial extension reads the silver GeoParquet geometry as geometry, so the
+route coordinates and the interpolated positions come out of the query rather than being
+decoded here — `INSTALL spatial` runs on startup, which needs network access the first time.
 
 ## Usage
 
@@ -22,14 +27,16 @@ just visualise --since 7d --open                   # also push to a running view
 ```
 
 `--since` is required (`30m`, `12h`, `7d`, `2w`). `--devices` takes id *prefixes*, so a
-few leading characters are enough. `--near <degrees>` restricts the rail segments drawn
-to those within that distance of a gps fix — a raw lon/lat **degrees** cut (a rough hack,
-not true ground distance), off by default. Defaults: input `data/lookout.sqlite`, output
-`data/lookout.rrd`. Open the result with the rerun viewer:
+few leading characters are enough. Defaults: input `--medallion-root
+~/Data/geo/lookout/medallion`, output `data/lookout.rrd`. Open the result with the rerun
+viewer:
 
 ```sh
 rerun data/lookout.rrd
 ```
+
+The Overture rail network pane is not currently drawn: it was fed by an `enrich` step that
+has been removed, and returns when the silver rail derivation exists.
 
 ## `--open` and the persisted blueprint
 

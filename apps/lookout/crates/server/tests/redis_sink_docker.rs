@@ -11,13 +11,13 @@
 use std::time::Duration;
 
 use redis::aio::MultiplexedConnection;
-use server::queue::{RedisSink, SampleSink, QUEUE_KEY};
+use server::queue::{QUEUE_KEY, RedisSink, SampleSink};
 use shared::{Accel, AccelReading, Gps, GpsReading, Message, V1Message};
 use telemetry::RawSample;
-use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
-use testcontainers_modules::redis::{Redis, REDIS_PORT};
-use tokio::time::{sleep, Instant};
+use testcontainers::runners::AsyncRunner;
+use testcontainers_modules::redis::{REDIS_PORT, Redis};
+use tokio::time::{Instant, sleep};
 use uuid::Uuid;
 
 async fn start_redis() -> (ContainerAsync<Redis>, String) {
@@ -42,14 +42,13 @@ async fn wait_for_redis(url: &str) -> MultiplexedConnection {
     let client = redis::Client::open(url).expect("open redis client");
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
-        if let Ok(mut conn) = client.get_multiplexed_async_connection().await {
-            if redis::cmd("PING")
+        if let Ok(mut conn) = client.get_multiplexed_async_connection().await
+            && redis::cmd("PING")
                 .query_async::<String>(&mut conn)
                 .await
                 .is_ok()
-            {
-                return conn;
-            }
+        {
+            return conn;
         }
         assert!(
             Instant::now() < deadline,

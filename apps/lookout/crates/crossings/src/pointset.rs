@@ -12,7 +12,6 @@ use std::fmt::{self, Display};
 
 use geo_types::Coord;
 
-use crate::id::CrossingId;
 use crate::silver::Crossing;
 
 /// Names the format in the first bytes of the file, so a reader handed the wrong file says so
@@ -46,16 +45,42 @@ pub enum FormatError {
 #[error("{0} points is more than a u32 count can name")]
 pub struct TooManyPoints(usize);
 
+/// A crossing's id in the packed buffer: the four bytes the store gives it in
+/// `crossing_short_id`, which is all a device has room for beside a coordinate.
+///
+/// Minted where the crossing is — in the derivation that writes the dataset, which is also
+/// where two crossings landing on one of these is refused — so nothing here derives it, and
+/// there is one answer to what a crossing is called on a device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PackedId(u32);
+
+impl PackedId {
+    /// The id `bits` names: as the store holds it, or as a packed buffer gives it back.
+    pub fn from_bits(bits: u32) -> Self {
+        Self(bits)
+    }
+
+    pub fn get(&self) -> u32 {
+        self.0
+    }
+}
+
+impl Display for PackedId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:08x}", self.0)
+    }
+}
+
 /// One crossing as the device holds it: where it is, and what it is called.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Point {
-    pub id: CrossingId,
+    pub id: PackedId,
     pub latitude: f32,
     pub longitude: f32,
 }
 
 impl Point {
-    pub fn new(id: CrossingId, position: Coord<f64>) -> Self {
+    pub fn new(id: PackedId, position: Coord<f64>) -> Self {
         Self {
             id,
             latitude: position.y as f32,
@@ -63,8 +88,9 @@ impl Point {
         }
     }
 
-    pub fn of(crossing: &Crossing, id: CrossingId) -> Self {
-        Self::new(id, crossing.position)
+    /// The crossing as the device holds it, under the name the store gave it.
+    pub fn of(crossing: &Crossing) -> Self {
+        Self::new(crossing.short_id, crossing.position)
     }
 }
 
@@ -146,7 +172,7 @@ pub fn unpack(packed: &[u8]) -> Result<Vec<Point>, FormatError> {
         .map(|row| Point {
             latitude: f32::from_le_bytes(word(latitudes, row)),
             longitude: f32::from_le_bytes(word(longitudes, row)),
-            id: CrossingId::from_bits(u32::from_le_bytes(word(ids, row))),
+            id: PackedId::from_bits(u32::from_le_bytes(word(ids, row))),
         })
         .collect())
 }
@@ -156,21 +182,17 @@ mod tests {
     use geo_types::coord;
 
     use super::*;
-    use crate::id::Key;
 
     /// A crossing near Ruhland, and one near Dresden.
     const RUHLAND: (f64, f64) = (13.548209, 51.617567);
     const DRESDEN: (f64, f64) = (13.733, 51.05);
 
-    fn point(name: &str, (lon, lat): (f64, f64)) -> Point {
-        Point::new(
-            CrossingId::of(&Key::new(name, "water", 0.5)),
-            coord! { x: lon, y: lat },
-        )
+    fn point(id: u32, (lon, lat): (f64, f64)) -> Point {
+        Point::new(PackedId::from_bits(id), coord! { x: lon, y: lat })
     }
 
     fn points() -> Vec<Point> {
-        vec![point("ruhland", RUHLAND), point("dresden", DRESDEN)]
+        vec![point(0x292e_417a, RUHLAND), point(0x2490_bdfe, DRESDEN)]
     }
 
     /// The property the device depends on: what the packer wrote is what a reader of the
@@ -303,16 +325,15 @@ mod tests {
     #[test]
     fn a_point_carries_its_crossings_position() {
         let crossing = Crossing {
-            rail_id: "rail".to_string(),
-            water_id: "water".to_string(),
-            frac: 0.5,
+            crossing_id: "water:rail@0.5".parse().expect("id"),
+            short_id: PackedId::from_bits(0x292e_417a),
             position: coord! { x: RUHLAND.0, y: RUHLAND.1 },
+            extract_id: "20260727T193628Z".to_string(),
         };
-        let id = CrossingId::of(&Key::from(&crossing));
 
-        let point = Point::of(&crossing, id);
+        let point = Point::of(&crossing);
 
-        assert_eq!(point.id, id);
+        assert_eq!(point.id, crossing.short_id);
         assert_eq!(point.latitude, RUHLAND.1 as f32);
         assert_eq!(point.longitude, RUHLAND.0 as f32);
     }

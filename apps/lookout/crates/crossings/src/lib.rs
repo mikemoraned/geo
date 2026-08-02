@@ -5,12 +5,10 @@
 //! that is this crate's whole job.
 
 pub mod bbox;
-pub mod id;
 pub mod pointset;
 pub mod random;
 pub mod silver;
 
 pub use bbox::{Bbox, BboxError};
-pub use id::{Collision, CrossingId};
-pub use pointset::{FormatError, Point};
+pub use pointset::{FormatError, PackedId, Point};
 pub use silver::{Crossing, ReadError};

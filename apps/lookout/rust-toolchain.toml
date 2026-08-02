@@ -1,0 +1,8 @@
+# The toolchain this app is built and checked with, pinned so a checkout, a Docker build
+# and CI all compile it with the same compiler — and so an edition or lint change is a
+# deliberate edit here rather than something a machine picks up by being newer.
+# `rustfmt` and `clippy` are listed because `just test` and the formatting checks need
+# them; a bare toolchain install carries neither.
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]

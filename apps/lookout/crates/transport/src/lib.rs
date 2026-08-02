@@ -1,12 +1,9 @@
-//! Transport enrichment: reads a lookout SQLite archive and derives the spatial
-//! extent of its GPS data, to fetch Overture transport data intersecting that extent.
+//! Point-in-time extracts of Overture Maps into the bronze layer of the medallion store.
 //!
-//!   - [`groups`] — group fixes by `(device_id, UTC day)` and reduce each to a bbox.
-//!   - [`archive`] — read the `gps` table those groups are built from.
-//!   - [`overture`] — query Overture transport GeoParquet via SedonaDB.
-//!   - [`store`] — persist the fetched segments/connectors into the `transport` table.
+//!   - [`overture`] — read one release, from the public bucket or a local mirror of it.
+//!   - [`extract`] — write a country's rail, water and divisions from it into bronze.
+//!   - [`countries`] — which country a place is in, from the areas an extract took.
 
-pub mod archive;
-pub mod groups;
+pub mod countries;
+pub mod extract;
 pub mod overture;
-pub mod store;

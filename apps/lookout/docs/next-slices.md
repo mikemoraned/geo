@@ -1,57 +1,99 @@
 # Next Slices
 
-## Slice: minimal predictor and evaluation framework 
+## Slice: Crow-flies predictor deployed to M5 device and Rerun sim
 
 ### Target
 
-If other slices are done, we should have enough to put together a first minimal predictor that is based solely on crow-flies distance, and also to evaluate how good it is.
+One half of this is a clean-up / rationalisation of what we've already spiked on with the M5 device (apps/lookout/spikes/m5/spike7-battery-and-trend). The other half is turning rerun visualisation into something that shows what the predictor is doing.
 
-## Straw man
+Effectively what I want to end up with is:
+* A core predictor defined in a CRUX wrapper, perhaps with it's central core being a state-machine
+* A productionised version of the M5-deployed setup that uses that core to read live GPS readings and predict when water will be crossed
+* A rerun-based simulation that re-drives a named session (from silver/session table) as fake GPS readings through the predictor, captures the predictions, and visualises them
+  * I want to use this as way to see how the predictor is performing by live-comparing where it thinks it's going to cross water vs what water is actually there
 
-The essential idea here is to use our collected traces along with known water crossings to both act as source data and as measurement.
+As part of this we should also be able to delete all the current `visualise` code + remove the `spikes/m5` dir.
 
-So, we first find all gps readings from real traces and "sessionise" them. This effectively boils down to breaking the data from the same device into sessions whenever:
-1. There is an explicit `StartSession` message
-2. There is a gap of N minutes between successive readings (N = 10 minutes probably good enough)
+## Slice: Evaluation framework based on sampled sessions from myself and motis
 
-Then, we look at any gps readings in each session that come within M metres of a known water crossing. This is where it is probably a good idea to first normalise a session to include a version of the path that has a CRS in metres (a projected CRS). Same goes for the water crossings dataset. For simplicity, since we are covering Germany, ideally it'd be good to use a single CRS for now.
+### Target
 
-Once we have some gps readings for each water crossing for each session, we minimise this to just a single example for each water crossing per trace, using the closest match. This should give us a set of water crossings per session. We treat this as our ground truth.
+Implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session table) and from motis (bronze/motis_segment). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
 
-We then implement a simple predictor which functions something like:
-1. Receive latest GPS reading
-2. Find all water crossings within D distance (in metres); remember this for later
-3. If we have a previous set of water crossings:
-    * find overlap between sets, and compare distances for each pair of old and new, and work out distance delta (delta = new - old)
-    * for those where delta is negative (we've gotten closer) calculate velocity
-    * emit prediction of wall-clock time we will pass each water crossing based on current distance to water crossing and current velocity towards it
+Since I likely won't be in Germany for a while, if needed, we can get new motis data by live polling motis in a particular bounding box, and just watching when trains arrive.
 
-We can run this predictor for each gps reading in each session, and then assess as follows:
-* precision = for each water crossing, whenever we predicted that we would cross at time T_P, what was the actual T_A, and was it within some tolerance e.g. 30 seconds. count each of these as a boolean yes/no
-* recall = for each water crossing that was ultimately passed in a session, did we make a prediction for it?
+#### Tasks 
 
-This measurement framework and predictor can both likely be improved, but we need to start with something.
+...
+- [ ] Delete `docs/2026-08-01-evaluation.md` at the end of this slice. It is a dated
+      assessment of how to measure a predictor, written before one existed and before there
+      was any ground truth to measure against, and kept for the history of the decision.
+      Anything in it still holding by then belongs in the tasks above, in the notebooks
+      that implement the measures, or in a durable doc alongside `medallion.md`; the rest —
+      the rejected alternatives, the reasoning about metrics from other domains — goes
+      stale once a first run has actually produced numbers.
 
-## Refactor to Medallion Architecture
 
-I think at this point we need to cleanly separate our bits of data processing and storage into a [medallion architecture](https://motherduck.com/glossary/medallion-architecture/). In this context this means something like:
-* bronze:
-    * raw gps and accel sensor readings, recorded live in redis and extracted via `recorder`
-    * motis train samples, recorded via `motis_poll`
-    * point in time extracts from OvertureMaps restricted to our needs e.g. rail/water for Germany
-* silver:
-    * gps readings sessionised and normalised into standard geometries
-    * derived water crossings, represented as an enriched OvertureMaps segments and connector dataset extended/restricted to only what we need
-* gold:
-    * results of runs evaluating particular predictor versions against silver datasets
+## Slice: make the store operable at size
+
+### Target
+
+The store's layout is settled; what it lacks is the ability to be *worked* — to re-derive
+part of history rather than all of it, and to stop accumulating files without bound. Both
+become urgent at a size we are not at yet, and both are cheaper to build before then.
+
+### Refactors / extensions
+
+- **Give the derivation CLIs a date-range argument**, so a run can ask for less than
+  everything. They currently read every partition and filter on data columns, which means
+  the partition pruning the layout provides is never exercised: re-deriving one day's output
+  costs a full scan. This is also the prerequisite for handing the work to an orchestrator
+  later, since a range is what a backfill is expressed in.
+- **Write down a compaction plan for the append-shaped layers**, before the small-file
+  problem is real rather than after. One file per ingestion is deliberate and correct at the
+  point of writing, but a dataset polled on an interval accumulates a file per poll
+  indefinitely (the sqlite backfill alone produced 1,307 in one dataset). The standard answer
+  is periodic compaction into fewer, larger files per partition; the thing to decide is what
+  triggers it and how it preserves immutability, since rewriting files is what that layer
+  forbids.
+- **Leave the engine catalog traits alone** until registering datasets by hand is genuinely
+  annoying, then add a schema provider *over* the dataset definitions rather than replacing
+  them. The definitions are plain data every engine can read; a catalog is one engine's view
+  of it, and those traits move between that engine's releases.
+
+## Slice: embed predictor on website
+
+### Target
+
+We now want to take our simple predictor and start applying it for real.
+
+### Straw Man
+
+This should involve refactoring the existing lookout fly.io website so that it's sensor gathering follows the crux / ports-and-adaptors pattern. Then we can extend it to apply the predictor and visualise it in a simple way.
+
+This also is where we need to be publishing data about crossings for it to download client-side e.g. a PMTiles file.
 
 ### Tasks
 
 ...
 
-## ...
+## Slice: extend to UK
 
-### Tasks 
+### Target
+
+We've mostly been testing with German (DE) data. We should repeat / extend what we did in Germany on the UK train network.
+
+### Refactors / extensions
+
+- **Silver datasets holding geometry need partitioning by country.** The projected geometry
+  column carries one CRS, chosen per country (`medallion::Country`), but a dataset like
+  `train_segment` is partitioned only by date — so segments from two countries would share
+  a partition and the dataset would end up with a different CRS per file depending on which
+  run wrote it. Partitioning by country as well (`country=<iso>/departure_date=<date>`)
+  keeps each partition to one CRS. That needs `DatasetSpec` to carry more than one
+  partition key, which it currently does not.
+- Add the UK to `medallion::Country`: its projected zone (British National Grid, EPSG:27700)
+  and the PROJJSON for it, generated by `just crs-definitions`.
 
 ...
 

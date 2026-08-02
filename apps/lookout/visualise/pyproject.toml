@@ -1,12 +1,12 @@
 [project]
 name = "visualise"
 version = "0.1.0"
-description = "Convert a lookout SQLite archive into a rerun .rrd for visualisation"
+description = "Convert the lookout medallion store into a rerun .rrd for visualisation"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "duckdb>=1.5.5",
     "rerun-sdk>=0.34.1",
-    "shapely>=2.1.2",
 ]
 
 [dependency-groups]

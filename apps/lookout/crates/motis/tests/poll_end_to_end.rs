@@ -1,6 +1,6 @@
 //! End-to-end test for [`motis::poll::poll_once`] against the **real** local Motis server:
 //! seed a throwaway redis (testcontainers) with GPS near Frankfurt Hbf, then run one poll
-//! tick that queries live Motis and lands segments in a real [`Store`]. Unlike
+//! tick that queries live Motis and lands segments in a real bronze capture log. Unlike
 //! `poll_docker` (which mocks Motis), this exercises the rail filter and the
 //! train-number/agency `/trip` enrichment against live DELFI data.
 //!
@@ -13,10 +13,11 @@ mod common;
 use std::time::Duration;
 
 use chrono::Utc;
-use common::{gps, lpush, start_redis, wait_ready, RAIL_MODES};
+use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready};
+use medallion::Root;
+use motis::bronze::SegmentLog;
 use motis::client::MotisClient;
-use motis::poll::{poll_once, PollConfig, PollOutcome};
-use motis::store::Store;
+use motis::poll::{PollConfig, PollOutcome, poll_once};
 use motis::window::PositionWindow;
 
 #[tokio::test]
@@ -31,8 +32,8 @@ async fn poll_once_captures_rail_from_local_motis_end_to_end() {
     lpush(&mut conn, &gps(2, now_ms - 30_000, 50.110, 8.660)).await;
     lpush(&mut conn, &gps(3, now_ms, 50.113, 8.669)).await;
 
-    let db = tempfile::NamedTempFile::new().expect("temp db");
-    let store = Store::open(db.path()).expect("open store");
+    let store = tempfile::tempdir().expect("temp store");
+    let log = SegmentLog::new(Root::new(store.path()));
     let client = MotisClient::default(); // 127.0.0.1:8080
     let mut window = PositionWindow::new(Duration::from_secs(30 * 60));
     let config = PollConfig {
@@ -42,38 +43,33 @@ async fn poll_once_captures_rail_from_local_motis_end_to_end() {
         sample_limit: 1000,
     };
 
-    let outcome = poll_once(now, &mut conn, &client, &store, &mut window, &config)
+    let outcome = poll_once(now, &mut conn, &client, &log, &mut window, &config)
         .await
         .expect("poll once against local motis");
 
     let PollOutcome::Queried { segments, .. } = outcome else {
         panic!("expected a Motis query, got {outcome:?}");
     };
-    assert!(segments > 0, "expected some rail segments near Frankfurt Hbf");
+    assert!(
+        segments > 0,
+        "expected some rail segments near Frankfurt Hbf"
+    );
 
-    // Inspect what landed: every stored segment is rail, and the `/trip` enrichment
+    // Inspect what landed: every captured segment is rail, and the `/trip` enrichment
     // populated an agency and at least one train number.
-    let reopened = rusqlite::Connection::open(db.path()).expect("reopen db");
-    let mut stmt = reopened
-        .prepare("SELECT mode, agency_name, train_number FROM segment")
-        .expect("prepare");
-    let rows: Vec<(String, Option<String>, Option<i64>)> = stmt
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-        .expect("query")
-        .collect::<Result<_, _>>()
-        .expect("rows");
+    let rows = captured_segments(&Root::new(store.path())).await;
 
     assert!(
-        rows.iter().all(|(mode, _, _)| RAIL_MODES.contains(&mode.as_str())),
-        "every stored segment should be a rail mode; got {:?}",
-        rows.iter().map(|r| r.0.as_str()).collect::<Vec<_>>()
+        rows.iter().all(|s| RAIL_MODES.contains(&s.mode.as_str())),
+        "every captured segment should be a rail mode; got {:?}",
+        rows.iter().map(|s| s.mode.as_str()).collect::<Vec<_>>()
     );
     assert!(
-        rows.iter().any(|(_, agency, _)| agency.is_some()),
+        rows.iter().any(|s| s.agency_name.is_some()),
         "expected at least one segment's trip to resolve an agency"
     );
     assert!(
-        rows.iter().any(|(_, _, number)| number.is_some()),
+        rows.iter().any(|s| s.train_number.is_some()),
         "expected at least one train number from the /trip enrichment"
     );
 }

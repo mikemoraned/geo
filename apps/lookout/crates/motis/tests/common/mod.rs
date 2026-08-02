@@ -5,10 +5,10 @@ use std::time::Duration;
 
 use redis::aio::MultiplexedConnection;
 use shared::{Gps, GpsReading, Message, V1Message};
-use telemetry::{RawSample, QUEUE_KEY};
+use telemetry::{QUEUE_KEY, RawSample};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
-use testcontainers_modules::redis::{Redis, REDIS_PORT};
+use testcontainers_modules::redis::{REDIS_PORT, Redis};
 use uuid::Uuid;
 
 /// Motis `mode`s the poll keeps — mainline and regional rail.
@@ -41,16 +41,18 @@ pub async fn wait_ready(url: &str) -> MultiplexedConnection {
     let client = redis::Client::open(url).expect("open client");
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
     loop {
-        if let Ok(mut conn) = client.get_multiplexed_async_connection().await {
-            if redis::cmd("PING")
+        if let Ok(mut conn) = client.get_multiplexed_async_connection().await
+            && redis::cmd("PING")
                 .query_async::<String>(&mut conn)
                 .await
                 .is_ok()
-            {
-                return conn;
-            }
+        {
+            return conn;
         }
-        assert!(std::time::Instant::now() < deadline, "redis not ready in 30s");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "redis not ready in 30s"
+        );
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
@@ -82,4 +84,25 @@ pub async fn lpush(conn: &mut MultiplexedConnection, message: &Message) {
         .query_async(conn)
         .await
         .expect("lpush");
+}
+
+/// One row of the bronze capture log, reduced to the fields the poll tests assert on.
+#[derive(Debug, serde::Deserialize)]
+pub struct CapturedSegment {
+    pub mode: String,
+    pub agency_name: Option<String>,
+    pub train_number: Option<u32>,
+}
+
+/// Read back what a poll captured, the way any other reader would: as a table.
+pub async fn captured_segments(root: &medallion::Root) -> Vec<CapturedSegment> {
+    let query = medallion::Query::new(root.clone());
+    query
+        .register(model::MOTIS_SEGMENT, "captured")
+        .await
+        .expect("register capture log");
+    query
+        .rows("SELECT mode, agency_name, train_number FROM captured")
+        .await
+        .expect("read capture log")
 }

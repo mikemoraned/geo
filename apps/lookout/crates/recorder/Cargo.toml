@@ -1,21 +1,30 @@
 [package]
 name = "recorder"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 rustls = { workspace = true }
+arrow = { workspace = true }
+chrono = { workspace = true }
+geo = { workspace = true }
+geo-types = { workspace = true }
+geo-traits = { workspace = true }
 clap = { workspace = true }
+medallion = { workspace = true }
+model = { workspace = true }
 redis = { workspace = true }
+serde = { workspace = true }
+serde_arrow = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-rusqlite = { workspace = true }
 md5 = { workspace = true }
 shared = { workspace = true }
 telemetry = { workspace = true }
+transport = { workspace = true }
 
 [dev-dependencies]
 uuid = { workspace = true }

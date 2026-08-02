@@ -4,8 +4,21 @@
 # into the binary (BUILD_GIT_HASH) so it's logged at startup and served at /version.
 git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git diff --quiet 2>/dev/null || echo -dirty)"`
 
+# DuckDB is linked by the medallion multi-engine test, which reads one silver file
+# back through every engine; `.cargo/config.toml` points libduckdb-sys at the brew prefix.
+# PROJ provides `projinfo`, which generates the CRS definitions `crs-definitions` writes,
+# and `jq` formats them.
 prerequisites:
     cargo install rerun-cli --locked
+    brew install duckdb proj jq
+
+# Regenerate the PROJJSON CRS definitions the medallion crate embeds, from PROJ's own
+# database. GeoParquet requires the CRS as PROJJSON and nothing in the dependency tree
+# emits it, so the definitions are generated here and committed. Not part of the build:
+# run it when a definition needs adding or refreshing, and commit the result.
+crs-definitions:
+    projinfo -o PROJJSON -q "OGC:CRS84" | jq . > crates/medallion/src/crs84.projjson.json
+    projinfo -o PROJJSON -q "EPSG:25832" | jq . > crates/medallion/src/etrs89_utm32n.projjson.json
 
 # Run the server locally on http://localhost:3000 (override with PORT).
 # Log-only: LOOKOUT_REDIS_URL is unset, so received samples are logged, not queued.
@@ -22,18 +35,24 @@ build:
     cargo build --release -p server
 
 # Run all tests: the Rust workspace (incl _docker tests — requires Docker) and the
-# Python visualise tests.
+# Python ones.
 test: test-python
     cargo nextest run --workspace
 
 # Run tests without Docker: the no-docker profile skips _docker-named tests. Still
-# runs the Python visualise tests (they need no Docker).
+# runs the Python tests (they need no Docker).
 test-no-docker: test-python
     cargo nextest run --workspace --profile no-docker
 
-# Run the Python visualise tests.
+# Run the Python tests: the visualise tool, the store's python writer driven from pyarrow and
+# DuckDB (uv builds the extension module with maturin; nothing to install first), and the
+# modules the water-crossings notebooks import.
+# The rebuild is forced because uv caches the built wheel against the extension crate's own
+# sources — a change to the rust crates it wraps would otherwise be tested as the last build.
 test-python:
     uv run --directory visualise pytest -q
+    uv run --directory crates/medallion-py --reinstall-package lookout-medallion pytest -q
+    uv run --directory notebooks/water_crossings pytest -q
 
 # Run the end_to_end tests against real services (release mode), with real
 # credentials injected from 1Password. Hits the real upstash redis.
@@ -45,37 +64,100 @@ end_to_end_test:
 deploy:
     fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}"
 
-# Read the upstash telemetry queue into a SQLite archive, with the redis URL from
-# 1Password. No args = non-destructive view-latest; `just record drain` to drain.
-record *args:
+# Bring bronze up to date: drain the telemetry queue, then take a fresh Overture extract.
+# The other bronze writer is deliberately not here — `bronze-poll-motis` runs until stopped.
+# Note that the extract is a new extract id and ~1.5 GB every time, so this is a heavier
+# recipe than draining alone; pass --medallion-root (or any other flag) through to both.
+bronze *args:
+    just bronze-record drain {{args}}
+    just bronze-extract {{args}}
+
+# Read the upstash telemetry queue into the bronze telemetry datasets, with the redis URL
+# from 1Password. No args = non-destructive view-latest; `just bronze-record drain` to drain.
+bronze-record *args:
     op run --env-file=deploy/lookout.env -- cargo run -p recorder -- {{args}}
 
-# Poll Motis for train trips near recently logged GPS and append them to a raw
-# `motis` SQLite log (data/motis.sqlite). Reads the redis URL from 1Password (like
-# `record`, for the queue it polls). Runs a continuous loop; Ctrl-C to stop. Override
-# defaults with --poll-interval-secs / --window-age-mins / --zoom / --motis-url / --db.
-poll-motis *args:
+# Poll Motis for train trips near recently logged GPS and write each poll to the bronze
+# capture log in the medallion store. Reads the redis URL from 1Password (like
+# `bronze-record`, for the queue it polls). Runs a continuous loop; Ctrl-C to stop.
+# Override defaults with
+# --poll-interval-secs / --window-age-mins / --zoom / --motis-url / --medallion-root.
+bronze-poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 
-# Enrich the SQLite archive with Overture transport data: group the `gps` fixes into
-# per-device-day bounding boxes, fetch the rail segments + connectors intersecting them
-# from public Overture Maps S3 (anonymous — no credentials), and write a `transport`
-# table. No args = defaults (data/lookout.sqlite, pinned release); override with --db /
-# --release. Idempotent, so re-running won't duplicate rows.
-enrich *args:
-    cargo run -p transport --bin enrich -- {{args}}
+# Take a point-in-time Overture extract into bronze: the country's rail segments and the
+# connectors they reference, its water, and its administrative divisions, all under one
+# extract id with a manifest row recording the release and the window. No args = defaults
+# (pinned release, --country DE, public Overture S3 — anonymous, no credentials); pass
+# --mirror <dir> to read a local copy of the release instead, and --medallion-root to
+# write elsewhere. Each run is a new extract id, never a replacement.
+bronze-extract *args:
+    cargo run --release -p transport --bin extract -- {{args}}
 
-# Ingest the raw motis capture log (data/motis.sqlite) into lookout's derived
-# `train_segment` table: dedup re-seen legs, decode each polyline to WKB. No args =
-# defaults (data/motis.sqlite → data/lookout.sqlite); override with --motis-db /
-# --lookout-db. Idempotent, so re-running won't duplicate rows.
-ingest-motis *args:
+# Re-derive every silver dataset from bronze, in dependency order. Each derivation replaces
+# what it produces, so this is safe to re-run and is the way to bring a copy of the store up
+# to date. All of them need an Overture extract to have been taken (that is where the
+# country areas come from), so run `just bronze-extract` first on a store without one.
+silver *args:
+    just silver-sessionise {{args}}
+    just silver-motis-ingest {{args}}
+    just silver-crossings {{args}}
+
+# Derive the silver `train_segment` dataset from the bronze motis capture log: dedup
+# re-seen legs, decode each polyline to WKB, and add the projected geometry. Requires
+# Each leg's country — and so the zone it is projected into — comes from where it starts,
+# against the country areas of the newest Overture extract, so `just bronze-extract` has to
+# have been run. Override the store with --medallion-root. Rewrites the partitions it
+# touches, so re-running over unchanged bronze leaves the same dataset.
+silver-motis-ingest *args:
     cargo run -p motis --bin motis_ingest -- {{args}}
 
-# Pack the silver water crossings into the flat point buffer the M5 device scans, in
-# gold. No args = defaults (the v8 notebook export → data/gold/crossings.pointset);
-# override with --input / --output, or restrict with --bbox west,south,east,north.
-pack-crossings *args:
+# Derive the silver `session` and `session_sample` datasets from the bronze telemetry:
+# dedup the GPS readings, split each device's into sessions at a `StartSession` or a
+# silence longer than --gap-mins (default 10) — a `StartSession` also claiming the samples
+# taken up to --lead-secs (default 60) before it, which a device fixing its position ahead
+# of announcing produces — and write each session's path and samples
+# with their projected geometry. Each session's country — and so the zone it is projected
+# into — comes from where it started, against the country areas of the newest Overture
+# extract, so `just bronze-extract` has to have been run. Override the store with
+# --medallion-root. Re-derives every session from all of bronze, so a rerun replaces what
+# the last one wrote rather than adding to it.
+silver-sessionise *args:
+    cargo run --release -p recorder --bin sessionise -- {{args}}
+
+# Derive both crossing datasets: the water crossings from the Overture extract, then the
+# ones each recorded session passed. The first is the slow half — it intersects a country's
+# rail against its water and takes the best part of an hour — and it only changes when the
+# extract or the collapse tuning does, so run `silver-session-crossings` alone after a drain.
+# Args reach the session half only; see `silver-water-crossings` for why.
+silver-crossings *args:
+    just silver-water-crossings
+    just silver-session-crossings {{args}}
+
+# Derive the silver `water_crossing` dataset by running the crossings notebook headlessly:
+# every place a stretch of track meets a body of water, collapsed to one crossing per place.
+# Reads the extract the notebook pins and writes one partition per country.
+# **Writes into the repo store whichever store other recipes are pointed at**: the notebook
+# resolves the store by walking up for the workspace, and a marimo script takes no arguments
+# of ours. Pass a different store by editing the notebook, or run the notebook interactively.
+# The extension module is reinstalled because uv caches the built wheel against its own
+# sources and would not otherwise notice a change to the rust crates it wraps.
+silver-water-crossings:
+    uv run --no-project --reinstall-package lookout-medallion notebooks/water_crossings/v9.py
+
+# Derive the silver `session_crossing` dataset: the crossings each recorded session passed,
+# matched by distance from the session's samples with --match-radius-m (default 150). Needs
+# the sessions and the water crossings to have been derived. Override the store with
+# --medallion-root. Re-derives everything, so a rerun replaces what the last one wrote.
+silver-session-crossings *args:
+    cargo run --release -p session_crossings --bin match_crossings -- {{args}}
+
+# Pack the silver water crossings into the flat point buffer the M5 device scans, written to
+# the store's own gold layer (<store>/gold/crossings.pointset). Every country the store holds
+# is packed, since the device does not know where it will be switched on; restrict with
+# --bbox west,south,east,north. Override the store with --medallion-root, the file with
+# --output.
+gold-pack-crossings *args:
     cargo run -p crossings --bin pack_crossings -- {{args}}
 
 # Regenerate the made-up crossings spike 5 carries in flash: as many as the real German
@@ -85,10 +167,11 @@ random-crossings *args:
     cargo run -p crossings --bin random_crossings -- \
         --output spikes/m5/spike5-distance/core/src/random-crossings.pointset {{args}}
 
-# Convert the SQLite archive into a rerun .rrd, selecting by time window (and
+# Convert the medallion store into a rerun .rrd, selecting by time window (and
 # optionally device id prefixes). Requires --since, e.g. `just visualise --since 7d`
-# or `just visualise --since 12h --devices 77a cdf2`. Open the .rrd with `rerun`, or
-# pass `--open` to push it live to a running viewer (overriding its persisted layout).
+# or `just visualise --since 12h --devices 77a cdf2`; override the store with
+# --medallion-root. Open the .rrd with `rerun`, or pass `--open` to push it live to a
+# running viewer (overriding its persisted layout).
 visualise *args:
     uv run --project visualise python visualise/main.py {{args}}
 

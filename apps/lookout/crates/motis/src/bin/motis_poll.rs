@@ -1,27 +1,27 @@
 //! `motis_poll`: polls recent GPS positions off the redis telemetry queue, queries the
 //! local Motis server for train trips within a buffered bounding box around them, and
-//! appends the returned segments to a raw, duplication-allowed `motis` SQLite log.
+//! writes the returned segments to the bronze capture log, one parquet file per poll.
 //!
-//! This is a thin loop around [`motis::poll::poll_once`] — argument parsing, redis/store
-//! setup, the tick timer, and logging. Run via `just poll-motis`; Ctrl-C stops cleanly.
+//! This is a thin loop around [`motis::poll::poll_once`] — argument parsing, redis and
+//! store setup, the tick timer, and logging. Run via `just bronze-poll-motis`; Ctrl-C stops
+//! cleanly.
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use chrono::Utc;
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
-use motis::client::{MotisClient, DEFAULT_BASE_URL};
-use motis::poll::{poll_once, PollConfig, PollOutcome};
-use motis::store::Store;
+use medallion::MedallionArgs;
+use motis::bronze::SegmentLog;
+use motis::client::{DEFAULT_BASE_URL, MotisClient};
+use motis::poll::{PollConfig, PollOutcome, poll_once};
 use motis::window::PositionWindow;
 
 const DEFAULT_POLL_INTERVAL_SECS: u64 = 30;
 const DEFAULT_WINDOW_AGE_MINS: u64 = 30;
 const DEFAULT_RECENT_LOOKBACK_MINS: u64 = 5;
 const DEFAULT_ZOOM: f64 = 8.0;
-const DEFAULT_DB: &str = "data/motis.sqlite";
 
 /// How many of the most-recent queued samples to scan for GPS each tick.
 const SAMPLE_LIMIT: usize = 1000;
@@ -47,9 +47,8 @@ struct Args {
     /// Base URL of the Motis server.
     #[arg(long, default_value = DEFAULT_BASE_URL)]
     motis_url: String,
-    /// Path to the raw `motis` capture SQLite db.
-    #[arg(long, default_value = DEFAULT_DB)]
-    db: PathBuf,
+    #[command(flatten)]
+    medallion: MedallionArgs,
 }
 
 #[tokio::main]
@@ -61,13 +60,14 @@ async fn main() {
         .init();
 
     let args = Args::parse();
+    let root = args.medallion.root().expect("locate the medallion store");
 
     // rustls needs a process-global crypto provider before any `rediss://` connection.
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("install rustls crypto provider");
 
-    let store = Store::open(&args.db).expect("open motis sqlite db");
+    let log = SegmentLog::new(root.clone());
     let client = MotisClient::new(&args.motis_url);
     let mut window = PositionWindow::new(Duration::from_secs(args.window_age_mins * 60));
     let config = PollConfig {
@@ -78,14 +78,14 @@ async fn main() {
     };
 
     let url = std::env::var("LOOKOUT_REDIS_URL")
-        .expect("LOOKOUT_REDIS_URL must be set — run via `just poll-motis`");
+        .expect("LOOKOUT_REDIS_URL must be set — run via `just bronze-poll-motis`");
     let mut conn = telemetry::connect(&url)
         .await
         .expect("connect to telemetry redis");
 
     tracing::info!(
         motis_url = %args.motis_url,
-        db = %args.db.display(),
+        medallion_root = %root.path().display(),
         poll_interval_secs = args.poll_interval_secs,
         window_age_mins = args.window_age_mins,
         recent_lookback_mins = args.recent_lookback_mins,
@@ -101,7 +101,7 @@ async fn main() {
                 break;
             }
             _ = ticker.tick() => {
-                match poll_once(Utc::now(), &mut conn, &client, &store, &mut window, &config).await {
+                match poll_once(Utc::now(), &mut conn, &client, &log, &mut window, &config).await {
                     Ok(PollOutcome::NoRecentGps { ingested }) => {
                         tracing::info!(ingested, "no recent gps positions; skipping motis query");
                     }

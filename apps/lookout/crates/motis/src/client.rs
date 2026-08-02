@@ -6,8 +6,8 @@ use std::num::NonZeroU32;
 use chrono::{DateTime, Duration, Timelike, Utc};
 use geo_types::Rect;
 use motis_openapi_progenitor::{
-    types::{Itinerary, TripSegment},
     Client,
+    types::{Itinerary, TripSegment},
 };
 
 /// Where the local Motis server listens unless overridden. Uses `127.0.0.1` rather than
@@ -148,10 +148,11 @@ fn details_of(itinerary: Itinerary) -> TripDetails {
             name: leg.agency_name.clone(),
         })
         .unwrap_or_default();
-    let train_number = itinerary
-        .legs
-        .iter()
-        .find_map(|leg| leg.trip_short_name.as_deref().and_then(TrainNumber::from_gtfs));
+    let train_number = itinerary.legs.iter().find_map(|leg| {
+        leg.trip_short_name
+            .as_deref()
+            .and_then(TrainNumber::from_gtfs)
+    });
     TripDetails {
         agency,
         train_number,
@@ -183,10 +184,7 @@ mod tests {
 
     #[test]
     fn bbox_maps_to_sw_and_ne_corner_strings() {
-        let bbox = Rect::new(
-            Coord { x: 8.4, y: 49.5 },
-            Coord { x: 9.75, y: 50.25 },
-        );
+        let bbox = Rect::new(Coord { x: 8.4, y: 49.5 }, Coord { x: 9.75, y: 50.25 });
         let (min, max) = bbox_corners(&bbox);
         assert_eq!(min, "49.5,8.4");
         assert_eq!(max, "50.25,9.75");
@@ -195,7 +193,10 @@ mod tests {
     #[test]
     fn whole_second_drops_sub_second_precision() {
         let t = DateTime::from_timestamp(1_700_000_000, 738_002_000).unwrap();
-        assert_eq!(whole_second(t), DateTime::from_timestamp(1_700_000_000, 0).unwrap());
+        assert_eq!(
+            whole_second(t),
+            DateTime::from_timestamp(1_700_000_000, 0).unwrap()
+        );
     }
 
     #[test]
@@ -221,8 +222,14 @@ mod tests {
 
     #[test]
     fn train_number_parses_int_and_rejects_zero_and_non_numeric() {
-        assert_eq!(TrainNumber::from_gtfs("002569").map(TrainNumber::get), Some(2569));
-        assert_eq!(TrainNumber::from_gtfs("2569").map(TrainNumber::get), Some(2569));
+        assert_eq!(
+            TrainNumber::from_gtfs("002569").map(TrainNumber::get),
+            Some(2569)
+        );
+        assert_eq!(
+            TrainNumber::from_gtfs("2569").map(TrainNumber::get),
+            Some(2569)
+        );
         assert_eq!(TrainNumber::from_gtfs("000000"), None);
         assert_eq!(TrainNumber::from_gtfs("0"), None);
         assert_eq!(TrainNumber::from_gtfs(""), None);

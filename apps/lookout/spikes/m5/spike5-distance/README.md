@@ -68,6 +68,6 @@ took. Fixtures for the core's tests came from spike 3 and have not changed, so n
 
 ## The point set
 
-Comes from `just pack-crossings` in `apps/lookout` — see `crates/crossings/README.md` for the
+Comes from `just gold-pack-crossings` in `apps/lookout` — see `crates/crossings/README.md` for the
 byte layout. The device reader here is the second implementation of that format; the packer's
 own round-trip tests are the first.

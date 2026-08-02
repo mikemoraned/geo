@@ -7,3 +7,20 @@ requires-python = ">=3.13"
 dependencies = [
     "marimo>=0.23.15",
 ]
+
+# The notebooks declare their own dependencies inline and run `--sandbox`, so this group is
+# only what the modules beside them are tested with. Pinned to the versions the notebooks
+# name, so a module behaves under test as it does when a notebook imports it.
+[dependency-groups]
+dev = [
+    "numpy==2.5.1",
+    "pytest>=9",
+    "scipy==1.18.0",
+]
+
+[tool.pytest.ini_options]
+# The modules sit beside the notebooks that import them rather than in a package, so the
+# directory itself is the import path. Only `tests/` is collected: the visualiser module next
+# door is named for what it draws, not for a test suite.
+testpaths = ["tests"]
+pythonpath = ["."]

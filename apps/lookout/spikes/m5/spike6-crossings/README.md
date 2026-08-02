@@ -129,17 +129,16 @@ confirm the figures above hold while running. That log has not been captured yet
 run was deliberately untethered — and the numbers here are static ones, from the binary and
 from the code.
 
-## The point set is regenerable, but not from this branch
+## The point set is regenerable
 
 ```sh
-cargo run -p crossings --bin pack_crossings -- --input <crossing_reps.parquet> \
-    --output spikes/m5/spike6-crossings/core/src/water-crossings.pointset
+just gold-pack-crossings --output spikes/m5/spike6-crossings/core/src/water-crossings.pointset
 ```
 
-The `crossing_reps.parquet` it reads is the water-crossings notebook's own output, which is
-gitignored as regenerable and lives wherever that notebook was last run. The committed
-`.pointset` is therefore the artifact of record here. See `crates/crossings/README.md` for the
-byte layout and what a reader must check.
+It reads the silver `water_crossing` dataset out of the medallion store, so regenerating it
+needs that dataset to have been derived. The committed `.pointset` is what this spike was
+measured against either way. See `crates/crossings/README.md` for the byte layout and what a
+reader must check.
 
 ## `crux_core` is pinned to `=0.16.2`
 

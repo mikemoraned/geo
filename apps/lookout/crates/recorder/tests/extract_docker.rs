@@ -1,19 +1,21 @@
 //! End-to-end integration test for the recorder's extract path: prefill a real redis
 //! (a testcontainer) the way the server does (`LPUSH` of sample JSON), run the actual
-//! `recorder` binary to drain it into a SQLite archive, then reopen the archive and
-//! assert it holds the lossless raw rows plus the derived per-sensor rows.
+//! `recorder` binary to drain it into a medallion store, then query the store and assert
+//! it holds the lossless raw rows plus the readings interpreted from them.
 //!
 //! Requires Docker; the `_docker`-suffixed name is skipped by the no-docker profile.
 
 use std::process::Command;
 use std::time::Duration;
 
+use medallion::{Query, Root};
 use redis::aio::MultiplexedConnection;
+use serde::Deserialize;
 use shared::{Accel, AccelReading, Gps, GpsReading, Message, V1Message};
-use telemetry::{RawSample, QUEUE_KEY};
+use telemetry::{QUEUE_KEY, RawSample};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
-use testcontainers_modules::redis::{Redis, REDIS_PORT};
+use testcontainers_modules::redis::{REDIS_PORT, Redis};
 use uuid::Uuid;
 
 async fn start_redis() -> (ContainerAsync<Redis>, String) {
@@ -36,14 +38,13 @@ async fn wait_ready(url: &str) -> MultiplexedConnection {
     let client = redis::Client::open(url).expect("open client");
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
     loop {
-        if let Ok(mut conn) = client.get_multiplexed_async_connection().await {
-            if redis::cmd("PING")
+        if let Ok(mut conn) = client.get_multiplexed_async_connection().await
+            && redis::cmd("PING")
                 .query_async::<String>(&mut conn)
                 .await
                 .is_ok()
-            {
-                return conn;
-            }
+        {
+            return conn;
         }
         assert!(
             std::time::Instant::now() < deadline,
@@ -97,8 +98,14 @@ fn gps_sample(id: Uuid, t: i64, lat: f64) -> Message {
     }))
 }
 
+/// One row of the gps dataset, as the assertions need it.
+#[derive(Debug, Deserialize)]
+struct Fix {
+    lat: f64,
+}
+
 #[tokio::test]
-async fn extract_queue_to_sqlite_docker() {
+async fn extract_queue_to_store_docker() {
     let (_container, url) = start_redis().await;
     let mut conn = wait_ready(&url).await;
 
@@ -111,41 +118,49 @@ async fn extract_queue_to_sqlite_docker() {
     lpush(&mut conn, &gps_sample(device, 1_700_000_000_004, 55.96)).await;
 
     // Extract via the real recorder binary, pointed at this redis, draining into a
-    // temp archive.
+    // throwaway store.
     let dir = tempfile::tempdir().expect("tempdir");
-    let db_path = dir.path().join("lookout.sqlite");
     let status = Command::new(env!("CARGO_BIN_EXE_recorder"))
-        .args(["drain", "--output"])
-        .arg(&db_path)
+        .args(["drain", "--medallion-root"])
+        .arg(dir.path())
         .env("LOOKOUT_REDIS_URL", &url)
         .status()
         .expect("run recorder");
     assert!(status.success(), "recorder exited with {status}");
 
-    // Reopen the archive and assert it holds the lossless raw rows plus the derived
-    // per-sensor rows.
-    let archive = rusqlite::Connection::open(&db_path).expect("open archive");
-    let count = |table: &str| -> i64 {
-        archive
-            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                row.get(0)
-            })
-            .expect("count")
-    };
-    assert_eq!(count("raw"), 5, "one lossless row per queued payload");
-    assert_eq!(count("accel"), 3);
-    assert_eq!(count("gps"), 2);
+    // Query the store and assert it holds the lossless payloads plus the readings
+    // interpreted from them.
+    let query = Query::new(Root::new(dir.path()));
+    for dataset in [model::RAW_SAMPLE, model::GPS_READING, model::ACCEL_READING] {
+        query
+            .register(dataset, dataset.name)
+            .await
+            .expect("register dataset");
+    }
+    let mut counts = Vec::new();
+    for dataset in [model::RAW_SAMPLE, model::ACCEL_READING, model::GPS_READING] {
+        counts.push(
+            query
+                .count(&format!("SELECT COUNT(*) AS count FROM {}", dataset.name))
+                .await
+                .expect("count"),
+        );
+    }
+    assert_eq!(
+        counts,
+        vec![5, 3, 2],
+        "one lossless row per queued payload, and the readings interpreted from them"
+    );
 
-    let lats: Vec<f64> = {
-        let mut stmt = archive
-            .prepare("SELECT lat FROM gps ORDER BY t")
-            .expect("prepare");
-        let rows = stmt
-            .query_map([], |row| row.get(0))
-            .expect("query")
-            .collect::<Result<_, _>>()
-            .expect("collect");
-        rows
-    };
-    assert_eq!(lats, vec![55.95, 55.96]);
+    let fixes: Vec<Fix> = query
+        .rows(&format!(
+            "SELECT lat FROM {} ORDER BY t",
+            model::GPS_READING.name
+        ))
+        .await
+        .expect("gps fixes");
+    assert_eq!(
+        fixes.iter().map(|f| f.lat).collect::<Vec<_>>(),
+        vec![55.95, 55.96]
+    );
 }

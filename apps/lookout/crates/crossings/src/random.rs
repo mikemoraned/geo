@@ -9,23 +9,26 @@ use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::bbox::Bbox;
-use crate::id::{CrossingId, Key};
-use crate::pointset::Point;
+use crate::pointset::{PackedId, Point};
 
 /// Scattered uniformly through `window`, reproducibly for a given `seed`.
 ///
-/// Ids are derived the same way a real crossing's is, from a made-up key — so they look like
-/// what the device will eventually carry, and are as unique as the derivation makes them.
+/// Ids are drawn from the same stream as the positions, and are distinct — which is all a real
+/// crossing's id promises the device, and all a scan of made-up points depends on.
 pub fn points(count: usize, window: &Bbox, seed: u64) -> Vec<Point> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let (min, max) = (window.min(), window.max());
+    let mut taken = std::collections::HashSet::with_capacity(count);
 
     (0..count)
-        .map(|index| {
+        .map(|_| {
             let longitude = rng.random_range(min.x..=max.x);
             let latitude = rng.random_range(min.y..=max.y);
+            let id = std::iter::repeat_with(|| rng.random::<u32>())
+                .find(|id| taken.insert(*id))
+                .expect("a u32 not yet drawn, of which there are far more than count");
             Point::new(
-                CrossingId::of(&Key::new(format!("random-{index}"), "random", seed as f64)),
+                PackedId::from_bits(id),
                 geo_types::coord! { x: longitude, y: latitude },
             )
         })

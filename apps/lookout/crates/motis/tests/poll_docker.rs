@@ -1,7 +1,7 @@
 //! Integration test for the poll core [`motis::poll::poll_once`]: GPS samples on a real
 //! redis (testcontainers) drive a real [`MotisClient`] against a mock Motis server
-//! (wiremock) and land in a real [`Store`]. Exercises the whole tick — recent-GPS
-//! filtering, the buffered-bbox query, and appending segments — end to end.
+//! (wiremock) and land in a real bronze capture log. Exercises the whole tick — recent-GPS
+//! filtering, the buffered-bbox query, and writing the poll's segments — end to end.
 //!
 //! Requires Docker (redis); the `_docker`-suffixed name is skipped by the no-docker
 //! profile. The Motis server is mocked, so no live Motis is needed.
@@ -11,10 +11,11 @@ mod common;
 use std::time::Duration;
 
 use chrono::Utc;
-use common::{gps, lpush, start_redis, wait_ready, RAIL_MODES};
+use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready};
+use medallion::Root;
+use motis::bronze::SegmentLog;
 use motis::client::MotisClient;
-use motis::poll::{poll_once, PollConfig, PollOutcome};
-use motis::store::Store;
+use motis::poll::{PollConfig, PollOutcome, poll_once};
 use motis::window::PositionWindow;
 use shared::{Accel, AccelReading, Message, V1Message};
 use uuid::Uuid;
@@ -46,14 +47,18 @@ async fn mock_motis(segments_json: &str) -> MockServer {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/api/v4/map/trips"))
-        .respond_with(ResponseTemplate::new(200).set_body_raw(segments_json.as_bytes(), "application/json"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(segments_json.as_bytes(), "application/json"),
+        )
         .expect(1)
         .mount(&server)
         .await;
     // Every `trip` lookup (one per distinct tripId) resolves to the same itinerary.
     Mock::given(method("GET"))
         .and(path("/api/v4/trip"))
-        .respond_with(ResponseTemplate::new(200).set_body_raw(TRIP_FIXTURE.as_bytes(), "application/json"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(TRIP_FIXTURE.as_bytes(), "application/json"),
+        )
         .mount(&server)
         .await;
     server
@@ -86,8 +91,8 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
 
     let motis = mock_motis(TRIPS_FIXTURE).await;
 
-    let db = tempfile::NamedTempFile::new().expect("temp db");
-    let store = Store::open(db.path()).expect("open store");
+    let store = tempfile::tempdir().expect("temp store");
+    let log = SegmentLog::new(Root::new(store.path()));
     let client = MotisClient::new(&motis.uri());
     let mut window = PositionWindow::new(Duration::from_secs(30 * 60));
     let config = PollConfig {
@@ -97,7 +102,7 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
         sample_limit: 1000,
     };
 
-    let outcome = poll_once(now, &mut conn, &client, &store, &mut window, &config)
+    let outcome = poll_once(now, &mut conn, &client, &log, &mut window, &config)
         .await
         .expect("poll once");
 
@@ -114,21 +119,23 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
     );
 
     // Only the rail segment is persisted, with its resolved agency and train number.
-    let reopened = rusqlite::Connection::open(db.path()).expect("reopen db");
-    let count: i64 = reopened
-        .query_row("SELECT COUNT(*) FROM segment", [], |r| r.get(0))
-        .expect("count");
-    assert_eq!(count as usize, rail_fixture_len());
-    let enriched: i64 = reopened
-        .query_row(
-            "SELECT COUNT(*) FROM segment
-             WHERE agency_name = 'DB Fernverkehr AG' AND train_number = 2569",
-            [],
-            |r| r.get(0),
-        )
-        .expect("count enriched");
+    let captured = captured_segments(&Root::new(store.path())).await;
+    assert_eq!(captured.len(), rail_fixture_len());
+    assert!(
+        captured
+            .iter()
+            .all(|s| RAIL_MODES.contains(&s.mode.as_str())),
+        "the non-rail fixture segments should have been filtered out; got {:?}",
+        captured.iter().map(|s| s.mode.as_str()).collect::<Vec<_>>()
+    );
+    let enriched = captured
+        .iter()
+        .filter(|s| {
+            s.agency_name.as_deref() == Some("DB Fernverkehr AG") && s.train_number == Some(2569)
+        })
+        .count();
     assert_eq!(
-        enriched as usize,
+        enriched,
         rail_fixture_len(),
         "the rail segment's trip resolved its agency and train number"
     );
