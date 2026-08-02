@@ -10,9 +10,9 @@ just flash     # build, flash, and tail the serial console
 
 ## Why two crates
 
-`esp-idf-sys`'s build script aborts on a host target, so **any** crate that depends on
-`esp-idf-svc` can never be built or tested off-device. Host-testability is the main reason
-Crux is here at all, so the split is forced:
+A crate depending on `esp-idf-*` cannot be built or tested off-device at all (see
+[`docs/device.md`](../../../docs/device.md)). Host-testability is the main reason Crux is
+here, so the split is forced rather than chosen:
 
 - `core/` — the app: `Model`, `Event`, `Effect`, `view()`. No `esp-idf-*` dependency, so
   `cargo test` runs it on the laptop against the same source the device flashes.

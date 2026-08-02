@@ -61,45 +61,10 @@ is jittering from a *fix* that is jittering, and spike 3 measured how much that 
 satellites at HDOP 2.4 wanders about a metre, but 6 at HDOP 4.4 wanders 4.5 m/s and reports a
 false 4-knot speed with it.
 
-## The lat/lon representation held up
+## What a scan costs
 
-`f32` degrees were chosen on a measured ≤0.21 m round-trip error over this set. Against real
-distances that lands as **0.27 m of disagreement over 2.3 km**, roughly 1 part in 10,000 — far
-under the metre-scale wander a stationary fix shows even in good conditions, and nowhere near
-enough to reorder two crossings that are metres apart. `i32` at 1e-7° would have bought
-centimetres nobody can use, for a third more flash.
-
-## What a scan costs: ~4.7 ms for 5,749 crossings
-
-Measured in spike 5, on made-up points of the same size, and unchanged here — the cost is set
-by how many points there are, not what they mean.
-
-| profile | `opt-level` | `debug-assertions` | per scan | per crossing |
-|---|---|---|---|---|
-| dev (`just flash`) | `z` | on | 7,835–8,377 µs | ~1.39 µs |
-| release (`just flash-release`) | `s` | off | 4,353–5,025 µs | ~0.82 µs |
-
-**Release is 1.7× faster than dev**, and most of that is unlikely to be the opt-level — `z`
-and `s` are both size-oriented — but rather the `debug-assertions` and `overflow-checks` the
-dev profile turns on, which put a branch on every arithmetic operation inside the haversine.
-Measure on release; the dev number is what iteration feels like, not what the device does.
-
-At 0.82 µs a crossing — about 196 cycles at 240 MHz for an f32 haversine plus the top-N
-bookkeeping — a scan is **0.5% of a one-second budget**. Both figures include parsing the
-sentence that carried the new position, so they are upper bounds on the scan alone.
-
-Brute force is settled at this size and stays settled well past it: ~120,000 points before a
-scan reaches a tenth of the fix interval, ~1.2M before it fills it. The German set would have
-to grow **20× before an index is worth discussing**.
-
-### The prediction held, but its reasoning did not
-
-The slice predicted single-digit milliseconds, and 4.7 ms is single-digit milliseconds. But it
-got there via "even 50k points (~400 KB) scans in single-digit ms at 240 MHz", and at the
-measured rate 50k would take **~41 ms** — still an order of magnitude out. The conclusion
-survived only because the real set turned out to be 9× smaller than the number the estimate
-was built on. Worth remembering before reusing that reasoning for a bigger set: on this board,
-budget most of a microsecond per point, not tens of nanoseconds.
+Unchanged from spike 5, which measured it: the cost is set by how many points there are, not
+by what they mean. See [`docs/device.md`](../../../docs/device.md).
 
 ## Footprint
 
@@ -143,10 +108,8 @@ reader must check.
 ## `crux_core` is pinned to `=0.16.2`
 
 Not because this spike needs it — there is no BLE here, and the reboot only appears with
-NimBLE running — but because the predictor this core is a step towards does. Building against
-0.19 now would mean discovering on the way back that the core has to come down again. The pin
-costs one associated type (`type Capabilities = ()`, dropped in later versions) and a `_caps`
-argument to `update`. Spike 4's README has the evidence.
+NimBLE running — but because the predictor this core is a step towards does. See
+[`docs/device.md`](../../../docs/device.md); spike 4's README has the evidence.
 
 ## The console
 

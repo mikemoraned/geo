@@ -109,28 +109,17 @@ forfeit the shared-core argument that put it here.
 
 ## Notes
 
-- **NimBLE, not Bluedroid.** `esp32-nimble` needs `CONFIG_BT_NIMBLE_ENABLED=y` *and*
-  `CONFIG_BT_BLUEDROID_ENABLED=n` in `sdkconfig.defaults`; Bluedroid is the ESP-IDF default,
-  and leaving it on builds the wrong host stack.
-- **Never log from a GATT callback.** They run on the NimBLE **host** task, whose default
-  stack is 4096, and Debug-formatting the connection descriptor through the ESP logger
-  overflows it. The result is an occasional `Double exception` with a corrupted backtrace —
-  and because the corruption lands wherever the stack happens to overrun into, one dump
-  blamed `memcpy` reading rodata and reported `EXCCAUSE 2` (an instruction fetch from a data
-  address), which looks nothing like a stack problem.
+The rules these produced — NimBLE rather than Bluedroid, never logging from a GATT callback,
+and sizing the main task's stack from a measurement — are in
+[`docs/device.md`](../../../docs/device.md). What is worth keeping here is why the callback
+overflow took so long to find.
 
-  Two things made this hard to pin down. Raising *main's* stack does nothing, because main is
-  a different task. And it appeared to crash while idle, which seemed to rule the callbacks
-  out — but the host or the BLE explorer retries connections in the background, so the
-  callbacks were firing without anyone touching anything.
+Raising *main's* stack does nothing, because main is a different task. And it appeared to
+crash while idle, which seemed to rule the callbacks out — but the host or the BLE explorer
+retries connections in the background, so the callbacks were firing without anyone touching
+anything. The corruption lands wherever the stack happens to overrun into, so one dump
+blamed `memcpy` reading rodata and reported `EXCCAUSE 2`, an instruction fetch from a data
+address, which looks nothing like a stack problem.
 
-  The fix is both halves: `CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=8192`, and callbacks that do
-  nothing but an atomic store, with the main loop doing the reporting. Measured afterwards,
-  the callback task uses ~1.7KB of its 8192 — so the logging really was the bulk of it.
-- **Measure stacks, don't estimate them.** `uxTaskGetStackHighWaterMark(null)` reports the
-  calling task's unused bytes; the shell logs it for main at startup and for the NimBLE host
-  task from the callback. Main uses ~26KB, which is why spike 3's 32768 was marginal at only
-  ~6.5KB spare.
-- **Main task stack raised again**, to 49152. Spike 3 left only ~6.5KB spare at 32768 and this
-  adds the BLE handles on top. The startup log reports what was actually used — worth reading
-  rather than guessing, since an overflow shows up as a corrupt pointer somewhere unrelated.
+Measured after the fix, the callback task uses ~1.7 KB of its 8192 — so the logging really
+was the bulk of it.

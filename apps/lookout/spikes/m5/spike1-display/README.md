@@ -11,40 +11,12 @@ just flash     # build, flash, and tail the serial console
 just monitor   # tail the console of whatever is already flashed
 ```
 
-## Panel configuration
+## What it established
 
-Taken from M5's own board definition in
-[M5GFX](https://github.com/m5stack/M5GFX/blob/master/src/M5GFX.cpp) (`board_M5StickCPlus2`),
-not guessed:
-
-| | |
-|---|---|
-| SCLK / MOSI | G13 / G15 |
-| CS / DC / RST | G5 / G14 / G12 |
-| Backlight | G27 |
-| SPI host | SPI2 (HSPI), 26MHz — see below |
-| Size | 135x240, **offset 52,40** |
-| Colours | inverted |
-
-The offset is the part that has to be right: the ST7789V2 addresses a window larger than
-the visible 135x240 panel, so without it the image shifts and wraps.
-
-Note the panel pins differ from the original StickC *Plus* (which used DC 23 / RST 18) —
-Plus-era example code will not work here.
-
-## M5GFX's 40MHz is not reachable
-
-The panel is not on SPI2's IOMUX pins (CLK 14 / MOSI 13 / CS 15 — the board wires 13/15/5),
-so the signals go through the GPIO matrix, which ESP-IDF caps at 80MHz/3 ≈ 26.67MHz. Asking
-for 40MHz is rejected at `spi_bus_add_device`:
-
-```
-E spi_hal: The clock_speed_hz should less than 26666666
-E spi_master: spi_bus_add_device(517): assigned clock speed not supported
-```
-
-which then boot-loops on a second assert as `SpiDriver::drop` tears down a bus that still
-has the half-added device attached — the clock error above it is the real cause.
+The panel's pins, its 52,40 addressing offset, and why its SPI clock tops out at 26 MHz
+rather than the 40 MHz M5GFX quotes are in [`docs/device.md`](../../../docs/device.md). All
+three came from M5's own board definition rather than from guessing, and the offset is the
+one that has to be right: without it the image shifts and wraps.
 
 ## Notes
 

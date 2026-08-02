@@ -147,7 +147,7 @@ with a GTFS-RT feed to make that interpolation delay-aware.
 - **Parked (not done): pfaedle rail track geometry.** DELFI's `shapes.txt` covers only
   bus/coach, so rail interpolation still cuts corners. The pfaedle tooling was built and
   produces correct curved rail, but importing its `shapes.txt` breaks GTFS-RT realtime, so
-  this is parked. Full write-up and resume steps live in `.claude/memory/motis-trips-api.md`.
+  this is parked. Full write-up and resume steps are in `docs/next-slices.md`.
 
 ## minimal version of water crossings
 
@@ -192,7 +192,7 @@ BLE; no prediction logic exists yet. New crates on device: `esp-idf-svc`, `mipid
   never identified, only avoided.
 - **Hardware facts worth not re-deriving** — the power-hold pin, panel offset, and bus ceiling,
   which Grove pin is RX, UART buffer sizing, and that stack overflow on this board always
-  presents as a fault in unrelated code — are in `.claude/memory/m5-esp32-toolchain.md`.
+  presents as a fault in unrelated code — are in `docs/device.md`.
 - **GNSS noise is worse than the predictor's straw man assumes**: held still with poor
   satellite geometry, the receiver reported metres-per-second of phantom motion and a false
   multi-knot speed. Carried into the new "Deploy predictor on M5 device" slice, along with the

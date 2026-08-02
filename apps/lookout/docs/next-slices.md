@@ -104,58 +104,80 @@ We've mostly been testing with German (DE) data. We should repeat / extend what 
 Run the real predictor on the M5StickC PLUS2, fed by its own GPS unit rather than by replayed
 traces — the point the device spikes were building towards.
 
-### Constraint inherited from the device spikes: `crux_core` is pinned
-
-**`crux_core` must stay pinned at `=0.16.2` on device.** On 0.19, Crux + BLE reboots the
-M5 every 4 seconds to 7 minutes, always inside crux's per-effect `Command`/crossbeam machinery.
-Pinning 0.16.2 fixes it — 30 minutes stable with a client connected and a real fix — but the
-cause was never identified, only avoided; it is some change between 0.17 and 0.19. Stack
-overflow, both task stacks, heap exhaustion, fragmentation, heap overrun, PSRAM, allocation
-volume, and model placement were all ruled out by measurement. Evidence and the four wrong
-diagnoses are in `apps/lookout/spikes/m5/spike4-ble/README.md`.
-
-Two consequences for this slice:
-
-- The predictor core has to compile against 0.16.2's API (one extra associated type,
-  `type Capabilities = ()`), so don't adopt newer crux features in the shared core.
-- If a newer crux becomes necessary, the work is bisecting 0.17/0.18 to find the change (one
-  flash and a 15-minute soak each), or dropping crux from the device shell — which would
-  forfeit the shared-core argument that justified Crux in the first place.
-
 ### What the spikes already established
 
-The spikes leave a working skeleton to hang the predictor on: `apps/lookout/spikes/m5`, with
-a Crux core split from an esp-idf shell so the core stays testable on the laptop. The
-predictor should *be* that core. See `.claude/memory/m5-esp32-toolchain.md` for the board's
-gotchas (power hold, panel offset, RX pin, stack size, UART buffer).
+The spikes leave a working skeleton to hang the predictor on: a Crux core split from an
+esp-idf shell, so the core stays testable on the laptop. The predictor should *be* that core.
+Everything the spikes established about the board — power hold, panel offset, RX pin, stack
+sizing, UART buffer, and what the receiver's numbers are worth — is in [device.md](device.md),
+so the spike code itself can go.
 
-### Notes & Gotchas (what the on-device GNSS actually behaves like)
+Three things there bear directly on this slice:
 
-Measured on the GPS/BDS unit (AT6668) with the receiver deliberately held still:
+- **Build the predictor core against the current `crux_core`**, and soak it on device with
+  BLE running. 0.19 rebooted the board every few minutes and 0.16.2 did not; whether later
+  releases still do is unknown. [device.md](device.md) has the evidence and what dropping
+  back would cost.
+- **The predictor should take fix quality as an input, not just lat/lon.** Held still in
+  poor geometry the receiver showed metres per second of phantom motion and a false
+  multi-knot speed, so a straw man deriving velocity by differencing position between fixes
+  may emit confident nonsense from a stationary device. That rests on two observations only
+  — see [device.md](device.md) — so it is a reason to design against the failure, not an
+  established characterisation of the receiver.
+- **Wall-clock time can come from the receiver**, before any position fix, so the device
+  needs neither NTP nor the BM8563 RTC.
 
-- **Good geometry** (8 satellites, HDOP 2.4): position wanders ~1.8m horizontally over 12s,
-  and differencing consecutive one-second fixes implies ~1.0 m/s of motion. The receiver's
-  own Doppler-derived speed is far more honest at 0.04–0.91 knots (≤0.5 m/s).
-- **Poor geometry** (6 satellites, HDOP 4.4): position wanders ~4.5 m/s, *and* the reported
-  speed claims 4.13 knots. In poor conditions the Doppler speed lies too.
+Worth checking whether the phone traces show the same noise before assuming it is specific
+to this receiver.
 
-So a predictor that derives velocity by differencing distance-to-crossing between successive
-readings — as the minimal predictor's straw man does — will be dominated by noise at these
-scales, and a stationary device can appear to be closing on a crossing fast enough to emit
-confident nonsense. Two responses, both wanted here:
+## Slice: rail track geometry from pfaedle (parked)
 
-1. Prefer the receiver's reported speed over position-differencing, and/or difference over a
-   longer baseline than one reading.
-2. **Gate on fix quality.** HDOP and satellite count are the difference between ~0.2 m/s and
-   ~4.5 m/s of phantom motion, so the on-device predictor needs them as inputs, not just
-   lat/lon. `RMC`/`GGA` carry both.
+### Target
 
-A train at speed should swamp this noise, but approach and departure — exactly when a crossing
-prediction is being refined — are the low-speed regime where it bites. Worth checking whether
-the same holds for the phone traces before assuming it is device-specific.
+Give rail legs real curved geometry instead of the straight stop-to-stop lines DELFI's
+`shapes.txt` yields for rail — see [motis.md](motis.md). pfaedle map-matches GTFS trips onto
+OSM to synthesise `shapes.txt`, and produced correct curved rail: `-D -m rail` recomputes
+rail shapes only, leaving bus and coach shapes alone, and rail polylines come out hundreds
+of points where they were four.
 
-Also: the receiver reports true UTC in `ZDA`/`RMC` before it has any position fix, so
-wall-clock time needs neither NTP nor the BM8563 RTC.
+**Parked, and the tooling was reverted out of the tree** (`tools/pfaedle`, commit
+`dfd8655`), because importing the result breaks realtime.
+
+### Why it is parked
+
+Import the raw DELFI feed and around 99.97% of RT entities resolve. Import any feed carrying
+pfaedle's `shapes.txt` and trip resolution fails for ~99.6% of them, with **no segment coming
+back realtime-corrected**. The static schedule itself imports fine: the trips are there and
+the rail is genuinely curved.
+
+It is the `shapes.txt` and not the trips. Three attempts broke realtime identically,
+including one that kept `trips.txt` byte-identical to the raw feed apart from the rail
+`shape_id` fields — and there the failing trips were *bus* trips whose `shape_id` was never
+touched. The only remaining difference is the swapped-in `shapes.txt`, which grows from
+308 MB to 2.3 GB. It is not feed currency either: a same-day RT fetch still overlapped the
+static feed's trip ids 99.6%.
+
+Leading hypothesis, untested: the 2.3 GB of rail geometry makes `motis import` hit some
+limit and produce a timetable whose RT trip index is incomplete, while scheduled queries
+still work.
+
+### To resume
+
+1. Confirm the trigger — build the raw feed with only `shapes.txt` swapped, import, and check
+   the RT statistic. Expect it to break.
+2. Chase the cause: read `motis import` for shape, memory or limit warnings; try shrinking
+   `shapes.txt`, by simplifying the rail polylines or dropping the unused bus shapes, and
+   re-test.
+3. If Motis genuinely cannot take large rail shapes, file an issue upstream, or accept
+   straight-line rail — which is what transitous does — and drop this.
+
+Two facts about pfaedle worth keeping if it resumes: it has no homebrew formula and has to
+be built from source against `cmake` and `libzip`, and it must run from its build directory
+with an explicit config path, since it only finds its default MOT-to-OSM matching config
+when installed. Its GTFS parser is also stricter than Motis's — it aborts on the dangling
+references in DELFI's `transfers.txt` and `pathways.txt`, which Motis tolerates.
+
+Each realtime A/B needs the Motis server run by hand: the sandbox denies the LMDB tile mmap.
 
 ## Slice: Enrich and use relative direction of POI
 

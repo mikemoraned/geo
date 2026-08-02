@@ -18,16 +18,13 @@ whoever else works here, and keeping in step with the code it describes. A note 
 outside the repo is invisible to all of that, so if you find one there, move it in.
 
 Read the relevant note before working on that area, and add or update one when you learn
-something a future session shouldn't have to re-derive. Index new notes here. Current
-notes:
+something a future session shouldn't have to re-derive. Index new notes here.
 
-- [`.claude/memory/lookout-architecture.md`](.claude/memory/lookout-architecture.md) —
-  the lookout redis→sqlite pipeline as it stands, its migration to the medallion store,
-  and the "Rust derives, Python reads" convention
-- [`.claude/memory/motis-trips-api.md`](.claude/memory/motis-trips-api.md) — the Motis
-  `map/trips` endpoint, enabling realtime, and the no-vehicle-GPS constraint
-- [`.claude/memory/m5-esp32-toolchain.md`](.claude/memory/m5-esp32-toolchain.md) — the
-  M5StickC PLUS2 spikes: why Claude can't flash, the `LIBCLANG_PATH` trap, confirmed board facts
+**Notes hold how we work; `docs/` holds what we have discovered.** A fact about the system
+itself — the hardware, an upstream API, a data format, the shape of the pipeline — belongs in
+an app's `docs/`, written for anyone working on the code rather than for Claude. Notes are
+for working practice and for the limits of this environment. Current notes:
+
 - [`.claude/memory/python-conventions.md`](.claude/memory/python-conventions.md) — keep
   Python minimal, in a uv project dir, no low-level fiddliness
 - [`.claude/memory/docs-style.md`](.claude/memory/docs-style.md) — reference docs are
@@ -35,7 +32,12 @@ notes:
 - [`.claude/memory/testing-limits.md`](.claude/memory/testing-limits.md) — Docker tests
   don't run in the sandbox, so binaries need running directly
 - [`.claude/memory/working-with-claude.md`](.claude/memory/working-with-claude.md) —
-  committing only on explicit instruction, and keeping formatting out of feature commits
+  committing only on explicit instruction, keeping formatting out of feature commits, and
+  why Claude cannot flash the device
+
+Lookout's own facts are in [`apps/lookout/docs/`](apps/lookout/docs/): `medallion.md` (the
+store), `architecture.md` (the pipeline), `device.md` (the M5 board and its GNSS receiver),
+`motis.md` (the Motis API and the German timetable feed).
 
 ## Running Claude
 

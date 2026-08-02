@@ -33,10 +33,17 @@ This is a clean-up slice focussed on consolidating and improving what we have in
     two deliberate departures from the skill: British spelling, and `data` as a mass noun
   * `completed-slices.md` was included in the pass by request — wording only, never the
     record of what was done, since `.claude/rules/slices.md` holds it append-only
-* [ ] extract knowledge out of claude-specific areas like .claude files and into explicit docs under docs:
-  * These should be written in a style that passes `writing-clearly-and-concisely` SKILL and in additionaly should be focussed on key facts in a dispassionate technical style
+* [x] extract knowledge out of claude-specific areas like .claude files and into explicit docs under docs:
+  * landed as three topic docs beside `medallion.md`: `device.md`, `motis.md`, `architecture.md`
+  * `docs/` is self-contained and makes no reference to the spikes, so they can be deleted
+    without losing anything; the pfaedle blocker went to `next-slices.md` as a parked slice,
+    and the Motis server facts were already in `tools/motis-server/Justfile`
+  * These should be written in a style that passes `writing-clearly-and-concisely` SKILL and additionaly should be focussed on key facts in a dispassionate technical style
   * This includes in .claude/memory:
     * m5-esp32-toolchain.md
     * lookout-architecture.md
     * motis-trips-api.md
-  * This documentation should additionally extract and remove details from "### Notes & Gotchas (what the on-device GNSS actually behaves like)" in next-slices.md
+  * This documentation should additionally extract and remove details from:
+    * "### Notes & Gotchas (what the on-device GNSS actually behaves like)" in next-slices.md
+    * the various READMEs in each spike
+  * The overall intent is to end up with one place where we record factual information we have discovered
