@@ -14,7 +14,7 @@ This is a clean-up slice focussed on consolidating and improving what we have in
   * `extract new`: does a new extract, using the defaults as of now
   * the Justfile default should be `extract backfill`, so bare `just bronze-extract` backfills the latest
 * [ ] do a clean local update in slice of all data to ensure we have a populated silver and gold area
-  * [ ] re-download extracts from OvertureMaps
+  * [x] re-download extracts from OvertureMaps
   * [ ] use summary cli to show what's in medallion now
 * [ ] update bronze:
   * [ ] bring down latest data saved from devices that is in redis and regenerate silver/gold
