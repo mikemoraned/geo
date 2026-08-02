@@ -230,3 +230,37 @@ it and render the result. New dependencies: `parquet` and `rand`/`rand_chacha` o
   release, though: the dev profile is 1.7× slower.
 - **Deferred**: showing whether a crossing is closing or receding — it needs judging on a live
   train, and there is no travel for a few weeks.
+
+
+## Sessionisation and Water crossings per session + Refactor to Medallion
+
+Started as "minimal predictor and evaluation framework", narrowed once the crow-flies predictor
+reached the M5 device under its own spike: the store refactor and the ground truth proved
+substantial in themselves, so the predictor and its evaluation moved to their own slices. What
+landed is a medallion-layered store, GPS traces sessionised into silver, and water crossings
+per session as ground truth. New crates: `medallion`, `medallion-py` (the `lookout_medallion`
+python module) and `session_crossings`; sqlite and `rusqlite` are gone, as are `enrich` and the
+one-shot backfills.
+
+- **Every layer moved to parquet under `data/medallion` in the repo**, so bronze is versioned
+  with the code that wrote it. Bronze is append-shaped and immutable, silver is GeoParquet 1.1
+  with WKB and a pre-projected metric column. A round-trip test holds silver readable by
+  DuckDB, SedonaDB and georust with no engine-specific handling.
+- **The layer is part of a dataset's type**, so replacing or sweeping a bronze partition is a
+  missing method rather than a runtime error. `medallion` is the only door into the silver
+  format for Rust and python alike, which is what makes the store's rules enforceable.
+- **Silver keeps every sample and flags the doubtful ones** — reported accuracy and implied
+  speed — rather than filtering, so each consumer draws its own line instead of inheriting one
+  baked into the store.
+- **A session's country is derived from where it starts**, not passed in per run, since the
+  projected CRS follows from it. Sessions and legs partition by country above their date.
+- **A reported session start absorbs the fix that precedes it**, after the first run showed
+  devices fixing position seconds before announcing; that artefact was a third of the sessions.
+- **The crossings pipeline stays a notebook and only its write is Rust**, so silver has one
+  writer implementation. A crossing is named by water, track and position along it — the first
+  two are not unique, since a meandering river meets one segment repeatedly.
+- **The ground truth is thin but real**: 165 recorded passes, each one crossing passed in one
+  session at the instant of the nearest sample, spread across 16 of the 31 sessions. Enough for
+  a first precision and recall number, not enough to read much into small differences. The
+  250 m match radius is where nearest-sample distances stop decaying and go flat, so more
+  ground truth needs more recording rather than a wider radius.
