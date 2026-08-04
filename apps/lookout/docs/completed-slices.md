@@ -19,12 +19,12 @@ was built and verified.
   refactor were not reached.
 - **Key constraint discovered:** the dev machine (Apple Silicon M3 MacBook Air) has no
   accelerometer — Apple Silicon dropped the Sudden Motion Sensor, so `DeviceMotionEvent`
-  never fires on the laptop. A localhost-only, laptop-only setup can validate transport
+  never fires on the laptop. A localhost-only, laptop-only setup can check transport
   and persistence but cannot source real motion data.
 - **Implication:** future slices needing real motion must use an external source —
   AirPods (`CMHeadphoneMotionManager`), an IMU game controller (native HID), or an
   iPhone/iPad over HTTPS (needs a cert or tunnel, the LAN work this slice deferred).
-  Recorded in `target.md` under Learned Constraints.
+  Recorded in `target.md` under Learnings.
 
 ## mike is on a train getting data
 
@@ -39,12 +39,13 @@ context for Geolocation / DeviceMotion, `wss://` websocket — no cert/LAN work 
   sends timestamped JSON samples over the websocket with a best-effort in-memory outbox
   flushed on reconnect (not persisted, drops oldest on overflow).
 - **Transport**: server `LPUSH`es samples onto an upstash redis list; pushing goes through
-  a `SampleSink` port (`RedisSink` for prod) so `/ws` is covered by a Docker-free integ
-  test. Redis is optional (log-only when unset) but fails loud when configured yet
-  unreachable. Added a `/version` endpoint + build-git-hash startup log for debugging.
+  a `SampleSink` port (`RedisSink` for production) so `/ws` is covered by a Docker-free
+  integration test. Redis is optional (log-only when unset) but fails loud when
+  configured yet unreachable. Added a `/version` endpoint + build-git-hash startup log
+  for debugging.
 - **New crates**: `shared` (the `Sample` model), `telemetry` (queue connect/drain, returns
-  a lossless `RawSample`), and a `recorder` cli. Deleted the rerun-as-archive plan.
-- **Recorder cli**: `view-latest` (non-destructive `LRANGE`) and `drain` (destructive
+  a lossless `RawSample`), and a `recorder` CLI. Deleted the rerun-as-archive plan.
+- **Recorder CLI**: `view-latest` (non-destructive `LRANGE`) and `drain` (destructive
   `BRPOP`) modes writing to SQLite — a lossless `raw(md5,json)` table plus per-sensor
   `accel`/`gps` tables, all `INSERT OR IGNORE`. Per-sensor tables are a rebuildable
   derivation of raw.
@@ -56,7 +57,7 @@ context for Geolocation / DeviceMotion, `wss://` websocket — no cert/LAN work 
 - **Secrets**: bobby's 1Password pattern — checked-in `deploy/*.env` hold only `op://`
   references; local runs wrap in `op run`, fly deploy pushes resolved values via
   `fly secrets set`. No secret values committed.
-- Proved on a real journey: 3 devices, 292 accel + 163 gps samples drained to
+- Proved on a real journey: 3 devices, 292 accel + 163 GPS samples drained to
   `data/lookout.sqlite`, converted to `.rrd` (`rerun rrd verify` passes), and confirmed
   visible in the rerun viewer.
 
@@ -73,7 +74,7 @@ views. The pre-journey dry run was deliberately skipped ("risk it on the day").
   parse. The `shared` crate was reorganised into `message` / `sensor` / `session` modules.
 - **Session metadata**: a new `StartSession` message (v1) lets a device announce its
   class (iPhone / iPad / laptop, classified client-side from `navigator`) at record time.
-  It's interpreted into a new `device` table keyed on `device_id`; sensor rows seed a
+  It is interpreted into a new `device` table keyed on `device_id`; sensor rows seed a
   minimal `unknown` placeholder so every reading has a device row to join to.
 - **Capture survival (frontend)**: screen wake lock re-acquired on visibility change
   (surfaced in the UI), an outbox persisted to `localStorage` and re-flushed on startup,
@@ -94,7 +95,7 @@ views. The pre-journey dry run was deliberately skipped ("risk it on the day").
 
 Overlaid the Overture rail network onto the device tracks in rerun, to see where journeys
 correspond to transport segments. A new `enrich` CLI derives per-`(device, UTC day)`
-bounding boxes from the archive's gps fixes, fetches the intersecting Overture rail data
+bounding boxes from the archive's GPS fixes, fetches the intersecting Overture rail data
 live from public S3, and persists it into the same SQLite archive; the Python visualiser
 then logs it as a static map backdrop.
 
@@ -103,7 +104,7 @@ then logs it as a static map backdrop.
   a git dep) — chosen over duckdb to grow non-trivial spatial work in-process later.
 - **Spatial pruning is essential**: filtering with `ST_Intersects` against a single
   `MULTIPOLYGON` of all bbox envelopes lets SedonaDB prune GeoParquet row groups by their
-  bbox covering — ~1m vs ~13min for a numeric bbox filter that barely prunes. Geometry is
+  bbox covering — ~1 min vs ~13 min for a numeric bbox filter that barely prunes. Geometry is
   read out as WKB via `ST_AsBinary`.
 - **Rail only**: keep `subtype = 'rail'` segments and the connectors they reference (ids
   `UNNEST`ed from the segments), excluding `tram`-class rail (and its connectors) via a
@@ -116,7 +117,7 @@ then logs it as a static map backdrop.
   with shapely and flipping stored `lon lat` to rerun's `(lat, lon)`. A shared transport map
   pane joins the per-device tiles; an un-enriched archive still visualises.
 - **`--near <degrees>` (hack)**: optionally restrict segments to those within a raw planar
-  degrees distance of a gps fix — a rough cut, not true ground distance (which would need
+  degrees distance of a GPS fix — a rough cut, not true ground distance (which would need
   reprojecting to a metric CRS); caveat noted in the help and code.
 
 ## getting a second source of position data from Motis
@@ -134,9 +135,9 @@ with a GTFS-RT feed to make that interpolation delay-aware.
   bounding box; a `store` appends raw segments to a duplication-allowed `motis.sqlite`.
 - **Capture loop** (`motis_poll`): reads recent GPS off redis non-destructively, builds a
   buffered bbox, queries Motis, filters to rail modes, resolves each trip via `/trip` for
-  agency + train number, and appends segments. **Ingest** (`motis_ingest`) dedups on the
-  scheduled leg, decodes polylines to WKB linestrings, and writes a derived `train_segment`
-  table into `lookout.sqlite`. **Visualise** interpolates each train along its line by
+  agency + train number, and appends segments. **Ingest** (`motis_ingest`) deduplicates
+  on the scheduled leg, decodes polylines to WKB linestrings, and writes a derived
+  `train_segment` table into `lookout.sqlite`. **Visualise** interpolates each train along its line by
   realtime-corrected timing into moving, labelled, mode-coloured dots sharing the GPS view.
 - **Moved the server dataset from gtfs.de free to DELFI** (a plain public URL swap, static
   then RT feed). This fixed the core data gap: DELFI carries correct `route_type`, so `mode`
@@ -159,11 +160,11 @@ outputs export to GeoParquet and to uncompressed native GeoArrow for kepler.gl.
 
 - Progressed from a four-state extract to all of Germany; added deduplication to collapse the
   many redundant crossings down to roughly one per physical track × water body; and added a filter
-  to drop crossings the train can't actually see (tunnels, non-running track).
+  to drop crossings the train cannot see (tunnels, non-running track).
 - Built a small bbox test-case harness with a per-case viewer (linking to the OvertureMaps
-  explorer) to validate counts against hand-checked truth — which caught a wrong assumption.
+  explorer) to check counts against hand-checked truth — which caught a wrong assumption.
 - **The durable learnings — where the real difficulty lay (deduplication is water-side + spatial,
-  not rail-side; a 2D intersection isn't "visible water"; Overture's representation quirks) — are
+  not rail-side; a 2D intersection is not "visible water"; Overture's representation quirks) — are
   captured in `docs/target.md` under Learnings.**
 
 ## Spikes on Device Support
@@ -211,7 +212,7 @@ it, and render the result. New dependencies: `parquet` and `rand`/`rand_chacha` 
   5,749 crossings, and one pass yields both the nearest few for the screen and everything
   within a radius for the predictor. The budget is the gap between fixes — one a second, and a
   scan must finish before the next arrives. This takes **~4.7 ms of that second**, so a k-d
-  tree or anything more advanced isn't needed.
+  tree or anything more advanced is not needed.
 - **The device and the notebook agree** about which crossings are nearest Dresden and how far,
   to 0.27 m over 2.3 km, and both count the same number within 5 km — the stricter check, since
   a membership question flips where a distance merely wobbles. `f32` coordinates are enough.
@@ -237,7 +238,7 @@ reached the M5 device under its own spike: the store refactor and the ground tru
 substantial in themselves, so the predictor and its evaluation moved to their own slices. What
 landed is a medallion-layered store, GPS traces sessionised into silver, and water crossings
 per session as ground truth. New crates: `medallion`, `medallion-py` (the `lookout_medallion`
-python module), and `session_crossings`; sqlite and `rusqlite` are gone, as are `enrich` and the
+Python module), and `session_crossings`; SQLite and `rusqlite` are gone, as are `enrich` and the
 one-shot backfills.
 
 - **Every layer moved to parquet under `data/medallion` in the repo**, so bronze is versioned
@@ -246,7 +247,7 @@ one-shot backfills.
   DuckDB, SedonaDB, and georust with no engine-specific handling.
 - **The layer is part of a dataset's type**, so replacing or sweeping a bronze partition is a
   missing method rather than a runtime error. `medallion` is the only door into the silver
-  format for Rust and python alike, which is what makes the store's rules enforceable.
+  format for Rust and Python alike, which is what makes the store's rules enforceable.
 - **Silver keeps every sample and flags the doubtful ones** — reported accuracy and implied
   speed — rather than filtering, so each consumer draws its own line instead of inheriting one
   baked into the store.
