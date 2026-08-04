@@ -40,8 +40,8 @@ This is a clean-up slice focussed on consolidating and improving what we have in
   /plugin marketplace add rnorth/technical-writing
   /plugin install technical-writing@technical-writing
   ```
-* [ ] do a pass over docs with `technical-writing@technical-writing` skill
-* [ ] ensure this `technical-writing@technical-writing` skill is always enabled
+* [x] do a pass over docs with `technical-writing@technical-writing` skill
+* [ ] ensure this `technical-writing@technical-writing` skill is always enabled and used
 * [x] extract knowledge out of claude-specific areas like .claude files and into explicit docs under docs:
   * landed as three topic docs beside `medallion.md`: `device.md`, `motis.md`, `architecture.md`
   * `docs/` is self-contained and makes no reference to the spikes, so they can be deleted
