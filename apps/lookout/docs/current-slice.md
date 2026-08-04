@@ -29,4 +29,14 @@ The Event type given to the state-machine can be same as given to the CRUX shell
 
 For the purposes of producing a rerun simulation it may be easier to wrap and expose a state-machine rather than a full CRUX shell.
 
-We should split the crates into a core area (current `crates` dir) and create a new `platform` sub-dir where `m5plus` and `rerun` can live. The esp platforms will need to be their own workspaces as they can't compile as part of the main workspace, but `rerun` probably can. 
+We should split the crates into a core area (current `crates` dir) and create a new `platform` sub-dir where `m5plus` and `rerun` can live. The esp platforms will need to be their own workspaces as they can't compile as part of the main workspace, but `rerun` probably can.
+
+### Tasks
+
+We probably need to break this up into roughly these steps:
+1. Get same functionality working as in `apps/lookout/spikes/m5/spike7-battery-and-trend` but in a productionised form following the `platform` setup.
+  * note that now may be a good time to try out some of the higher-level crates we found for managing the M5 e.g. when looking for battery level exposing code
+2. Extract a `rerun` platform
+3. Delete all stuff no longer needed:
+  * `visualise` stuff can go
+  * so can all the `m5` spikes
