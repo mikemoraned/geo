@@ -26,9 +26,9 @@ DELFI's nationwide *Sollfahrplandaten* (`opendata-oepnv.de`, CC-BY-4.0), not the
 free feed. What it gives that gtfs.de did not:
 
 - **`route_type` is correct (101/102), so `mode` classifies.** Long-distance comes back as
-  `HIGHSPEED_RAIL`/`LONG_DISTANCE`, regional as `REGIONAL_RAIL`. gtfs.de typed all rail as
-  `route_type=2`, so every train reported `REGIONAL_RAIL` and classification had to go via
-  the agency. `mode` alone now separates an ICE from an S-Bahn.
+  `HIGHSPEED_RAIL`/`LONG_DISTANCE`, regional as `REGIONAL_RAIL`. gtfs.de types all rail as
+  `route_type=2`, so every train reports `REGIONAL_RAIL` and classification has to go via the
+  agency. `mode` alone separates an ICE from an S-Bahn.
 - **Train numbers exist, in `trip_short_name`.**
 
 What it still does not give:

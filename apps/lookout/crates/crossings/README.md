@@ -64,7 +64,7 @@ static POINTS: &Aligned<[u8]> = &Aligned(*include_bytes!("crossings.pointset"));
 `f32` degrees resolve to **≤0.21 m** over the German crossings (mean 0.11 m) — far under what
 the receiver resolves, and under the metre-scale wander a stationary fix shows even in good
 conditions. It also suits the ESP32's single-precision FPU, where `f64` is emulated in
-software. `i32` at 1e-7° was the alternative, at ~1 cm; the extra precision buys nothing
+software. `i32` at 1e-7° would resolve to ~1 cm, and that extra precision buys nothing
 against a GPS error budget measured in metres.
 
 ## Ids name a crossing, not a row
