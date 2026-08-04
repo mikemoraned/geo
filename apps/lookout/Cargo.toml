@@ -80,6 +80,7 @@ pyo3-arrow = "0.16"
 crossings = { path = "crates/crossings" }
 medallion = { path = "crates/medallion" }
 model = { path = "crates/model" }
+predictor = { path = "crates/predictor" }
 recorder = { path = "crates/recorder" }
 session_crossings = { path = "crates/session_crossings" }
 shared = { path = "crates/shared" }

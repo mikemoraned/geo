@@ -1,0 +1,25 @@
+# The crate the device and the simulation share, so it stays free of anything that cannot
+# cross to Xtensa: no `medallion`, no `model`, and nothing that reads the store.
+[package]
+name = "predictor"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+# Spelled out rather than inherited, because the device build needs a feature off that the
+# workspace leaves on — chrono's clock reads a timezone database that has no business here —
+# and a member cannot turn off a default the workspace kept.
+chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+# Positions are georust's `Point`, not a pair of coordinate types of our own. `geo-types`
+# alone rather than `geo`: the sample needs the type, and the algorithms come later where
+# they are used.
+geo-types = { workspace = true, features = ["serde"] }
+nmea = "0.7"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

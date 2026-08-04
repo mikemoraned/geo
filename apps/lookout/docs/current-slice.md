@@ -85,12 +85,18 @@ than the predictor.
 
 ### 1. The normalised sample
 
-- [ ] Define the sample type in a core crate, with newtypes for the coordinates as spike 7
-      already has, and `Option` for every field a receiver leaves out.
-- [ ] Put spike 7's NMEA accumulation behind a parser that emits samples, keeping its
+- [x] Define the sample type in a core crate, with newtypes for the coordinates as spike 7
+      already has, and `Option` for every field a receiver leaves out. The crate is
+      `crates/predictor`, and it will hold the state machine and the core too. **Done
+      without the newtypes**: a position is `geo_types::Point<f64>`, since georust already
+      has the type and spike 7's `Latitude`/`Longitude` were ours to maintain for nothing.
+      The range check they carried stays, as the function that builds a position.
+- [x] Put spike 7's NMEA accumulation behind a parser that emits samples, keeping its
       captured-sentence tests — the spliced sentence, the bad checksum, and the stationary
-      RMC with no course.
-- [ ] Give it a construction path from `session_sample`'s columns, so the python side builds
+      RMC with no course. A sample needs a date, which only RMC carries, so a GGA before the
+      first RMC produces nothing; and a sentence adding nothing to what is known produces
+      nothing, which is what keeps a dozen sentences a second from becoming a dozen samples.
+- [x] Give it a construction path from `session_sample`'s columns, so the python side builds
       samples from the store without going through NMEA.
 
 ### 2. The predictor state machine
@@ -119,6 +125,10 @@ Write this shell fresh from an esp-idf project template rather than lifting spik
 spikes grew one addition at a time and carry that shape; the facts they established are in
 [device.md](device.md) and are what to build from — power hold on GPIO4, panel offset, GNSS
 RX pin, stack sizing, and UART ring buffer.
+
+This is where `predictor` is first compiled for Xtensa. Nothing before it builds for the
+device, so a dependency that cannot cross surfaces here. `geo-types` is the one that has not
+already run on the board.
 
 - [ ] Generate the project from the esp-idf template into its own workspace, and get it
       booting with the power hold set.
