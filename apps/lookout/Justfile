@@ -105,9 +105,9 @@ silver-sessionise *args:
     cargo run --release -p recorder --bin sessionise -- {{args}}
 
 # Derive both crossing datasets: the water crossings from the Overture extract, then the
-# ones each recorded session passed. The first is the slow half — the best part of an hour —
-# and only changes when the extract does, so run `silver-session-crossings` alone after a
-# drain. Args reach the session half only; see `silver-water-crossings` for why.
+# ones each recorded session passed. The first is the slow half, and only changes when the
+# extract does, so run `silver-session-crossings` alone after a drain. Args reach the session
+# half only; see `silver-water-crossings` for why.
 silver-crossings *args:
     just silver-water-crossings
     just silver-session-crossings {{args}}

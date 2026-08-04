@@ -38,9 +38,9 @@ Two properties of that graph matter more than the order:
   crossings.** A session and a train leg are each placed in a country, and the country
   decides the projected CRS their geometry is written in. The country areas come from the
   newest extract, so a store without one cannot derive silver at all.
-- **The crossings half is the slow half.** Intersecting a country's rail against its water
-  takes the best part of an hour, and its result changes only when the extract or the
-  collapse tuning does. Re-deriving sessions after a drain does not require re-deriving it.
+- **The crossings half is the slow half.** Intersecting a country's rail against its water is
+  the longest step in a rebuild, and its result changes only when the extract or the collapse
+  tuning does. Re-deriving sessions after a drain does not require re-deriving it.
 
 ## Languages
 
