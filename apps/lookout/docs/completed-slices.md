@@ -263,3 +263,33 @@ one-shot backfills.
   a first precision and recall number, not enough to read much into small differences. The
   250 m match radius is where nearest-sample distances stop decaying and go flat, so more
   ground truth needs more recording rather than a wider radius.
+
+## Bring data up-to-date + clarify documentation
+
+A clean-up slice. Refreshed every layer of the store from current sources, then made the
+documentation state what is true now rather than how it came to be. No new crates.
+
+- **Two additions to the store's CLIs.** `just summarise` reports what each bronze, silver,
+  and gold dataset holds, with `--partitions` for the breakdown. `extract` split into
+  `backfill`, which re-fetches an existing extract's release, country, and window, and `new`,
+  with the Justfile defaulting to backfilling the latest.
+- **The store was rebuilt end to end**: device data drained from redis, Overture extracts
+  re-taken against the 2026-07-22.0 release, and silver and gold re-derived over both.
+- **Both prose skills are now always-on rules** in the repo `CLAUDE.md` —
+  `writing-clearly-and-concisely` for the general principles, `technical-writing` for what
+  technical text adds — with three recorded departures: British spelling, `data` as a mass
+  noun, and permission-sense `may`, which the house style uses to state what the rules allow.
+- **Claude-specific notes became durable docs.** `device.md`, `motis.md`, and
+  `architecture.md` now sit beside `medallion.md`, absorbing three `.claude/memory` notes, the
+  spike READMEs, and the GNSS gotchas from `next-slices.md`. `docs/` no longer refers to the
+  spikes, so they can go.
+- **`medallion.md` separates its rules from the alternatives.** The reference material states
+  only what the store does. A table format, parquet's native geometry types, and silver
+  history retention moved to an "Options considered or deferred" section, each with what
+  would justify revisiting it.
+- **Reference docs dropped their own history.** Retellings of past wrong diagnoses came out,
+  and `.claude/memory/docs-style.md` gained the rule behind that: state what holds now, and
+  leave the discovery story to the slice record.
+- **Checking the docs against the code caught two errors**: the crossings README claimed the
+  packed point set lives in RAM when it is `static` in rodata, and the UK slice still planned
+  country partitioning that the medallion refactor had already landed.
