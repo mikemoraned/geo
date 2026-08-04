@@ -5,6 +5,12 @@
 //! taken, from which release, and over what window. The rows themselves gain a single
 //! column, `extract_id`, joining them back to that manifest row.
 //!
+//! An extraction can also be taken again from what the manifest recorded, under the id it
+//! was first taken under: a release is immutable, so the same release read again over the
+//! same window is the same rows. That is how a store holding the manifest but not the rows
+//! is filled, and it is a different operation from taking a new extract, which is why the
+//! two are separate entry points rather than one with a flag.
+//!
 //! Every theme goes under one id in a single extraction, because they are read together:
 //! the crossings derivation joins rail to water, and clips both against the country
 //! boundary the window was measured from. Splitting them across extractions would let a
@@ -20,7 +26,7 @@ use std::str::FromStr;
 use arrow::array::{Array, Float64Array};
 use chrono::{DateTime, Utc};
 use geo_types::{Coord, Rect};
-use medallion::{Country, PartitionValue, Root};
+use medallion::{Country, PartitionValue, Query, Root};
 use model::ExtractManifestRow;
 
 use crate::overture::{Overture, OvertureError, OvertureType};
@@ -32,6 +38,9 @@ const EXCLUDED_CLASSES: &[&str] = &["tram"];
 /// The format an id generated from an instant takes: compact UTC, so ids sort
 /// chronologically and carry no character a path or a column name would object to.
 const ID_FORMAT: &str = "%Y%m%dT%H%M%SZ";
+
+/// Every extraction a store has recorded, newest first.
+const RECORDED: &str = "SELECT * FROM extract_manifest ORDER BY extracted_at DESC";
 
 /// Identifies one extraction, and with it one immutable set of extracted rows.
 ///
@@ -69,11 +78,38 @@ impl Display for ExtractId {
     }
 }
 
+/// The extractions a store has recorded, newest first.
+pub async fn recorded(root: &Root) -> Result<Vec<ExtractManifestRow>, ExtractError> {
+    let query = Query::new(root.clone());
+    query.register_by_name(model::EXTRACT_MANIFEST).await?;
+    Ok(query.rows(RECORDED).await?)
+}
+
+/// What the newest extraction took.
+pub async fn newest(root: &Root) -> Result<ExtractManifestRow, ExtractError> {
+    recorded(root)
+        .await?
+        .into_iter()
+        .next()
+        .ok_or(ExtractError::NoExtract)
+}
+
+/// What the extraction with `id` took.
+pub async fn recorded_as(root: &Root, id: &ExtractId) -> Result<ExtractManifestRow, ExtractError> {
+    recorded(root)
+        .await?
+        .into_iter()
+        .find(|recorded| recorded.extract_id == id.to_string())
+        .ok_or_else(|| ExtractError::NoSuchExtract { id: id.clone() })
+}
+
 /// Failure taking an extract.
 #[derive(Debug, thiserror::Error)]
 pub enum ExtractError {
     #[error("querying Overture: {0}")]
     Overture(#[from] OvertureError),
+    #[error("reading the manifest: {0}")]
+    Query(#[from] medallion::QueryError),
     #[error("partitioning the extract: {0}")]
     Path(#[from] medallion::PathError),
     #[error("writing the extract: {0}")]
@@ -82,6 +118,31 @@ pub enum ExtractError {
     Append(#[from] medallion::AppendError),
     #[error("{country} has no boundary in release {release}, so its window is unknown")]
     NoCountryBoundary { country: Country, release: String },
+    #[error("no extract has been recorded, so there is none to take again")]
+    NoExtract,
+    #[error("no extract {id} in the manifest")]
+    NoSuchExtract { id: ExtractId },
+    #[error("extract {id} recorded country {country}, which the store has no zone for")]
+    UnknownCountry {
+        id: ExtractId,
+        country: String,
+        #[source]
+        source: medallion::UnknownCountry,
+    },
+    #[error(
+        "extract {id} already holds rows in the store; an extract is immutable, so taking \
+         it again would double its rows rather than replace them"
+    )]
+    AlreadyPresent { id: ExtractId },
+    #[error(
+        "extract {id} was taken from release {recorded}, but this reads {opened}; a \
+         re-fetch has to read the release the extract was taken from"
+    )]
+    WrongRelease {
+        id: ExtractId,
+        recorded: String,
+        opened: String,
+    },
 }
 
 /// What one extraction produced.
@@ -114,6 +175,66 @@ impl<'a> Extractor<'a> {
         country: Country,
         at: DateTime<Utc>,
     ) -> Result<Extraction, ExtractError> {
+        self.register_themes().await?;
+        let window = self.country_window(country).await?;
+        let rows = self.write_types(&id, country, &window, at).await?;
+        self.write_manifest(&id, country, at, &window).await?;
+
+        Ok(Extraction { id, window, rows })
+    }
+
+    /// Take a recorded extraction again: the same release, country and window, written back
+    /// under the id it was taken under.
+    ///
+    /// This is how a store that has the manifest but not the rows is filled — the rows are
+    /// re-derivable from what the manifest records, since a release never changes. No
+    /// manifest row is written: the one being read is already the record of this extract,
+    /// and it names the instant the extraction was originally taken.
+    ///
+    /// An extract that already holds rows is not re-fetched. Extracts are immutable, so
+    /// there is nothing here that could replace them, and writing again would append a
+    /// second copy of every row.
+    pub async fn backfill(
+        &self,
+        recorded: &ExtractManifestRow,
+        at: DateTime<Utc>,
+    ) -> Result<Extraction, ExtractError> {
+        let id = ExtractId::new(recorded.extract_id.clone())?;
+        let country = recorded
+            .country
+            .parse()
+            .map_err(|source| ExtractError::UnknownCountry {
+                id: id.clone(),
+                country: recorded.country.clone(),
+                source,
+            })?;
+        let window = window_of(recorded);
+
+        let opened = self.overture.release().id();
+        if opened != recorded.release {
+            return Err(ExtractError::WrongRelease {
+                id,
+                recorded: recorded.release.clone(),
+                opened: opened.to_string(),
+            });
+        }
+        if self
+            .root
+            .dataset(model::OVERTURE_EXTRACT)
+            .for_id(&id)?
+            .holds_files()
+        {
+            return Err(ExtractError::AlreadyPresent { id });
+        }
+
+        self.register_themes().await?;
+        let rows = self.write_types(&id, country, &window, at).await?;
+
+        Ok(Extraction { id, window, rows })
+    }
+
+    /// Register every Overture type an extraction reads.
+    async fn register_themes(&self) -> Result<(), ExtractError> {
         for (overture_type, table) in [
             (OvertureType::DIVISION_AREA, "division_area"),
             (OvertureType::DIVISION, "division"),
@@ -123,9 +244,19 @@ impl<'a> Extractor<'a> {
         ] {
             self.overture.register(overture_type, table).await?;
         }
+        Ok(())
+    }
 
-        let window = self.country_window(country).await?;
-        let in_window = bbox_overlaps(&window);
+    /// Write every type the crossings pipeline reads, for one country over one window,
+    /// under a single id.
+    async fn write_types(
+        &self,
+        id: &ExtractId,
+        country: Country,
+        window: &Rect<f64>,
+        at: DateTime<Utc>,
+    ) -> Result<Vec<(OvertureType, usize)>, ExtractError> {
+        let in_window = bbox_overlaps(window);
         let of_country = format!("country = '{}'", country.code());
         let rail = format!(
             "subtype = 'rail' AND {class} AND {in_window}",
@@ -148,9 +279,7 @@ impl<'a> Extractor<'a> {
                 referenced_connectors(&in_window, &rail),
             ),
         ] {
-            let written = self
-                .write(&id, at, overture_type, table, &predicate)
-                .await?;
+            let written = self.write(id, at, overture_type, table, &predicate).await?;
             tracing::info!(
                 theme = overture_type.theme,
                 r#type = overture_type.name,
@@ -160,9 +289,7 @@ impl<'a> Extractor<'a> {
             rows.push((overture_type, written));
         }
 
-        self.write_manifest(&id, country, at, &window).await?;
-
-        Ok(Extraction { id, window, rows })
+        Ok(rows)
     }
 
     /// Extract one type's rows matching `predicate` into the extract, verbatim but for the
@@ -255,6 +382,20 @@ impl<'a> Extractor<'a> {
     }
 }
 
+/// The window a manifest row records, as the rectangle the predicates are built from.
+fn window_of(recorded: &ExtractManifestRow) -> Rect<f64> {
+    Rect::new(
+        Coord {
+            x: recorded.min_lon,
+            y: recorded.min_lat,
+        },
+        Coord {
+            x: recorded.max_lon,
+            y: recorded.max_lat,
+        },
+    )
+}
+
 /// A predicate keeping rows whose Overture `bbox` overlaps `window`. Overture stores the
 /// envelope on every row, so this prunes row groups before any geometry is decoded.
 fn bbox_overlaps(window: &Rect<f64>) -> String {
@@ -300,10 +441,130 @@ fn class_filter() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::overture::Release;
     use chrono::TimeZone;
 
     fn window() -> Rect<f64> {
         Rect::new(Coord { x: 5.8, y: 47.2 }, Coord { x: 15.1, y: 55.1 })
+    }
+
+    fn manifest_row(id: &str, hour: u32, release: &str) -> ExtractManifestRow {
+        ExtractManifestRow {
+            extract_id: id.to_string(),
+            extracted_at: Utc.with_ymd_and_hms(2026, 7, 27, hour, 0, 0).unwrap(),
+            release: release.to_string(),
+            country: Country::Germany.code().to_string(),
+            min_lon: window().min().x,
+            min_lat: window().min().y,
+            max_lon: window().max().x,
+            max_lat: window().max().y,
+        }
+    }
+
+    async fn store_recording(rows: &[ExtractManifestRow]) -> (tempfile::TempDir, Root) {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        for row in rows {
+            root.rows_of::<ExtractManifestRow>()
+                .append_rows(row.extracted_at, std::slice::from_ref(row))
+                .await
+                .expect("record the extraction");
+        }
+        (tmp, root)
+    }
+
+    /// A recorded extraction comes back as it was written, which is what makes an extract
+    /// re-fetchable from the manifest alone.
+    #[tokio::test]
+    async fn the_newest_recorded_extraction_is_the_last_one_taken() {
+        let (_tmp, root) = store_recording(&[
+            manifest_row("20260727T090000Z", 9, "2026-05-21.0"),
+            manifest_row("20260727T193628Z", 19, "2026-06-17.0"),
+        ])
+        .await;
+
+        let newest = newest(&root).await.expect("the newest extraction");
+
+        assert_eq!(newest, manifest_row("20260727T193628Z", 19, "2026-06-17.0"));
+    }
+
+    #[tokio::test]
+    async fn an_extraction_can_be_read_back_by_the_id_it_was_taken_under() {
+        let (_tmp, root) = store_recording(&[
+            manifest_row("20260727T090000Z", 9, "2026-05-21.0"),
+            manifest_row("20260727T193628Z", 19, "2026-06-17.0"),
+        ])
+        .await;
+        let wanted = "20260727T090000Z".parse().expect("a valid id");
+
+        let recorded = recorded_as(&root, &wanted).await.expect("the extraction");
+
+        assert_eq!(recorded.release, "2026-05-21.0");
+    }
+
+    #[tokio::test]
+    async fn an_id_no_extraction_was_taken_under_is_not_found() {
+        let (_tmp, root) =
+            store_recording(&[manifest_row("20260727T193628Z", 19, "2026-06-17.0")]).await;
+        let wanted = "20260101T000000Z".parse().expect("a valid id");
+
+        let err = recorded_as(&root, &wanted).await;
+
+        assert!(matches!(err, Err(ExtractError::NoSuchExtract { .. })));
+    }
+
+    /// A store nothing has been extracted into has no manifest to read, and so nothing to
+    /// take again.
+    #[tokio::test]
+    async fn a_store_with_no_manifest_has_no_extraction_to_take_again() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        let err = newest(&Root::new(tmp.path())).await;
+
+        assert!(matches!(
+            err,
+            Err(ExtractError::Query(
+                medallion::QueryError::NoSuchDataset { .. }
+            ))
+        ));
+    }
+
+    /// Re-fetching an extract whose rows are already there would append a second copy of
+    /// every one of them: bronze has no replace, so this is refused rather than doubled.
+    #[tokio::test]
+    async fn an_extract_already_in_the_store_is_not_taken_again() {
+        let recorded = manifest_row("20260727T193628Z", 19, "2026-06-17.0");
+        let (_tmp, root) = store_recording(std::slice::from_ref(&recorded)).await;
+        let extract = root
+            .dataset(model::OVERTURE_EXTRACT)
+            .for_id(&recorded.extract_id)
+            .unwrap()
+            .partition("theme", "base")
+            .unwrap();
+        std::fs::create_dir_all(extract.dir()).unwrap();
+        std::fs::write(extract.dir().join("already.parquet"), b"rows").unwrap();
+        let overture = Overture::open(Release::published(&recorded.release));
+
+        let err = Extractor::new(&overture, &root)
+            .backfill(&recorded, Utc::now())
+            .await;
+
+        assert!(matches!(err, Err(ExtractError::AlreadyPresent { .. })));
+    }
+
+    /// An extract's id names rows taken from one release, so filling it from a different
+    /// release would put rows under an id claiming provenance they do not have.
+    #[tokio::test]
+    async fn an_extract_is_not_filled_from_a_release_it_was_not_taken_from() {
+        let recorded = manifest_row("20260727T193628Z", 19, "2026-06-17.0");
+        let (_tmp, root) = store_recording(std::slice::from_ref(&recorded)).await;
+        let overture = Overture::open(Release::published("2026-05-21.0"));
+
+        let err = Extractor::new(&overture, &root)
+            .backfill(&recorded, Utc::now())
+            .await;
+
+        assert!(matches!(err, Err(ExtractError::WrongRelease { .. })));
     }
 
     #[test]

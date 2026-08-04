@@ -5,6 +5,7 @@
 #     "folium==0.20.0",
 #     "geopandas==1.1.4",
 #     "mapclassify==2.10.0",
+#     "marimo>=0.23.16",
 #     "matplotlib==3.11.1",
 # ]
 # ///

@@ -16,6 +16,14 @@ Keep mechanical churn out of feature commits. When `cargo fmt` would touch files
 never went near, stash the work, commit the formatting on its own, then restore and
 continue.
 
+## Flashing the M5 device
+
+Claude cannot open the serial port: every `/dev/cu.*` open returns `EPERM` from its process
+tree, including with the Bash sandbox disabled, so it is a session-level restriction with no
+workaround. Build and verify in-session, then hand over `! cd <spike-dir> && just flash` and
+read the boot log pasted back. Plan device work around that: put anything checkable into the
+startup log, so one flash round-trip answers the question.
+
 ## Spikes
 
 Throwaway code written to answer a question — does this library accept this shape, does

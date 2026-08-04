@@ -56,7 +56,7 @@ exactly the logic worth testing off-device.
 **Status: avoided by pinning `crux_core = "=0.16.2"`. Cause unidentified.**
 
 On `crux_core` 0.19 the device reboots on its own between 4 seconds and 7 minutes after boot,
-with or without a client connected. Spike 3 — the same core, display and GNSS code without
+with or without a client connected. Spike 3 — the same core, display, and GNSS code without
 Bluetooth — runs indefinitely, so enabling BLE is what brings it out.
 
 On 0.16.2 the same spike ran 30 minutes with a client connected *and* a real fix, so both the
@@ -83,7 +83,7 @@ posix_memalign / _DoubleExceptionVector, with crossbeam Receiver::try_recv on to
 
 The first is a null pointer dereference in a context crux has just constructed; the second is
 runaway recursion through the allocator. `App::update` returns a `Command` for every event, and
-each one allocates channels, an `Arc` and a slab entry — so this path runs constantly.
+each one allocates channels, an `Arc`, and a slab entry — so this path runs constantly.
 
 **Ruled out by measurement, not argument:**
 
@@ -97,10 +97,10 @@ each one allocates channels, an `Arc` and a slab entry — so this path runs con
 | Allocation churn | Cutting events ~15x (only `RMC`/`GGA` reach the core) did not stop it |
 | Model on the fragmented heap | Same crash with the core un-boxed, back on main's stack as in spike 3 |
 
-Guesses that were confidently wrong along the way, recorded so they are not re-run: logging
-from GATT callbacks, PSRAM, allocation volume, and the boxed model. Each looked plausible and
-each was contradicted by the next crash. The version pin was the fifth hypothesis and the
-first that held.
+Guesses confidently wrong along the way, recorded so they are not re-run: logging from GATT
+callbacks, PSRAM, allocation volume, and the boxed model. Each looked plausible and each was
+contradicted by the next crash. The version pin was the fifth hypothesis and the first that
+held.
 
 If the pin ever has to move — a later spike wanting newer crux — the untried options are
 bisecting 0.17/0.18 to find the change, pre-`Command` crux 0.10 (a real port: custom
@@ -109,28 +109,17 @@ forfeit the shared-core argument that put it here.
 
 ## Notes
 
-- **NimBLE, not Bluedroid.** `esp32-nimble` needs `CONFIG_BT_NIMBLE_ENABLED=y` *and*
-  `CONFIG_BT_BLUEDROID_ENABLED=n` in `sdkconfig.defaults`; Bluedroid is the ESP-IDF default,
-  and leaving it on builds the wrong host stack.
-- **Never log from a GATT callback.** They run on the NimBLE **host** task, whose default
-  stack is 4096, and Debug-formatting the connection descriptor through the ESP logger
-  overflows it. The result is an occasional `Double exception` with a corrupted backtrace —
-  and because the corruption lands wherever the stack happens to overrun into, one dump
-  blamed `memcpy` reading rodata and reported `EXCCAUSE 2` (an instruction fetch from a data
-  address), which looks nothing like a stack problem.
+The rules these produced — NimBLE rather than Bluedroid, never logging from a GATT callback,
+and sizing the main task's stack from a measurement — are in
+[`docs/device.md`](../../../docs/device.md). What is worth keeping here is why the callback
+overflow took so long to find.
 
-  Two things made this hard to pin down. Raising *main's* stack does nothing, because main is
-  a different task. And it appeared to crash while idle, which seemed to rule the callbacks
-  out — but the host or the BLE explorer retries connections in the background, so the
-  callbacks were firing without anyone touching anything.
+Raising *main's* stack does nothing, because main is a different task. And it appeared to
+crash while idle, which seemed to rule the callbacks out — but the host or the BLE explorer
+retries connections in the background, so the callbacks were firing without anyone touching
+anything. The corruption lands wherever the stack happens to overrun into, so one dump
+blamed `memcpy` reading rodata and reported `EXCCAUSE 2`, an instruction fetch from a data
+address, which looks nothing like a stack problem.
 
-  The fix is both halves: `CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=8192`, and callbacks that do
-  nothing but an atomic store, with the main loop doing the reporting. Measured afterwards,
-  the callback task uses ~1.7KB of its 8192 — so the logging really was the bulk of it.
-- **Measure stacks, don't estimate them.** `uxTaskGetStackHighWaterMark(null)` reports the
-  calling task's unused bytes; the shell logs it for main at startup and for the NimBLE host
-  task from the callback. Main uses ~26KB, which is why spike 3's 32768 was marginal at only
-  ~6.5KB spare.
-- **Main task stack raised again**, to 49152. Spike 3 left only ~6.5KB spare at 32768 and this
-  adds the BLE handles on top. The startup log reports what was actually used — worth reading
-  rather than guessing, since an overflow shows up as a corrupt pointer somewhere unrelated.
+Measured after the fix, the callback task uses ~1.7 KB of its 8192 — so the logging really
+was the bulk of it.

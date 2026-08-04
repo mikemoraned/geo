@@ -11,16 +11,13 @@ just capture   # save sentences from a real fix to a file (needs sky view)
 
 ## Wiring
 
-| | |
-|---|---|
-| Grove port | G32 / G33 |
-| Baud | 115200 8N1, NMEA 0183 4.1 |
-| UART | **never UART0** — that is the USB console |
+The Grove port is G32/G33 at 115200 8N1, and the Stick's RX is G33 — see
+[`docs/device.md`](../../../docs/device.md), which is also where the receiver's own
+behaviour is recorded. Never UART0: that is the USB console.
 
-The receiver's TX goes to the Stick's RX. Which of G32/G33 that is depends on who you ask,
-and the wrong choice is indistinguishable from a dead receiver — so the shell doesn't
-choose. It opens **both** pins at once on separate UARTs (G32 on UART1, G33 on UART2),
-listens for three seconds, and keeps whichever one carries NMEA:
+Which pin is RX depends on who you ask, and the wrong choice is indistinguishable from a
+dead receiver — so the shell doesn't choose. It opens **both** at once on separate UARTs
+(G32 on UART1, G33 on UART2), listens for three seconds, and keeps whichever carries NMEA:
 
 ```
 probed G32: 0 bytes, NMEA: false
@@ -29,7 +26,7 @@ GNSS on G33 at 115200 baud
 ```
 
 The two are electrically independent, so listening on the idle one costs nothing. If
-neither sees NMEA the shell exits with a message rather than showing an empty screen —
+neither sees NMEA, the shell exits with a message rather than showing an empty screen —
 that means the unit is unplugged, unpowered, or at a different baud rate.
 
 ## Parsing lives in the core
@@ -61,7 +58,6 @@ Raw captures are gitignored (`*.nmea`) for the same reason.
 - The `nmea` crate's `Nmea` accumulator is held in the core's model. Sentences each carry
   part of the picture, so the parser has to keep state across them, and a fix is only
   promoted once both a latitude and a longitude are known.
-- Multi-constellation receivers emit `$GN*` sentences rather than `$GP*`; both `RMC` and
-  `GGA` carry a position and either will do.
+- Both `RMC` and `GGA` carry a position, and either will do.
 - Time on screen still comes from `SystemTime` (epoch at boot). The fix carries true UTC —
   wiring that through to the clock is a natural next step, not done here.

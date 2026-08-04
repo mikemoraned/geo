@@ -14,7 +14,7 @@ use medallion::{Countries, Country, GEOMETRY, Query, Root};
 
 /// The newest extract's country areas.
 const NEWEST_EXTRACT: &str = "
-    SELECT extract_id FROM manifest ORDER BY extracted_at DESC LIMIT 1
+    SELECT extract_id FROM extract_manifest ORDER BY extracted_at DESC LIMIT 1
 ";
 
 /// A failure loading the country areas.
@@ -46,7 +46,7 @@ impl CountryAreas {
     /// Load the areas from the newest extract in `root`.
     pub async fn newest(root: &Root) -> Result<Self, CountryError> {
         let query = Query::new(root.clone());
-        query.register(model::EXTRACT_MANIFEST, "manifest").await?;
+        query.register_by_name(model::EXTRACT_MANIFEST).await?;
         let newest: Vec<Extracted> = query.rows(NEWEST_EXTRACT).await?;
         let newest = newest.first().ok_or(CountryError::NoExtract)?;
 

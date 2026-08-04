@@ -2,9 +2,7 @@
 //! local Motis server for train trips within a buffered bounding box around them, and
 //! writes the returned segments to the bronze capture log, one parquet file per poll.
 //!
-//! This is a thin loop around [`motis::poll::poll_once`] — argument parsing, redis and
-//! store setup, the tick timer, and logging. Run via `just bronze-poll-motis`; Ctrl-C stops
-//! cleanly.
+//! Runs a continuous loop until interrupted; Ctrl-C stops it cleanly, between polls.
 
 use std::time::Duration;
 

@@ -1,6 +1,8 @@
 //! `match_crossings`: derive the silver `session_crossing` dataset — the crossings each
-//! recorded session passed. A thin wrapper around [`session_crossings::silver`]; run via
-//! `just silver-crossings`.
+//! recorded session passed, matched by how near the session's samples come to one.
+//!
+//! Reads the silver sessions and water crossings, so both have to have been derived. Every
+//! session is matched again, so a rerun replaces what the last one wrote.
 
 use clap::Parser;
 use tracing_subscriber::EnvFilter;

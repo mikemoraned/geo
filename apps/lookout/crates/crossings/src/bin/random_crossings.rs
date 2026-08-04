@@ -1,5 +1,8 @@
 //! `random_crossings`: write a point buffer of made-up crossings, for trying the device out
-//! before the real ones are on it.
+//! before the real ones are on it. Reproducible from the seed.
+//!
+//! The spike that scans them embeds the file at build time, so it has to be rebuilt and
+//! reflashed for a new set to reach the device.
 
 use std::error::Error;
 use std::fs;

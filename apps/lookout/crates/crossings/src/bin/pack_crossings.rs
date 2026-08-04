@@ -1,5 +1,8 @@
 //! `pack_crossings`: read the silver water crossings out of the store and write the flat
 //! point buffer the M5 device scans.
+//!
+//! Every country the store holds is packed unless a window is given, since the device does
+//! not know where it will be switched on.
 
 use std::collections::BTreeSet;
 use std::error::Error;

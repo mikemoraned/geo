@@ -6,7 +6,7 @@ spikes build on what it established.
 
 ## What it does
 
-- Drives **G4 (HOLD) high** as the first thing after peripherals are taken, and keeps the
+- Drives **G4 (HOLD) high** as soon as it has taken the peripherals, and keeps the
   driver alive for the life of the program. Without this the PLUS2 cuts its own power
   immediately once it is on battery rather than USB.
 - Logs `hello …` and the PSRAM size over serial, then a `tick N` heartbeat every second.
@@ -24,20 +24,6 @@ just monitor   # tail the console of whatever is already flashed
 
 ## What it established
 
-- **Toolchain.** `espup`'s `esp` rustup channel (a nightly-based 1.90 fork) plus
-  `esp-idf-template` targeting `xtensa-esp32-espidf`, ESP-IDF v5.5.3. Edition 2024 is fine.
-- **LIBCLANG_PATH is required.** Without the Xtensa clang from
-  `~/.rustup/toolchains/esp/xtensa-esp32-elf-clang/*/esp-clang/lib` on `LIBCLANG_PATH`, the
-  `esp-idf-sys` bindgen step fails with `unknown target triple 'xtensa'` *after* a full
-  ESP-IDF build, so the real cause is a long way up the log. The `Justfile` resolves it.
-- **No `[patch.crates-io]` needed.** The template patches `esp-idf-sys`/`-hal`/`-svc` to git
-  HEAD; the released `esp-idf-svc` 0.52.1 builds fine, so the patch was dropped in favour of
-  something reproducible.
-- **PSRAM works with the stock quad-SPI settings.** ESP-IDF identifies the package itself
-  (`quad_psram: This chip is ESP32-PICO-V3-02` → `Found 2MB PSRAM device`) and adds the
-  2048K pool to the heap allocator; no PICO-specific pin overrides are needed.
-  `CONFIG_SPIRAM_IGNORE_NOTFOUND=y` is kept as insurance — a failed probe then reports as
-  `psram: 0 bytes` in the startup log instead of aborting boot.
-- **The board is 8MB flash, chip revision v3.1**, and the legacy I²C driver is what
-  `esp-idf-svc` binds by default (`W i2c: This driver is an old driver …`) — worth
-  resolving when spike 2 reads the BM8563 RTC over I²C.
+The toolchain and the board facts this and every later spike rest on — the `esp` channel and
+`LIBCLANG_PATH`, PSRAM needing no PICO-specific overrides, G4 as the hold pin, and the LED —
+are in [`docs/device.md`](../../../docs/device.md).

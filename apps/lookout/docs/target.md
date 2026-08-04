@@ -1,12 +1,12 @@
 # `Lookout` Motivation
 
-I travel on trains a lot and it's not unusual that something goes by that I'd have liked to have taken a picture of, but I didn't see it coming in time. This can be all sorts of things, but is commonly things like rivers and bridges. The purpose of this app is to remind me when there is something interesting coming up.
+I travel on trains a lot, and things I would have liked to photograph go past before I see them coming — most often rivers and bridges. This app is to remind me when something interesting is coming up.
 
 # Straw-man
 
-There are lots of things that count as interesting, but initially we will focus on rivers and bridges. So, initially we will find "points of interest" which are where a train line crosses a river or larger piece of water, and notify when the poi is 1 minute away, based on current rates of travel.
+Many things count as interesting; we start with rivers and bridges. A point of interest is where a train line crosses a river or a larger body of water, and we notify when it is a minute away at the current rate of travel.
 
-This plan may change based on what we discover, but for now this is the planned approach.
+What we discover may change this, but it is the approach for now.
 
 ## Architecture
 
@@ -19,30 +19,30 @@ We follow the [ports and adapters pattern](https://8thlight.com/insights/a-color
 ## Approach
 
 This largely breaks down into doing this live:
-1. Using the assumption that they are currently on a train, identify which trainline they are currently on, based on how fast they are travelling and where they are
+1. Identify which train line they are on, assuming they are on a train, from how fast they are travelling and where they are
     - this will involve taking in absolute position sensors (i.e. GPS) and also relative ones like accelerometers
-    - we can deal with uncertainty in position by clamping to the nearest trainline
+    - we can deal with uncertainty in position by clamping to the nearest train line
     - we can use some more advanced modelling based on past position etc
-2. Find next poi of interest that is on that line
-3. Predict time of arrival at that poi and alert if this is less than a minute
+2. Find the next point of interest on that line
+3. Predict the time of arrival there, and alert when it is less than a minute away
 
 This means that ahead of time we have to build a dataset that supports the lookup:
 1. Get the train network for an area from [OvertureMaps](https://docs.overturemaps.org/guides/transportation/)
-2. distill this down into a series of segments, or whatever supports the lookup
+2. Distil it down into a series of segments, or whatever supports the lookup
 
-We can additionally improve accuracy by using accelerometers from devices that are coupled i.e. my laptop, my phone and my ipad. This is where a local device comms library comes in as it allows this accelerometer data to be shared across the devices. We may also want to consider using an [M5](https://m5stack.com) device purely as a dumb accelerometer i.e. it need not be running the whole stack, and just providing sensor data.
+Accelerometers from coupled devices — my laptop, my phone, and my iPad — can improve accuracy further, which is what a local device comms library is for: it shares their readings across them. An [M5](https://m5stack.com) device can serve as a dumb accelerometer, providing sensor data without running the whole stack.
 
-# Constraints, Trade-offs and Technology Choices
+# Constraints, Trade-offs, and Technology Choices
 
 - Use the [crux](https://redbadger.github.io/crux/) library for ports and adapters
 - Use the [iroh](https://docs.iroh.computer/quickstart) library for multi-device comms
 - data is persisted in the layered store described in [medallion.md](medallion.md): parquet
   from bronze onwards, with sqlite only as a landing/external format for live capture
-- sensor data is visualised in https://rerun.io 
-- all code inside the centre of the architecture should be in Rust i.e. all business logic is in Rust
-- for front-end on web we should follow a single-page-app pattern and use typescript + https://www.solidjs.com
+- sensor data is visualised in https://rerun.io
+- keep all code inside the centre of the architecture in Rust i.e. all business logic is in Rust
+- on the web front-end, follow a single-page-app pattern and use typescript + https://www.solidjs.com
 
-# Learnings 
+# Learnings
 
 ## Constraints
 
@@ -50,7 +50,7 @@ We can additionally improve accuracy by using accelerometers from devices that a
   (M3) MacBook Air (`Mac15,12`); Apple Silicon dropped the Sudden Motion Sensor, so there
   is no built-in accelerometer the OS or browser can read — `DeviceMotionEvent` never
   fires in desktop Safari/Chrome, and there is no SMC motion sensor. A "browser + server
-  both on the laptop, localhost only" setup can validate the websocket transport and
+  both on the laptop, localhost only" setup can check the websocket transport and
   persistence plumbing, but **cannot** produce real accelerometer data. Any slice needing
   real motion must use an external source:
     - **AirPods** (Pro / 3rd-gen / Max) via macOS `CMHeadphoneMotionManager` — real

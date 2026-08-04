@@ -33,18 +33,6 @@ struct Counted {
     count: i64,
 }
 
-/// Whether `dir` holds any file, at any depth below it.
-///
-/// A directory of empty directories is what a swept dataset leaves, and reads the same as one
-/// that was never written.
-fn holds_files(dir: &std::path::Path) -> bool {
-    std::fs::read_dir(dir).is_ok_and(|entries| {
-        entries.flatten().any(|entry| {
-            entry.path().is_dir() && holds_files(&entry.path()) || entry.path().is_file()
-        })
-    })
-}
-
 /// A SQL session over one medallion store.
 pub struct Query {
     root: Root,
@@ -72,6 +60,15 @@ impl Query {
         self.register_at(&self.root.dataset(dataset), table).await
     }
 
+    /// Register `dataset` as a table of its own name, for a query that reads it as what it
+    /// is rather than under a name chosen for the query.
+    pub async fn register_by_name<L: LayerKind>(
+        &self,
+        dataset: DatasetSpec<L>,
+    ) -> Result<(), QueryError> {
+        self.register(dataset, dataset.name).await
+    }
+
     /// Register one partition of a dataset under `table`, for a dataset whose partitions
     /// hold different schemas and so cannot be read as a single table.
     ///
@@ -83,13 +80,13 @@ impl Query {
         dataset: &Dataset<L>,
         table: &str,
     ) -> Result<(), QueryError> {
-        let dir = dataset.dir();
-        if !holds_files(&dir) {
+        if !dataset.holds_files() {
             return Err(QueryError::NoSuchDataset {
                 layer: dataset.layer(),
                 dataset: dataset.name().to_string(),
             });
         }
+        let dir = dataset.dir();
         let df = self
             .ctx
             .read_parquet(dir.display().to_string(), GeoParquetReadOptions::default())
@@ -251,6 +248,24 @@ mod tests {
             .unwrap();
 
         assert_eq!(rows.len(), 2);
+    }
+
+    /// A query reading a dataset under its own name takes that name from the dataset, so
+    /// the two cannot drift apart.
+    #[tokio::test]
+    async fn a_dataset_can_be_registered_as_a_table_of_its_own_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = store_with_rows(tmp.path(), vec![1], vec!["a"]).await;
+        let query = Query::new(root);
+        query.register_by_name(THING).await.unwrap();
+
+        assert_eq!(
+            query
+                .count(&format!("SELECT COUNT(*) AS count FROM {}", THING.name))
+                .await
+                .unwrap(),
+            1
+        );
     }
 
     #[tokio::test]
