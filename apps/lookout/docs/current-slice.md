@@ -1,42 +1,151 @@
-# Current Slice: Crow-flies predictor deployed to M5 device and Rerun sim
+# Current Slice: Crow-flies predictor deployed to M5 device and rerun sim
 
-### Target
+## Target
 
-One half of this is a clean-up / rationalisation of what we've already spiked on with the M5 device (apps/lookout/spikes/m5/spike7-battery-and-trend). The other half is turning rerun visualisation into something that shows what the predictor is doing.
+Two halves. One rationalises what the M5 spikes established
+(`spikes/m5/spike7-battery-and-trend`) into production code. The other turns rerun
+visualisation into something that shows what the predictor is doing.
 
-Effectively what I want to end up with is:
-* A core predictor defined in a CRUX wrapper, perhaps with its central core being a state-machine
-* A productionised version of the M5-deployed setup that uses that core to read live GPS readings and predict when water will be crossed
-* A rerun-based simulation that re-drives a named session (from silver/session table) as fake GPS readings through the predictor, captures the predictions, and visualises them
-  * I want to use this as a way to see how the predictor is performing by live-comparing where it thinks it's going to cross water vs what water is actually there
+What exists at the end:
 
-As part of this we should also be able to delete all the current `visualise` code + remove the `spikes/m5` dir.
+- A predictor in a Crux core, its centre a state machine.
+- An M5 build that drives that core from the device's own GPS and predicts the water
+  crossings ahead.
+- A rerun simulation that re-drives a named session from silver as GPS samples through the
+  same core, captures the predictions, and visualises them against the crossings that
+  session actually made — so the predictor's guesses and the water can be compared as the
+  run plays out.
+- No `visualise` directory and no `spikes/m5` directory.
 
-### Sketch
+## What a prediction is
 
-The sort of thing I am thinking of is a CRUX core which is designed to be embedded in a different shell; M5 device, a rerun runner, or (later) an App or Website.
+For each crossing within a radius of the current fix: how far away it is in a straight line,
+and the time we reach it at the current speed. Crow-flies — the track's real geometry plays
+no part, so a curve or a river bend makes the estimate early. That is the baseline the
+evaluation slice measures against, not the final answer.
 
-For the M5 version of this in the spikes so far we've allowed the Events to contain GNSS strings from an attached GPS device. That's probably too low-level for what I want here. Instead I'd like the core to consume a normalised GPS Sample which is rich enough to represent all the information that may be useful. We can then create a parser for the GNSS strings which converts to this normalised form. We wouldn't need this parser code for the rerun version of this as it can be driven by fake normalised events e.g. that are extracted from `sessions` in silver.
+## Sketch
 
-Within this core there would then be a state-machine which is even simpler in interface i.e. it
-* receives a series of Events which are either GPS Samples or a clock advancement to a timestamp (a GPS Sample also contains an embedded timestamp so can also advance time)
-* transitions when an Event is passed
-* can be queried to say which water passing points it predicts we will pass and when
+### The core
 
-This state-machine interface should be captured by a minimal generic `trait`. A particular state-machine struct implementing this trair may additionally expose extra info like, for example, which water passing points are receding or coming closer, for the sake of a nicer display. It may make sense to capture these expectations in a separate trait.
+A Crux core built to sit in a different shell each time: the M5 device, a rerun runner, or
+later an app or a website.
 
-The Event type given to the state-machine can be same as given to the CRUX core, but doesn't have to be.
+The M5 spikes let events carry raw GNSS strings from the attached receiver. That is too
+low-level here. The core instead consumes a **normalised GPS sample** carrying everything a
+predictor can use: timestamp, latitude, longitude, and the optional altitude, speed, heading,
+accuracy, satellite count, and HDOP. A parser converts GNSS strings into that form for the
+device. The rerun runner needs no parser — silver `session_sample` already holds those
+columns, and a session replays as samples directly.
 
-For the purposes of producing a rerun simulation it may be easier to wrap and expose a state-machine directly rather than a full CRUX core.
+### The state machine
 
-Under `crates` dir we should add a new `platform` sub-dir where `m5plus` and `rerun` can live. The esp platform will need to be in its own workspace as they can't compile as part of the main workspace, but `rerun` probably can.
+Inside the core, a state machine with a narrower interface. It:
 
-### Tasks
+- receives events, each either a GPS sample or a clock advance to a timestamp (a sample
+  carries its own timestamp, so it advances the clock too)
+- transitions on each event
+- answers which crossings it predicts we pass, and when
 
-We probably need to break this up into roughly these steps:
-1. Get same functionality working as in `apps/lookout/spikes/m5/spike7-battery-and-trend` but in a productionised form following the `platform` setup.
-  * note that now may be a good time to try out some of the higher-level crates we found for managing the M5 e.g. when looking for battery level exposing code
-2. Extract a `rerun` platform
-3. Delete all stuff no longer needed:
-  * `visualise` stuff can go
-  * so can all the `m5` spikes
+A minimal generic `trait` captures that interface. A struct implementing it exposes extras
+for a nicer display — which crossings close, hold, or recede — through a second trait, so the
+minimal one stays minimal.
+
+### Layout
+
+Add a `platform` sub-directory under `crates`, holding `m5plus` and `rerun-py`. The esp
+platform needs its own workspace, since it cannot compile as part of the main one; the
+binding crate compiles inside it.
+
+**The rerun runner is python.** The rerun python SDK carries more of the blueprint API than
+the Rust one, and the layout is the whole point of this half of the slice.
+
+**Crux has no python shell.** Its type generation emits Swift, Kotlin/Java, and TypeScript —
+`crux_core`'s `type_generation` module offers those and nothing else — and its FFI bindings
+are generated for Apple, Android, and WASM. So the crossing into python is ours to build.
+
+Build it with pyo3, following `medallion-py`: a `cdylib` with its own `pyproject.toml` and
+python tests, built by maturin. The simulation's own python lives in the same uv project.
+Python then holds the predictor as an object and calls it, with no serialisation between.
+
+The alternative, kept here because it is the crux-native one: drive the `Bridge` instead —
+crux's bincode `process_event(bytes) -> bytes` boundary — and generate the python types from
+the same `serde-reflection` registry crux's typegen builds, since `serde-generate` has a
+python3 backend and ships `serde` and `bincode` runtimes for it. That buys exercising the
+exact byte interface the device shell crosses, and costs bincode on both sides, a codegen
+step, and a vendored python runtime. Take it only once the sim needs to test the boundary
+rather than the predictor.
+
+## Open questions
+
+- Whether the state machine's event type is the core's event type or its own.
+- Whether the python extension exposes the state machine directly or the full Crux core. The
+  state machine is the smaller surface; the core is what the device runs.
+
+## Tasks
+
+### 1. The normalised sample
+
+- [ ] Define the sample type in a core crate, with newtypes for the coordinates as spike 7
+      already has, and `Option` for every field a receiver leaves out.
+- [ ] Put spike 7's NMEA accumulation behind a parser that emits samples, keeping its
+      captured-sentence tests — the spliced sentence, the bad checksum, and the stationary
+      RMC with no course.
+- [ ] Give it a construction path from `session_sample`'s columns, so the python side builds
+      samples from the store without going through NMEA.
+
+### 2. The predictor state machine
+
+- [ ] Define both traits: the minimal interface, and the closing/holding/receding extras.
+- [ ] Stub it returning no predictions, write the tests against the crow-flies definition
+      above, then implement — keeping it compiling at each step.
+- [ ] Decide and test what it answers when speed is unknown or zero.
+
+### 3. The Crux core
+
+- [ ] Wrap the state machine in a core carrying spike 7's panel view model — clock, fix,
+      quality, battery, nearest, within — extended with the predicted times.
+- [ ] Keep the crossings carried in flash and the battery judgement in the core, both as
+      spike 7 has them.
+- [ ] Build against the current `crux_core` rather than the pinned `=0.16.2`.
+
+**Leave BLE off.** Nothing in this slice needs it: the panel is the output, and the crossings
+are carried in flash. The reboot that pinned crux to `=0.16.2` only appears with NimBLE
+running (see [device.md](device.md)), so leaving BLE out takes the version question off this
+slice entirely. It returns whenever BLE does.
+
+### 4. `crates/platform/m5plus`
+
+Write this shell fresh from an esp-idf project template rather than lifting spike 7's. The
+spikes grew one addition at a time and carry that shape; the facts they established are in
+[device.md](device.md) and are what to build from — power hold on GPIO4, panel offset, GNSS
+RX pin, stack sizing, and UART ring buffer.
+
+- [ ] Generate the project from the esp-idf template into its own workspace, and get it
+      booting with the power hold set.
+- [ ] Reach for the higher-level M5 crates **first**, for the battery and for anything else
+      they cover. Spike 7 read the ADC by hand only because `m5unified` initialises the
+      display alongside power; judge that trade again now the display is wanted too.
+- [ ] Drive the panel, and the GNSS receiver over UART, feeding samples to the core.
+- [ ] Flash it and confirm on hardware.
+
+### 5. `crates/platform/rerun-py`
+
+- [ ] Expose the predictor as a python extension module, following `medallion-py`: a pyo3
+      `cdylib`, maturin in `pyproject.toml`, and the tests written in python since a rust
+      test binary for an extension module has no interpreter to run in.
+- [ ] Read a named session's samples from silver in python — DuckDB over the store, as
+      `visualise` does today — and feed them through the extension in `t` order.
+- [ ] Log the track, each prediction as it is made, and its error against the crossing when
+      it arrives.
+- [ ] Log silver `session_crossing` as the ground truth to compare against.
+- [ ] Give it a blueprint: a map of the session and the crossings, and a timeline of
+      predicted times against actual ones.
+
+### 6. Delete what is replaced
+
+- [ ] Delete `visualise/` and its `just visualise` recipe. The bronze GPS and accelerometer
+      views and the moving `train_segment` dots go with it; the rerun platform draws the
+      predictor and nothing else.
+- [ ] Delete `spikes/m5/`, after checking [device.md](device.md) carries every board fact
+      worth keeping.
