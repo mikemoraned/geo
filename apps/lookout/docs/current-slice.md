@@ -1,10 +1,10 @@
-# Current Slice: Crow-flies predictor deployed to M5 device and rerun sim
+# Current Slice: Crow-flies predictor deployed to M5 device and rerun simulation
 
 ## Target
 
-Two halves. One rationalises what the M5 spikes established
-(`spikes/m5/spike7-battery-and-trend`) into production code. The other turns rerun
-visualisation into something that shows what the predictor is doing.
+Two halves. One turns what the M5 spikes established
+(`spikes/m5/spike7-battery-and-trend`) into production code. The other makes rerun show what
+the predictor is doing.
 
 What exists at the end:
 
@@ -12,17 +12,16 @@ What exists at the end:
 - An M5 build that drives that core from the device's own GPS and predicts the water
   crossings ahead.
 - A rerun simulation that re-drives a named session from silver as GPS samples through the
-  same core, captures the predictions, and visualises them against the crossings that
-  session actually made — so the predictor's guesses and the water can be compared as the
-  run plays out.
+  same core, captures its predictions, and draws them against the crossings that session
+  actually made — so we can watch the predictions and the water diverge as the run plays out.
 - No `visualise` directory and no `spikes/m5` directory.
 
 ## What a prediction is
 
 For each crossing within a radius of the current fix: how far away it is in a straight line,
-and the time we reach it at the current speed. Crow-flies — the track's real geometry plays
-no part, so a curve or a river bend makes the estimate early. That is the baseline the
-evaluation slice measures against, not the final answer.
+and the time we reach it at the current speed. Crow-flies — the track's real geometry plays no
+part, so a curve or a river bend puts a crossing nearer, and sooner, than the rails do. That
+is the baseline the evaluation slice measures against, not the final answer.
 
 ## Sketch
 
@@ -32,7 +31,7 @@ A Crux core built to sit in a different shell each time: the M5 device, a rerun 
 later an app or a website.
 
 The M5 spikes let events carry raw GNSS strings from the attached receiver. That is too
-low-level here. The core instead consumes a **normalised GPS sample** carrying everything a
+low-level here. The core instead consumes a **normalised GPS sample** carrying what a
 predictor can use: timestamp, latitude, longitude, and the optional altitude, speed, heading,
 accuracy, satellite count, and HDOP. A parser converts GNSS strings into that form for the
 device. The rerun runner needs no parser — silver `session_sample` already holds those
@@ -48,33 +47,33 @@ Inside the core, a state machine with a narrower interface. It:
 - answers which crossings it predicts we pass, and when
 
 A minimal generic `trait` captures that interface. A struct implementing it exposes extras
-for a nicer display — which crossings close, hold, or recede — through a second trait, so the
-minimal one stays minimal.
+through a second trait — which crossings close, hold, or recede — so the panel can say more
+than the prediction alone while the first trait stays small.
 
 ### Layout
 
-Add a `platform` sub-directory under `crates`, holding `m5plus` and `rerun-py`. The esp
-platform needs its own workspace, since it cannot compile as part of the main one; the
-binding crate compiles inside it.
+Add a `platform` sub-directory under `crates`, holding `m5plus` and `rerun-py`. `m5plus` needs
+its own workspace, since it cannot compile as part of the main one. `rerun-py` compiles in the
+main workspace.
 
 **The rerun runner is python.** The rerun python SDK carries more of the blueprint API than
-the Rust one, and the layout is the whole point of this half of the slice.
+the Rust one, and the blueprint is the whole point of this half of the slice.
 
 **Crux has no python shell.** Its type generation emits Swift, Kotlin/Java, and TypeScript —
 `crux_core`'s `type_generation` module offers those and nothing else — and its FFI bindings
-are generated for Apple, Android, and WASM. So the crossing into python is ours to build.
+are generated for Apple, Android, and WASM. So we write the python binding ourselves.
 
-Build it with pyo3, following `medallion-py`: a `cdylib` with its own `pyproject.toml` and
+Write it with pyo3, following `medallion-py`: a `cdylib` with its own `pyproject.toml` and
 python tests, built by maturin. The simulation's own python lives in the same uv project.
-Python then holds the predictor as an object and calls it, with no serialisation between.
+Python then holds the predictor as an object and calls it, with nothing serialised between.
 
-The alternative, kept here because it is the crux-native one: drive the `Bridge` instead —
-crux's bincode `process_event(bytes) -> bytes` boundary — and generate the python types from
-the same `serde-reflection` registry crux's typegen builds, since `serde-generate` has a
-python3 backend and ships `serde` and `bincode` runtimes for it. That buys exercising the
-exact byte interface the device shell crosses, and costs bincode on both sides, a codegen
-step, and a vendored python runtime. Take it only once the sim needs to test the boundary
-rather than the predictor.
+The crux-native alternative, recorded rather than taken: drive the `Bridge` — crux's bincode
+`process_event(bytes) -> bytes` boundary — and generate the python types from the same
+`serde-reflection` registry crux's typegen builds, since `serde-generate` has a python3
+backend and ships `serde` and `bincode` runtimes for it. It buys one thing: python meets the
+exact byte interface the device shell does. It costs bincode on both sides, a codegen step,
+and a vendored python runtime. Take it once the simulation needs to test that boundary rather
+than the predictor.
 
 ## Open questions
 
@@ -103,16 +102,16 @@ rather than the predictor.
 
 ### 3. The Crux core
 
+**Leave BLE off.** Nothing in this slice needs it: the panel is the output, and the crossings
+are carried in flash. The reboot that pinned crux to `=0.16.2` only appears with NimBLE
+running (see [device.md](device.md)), so leaving BLE out takes the version question off this
+slice entirely. It returns whenever BLE does.
+
 - [ ] Wrap the state machine in a core carrying spike 7's panel view model — clock, fix,
       quality, battery, nearest, within — extended with the predicted times.
 - [ ] Keep the crossings carried in flash and the battery judgement in the core, both as
       spike 7 has them.
 - [ ] Build against the current `crux_core` rather than the pinned `=0.16.2`.
-
-**Leave BLE off.** Nothing in this slice needs it: the panel is the output, and the crossings
-are carried in flash. The reboot that pinned crux to `=0.16.2` only appears with NimBLE
-running (see [device.md](device.md)), so leaving BLE out takes the version question off this
-slice entirely. It returns whenever BLE does.
 
 ### 4. `crates/platform/m5plus`
 
@@ -125,19 +124,19 @@ RX pin, stack sizing, and UART ring buffer.
       booting with the power hold set.
 - [ ] Reach for the higher-level M5 crates **first**, for the battery and for anything else
       they cover. Spike 7 read the ADC by hand only because `m5unified` initialises the
-      display alongside power; judge that trade again now the display is wanted too.
-- [ ] Drive the panel, and the GNSS receiver over UART, feeding samples to the core.
+      display alongside power; weigh that again now the display is needed too.
+- [ ] Drive the panel and read the GNSS receiver over UART, feeding samples to the core.
 - [ ] Flash it and confirm on hardware.
 
 ### 5. `crates/platform/rerun-py`
 
 - [ ] Expose the predictor as a python extension module, following `medallion-py`: a pyo3
-      `cdylib`, maturin in `pyproject.toml`, and the tests written in python since a rust
+      `cdylib`, maturin in `pyproject.toml`, and the tests written in python, since a rust
       test binary for an extension module has no interpreter to run in.
 - [ ] Read a named session's samples from silver in python — DuckDB over the store, as
       `visualise` does today — and feed them through the extension in `t` order.
 - [ ] Log the track, each prediction as it is made, and its error against the crossing when
-      it arrives.
+      that crossing arrives.
 - [ ] Log silver `session_crossing` as the ground truth to compare against.
 - [ ] Give it a blueprint: a map of the session and the crossings, and a timeline of
       predicted times against actual ones.
