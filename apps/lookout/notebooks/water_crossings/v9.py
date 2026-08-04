@@ -41,7 +41,7 @@ def _(lookout_medallion):
     # what the last run saw, so moving to a newer extract is a deliberate edit here rather than
     # something that happens on its own. `just bronze-extract` writes them; the release each covers and
     # the window it was restricted to are in the manifest, read below.
-    EXTRACT_ID = "20260727T193628Z"
+    EXTRACT_ID = "20260804T152143Z"
 
     # The medallion store in the repo. Asked of the store's own writer rather than worked out
     # here, so what this notebook reads with duckdb is the store its writes land in.
