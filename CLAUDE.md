@@ -83,16 +83,23 @@ When doing TDD, always keep the code compiling at every step:
 
 ## Conventions / Style
 
-- **Write all prose through the `writing-clearly-and-concisely` skill.** This is always on:
-  documentation, READMEs, commit messages, error messages, comments, and anything else a
-  human reads. Active voice, positive form, concrete language, no needless words, and none
-  of the puffery the skill lists. It needs no prompting, and applies to edits of existing
-  prose as much as to new prose. Reference docs additionally follow
-  [`.claude/memory/docs-style.md`](.claude/memory/docs-style.md).
-  - Two deliberate departures from the skill's 1918 source: **British spelling** throughout
-    (`visualise`, `colour`, `metres`), and **`data` as a singular mass noun** ("data is
-    stored"), which is what this domain's readers write. Everything else applies, including
-    the serial comma.
+- **Write all prose through the `writing-clearly-and-concisely` and
+  `technical-writing@technical-writing` skills.** Both are always on, need no prompting, and
+  apply to edits of existing prose as much as to new prose: documentation, READMEs, commit
+  messages, error messages, comments, and anything else a human reads.
+  - `writing-clearly-and-concisely` carries the general principles — active voice, positive
+    form, concrete language, no needless words, and none of the puffery it lists.
+  - `technical-writing` carries what technical text additionally needs — one term per
+    concept, sentence-length caps, condition before command, procedural and descriptive
+    passages kept apart, and no hedging (`should`, `may`, `simply`, `just`).
+  - Reference docs additionally follow
+    [`.claude/memory/docs-style.md`](.claude/memory/docs-style.md).
+  - Three deliberate departures. **British spelling** throughout (`visualise`, `colour`,
+    `metres`) and **`data` as a singular mass noun** ("data is stored") override the 1918
+    source. **Permission-sense `may`** ("a projected column may additionally be
+    pre-computed") stays, against the hedging rule, since it states what the rules allow
+    rather than softening a claim; possibility-sense `may` still becomes `can`. Everything
+    else in both skills applies, including the serial comma.
 - **Code over comments:** make code self-documenting; add comments only for non-obvious
   things; substantive docs go in `docs/`.
 - **Prefer existing libraries; don't hand-roll — especially in notebook cells.** Reach for a

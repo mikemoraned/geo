@@ -41,7 +41,10 @@ This is a clean-up slice focussed on consolidating and improving what we have in
   /plugin install technical-writing@technical-writing
   ```
 * [x] do a pass over docs with `technical-writing@technical-writing` skill
-* [ ] ensure this `technical-writing@technical-writing` skill is always enabled and used
+* [x] ensure this `technical-writing@technical-writing` skill is always enabled and used
+  * enabled for everyone via checked-in `.claude/settings.json`; always-used is a rule in
+    the repo `CLAUDE.md` alongside `writing-clearly-and-concisely`, which splits what each
+    skill covers and records permission-sense `may` as a third departure
 * [x] extract knowledge out of claude-specific areas like .claude files and into explicit docs under docs:
   * landed as three topic docs beside `medallion.md`: `device.md`, `motis.md`, `architecture.md`
   * `docs/` is self-contained and makes no reference to the spikes, so they can be deleted
