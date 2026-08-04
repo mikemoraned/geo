@@ -34,7 +34,7 @@ water_crossing      ──pack_crossings──▶ gold crossings.pointset
 
 Two properties of that graph matter more than the order:
 
-- **An Overture extract is a prerequisite for the observation derivations, not just for the
+- **An Overture extract is a prerequisite for the observation derivations, not only for the
   crossings.** A session and a train leg are each placed in a country, and the country
   decides the projected CRS their geometry is written in. The country areas come from the
   newest extract, so a store without one cannot derive silver at all.

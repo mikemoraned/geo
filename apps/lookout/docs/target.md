@@ -19,18 +19,18 @@ We follow the [ports and adapters pattern](https://8thlight.com/insights/a-color
 ## Approach
 
 This largely breaks down into doing this live:
-1. Using the assumption that they are currently on a train, identify which trainline they are currently on, based on how fast they are travelling and where they are
+1. Identify which train line they are on, assuming they are on a train, from how fast they are travelling and where they are
     - this will involve taking in absolute position sensors (i.e. GPS) and also relative ones like accelerometers
-    - we can deal with uncertainty in position by clamping to the nearest trainline
+    - we can deal with uncertainty in position by clamping to the nearest train line
     - we can use some more advanced modelling based on past position etc
-2. Find next poi of interest that is on that line
-3. Predict time of arrival at that poi and alert if this is less than a minute
+2. Find the next point of interest on that line
+3. Predict the time of arrival there, and alert when it is less than a minute away
 
 This means that ahead of time we have to build a dataset that supports the lookup:
 1. Get the train network for an area from [OvertureMaps](https://docs.overturemaps.org/guides/transportation/)
-2. distill this down into a series of segments, or whatever supports the lookup
+2. Distil it down into a series of segments, or whatever supports the lookup
 
-Accelerometers from coupled devices — my laptop, my phone, and my iPad — can improve accuracy further, which is what a local device comms library is for: it shares their readings across them. An [M5](https://m5stack.com) device could serve as a dumb accelerometer, providing sensor data without running the whole stack.
+Accelerometers from coupled devices — my laptop, my phone, and my iPad — can improve accuracy further, which is what a local device comms library is for: it shares their readings across them. An [M5](https://m5stack.com) device can serve as a dumb accelerometer, providing sensor data without running the whole stack.
 
 # Constraints, Trade-offs, and Technology Choices
 
@@ -39,8 +39,8 @@ Accelerometers from coupled devices — my laptop, my phone, and my iPad — can
 - data is persisted in the layered store described in [medallion.md](medallion.md): parquet
   from bronze onwards, with sqlite only as a landing/external format for live capture
 - sensor data is visualised in https://rerun.io
-- all code inside the centre of the architecture should be in Rust i.e. all business logic is in Rust
-- for front-end on web we should follow a single-page-app pattern and use typescript + https://www.solidjs.com
+- keep all code inside the centre of the architecture in Rust i.e. all business logic is in Rust
+- on the web front-end, follow a single-page-app pattern and use typescript + https://www.solidjs.com
 
 # Learnings
 
@@ -50,7 +50,7 @@ Accelerometers from coupled devices — my laptop, my phone, and my iPad — can
   (M3) MacBook Air (`Mac15,12`); Apple Silicon dropped the Sudden Motion Sensor, so there
   is no built-in accelerometer the OS or browser can read — `DeviceMotionEvent` never
   fires in desktop Safari/Chrome, and there is no SMC motion sensor. A "browser + server
-  both on the laptop, localhost only" setup can validate the websocket transport and
+  both on the laptop, localhost only" setup can check the websocket transport and
   persistence plumbing, but **cannot** produce real accelerometer data. Any slice needing
   real motion must use an external source:
     - **AirPods** (Pro / 3rd-gen / Max) via macOS `CMHeadphoneMotionManager` — real

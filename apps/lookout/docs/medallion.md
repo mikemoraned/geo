@@ -16,15 +16,15 @@ partition keys come back as columns.
 
 **The store lives in the repo, at `data/medallion`.** The layers holding observations cannot
 be re-derived, so they are versioned alongside the code that wrote them, and a deletion is
-recoverable from history rather than only from a backup. That directory's own `.gitignore` states what is
-versioned: it ignores the derived layers, and the upstream reference extracts, which are
-large and re-derivable from the manifest recording what each one took.
+recoverable from history rather than only from a backup. That directory's own `.gitignore`
+states what is versioned. It ignores the derived layers, and the upstream reference extracts,
+which are large and re-derivable from the manifest recording what each one took.
 
 The root is found by walking up from the working directory for the manifest declaring the
-workspace, as cargo does, rather than resolved as a path relative to wherever a binary was
-started — that would quietly make a second store instead of finding the one that exists.
-Finding no workspace is an error saying so, not a fallback: a store in the wrong place is
-worse than a run that refuses to start.
+workspace, as cargo does. Resolving it as a path relative to wherever a binary was started
+would quietly make a second store instead of finding the one that exists. Finding no
+workspace is an error saying so, not a fallback: a store in the wrong place is worse than a
+run that refuses to start.
 
 Every CLI that reads or writes the store can still be pointed elsewhere:
 
@@ -74,7 +74,7 @@ of restating it, and there is no call to review or error to handle.
 
 **Bronze tolerates the same observation arriving more than once, so deduping is the reader's
 job.** Nothing here rejects a repeat: an ingestion cannot rewrite an earlier file to merge
-into it, a payload may reach the store by more than one route, and a re-run or a later
+into it, a payload can reach the store by more than one route, and a re-run or a later
 backfill of the same source can land it again. Overlapping samples of a live service are
 duplicated deliberately. Every row therefore carries what identifies the observation it
 holds — a content hash, or the natural key of the reading — and each derivation collapses on
@@ -107,7 +107,7 @@ normalised into standard geometries, and upstream reference data enriched, exten
 restricted to what is required.
 
 Format: **[GeoParquet 1.1.0](https://geoparquet.org/releases/v1.1.0/)**, optimised for fast
-and scalable lookup — embed whatever metadata makes queries faster e.g. bounding boxes.
+and scalable lookup. Metadata that makes queries faster, such as bounding boxes, is embedded.
 
 - Geometry is [WKB](https://libgeos.org/specifications/wkb/)-encoded
   [simple features](https://www.ogc.org/standards/sfa). Parquet's native
@@ -119,7 +119,7 @@ and scalable lookup — embed whatever metadata makes queries faster e.g. boundi
 - A column in the projected CRS most appropriate to the entity may additionally be
   pre-computed, since metric distance calculations must not be performed in degrees. It is
   likewise named the same across every dataset. Use
-  **one projected zone per country**: several UTM zones may cover a country, but a single
+  **one projected zone per country**: several UTM zones can cover a country, but a single
   zone keeps every geometry within that country directly comparable.
 - CRS is recorded in the GeoParquet metadata as PROJJSON.
 - **Follow the upstream schema** when extending or subsetting a reference dataset, and also
@@ -127,21 +127,21 @@ and scalable lookup — embed whatever metadata makes queries faster e.g. boundi
   the requirement.
 - **A column that identifies a row is declared as such on the dataset, and the writer enforces
   it.** Silver is where identity is decided — bronze tolerates a repeated observation, and a
-  derivation collapses on that identity to produce these rows — so a name a reader may treat as
+  derivation collapses on that identity to produce these rows — so a name a reader can treat as
   identifying one row is checked once, where the dataset is defined, rather than by each writer
   and each consumer. The check spans the dataset rather than a partition of it: which partition
   a row lands in is a fact about how it is stored, not about what it is called. A dataset may
-  carry more than one such name, each identifying a row on its own. That exists for a second,
-  shorter form of an id, meant for a consumer with no room for the first — exactly the case
+  carry more than one such name, each identifying a row on its own. That second name exists for
+  a shorter form of an id, meant for a consumer with no room for the first — exactly the case
   where a collision would otherwise surface downstream.
 
 #### Writing silver
 
 A derivation does not assemble a silver dataset's files itself: it hands the store its rows and
-the store applies the format. Which partition a row belongs to, the CRS its geometry is
-projected into and declared in, the deletion of a partition a rebuild no longer produces, and
-the names a definition says identify a row all follow from the dataset's definition and are
-applied in one place. A writer that projected its own geometry, or that swept only the
+the store applies the format. Four things follow from the dataset's definition and are applied
+in one place: which partition a row belongs to, the CRS its geometry is projected into and
+declared in, the deletion of a partition a rebuild no longer produces, and the names a
+definition says identify a row. A writer that projected its own geometry, or that swept only the
 partitions it remembered to, would be a second implementation of the format with nothing
 holding it to the first.
 
@@ -194,7 +194,7 @@ matrix to track, against a store small enough that a partition is one file and a
 therefore already atomic. The trigger to reconsider is partition-level atomicity or schema
 evolution starting to cost debugging time. Judge whichever is chosen then first on breadth
 of engine support, since multi-engine readability is the rule this store is built around, and
-verify its write maturity against the implementation's own status reporting, since this store
+check its write maturity against the implementation's own status reporting, since this store
 would be a writer and not only a reader.
 
 ## Rederivability
@@ -262,7 +262,7 @@ the layout to be written down, and one that drifts silently when a key is rename
 
 This holds because dates are formatted `YYYY-MM-DD`, whose lexical and chronological order
 agree — a date key compared as a string is still ordered correctly. A partition key in a
-format without that property could not be relied on this way.
+format without that property cannot be relied on this way.
 
 ### Bronze
 

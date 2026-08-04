@@ -8,8 +8,8 @@ just gold-pack-crossings --medallion-root <store> --output <file>
 just gold-pack-crossings --bbox 13.0,50.9,14.5,51.9        # west,south,east,north
 ```
 
-The device holds every crossing in RAM and brute-force scans the lot against each GPS fix, so
-what it needs is not a queryable dataset but a packed array of coordinates. At the measured
+The device holds every crossing in flash and brute-force scans the lot against each GPS fix,
+so what it needs is not a queryable dataset but a packed array of coordinates. At the measured
 size — 5,749 crossings for Germany — that is **69,000 bytes**, small enough to `include_bytes!`
 into the firmware, and small enough that an index would waste the effort.
 

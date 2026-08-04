@@ -22,14 +22,14 @@ rerun data/lookout.rrd
 ## `--open` and the persisted blueprint
 
 The rerun viewer persists a layout (blueprint) per application id and restores it on
-launch, so a layout from an earlier run can shadow later ones — e.g. after narrowing
-`--devices`, you may see empty view panels for devices no longer in the data. This
-survives restarting the viewer, because it's the *layout* that's persisted, not the
+launch, so a layout from an earlier run can shadow later ones — after narrowing
+`--devices`, empty view panels can remain for devices no longer in the data. This
+survives restarting the viewer, because it is the *layout* that is persisted, not the
 data.
 
 `--open` avoids this: it tees the recording to both the `.rrd` file and a **running**
 viewer (`127.0.0.1:9876`), pushing this run's blueprint as the *active* one so it
 overrides whatever the viewer had persisted. Keep a viewer open and re-run with
-`--open` to refresh it live. Without a running viewer it simply writes the file.
+`--open` to refresh it live. Without a running viewer it writes the file alone.
 
 To clear a stale layout when opening a file by hand instead, run `rerun reset` once.

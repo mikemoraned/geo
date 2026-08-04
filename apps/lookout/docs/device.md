@@ -125,7 +125,7 @@ Build `chrono` with `default-features = false` on device. Its default `clock` fe
 in `iana-time-zone`, which has no business here, and a core that is handed its time rather
 than reading it does not need it.
 
-### What its numbers might be worth
+### What its numbers show
 
 **Two observations, one short session each, in one place.** Read what follows as an
 indication of the error that is possible, not as a measurement of the error to expect: the
@@ -142,23 +142,23 @@ error:
 
 Two possibilities follow, both worth designing against because the precaution is cheap:
 
-- **Differencing position between consecutive fixes may be dominated by noise at these
+- **Differencing position between consecutive fixes can be dominated by noise at these
   scales.** If it is, a stationary device can appear to close on a crossing fast enough to
   emit confident nonsense. The receiver's Doppler speed, or differencing over a longer
   baseline than one reading, avoids depending on the answer.
-- **The Doppler speed may degrade with fix quality too**, which is the more awkward of the
+- **The Doppler speed can degrade with fix quality too**, which is the more awkward of the
   two, since it is the fallback for the first. That argues for treating fix quality as an
   input rather than a diagnostic — `RMC`/`GGA` carry HDOP and satellite count — rather than
   for trusting the second reading above.
 
-A train at speed should swamp errors of this size either way. Approach and departure —
+A train at speed swamps errors of this size either way. Approach and departure —
 exactly when a crossing prediction is being refined — are the low-speed regime where they
 would bite.
 
 **What would settle it:** repeated stationary sessions across locations and sky views, and a
 moving session against a reference the receiver is not the source of. Until then, treat a
-predictor that behaves well here as untested rather than validated, and check whether the
-phone traces show the same thing before assuming any of it is specific to this receiver.
+predictor that behaves well here as untested. Check whether the phone traces show the same
+thing before assuming any of it is specific to this receiver.
 
 ## Stacks, and how overflow presents
 
@@ -202,9 +202,9 @@ connected and a real fix.
 
 The cause was never found, only avoided; it is some change between 0.17 and 0.19. Nothing
 establishes that later releases still carry it — the versions after 0.19 were never tried,
-and a fault this visible may well have been fixed upstream since. So the sequence on any new
-work is: build against the latest, soak it with BLE running, and only drop back if the
-reboots appear.
+and a fault this visible may well have been fixed upstream since. The sequence on any new
+work is therefore: build against the latest, soak it with BLE running, and drop back only if
+the reboots appear.
 
 Dropping back costs one associated type (`type Capabilities = ()`, which later versions
 removed); the `#[effect]` API is otherwise identical. That is worth knowing when deciding

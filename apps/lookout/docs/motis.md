@@ -18,7 +18,7 @@ interpolation is the nationwide ceiling. A second source of *real* positions has
 from somewhere else.
 
 Realtime therefore matters twice over: without it the interpolation is against the
-scheduled timetable, and a delayed train is reported where it should have been.
+scheduled timetable, and a delayed train is reported at its scheduled position.
 
 ## The feed is DELFI, and the choice changes what is answerable
 
