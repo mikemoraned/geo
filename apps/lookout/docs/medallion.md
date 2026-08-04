@@ -5,6 +5,9 @@ layer uses. This is the [medallion
 pattern](https://motherduck.com/glossary/medallion-architecture/): data flows
 landing → bronze → silver → gold, getting more derived and more query-shaped at each step.
 
+Everything up to [Options considered or deferred](#options-considered-or-deferred) describes
+the store as it is. That last section holds what was weighed and set aside.
+
 ## Root
 
 ```
@@ -114,9 +117,7 @@ Format: **[GeoParquet 1.1.0](https://geoparquet.org/releases/v1.1.0/)**, optimis
 and scalable lookup. Metadata that makes queries faster, such as bounding boxes, is embedded.
 
 - Geometry is [WKB](https://libgeos.org/specifications/wkb/)-encoded
-  [simple features](https://www.ogc.org/standards/sfa). Parquet's native
-  [GEOMETRY/GEOGRAPHY types](https://parquet.apache.org/docs/file-format/types/geospatial/)
-  are not used, as engine support for them remains limited.
+  [simple features](https://www.ogc.org/standards/sfa).
 - A clean lat/lon geometry in a global CRS (CRS 84) is always present, in a column named
   the same across every dataset. A reader therefore finds a dataset's geometry without
   knowing which dataset it is.
@@ -192,18 +193,8 @@ compressed GeoArrow is not universally supported by consuming viewers.
 ## No table format
 
 The layout above *is* the metadata: partitioning is directory names, schema is the files',
-and a partition is replaced by rewriting it. A table format holds partition spec, schema
-history, snapshots, and statistics as metadata beside the data. It would add atomic
-replacement of many files at once, schema evolution, time travel, and pruning from statistics
-rather than from paths.
-
-**Deliberately not adopted.** It costs a metadata layer to understand and an engine support
-matrix to track. This store is small enough that a partition is one file, so a rewrite is
-already atomic. The trigger to reconsider is partition-level atomicity or schema evolution
-starting to cost debugging time. Judge whichever is chosen then first on breadth of engine
-support, since multi-engine readability is the rule this store is built around. Check its
-write maturity too, against the implementation's own status reporting, since this store would
-be a writer and not only a reader.
+and a partition is replaced by rewriting it. Nothing holds partition spec, schema history,
+snapshots, or statistics beside the data.
 
 ## Rederivability
 
@@ -341,13 +332,8 @@ level requires knowing every value the run produced for it, so it is done where 
 known. A rebuild covering only part of a dataset must therefore not sweep: the part it did
 not derive would read as a part that produced nothing.
 
-Whether a silver dataset additionally **retains history** — superseded versions of a row, or
-validity intervals — is a per-dataset decision, and one to settle explicitly rather than by
-accident. It is needed when something downstream has to know what the
-dataset said at an earlier time, and unnecessary when only the current view is ever read.
-Whichever is chosen, apply it consistently across silver rather than varying it
-dataset-by-dataset. Rows carry the identifiers of the bronze inputs they derive from, so
-lineage remains traceable either way.
+Rows carry the identifiers of the bronze inputs they derive from, so lineage stays traceable
+whatever a dataset does about superseded rows.
 
 ### Gold
 
@@ -367,3 +353,29 @@ format has no room for columns. It is laid out the same way and holds its file i
 which is the one thing that always differs, and what it cannot carry as a column belongs in
 the run's log instead. Something outside the store holding one of these cannot say which run
 produced it, which is why a rerun adds a version rather than replacing one.
+
+## Options considered or deferred
+
+Alternatives weighed and set aside, with what would justify revisiting each. None of this
+describes how the store behaves now.
+
+**A table format.** The layer that holds partition spec, schema history, snapshots, and
+statistics as metadata beside the data. It would add atomic replacement of many files at
+once, schema evolution, time travel, and pruning from statistics rather than from paths. Not
+adopted: it costs a metadata layer to understand and an engine support matrix to track,
+against a store where a partition is one file and a rewrite is therefore already atomic.
+Revisit when partition-level atomicity or schema evolution starts to cost debugging time.
+Judge a candidate first on breadth of engine support, since multi-engine readability is the
+rule this store is built around, and then on write maturity against its own status reporting,
+since this store would be a writer and not only a reader.
+
+**Parquet's native
+[GEOMETRY/GEOGRAPHY types](https://parquet.apache.org/docs/file-format/types/geospatial/).**
+Not used, as engine support for them remains limited. Silver encodes geometry as WKB instead.
+Revisit when every engine in use reads them with no engine-specific handling.
+
+**Retaining history in silver** — superseded versions of a row, or validity intervals.
+Deferred, and a per-dataset decision to settle explicitly rather than by accident. It is
+needed when something downstream has to know what a dataset said at an earlier time, and
+unnecessary when only the current view is ever read. Whichever is chosen, apply it
+consistently across silver rather than varying it dataset by dataset.
