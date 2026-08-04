@@ -35,6 +35,13 @@ This is a clean-up slice focussed on consolidating and improving what we have in
     two deliberate departures from the skill: British spelling, and `data` as a mass noun
   * `completed-slices.md` was included in the pass by request — wording only, never the
     record of what was done, since `.claude/rules/slices.md` holds it append-only
+* [x] enable `technical-writing@technical-writing` skill
+  ```
+  /plugin marketplace add rnorth/technical-writing
+  /plugin install technical-writing@technical-writing
+  ```
+* [ ] do a pass over docs with `technical-writing@technical-writing` skill
+* [ ] ensure this `technical-writing@technical-writing` skill is always enabled
 * [x] extract knowledge out of claude-specific areas like .claude files and into explicit docs under docs:
   * landed as three topic docs beside `medallion.md`: `device.md`, `motis.md`, `architecture.md`
   * `docs/` is self-contained and makes no reference to the spikes, so they can be deleted
