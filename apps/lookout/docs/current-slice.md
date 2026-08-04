@@ -14,22 +14,22 @@ As part of this we should also be able to delete all the current `visualise` cod
 
 ### Sketch
 
-The sort of thing I am thinking of is a CRUX shell which defines the unit that is designed to be embedded in an M5 device, a rerun runner, or (later) an App or Website. For the M5 version of this in the spikes so far we've allowed the Events to contain GNSS strings from an attached GPS device. That's probably too low-level for what I want here.
+The sort of thing I am thinking of is a CRUX core which is designed to be embedded in a different shell; M5 device, a rerun runner, or (later) an App or Website.
 
-Instead I'd like the shell to consume a normalised GPS Sample which is rich enough to represent all the information that may be useful. We can then create a parser for the GNSS strings which converts to this normalised form. We wouldn't need this parser code for the rerun version of this as it can be driven by fake normalised events e.g. that are extracted from `sessions` in silver.
+For the M5 version of this in the spikes so far we've allowed the Events to contain GNSS strings from an attached GPS device. That's probably too low-level for what I want here. Instead I'd like the core to consume a normalised GPS Sample which is rich enough to represent all the information that may be useful. We can then create a parser for the GNSS strings which converts to this normalised form. We wouldn't need this parser code for the rerun version of this as it can be driven by fake normalised events e.g. that are extracted from `sessions` in silver.
 
-Within this shell there would then be a state-machine which is even simpler in interface i.e.  it is effectively a state-machine that
-* receives a series of Events which are either GPS Samples or a clock advancement to a timestamp (a GPS Sample also contains an embedded timestamp)
+Within this core there would then be a state-machine which is even simpler in interface i.e. it
+* receives a series of Events which are either GPS Samples or a clock advancement to a timestamp (a GPS Sample also contains an embedded timestamp so can also advance time)
 * transitions when an Event is passed
 * can be queried to say which water passing points it predicts we will pass and when
 
-This is minimal generic `trait` but additionally a state may expose extra info like, for example, which water passing points are receding or coming closer.
+This state-machine interface should be captured by a minimal generic `trait`. A particular state-machine struct implementing this trair may additionally expose extra info like, for example, which water passing points are receding or coming closer, for the sake of a nicer display. It may make sense to capture these expectations in a separate trait.
 
-The Event type given to the state-machine can be same as given to the CRUX shell, but doesn't have to be.
+The Event type given to the state-machine can be same as given to the CRUX core, but doesn't have to be.
 
-For the purposes of producing a rerun simulation it may be easier to wrap and expose a state-machine rather than a full CRUX shell.
+For the purposes of producing a rerun simulation it may be easier to wrap and expose a state-machine directly rather than a full CRUX core.
 
-We should split the crates into a core area (current `crates` dir) and create a new `platform` sub-dir where `m5plus` and `rerun` can live. The esp platforms will need to be their own workspaces as they can't compile as part of the main workspace, but `rerun` probably can.
+Under `crates` dir we should add a new `platform` sub-dir where `m5plus` and `rerun` can live. The esp platform will need to be in its own workspace as they can't compile as part of the main workspace, but `rerun` probably can.
 
 ### Tasks
 
