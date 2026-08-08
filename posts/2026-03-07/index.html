@@ -1,0 +1,191 @@
+
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- HTML Meta Tags -->
+    <title>Geo projects of Mike Moran</title>
+    <meta
+      name="description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Facebook Meta Tags -->
+    <meta property="og:url" content="https://geo.houseofmoran.io" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Geo projects of Mike Moran" />
+    <meta
+      property="og:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="twitter:domain" content="geo.houseofmoran.io" />
+    <meta property="twitter:url" content="https://geo.houseofmoran.io" />
+    <meta name="twitter:title" content="Geo projects of Mike Moran" />
+    <meta
+      name="twitter:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    
+      <link rel="alternate" type="application/atom+xml" title="Atom" href="https://geo.houseofmoran.io/atom.xml">
+    
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
+    >
+    <script src="https://kit.fontawesome.com/d6b9545e6b.js" crossorigin="anonymous"></script>
+    <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.file-downloads.hash.outbound-links.js"></script>
+    <style>
+      aside {
+        font-size: smaller;
+        border: 1px solid lightgray;
+        border-radius: 5px;
+        padding: 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="columns">
+        <div class="column">
+          
+<nav class="navbar is-info" role="navigation" aria-label="main navigation">
+    <div class="navbar-brand">
+        <a class="navbar-item" href="/">
+            <i class="fa-solid fa-globe"></i> Geo Projects
+        </a>
+
+        <a class="navbar-item" href="https://www.houseofmoran.com">
+            by Mike Moran
+        </a>
+    </div>
+</nav>
+
+<section class="section">
+    <article>
+    
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2026-03-07&#x2F;">
+        <p class="card-header-title">What happens to Edinburgh if sea-level rises?</p>
+      </a>
+    </header>
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2026-03-07&#x2F;">
+          <img src="&#x2F;images&#x2F;edinburgh_heights&#x2F;edinburgh_height_slices_grid.png" alt="Map of Edinburgh showing areas of Edinburgh above different heights" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>Like <a href="/posts/2025-12-26/">before</a>, this was another question that came up over the dinner-table when I was in Germany at xmas. I'd recently found out at a <a href="https://thegeomob.com/post/sept-30th-2025-geomobedi-details">September Edinburgh GeoMob</a> talk by <a href="https://www.linkedin.com/in/peter-creasey-9250962/">Peter Creasey</a> that Scotland had <a href="https://remotesensingdata.gov.scot/data#/map">freely-available Lidar datasets</a>. This sounded like a good opportunity to use them, particularly because I was wanting to play with datasets that provide height information.</p>
+<span id="continue-reading"></span>
+<p>The first hurdle at which so many of these "what if?" questions fall is access to data. So, a huge thanks to the Scottish Government for making these datasets available, and in an easily understood form!</p>
+<p>I decided to interpret the question of "What happens to Edinburgh if sea-level rises?" as "Which parts of Edinburgh are above different heights?". The Lidar datasets contain a <a href="https://www.neonscience.org/resources/learning-hub/tutorials/chm-dsm-dtm">Digital Terrain Model</a> which looked like what I needed as input, so my rough plan was:</p>
+<ol>
+<li>Find boundary of Edinburgh in <a href="https://explore.overturemaps.org/?mode=explore&amp;feature=divisions.division_area.58a34fa4-bc76-476e-81a8-1ed8a5cd693f#11.72/55.9108/-3.2636">OvertureMaps</a></li>
+<li>Find grid cells in Lidar data corresponding to this area</li>
+<li>Build an H3 grid over same area</li>
+<li>Map H3 grid over Lidar cells, extracting out the min heights that sit under it</li>
+<li>Visualise impact of changing sea-level</li>
+</ol>
+<p>This interpretation and method for sure could be improved, but I find it is sometimes easier to do something concrete but imperfect, before improving it later or taking these learnings to subsequent projects.</p>
+<p>One of the first things I noticed after a first-pass through doing all of the above was that the Edinburgh boundary seemed to exclude pieces of the coast:</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;edinburgh_heights&#x2F;edinburgh_boundary2.png" />
+</figure><br/>
+<p>This is a good example of how different aspects of geo quality can affect what you are doing in a very case-specific way. With my other <a href="/posts/2024-10-01/">projects</a>, where I've used this same boundary, I've been using it for things like constraining placement of random points, so it hasn't mattered too much. In this case I explicitly care about the boundary close to the water.</p>
+<p>I decided to fudge it a little here by applying a buffer of 400 metres and manually inspecting it was sufficient to include my areas of interest. This isn't rigourous and wouldn't scale easily to other cities, but was good enough for this specific example.</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;edinburgh_heights&#x2F;edinburgh_boundary_buffered2.png" />
+</figure><br/>
+<p>Building and using the grids ended up being a lot of back-and-forth between Claude/Opus4.5 and myself, either separately or via the <a href="https://marimo.io/features/feat-ai">Marimo integration</a>. Claude tended to produce a big wodge of Python attempting to solve the whole thing. Whilst I like Python, it's too easy for Claude, and myself, to make dumb mistakes. Add onto this that we're dealing with Geo, where you're only one bad projection away from making your result meaningless.</p>
+<p>So, I used Claude's suggestions in a similar way as I do my own Geo explorations: splitting steps into smaller functions and chunks, and applying them incrementally in a notebook, inspecting the output as I go. For example, visualising the Lidar grid ...</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;edinburgh_heights&#x2F;edinburgh_lidar2.png" />
+</figure><br/>
+<p>... or sampling the resulting output minimum heights.</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;edinburgh_heights&#x2F;edinburgh_grid_sample2.png" />
+</figure><br/>
+<p>The process of extracting the data takes about an hour, so I split this out into a <a href="/notebooks/questions/edinburgh_heights/extract_edinburgh.html">separate notebook</a> which outputs a <a href="https://geoarrow.org">GeoArrow</a> file in <a href="https://arrow.apache.org/docs/python/feather.html">Feather format</a>. If I were to do this again, I'd probably explore the <a href="https://developmentseed.org/geozarr-examples/examples/cog-to-zarr/">Zarr store over GeoTIFF</a> option, as that may be more more efficient; this would probably replace steps 2 to 4, just with a different cell definition.</p>
+<p>I found <a href="https://kepler-preview.foursquare.com">Kepler.gl</a> really useful as a way to play with this dataset and in particular to see where there may be interesting height cut-points. Note that the Arrow file needed to be saved as uncompressed, as Kepler doesn't yet support compressed GeoArrow.</p>
+<figure class="image is-2by1">
+<iframe
+    class="youtube has-ratio"
+    width="560"
+    height="315"
+    src=""
+    data-src="https://www.youtube-nocookie.com/embed/7-W-LEc9GPQ"
+    title="YouTube video player"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen>s
+</iframe>
+</figure><br/>
+<p>Ultimately, I produced a summary in a <a href="/notebooks/questions/edinburgh_heights/vis_edinburgh.html">another notebook</a> which sliced at different heights, and then I visually compared how this affected the area remaining:</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;edinburgh_heights&#x2F;edinburgh_height_slices.png" />
+</figure><br/>
+<p>My overall (simplistic) conclusion is that Edinburgh will not be hugely effected, especially if you consider that this is the buffered shape that already includes some sea area. This seems to be consistent with a more rigourous approach from <a href="https://www.climatecentral.org/what-we-do">Climate Central</a> looking at, for example, <a href="https://coastal.climatecentral.org/mapview/12/-3.2204/55.9412/014da2d18f83f88d1b0d3a9607fd1f41e21d47166f47d9cf1b00cb47bc60e86a">land projected to be below annual flood level in 2110</a> (red areas):</p>
+<figure class="image">
+    <img src="&#x2F;images&#x2F;edinburgh_heights&#x2F;year_2110_return_level_1_ssp3rcp70_p50_contiguous_ipcc_2021_med.png" />
+</figure><br/>
+<p>This is obviously devastating for people who live in these areas, and I don't want to minimise that. I'm also sure that Edinburgh as a whole will experience many other negative climactic impacts, but looking purely at direct sea-level rise, it seems to be comparatively spared.</p>
+<br/>
+
+        
+        <a href="&#x2F;posts&#x2F;2026-03-07&#x2F;">
+          <time datetime="2026-03-07">
+            <i class="fa-solid fa-calendar-day"></i>  7 March 2026
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+    </article>
+</section>
+
+        </div>
+      </div>
+    </div>
+    <footer class="footer">
+      <div class="content has-text-centered">
+        <p>
+          Last updated on  8 August 2026 at 12:14am
+        </p>
+      </div>
+    </footer>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/+esm';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script defer>
+      const youtube_iframes = Array.from(
+        document.getElementsByClassName("youtube")
+      );
+      youtube_iframes.forEach((youtube_iframe) => {
+        const data_src = youtube_iframe.getAttribute("data-src");
+        if (data_src) {
+          youtube_iframe.setAttribute("src", data_src);
+        }
+      });
+    </script>
+  </body>
+</html>
