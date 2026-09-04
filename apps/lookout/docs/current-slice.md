@@ -144,11 +144,17 @@ the crossings. The reboot issue that pinned crux to `=0.16.2` appears only with 
 (see [device.md](device.md)), so leaving BLE out takes the version question off this slice
 entirely.
 
-- [ ] Wrap the state machine in a core carrying spike 7's panel view model, extended with
-      the predicted times: clock, fix, quality, battery, nearest, within.
-- [ ] Keep the crossings carried in flash and the battery judgement in the core, both as
-      spike 7 has them.
-- [ ] Build against the current `crux_core` rather than the pinned `=0.16.2`.
+- [x] Wrap the state machine in a core carrying spike 7's panel view model, extended with
+      the predicted times: clock, fix, quality, battery, nearest, within. The crate is
+      `crates/platform-core`, next to the `crates/platform` shells that drive it. A crossing's line is its distance and a countdown, and **no
+      longer its id**: 13 characters do not hold all three, and eight hex digits naming a row
+      in a dataset say nothing to someone on a train.
+- [x] Keep the crossings carried in flash and the battery judgement in the core, both as
+      spike 7 has them. Scanning them where they lie needed a `Crossings` source in
+      `predictor`, since `CrowFlies` took a `Vec` — building one would have copied 69 KB of
+      flash into RAM, against what [device.md](device.md) records.
+- [x] Build against the current `crux_core` rather than the pinned `=0.16.2`. That is 0.20,
+      which drops the `Capabilities` associated type and the `caps` argument to `update`.
 
 ### 4. `crates/platform/m5plus`
 

@@ -12,7 +12,7 @@ pub mod parser;
 pub mod predict;
 pub mod sample;
 
-pub use crossing::{Crossing, CrossingId};
+pub use crossing::{Crossing, CrossingId, Crossings};
 pub use crow_flies::CrowFlies;
 pub use measure::Measure;
 pub use parser::Parser;

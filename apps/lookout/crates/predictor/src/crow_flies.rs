@@ -7,7 +7,7 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
-use crate::crossing::{Crossing, CrossingId};
+use crate::crossing::{Crossing, CrossingId, Crossings};
 use crate::measure::Measure;
 use crate::predict::{Event, ObserveError, Predict, Prediction, Trend, Trending};
 use crate::sample::Sample;
@@ -23,9 +23,12 @@ pub const DEFAULT_RADIUS_METRES: f64 = 5_000.0;
 const HOLDING_METRES: f64 = 10.0;
 
 /// A predictor that measures in straight lines.
+///
+/// `C` is where the crossings come from, defaulting to the `Vec` anything off the device
+/// holds them in. The device passes the columns it scans in flash instead.
 #[derive(Debug, Clone)]
-pub struct CrowFlies<T: Measure> {
-    crossings: Vec<Crossing<T>>,
+pub struct CrowFlies<T: Measure, C: Crossings<T> = Vec<Crossing<T>>> {
+    crossings: C,
     radius_metres: T,
     now: Option<DateTime<Utc>>,
     /// The last fix, kept to derive a speed for a receiver that reports none.
@@ -35,9 +38,9 @@ pub struct CrowFlies<T: Measure> {
     previous: Vec<Prediction<T>>,
 }
 
-impl<T: Measure> CrowFlies<T> {
+impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
     /// A predictor over `crossings`, reporting everything within `radius_metres`.
-    pub fn new(crossings: Vec<Crossing<T>>, radius_metres: f64) -> Self {
+    pub fn new(crossings: C, radius_metres: f64) -> Self {
         // Infallible: `from_f64` only declines a value the target cannot represent, and a
         // radius in metres is an ordinary magnitude in any float.
         let radius_metres = T::from_f64(radius_metres).expect("a radius fits in any float");
@@ -77,9 +80,7 @@ impl<T: Measure> CrowFlies<T> {
         let from = sample.position;
         let radius_metres = self.radius_metres;
 
-        let mut predicted: Vec<Prediction<T>> = self
-            .crossings
-            .iter()
+        let mut predicted: Vec<Prediction<T>> = Crossings::iter(&self.crossings)
             .filter_map(|crossing| {
                 let metres = Haversine.distance(from, crossing.position);
                 (metres <= radius_metres).then(|| Prediction {
@@ -135,7 +136,7 @@ fn arrival<T: Measure>(at: DateTime<Utc>, metres: T, speed_mps: T) -> Option<Dat
     at.checked_add_signed(TimeDelta::try_milliseconds(milliseconds as i64)?)
 }
 
-impl<T: Measure> Predict<T> for CrowFlies<T> {
+impl<T: Measure, C: Crossings<T>> Predict<T> for CrowFlies<T, C> {
     /// The clock moves before anything else does, so an event out of order is refused with
     /// the predictor untouched rather than half applied.
     fn observe(&mut self, event: Event<T>) -> Result<(), ObserveError> {
@@ -154,7 +155,7 @@ impl<T: Measure> Predict<T> for CrowFlies<T> {
     }
 }
 
-impl<T: Measure> Trending for CrowFlies<T> {
+impl<T: Measure, C: Crossings<T>> Trending for CrowFlies<T, C> {
     fn trend(&self, crossing: CrossingId) -> Option<Trend> {
         let metres = |predictions: &[Prediction<T>]| {
             predictions
@@ -214,7 +215,7 @@ mod tests {
         assert!((got - want).abs() < TOLERANCE_M, "{got} is not near {want}");
     }
 
-    fn ids<T: Measure>(predictor: &CrowFlies<T>) -> Vec<u32> {
+    fn ids<T: Measure, C: Crossings<T>>(predictor: &CrowFlies<T, C>) -> Vec<u32> {
         predictor
             .predictions()
             .iter()

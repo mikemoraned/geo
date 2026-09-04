@@ -78,6 +78,7 @@ pyo3 = "0.28"
 # python are our `RecordBatch`.
 pyo3-arrow = "0.16"
 crossings = { path = "crates/crossings" }
+platform-core = { path = "crates/platform-core" }
 medallion = { path = "crates/medallion" }
 model = { path = "crates/model" }
 predictor = { path = "crates/predictor" }

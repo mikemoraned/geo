@@ -63,6 +63,30 @@ impl<T: Measure> Crossing<T> {
     }
 }
 
+/// Where a predictor reads its crossings from.
+///
+/// A source rather than a slice, because the two platforms hold the set differently. The
+/// device keeps thousands of crossings in flash as three parallel columns and scans them
+/// where they lie; copying them into a `Vec` to scan would cost tens of kilobytes of RAM the
+/// board has better uses for. Off the device a `Vec` is the obvious source, and is one.
+pub trait Crossings<T: Measure> {
+    /// Every crossing in the set, in whatever order it is held in. A scan reads all of them,
+    /// so the order is the source's to choose.
+    fn iter(&self) -> impl Iterator<Item = Crossing<T>>;
+}
+
+impl<T: Measure> Crossings<T> for Vec<Crossing<T>> {
+    fn iter(&self) -> impl Iterator<Item = Crossing<T>> {
+        self.as_slice().iter().copied()
+    }
+}
+
+impl<T: Measure> Crossings<T> for &[Crossing<T>] {
+    fn iter(&self) -> impl Iterator<Item = Crossing<T>> {
+        (*self).iter().copied()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

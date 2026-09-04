@@ -132,6 +132,11 @@ silver-session-crossings *args:
 gold-pack-crossings *args:
     cargo run -p crossings --bin pack_crossings -- {{args}}
 
+# Regenerate the crossings the device carries in flash. Same arguments as gold-pack-crossings.
+carried-crossings *args:
+    cargo run -p crossings --bin pack_crossings -- \
+        --output crates/platform-core/src/water-crossings.pointset {{args}}
+
 # Regenerate the made-up crossings spike 5 carries in flash.
 random-crossings *args:
     cargo run -p crossings --bin random_crossings -- \
