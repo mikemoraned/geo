@@ -142,6 +142,42 @@ random-crossings *args:
     cargo run -p crossings --bin random_crossings -- \
         --output spikes/m5/spike5-distance/core/src/random-crossings.pointset {{args}}
 
+# The M5StickC PLUS2 shell, in `crates/platform/m5plus`. Recipes are named for the platform
+# rather than for "the device", since a second one would need its own: each shell has its own
+# workspace, its own toolchain and its own target dir, so every recipe below runs cargo in that
+# directory rather than this one.
+#
+# espup writes `~/export-esp.sh` to put the Xtensa clang on LIBCLANG_PATH. Resolving it here
+# means the recipes work in a shell that has not sourced it: without it, `esp-idf-sys`'s
+# bindgen step fails with `unknown target triple 'xtensa'`, around ten minutes into a build.
+export LIBCLANG_PATH := `ls -d "$HOME"/.rustup/toolchains/esp/xtensa-esp32-elf-clang/*/esp-clang/lib 2>/dev/null | tail -1`
+
+m5plus_dir := "crates/platform/m5plus"
+
+# Build the M5StickC PLUS2 shell. The first run installs ESP-IDF and its toolchains under
+# `crates/platform/m5plus/.embuild`, which takes several gigabytes and the best part of an hour.
+# **A build that dies with a SIGSEGV inside LLVM's Xtensa backend is the compiler, not the
+# source** — run it again.
+m5plus-build:
+    cd {{m5plus_dir}} && cargo build
+
+# The same, in release. Worth having: the dev profile carries `debug-assertions` and
+# `overflow-checks`, which put a branch on every arithmetic operation in the crossing scan, and
+# builds at `opt-level = "z"` rather than "s". Release is 1.7x faster over the same scan.
+m5plus-build-release:
+    cd {{m5plus_dir}} && cargo build --release
+
+# Flash the M5StickC PLUS2 and tail its serial console. Ctrl-C to leave the monitor.
+m5plus-flash: m5plus-build
+    cd {{m5plus_dir}} && espflash flash --monitor target/xtensa-esp32-espidf/debug/m5plus
+
+m5plus-flash-release: m5plus-build-release
+    cd {{m5plus_dir}} && espflash flash --monitor target/xtensa-esp32-espidf/release/m5plus
+
+# Tail the serial console of whatever is already flashed on the M5StickC PLUS2.
+m5plus-monitor:
+    cd {{m5plus_dir}} && espflash monitor
+
 # Convert the medallion store into a rerun .rrd. Requires --since, e.g.
 # `just visualise --since 7d`; see visualise/README.md for the rest.
 visualise *args:

@@ -5,7 +5,10 @@ edition.workspace = true
 
 [dependencies]
 # Some entries are written out rather than inherited from the workspace: see docs/device.md.
-crux_core = "0.20"
+# Pinned back from 0.20, which reboots this board within seconds of its first event, inside
+# its own per-effect machinery and with no BLE anywhere near it. See docs/device.md. Unpinning
+# costs an associated type; leaving it unpinned costs a device that does not stay up.
+crux_core = "=0.16.2"
 battery-estimator = "0.3"
 bytemuck = "1"
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }

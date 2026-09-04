@@ -4,6 +4,11 @@
 # contain, and pins crux to a version the app does not. Listing one here as well leaves
 # cargo with two roots for the same directory and it refuses to load either.
 members = ["crates/*"]
+# `crates/platform` holds the shells that drive the core, and is not a crate itself. The glob
+# above would still try to read a manifest there, so it is excluded — which also keeps
+# `crates/platform/m5plus` out, as a crate targeting Xtensa with its own workspace must be.
+# A shell that does belong here, such as `crates/platform/rerun-py`, is listed by name.
+exclude = ["crates/platform"]
 resolver = "2"
 
 [workspace.package]

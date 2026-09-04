@@ -1,0 +1,39 @@
+# Standalone workspace: this crate targets `xtensa-esp32-espidf`, so the host-targeted lookout
+# workspace above it must neither contain it nor glob it in. See docs/device.md for what
+# happens when both claim the same directory.
+[workspace]
+
+[package]
+name = "m5plus"
+version = "0.1.0"
+authors = ["Mike Moran <mike@houseofmoran.com>"]
+edition = "2024"
+resolver = "2"
+rust-version = "1.90"
+
+[[bin]]
+name = "m5plus"
+path = "src/bin/m5plus.rs"
+harness = false # no built-in test harness: nothing here can run off the device
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true    # Symbols are nice, and they don't increase the size on Flash
+opt-level = "z"
+
+[dependencies]
+log = "0.4"
+esp-idf-svc = { version = "0.52.1", features = ["critical-section"] }
+mipidsi = "0.10"
+embedded-graphics = "0.8"
+# Must match the core's pin — see `../../platform-core/Cargo.toml`.
+crux_core = "=0.16.2"
+# Both imported directly, not over FFI: a Rust shell needs no typegen or bridge. They inherit
+# `edition` and `[lints]` from the lookout workspace, which they still belong to.
+platform-core = { path = "../../platform-core" }
+predictor = { path = "../../predictor" }
+
+[build-dependencies]
+embuild = "0.33"

@@ -140,9 +140,11 @@ predictor.
 ### 3. The Crux core
 
 **Leave BLE off.** Nothing in this slice needs it: the panel is the output, and flash carries
-the crossings. The reboot issue that pinned crux to `=0.16.2` appears only with NimBLE running
-(see [device.md](device.md)), so leaving BLE out takes the version question off this slice
-entirely.
+the crossings. ~~The reboot issue that pinned crux to `=0.16.2` appears only with NimBLE
+running (see [device.md](device.md)), so leaving BLE out takes the version question off this
+slice entirely.~~ **Refuted on hardware**: 0.20 double-faults on the first event with no radio
+on the board at all. BLE was never the precondition — it only looked like one while 0.19 was
+the only broken version tried. The pin is back to `=0.16.2`.
 
 - [x] Wrap the state machine in a core carrying spike 7's panel view model, extended with
       the predicted times: clock, fix, quality, battery, nearest, within. The crate is
@@ -153,8 +155,11 @@ entirely.
       spike 7 has them. Scanning them where they lie needed a `Crossings` source in
       `predictor`, since `CrowFlies` took a `Vec` — building one would have copied 69 KB of
       flash into RAM, against what [device.md](device.md) records.
-- [x] Build against the current `crux_core` rather than the pinned `=0.16.2`. That is 0.20,
+- [-] Build against the current `crux_core` rather than the pinned `=0.16.2`. That is 0.20,
       which drops the `Capabilities` associated type and the `caps` argument to `update`.
+      **Moot**: 0.20 reboots the device, so the pin stays and the associated type comes back.
+      Done and then undone, which is what establishes it — the version question could not be
+      settled off the board.
 
 ### 4. `crates/platform/m5plus`
 
@@ -165,15 +170,38 @@ GPIO4, panel offset, GNSS RX pin, stack sizing, and UART ring buffer.
 
 This is where `predictor` first compiles for Xtensa. Nothing before it builds for the device,
 so a dependency that cannot cross surfaces here. `geo-types` is the one that has not already
-run on the board.
+run on the board — and it crosses: `predictor` and `platform-core` both build for
+`xtensa-esp32-espidf` untouched.
 
-- [ ] Generate the project from the esp-idf template into its own workspace, and get it
-      booting with the power hold set.
-- [ ] Reach for the higher-level M5 crates **first**, for the battery and for anything else
+- [x] Generate the project from the esp-idf template into its own workspace, and get it
+      booting with the power hold set. The crate is `crates/platform/m5plus`, and it is
+      excluded from the app workspace by name: `members = ["crates/*"]` would otherwise try to
+      read a manifest in `crates/platform` itself and refuse to load the workspace at all.
+      ESP-IDF installs under the crate rather than `~/.espressif`, because the sandbox only
+      writes inside `apps/lookout`.
+- [x] Reach for the higher-level M5 crates **first**, for the battery and for anything else
       they cover. Spike 7 read the ADC by hand only because `m5unified` initialises the
-      display alongside power. Weigh that again now we need the display too.
-- [ ] Drive the panel and read the GNSS receiver over UART, feeding samples to the core.
-- [ ] Flash it and confirm on hardware.
+      display alongside power. Weigh that again now we need the display too. **Weighed and
+      declined**: the crate's shim pins ESP-IDF below the 5.5 this board runs, and wants
+      vendoring as a C++ component. See [device.md](device.md).
+- [x] Drive the panel and read the GNSS receiver over UART, feeding samples to the core.
+      **The shell sends no `Tick`**: this board's clock counts from the epoch at boot, with no
+      NTP and no RTC, so every tick would be behind the receiver and refused. The panel's clock
+      is the predictor's, which a fix advances — one line changed in the core, and `Model::now`
+      went with it.
+- [x] Flash it and confirm on hardware. Claude cannot open the serial port, so this is
+      `just m5plus-flash` run by hand and the boot log read back. Confirmed on a real fix: the
+      panel's clock is the receiver's UTC, the position and quality lines read, and the scan
+      runs at 1 Hz against the whole set for no measurable stack. **A crossing line has never
+      been drawn**, because the carried set is Germany and the fix was in Scotland, so the
+      count correctly reads `0 in 5km`. The predictions themselves are covered by the core's
+      tests and are what the rerun runner exercises end to end.
+- [ ] Move the ESP-IDF install to `~/.espressif`, so one copy serves every worktree instead
+      of 4.3 GB under each. Set `ESP_IDF_TOOLS_INSTALL_DIR = "global"` in the shell's
+      `.cargo/config.toml`, have the user run `just m5plus-build` once outside the sandbox to
+      populate it, then delete the in-crate `.embuild`. **Confirm Claude can still build
+      against it before deleting anything**: the sandbox refused to *write* there, and whether
+      it reads there, and whether embuild writes to it on every build, are both untested.
 
 ### 5. `crates/platform/rerun-py`
 

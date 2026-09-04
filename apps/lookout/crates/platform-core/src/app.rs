@@ -15,7 +15,6 @@ use crate::pointset::PointSet;
 use crate::{Float, carried};
 
 pub struct Model {
-    now: Option<DateTime<Utc>>,
     parser: Parser<Float>,
     battery: Battery,
     predictor: CrowFlies<Float, PointSet<'static>>,
@@ -26,7 +25,6 @@ pub struct Model {
 impl Default for Model {
     fn default() -> Self {
         Self {
-            now: None,
             parser: Parser::new(),
             battery: Battery::default(),
             predictor: CrowFlies::new(carried::crossings(), DEFAULT_RADIUS_METRES),
@@ -36,8 +34,10 @@ impl Default for Model {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Event {
-    /// The time, as the shell reads it. Set that clock from the receiver: the predictor
-    /// refuses one behind its own fixes, leaving the countdowns to advance on fixes alone.
+    /// The time, as the shell reads it, so a countdown shortens between fixes rather than
+    /// waiting for the next one. A time behind what the receiver has already reported is
+    /// refused, so a shell with no real clock — no NTP and no RTC, which is the device — can
+    /// send these or not, and the panel reads the same either way.
     Tick(DateTime<Utc>),
     /// One sentence off the UART. The shell reads a line and checks it is one, so noise on
     /// the wire is refused there rather than reaching here.
@@ -95,16 +95,14 @@ impl App for Lookout {
     type Model = Model;
     type ViewModel = ViewModel;
     type Effect = Effect;
+    /// Unused: an effect is described by the returned `Command`. The associated type is
+    /// required by this crux version and dropped in later ones.
+    type Capabilities = ();
 
     /// A render is asked for only where the panel would draw something different.
-    fn update(&self, event: Event, model: &mut Model) -> Command<Effect, Event> {
+    fn update(&self, event: Event, model: &mut Model, _caps: &()) -> Command<Effect, Event> {
         let change = match event {
-            // The clock is on the screen, so every tick draws something different.
-            Event::Tick(now) => {
-                model.now = Some(now);
-                self.observe(Observed::Elapsed(now), model);
-                Change::Moved
-            }
+            Event::Tick(now) => self.observe(Observed::Elapsed(now), model),
             Event::Sentence(sentence) => self.absorb(&sentence, model),
             Event::Battery(millivolts) => {
                 let before = model.battery.charge();
@@ -124,8 +122,9 @@ impl App for Lookout {
     }
 
     fn view(&self, model: &Model) -> Self::ViewModel {
-        // The predictor's clock, not the shell's: the arrival instants are on it, and it
-        // advances on a fix even where the shell's clock lags.
+        // The clock is the predictor's, and so is everything shown against it. It advances on
+        // a tick and on a fix alike, and refuses either where it is behind — so the panel
+        // shows the receiver's time on a device whose own clock counts from the epoch at boot.
         let now = model.predictor.now();
         // The fix the predictions were made from, so the panel cannot report a position the
         // scan never ran from.
@@ -133,8 +132,7 @@ impl App for Lookout {
         let predictions = model.predictor.predictions();
 
         ViewModel {
-            clock: model
-                .now
+            clock: now
                 .map(|now| now.format("%H:%M:%S").to_string())
                 .unwrap_or_else(|| NO_TIME_YET.to_string()),
             latitude: fix
@@ -283,6 +281,20 @@ mod tests {
         core.process_event(Event::Tick(fix_instant()));
 
         assert_eq!(core.view().clock, "20:43:29");
+    }
+
+    /// A fix carries true UTC, and a board with no NTP and no RTC counts from the epoch at
+    /// boot. The panel shows the receiver's time rather than 1970, and a shell with no clock
+    /// worth reporting can leave [`Event::Tick`] out entirely.
+    #[test]
+    fn a_clock_behind_the_receiver_does_not_move_the_panel_back() {
+        let core = fixed();
+        let epoch = DateTime::<Utc>::from_timestamp_nanos(0);
+
+        let effects = core.process_event(Event::Tick(epoch));
+
+        assert_eq!(core.view().clock, "20:43:29");
+        assert!(effects.is_empty());
     }
 
     /// Both are needed to read a jittering distance: 8 satellites at HDOP 2.4 wanders about a

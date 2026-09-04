@@ -1,0 +1,6 @@
+/.vscode
+/.embuild
+/target
+
+# Cargo.lock is committed, against the esp-idf-template default: this is a binary, and a
+# device build that worked once has to still build when someone comes back to it.

@@ -21,4 +21,13 @@ What a passing test run does and doesn't prove when Claude runs it.
   water-crossings notebook run, so `just test-python` — and therefore `just test-no-docker`
   as a whole — cannot complete here. Run the three Python suites separately to see which
   half is real, and have the user run the notebook recipes.
+- **The sandbox writes only inside the app directory**, so a toolchain that installs into
+  `$HOME` fails. A device crate therefore keeps its managed ESP-IDF under itself rather than
+  in a shared home-directory install, at the cost of several gigabytes per git worktree. The
+  failure is a bare "operation not permitted", reported after the whole toolchain resolution
+  has run.
+- **Nothing in a crate depending on `esp-idf-*` can be run here at all** — it cannot even be
+  compiled for the host. A clean device build proves it compiles and links for the target and
+  nothing more; behaviour needs a flash, which Claude cannot do. See
+  [working-with-claude.md](working-with-claude.md).
 - Say plainly, when reporting, which tests could not be run.

@@ -73,6 +73,29 @@ it refuses to load *either*. Every `cargo` command under `apps/lookout` then fai
 "multiple workspace roots found in the same workspace", while the device crate's own build
 keeps working. That asymmetry is how the breakage goes unnoticed.
 
+## The M5 libraries
+
+M5's own C++ libraries know this board: M5Unified carries its battery divider, its hold pin
+and its button wiring, and M5GFX its panel geometry. The `m5unified` crate (0.3.8) wraps them
+through a flat C ABI shim, whose C++ source and ESP-IDF component wrapper ship inside
+`m5unified-sys`.
+
+The pins and offsets they would supply are already established here, and each costs a
+constant. Against that, taking the libraries costs:
+
+- **An ESP-IDF older than this board runs.** The shim's component declares `idf: >=5.0,<5.5`,
+  because M5Unified and M5GFX 0.2.x bind the legacy I²C driver while 5.5 also pulls the
+  driver_ng paths, and linking both aborts.
+- **Vendoring the shim.** A consuming project registers it as an ESP-IDF component pointing at
+  the shim's sources, and a published crate's sources sit at a registry path no CMake file can
+  name. The shim's own examples reach it by relative path within its repository.
+- **C++ exceptions and RTTI**, which its components require and nothing else here needs.
+- **M5GFX in place of `mipidsi` and `embedded-graphics`**, so drawing goes through the C++ API
+  rather than a Rust `DrawTarget`.
+
+Worth revisiting if the IMU, the RTC, the buttons and the speaker are wanted together, when
+the constants to be replaced outnumber the ones already established.
+
 ## Display
 
 ST7789V2, driven with `mipidsi` + `embedded-graphics`. The configuration comes from M5's own
@@ -146,7 +169,8 @@ sample is far too small to characterise the receiver, and nothing here has been 
 varied by location, or checked against a known-good reference.
 
 Both were taken with the receiver deliberately held still, so any motion the numbers show is
-error:
+error. Neither is the best this receiver does: 13 satellites at HDOP 1.4 has been seen
+outdoors with a clear sky, so read the geometry in the table as poor rather than typical:
 
 | geometry | position wander | receiver's own speed |
 |---|---|---|
@@ -182,10 +206,14 @@ never presents as one.** It lands as a fault in whatever code is nearby: an SPI 
 moment of overflow and names the task.
 
 - **The main task needs far more than the template's 8192.** A shell with a display buffer,
-  a UART buffer, and a core whose model embeds a parser peaks around 26 KB. Rust commits a
-  function's whole frame on entry, so the size follows from everything `main` declares, not
-  from what has run. Log `uxTaskGetStackHighWaterMark(null)` at startup so there is a number
-  rather than an estimate.
+  a UART buffer, and a core whose model embeds a parser reaches 26,564 bytes before its loop
+  has drawn anything. Rust commits a function's whole frame on entry, so the size follows from
+  everything `main` declares, not from what has run. Log
+  `uxTaskGetStackHighWaterMark(null)` at startup so there is a number rather than an estimate.
+- **Size the stack by the headroom left over, not by the peak.** What remains after `main`'s
+  own frame is what everything the loop calls into has to fit in: a display driver, a
+  formatter, a parser. 32,768 leaves around 6 KB of it, which is thin against the failure mode
+  above; 49,152 leaves around 22 KB.
 - **Raising main's stack does nothing for a fault on another task**, which is what makes a
   NimBLE callback overflow so confusing.
 
@@ -204,30 +232,37 @@ this:
 - It appears to crash while idle, because the host retries connections in the background and
   fires the callbacks with nobody touching anything.
 
-## `crux_core` 0.19 rebooted the device; 0.16.2 is the fallback
+## `crux_core` after 0.16.2 reboots the device
 
-**Build against the current `crux_core`.** What follows is a known-good version to retreat
-to if the symptom below reappears, not a version to hold.
+**Pin `crux_core` to `=0.16.2`.** Two later versions have been tried on this board and both
+reboot it, so treat a newer one as a change to make deliberately and soak, not a default.
 
-With `esp32-nimble` running, `crux_core` 0.19 rebooted the device every 4 seconds to 7
-minutes, always inside its per-effect `Command`/crossbeam machinery — a null `&self` in
-`CommandContext::clone`, or endless recursion through `posix_memalign`. Without BLE the
-identical core ran indefinitely. On 0.16.2 the same build ran 30 minutes with a client
-connected and a real fix.
+The reboots are always inside crux's per-effect `Command`/crossbeam machinery, and reach it
+constantly: `App::update` returns a `Command` for every event, each allocating channels, an
+`Arc`, and a slab entry.
 
-The cause was never found, only avoided. It is some change between 0.17 and 0.19. Nothing
-establishes that later releases still carry it: the versions after 0.19 are untried, and a
-fault this visible may well have been fixed upstream since. The sequence on any new
-work is therefore: build against the latest, soak it with BLE running, and drop back only if
-the reboots appear.
+| version | conditions | result |
+|---|---|---|
+| 0.16.2 | BLE running, a client connected, a real fix | 30 minutes, no reboot |
+| 0.16.2 | no BLE, a real fix, scanning at 1 Hz | 21 minutes over two runs, no reboot |
+| 0.19 | `esp32-nimble` running | reboots every 4 seconds to 7 minutes |
+| 0.19 | no BLE | ran indefinitely |
+| 0.20 | no BLE, no radio of any kind | double exception on the first event |
 
-Dropping back costs one associated type, `type Capabilities = ()`, which later versions
-removed. The `#[effect]` API is otherwise identical. That is worth knowing when deciding how
-much newer crux to lean on in a shared core. The retreat is cheap while the core stays close
-to that API, and stops being cheap once it does not. That is a trade to make deliberately,
-not a reason to write against 0.16.2 by default.
+**BLE is not a precondition.** It looked like one while 0.19 was the only broken version
+tried; 0.20 faults with nothing but a UART, a display and an ADC on the board, within a
+second of the first sentence reaching the core.
 
-The fault is always inside crux's per-effect machinery. Two signatures, both reproducible:
+The cause has never been found, only avoided, and no release from 0.17 onwards has been seen
+working. Whether 0.20's fault and 0.19's are the same one is not established — only that both
+land in the same machinery.
+
+Holding this version costs one associated type, `type Capabilities = ()`, and a `caps`
+argument to `update`, both of which later versions removed. The `#[effect]` API is otherwise
+identical. So the cost is small while a shared core stays close to that API, and stops being
+small once it does not — which is what would make trying a newer release worth another soak.
+
+Three signatures, all reproducible:
 
 ```
 crux_core::command::Command::new → Box::new_uninit → CommandContext::spawn
@@ -240,10 +275,20 @@ Double exception, EXCVADDR = 0xffffffe0, backtrace an endless repeat of
 posix_memalign / _DoubleExceptionVector, with crossbeam Receiver::try_recv on top
 ```
 
-The first is a null pointer dereference in a context crux has just constructed. The second
-is runaway recursion through the allocator. `App::update` returns a `Command` for every
-event, and each one allocates channels, an `Arc`, and a slab entry, so this path runs
-constantly.
+```
+Double exception, EXCCAUSE 2, EXCVADDR = 0xffffffe0, backtrace CORRUPTED after one
+frame, with drop_in_place<crux_core::core::resolve::RequestHandle<()>> and memcpy in
+the registers
+```
+
+The first is a null pointer dereference in a context crux has just constructed. The second is
+runaway recursion through the allocator. The third reads as a pointer 32 bytes below null,
+dereferenced while a request handle is dropped.
+
+**The third is not a stack overflow, despite presenting as the same fault an overflow gives.**
+`CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK` was enabled and did not fire, and the high-water
+mark logged immediately before was 22,588 bytes free of 49,152. An address near null is a
+dereference, not an exhausted stack.
 
 **Measurement ruled these out — do not re-run them:**
 
@@ -257,10 +302,9 @@ constantly.
 | Allocation churn | Cutting events ~15× (only `RMC`/`GGA` reaching the core) did not stop it |
 | Model on the fragmented heap | Same crash with the core un-boxed, back on the main task's stack |
 
-If a current version does reboot, three options remain untried: bisecting 0.17/0.18 to find
-the change (one flash and a 15-minute soak each), porting to pre-`Command` crux 0.10, or
-dropping crux from the device shell. The last forfeits the shared-core argument that put it
-there.
+Three options remain untried: bisecting 0.17 and 0.18 to find the change (one flash and a
+15-minute soak each), porting to pre-`Command` crux 0.10, or dropping crux from the device
+shell. The last forfeits the shared-core argument that put it there.
 
 ## Battery
 
@@ -284,10 +328,8 @@ Two things about the `battery-estimator` crate:
   misread of 9 V as a confident 100%. A plausibility range in front of it turns both into
   saying nothing.
 
-`m5unified` knows this board properly, including a `battery_level()` for the PLUS2. But
-`M5Unified::begin()` initialises the display too, with no power-only path, so one number
-would cost the panel driver and a C++ ESP-IDF component. Worth revisiting if the IMU, RTC,
-and buttons are ever wanted as well.
+`m5unified` reports this board's cell directly, and [the M5 libraries](#the-m5-libraries)
+records what taking it would cost.
 
 ## Scanning the crossings
 

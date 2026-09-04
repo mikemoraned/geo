@@ -1,0 +1,20 @@
+[build]
+target = "xtensa-esp32-espidf"
+
+[target.'cfg(target_os = "espidf")']
+linker = "ldproxy"
+runner = "espflash flash --monitor"
+rustflags = [ "--cfg",  "espidf_time64"]
+
+[unstable]
+build-std = ["std", "panic_abort"]
+
+[env]
+MCU = "esp32"
+ESP_IDF_VERSION = "v5.5.3"
+# The ESP-IDF checkout and its toolchains are installed under this crate, in `.embuild`, which
+# is the template's default and several gigabytes. `global` would put one copy in `~/.espressif`
+# and share it across the git worktrees this repo is worked in, but the sandbox Claude runs
+# under only writes inside `apps/lookout`, and the failure is a bare "operation not permitted"
+# after the whole ESP-IDF resolution has run.
+ESP_IDF_TOOLS_INSTALL_DIR = "workspace"
