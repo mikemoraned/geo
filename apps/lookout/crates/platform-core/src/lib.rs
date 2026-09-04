@@ -1,4 +1,4 @@
-//! The Crux core every shell drives: the device, the rerun runner, and whatever comes after.
+//! The Crux core the device shell drives.
 //!
 //! What the device does, minus the hardware. A shell reads the receiver, the battery pin and
 //! the clock, and hands each over as an [`Event`]; everything deciding what any of it *means*
@@ -6,8 +6,9 @@
 //! seconds, and a whole battery discharge takes an hour and a half, so neither is something
 //! to iterate against on the board.
 //!
-//! The prediction itself is [`predictor`]'s. This crate holds the crossings it scans, the
-//! battery judgement, and the panel.
+//! The prediction itself is [`predictor`]'s, and so is everything a shell measuring in another
+//! float would need. This crate holds what only the board has: the crossings carried in its
+//! flash, the judgement of its battery, and its panel.
 
 pub mod app;
 pub mod battery;
@@ -17,10 +18,6 @@ pub mod pointset;
 
 pub use app::{Effect, Event, Lookout, Model};
 pub use panel::{NEAREST_ON_SCREEN, ViewModel};
-
-/// How far ahead the predictor reports. Wide enough that a train at speed has a minute or two
-/// of warning, narrow enough to mean something at walking pace.
-pub const WITHIN_METRES: f64 = 5_000.0;
 
 /// The float everything here measures in, and which satisfies [`predictor::Measure`].
 ///

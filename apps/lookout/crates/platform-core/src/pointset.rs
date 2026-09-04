@@ -10,7 +10,7 @@
 //! file from that packer, and the test that reads it is what makes the repetition safe.
 
 use bytemuck::PodCastError;
-use predictor::{Crossing, Crossings};
+use predictor::{Crossing, CrossingId, Crossings};
 
 /// Names the format in the first bytes of the file.
 const MAGIC: [u8; 4] = *b"XING";
@@ -19,7 +19,8 @@ const VERSION: u32 = 1;
 /// Magic, version, count. A multiple of 4, so the columns after it are aligned.
 const HEADER_LEN: usize = 12;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+/// Not `Eq`: a coordinate is a float, and the error carries the one that was wrong.
+#[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
 pub enum FormatError {
     #[error("{0} bytes is too short to hold a header")]
     NoHeader(usize),
@@ -37,6 +38,10 @@ pub enum FormatError {
     /// `#[repr(align(4))]` wrapper around it — a fault on Xtensa if it were not caught.
     #[error("not aligned for 4-byte columns")]
     Misaligned,
+    /// Found once, here, rather than per scan: an unchecked coordinate off the globe would
+    /// otherwise be measured against every fix for the rest of the run.
+    #[error("holds {latitude},{longitude}, which is not on the globe")]
+    OffTheGlobe { latitude: f32, longitude: f32 },
 }
 
 /// One crossing, as the buffer holds it.
@@ -46,6 +51,13 @@ pub struct Point {
     pub latitude: f32,
     pub longitude: f32,
 }
+
+/// Forces the 4-byte alignment the columns are cast at.
+///
+/// `include_bytes!` yields a buffer aligned to 1, and casting that to `&[f32]` fails here —
+/// and, unchecked, would fault on Xtensa. Anything holding packed bytes goes behind this.
+#[repr(C, align(4))]
+pub(crate) struct Aligned<T: ?Sized>(pub T);
 
 /// The crossings, borrowed from the bytes they are stored in.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -65,12 +77,12 @@ impl<'a> PointSet<'a> {
         if header[..4] != MAGIC {
             return Err(FormatError::NotAPointSet);
         }
-        let version = u32::from_le_bytes([header[4], header[5], header[6], header[7]]);
+        let version = word(header, 4);
         if version != VERSION {
             return Err(FormatError::UnsupportedVersion { found: version });
         }
 
-        let count = u32::from_le_bytes([header[8], header[9], header[10], header[11]]);
+        let count = word(header, 8);
         let points = count as usize;
         let column_len = points * 4;
         let needed = HEADER_LEN + column_len * 3;
@@ -84,11 +96,31 @@ impl<'a> PointSet<'a> {
 
         let column = |index: usize| &packed[HEADER_LEN + index * column_len..][..column_len];
 
-        Ok(Self {
+        let set = Self {
             latitudes: floats(column(0))?,
             longitudes: floats(column(1))?,
             ids: words(column(2))?,
-        })
+        };
+        set.on_the_globe()?;
+        Ok(set)
+    }
+
+    /// Checks every coordinate once, so a scan never has to.
+    ///
+    /// A distance to a point the earth has no room for is a number the predictor would report
+    /// as a prediction. The columns are bytes that can arrive corrupt, so they are swept here,
+    /// where a bad one is a fact about the buffer rather than about a fix.
+    fn on_the_globe(&self) -> Result<(), FormatError> {
+        self.positions()
+            .find(|(latitude, longitude)| {
+                !(-90.0..=90.0).contains(latitude) || !(-180.0..=180.0).contains(longitude)
+            })
+            .map_or(Ok(()), |(latitude, longitude)| {
+                Err(FormatError::OffTheGlobe {
+                    latitude,
+                    longitude,
+                })
+            })
     }
 
     pub fn len(&self) -> usize {
@@ -99,24 +131,22 @@ impl<'a> PointSet<'a> {
         self.ids.is_empty()
     }
 
-    /// The columns, for a scan that wants to read position without touching the ids.
-    pub fn positions(&self) -> impl Iterator<Item = (f32, f32)> + '_ {
+    /// The position columns, without touching the ids.
+    fn positions(&self) -> impl Iterator<Item = (f32, f32)> + '_ {
         self.latitudes
             .iter()
             .copied()
             .zip(self.longitudes.iter().copied())
     }
 
-    pub fn get(&self, index: usize) -> Option<Point> {
-        Some(Point {
-            id: *self.ids.get(index)?,
-            latitude: self.latitudes[index],
-            longitude: self.longitudes[index],
-        })
-    }
-
     pub fn iter(&self) -> impl Iterator<Item = Point> + '_ {
-        (0..self.len()).filter_map(|index| self.get(index))
+        self.positions()
+            .zip(self.ids.iter().copied())
+            .map(|((latitude, longitude), id)| Point {
+                id,
+                latitude,
+                longitude,
+            })
     }
 }
 
@@ -154,18 +184,16 @@ const fn word(packed: &[u8], at: usize) -> u32 {
 
 /// A set is what the predictor scans, read straight out of flash.
 ///
-/// A point off the globe is dropped rather than scanned. The buffer is bytes that can arrive
-/// corrupt, and a coordinate the earth has no room for would otherwise be measured against
-/// every fix for the rest of the run.
+/// Nothing here converts or checks: the coordinates were checked when the buffer was read, and
+/// they are already in the float the scan measures in. A fix a second against the whole set is
+/// the one path on the device where that matters — the ESP32 emulates `f64` in software.
 impl Crossings<f32> for PointSet<'_> {
-    fn iter(&self) -> impl Iterator<Item = Crossing<f32>> {
-        PointSet::iter(self).filter_map(|point| {
-            Crossing::at(
-                point.id,
-                f64::from(point.latitude),
-                f64::from(point.longitude),
+    fn all(&self) -> impl Iterator<Item = Crossing<f32>> {
+        PointSet::iter(self).map(|point| {
+            Crossing::new(
+                CrossingId::new(point.id),
+                geo_types::Point::new(point.longitude, point.latitude),
             )
-            .ok()
         })
     }
 }
@@ -193,8 +221,6 @@ mod tests {
     /// A real file from the packer, four crossings around Ruhland and Ortrand. It is what
     /// keeps this reader honest about a layout it repeats rather than imports: if the two
     /// drift apart, this stops reading.
-    #[repr(C, align(4))]
-    struct Aligned<T: ?Sized>(T);
     static FOUR_CROSSINGS: &Aligned<[u8; 60]> =
         &Aligned(*include_bytes!("../tests/four-crossings.pointset"));
 
@@ -270,24 +296,27 @@ mod tests {
     }
 
     #[test]
-    fn positions_and_points_describe_the_same_crossings() {
+    fn a_set_yields_every_crossing_it_holds() {
         let points = PointSet::new(four_crossings()).unwrap();
 
-        let from_columns: Vec<_> = points.positions().collect();
-        let from_points: Vec<_> = points
-            .iter()
-            .map(|point| (point.latitude, point.longitude))
-            .collect();
-
-        assert_eq!(from_columns, from_points);
+        assert_eq!(points.iter().count(), points.len());
     }
 
+    /// The columns are read once when the buffer is, so a corrupt one is a fact about the
+    /// file rather than a distance the predictor reports every second for the rest of the run.
     #[test]
-    fn an_index_past_the_end_is_none() {
-        let points = PointSet::new(four_crossings()).unwrap();
+    fn a_coordinate_off_the_globe_is_refused() {
+        let bytes = packed(&[Point {
+            id: 1,
+            latitude: 91.0,
+            longitude: 13.5,
+        }]);
+        let words = aligned(&bytes);
 
-        assert!(points.get(3).is_some());
-        assert!(points.get(4).is_none());
+        assert!(matches!(
+            read(&words, bytes.len()),
+            Err(FormatError::OffTheGlobe { .. })
+        ));
     }
 
     #[test]

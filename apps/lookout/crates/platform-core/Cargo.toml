@@ -1,29 +1,23 @@
-# The Crux core every shell drives: the device, the rerun runner, and whatever comes after.
-# Like `predictor` it holds nothing that cannot cross to Xtensa — no `medallion`, no `model`,
-# and nothing that reads the store or touches hardware.
 [package]
 name = "platform-core"
 version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
-# The current release, not the `=0.16.2` the spikes pinned. That pin bought a board that did
-# not reboot with NimBLE running, and this core has no BLE in it — see
-# [docs/device.md](../../docs/device.md) for what to do if the reboots return.
+# Some entries are written out rather than inherited from the workspace: see docs/device.md.
 crux_core = "0.20"
-# Voltage to state-of-charge over a real lithium-polymer discharge curve, rather than a
-# straight line between empty and full, which would read half-full for most of a discharge.
 battery-estimator = "0.3"
-# Casts the packed crossings buffer's columns in place. Its checked casts turn a misaligned
-# buffer into an error rather than a fault on Xtensa.
 bytemuck = "1"
-# Spelled out rather than inherited, for the reason `predictor` spells it out: the device
-# needs chrono's `clock` feature off, and a member cannot turn off a default the workspace
-# kept.
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+geo-types = { workspace = true }
 predictor = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
+
+[dev-dependencies]
+# The same crate again, for the captured sentences its tests share with this crate's. A
+# dev-dependency, so the feature is off in anything built for the device.
+predictor = { workspace = true, features = ["fixtures"] }
 
 [lints]
 workspace = true

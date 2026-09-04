@@ -5,7 +5,7 @@
 //! asserted below is width.
 
 use chrono::{DateTime, Utc};
-use predictor::Prediction;
+use predictor::{DEFAULT_RADIUS_METRES, Prediction};
 
 use crate::Float;
 use crate::battery::Charge;
@@ -59,22 +59,19 @@ pub(crate) fn line(prediction: &Prediction<Float>, now: Option<DateTime<Utc>>) -
     )
 }
 
-/// The battery as bars in brackets — `[===]` down to `[   ]`.
+/// The battery as bars in brackets, one for each step of [`Charge`].
 ///
 /// Five characters, which is what is left of the first line once the clock has taken eight of
 /// thirteen. `FONT_10X20` is an ASCII font, so a battery glyph is not an option.
-pub(crate) fn bars(charge: Charge) -> String {
-    let filled = charge.bars();
-    format!(
-        "[{}{}]",
-        "=".repeat(filled),
-        " ".repeat(Charge::BARS - filled)
-    )
+pub(crate) fn bars(charge: Charge) -> &'static str {
+    const FILLED: [&str; Charge::BARS + 1] = ["[   ]", "[=  ]", "[== ]", "[===]"];
+
+    FILLED[charge.bars()]
 }
 
 /// How many crossings the predictor reports, and how far out it looked.
 pub(crate) fn within(count: usize) -> String {
-    format!("{count} in {:.0}km", crate::WITHIN_METRES / 1_000.0)
+    format!("{count} in {:.0}km", DEFAULT_RADIUS_METRES / 1_000.0)
 }
 
 /// A distance in as few characters as it can be said in, never more than six: metres up to a

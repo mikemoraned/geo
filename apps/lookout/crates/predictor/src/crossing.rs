@@ -72,18 +72,15 @@ impl<T: Measure> Crossing<T> {
 pub trait Crossings<T: Measure> {
     /// Every crossing in the set, in whatever order it is held in. A scan reads all of them,
     /// so the order is the source's to choose.
-    fn iter(&self) -> impl Iterator<Item = Crossing<T>>;
+    ///
+    /// Named `all` rather than `iter` because every source that implements this has an
+    /// inherent `iter` of its own, yielding something else.
+    fn all(&self) -> impl Iterator<Item = Crossing<T>>;
 }
 
 impl<T: Measure> Crossings<T> for Vec<Crossing<T>> {
-    fn iter(&self) -> impl Iterator<Item = Crossing<T>> {
-        self.as_slice().iter().copied()
-    }
-}
-
-impl<T: Measure> Crossings<T> for &[Crossing<T>] {
-    fn iter(&self) -> impl Iterator<Item = Crossing<T>> {
-        (*self).iter().copied()
+    fn all(&self) -> impl Iterator<Item = Crossing<T>> {
+        self.iter().copied()
     }
 }
 

@@ -6,21 +6,19 @@ use crux_core::{
     macros::effect,
     render::{self, RenderOperation},
 };
-use predictor::{CrowFlies, Event as Observed, Parser, Predict, Sample};
+use predictor::{CrowFlies, DEFAULT_RADIUS_METRES, Event as Observed, Parser, Predict};
 use serde::{Deserialize, Serialize};
 
 use crate::battery::Battery;
 use crate::panel::{self, NEAREST_ON_SCREEN, NO_FIX_YET, NO_TIME_YET, ViewModel};
 use crate::pointset::PointSet;
-use crate::{Float, WITHIN_METRES, carried};
+use crate::{Float, carried};
 
 pub struct Model {
     now: Option<DateTime<Utc>>,
     /// Sentences arrive one at a time and each fills in part of the picture, so the parser
     /// keeps state across them.
     parser: Parser<Float>,
-    /// The last fix, which is what the panel reports and what the predictor last saw.
-    fix: Option<Sample<Float>>,
     battery: Battery,
     predictor: CrowFlies<Float, PointSet<'static>>,
 }
@@ -32,9 +30,8 @@ impl Default for Model {
         Self {
             now: None,
             parser: Parser::new(),
-            fix: None,
             battery: Battery::default(),
-            predictor: CrowFlies::new(carried::crossings(), WITHIN_METRES),
+            predictor: CrowFlies::new(carried::crossings(), DEFAULT_RADIUS_METRES),
         }
     }
 }
@@ -57,6 +54,13 @@ pub enum Effect {
     Render(RenderOperation),
 }
 
+/// Whether an event moved anything the panel shows, which is what decides a redraw.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Change {
+    Moved,
+    Unchanged,
+}
+
 #[derive(Debug, Default)]
 pub struct Lookout;
 
@@ -66,19 +70,21 @@ impl Lookout {
     /// Sentences the receiver emits before it has a fix, ones that fail their checksum, and
     /// ones repeating what is already known all complete nothing, and leave the last fix and
     /// the last prediction in place. That matters at a dozen sentences a second: without it
-    /// the whole set would be scanned a dozen times for one position.
-    fn absorb(&self, sentence: &str, model: &mut Model) {
+    /// the whole set would be scanned, and the screen redrawn, a dozen times for one position.
+    fn absorb(&self, sentence: &str, model: &mut Model) -> Change {
         let Some(sample) = model.parser.absorb(sentence) else {
-            return;
+            return Change::Unchanged;
         };
-        model.fix = Some(sample);
-        self.observe(Observed::Sampled(sample), model);
+        self.observe(Observed::Sampled(sample), model)
     }
 
-    /// Tells the predictor, ignoring what it refuses. An event out of order changes nothing
-    /// there, and there is nothing the panel can do about one.
-    fn observe(&self, event: Observed<Float>, model: &mut Model) {
-        let _ = model.predictor.observe(event);
+    /// Tells the predictor. An event it refuses changes nothing there, so nothing the panel
+    /// shows has moved either, and there is nothing the panel could do about one anyway.
+    fn observe(&self, event: Observed<Float>, model: &mut Model) -> Change {
+        match model.predictor.observe(event) {
+            Ok(()) => Change::Moved,
+            Err(_) => Change::Unchanged,
+        }
     }
 }
 
@@ -88,23 +94,42 @@ impl App for Lookout {
     type ViewModel = ViewModel;
     type Effect = Effect;
 
+    /// A render is asked for only where the panel would draw something different. The receiver
+    /// emits a dozen sentences a second and most of them repeat the position of the one
+    /// before, so redrawing on each would spend a second of screen for a second of fixes.
     fn update(&self, event: Event, model: &mut Model) -> Command<Effect, Event> {
-        match event {
+        let change = match event {
+            // The clock is on the screen, so it is different every time it moves.
             Event::Tick(now) => {
                 model.now = Some(now);
                 self.observe(Observed::Elapsed(now), model);
+                Change::Moved
             }
             Event::Sentence(sentence) => self.absorb(&sentence, model),
-            Event::Battery(millivolts) => model.battery.measured(millivolts),
+            Event::Battery(millivolts) => {
+                let before = model.battery.charge();
+                model.battery.measured(millivolts);
+                if model.battery.charge() == before {
+                    Change::Unchanged
+                } else {
+                    Change::Moved
+                }
+            }
         };
 
-        render::render()
+        match change {
+            Change::Moved => render::render(),
+            Change::Unchanged => Command::done(),
+        }
     }
 
     fn view(&self, model: &Model) -> Self::ViewModel {
         // The predictor's clock, not the shell's: it is the one the arrival instants are on,
         // and it advances on a fix even where the shell's clock is behind them.
         let now = model.predictor.now();
+        // The fix the predictions were made from, so the panel cannot report a position the
+        // scan never ran at.
+        let fix = model.predictor.latest();
         let predictions = model.predictor.predictions();
 
         ViewModel {
@@ -112,25 +137,28 @@ impl App for Lookout {
                 .now
                 .map(|now| now.format("%H:%M:%S").to_string())
                 .unwrap_or_else(|| NO_TIME_YET.to_string()),
-            latitude: model
-                .fix
+            latitude: fix
                 .map(|fix| format!("{:.5}", fix.latitude()))
                 .unwrap_or_else(|| NO_FIX_YET.to_string()),
-            longitude: model
-                .fix
+            longitude: fix
                 .map(|fix| format!("{:.5}", fix.longitude()))
                 .unwrap_or_default(),
-            battery: model.battery.charge().map(panel::bars).unwrap_or_default(),
+            battery: model
+                .battery
+                .charge()
+                .map(panel::bars)
+                .unwrap_or_default()
+                .to_string(),
             quality: match (
-                model.fix.and_then(|fix| fix.satellites),
-                model.fix.and_then(|fix| fix.hdop),
+                fix.and_then(|fix| fix.satellites),
+                fix.and_then(|fix| fix.hdop),
             ) {
                 (Some(satellites), Some(hdop)) => format!("{satellites}sat h{hdop:.1}"),
                 (Some(satellites), None) => format!("{satellites}sat"),
                 _ => String::new(),
             },
             // Nothing about crossings until there is a fix to have scanned them from.
-            within: match model.fix {
+            within: match fix {
                 None => String::new(),
                 Some(_) => panel::within(predictions.len()),
             },
@@ -145,44 +173,40 @@ impl App for Lookout {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{TimeDelta, TimeZone};
+    use chrono::TimeDelta;
     use crux_core::Core;
+    use predictor::fixtures::{Fix, RMC_VOID};
 
     use super::*;
     use crate::panel::{CHARACTERS_PER_LINE, NO_ARRIVAL};
 
-    /// Captured from the AT6668 indoors, so this is the real thing: no fix yet, but the
-    /// actual sentence shape the receiver emits.
-    const RMC_VOID: &str = "$GNRMC,202725.00,V,,,,,,,290726,,,N,V*11";
-
-    /// Bodies of sentences in the shape the AT6668 emits them, down to the field count and
-    /// the NMEA 4.1 mode/status pair at the end of `RMC`, carrying **Dresden Hauptbahnhof**
-    /// — the same public landmark [`crate::carried`] checks the crossings set against, and a
-    /// place with twenty crossings inside the radius to predict. [`sentence`] appends the
-    /// checksum.
+    /// **Dresden Hauptbahnhof** — the same public landmark [`crate::carried`] checks the
+    /// crossings set against, and a place with twenty crossings inside the radius to predict.
     ///
     /// The speed is 54 knots, about 100 km/h, so the countdowns are a train's.
-    const RMC_FIX: &str = "GNRMC,204329.00,A,5102.41800,N,01343.93200,E,54.00,79.94,290726,,,A,V";
-    const GGA_FIX: &str = "GNGGA,204329.00,5102.41800,N,01343.93200,E,1,06,4.4,262.46,M,45.12,M,,";
-    /// A second later and a little north-east, so the fix moves and the scan runs again.
-    const RMC_LATER: &str = "GNRMC,204330.00,A,5102.42400,N,01343.94100,E,54.00,79.94,290726,,,A,V";
-    /// A receiver standing still reports a speed of zero and no course at all — the `0.00,,`
-    /// here. There is then no arrival to count down to.
-    const RMC_STOPPED: &str = "GNRMC,204858.00,A,5102.41800,N,01343.93200,E,0.00,,290726,,,A,V";
-
-    /// When the fixtures above are dated. A sentence carries the time of day and the date in
-    /// separate fields, and a countdown only advances if the shell's clock agrees with both.
-    fn fix_instant() -> DateTime<Utc> {
-        Utc.with_ymd_and_hms(2026, 7, 29, 20, 43, 29)
-            .single()
-            .expect("an instant")
+    fn at_the_station() -> Fix {
+        Fix::at(20, 43, 29, 51.0403, 13.7322)
+            .with_speed_knots(54.0)
+            .with_course_degrees(79.94)
     }
 
-    /// Wraps a sentence body into the on-the-wire form: `$`, the body, then `*` and the XOR
-    /// of every body byte as two hex digits.
-    fn sentence(body: &str) -> String {
-        let checksum = body.bytes().fold(0u8, |acc, byte| acc ^ byte);
-        format!("${body}*{checksum:02X}")
+    /// A second later and a little north-east, so the fix moves and the scan runs again.
+    fn moved_on() -> Fix {
+        Fix::at(20, 43, 30, 51.0404, 13.73235)
+            .with_speed_knots(54.0)
+            .with_course_degrees(79.94)
+    }
+
+    /// Standing at the station. A receiver reports a speed of zero and no course at all, and
+    /// there is then no arrival to count down to.
+    fn stopped() -> Fix {
+        Fix::at(20, 48, 58, 51.0403, 13.7322)
+    }
+
+    /// When the fixtures are dated. A sentence carries the time of day and the date in
+    /// separate fields, and a countdown only advances if the shell's clock agrees with both.
+    fn fix_instant() -> DateTime<Utc> {
+        at_the_station().t()
     }
 
     fn core() -> Core<Lookout> {
@@ -192,8 +216,8 @@ mod tests {
     /// A core that has seen one fix at the station, moving.
     fn fixed() -> Core<Lookout> {
         let core = core();
-        core.process_event(Event::Sentence(sentence(RMC_FIX)));
-        core.process_event(Event::Sentence(sentence(GGA_FIX)));
+        core.process_event(Event::Sentence(at_the_station().rmc()));
+        core.process_event(Event::Sentence(at_the_station().gga()));
         core
     }
 
@@ -236,9 +260,30 @@ mod tests {
     fn a_sentence_asks_the_shell_to_render() {
         let core = core();
 
-        let effects = core.process_event(Event::Sentence(sentence(RMC_FIX)));
+        let effects = core.process_event(Event::Sentence(at_the_station().rmc()));
 
         assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
+    }
+
+    /// A dozen sentences a second arrive and most repeat the position of the one before. A
+    /// render for each would spend a second of screen redrawing one second of fixes.
+    #[test]
+    fn a_sentence_that_changes_nothing_asks_for_no_render() {
+        let core = fixed();
+
+        let effects = core.process_event(Event::Sentence(at_the_station().rmc()));
+
+        assert!(effects.is_empty());
+    }
+
+    /// The reading is taken on a timer, and the bars it fills change a handful of times over a
+    /// whole discharge.
+    #[test]
+    fn a_battery_reading_that_fills_the_same_bars_asks_for_no_render() {
+        let core = core();
+
+        assert!(!core.process_event(Event::Battery(4_200)).is_empty());
+        assert!(core.process_event(Event::Battery(4_190)).is_empty());
     }
 
     #[test]
@@ -309,7 +354,7 @@ mod tests {
     fn a_fix_that_is_not_moving_predicts_a_distance_and_no_time() {
         let core = core();
 
-        core.process_event(Event::Sentence(sentence(RMC_STOPPED)));
+        core.process_event(Event::Sentence(stopped().rmc()));
 
         assert_eq!(core.view().nearest[0], format!("2.3km {NO_ARRIVAL}"));
     }
@@ -319,7 +364,7 @@ mod tests {
         let core = fixed();
         let before = core.view().nearest;
 
-        core.process_event(Event::Sentence(sentence(RMC_LATER)));
+        core.process_event(Event::Sentence(moved_on().rmc()));
 
         assert_ne!(core.view().nearest, before);
     }
@@ -331,7 +376,7 @@ mod tests {
         let core = fixed();
         let first = core.view().nearest;
 
-        core.process_event(Event::Sentence(sentence(RMC_FIX)));
+        core.process_event(Event::Sentence(at_the_station().rmc()));
 
         assert_eq!(core.view().nearest, first);
     }

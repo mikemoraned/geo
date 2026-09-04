@@ -31,8 +31,8 @@ pub struct CrowFlies<T: Measure, C: Crossings<T> = Vec<Crossing<T>>> {
     crossings: C,
     radius_metres: T,
     now: Option<DateTime<Utc>>,
-    /// The last fix, kept to derive a speed for a receiver that reports none.
-    last: Option<Sample<T>>,
+    /// The most recent fix, kept to derive a speed for a receiver that reports none.
+    latest: Option<Sample<T>>,
     predictions: Vec<Prediction<T>>,
     /// What was predicted at the fix before, which is what a trend is measured against.
     previous: Vec<Prediction<T>>,
@@ -48,7 +48,7 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
             crossings,
             radius_metres,
             now: None,
-            last: None,
+            latest: None,
             predictions: Vec::new(),
             previous: Vec::new(),
         }
@@ -57,6 +57,11 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
     /// The clock, as the last event left it.
     pub fn now(&self) -> Option<DateTime<Utc>> {
         self.now
+    }
+
+    /// The fix the predictions were made from, which is the most recent one it accepted.
+    pub fn latest(&self) -> Option<&Sample<T>> {
+        self.latest.as_ref()
     }
 
     /// Moves the clock to `to`, refusing to wind it back.
@@ -76,11 +81,13 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
     /// Predicts afresh from `sample`, keeping what was predicted before it as the trend to
     /// measure the new answer against.
     fn predict(&mut self, sample: Sample<T>) {
-        let speed = speed_mps(&sample, self.last.as_ref());
+        let speed = speed_mps(&sample, self.latest.as_ref());
         let from = sample.position;
         let radius_metres = self.radius_metres;
 
-        let mut predicted: Vec<Prediction<T>> = Crossings::iter(&self.crossings)
+        let mut predicted: Vec<Prediction<T>> = self
+            .crossings
+            .all()
             .filter_map(|crossing| {
                 let metres = Haversine.distance(from, crossing.position);
                 (metres <= radius_metres).then(|| Prediction {
@@ -99,7 +106,7 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
         });
 
         self.previous = std::mem::replace(&mut self.predictions, predicted);
-        self.last = Some(sample);
+        self.latest = Some(sample);
     }
 }
 
@@ -215,7 +222,7 @@ mod tests {
         assert!((got - want).abs() < TOLERANCE_M, "{got} is not near {want}");
     }
 
-    fn ids<T: Measure, C: Crossings<T>>(predictor: &CrowFlies<T, C>) -> Vec<u32> {
+    fn ids<T: Measure>(predictor: &CrowFlies<T>) -> Vec<u32> {
         predictor
             .predictions()
             .iter()

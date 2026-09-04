@@ -5241,6 +5241,7 @@ dependencies = [
  "bytemuck",
  "chrono",
  "crux_core",
+ "geo-types",
  "predictor",
  "serde",
  "thiserror 2.0.18",

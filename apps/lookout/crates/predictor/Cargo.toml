@@ -1,28 +1,20 @@
-# The crate the device and the simulation share, so it stays free of anything that cannot
-# cross to Xtensa: no `medallion`, no `model`, and nothing that reads the store.
 [package]
 name = "predictor"
 version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
-# Spelled out rather than inherited, because the device build needs a feature off that the
-# workspace leaves on — chrono's clock pulls in a timezone database the device never reads —
-# and a member cannot turn off a default the workspace kept.
+# Some entries are written out rather than inherited from the workspace: see docs/device.md.
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
-# A position is georust's `Point`. `geo-types` carries the type, with `serde` enabled so a
-# sample can cross a wire; `geo` below carries the distance measures taken over it.
 geo-types = { workspace = true, features = ["serde"] }
-# Great-circle distance, generic over the float so the scan can stay `f32`. Spelled out for
-# the same reason as chrono: `default-features = false` drops earcutr, spade and rayon, and
-# the workspace entry leaves them on.
 geo = { version = "0.31", default-features = false }
 nmea = "0.7"
-# `FromPrimitive`, which is half of the bound georust's haversine needs and so half of what
-# `Measure` names. Already in the tree under `geo`.
 num-traits = { version = "0.2", default-features = false }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
+
+[features]
+fixtures = []
 
 [dev-dependencies]
 serde_json = "1"

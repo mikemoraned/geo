@@ -91,47 +91,20 @@ mod tests {
     use chrono::{TimeZone, Utc};
 
     use super::*;
+    use crate::fixtures::{Fix, GGA_NO_FIX, GSA_NO_FIX, RMC_VOID, SPLICED, with_bad_checksum};
 
-    /// Captured from the AT6668 indoors, so these are the real thing: no fix yet, but the
-    /// actual sentence shapes the receiver emits. Note `RMC_VOID` carries the NMEA 4.1
-    /// navigational-status field (the trailing `,V`) that a hand-written 0183 RMC lacks.
-    const RMC_VOID: &str = "$GNRMC,202725.00,V,,,,,,,290726,,,N,V*11";
-    const GGA_NO_FIX: &str = "$GNGGA,202725.00,,,,,0,00,25.5,,,,,,*4A";
-    const GSA_NO_FIX: &str = "$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01";
-    /// Also captured: an RX overrun spliced two sentences together. A shell sizes its UART
-    /// ring buffer to avoid the overrun, but corruption on a serial line is never ruled out,
-    /// so a parser has to survive one.
-    const SPLICED: &str = "$GAGSV,12724.00,V,N*55";
-
-    /// Bodies of sentences taken from a real outdoor capture, with **the position replaced**
-    /// — a real fix pins down where and when someone was, which is not something to commit.
-    /// Everything else is as the AT6668 emitted it, including the field count and the NMEA
-    /// 4.1 mode/status pair at the end of `RMC`. `sentence` appends the checksum, since
-    /// changing the coordinates invalidates the captured one.
-    ///
-    /// They encode a fix at 50.5N 8.5E and a second slightly north-east of it.
-    const RMC_FIX: &str = "GNRMC,204329.00,A,5030.00000,N,00830.00000,E,4.13,79.94,290726,,,A,V";
-    const GGA_FIX: &str = "GNGGA,204329.00,5030.00000,N,00830.00000,E,1,06,4.4,262.46,M,45.12,M,,";
-    const GGA_LATER: &str =
-        "GNGGA,204330.00,5030.00600,N,00830.00900,E,1,06,4.4,262.46,M,45.12,M,,";
-    /// A stationary receiver leaves the course field **empty** (the `0.08,,` here) because
-    /// there is no heading to report. Captured, and a sample still has to come out of it.
-    const RMC_STATIONARY: &str = "GNRMC,204858.00,A,5030.00000,N,00830.00000,E,0.08,,290726,,,A,V";
-
-    /// Wraps a sentence body into the on-the-wire form: `$`, the body, then `*` and the XOR
-    /// of every body byte as two hex digits.
-    fn sentence(body: &str) -> String {
-        format!("${body}*{:02X}", checksum(body))
+    /// The fix the captured sentences carry, at 50.5N 8.5E and moving.
+    fn fix() -> Fix {
+        Fix::at(20, 43, 29, 50.5, 8.5)
+            .with_speed_knots(4.13)
+            .with_course_degrees(79.94)
     }
 
-    /// The same sentence with a checksum that is guaranteed wrong. Inverting every bit cannot
-    /// land back on the correct value, which fabricating one by hand can.
-    fn sentence_with_bad_checksum(body: &str) -> String {
-        format!("${body}*{:02X}", checksum(body) ^ 0xFF)
-    }
-
-    fn checksum(body: &str) -> u8 {
-        body.bytes().fold(0u8, |acc, byte| acc ^ byte)
+    /// A second later and a little north-east of it.
+    fn later() -> Fix {
+        Fix::at(20, 43, 30, 50.5001, 8.50015)
+            .with_speed_knots(4.13)
+            .with_course_degrees(79.94)
     }
 
     /// The `nmea` crate holds everything but the coordinates as `f32`, so a field widened to
@@ -149,20 +122,17 @@ mod tests {
     /// A parser that has seen the RMC every fix needs, since only RMC carries the date.
     fn fixed() -> Parser<f64> {
         let mut parser = parser();
-        parser.absorb(&sentence(RMC_FIX)).expect("a first sample");
+        parser.absorb(&fix().rmc()).expect("a first sample");
         parser
     }
 
     #[test]
     fn an_rmc_sentence_makes_a_sample() {
-        let sample = parser().absorb(&sentence(RMC_FIX)).expect("a sample");
+        let sample = parser().absorb(&fix().rmc()).expect("a sample");
 
         assert_eq!(sample.latitude(), 50.5);
         assert_eq!(sample.longitude(), 8.5);
-        assert_eq!(
-            sample.t,
-            Utc.with_ymd_and_hms(2026, 7, 29, 20, 43, 29).unwrap()
-        );
+        assert_eq!(sample.t, fix().t());
     }
 
     /// Speed is the one field a receiver reports in a unit a sample does not use: 4.13 knots
@@ -170,7 +140,7 @@ mod tests {
     /// wrong by a factor of two.
     #[test]
     fn a_speed_in_knots_becomes_metres_per_second() {
-        let sample = parser().absorb(&sentence(RMC_FIX)).expect("a sample");
+        let sample = parser().absorb(&fix().rmc()).expect("a sample");
 
         assert_near(sample.speed_mps, 4.13 * 1_852.0 / 3_600.0);
         assert_near(sample.heading_degrees, 79.94);
@@ -179,14 +149,14 @@ mod tests {
     /// GGA carries no date, so nothing it says can be placed on a timeline on its own.
     #[test]
     fn a_gga_sentence_alone_makes_no_sample() {
-        assert_eq!(parser().absorb(&sentence(GGA_FIX)), None);
+        assert_eq!(parser().absorb(&fix().gga()), None);
     }
 
     /// Once an RMC has supplied the date, the accumulator keeps it, and a GGA fills in what
     /// RMC does not carry.
     #[test]
     fn a_gga_after_an_rmc_makes_a_sample_reporting_the_fix_quality() {
-        let sample = fixed().absorb(&sentence(GGA_FIX)).expect("a sample");
+        let sample = fixed().absorb(&fix().gga()).expect("a sample");
 
         assert_eq!(sample.satellites, Some(6));
         assert_near(sample.hdop, 4.4);
@@ -195,7 +165,7 @@ mod tests {
 
     #[test]
     fn a_later_sentence_moves_the_sample() {
-        let sample = fixed().absorb(&sentence(GGA_LATER)).expect("a sample");
+        let sample = fixed().absorb(&later().gga()).expect("a sample");
 
         assert_eq!(sample.latitude(), 50.5001);
         assert_eq!(
@@ -206,9 +176,9 @@ mod tests {
 
     #[test]
     fn a_stationary_rmc_with_no_course_still_makes_a_sample() {
-        let sample = parser()
-            .absorb(&sentence(RMC_STATIONARY))
-            .expect("a sample");
+        let stationary = Fix::at(20, 48, 58, 50.5, 8.5).with_speed_knots(0.08);
+
+        let sample = parser().absorb(&stationary.rmc()).expect("a sample");
 
         assert_eq!(sample.latitude(), 50.5);
         assert_eq!(sample.heading_degrees, None);
@@ -236,10 +206,10 @@ mod tests {
     }
 
     /// A well-formed later sentence whose checksum does not match its contents, so the move
-    /// to 50.501 must not be believed.
+    /// to 50.5001 must not be believed.
     #[test]
     fn a_corrupt_sentence_makes_no_sample() {
-        assert_eq!(fixed().absorb(&sentence_with_bad_checksum(GGA_LATER)), None);
+        assert_eq!(fixed().absorb(&with_bad_checksum(&later().gga())), None);
     }
 
     #[test]
@@ -253,7 +223,7 @@ mod tests {
     fn a_sentence_adding_nothing_makes_no_sample() {
         let mut parser = fixed();
 
-        assert!(parser.absorb(&sentence(GGA_FIX)).is_some());
-        assert_eq!(parser.absorb(&sentence(GGA_FIX)), None);
+        assert!(parser.absorb(&fix().gga()).is_some());
+        assert_eq!(parser.absorb(&fix().gga()), None);
     }
 }

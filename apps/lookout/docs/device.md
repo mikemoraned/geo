@@ -49,6 +49,21 @@ reproducible where a git HEAD is not.
   tested on the laptop must live in a crate with no `esp-idf-*` dependency, which the device
   crate then depends on. This is what forces the core/shell split, not a preference for it.
 
+### A device crate spells out what the workspace leaves on
+
+A workspace dependency entry is inherited whole: a member can add features to it but cannot
+turn off a default it enables. So a dependency whose defaults pull in something the device
+cannot afford is written out in full, with `default-features = false`, rather than taken from
+the workspace. An entry that looks needlessly spelled out is doing this, and collapsing it to
+`workspace = true` puts the default back.
+
+Two so far, both in the crates the device compiles:
+
+- **chrono's `clock`** brings a timezone database, to read a clock the device does not have.
+  The time arrives as an event instead.
+- **geo's defaults** bring triangulation and a thread pool — earcutr, spade, and rayon — for
+  geometry beyond the distance between two points.
+
 ### Device crates need their own workspace
 
 A device crate builds for Xtensa and pins versions the host-targeted app does not, so it

@@ -8,12 +8,7 @@
 //! cost a partition table, a mount at boot, and a way for the device to hold a set that
 //! disagrees with the code reading it. Regenerate the file with `just carried-crossings`.
 
-use crate::pointset::{PointSet, holds_points};
-
-/// `include_bytes!` yields a buffer aligned to 1, and the columns are cast in place — so the
-/// alignment has to be forced here or the cast fails (and, unchecked, would fault on Xtensa).
-#[repr(C, align(4))]
-struct Aligned<T: ?Sized>(T);
+use crate::pointset::{Aligned, PointSet, holds_points};
 
 /// The size is written out because `include_bytes!` yields a sized array: if the file is
 /// regenerated at a different size, this stops compiling, which is the right moment to notice.
@@ -39,10 +34,9 @@ pub fn crossings() -> PointSet<'static> {
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, Utc};
-    use predictor::{CrowFlies, Event, Predict, Sample};
+    use predictor::{CrowFlies, DEFAULT_RADIUS_METRES, Event, Predict, Sample};
 
     use super::*;
-    use crate::WITHIN_METRES;
 
     /// A set with nothing in it would read, scan, and predict nothing, all without failing.
     #[test]
@@ -91,7 +85,7 @@ mod tests {
 
     /// The predictor the device runs, over the carried set, at the station.
     fn at_dresden() -> CrowFlies<f32, PointSet<'static>> {
-        let mut predictor = CrowFlies::new(crossings(), WITHIN_METRES);
+        let mut predictor = CrowFlies::new(crossings(), DEFAULT_RADIUS_METRES);
         let t = DateTime::<Utc>::from_timestamp_millis(1_785_098_609_000).expect("an instant");
         predictor
             .observe(Event::Sampled(
