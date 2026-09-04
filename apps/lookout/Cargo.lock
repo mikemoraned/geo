@@ -5085,8 +5085,10 @@ name = "predictor"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "geo",
  "geo-types",
  "nmea",
+ "num-traits",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

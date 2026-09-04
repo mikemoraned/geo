@@ -5,6 +5,7 @@
 
 use nmea::Nmea;
 
+use crate::measure::Measure;
 use crate::sample::Sample;
 
 /// One knot in metres per second, by definition — a nautical mile an hour, and a nautical
@@ -16,17 +17,28 @@ const METRES_PER_SECOND_PER_KNOT: f64 = 1_852.0 / 3_600.0;
 /// One fix is spread over several sentences: RMC carries the date, the speed and the course,
 /// GGA the altitude, the satellite count and the HDOP. So the parser keeps state across them
 /// and reports a sample from everything it knows, each time a sentence adds to it.
-#[derive(Debug, Default)]
-pub struct Parser {
+#[derive(Debug, Clone)]
+pub struct Parser<T: Measure> {
     /// The `nmea` crate's own accumulator, which merges each sentence into the picture so
-    /// far. A sentence carrying no position clears the position, which is why a sample is
-    /// built from what the accumulator holds rather than from the sentence just parsed.
+    /// far. A sentence carrying no position clears the position, so a sample is built from
+    /// what the accumulator holds rather than from the sentence last parsed.
     sentences: Nmea,
     /// The last sample reported, so that a sentence adding nothing reports nothing.
-    last: Option<Sample>,
+    last: Option<Sample<T>>,
 }
 
-impl Parser {
+/// Hand-written, because deriving it would demand a `Default` measure that a parser with no
+/// sample yet has no use for.
+impl<T: Measure> Default for Parser<T> {
+    fn default() -> Self {
+        Self {
+            sentences: Nmea::default(),
+            last: None,
+        }
+    }
+}
+
+impl<T: Measure> Parser<T> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -36,10 +48,10 @@ impl Parser {
     ///
     /// Nothing is reported until the receiver has a position and a date to place it on. GGA
     /// carries no date, so a stream reports its first sample when its first RMC lands.
-    /// Sentences that fail their checksum, ones the receiver emits before it has a fix, and
-    /// ones that repeat what is already known all report nothing and leave what is known
-    /// intact.
-    pub fn absorb(&mut self, sentence: &str) -> Option<Sample> {
+    /// Three kinds of sentence report nothing and leave what is known intact: one that fails
+    /// its checksum, one the receiver emits before it has a fix, and one that repeats what is
+    /// already known.
+    pub fn absorb(&mut self, sentence: &str) -> Option<Sample<T>> {
         self.sentences.parse(sentence).ok()?;
 
         let sample = self.sample()?;
@@ -51,7 +63,7 @@ impl Parser {
     }
 
     /// Everything accumulated so far as a sample, once it amounts to one.
-    fn sample(&self) -> Option<Sample> {
+    fn sample(&self) -> Option<Sample<T>> {
         let at = self.sentences.fix_date?.and_time(self.sentences.fix_time?);
 
         Some(
@@ -62,16 +74,14 @@ impl Parser {
             )
             .ok()?
             .with_altitude_metres(self.sentences.altitude.map(f64::from))
-            .with_motion(
+            .with_speed_mps(
                 self.sentences
                     .speed_over_ground
                     .map(|knots| f64::from(knots) * METRES_PER_SECOND_PER_KNOT),
-                self.sentences.true_course.map(f64::from),
             )
-            .with_quality(
-                self.sentences.num_of_fix_satellites,
-                self.sentences.hdop.map(f64::from),
-            ),
+            .with_heading_degrees(self.sentences.true_course.map(f64::from))
+            .with_satellites(self.sentences.num_of_fix_satellites)
+            .with_hdop(self.sentences.hdop.map(f64::from)),
         )
     }
 }
@@ -88,9 +98,9 @@ mod tests {
     const RMC_VOID: &str = "$GNRMC,202725.00,V,,,,,,,290726,,,N,V*11";
     const GGA_NO_FIX: &str = "$GNGGA,202725.00,,,,,0,00,25.5,,,,,,*4A";
     const GSA_NO_FIX: &str = "$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01";
-    /// Also captured: an RX overrun spliced two sentences together. Worth keeping as a test
-    /// even though the shell's larger ring buffer should now prevent it — corruption on a
-    /// serial line is never fully ruled out.
+    /// Also captured: an RX overrun spliced two sentences together. A shell sizes its UART
+    /// ring buffer to avoid the overrun, but corruption on a serial line is never ruled out,
+    /// so a parser has to survive one.
     const SPLICED: &str = "$GAGSV,12724.00,V,N*55";
 
     /// Bodies of sentences taken from a real outdoor capture, with **the position replaced**
@@ -105,7 +115,7 @@ mod tests {
     const GGA_LATER: &str =
         "GNGGA,204330.00,5030.00600,N,00830.00900,E,1,06,4.4,262.46,M,45.12,M,,";
     /// A stationary receiver leaves the course field **empty** (the `0.08,,` here) because
-    /// there is no meaningful heading. Captured; a sample still has to come out of it.
+    /// there is no heading to report. Captured, and a sample still has to come out of it.
     const RMC_STATIONARY: &str = "GNRMC,204858.00,A,5030.00000,N,00830.00000,E,0.08,,290726,,,A,V";
 
     /// Wraps a sentence body into the on-the-wire form: `$`, the body, then `*` and the XOR
@@ -114,8 +124,8 @@ mod tests {
         format!("${body}*{:02X}", checksum(body))
     }
 
-    /// The same sentence with a checksum that is guaranteed wrong — inverting every bit
-    /// cannot land back on the correct value, which fabricating one by hand might.
+    /// The same sentence with a checksum that is guaranteed wrong. Inverting every bit cannot
+    /// land back on the correct value, which fabricating one by hand can.
     fn sentence_with_bad_checksum(body: &str) -> String {
         format!("${body}*{:02X}", checksum(body) ^ 0xFF)
     }
@@ -131,16 +141,21 @@ mod tests {
         assert!((got - want).abs() < 1e-5, "{got} is not near {want}");
     }
 
+    /// The measure a test parser holds: `f64`, since nothing here is measuring distances.
+    fn parser() -> Parser<f64> {
+        Parser::new()
+    }
+
     /// A parser that has seen the RMC every fix needs, since only RMC carries the date.
-    fn fixed() -> Parser {
-        let mut parser = Parser::new();
+    fn fixed() -> Parser<f64> {
+        let mut parser = parser();
         parser.absorb(&sentence(RMC_FIX)).expect("a first sample");
         parser
     }
 
     #[test]
     fn an_rmc_sentence_makes_a_sample() {
-        let sample = Parser::new().absorb(&sentence(RMC_FIX)).expect("a sample");
+        let sample = parser().absorb(&sentence(RMC_FIX)).expect("a sample");
 
         assert_eq!(sample.latitude(), 50.5);
         assert_eq!(sample.longitude(), 8.5);
@@ -155,7 +170,7 @@ mod tests {
     /// wrong by a factor of two.
     #[test]
     fn a_speed_in_knots_becomes_metres_per_second() {
-        let sample = Parser::new().absorb(&sentence(RMC_FIX)).expect("a sample");
+        let sample = parser().absorb(&sentence(RMC_FIX)).expect("a sample");
 
         assert_near(sample.speed_mps, 4.13 * 1_852.0 / 3_600.0);
         assert_near(sample.heading_degrees, 79.94);
@@ -164,7 +179,7 @@ mod tests {
     /// GGA carries no date, so nothing it says can be placed on a timeline on its own.
     #[test]
     fn a_gga_sentence_alone_makes_no_sample() {
-        assert_eq!(Parser::new().absorb(&sentence(GGA_FIX)), None);
+        assert_eq!(parser().absorb(&sentence(GGA_FIX)), None);
     }
 
     /// Once an RMC has supplied the date, the accumulator keeps it, and a GGA fills in what
@@ -191,7 +206,7 @@ mod tests {
 
     #[test]
     fn a_stationary_rmc_with_no_course_still_makes_a_sample() {
-        let sample = Parser::new()
+        let sample = parser()
             .absorb(&sentence(RMC_STATIONARY))
             .expect("a sample");
 
@@ -208,7 +223,7 @@ mod tests {
 
     #[test]
     fn the_real_indoor_stream_makes_no_samples() {
-        let mut parser = Parser::new();
+        let mut parser = parser();
 
         for sentence in [RMC_VOID, GGA_NO_FIX, GSA_NO_FIX, SPLICED] {
             assert_eq!(parser.absorb(sentence), None, "{sentence}");
@@ -229,7 +244,7 @@ mod tests {
 
     #[test]
     fn noise_on_the_line_does_not_panic() {
-        assert_eq!(Parser::new().absorb("\0\u{1}not a sentence"), None);
+        assert_eq!(parser().absorb("\0\u{1}not a sentence"), None);
     }
 
     /// A dozen sentences a second arrive saying what the last one said. Reporting each as a

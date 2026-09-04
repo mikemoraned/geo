@@ -7,14 +7,20 @@ edition.workspace = true
 
 [dependencies]
 # Spelled out rather than inherited, because the device build needs a feature off that the
-# workspace leaves on — chrono's clock reads a timezone database that has no business here —
+# workspace leaves on — chrono's clock pulls in a timezone database the device never reads —
 # and a member cannot turn off a default the workspace kept.
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
-# Positions are georust's `Point`, not a pair of coordinate types of our own. `geo-types`
-# alone rather than `geo`: the sample needs the type, and the algorithms come later where
-# they are used.
+# A position is georust's `Point`. `geo-types` carries the type, with `serde` enabled so a
+# sample can cross a wire; `geo` below carries the distance measures taken over it.
 geo-types = { workspace = true, features = ["serde"] }
+# Great-circle distance, generic over the float so the scan can stay `f32`. Spelled out for
+# the same reason as chrono: `default-features = false` drops earcutr, spade and rayon, and
+# the workspace entry leaves them on.
+geo = { version = "0.31", default-features = false }
 nmea = "0.7"
+# `FromPrimitive`, which is half of the bound georust's haversine needs and so half of what
+# `Measure` names. Already in the tree under `geo`.
+num-traits = { version = "0.2", default-features = false }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 
