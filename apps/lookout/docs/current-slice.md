@@ -196,12 +196,15 @@ run on the board — and it crosses: `predictor` and `platform-core` both build 
       been drawn**, because the carried set is Germany and the fix was in Scotland, so the
       count correctly reads `0 in 5km`. The predictions themselves are covered by the core's
       tests and are what the rerun runner exercises end to end.
-- [ ] Move the ESP-IDF install to `~/.espressif`, so one copy serves every worktree instead
-      of 4.3 GB under each. Set `ESP_IDF_TOOLS_INSTALL_DIR = "global"` in the shell's
-      `.cargo/config.toml`, have the user run `just m5plus-build` once outside the sandbox to
-      populate it, then delete the in-crate `.embuild`. **Confirm Claude can still build
-      against it before deleting anything**: the sandbox refused to *write* there, and whether
-      it reads there, and whether embuild writes to it on every build, are both untested.
+- [x] Move the ESP-IDF install to `~/.espressif`, so one copy serves every worktree instead
+      of 4.3 GB under each. The shell's `.cargo/config.toml` is on
+      `ESP_IDF_TOOLS_INSTALL_DIR = "global"`, and the root `Justfile` grants the sandbox
+      read-only access to `~/.espressif`, since safehouse denies by default and refused even to
+      read it. Confirmed with the in-crate `.embuild` gone and `esp-idf-sys` rebuilt from
+      scratch. Two things learnt on the way: changing the install dir invalidates the cmake
+      cache under `target/`, which fails as a source-directory mismatch rather than anything
+      naming the setting; and only the first build writes to the install dir, so read-only
+      access is enough for every build after it.
 
 ### 5. `crates/platform/rerun-py`
 

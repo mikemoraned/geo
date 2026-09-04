@@ -21,11 +21,16 @@ What a passing test run does and doesn't prove when Claude runs it.
   water-crossings notebook run, so `just test-python` — and therefore `just test-no-docker`
   as a whole — cannot complete here. Run the three Python suites separately to see which
   half is real, and have the user run the notebook recipes.
-- **The sandbox writes only inside the app directory**, so a toolchain that installs into
-  `$HOME` fails. A device crate therefore keeps its managed ESP-IDF under itself rather than
-  in a shared home-directory install, at the cost of several gigabytes per git worktree. The
-  failure is a bare "operation not permitted", reported after the whole toolchain resolution
-  has run.
+- **The sandbox denies by default and grants only what it is given**, so a path outside the
+  app directory is unreachable — for reading as much as for writing — unless the launcher
+  lists it. That `~/.cargo` and `~/.rustup` are readable says nothing about any other home
+  directory path: they are reachable because they are granted, not because they are outside
+  the repo. Grant one by adding it to `--add-dirs-ro` in the root `Justfile`'s `claude`
+  recipe, which takes a colon-separated list.
+- **A grant added there reaches only a session started afterwards.** The policy is fixed when
+  Claude launches, so a change to it cannot be tested in the session that made it.
+- The failure either way is a bare "operation not permitted" naming a path that plainly
+  exists, and a toolchain reports it only after its whole resolution has run.
 - **Nothing in a crate depending on `esp-idf-*` can be run here at all** — it cannot even be
   compiled for the host. A clean device build proves it compiles and links for the target and
   nothing more; behaviour needs a flash, which Claude cannot do. See

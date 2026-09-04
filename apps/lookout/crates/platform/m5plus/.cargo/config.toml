@@ -12,9 +12,11 @@ build-std = ["std", "panic_abort"]
 [env]
 MCU = "esp32"
 ESP_IDF_VERSION = "v5.5.3"
-# The ESP-IDF checkout and its toolchains are installed under this crate, in `.embuild`, which
-# is the template's default and several gigabytes. `global` would put one copy in `~/.espressif`
-# and share it across the git worktrees this repo is worked in, but the sandbox Claude runs
-# under only writes inside `apps/lookout`, and the failure is a bare "operation not permitted"
-# after the whole ESP-IDF resolution has run.
-ESP_IDF_TOOLS_INSTALL_DIR = "workspace"
+# One copy of the ESP-IDF checkout and its toolchains, in `~/.espressif`, shared by every git
+# worktree this repo is worked in. The template's `workspace` default puts 4.3 GB under each
+# one instead.
+#
+# Only the first build writes there; later builds read it, including those that rebuild ESP-IDF
+# itself. So a sandbox confined to this repo can build against an install it could not have
+# created — the one-time install has to be run outside it.
+ESP_IDF_TOOLS_INSTALL_DIR = "global"
