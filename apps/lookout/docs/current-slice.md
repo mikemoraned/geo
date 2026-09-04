@@ -97,8 +97,9 @@ predictor.
   `predict::Event` is `Sampled(Sample)` or `Elapsed(DateTime<Utc>)`, and nothing in the state
   machine knows crux exists. The core's event is a separate type it converts from. That is
   also what lets the python side drive the state machine with no core around it.
-- Whether the python extension exposes the state machine directly or the full Crux core. The
-  state machine is the smaller surface, and the core is what the device runs.
+- ~~Whether the python extension exposes the state machine directly or the full Crux core.~~
+  The state machine. The runner draws predictions, which is what `Predict` and `Trending`
+  answer; the core adds a panel view model that nothing off the device reads.
 
 ## Tasks
 
@@ -208,9 +209,12 @@ run on the board — and it crosses: `predictor` and `platform-core` both build 
 
 ### 5. `crates/platform/rerun-py`
 
-- [ ] Expose the predictor as a python extension module, following `medallion-py`: a pyo3
+- [x] Expose the predictor as a python extension module, following `medallion-py`: a pyo3
       `cdylib`, maturin in `pyproject.toml`, and the tests written in python. A rust test
-      binary for an extension module has no interpreter to run in.
+      binary for an extension module has no interpreter to run in. **The state machine, not
+      the core**, which settles the open question above: the runner drives `CrowFlies` and
+      knows nothing of crux. An instant crosses as an aware `datetime` through pyo3's `chrono`
+      feature, so a naive one is a `TypeError` rather than some other moment.
 - [ ] Read a named session's samples from silver in python, with DuckDB over the store as
       `visualise` does today, and feed them through the extension in `t` order.
 - [ ] Log the track, each prediction as it is made, and its error against the crossing when

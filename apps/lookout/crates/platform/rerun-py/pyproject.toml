@@ -1,0 +1,19 @@
+[build-system]
+requires = ["maturin>=1.14,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "lookout-predictor"
+version = "0.1.0"
+description = "Replay a recorded session through the crow-flies predictor"
+requires-python = ">=3.13"
+classifiers = ["Private :: Do Not Upload"]
+
+[tool.maturin]
+# Linking against libpython is what an extension module must not do; the feature is enabled
+# here rather than in Cargo.toml so `cargo check --workspace` still builds this crate.
+features = ["pyo3/extension-module"]
+module-name = "lookout_predictor"
+
+[dependency-groups]
+dev = ["pytest>=9"]

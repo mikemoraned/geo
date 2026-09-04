@@ -5962,6 +5962,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rerun-py"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "predictor",
+ "pyo3",
+]
+
+[[package]]
 name = "resolv-conf"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"

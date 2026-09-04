@@ -45,13 +45,15 @@ test-no-docker: test-python
     cargo nextest run --workspace --profile no-docker
 
 # Run the Python tests: the visualise tool, the store's python writer driven from pyarrow and
-# DuckDB (uv builds the extension module with maturin; nothing to install first), and the
-# modules the water-crossings notebooks import.
+# DuckDB, the predictor the rerun runner replays through (uv builds each extension module
+# with maturin; nothing to install first), and the modules the water-crossings notebooks
+# import.
 # The rebuild is forced because uv caches the built wheel against the extension crate's own
 # sources — a change to the rust crates it wraps would otherwise be tested as the last build.
 test-python:
     uv run --directory visualise pytest -q
     uv run --directory crates/medallion-py --reinstall-package lookout-medallion pytest -q
+    uv run --directory crates/platform/rerun-py --reinstall-package lookout-predictor pytest -q
     uv run --directory notebooks/water_crossings pytest -q
 
 # Run the end_to_end tests against real services (release mode), with real

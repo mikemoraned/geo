@@ -3,7 +3,7 @@
 # own lock, because it has to build for the device alongside a shell this workspace cannot
 # contain, and pins crux to a version the app does not. Listing one here as well leaves
 # cargo with two roots for the same directory and it refuses to load either.
-members = ["crates/*"]
+members = ["crates/*", "crates/platform/rerun-py"]
 # `crates/platform` holds the shells that drive the core, and is not a crate itself. The glob
 # above would still try to read a manifest there, so it is excluded — which also keeps
 # `crates/platform/m5plus` out, as a crate targeting Xtensa with its own workspace must be.
