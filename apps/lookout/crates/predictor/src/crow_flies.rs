@@ -144,8 +144,8 @@ fn arrival<T: Measure>(at: DateTime<Utc>, metres: T, speed_mps: T) -> Option<Dat
 }
 
 impl<T: Measure, C: Crossings<T>> Predict<T> for CrowFlies<T, C> {
-    /// The clock moves before anything else does, so an event out of order is refused with
-    /// the predictor untouched rather than half applied.
+    /// An event out of order leaves the clock, the predictions, and the trend as they were,
+    /// rather than half applied.
     fn observe(&mut self, event: Event<T>) -> Result<(), ObserveError> {
         match event {
             Event::Sampled(sample) => {

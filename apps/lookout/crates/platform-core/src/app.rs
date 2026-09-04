@@ -62,11 +62,11 @@ enum Change {
 pub struct Lookout;
 
 impl Lookout {
-    /// Feeds one sentence to the parser and predicts again from the fix it completes.
+    /// Takes one sentence off the wire, answering whether anything the panel shows has moved.
     ///
-    /// A sentence completing nothing leaves the last fix and prediction in place: one the
-    /// receiver emits before it has a fix, one failing its checksum, one repeating what is
-    /// known.
+    /// A sentence completing a fix moves the panel to it and predicts afresh from it. One
+    /// completing nothing leaves the last fix and prediction in place: one the receiver emits
+    /// before it has a fix, one failing its checksum, one repeating what is known.
     ///
     /// That matters at a dozen sentences a second. Otherwise one position would scan the
     /// whole set, and redraw the screen, a dozen times.
@@ -77,8 +77,10 @@ impl Lookout {
         self.observe(Observed::Sampled(sample), model)
     }
 
-    /// Tells the predictor. An event it refuses changes nothing there, so nothing on the
-    /// panel has moved either.
+    /// Applies one event, answering whether anything the panel shows has moved.
+    ///
+    /// An event dated before the clock is refused, and leaves everything the panel shows as
+    /// it was.
     fn observe(&self, event: Observed<Float>, model: &mut Model) -> Change {
         match model.predictor.observe(event) {
             Ok(()) => Change::Moved,

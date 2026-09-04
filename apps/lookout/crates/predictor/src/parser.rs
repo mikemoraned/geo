@@ -43,7 +43,7 @@ impl<T: Measure> Parser<T> {
         Self::default()
     }
 
-    /// Feeds one sentence, exactly as it came off the wire, and reports the sample it
+    /// Takes one sentence, exactly as it came off the wire, and reports the sample it
     /// completes.
     ///
     /// Nothing is reported until the receiver has a position and a date to place it on. GGA

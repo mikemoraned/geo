@@ -11,6 +11,15 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
 - Follow [Rust doc guidelines](https://doc.rust-lang.org/stable/rustdoc/write-documentation/what-to-include.html) if comments are needed
 - **Comments describe long-lived properties of the code, not the workflow that produced it.** Apply this test to every candidate comment: *would it still read correctly to a stranger if every caller, every input value, every motivating task, and every surrounding circumstance changed?* Only the function's own contract and invariants survive that test — everything else is leakage and will rot the moment work moves on. The principle is the test, not a list. Things that typically fail it: slice/phase/PR/task references, "previously did X, now does Y" framing, the calling site that motivated the change, and current snapshots of inputs (specific counts, specific file paths a caller happens to use today, the current default of a flag, the current name of a model). Describe the contract in terms of the parameters, not the values they hold this week. If the only honest justification is "the current task needs this," it belongs in the task/slice doc, not the code.
 
+- **A doc comment states what the caller can observe, not what the code does inside.** Name the
+  effect, never the collaborator: "Applies one event, answering whether anything the panel
+  shows has moved", not "Tells the predictor". A caller cannot see that a `parser` field
+  exists, and naming it in the docs both leaks the design and rots the moment it changes. What
+  belongs there is the return value, every argument the call mutates, and any state it changes
+  that the signature does not show — and state in that last group is better made explicit than
+  documented. Rationale for a decision is welcome in a second paragraph; it is the *first* line
+  that must be the contract.
+
 - **A crate's `Cargo.toml` carries no commentary by default.** What a library is for is
   answered by the code importing it, and a crate's purpose by its `lib.rs` module doc.
   Comment an entry only where it *deviates* from the workspace in a way a reader would
