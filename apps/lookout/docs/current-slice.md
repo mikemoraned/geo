@@ -141,9 +141,9 @@ than the predictor.
 ### 3. The Crux core
 
 **Leave BLE off.** Nothing in this slice needs it: the panel is the output, and the crossings
-are carried in flash. The reboot that pinned crux to `=0.16.2` only appears with NimBLE
-running (see [device.md](device.md)). Leaving BLE out takes the version question off this
-slice entirely. It returns whenever BLE does.
+are carried in flash. The reboot issue that pinned crux to `=0.16.2` only appears with NimBLE
+running (see [device.md](device.md)) so not need to consider that issue here. 
+Leaving BLE out takes the version question off this slice entirely.
 
 - [ ] Wrap the state machine in a core carrying spike 7's panel view model, extended with
       the predicted times: clock, fix, quality, battery, nearest, within.
@@ -154,12 +154,12 @@ slice entirely. It returns whenever BLE does.
 ### 4. `crates/platform/m5plus`
 
 Write this shell fresh from an esp-idf project template rather than lifting spike 7's. The
-spikes grew one addition at a time and carry that shape. What to build from is the facts they
-established, in [device.md](device.md): power hold on GPIO4, panel offset, GNSS RX pin, stack
-sizing, and UART ring buffer.
+spikes grew one addition at a time and carry that shape, which we don't want to inherit here. 
+What to build from is the facts they established, in [device.md](device.md): 
+power hold on GPIO4, panel offset, GNSS RX pin, stack sizing, and UART ring buffer.
 
 This is where `predictor` is first compiled for Xtensa. Nothing before it builds for the
-device, so a dependency that cannot cross surfaces here. `geo-types` is the one that has not
+device, so a dependency that cannot cross, surfaces here. `geo-types` is the one that has not
 already run on the board.
 
 - [ ] Generate the project from the esp-idf template into its own workspace, and get it
