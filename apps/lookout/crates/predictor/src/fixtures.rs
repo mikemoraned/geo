@@ -1,14 +1,14 @@
 //! Sentences in the shape the receiver emits them, for tests on either side of the parser.
 //!
-//! One place knows what an AT6668 sentence looks like — the field count, the NMEA 4.1
-//! mode/status pair RMC ends with, the empty course a stationary receiver reports. A test that
-//! needs a fix somewhere else asks for one here rather than writing out another sentence, so
-//! a receiver that changes is a change in one file.
+//! One place knows what an AT6668 sentence looks like: the field count, the NMEA 4.1
+//! mode/status pair RMC ends with, the empty course a stationary receiver reports. A test
+//! needing a fix somewhere else asks for one here rather than writing out another sentence,
+//! so a change in the receiver is a change in one file.
 //!
-//! The constants are captured: real sentences the receiver emitted, with **the position
-//! replaced** where they carry one, since a real fix pins down where and when someone was.
-//! [`Fix`] builds the rest, and the test at the foot of this module holds it to the captured
-//! bodies, so what it produces is what the receiver produces.
+//! The constants are captured — real sentences the receiver emitted, with the position
+//! replaced, since a real fix pins down where and when someone was. [`Fix`] builds the rest,
+//! and the tests below hold it to those captures, so what it builds is what the receiver
+//! sends.
 //!
 //! Off by default, behind the `fixtures` feature, so nothing here reaches a device binary. A
 //! crate wanting it puts `predictor` in its `[dev-dependencies]` with the feature on.

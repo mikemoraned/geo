@@ -225,7 +225,7 @@ mod tests {
         assert_eq!(sample.hdop, None);
     }
 
-    /// The path the simulation takes: `session_sample`'s columns, with no receiver and no
+    /// The path the runner takes: `session_sample`'s columns, with no receiver and no
     /// sentence anywhere in it. The columns it has no counterpart for stay absent rather
     /// than being invented — the phone counts no satellites.
     #[test]

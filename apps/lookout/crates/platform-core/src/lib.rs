@@ -1,14 +1,12 @@
 //! The Crux core the device shell drives.
 //!
-//! What the device does, minus the hardware. A shell reads the receiver, the battery pin and
-//! the clock, and hands each over as an [`Event`]; everything deciding what any of it *means*
-//! is here, where a laptop can test it. The GPS needs sky view and a cold start of about 23
-//! seconds, and a whole battery discharge takes an hour and a half, so neither is something
-//! to iterate against on the board.
+//! What the device does, minus the hardware. A shell reads the receiver, the battery pin, and
+//! the clock. Deciding what any of it means happens here, where a laptop can test it. The same
+//! test on the board costs a cold start under open sky, or an hour and a half of discharge.
 //!
-//! The prediction itself is [`predictor`]'s, and so is everything a shell measuring in another
-//! float would need. This crate holds what only the board has: the crossings carried in its
-//! flash, the judgement of its battery, and its panel.
+//! The prediction itself is [`predictor`]'s, along with anything a shell measuring in another
+//! float needs. This crate holds what only the board has: the crossings in its flash, the
+//! judgement of its battery, and its panel.
 
 pub mod app;
 pub mod battery;
@@ -19,9 +17,9 @@ pub mod pointset;
 pub use app::{Effect, Event, Lookout, Model};
 pub use panel::{NEAREST_ON_SCREEN, ViewModel};
 
-/// The float everything here measures in, and which satisfies [`predictor::Measure`].
+/// The float everything here measures in, and one [`predictor::Measure`] admits.
 ///
-/// `f32`, because the ESP32's FPU is single precision: `f64` there is emulated in software,
-/// and a scan of thousands of crossings against every fix cannot afford that. It is the
-/// measure rather than a unit — a position held in it is degrees, and a distance metres.
+/// `f32`, because the ESP32's FPU is single precision: `f64` there runs in software, and a
+/// scan of thousands of crossings a second cannot afford it. A measure, not a unit — a
+/// position held in it is degrees, a distance metres.
 pub(crate) type Float = f32;

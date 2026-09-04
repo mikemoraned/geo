@@ -3,11 +3,11 @@
 //! The device holds the whole set in flash and scans it against every fix, so nothing here
 //! copies or allocates: the columns are the file's own bytes, cast where they lie.
 //!
-//! **This is the second implementation of the format.** The packer that writes it is
-//! `apps/lookout/crates/crossings`, whose README is the layout's definition; the constants
-//! below are repeated here rather than shared, because that crate reads GeoParquet through
-//! arrow and could never be built for this target. `tests/four-crossings.pointset` is a real
-//! file from that packer, and the test that reads it is what makes the repetition safe.
+//! This is the second implementation of the format. `apps/lookout/crates/crossings` packs the
+//! file and its README defines the layout, but that crate reads GeoParquet through arrow and
+//! could never build for this target, so the constants below are repeated rather than shared.
+//! `tests/four-crossings.pointset` is a real file from the packer, and the test that reads it
+//! is what makes the repetition safe.
 
 use bytemuck::PodCastError;
 use predictor::{Crossing, CrossingId, Crossings};
@@ -34,12 +34,12 @@ pub enum FormatError {
         needed: usize,
         got: usize,
     },
-    /// `include_bytes!` yields a buffer aligned to 1, so this is what happens without a
-    /// `#[repr(align(4))]` wrapper around it — a fault on Xtensa if it were not caught.
+    /// What an unwrapped `include_bytes!` buffer gives, since it is aligned to 1. Uncaught,
+    /// it would fault on Xtensa.
     #[error("not aligned for 4-byte columns")]
     Misaligned,
-    /// Found once, here, rather than per scan: an unchecked coordinate off the globe would
-    /// otherwise be measured against every fix for the rest of the run.
+    /// Found once here rather than per scan. Unchecked, such a coordinate would be measured
+    /// against every fix for the rest of the run.
     #[error("holds {latitude},{longitude}, which is not on the globe")]
     OffTheGlobe { latitude: f32, longitude: f32 },
 }
@@ -52,10 +52,8 @@ pub struct Point {
     pub longitude: f32,
 }
 
-/// Forces the 4-byte alignment the columns are cast at.
-///
-/// `include_bytes!` yields a buffer aligned to 1, and casting that to `&[f32]` fails here —
-/// and, unchecked, would fault on Xtensa. Anything holding packed bytes goes behind this.
+/// Forces the 4-byte alignment the columns are cast at. Anything holding packed bytes goes
+/// behind it, because `include_bytes!` yields a buffer aligned to 1.
 #[repr(C, align(4))]
 pub(crate) struct Aligned<T: ?Sized>(pub T);
 
@@ -107,9 +105,9 @@ impl<'a> PointSet<'a> {
 
     /// Checks every coordinate once, so a scan never has to.
     ///
-    /// A distance to a point the earth has no room for is a number the predictor would report
-    /// as a prediction. The columns are bytes that can arrive corrupt, so they are swept here,
-    /// where a bad one is a fact about the buffer rather than about a fix.
+    /// The columns are bytes, and bytes arrive corrupt. Swept here, a coordinate the earth has
+    /// no room for is a fact about the buffer; found later, it is a distance the predictor
+    /// reports as a prediction.
     fn on_the_globe(&self) -> Result<(), FormatError> {
         self.positions()
             .find(|(latitude, longitude)| {
@@ -152,11 +150,10 @@ impl<'a> PointSet<'a> {
 
 /// Whether a buffer holds a point set this reader understands, decided at compile time.
 ///
-/// The same three questions [`PointSet::new`] asks — the magic, the version, and whether the
-/// length matches the count claimed — over bytes built into the binary, so a set the reader
-/// cannot make sense of stops the build rather than reaching a device. It answers a `bool`
-/// because that is what a `const` assertion can act on; `new` is where a failure is
-/// described.
+/// It asks the three questions [`PointSet::new`] asks — the magic, the version, and whether
+/// the length matches the count claimed — of bytes built into the binary, so a set the reader
+/// cannot make sense of stops the build rather than reaching a device. The answer is a `bool`
+/// because that is what a `const` assertion acts on. `new` is where a failure is described.
 pub(crate) const fn holds_points(packed: &[u8]) -> bool {
     if packed.len() < HEADER_LEN {
         return false;
@@ -184,9 +181,9 @@ const fn word(packed: &[u8], at: usize) -> u32 {
 
 /// A set is what the predictor scans, read straight out of flash.
 ///
-/// Nothing here converts or checks: the coordinates were checked when the buffer was read, and
-/// they are already in the float the scan measures in. A fix a second against the whole set is
-/// the one path on the device where that matters — the ESP32 emulates `f64` in software.
+/// Nothing here converts or checks. The coordinates were checked when the buffer was read, and
+/// they already hold the float the scan measures in — which matters on a board that emulates
+/// `f64` in software and scans the whole set every second.
 impl Crossings<f32> for PointSet<'_> {
     fn all(&self) -> impl Iterator<Item = Crossing<f32>> {
         PointSet::iter(self).map(|point| {

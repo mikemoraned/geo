@@ -16,15 +16,13 @@ use crate::{Float, carried};
 
 pub struct Model {
     now: Option<DateTime<Utc>>,
-    /// Sentences arrive one at a time and each fills in part of the picture, so the parser
-    /// keeps state across them.
     parser: Parser<Float>,
     battery: Battery,
     predictor: CrowFlies<Float, PointSet<'static>>,
 }
 
-/// The crossings are borrowed once rather than on every scan: they are the same bytes for the
-/// life of the binary.
+/// The crossings are borrowed once, not per scan: they are the same bytes for the life of the
+/// binary.
 impl Default for Model {
     fn default() -> Self {
         Self {
@@ -38,13 +36,12 @@ impl Default for Model {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Event {
-    /// The time, as the shell reads it. Set the shell's clock from the receiver: a clock
-    /// behind the fixes is refused by the predictor, which leaves the countdowns to advance
-    /// on fixes alone.
+    /// The time, as the shell reads it. Set that clock from the receiver: the predictor
+    /// refuses one behind its own fixes, leaving the countdowns to advance on fixes alone.
     Tick(DateTime<Utc>),
     /// One raw NMEA sentence, exactly as it came off the UART.
     Sentence(String),
-    /// The battery terminal voltage the shell measured, in millivolts. What it *means* is
+    /// The battery terminal voltage the shell measured, in millivolts. What it means is
     /// decided here, not there — see [`crate::battery`].
     Battery(u16),
 }
@@ -67,10 +64,12 @@ pub struct Lookout;
 impl Lookout {
     /// Feeds one sentence to the parser and predicts again from the fix it completes.
     ///
-    /// Sentences the receiver emits before it has a fix, ones that fail their checksum, and
-    /// ones repeating what is already known all complete nothing, and leave the last fix and
-    /// the last prediction in place. That matters at a dozen sentences a second: without it
-    /// the whole set would be scanned, and the screen redrawn, a dozen times for one position.
+    /// A sentence completing nothing leaves the last fix and prediction in place: one the
+    /// receiver emits before it has a fix, one failing its checksum, one repeating what is
+    /// known.
+    ///
+    /// That matters at a dozen sentences a second. Otherwise one position would scan the
+    /// whole set, and redraw the screen, a dozen times.
     fn absorb(&self, sentence: &str, model: &mut Model) -> Change {
         let Some(sample) = model.parser.absorb(sentence) else {
             return Change::Unchanged;
@@ -78,8 +77,8 @@ impl Lookout {
         self.observe(Observed::Sampled(sample), model)
     }
 
-    /// Tells the predictor. An event it refuses changes nothing there, so nothing the panel
-    /// shows has moved either, and there is nothing the panel could do about one anyway.
+    /// Tells the predictor. An event it refuses changes nothing there, so nothing on the
+    /// panel has moved either.
     fn observe(&self, event: Observed<Float>, model: &mut Model) -> Change {
         match model.predictor.observe(event) {
             Ok(()) => Change::Moved,
@@ -94,12 +93,10 @@ impl App for Lookout {
     type ViewModel = ViewModel;
     type Effect = Effect;
 
-    /// A render is asked for only where the panel would draw something different. The receiver
-    /// emits a dozen sentences a second and most of them repeat the position of the one
-    /// before, so redrawing on each would spend a second of screen for a second of fixes.
+    /// A render is asked for only where the panel would draw something different.
     fn update(&self, event: Event, model: &mut Model) -> Command<Effect, Event> {
         let change = match event {
-            // The clock is on the screen, so it is different every time it moves.
+            // The clock is on the screen, so every tick draws something different.
             Event::Tick(now) => {
                 model.now = Some(now);
                 self.observe(Observed::Elapsed(now), model);
@@ -124,11 +121,11 @@ impl App for Lookout {
     }
 
     fn view(&self, model: &Model) -> Self::ViewModel {
-        // The predictor's clock, not the shell's: it is the one the arrival instants are on,
-        // and it advances on a fix even where the shell's clock is behind them.
+        // The predictor's clock, not the shell's: the arrival instants are on it, and it
+        // advances on a fix even where the shell's clock lags.
         let now = model.predictor.now();
         // The fix the predictions were made from, so the panel cannot report a position the
-        // scan never ran at.
+        // scan never ran from.
         let fix = model.predictor.latest();
         let predictions = model.predictor.predictions();
 
@@ -180,10 +177,9 @@ mod tests {
     use super::*;
     use crate::panel::{CHARACTERS_PER_LINE, NO_ARRIVAL};
 
-    /// **Dresden Hauptbahnhof** — the same public landmark [`crate::carried`] checks the
-    /// crossings set against, and a place with twenty crossings inside the radius to predict.
-    ///
-    /// The speed is 54 knots, about 100 km/h, so the countdowns are a train's.
+    /// Dresden Hauptbahnhof, the landmark [`crate::carried`] also checks the set against, and
+    /// a place with twenty crossings inside the radius. At 54 knots, about 100 km/h, the
+    /// countdowns are a train's.
     fn at_the_station() -> Fix {
         Fix::at(20, 43, 29, 51.0403, 13.7322)
             .with_speed_knots(54.0)
@@ -197,14 +193,14 @@ mod tests {
             .with_course_degrees(79.94)
     }
 
-    /// Standing at the station. A receiver reports a speed of zero and no course at all, and
-    /// there is then no arrival to count down to.
+    /// Standing at the station: a speed of zero and no course, so no arrival to count down to.
     fn stopped() -> Fix {
         Fix::at(20, 48, 58, 51.0403, 13.7322)
     }
 
     /// When the fixtures are dated. A sentence carries the time of day and the date in
-    /// separate fields, and a countdown only advances if the shell's clock agrees with both.
+    /// separate fields, and a countdown advances only where the shell's clock agrees with
+    /// both.
     fn fix_instant() -> DateTime<Utc> {
         at_the_station().t()
     }
@@ -369,8 +365,8 @@ mod tests {
         assert_ne!(core.view().nearest, before);
     }
 
-    /// A dozen sentences a second arrive carrying the same position, and scanning the whole
-    /// set for each of them would be a waste of a second the device does not have.
+    /// Scanning the whole set again for a position already scanned would waste a second the
+    /// device does not have.
     #[test]
     fn the_predictions_do_not_change_while_the_fix_does_not() {
         let core = fixed();

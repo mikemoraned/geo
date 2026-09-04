@@ -26,10 +26,10 @@ pub enum Event<T: Measure> {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Prediction<T: Measure> {
     pub crossing: CrossingId,
-    /// The straight-line distance from the last fix. Crow-flies: the track's own geometry
+    /// The straight-line distance from the latest fix. Crow-flies: the track's own geometry
     /// plays no part, so a bend or a river meander puts a crossing nearer than the rails do.
     pub metres: T,
-    /// When we reach it at the speed of the last fix, absent where there is no speed to
+    /// When we reach it at the speed of the latest fix, absent where there is no speed to
     /// divide by.
     ///
     /// An instant rather than a countdown, so it stays true while the clock advances between

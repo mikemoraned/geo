@@ -4,19 +4,19 @@
 //! and packed by `apps/lookout/crates/crossings`.
 //!
 //! Built into the binary rather than read from a filesystem. The set is a small fraction of
-//! the flash it would sit in either way, so a filesystem would save nothing, and it would
-//! cost a partition table, a mount at boot, and a way for the device to hold a set that
-//! disagrees with the code reading it. Regenerate the file with `just carried-crossings`.
+//! the flash either way, so a filesystem would save nothing. It would cost a partition table,
+//! a mount at boot, and a way for the device to hold a set the code reading it disagrees with.
+//!
+//! Regenerate the file with `just carried-crossings`.
 
 use crate::pointset::{Aligned, PointSet, holds_points};
 
-/// The size is written out because `include_bytes!` yields a sized array: if the file is
-/// regenerated at a different size, this stops compiling, which is the right moment to notice.
+/// The size is written out because `include_bytes!` yields a sized array. A regenerated file
+/// of a different size then stops the build, which is when to notice.
 static PACKED: &Aligned<[u8; 69_000]> = &Aligned(*include_bytes!("water-crossings.pointset"));
 
 /// A set the reader cannot make sense of stops the build. The bytes are the same on every
-/// boot, so a device is the wrong place to discover they are the wrong bytes, and a panel
-/// reporting it is a shipped binary that can never predict anything.
+/// boot, so a device is the wrong place to find out they are the wrong bytes.
 const _: () = assert!(
     holds_points(&PACKED.0),
     "the carried crossings are not a point set this reader understands — repack them",
@@ -24,9 +24,8 @@ const _: () = assert!(
 
 /// The crossings, borrowed from flash.
 ///
-/// Infallible in a binary that compiled. The assertion above asks the same questions of the
-/// same bytes as the reader does, and the alignment the reader also checks is forced by
-/// [`Aligned`].
+/// Infallible in a binary that compiled. The assertion above asks the reader's own questions
+/// of the same bytes, and [`Aligned`] forces the alignment it also checks.
 pub fn crossings() -> PointSet<'static> {
     PointSet::new(&PACKED.0).expect("a set checked where it is built into the binary")
 }
@@ -63,12 +62,9 @@ mod tests {
         }
     }
 
-    /// Dresden Hauptbahnhof, and the five crossings nearest it — worked out from the source
-    /// GeoParquet with an independent haversine, in `f64`, before any of this ran. They are
-    /// the same handful of Elbe crossings a train north out of the station passes.
-    ///
-    /// This is the end-to-end check that matters for the real set: the notebook's answer and
-    /// the device's answer, over the same source rows, have to be the same answer.
+    /// Dresden Hauptbahnhof, and the five crossings nearest it: the Elbe crossings a train
+    /// north out of the station passes. They come from the source GeoParquet, through an
+    /// independent haversine in `f64`, so the tests below compare two answers rather than one.
     const DRESDEN_HBF: (f64, f64) = (51.0403, 13.7322);
     const NEAREST_TO_DRESDEN: [(u32, f32); 5] = [
         (0x2620_a981, 2334.9),
@@ -77,10 +73,9 @@ mod tests {
         (0xe6c6_312b, 2347.3),
         (0x4efe_dc58, 2351.6),
     ];
-    /// How far the device's answer may sit from the notebook's. They actually agree to
-    /// **0.27 m over 2.3 km** — about what the `f32` coordinates cost (~0.2 m at this
-    /// latitude) plus the two implementations using slightly different mean earth radii.
-    /// A metre leaves room for that without leaving room for a real disagreement.
+    /// How far the device's answer may sit from the notebook's. They agree to 0.27 m over
+    /// 2.3 km — about what `f32` coordinates cost at this latitude, plus two implementations
+    /// rounding the earth differently. A metre covers that and no real disagreement.
     const TOLERANCE_M: f32 = 1.0;
 
     /// The predictor the device runs, over the carried set, at the station.
@@ -128,10 +123,9 @@ mod tests {
         }
     }
 
-    /// The predictor's radius over the same source rows: twenty crossings lie within five
-    /// kilometres of the station. An `f32` buffer disagreeing with `f64` source data about a
-    /// *membership* question is the failure this rules out — a crossing sitting near the
-    /// radius could fall the other side of it.
+    /// Twenty crossings lie within the radius of the station. Membership is the stricter
+    /// check: a distance can be slightly out and still rank the same, where a crossing near
+    /// the radius falls one side of it or the other.
     #[test]
     fn the_device_agrees_with_the_notebook_about_what_is_near() {
         let predictor = at_dresden();

@@ -1,7 +1,7 @@
 //! NMEA sentences in, [`Sample`]s out.
 //!
-//! Only the device needs this. The simulation reads samples the store already holds, so it
-//! never builds one from a sentence.
+//! Only the device needs this. The runner reads samples the store already holds, so it never
+//! builds one from a sentence.
 
 use nmea::Nmea;
 

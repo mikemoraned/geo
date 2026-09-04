@@ -5,11 +5,11 @@ use num_traits::FromPrimitive;
 
 /// What everything in this crate measures in.
 ///
-/// It is a parameter rather than a fixed type because this crate runs on two platforms that
-/// want different answers. The ESP32's FPU is single precision, so `f64` there is emulated in
-/// software, and a scan of thousands of crossings against every fix cannot afford that. `f32`
-/// resolves about 0.42m at these latitudes, finer than the fix being measured. Off the device
-/// `f64` costs nothing and is what the store already holds.
+/// A parameter rather than a fixed type, because this crate runs on two platforms wanting
+/// different answers. The ESP32's FPU is single precision, so `f64` there runs in software,
+/// and a scan of thousands of crossings against every fix cannot afford it. `f32` resolves
+/// about 0.42m at these latitudes, finer than the fix it measures. Off the device `f64` costs
+/// nothing and is what the store holds.
 ///
 /// Degrees enter as `f64` whatever the measure, because that is what every source hands over:
 /// NMEA parses to `f64`, and silver stores `f64`. They convert once, where they are checked.
