@@ -1,25 +1,25 @@
-# Current Slice: Crow-flies predictor deployed to M5 device and rerun simulation
+# Current Slice: Crow-flies predictor on the M5 device and in rerun
 
 ## Target
 
 Two halves. One turns what the M5 spikes established
 (`spikes/m5/spike7-battery-and-trend`) into production code. The other makes rerun show what
-the predictor is doing.
+the predictor does.
 
 What exists at the end:
 
 - A predictor in a Crux core, its centre a state machine.
 - An M5 build that drives that core from the device's own GPS and predicts the water
   crossings ahead.
-- A rerun simulation that re-drives a named session from silver as GPS samples through the
-  same core. It captures the predictions and draws them against the crossings that session
-  actually made. We can then watch prediction and water diverge as the run plays out.
-- No `visualise` directory and no `spikes/m5` directory.
+- A rerun runner that replays a named session from silver as GPS samples through the same
+  core. It draws the predictions against the crossings that session actually made, so we
+  watch prediction and water diverge as the run plays out.
+- No `visualise` or `spikes/m5` directory.
 
 ## What a prediction is
 
-For each crossing within a radius of the current fix: how far away it is in a straight line,
-and the time we reach it at the current speed. Crow-flies: the track's real geometry plays no
+For each crossing within a radius of the current fix: the straight-line distance to it, and
+the time we reach it at the current speed. Crow-flies: the track's real geometry plays no
 part. A curve or a river bend puts a crossing nearer, and sooner, than the rails do. That is
 the baseline the evaluation slice measures against, not the final answer.
 
@@ -27,31 +27,30 @@ the baseline the evaluation slice measures against, not the final answer.
 
 ### The core
 
-A Crux core built to sit in a different shell each time: the M5 device, a rerun runner, or
+A Crux core built to sit in a different shell each time: the M5 device, the rerun runner,
 later an app or a website.
 
 The M5 spikes let events carry raw GNSS strings from the attached receiver. That is too
 low-level here. The core instead consumes a **normalised GPS sample** carrying what a
-predictor can use: timestamp, latitude, longitude, and the optional altitude, speed, heading,
-accuracy, satellite count, and HDOP. A parser converts GNSS strings into that form for the
-device. The rerun runner needs no parser — silver `session_sample` already holds those
-columns, and a session replays as samples directly.
+predictor can use. Required: timestamp, latitude, longitude. Optional: altitude, speed,
+heading, accuracy, satellite count, and HDOP. A parser converts GNSS strings into that form
+for the device. The rerun runner needs no parser — silver `session_sample` already holds
+those columns, and a session replays as samples directly.
 
 ### The measure
 
 Everything shared is **generic over the float it measures in**, behind one named bound. The
 ESP32's FPU is single precision, so `f64` there is emulated in software. A scan of thousands
-of crossings against every fix cannot afford that. Off the device `f64` costs nothing
-and is what the store already holds. A type fixing either one would be unusable on the other
-platform.
+of crossings against every fix cannot afford that. Off the device `f64` costs nothing and is
+what the store already holds. Fixing either type would be unusable on the other platform.
 
 Degrees enter as `f64` whatever the measure, since that is what every source hands over, and
-convert once where they are checked.
+convert once, where they are checked.
 
 The measure matters in one place beyond the scan: deriving a speed from two fixes. `f32`
 resolves latitude to about 0.42m, so each fix carries that much error and so does the step
-between two of them. A train covers 30m in a second, which puts the error near 1%. Walking
-pace covers 1.4m, which puts it near 30%. It holds at the speeds this is for, and the device
+between two of them. A train covers 30m a second, which puts the error near 1%. Walking pace
+covers 1.4m, which puts it near 30%. `f32` holds at the speeds this is for, and the device
 reports a speed in RMC anyway.
 
 ### The state machine
@@ -77,20 +76,20 @@ main workspace.
 the Rust one, and the blueprint is the point of this half of the slice.
 
 **Crux has no python shell.** Its type generation emits Swift, Kotlin/Java, and TypeScript,
-and `crux_core`'s `type_generation` module offers nothing else. Its FFI bindings are generated
-for Apple, Android, and WASM. So we write the python binding ourselves.
+and `crux_core`'s `type_generation` module offers nothing else. Its FFI bindings cover Apple,
+Android, and WASM. So we write the python binding ourselves.
 
 Write it with pyo3, following `medallion-py`: a `cdylib` with its own `pyproject.toml` and
-python tests, built by maturin. The simulation's own python lives in the same uv project.
-Python then holds the predictor as an object and calls it, with nothing serialised between.
+python tests, built by maturin. The runner's own python lives in the same uv project. Python
+then holds the predictor as an object and calls it, with nothing serialised between.
 
 The crux-native alternative, recorded rather than taken: drive the `Bridge`, crux's bincode
 `process_event(bytes) -> bytes` boundary, and generate the python types from the same
 `serde-reflection` registry crux's typegen builds. `serde-generate` has a python3 backend and
-ships `serde` and `bincode` runtimes for it. It buys one thing: python meets the
-exact byte interface the device shell does. It costs bincode on both sides, a codegen step,
-and a vendored python runtime. Take it once the simulation needs to test that boundary rather
-than the predictor.
+ships `serde` and `bincode` runtimes for it. It buys one thing: python meets the exact byte
+interface the device shell does. It costs bincode on both sides, a codegen step, and a
+vendored python runtime. Take it once the runner needs to test that boundary rather than the
+predictor.
 
 ## Open questions
 
@@ -107,10 +106,10 @@ than the predictor.
 
 - [x] Define the sample type in a core crate, with newtypes for the coordinates as spike 7
       already has, and `Option` for every field a receiver leaves out. The crate is
-      `crates/predictor`, and it will hold the state machine and the core too. **Done
-      without the newtypes**: a position is a `geo_types::Point`, since georust already has
-      the type and spike 7's `Latitude`/`Longitude` were ours to maintain for nothing. The
-      range check they carried stays, as the function that builds a position.
+      `crates/predictor`, and it holds the state machine and the core too. **Done without
+      the newtypes**: a position is a `geo_types::Point`, since georust already has the type
+      and spike 7's `Latitude`/`Longitude` were ours to maintain for nothing. The range check
+      they carried stays, as the function that builds a position.
 - [x] Put spike 7's NMEA accumulation behind a parser that emits samples, keeping its
       captured-sentence tests — the spliced sentence, the bad checksum, and the stationary
       RMC with no course. A sample needs a date, which only RMC carries, so a GGA before the
@@ -140,10 +139,10 @@ than the predictor.
 
 ### 3. The Crux core
 
-**Leave BLE off.** Nothing in this slice needs it: the panel is the output, and the crossings
-are carried in flash. The reboot issue that pinned crux to `=0.16.2` only appears with NimBLE
-running (see [device.md](device.md)) so not need to consider that issue here. 
-Leaving BLE out takes the version question off this slice entirely.
+**Leave BLE off.** Nothing in this slice needs it: the panel is the output, and flash carries
+the crossings. The reboot issue that pinned crux to `=0.16.2` appears only with NimBLE running
+(see [device.md](device.md)), so leaving BLE out takes the version question off this slice
+entirely.
 
 - [ ] Wrap the state machine in a core carrying spike 7's panel view model, extended with
       the predicted times: clock, fix, quality, battery, nearest, within.
@@ -154,19 +153,19 @@ Leaving BLE out takes the version question off this slice entirely.
 ### 4. `crates/platform/m5plus`
 
 Write this shell fresh from an esp-idf project template rather than lifting spike 7's. The
-spikes grew one addition at a time and carry that shape, which we don't want to inherit here. 
-What to build from is the facts they established, in [device.md](device.md): 
-power hold on GPIO4, panel offset, GNSS RX pin, stack sizing, and UART ring buffer.
+spikes grew one addition at a time and carry that shape, which we don't want to inherit here.
+Build instead from the facts they established, in [device.md](device.md): power hold on
+GPIO4, panel offset, GNSS RX pin, stack sizing, and UART ring buffer.
 
-This is where `predictor` is first compiled for Xtensa. Nothing before it builds for the
-device, so a dependency that cannot cross, surfaces here. `geo-types` is the one that has not
-already run on the board.
+This is where `predictor` first compiles for Xtensa. Nothing before it builds for the device,
+so a dependency that cannot cross surfaces here. `geo-types` is the one that has not already
+run on the board.
 
 - [ ] Generate the project from the esp-idf template into its own workspace, and get it
       booting with the power hold set.
 - [ ] Reach for the higher-level M5 crates **first**, for the battery and for anything else
       they cover. Spike 7 read the ADC by hand only because `m5unified` initialises the
-      display alongside power. Weigh that again now the display is needed too.
+      display alongside power. Weigh that again now we need the display too.
 - [ ] Drive the panel and read the GNSS receiver over UART, feeding samples to the core.
 - [ ] Flash it and confirm on hardware.
 
@@ -186,7 +185,7 @@ already run on the board.
 ### 6. Delete what is replaced
 
 - [ ] Delete `visualise/` and its `just visualise` recipe. The bronze GPS and accelerometer
-      views and the moving `train_segment` dots go with it; the rerun platform draws the
+      views and the moving `train_segment` dots go with it. The rerun runner draws the
       predictor and nothing else.
 - [ ] Delete `spikes/m5/`, after checking [device.md](device.md) carries every board fact
       worth keeping.
