@@ -6,7 +6,7 @@ use crux_core::{
     macros::effect,
     render::{self, RenderOperation},
 };
-use predictor::{CrowFlies, DEFAULT_RADIUS_METRES, Event as Observed, Parser, Predict};
+use predictor::{CrowFlies, DEFAULT_RADIUS_METRES, Event as Observed, Parser, Predict, Sentence};
 use serde::{Deserialize, Serialize};
 
 use crate::battery::Battery;
@@ -39,8 +39,9 @@ pub enum Event {
     /// The time, as the shell reads it. Set that clock from the receiver: the predictor
     /// refuses one behind its own fixes, leaving the countdowns to advance on fixes alone.
     Tick(DateTime<Utc>),
-    /// One raw NMEA sentence, exactly as it came off the UART.
-    Sentence(String),
+    /// One sentence off the UART. The shell reads a line and checks it is one, so noise on
+    /// the wire is refused there rather than reaching here.
+    Sentence(Sentence),
     /// The battery terminal voltage the shell measured, in millivolts. What it means is
     /// decided here, not there — see [`crate::battery`].
     Battery(u16),
@@ -66,11 +67,11 @@ impl Lookout {
     ///
     /// A sentence completing a fix moves the panel to it and predicts afresh from it. One
     /// completing nothing leaves the last fix and prediction in place: one the receiver emits
-    /// before it has a fix, one failing its checksum, one repeating what is known.
+    /// before it has a fix, one whose checksum fails, one repeating what is known.
     ///
     /// That matters at a dozen sentences a second. Otherwise one position would scan the
     /// whole set, and redraw the screen, a dozen times.
-    fn absorb(&self, sentence: &str, model: &mut Model) -> Change {
+    fn absorb(&self, sentence: &Sentence, model: &mut Model) -> Change {
         let Some(sample) = model.parser.absorb(sentence) else {
             return Change::Unchanged;
         };
@@ -174,7 +175,7 @@ impl App for Lookout {
 mod tests {
     use chrono::TimeDelta;
     use crux_core::Core;
-    use predictor::fixtures::{Fix, RMC_VOID};
+    use predictor::fixtures::{Fix, RMC_VOID, captured};
 
     use super::*;
     use crate::panel::{CHARACTERS_PER_LINE, NO_ARRIVAL};
@@ -240,18 +241,9 @@ mod tests {
     fn a_void_sentence_leaves_the_last_fix_alone() {
         let core = fixed();
 
-        core.process_event(Event::Sentence(RMC_VOID.to_string()));
+        core.process_event(Event::Sentence(captured(RMC_VOID)));
 
         assert_eq!(core.view().latitude, "51.04030");
-    }
-
-    #[test]
-    fn noise_on_the_line_does_not_panic() {
-        let core = core();
-
-        core.process_event(Event::Sentence("\0\u{1}not a sentence".to_string()));
-
-        assert_eq!(core.view().latitude, NO_FIX_YET);
     }
 
     #[test]

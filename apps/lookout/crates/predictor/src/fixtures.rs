@@ -15,6 +15,8 @@
 
 use chrono::{DateTime, TimeZone, Utc};
 
+use crate::sentence::Sentence;
+
 /// Captured indoors, before the receiver had a fix. `RMC_VOID` carries the NMEA 4.1
 /// navigational-status field — the trailing `,V` — that a hand-written 0183 RMC lacks.
 pub const RMC_VOID: &str = "$GNRMC,202725.00,V,,,,,,,290726,,,N,V*11";
@@ -39,23 +41,29 @@ const DAY: u32 = 29;
 const QUALITY: &str = "1,06,4.4";
 const ALTITUDE: &str = "262.46,M,45.12,M";
 
+/// A captured sentence, as a [`Sentence`].
+///
+/// Infallible for the constants above: each is a real line off the receiver, and the shape is
+/// all a [`Sentence`] asks for.
+pub fn captured(sentence: &str) -> Sentence {
+    Sentence::new(sentence).expect("a captured sentence")
+}
+
 /// Wraps a sentence body into the on-the-wire form: `$`, the body, then `*` and the XOR of
 /// every body byte as two hex digits.
-fn sentence(body: &str) -> String {
-    format!("${body}*{:02X}", checksum(body))
+fn sentence(body: &str) -> Sentence {
+    Sentence::new(format!("${body}*{:02X}", checksum(body))).expect("a body and its checksum")
 }
 
 /// The same sentence, corrupted: its contents intact and its checksum guaranteed wrong.
 ///
-/// Inverting every bit of the checksum cannot land back on the correct value, which
-/// fabricating one by hand can.
-pub fn with_bad_checksum(sentence: &str) -> String {
-    let body = sentence
-        .trim_start_matches('$')
-        .split_once('*')
-        .map_or(sentence, |(body, _)| body);
+/// Still a [`Sentence`], because a checksum that fails to cover its body is the shape a real
+/// overrun takes. Inverting every bit cannot land back on the correct value, which fabricating
+/// one by hand can.
+pub fn with_bad_checksum(sentence: &Sentence) -> Sentence {
+    let body = sentence.body();
 
-    format!("${body}*{:02X}", checksum(body) ^ 0xFF)
+    Sentence::new(format!("${body}*{:02X}", checksum(body) ^ 0xFF)).expect("a wrong checksum")
 }
 
 fn checksum(body: &str) -> u8 {
@@ -120,12 +128,12 @@ impl Fix {
     }
 
     /// Position, speed, course and date, ready for the wire.
-    pub fn rmc(&self) -> String {
+    pub fn rmc(&self) -> Sentence {
         sentence(&self.rmc_body())
     }
 
     /// Position, fix quality and altitude, ready for the wire. No date: GGA carries none.
-    pub fn gga(&self) -> String {
+    pub fn gga(&self) -> Sentence {
         sentence(&self.gga_body())
     }
 
@@ -241,7 +249,7 @@ mod tests {
     fn a_southern_or_western_fix_reports_its_hemisphere() {
         let fix = Fix::at(20, 43, 29, -33.9, -18.4);
 
-        assert!(fix.rmc().contains("3354.00000,S,01824.00000,W"));
+        assert!(fix.rmc().body().contains("3354.00000,S,01824.00000,W"));
     }
 
     /// The contents have to survive, or a reader would refuse the sentence for the wrong
@@ -250,7 +258,7 @@ mod tests {
     fn a_corrupted_sentence_keeps_its_body_and_loses_its_checksum() {
         let corrupt = with_bad_checksum(&captured_fix().gga());
 
-        assert!(corrupt.starts_with(&format!("${CAPTURED_GGA}*")));
+        assert_eq!(corrupt.body(), CAPTURED_GGA);
         assert_ne!(corrupt, captured_fix().gga());
     }
 

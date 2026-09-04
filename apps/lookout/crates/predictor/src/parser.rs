@@ -7,6 +7,7 @@ use nmea::Nmea;
 
 use crate::measure::Measure;
 use crate::sample::Sample;
+use crate::sentence::Sentence;
 
 /// One knot in metres per second, by definition — a nautical mile an hour, and a nautical
 /// mile is 1,852 metres.
@@ -43,16 +44,15 @@ impl<T: Measure> Parser<T> {
         Self::default()
     }
 
-    /// Takes one sentence, exactly as it came off the wire, and reports the sample it
-    /// completes.
+    /// Takes one sentence and reports the sample it completes.
     ///
     /// Nothing is reported until the receiver has a position and a date to place it on. GGA
     /// carries no date, so a stream reports its first sample when its first RMC lands.
-    /// Three kinds of sentence report nothing and leave what is known intact: one that fails
-    /// its checksum, one the receiver emits before it has a fix, and one that repeats what is
-    /// already known.
-    pub fn absorb(&mut self, sentence: &str) -> Option<Sample<T>> {
-        self.sentences.parse(sentence).ok()?;
+    /// Three kinds of sentence report nothing and leave what is known intact: one whose
+    /// checksum does not match its body, one the receiver emits before it has a fix, and one
+    /// that repeats what is already known.
+    pub fn absorb(&mut self, sentence: &Sentence) -> Option<Sample<T>> {
+        self.sentences.parse(sentence.as_str()).ok()?;
 
         let sample = self.sample()?;
         if self.last == Some(sample) {
@@ -91,7 +91,9 @@ mod tests {
     use chrono::{TimeZone, Utc};
 
     use super::*;
-    use crate::fixtures::{Fix, GGA_NO_FIX, GSA_NO_FIX, RMC_VOID, SPLICED, with_bad_checksum};
+    use crate::fixtures::{
+        Fix, GGA_NO_FIX, GSA_NO_FIX, RMC_VOID, SPLICED, captured, with_bad_checksum,
+    };
 
     /// The fix the captured sentences carry, at 50.5N 8.5E and moving.
     fn fix() -> Fix {
@@ -188,33 +190,28 @@ mod tests {
     /// position is not a sample. What the state machine still holds is its own business.
     #[test]
     fn a_void_sentence_makes_no_sample() {
-        assert_eq!(fixed().absorb(RMC_VOID), None);
+        assert_eq!(fixed().absorb(&captured(RMC_VOID)), None);
     }
 
     #[test]
     fn the_real_indoor_stream_makes_no_samples() {
         let mut parser = parser();
 
-        for sentence in [RMC_VOID, GGA_NO_FIX, GSA_NO_FIX, SPLICED] {
-            assert_eq!(parser.absorb(sentence), None, "{sentence}");
+        for sentence in [RMC_VOID, GGA_NO_FIX, GSA_NO_FIX, SPLICED].map(captured) {
+            assert_eq!(parser.absorb(&sentence), None, "{sentence}");
         }
     }
 
     #[test]
     fn a_spliced_sentence_makes_no_sample() {
-        assert_eq!(fixed().absorb(SPLICED), None);
+        assert_eq!(fixed().absorb(&captured(SPLICED)), None);
     }
 
-    /// A well-formed later sentence whose checksum does not match its contents, so the move
-    /// to 50.5001 must not be believed.
+    /// A sentence whose checksum does not match its contents, so the move to 50.5001 must not
+    /// be believed.
     #[test]
     fn a_corrupt_sentence_makes_no_sample() {
         assert_eq!(fixed().absorb(&with_bad_checksum(&later().gga())), None);
-    }
-
-    #[test]
-    fn noise_on_the_line_does_not_panic() {
-        assert_eq!(parser().absorb("\0\u{1}not a sentence"), None);
     }
 
     /// A dozen sentences a second arrive saying what the last one said. Reporting each as a
