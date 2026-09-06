@@ -17,9 +17,6 @@ doctest = false
 [dependencies]
 chrono = { workspace = true }
 predictor = { workspace = true }
-# `chrono` carries a python `datetime` across as a `DateTime<Utc>`, which is what a sample
-# and a prediction are timed by. Without it every instant would cross as a number and the
-# timezone would be the caller's to remember.
 pyo3 = { workspace = true, features = ["chrono"] }
 
 [lints]

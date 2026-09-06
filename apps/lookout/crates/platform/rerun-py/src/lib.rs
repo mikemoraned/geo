@@ -19,9 +19,10 @@
 //! Nothing is serialised across the boundary: python holds the state machine itself, and a
 //! call into it runs the predictor's own code.
 //!
-//! It measures in `f64`, which is what the store holds and what a python float is.
+//! It measures in `f64`, which is what the store holds and what a python float is. Instants
+//! are aware datetimes, in whatever timezone the caller has them in.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, FixedOffset, Utc};
 use predictor::{
     Crossing, CrossingId, CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS_METRES, Event,
     ObserveError, Predict, Sample, Trending,
@@ -33,7 +34,6 @@ use pyo3::prelude::*;
 #[pyclass(frozen, get_all, eq, skip_from_py_object)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Prediction {
-    /// The crossing, as the id it was given.
     crossing: u32,
     /// The straight-line distance from the latest fix, in metres.
     metres: f64,
@@ -84,8 +84,7 @@ impl From<predictor::Trend> for Trend {
 /// radius, and when we reach it at the speed we are going.
 ///
 /// The track's own geometry plays no part, so a bend or a river meander puts a crossing
-/// nearer, and sooner, than the rails can reach it. That is the baseline the evaluation
-/// measures a better predictor against.
+/// nearer, and sooner, than the rails can reach it.
 #[pyclass]
 pub struct CrowFlies {
     inner: CrowFliesPredictor<f64>,
@@ -113,6 +112,9 @@ impl CrowFlies {
 
     /// Observes one fix, which moves the position and advances the clock to its own instant.
     ///
+    /// `t` is an aware datetime in any timezone, since a store hands one back in whichever
+    /// its engine holds. A naive one is refused: it names no instant.
+    ///
     /// Everything past the position is what the source happened to know. A field left out
     /// stays unknown rather than being invented: with no speed reported, the step from the
     /// previous fix says how fast we are going, and with no previous fix there is no time to
@@ -132,7 +134,7 @@ impl CrowFlies {
     #[allow(clippy::too_many_arguments)]
     fn observe_sample(
         &mut self,
-        t: DateTime<Utc>,
+        t: DateTime<FixedOffset>,
         latitude: f64,
         longitude: f64,
         altitude_metres: Option<f64>,
@@ -142,7 +144,7 @@ impl CrowFlies {
         satellites: Option<u32>,
         hdop: Option<f64>,
     ) -> PyResult<()> {
-        let sample = Sample::at(t, latitude, longitude)
+        let sample = Sample::at(t.to_utc(), latitude, longitude)
             .map_err(|err| PyValueError::new_err(err.to_string()))?
             .with_altitude_metres(altitude_metres)
             .with_speed_mps(speed_mps)
@@ -155,8 +157,8 @@ impl CrowFlies {
     }
 
     /// Observes time passing with no fix, so a stale prediction can be told from a fresh one.
-    fn observe_elapsed(&mut self, t: DateTime<Utc>) -> PyResult<()> {
-        self.observe(Event::Elapsed(t))
+    fn observe_elapsed(&mut self, t: DateTime<FixedOffset>) -> PyResult<()> {
+        self.observe(Event::Elapsed(t.to_utc()))
     }
 
     /// The crossings it predicts we reach, nearest first.

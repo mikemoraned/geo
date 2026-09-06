@@ -15,5 +15,27 @@ classifiers = ["Private :: Do Not Upload"]
 features = ["pyo3/extension-module"]
 module-name = "lookout_predictor"
 
+# The wheel is the extension module alone, and it depends on nothing. What is listed here is
+# what the runner beside it needs: it shares this project rather than having one of its own,
+# so that driving the predictor takes no install step.
 [dependency-groups]
-dev = ["pytest>=9"]
+dev = [
+    # The store's own reader and writer, so the runner reads a dataset by name rather than
+    # working out which files hold it.
+    "lookout-medallion",
+    "pyarrow>=25",
+    "pytest>=9",
+    # Builds the fixtures the tests read back: geometry as WKB, and the projected column in
+    # the zone the store states for the country.
+    "pyproj>=3.7",
+    "shapely>=2.1",
+]
+
+[tool.uv.sources]
+lookout-medallion = { path = "../../medallion-py" }
+
+[tool.pytest.ini_options]
+# The runner's own python sits beside the extension module rather than inside the wheel: it
+# is what drives the predictor, not part of it.
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,31 +1,27 @@
 # lookout_predictor
 
 The crow-flies predictor as a python extension module, so the rerun runner replays a recorded
-session through the predictor itself rather than through a second one written in python — see
-[`docs/architecture.md`](../../../docs/architecture.md) for where it sits, and `src/lib.rs` for
-the API, whose doc comments are the module's `__doc__`.
+session through the predictor itself rather than through a second one written in python. See
+`src/lib.rs` for the API, whose doc comments are the module's `__doc__`, and
+[`docs/architecture.md`](../../../docs/architecture.md) for where it sits.
+
+## The runner
+
+`runner/` is the python beside the extension: `store.py` reads a session's samples and the
+crossings to scan them against, through `lookout_medallion.query_silver`, and `replay.py`
+feeds those samples through a predictor the caller built, a step per sample.
 
 ```python
 from lookout_predictor import CrowFlies
 
-predictor = CrowFlies([(crossing_id, lat, lon), ...], radius_metres=5000.0)
-predictor.observe_sample(t, lat, lon, speed_mps=speed)
-for prediction in predictor.predictions():
-    print(prediction.crossing, prediction.metres, prediction.at)
+from runner.replay import replay
+from runner.store import Store
+
+store = Store()
+predictor = CrowFlies(store.crossings(country="DE"))
+for step in replay(predictor, store.samples(session_id)):
+    print(step.sample.t, step.predictions)
 ```
-
-## What it expects
-
-Samples arrive in `t` order, each instant tz-aware. One behind the clock raises a `ValueError`
-and changes nothing; a naive datetime raises a `TypeError`. A coordinate off the globe raises a
-`ValueError` too, whether it arrives as a crossing or as a fix.
-
-Everything past the position is optional, and a field left out stays unknown rather than
-becoming zero. Without a reported speed, the step from the previous fix says how fast we are
-going. Without a previous fix, a prediction carries a distance and no time.
-
-Distances are metres and speeds metres per second, measured in `f64` — what the store holds and
-what a python float is.
 
 ## Running the tests
 

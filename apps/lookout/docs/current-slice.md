@@ -215,8 +215,20 @@ run on the board — and it crosses: `predictor` and `platform-core` both build 
       the core**, which settles the open question above: the runner drives `CrowFlies` and
       knows nothing of crux. An instant crosses as an aware `datetime` through pyo3's `chrono`
       feature, so a naive one is a `TypeError` rather than some other moment.
-- [ ] Read a named session's samples from silver in python, with DuckDB over the store as
-      `visualise` does today, and feed them through the extension in `t` order.
+- [x] Read a named session's samples from silver in python, ~~with DuckDB over the store as
+      `visualise` does today~~, and feed them through the extension in `t` order. **Through
+      `medallion-py` instead**, which grew a `query_silver`: DuckDB in python would have made
+      `runner/store.py` a third place that knows the store's layout, after `medallion` and
+      `visualise`. Reading a dataset by name brings its partitions and its geometry's CRS with
+      it, so a crossing's position arrives as coordinates rather than as WKB to decode. Behind
+      it, `medallion::Query` grew bound parameters, and a result that always carries its
+      columns — an empty batch where a query matched nothing.
+- [ ] Derive the datasets a query reads from the query itself, so `query_silver` takes SQL
+      alone and `datasets=` goes away. Parse rather than match on the text ourselves:
+      datafusion already carries a parser, and `resolve_table_references` in `datafusion_sql`
+      answers a parsed statement's table references, separating them from its CTE names. A
+      reference naming no silver dataset is then the error `datasets=` catches today.
+
 - [ ] Log the track, each prediction as it is made, and its error against the crossing when
       that crossing arrives.
 - [ ] Log silver `session_crossing` as the ground truth to compare against.
