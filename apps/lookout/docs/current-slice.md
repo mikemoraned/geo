@@ -223,11 +223,13 @@ run on the board — and it crosses: `predictor` and `platform-core` both build 
       it, so a crossing's position arrives as coordinates rather than as WKB to decode. Behind
       it, `medallion::Query` grew bound parameters, and a result that always carries its
       columns — an empty batch where a query matched nothing.
-- [ ] Derive the datasets a query reads from the query itself, so `query_silver` takes SQL
+- [x] Derive the datasets a query reads from the query itself, so `query_silver` takes SQL
       alone and `datasets=` goes away. Parse rather than match on the text ourselves:
       datafusion already carries a parser, and `resolve_table_references` in `datafusion_sql`
       answers a parsed statement's table references, separating them from its CTE names. A
-      reference naming no silver dataset is then the error `datasets=` catches today.
+      reference naming no silver dataset is then the error `datasets=` catches today. It
+      lands as `medallion::table_references`, which leaves naming the datasets to `model`
+      where it already lives.
 
 - [ ] Log the track, each prediction as it is made, and its error against the crossing when
       that crossing arrives.

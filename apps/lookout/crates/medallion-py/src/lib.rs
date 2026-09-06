@@ -16,7 +16,6 @@
 //! written = lookout_medallion.write_silver("water_crossing", table)
 //! table = lookout_medallion.query_silver(
 //!     "SELECT crossing_id FROM water_crossing WHERE country = $country",
-//!     datasets=["water_crossing"],
 //!     params={"country": "DE"},
 //! )
 //! ```
@@ -113,8 +112,8 @@ impl From<Param> for ScalarValue {
 
 /// Query the store, returning an Arrow table.
 ///
-/// `datasets` names the silver datasets the query reads, each registered as a table of its
-/// own name, with its partitions walked and its geometry columns read back with their CRS.
+/// The datasets the query reads are the tables it names, each registered under that name with
+/// its partitions walked and its geometry columns read back with their CRS.
 ///
 /// `params` binds the query's `$name` placeholders as values, so an id carrying a quote
 /// reads as an id that does not exist rather than as more query.
@@ -123,15 +122,15 @@ impl From<Param> for ScalarValue {
 /// without copying the rows through python objects. A dataset the store does not define, or
 /// that has never been written, raises a `ValueError` naming it.
 #[pyfunction]
-#[pyo3(signature = (sql, *, datasets, params=None, root=None))]
+#[pyo3(signature = (sql, *, params=None, root=None))]
 fn query_silver(
     py: Python<'_>,
     sql: &str,
-    datasets: Vec<String>,
     params: Option<HashMap<String, Param>>,
     root: Option<PathBuf>,
 ) -> PyResult<PyTable> {
-    let targets = datasets
+    let targets = medallion::table_references(sql)
+        .map_err(query_error)?
         .iter()
         .map(|dataset| model::silver_target(dataset).map_err(target_error))
         .collect::<PyResult<Vec<_>>>()?;

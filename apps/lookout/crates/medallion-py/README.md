@@ -13,7 +13,6 @@ written = lookout_medallion.write_silver("train_segment", table, root="/some/sto
 
 table = lookout_medallion.query_silver(
     "SELECT trip_id, ST_X(geometry) AS lon FROM train_segment WHERE country = $country",
-    datasets=["train_segment"],
     params={"country": "DE"},
 )
 ```

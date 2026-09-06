@@ -4,11 +4,14 @@
 //! directories and reading the geometry columns back with their CRS, so callers express
 //! what they want of a dataset as a query rather than as file traversal.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use datafusion::arrow::array::RecordBatch;
 use datafusion::common::ParamValues;
 use datafusion::scalar::ScalarValue;
+use datafusion::sql::TableReference;
+use datafusion::sql::parser::DFParser;
+use datafusion::sql::resolve::resolve_table_references;
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
@@ -29,6 +32,22 @@ pub enum QueryError {
     DataFusion(#[from] datafusion::error::DataFusionError),
     #[error("reading rows: {0}")]
     Rows(#[from] serde_arrow::Error),
+}
+
+/// The tables `sql` reads, in the order they are named.
+///
+/// A caller registering what a query needs asks the parser rather than reading the text, so
+/// a name inside a string literal or a comment is not one, and a name a `WITH` clause defines
+/// is not either — a CTE is the query's own table, not one to look for in the store.
+pub fn table_references(sql: &str) -> Result<Vec<String>, QueryError> {
+    let mut names = BTreeSet::new();
+
+    for statement in DFParser::parse_sql(sql)? {
+        let (referenced, _ctes) = resolve_table_references(&statement, true)?;
+        names.extend(referenced.iter().map(TableReference::to_string));
+    }
+
+    Ok(names.into_iter().collect())
 }
 
 /// The single column a counting query returns. Its name is fixed, so callers alias their
@@ -436,6 +455,62 @@ mod tests {
 
         let rows: usize = batches.iter().map(RecordBatch::num_rows).sum();
         assert_eq!(rows, 0);
+    }
+
+    #[test]
+    fn the_tables_a_query_reads_are_the_ones_it_names() {
+        assert_eq!(
+            table_references("SELECT id FROM thing WHERE id > 1").unwrap(),
+            vec!["thing"]
+        );
+    }
+
+    #[test]
+    fn a_table_joined_to_another_is_named_once_each() {
+        let names =
+            table_references("SELECT * FROM thing t, other o WHERE t.id = o.id AND t.id > 1")
+                .unwrap();
+
+        assert_eq!(names, vec!["other", "thing"]);
+    }
+
+    #[test]
+    fn a_table_read_twice_is_named_once() {
+        let names =
+            table_references("SELECT id FROM thing UNION ALL SELECT id FROM thing WHERE id > 1")
+                .unwrap();
+
+        assert_eq!(names, vec!["thing"]);
+    }
+
+    /// A `WITH` clause defines a table the query carries with it, so it is not one to look
+    /// for in the store — but what the clause itself reads is.
+    #[test]
+    fn a_cte_is_not_a_table_to_look_for() {
+        let names = table_references(
+            "WITH recent AS (SELECT * FROM thing WHERE id > 1) SELECT * FROM recent",
+        )
+        .unwrap();
+
+        assert_eq!(names, vec!["thing"]);
+    }
+
+    /// Parsed rather than matched on, so a name that only looks like one is not read as one.
+    #[test]
+    fn a_name_inside_a_literal_is_not_a_table() {
+        let names = table_references("SELECT id FROM thing WHERE name = 'from other'").unwrap();
+
+        assert_eq!(names, vec!["thing"]);
+    }
+
+    #[test]
+    fn a_query_reading_no_table_names_none() {
+        assert!(table_references("SELECT 1").unwrap().is_empty());
+    }
+
+    #[test]
+    fn sql_that_does_not_parse_is_an_error_rather_than_no_tables() {
+        assert!(table_references("SELECT * FROM (").is_err());
     }
 
     /// A caller handing an empty result to another engine still has the columns to hand it

@@ -45,11 +45,9 @@ class Store:
     def __init__(self, root: Path | None = None) -> None:
         self.root = None if root is None else str(root)
 
-    def _query(self, sql: str, datasets: list[str], **params) -> pa.Table:
+    def _query(self, sql: str, **params) -> pa.Table:
         return pa.table(
-            lookout_medallion.query_silver(
-                sql, datasets=datasets, params=params, root=self.root
-            )
+            lookout_medallion.query_silver(sql, params=params, root=self.root)
         )
 
     def samples(self, session_id: str) -> Iterator[Sample]:
@@ -65,7 +63,6 @@ class Store:
             WHERE session_id = $session_id
             ORDER BY t, seq
             """,
-            datasets=["session_sample"],
             session_id=session_id,
         )
         for row in table.to_pylist():
@@ -92,7 +89,6 @@ class Store:
             FROM water_crossing
             {where}
             """,
-            datasets=["water_crossing"],
             **({"country": country} if country else {}),
         )
         return [(row["id"], row["lat"], row["lon"]) for row in table.to_pylist()]
@@ -105,8 +101,7 @@ class Store:
             FROM session_sample
             GROUP BY session_id
             ORDER BY first DESC
-            """,
-            datasets=["session_sample"],
+            """
         )
         return [
             (row["session_id"], row["first"], row["last"], row["samples"])
