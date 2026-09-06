@@ -239,9 +239,16 @@ run on the board — and it crosses: `predictor` and `platform-core` both build 
       definition of having passed. What to draw and drawing it are separate functions, since
       the entity paths and values are the decisions worth testing and rerun has no read-back
       to test them through. `just sessions` and `just replay <id>` are the commands.
-- [ ] Log silver `session_crossing` as the ground truth to compare against.
-- [ ] Give it a blueprint: a map of the session and the crossings, and a timeline of
-      predicted times against actual ones.
+- [x] Log silver `session_crossing` as the ground truth to compare against. Three ways: the
+      crossings a session reached are drawn apart from the rest on the map, each passing is
+      noted at the moment it happened with how near the sample that matched it was, and the
+      true countdown to a passing is drawn against the predicted one, so a plot holds both
+      and the gap between them is the error.
+- [x] Give it a blueprint: a map of the session and the crossings, and a timeline of
+      predicted times against actual ones. **No view names a crossing**, so a session with two
+      crossings and one with two thousand lay out the same way — which is why the entity paths
+      group by what is measured rather than by which crossing it is measured against: a plot is
+      one subtree, and a crossing is a series within it.
 
 ### 6. Delete what is replaced
 

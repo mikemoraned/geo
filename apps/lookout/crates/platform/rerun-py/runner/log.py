@@ -12,19 +12,30 @@ archetype it is logged as. Nothing about rerun reaches the first, and no decisio
 second.
 """
 
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 
 import rerun as rr
 
 from .replay import Step
+from .store import Passing
 
 TIMELINE = "t"
 
-TRACK = "session/track"
-FIX = "session/fix"
+SESSION = "session"
+TRACK = f"{SESSION}/track"
+FIX = f"{SESSION}/fix"
 CROSSINGS = "crossings"
+PASSED = "crossings/passed"
+
+# Grouped by what is measured rather than by which crossing it is measured against, so one
+# plot is one subtree and a crossing is a series within it.
+DISTANCE = "distance"
+PREDICTED_ETA = "eta/predicted"
+ACTUAL_ETA = "eta/actual"
+ERROR = "error"
+PASSING = "passing"
 
 
 @dataclass(frozen=True)
@@ -54,7 +65,17 @@ class Measure:
     at: datetime | None = None
 
 
-Drawing = Marker | Line | Measure
+@dataclass(frozen=True)
+class Note:
+    """A line of text at a moment, for something that happens rather than something that
+    holds a value."""
+
+    path: str
+    text: str
+    at: datetime | None = None
+
+
+Drawing = Marker | Line | Measure | Note
 
 
 def error_seconds(predicted_at: datetime | None, passed_at: datetime | None) -> float | None:
@@ -72,17 +93,30 @@ def error_seconds(predicted_at: datetime | None, passed_at: datetime | None) -> 
 def drawings(
     steps: Iterable[Step],
     crossings: Iterable[tuple[int, float, float]],
-    passed: Mapping[int, datetime],
+    passings: Iterable[Passing],
 ) -> Iterator[Drawing]:
     """What a replay draws, in the order it is drawn.
 
     `crossings` are those the predictor scans, drawn once as the map it scans them on.
-    `passed` says when the session actually reached each of them, which is what an error is
-    measured against; a crossing missing from it is drawn without one.
+    `passings` are the ground truth: which of them the session actually reached and when,
+    which is what a predicted time is compared against. A crossing the session never reached
+    is drawn as a prediction with nothing to answer to.
 
     The track comes last, because it is the whole of the run rather than a step of it.
     """
+    crossings = list(crossings)
+    passed = {passing.crossing: passing for passing in passings}
+    where = {crossing: (lat, lon) for crossing, lat, lon in crossings}
+
     yield Marker(CROSSINGS, [(lat, lon) for _, lat, lon in crossings])
+    yield Marker(PASSED, [where[crossing] for crossing in passed if crossing in where])
+
+    for passing in passed.values():
+        yield Note(
+            f"{PASSING}/{passing.crossing}",
+            f"passed, nearest sample {passing.distance_metres:.0f}m away",
+            passing.at,
+        )
 
     track: list[tuple[float, float]] = []
     for step in steps:
@@ -91,11 +125,25 @@ def drawings(
         yield Marker(FIX, [track[-1]], at)
 
         for prediction in step.predictions:
-            path = f"predicted/{prediction.crossing}"
-            yield Measure(f"{path}/metres", prediction.metres, at)
-            error = error_seconds(prediction.at, passed.get(prediction.crossing))
+            crossing = prediction.crossing
+            yield Measure(f"{DISTANCE}/{crossing}", prediction.metres, at)
+
+            if prediction.at is not None:
+                yield Measure(
+                    f"{PREDICTED_ETA}/{crossing}", (prediction.at - at).total_seconds(), at
+                )
+
+            passing = passed.get(crossing)
+            if passing is not None:
+                # The same countdown the prediction is guessing at, so the two lie on one
+                # plot and the gap between them is the error.
+                yield Measure(
+                    f"{ACTUAL_ETA}/{crossing}", (passing.at - at).total_seconds(), at
+                )
+
+            error = error_seconds(prediction.at, passing.at if passing else None)
             if error is not None:
-                yield Measure(f"{path}/error_seconds", error, at)
+                yield Measure(f"{ERROR}/{crossing}", error, at)
 
     yield Line(TRACK, track)
 
@@ -116,3 +164,5 @@ def draw(recording: rr.RecordingStream, drawn: Iterable[Drawing]) -> None:
                 recording.log(path, rr.GeoLineStrings(lat_lon=[lat_lon]), static=at is None)
             case Measure(path, value, at):
                 recording.log(path, rr.Scalars(value), static=at is None)
+            case Note(path, text, at):
+                recording.log(path, rr.TextLog(text), static=at is None)

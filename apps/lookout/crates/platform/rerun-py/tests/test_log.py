@@ -6,12 +6,19 @@ import rerun as rr
 from lookout_predictor import CrowFlies
 
 from runner.log import (
+    ACTUAL_ETA,
     CROSSINGS,
+    DISTANCE,
+    ERROR,
     FIX,
+    PASSED,
+    PASSING,
+    PREDICTED_ETA,
     TRACK,
     Line,
     Marker,
     Measure,
+    Note,
     draw,
     drawings,
     error_seconds,
@@ -43,9 +50,8 @@ class TestTheError:
 def drawn(store, **kwargs):
     reader = Store(store)
     crossings = reader.crossings(country=COUNTRY)
-    passed = {passing.crossing: passing.at for passing in reader.passings(SESSION)}
     steps = replay(CrowFlies(crossings, **kwargs), reader.samples(SESSION))
-    return list(drawings(steps, crossings, passed))
+    return list(drawings(steps, crossings, reader.passings(SESSION)))
 
 
 def paths(drawings_, kind=None):
@@ -80,7 +86,7 @@ class TestWhatAReplayDraws:
         assert len(track.lat_lon) == 4
 
     def test_a_predicted_crossing_carries_its_distance_at_every_fix(self, store):
-        metres = [d for d in drawn(store) if d.path == f"predicted/{NEAR}/metres"]
+        metres = [d for d in drawn(store) if d.path == f"{DISTANCE}/{NEAR}"]
 
         assert len(metres) == 4, "the near crossing is inside the radius from the first fix"
         assert [measure.value for measure in metres] == sorted(
@@ -88,7 +94,7 @@ class TestWhatAReplayDraws:
         ), "closing as the run goes north"
 
     def test_the_error_is_a_series_against_the_passing_the_store_recorded(self, store):
-        errors = [d for d in drawn(store) if d.path == f"predicted/{NEAR}/error_seconds"]
+        errors = [d for d in drawn(store) if d.path == f"{ERROR}/{NEAR}"]
 
         assert [measure.at for measure in errors] == sorted(
             measure.at for measure in errors
@@ -98,17 +104,50 @@ class TestWhatAReplayDraws:
         assert len(errors) == 3
 
     def test_a_crossing_the_session_never_passed_is_drawn_without_an_error(self, store):
-        assert paths(drawn(store), Measure).count(f"predicted/{FAR}/metres") > 0
-        assert f"predicted/{FAR}/error_seconds" not in paths(drawn(store))
+        assert paths(drawn(store), Measure).count(f"{DISTANCE}/{FAR}") > 0
+        assert f"{ERROR}/{FAR}" not in paths(drawn(store))
 
     def test_a_replay_of_nothing_still_draws_the_map_and_an_empty_track(self, store):
         reader = Store(store)
         crossings = reader.crossings(country=COUNTRY)
 
-        drawings_ = list(drawings([], crossings, {}))
+        drawings_ = list(drawings([], crossings, []))
 
-        assert paths(drawings_) == [CROSSINGS, TRACK]
+        assert paths(drawings_) == [CROSSINGS, PASSED, TRACK]
         assert drawings_[-1].lat_lon == []
+
+
+class TestTheGroundTruth:
+    def test_the_crossings_the_session_reached_are_drawn_apart_from_the_rest(self, store):
+        passed = [d for d in drawn(store) if d.path == PASSED]
+
+        assert len(passed) == 1
+        assert passed[0].at is None
+        assert passed[0].lat_lon == [(50.04, LON)], "the near crossing, not the far one"
+
+    def test_each_passing_is_noted_at_the_moment_it_happened(self, store):
+        notes = [d for d in drawn(store) if isinstance(d, Note)]
+
+        assert [note.path for note in notes] == [f"{PASSING}/{NEAR}"]
+        assert notes[0].at == PASSED_AT
+        assert "8m away" in notes[0].text, "how good the evidence for it is"
+
+    def test_the_true_countdown_is_drawn_against_the_predicted_one(self, store):
+        drawings_ = drawn(store)
+        predicted = [d for d in drawings_ if d.path == f"{PREDICTED_ETA}/{NEAR}"]
+        actual = [d for d in drawings_ if d.path == f"{ACTUAL_ETA}/{NEAR}"]
+
+        assert [measure.at for measure in predicted] == [measure.at for measure in actual][1:]
+        assert [measure.value for measure in actual] == sorted(
+            (measure.value for measure in actual), reverse=True
+        ), "counting down to the moment it was passed"
+        assert actual[-1].value == 60.0, "a minute after the last fix"
+
+    def test_a_crossing_the_session_never_reached_has_no_countdown_to_answer_to(self, store):
+        drawings_ = drawn(store)
+
+        assert [d for d in drawings_ if d.path == f"{PREDICTED_ETA}/{FAR}"]
+        assert not [d for d in drawings_ if d.path == f"{ACTUAL_ETA}/{FAR}"]
 
 
 def test_drawing_logs_every_drawing_to_the_recording(store):

@@ -20,6 +20,7 @@ import lookout_medallion
 import rerun as rr
 from lookout_predictor import DEFAULT_RADIUS_METRES, CrowFlies
 
+from .blueprint import blueprint
 from .log import draw, drawings
 from .replay import replay
 from .store import Store
@@ -110,18 +111,19 @@ def replayed(store: Store, args: argparse.Namespace) -> rr.RecordingStream:
             raise SystemExit(
                 f"no rerun viewer is listening on {host}:{port}; start one with `rerun`"
             )
-        recording.connect_grpc(args.url)
+        recording.connect_grpc(args.url, default_blueprint=blueprint())
     else:
         output = args.output or default_output()
         output.parent.mkdir(parents=True, exist_ok=True)
-        recording.save(str(output))
+        recording.save(str(output), default_blueprint=blueprint())
         print(f"writing {output}")
 
     crossings = store.crossings(country=args.country)
-    passed = {passing.crossing: passing.at for passing in store.passings(args.session)}
+    passings = store.passings(args.session)
     predictor = CrowFlies(crossings, radius_metres=args.radius_metres)
+    steps = replay(predictor, store.samples(args.session))
 
-    draw(recording, drawings(replay(predictor, store.samples(args.session)), crossings, passed))
+    draw(recording, drawings(steps, crossings, passings))
     return recording
 
 

@@ -120,7 +120,7 @@ def _passing_table():
             "crossing_id": pa.array(["w1-t1"], pa.string()),
             "device_id": pa.array([DEVICE], pa.string()),
             "crossed_at": pa.array([PASSED_AT], pa.timestamp("ms", tz="UTC")),
-            "distance_m": pa.array([8.5], pa.float64()),
+            "distance_m": pa.array([8.2], pa.float64()),
             "samples_within": pa.array([3], pa.uint32()),
             "match_radius_m": pa.array([50.0], pa.float64()),
             "crossed_date": pa.array([PASSED_AT.date()], pa.date32()),
