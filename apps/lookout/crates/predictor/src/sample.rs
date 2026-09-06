@@ -102,7 +102,7 @@ impl<T: Measure> Sample<T> {
         }
     }
 
-    /// The same from degrees, for a caller holding a store's columns or a parsed sentence
+    /// A fix from degrees, for a caller holding a store's columns or a parsed sentence
     /// rather than a checked position.
     pub fn at(
         t: DateTime<Utc>,
@@ -191,7 +191,7 @@ mod tests {
         assert_eq!(sample.longitude(), 8.5);
     }
 
-    /// The same fix, held in the measure the device uses. `f32` resolves a degree to about a
+    /// A fix held in the measure the device uses. `f32` resolves a degree to about a
     /// tenth of a metre here, so the position survives the conversion at the precision the
     /// scan needs.
     #[test]

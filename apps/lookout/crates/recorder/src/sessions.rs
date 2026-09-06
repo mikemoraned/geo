@@ -387,7 +387,7 @@ mod tests {
         derived_at(tmp, messages, Gap::default()).await
     }
 
-    /// The same, at the threshold a test names rather than the default one.
+    /// The sessions derived from a store holding `messages`, at the threshold a test names.
     async fn derived_at(tmp: &tempfile::TempDir, messages: &[Message], gap: Gap) -> Vec<Session> {
         let root = store(tmp, messages).await;
         sessions(&root, gap, Lead::default())

@@ -55,7 +55,7 @@ fn sentence(body: &str) -> Sentence {
     Sentence::new(format!("${body}*{:02X}", checksum(body))).expect("a body and its checksum")
 }
 
-/// The same sentence, corrupted: its contents intact and its checksum guaranteed wrong.
+/// `sentence` corrupted: its contents intact and its checksum guaranteed wrong.
 ///
 /// Still a [`Sentence`], because a checksum that fails to cover its body is the shape a real
 /// overrun takes. Inverting every bit cannot land back on the correct value, which fabricating

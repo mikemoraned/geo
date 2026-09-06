@@ -489,7 +489,7 @@ mod tests {
         assert_eq!(predictor.trend(CrossingId::new(99)), None);
     }
 
-    /// The same prediction at the measure the device runs in, which is the point of the
+    /// The whole prediction at the measure the device runs in, which is the point of the
     /// measure being a parameter at all. `f32` is not a lesser answer here: over a kilometre
     /// it resolves to about a tenth of a metre, far finer than the fix being measured.
     #[test]

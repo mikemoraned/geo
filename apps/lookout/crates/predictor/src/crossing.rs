@@ -38,7 +38,7 @@ impl<T: Measure> Crossing<T> {
         Self { id, position }
     }
 
-    /// The same from degrees, latitude first, as [`crate::Sample::at`] takes them.
+    /// A crossing from degrees, latitude first, as [`crate::Sample::at`] takes them.
     ///
     /// Checked on the same terms as a sample's position. The set is read from a flash buffer
     /// that can arrive corrupt, and an unchecked crossing off the globe is scanned against

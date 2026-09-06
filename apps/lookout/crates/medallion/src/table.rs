@@ -358,7 +358,7 @@ struct Columns {
 }
 
 impl Columns {
-    /// The same columns holding only `rows`.
+    /// These columns, restricted to `rows`.
     fn take(&self, rows: &[u32]) -> Result<Self, TableError> {
         let indices = UInt32Array::from(rows.to_vec());
         let taken = |array: &ArrayRef| arrow::compute::take(array, &indices, None);
