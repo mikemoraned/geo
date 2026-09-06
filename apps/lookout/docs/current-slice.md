@@ -249,6 +249,28 @@ run on the board — and it crosses: `predictor` and `platform-core` both build 
       crossings and one with two thousand lay out the same way — which is why the entity paths
       group by what is measured rather than by which crossing it is measured against: a plot is
       one subtree, and a crossing is a series within it.
+- [ ] Draw the predictions as a 2D plot of predicted against actual: x is when a crossing was
+      really passed and y is when the latest fix expects to pass it, both measured from the
+      start of the session. A crossing sits at a fixed x and moves up or down as
+      the prediction changes, so a perfect predictor puts every crossing on the y = x
+      diagonal, over-prediction above it and under-prediction below. Mark each real passing on
+      the x axis, so the truths read even where nothing is predicted against them. This is the
+      view of the thing the slice is about; the map answers *where*, and this answers *how
+      wrong*.
+
+      **A prediction past the end of the session grows the y axis** rather than being clamped
+      to it or dropped: at a standstill the arrival runs far into the future, and a point
+      sitting high above the diagonal is the honest picture of that. So the axes are equal
+      scales rather than a fixed 0 to 1 — seconds since the session started will do, as long
+      as both axes measure the same thing, which is what keeps the diagonal meaningful.
+
+      **A crossing with only one half is left out.** One predicted but never passed has no x,
+      and one passed but never predicted has no y; neither belongs on a time-against-time
+      plot. Both are worth seeing — a prediction with no crossing behind it is exactly the
+      failure this is for — but on a plot of their own later, not by bending this one.
+
+      Unlike a map view, a `Spatial2DView` takes a visible time range, so the trail a crossing
+      leaves as it converges can be shown as well as its latest position.
 
 ### 6. Delete what is replaced
 
