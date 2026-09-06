@@ -32,6 +32,21 @@ class Sample:
     heading_degrees: float | None
 
 
+@dataclass(frozen=True)
+class Passing:
+    """One crossing passed in a session, as `session_crossing` recorded it.
+
+    The ground truth a prediction is measured against. `at` is the instant of the session's
+    nearest sample to the crossing, which is as precise as a recording gets, and
+    `distance_metres` is how far that sample was — a passing matched by one distant sample is
+    weaker evidence than one matched by twenty close ones.
+    """
+
+    crossing: int
+    at: datetime
+    distance_metres: float
+
+
 class Store:
     """One medallion store, queried with SQL.
 
@@ -92,6 +107,31 @@ class Store:
             **({"country": country} if country else {}),
         )
         return [(row["id"], row["lat"], row["lon"]) for row in table.to_pylist()]
+
+    def passings(self, session_id: str) -> list[Passing]:
+        """The crossings `session_id` passed, in the order it passed them.
+
+        Named by `crossing_short_id`, as a prediction is, which is what the join to
+        `water_crossing` is for: `session_crossing` records the full id.
+        """
+        table = self._query(
+            """
+            SELECT w.crossing_short_id AS crossing, c.crossed_at, c.distance_m
+            FROM session_crossing c
+            JOIN water_crossing w ON w.crossing_id = c.crossing_id
+            WHERE c.session_id = $session_id
+            ORDER BY c.crossed_at
+            """,
+            session_id=session_id,
+        )
+        return [
+            Passing(
+                crossing=row["crossing"],
+                at=row["crossed_at"],
+                distance_metres=row["distance_m"],
+            )
+            for row in table.to_pylist()
+        ]
 
     def sessions(self) -> list[tuple[str, datetime, datetime, int]]:
         """Every session that has samples, as `(id, first, last, samples)`, newest first."""

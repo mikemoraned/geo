@@ -8,8 +8,14 @@ session through the predictor itself rather than through a second one written in
 ## The runner
 
 `runner/` is the python beside the extension: `store.py` reads a session's samples and the
-crossings to scan them against, through `lookout_medallion.query_silver`, and `replay.py`
-feeds those samples through a predictor the caller built, a step per sample.
+crossings to scan them against, through `lookout_medallion.query_silver`; `replay.py` feeds
+those samples through a predictor the caller built, a step per sample; `log.py` says what that
+draws and draws it; and `main.py` is the command that puts the four together.
+
+```
+just sessions                   # the sessions the store holds
+just replay <session-id>        # replay one into a .rrd beside the store
+```
 
 ```python
 from lookout_predictor import CrowFlies

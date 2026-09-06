@@ -26,6 +26,9 @@ START_LAT = 50.0
 # about 6.7km.
 NEAR, FAR = 0x292E417A, 0x51B0C33D
 NEAR_LAT, FAR_LAT = 50.04, 50.06
+# When the run reached the nearer crossing, four minutes past its last sample. The further one
+# it never reached.
+PASSED_AT = T0 + datetime.timedelta(minutes=4)
 
 
 def _projected(points):
@@ -105,6 +108,26 @@ def _crossing_table():
     )
 
 
+def _passing_table():
+    """The ground truth: the run passed the nearer crossing, and never reached the further.
+
+    Dated by when it happened, as `session_crossing` is partitioned, and carrying the full
+    `crossing_id` that names the crossing in `water_crossing`.
+    """
+    return pa.table(
+        {
+            "session_id": pa.array([SESSION], pa.string()),
+            "crossing_id": pa.array(["w1-t1"], pa.string()),
+            "device_id": pa.array([DEVICE], pa.string()),
+            "crossed_at": pa.array([PASSED_AT], pa.timestamp("ms", tz="UTC")),
+            "distance_m": pa.array([8.5], pa.float64()),
+            "samples_within": pa.array([3], pa.uint32()),
+            "match_radius_m": pa.array([50.0], pa.float64()),
+            "crossed_date": pa.array([PASSED_AT.date()], pa.date32()),
+        }
+    )
+
+
 @pytest.fixture
 def empty_store(tmp_path):
     """A store with nothing derived into it yet."""
@@ -113,7 +136,9 @@ def empty_store(tmp_path):
 
 @pytest.fixture
 def store(tmp_path):
-    """A store holding one session that crosses midnight, and the two crossings ahead of it."""
+    """One session that crosses midnight, the two crossings ahead of it, and the one it
+    passed."""
     lookout_medallion.write_silver("session_sample", _sample_table(), root=str(tmp_path))
     lookout_medallion.write_silver("water_crossing", _crossing_table(), root=str(tmp_path))
+    lookout_medallion.write_silver("session_crossing", _passing_table(), root=str(tmp_path))
     return tmp_path

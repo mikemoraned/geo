@@ -231,8 +231,14 @@ run on the board — and it crosses: `predictor` and `platform-core` both build 
       lands as `medallion::table_references`, which leaves naming the datasets to `model`
       where it already lives.
 
-- [ ] Log the track, each prediction as it is made, and its error against the crossing when
-      that crossing arrives.
+- [x] Log the track, each prediction as it is made, and its error against the crossing when
+      that crossing arrives. **The error is a series rather than one number**: logged at every
+      fix that predicts a crossing whose passing is known, so a prediction converging on the
+      water and one that never does look nothing alike over a run. Arrival is
+      `session_crossing`'s, read by `Store.passings`, so the runner does not invent a second
+      definition of having passed. What to draw and drawing it are separate functions, since
+      the entity paths and values are the decisions worth testing and rerun has no read-back
+      to test them through. `just sessions` and `just replay <id>` are the commands.
 - [ ] Log silver `session_crossing` as the ground truth to compare against.
 - [ ] Give it a blueprint: a map of the session and the crossings, and a timeline of
       predicted times against actual ones.

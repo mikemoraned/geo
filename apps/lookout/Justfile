@@ -180,6 +180,19 @@ m5plus-flash-release: m5plus-build-release
 m5plus-monitor:
     cd {{m5plus_dir}} && espflash monitor
 
+# The sessions the store holds, as `just replay` names them.
+sessions *args:
+    uv run --directory crates/platform/rerun-py python -m runner.main sessions {{args}}
+
+# Replay a recorded session through the predictor, drawing it in a rerun viewer that is
+# already running — start one with `rerun`.
+replay session *args:
+    uv run --directory crates/platform/rerun-py python -m runner.main replay {{session}} {{args}}
+
+# The same, written to a .rrd to keep rather than drawn in a viewer.
+record session *args:
+    uv run --directory crates/platform/rerun-py python -m runner.main record {{session}} {{args}}
+
 # Convert the medallion store into a rerun .rrd. Requires --since, e.g.
 # `just visualise --since 7d`; see visualise/README.md for the rest.
 visualise *args:
