@@ -63,14 +63,18 @@ def draw(
         ),
         static=True,
     )
+    positions = []
     for step_index, step in enumerate(steps):
         t = step.sample.t
         recording.set_time(TIMELINE, timestamp=t)
         recording.log(f"steps/log", rr.TextLog(f"Step {step_index}", level=rr.TextLogLevel.INFO))
         sample = step.sample
         position = (sample.lat, sample.lon)
+        positions.append(position)
         recording.log(f"steps/sample/position",
                       rr.GeoPoints(lat_lon=[position], radii=rr.Radius.ui_points(10.0)))
+        recording.log(f"steps/sample/positions",
+                      rr.GeoLineStrings(lat_lon=positions, radii=rr.Radius.ui_points(2.0)))
         if sample.accuracy_metres:
             recording.log(f"steps/sample/position/accuracy", rr.Scalars(sample.accuracy_metres))
 

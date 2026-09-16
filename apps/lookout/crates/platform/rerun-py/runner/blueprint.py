@@ -42,18 +42,17 @@ def blueprint() -> rrb.Blueprint:
     return rrb.Blueprint(
         rrb.Grid(
             rrb.TextLogView(
-                origin="steps", 
+                origin="steps/log", 
                 name="Step Logs"
             ),
             rrb.MapView(
-                origin="steps",
-                name="Sample Locations",
+                origin="steps/sample",
+                name="Sample Positions",
                 zoom=16.0,
                 background=rrb.MapProvider.OpenStreetMap
             ),
             rrb.TimeSeriesView(
-                origin="steps",
-                # contents="*/sample/position/accuracy"
+                origin="steps/sample/position/accuracy"
             )
         ),
         collapse_panels=False,
