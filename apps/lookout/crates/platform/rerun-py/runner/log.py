@@ -53,13 +53,26 @@ def draw(
     crossings: Iterable[tuple[int, float, float]],
     passings: Iterable[Passing],
 ) -> None:
+    recording.log(
+        "steps/sample/position/accuracy",
+        rr.SeriesPoints(
+            colors=[255, 0, 0],
+            names="accuracy",
+            markers="circle",
+            marker_sizes=4,
+        ),
+        static=True,
+    )
     for step_index, step in enumerate(steps):
         t = step.sample.t
         recording.set_time(TIMELINE, timestamp=t)
-        recording.log(f"steps/{step_index}/log", rr.TextLog(f"Step {step_index}", level=rr.TextLogLevel.INFO))
-        sample_position = (step.sample.lat, step.sample.lon)
-        recording.log(f"steps/{step_index}/sample/position", 
-                      rr.GeoPoints(lat_lon=[sample_position], radii=rr.Radius.ui_points(20.0)))
+        recording.log(f"steps/log", rr.TextLog(f"Step {step_index}", level=rr.TextLogLevel.INFO))
+        sample = step.sample
+        position = (sample.lat, sample.lon)
+        recording.log(f"steps/sample/position",
+                      rr.GeoPoints(lat_lon=[position], radii=rr.Radius.ui_points(10.0)))
+        if sample.accuracy_metres:
+            recording.log(f"steps/sample/position/accuracy", rr.Scalars(sample.accuracy_metres))
 
     # """Draws a replay, on a timeline of the fixes' own instants.
 

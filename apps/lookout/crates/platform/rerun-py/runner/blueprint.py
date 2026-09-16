@@ -41,12 +41,19 @@ from .log import ACTUAL_ETA, CROSSINGS, DISTANCE, ERROR, PASSING, PREDICTED_ETA,
 def blueprint() -> rrb.Blueprint:
     return rrb.Blueprint(
         rrb.Grid(
-            rrb.TextLogView(origin="steps", name="Step Logs"),
-            rrb.MapView(
+            rrb.TextLogView(
                 origin="steps", 
+                name="Step Logs"
+            ),
+            rrb.MapView(
+                origin="steps",
                 name="Sample Locations",
                 zoom=16.0,
                 background=rrb.MapProvider.OpenStreetMap
+            ),
+            rrb.TimeSeriesView(
+                origin="steps",
+                # contents="*/sample/position/accuracy"
             )
         ),
         collapse_panels=False,
