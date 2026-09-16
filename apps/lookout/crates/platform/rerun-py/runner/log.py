@@ -56,7 +56,7 @@ def draw(
     for step_index, step in enumerate(steps):
         t = step.sample.t
         recording.set_time(TIMELINE, timestamp=t)
-        recording.log(f"log/step/{step_index}", rr.TextLog("Step", level=rr.TextLogLevel.INFO))
+        recording.log(f"steps/{step_index}/log", rr.TextLog(f"Step {step_index}", level=rr.TextLogLevel.INFO))
 
     # """Draws a replay, on a timeline of the fixes' own instants.
 

@@ -40,6 +40,6 @@ from .log import ACTUAL_ETA, CROSSINGS, DISTANCE, ERROR, PASSING, PREDICTED_ETA,
 
 def blueprint() -> rrb.Blueprint:
     return rrb.Blueprint(
-        rrb.TextLogView(origin="log", name="Text Logs"),
-        collapse_panels=True,
+        rrb.TextLogView(origin="steps", name="Step Logs"),
+        collapse_panels=False,
     )
