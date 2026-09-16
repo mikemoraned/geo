@@ -14,26 +14,32 @@ import rerun.blueprint as rrb
 from .log import ACTUAL_ETA, CROSSINGS, DISTANCE, ERROR, PASSING, PREDICTED_ETA, SESSION
 
 
+# def blueprint() -> rrb.Blueprint:
+#     """The layout a recording carries with it, so it opens as something to read."""
+#     return rrb.Blueprint(
+#         rrb.Horizontal(
+#             rrb.MapView(
+#                 name="where",
+#                 origin="/",
+#                 contents=[f"+ {SESSION}/**", f"+ {CROSSINGS}/**"],
+#             ),
+#             rrb.Vertical(
+#                 rrb.TimeSeriesView(
+#                     name="when: predicted against actual",
+#                     origin="/",
+#                     contents=[f"+ {PREDICTED_ETA}/**", f"+ {ACTUAL_ETA}/**"],
+#                 ),
+#                 rrb.TimeSeriesView(name="error (seconds)", origin=ERROR),
+#                 rrb.TimeSeriesView(name="distance (metres)", origin=DISTANCE),
+#                 rrb.TextLogView(name="passings", origin=PASSING),
+#             ),
+#             column_shares=[3, 2],
+#         ),
+#         collapse_panels=True,
+#     )
+
 def blueprint() -> rrb.Blueprint:
-    """The layout a recording carries with it, so it opens as something to read."""
     return rrb.Blueprint(
-        rrb.Horizontal(
-            rrb.MapView(
-                name="where",
-                origin="/",
-                contents=[f"+ {SESSION}/**", f"+ {CROSSINGS}/**"],
-            ),
-            rrb.Vertical(
-                rrb.TimeSeriesView(
-                    name="when: predicted against actual",
-                    origin="/",
-                    contents=[f"+ {PREDICTED_ETA}/**", f"+ {ACTUAL_ETA}/**"],
-                ),
-                rrb.TimeSeriesView(name="error (seconds)", origin=ERROR),
-                rrb.TimeSeriesView(name="distance (metres)", origin=DISTANCE),
-                rrb.TextLogView(name="passings", origin=PASSING),
-            ),
-            column_shares=[3, 2],
-        ),
+        rrb.TextLogView(origin="log", name="Text Logs"),
         collapse_panels=True,
     )

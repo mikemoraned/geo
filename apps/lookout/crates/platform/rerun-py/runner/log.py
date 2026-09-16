@@ -53,65 +53,70 @@ def draw(
     crossings: Iterable[tuple[int, float, float]],
     passings: Iterable[Passing],
 ) -> None:
-    """Draws a replay, on a timeline of the fixes' own instants.
+    for step_index, step in enumerate(steps):
+        t = step.sample.t
+        recording.set_time(TIMELINE, timestamp=t)
+        recording.log(f"log/step/{step_index}", rr.TextLog("Step", level=rr.TextLogLevel.INFO))
 
-    `crossings` are those the predictor scans, drawn once as the map it scans them on.
-    `passings` are the ground truth: which of them the session actually reached and when,
-    which is what a predicted time is compared against. A crossing the session never reached
-    is drawn as a prediction with nothing to answer to.
+    # """Draws a replay, on a timeline of the fixes' own instants.
 
-    What holds for the whole recording — the map, the track — is logged as static rather than
-    at an instant of it.
-    """
-    crossings = list(crossings)
-    passed = {passing.crossing: passing for passing in passings}
-    where = {crossing: (lat, lon) for crossing, lat, lon in crossings}
+    # `crossings` are those the predictor scans, drawn once as the map it scans them on.
+    # `passings` are the ground truth: which of them the session actually reached and when,
+    # which is what a predicted time is compared against. A crossing the session never reached
+    # is drawn as a prediction with nothing to answer to.
 
-    recording.log(
-        CROSSINGS, rr.GeoPoints(lat_lon=[(lat, lon) for _, lat, lon in crossings]), static=True
-    )
-    recording.log(
-        PASSED,
-        rr.GeoPoints(lat_lon=[where[crossing] for crossing in passed if crossing in where]),
-        static=True,
-    )
+    # What holds for the whole recording — the map, the track — is logged as static rather than
+    # at an instant of it.
+    # """
+    # crossings = list(crossings)
+    # passed = {passing.crossing: passing for passing in passings}
+    # where = {crossing: (lat, lon) for crossing, lat, lon in crossings}
 
-    for passing in passed.values():
-        recording.set_time(TIMELINE, timestamp=passing.at)
-        recording.log(
-            f"{PASSING}/{passing.crossing}",
-            rr.TextLog(f"passed, nearest sample {passing.distance_metres:.0f}m away"),
-        )
+    # recording.log(
+    #     CROSSINGS, rr.GeoPoints(lat_lon=[(lat, lon) for _, lat, lon in crossings]), static=True
+    # )
+    # recording.log(
+    #     PASSED,
+    #     rr.GeoPoints(lat_lon=[where[crossing] for crossing in passed if crossing in where]),
+    #     static=True,
+    # )
 
-    track: list[tuple[float, float]] = []
-    for step in steps:
-        at = step.sample.t
-        recording.set_time(TIMELINE, timestamp=at)
-        track.append((step.sample.lat, step.sample.lon))
-        recording.log(FIX, rr.GeoPoints(lat_lon=[track[-1]]))
+    # for passing in passed.values():
+    #     recording.set_time(TIMELINE, timestamp=passing.at)
+    #     recording.log(
+    #         f"{PASSING}/{passing.crossing}",
+    #         rr.TextLog(f"passed, nearest sample {passing.distance_metres:.0f}m away"),
+    #     )
 
-        for prediction in step.predictions:
-            crossing = prediction.crossing
-            recording.log(f"{DISTANCE}/{crossing}", rr.Scalars(prediction.metres))
+    # track: list[tuple[float, float]] = []
+    # for step in steps:
+    #     at = step.sample.t
+    #     recording.set_time(TIMELINE, timestamp=at)
+    #     track.append((step.sample.lat, step.sample.lon))
+    #     recording.log(FIX, rr.GeoPoints(lat_lon=[track[-1]]))
 
-            if prediction.at is not None:
-                recording.log(
-                    f"{PREDICTED_ETA}/{crossing}",
-                    rr.Scalars((prediction.at - at).total_seconds()),
-                )
+    #     for prediction in step.predictions:
+    #         crossing = prediction.crossing
+    #         recording.log(f"{DISTANCE}/{crossing}", rr.Scalars(prediction.metres))
 
-            passing = passed.get(crossing)
-            if passing is not None:
-                # The same countdown the prediction is guessing at, so the two lie on one
-                # plot and the gap between them is the error.
-                recording.log(
-                    f"{ACTUAL_ETA}/{crossing}", rr.Scalars((passing.at - at).total_seconds())
-                )
+    #         if prediction.at is not None:
+    #             recording.log(
+    #                 f"{PREDICTED_ETA}/{crossing}",
+    #                 rr.Scalars((prediction.at - at).total_seconds()),
+    #             )
 
-            error = error_seconds(prediction.at, passing.at if passing else None)
-            if error is not None:
-                recording.log(f"{ERROR}/{crossing}", rr.Scalars(error))
+    #         passing = passed.get(crossing)
+    #         if passing is not None:
+    #             # The same countdown the prediction is guessing at, so the two lie on one
+    #             # plot and the gap between them is the error.
+    #             recording.log(
+    #                 f"{ACTUAL_ETA}/{crossing}", rr.Scalars((passing.at - at).total_seconds())
+    #             )
 
-    # The track is the whole of the run rather than a step of it, so it is drawn once every
-    # step has been taken.
-    recording.log(TRACK, rr.GeoLineStrings(lat_lon=[track]), static=True)
+    #         error = error_seconds(prediction.at, passing.at if passing else None)
+    #         if error is not None:
+    #             recording.log(f"{ERROR}/{crossing}", rr.Scalars(error))
+
+    # # The track is the whole of the run rather than a step of it, so it is drawn once every
+    # # step has been taken.
+    # recording.log(TRACK, rr.GeoLineStrings(lat_lon=[track]), static=True)
