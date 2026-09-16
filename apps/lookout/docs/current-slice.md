@@ -236,9 +236,10 @@ run on the board — and it crosses: `predictor` and `platform-core` both build 
       fix that predicts a crossing whose passing is known, so a prediction converging on the
       water and one that never does look nothing alike over a run. Arrival is
       `session_crossing`'s, read by `Store.passings`, so the runner does not invent a second
-      definition of having passed. What to draw and drawing it are separate functions, since
-      the entity paths and values are the decisions worth testing and rerun has no read-back
-      to test them through. `just sessions` and `just replay <id>` are the commands.
+      definition of having passed. Drawing goes through the recording it is handed rather than
+      the one rerun holds globally, so standing in for a recording reads back every entity
+      path and value drawn — which is the only read-back there is, rerun offering none of its
+      own. `just sessions` and `just replay <id>` are the commands.
 - [x] Log silver `session_crossing` as the ground truth to compare against. Three ways: the
       crossings a session reached are drawn apart from the rest on the map, each passing is
       noted at the moment it happened with how near the sample that matched it was, and the

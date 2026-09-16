@@ -17,12 +17,12 @@ from runner.log import (
     PASSING,
     PREDICTED_ETA,
     SESSION,
-    drawings,
+    draw,
 )
 from runner.replay import replay
 from runner.store import Store
 
-from conftest import COUNTRY, SESSION as SESSION_ID
+from conftest import COUNTRY, SESSION as SESSION_ID, drawn
 
 # What the views cover, as prefixes. Restated here rather than imported from the blueprint,
 # since a test that reads its expectation off the thing it is testing checks nothing.
@@ -33,15 +33,16 @@ def test_a_blueprint_is_built_without_naming_a_crossing():
     assert isinstance(blueprint(), rrb.Blueprint)
 
 
-def test_every_path_a_replay_draws_falls_under_a_view(store):
+def test_every_path_a_replay_draws_falls_under_a_view(store, recording):
     reader = Store(store)
     crossings = reader.crossings(country=COUNTRY)
     steps = replay(CrowFlies(crossings), reader.samples(SESSION_ID))
 
-    drawn = {drawing.path for drawing in drawings(steps, crossings, reader.passings(SESSION_ID))}
+    draw(recording, steps, crossings, reader.passings(SESSION_ID))
 
-    assert drawn, "a replay of the fixture draws something"
-    for path in drawn:
+    paths = {one.path for one in drawn(recording)}
+    assert paths, "a replay of the fixture draws something"
+    for path in paths:
         assert any(path == prefix or path.startswith(f"{prefix}/") for prefix in VIEWED), (
             f"{path} is drawn but no view shows it"
         )

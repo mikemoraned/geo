@@ -1,4 +1,4 @@
-"""A store to read, written through the store's own writer.
+"""A store to read, and a stand-in for the recording a replay draws into.
 
 Written rather than laid out by hand, so what these tests read back is a real dataset: the
 columns `crates/model` declares, the partitions the store chose, and geometry with the CRS
@@ -6,11 +6,15 @@ the file states. A schema change lands here as a write that is refused, which is
 """
 
 import datetime
+from collections import namedtuple
+from typing import Any
+from unittest.mock import create_autospec
 
 import lookout_medallion
 import pyarrow as pa
 import pyproj
 import pytest
+import rerun as rr
 import shapely
 
 SESSION = "1e1b4a2c-0000-4000-8000-000000000001"
@@ -142,3 +146,53 @@ def store(tmp_path):
     lookout_medallion.write_silver("water_crossing", _crossing_table(), root=str(tmp_path))
     lookout_medallion.write_silver("session_crossing", _passing_table(), root=str(tmp_path))
     return tmp_path
+
+
+# One call a replay made on the recording it drew into: where it went, what it drew, and the
+# instant the clock stood at — `None` for something logged for the whole recording.
+Logged = namedtuple("Logged", "path archetype at")
+
+# Which component of an archetype holds what was drawn, where the name differs from the
+# archetype's own.
+DRAWN_COMPONENT = {
+    "GeoPoints": "positions",
+    "GeoLineStrings": "line_strings",
+    "Scalars": "scalars",
+    "TextLog": "text",
+}
+
+
+@pytest.fixture
+def recording():
+    """A stand-in for the recording a replay draws into.
+
+    Checked against the real `RecordingStream`, so a call this does not object to is one
+    rerun would also have accepted — a renamed method or a changed signature fails here
+    rather than passing against a hand-written double of an API that has moved on.
+    """
+    return create_autospec(rr.RecordingStream, instance=True)
+
+
+def drawn(recording, path: str | None = None) -> list[Logged]:
+    """What was drawn into `recording`, in order, and under `path` where one is named.
+
+    The clock is followed alongside the drawing, since what a viewer shows at an instant is
+    decided by the `set_time` that preceded the log rather than by the log itself.
+    """
+    at: datetime.datetime | None = None
+    logged = []
+
+    for name, args, kwargs in recording.method_calls:
+        if name == "set_time":
+            at = kwargs["timestamp"]
+        elif name == "log":
+            entity, archetype = args[0], args[1]
+            logged.append(Logged(entity, archetype, None if kwargs.get("static") else at))
+
+    return [one for one in logged if path is None or one.path == path]
+
+
+def values(archetype: Any, component: str = "") -> list:
+    """What an archetype carries, as plain python."""
+    named = component or DRAWN_COMPONENT[type(archetype).__name__]
+    return getattr(archetype, named).as_arrow_array().to_pylist()

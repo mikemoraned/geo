@@ -21,7 +21,7 @@ import rerun as rr
 from lookout_predictor import DEFAULT_RADIUS_METRES, CrowFlies
 
 from .blueprint import blueprint
-from .log import draw, drawings
+from .log import draw
 from .replay import replay
 from .store import Store
 
@@ -123,7 +123,7 @@ def replayed(store: Store, args: argparse.Namespace) -> rr.RecordingStream:
     predictor = CrowFlies(crossings, radius_metres=args.radius_metres)
     steps = replay(predictor, store.samples(args.session))
 
-    draw(recording, drawings(steps, crossings, passings))
+    draw(recording, steps, crossings, passings)
     return recording
 
 

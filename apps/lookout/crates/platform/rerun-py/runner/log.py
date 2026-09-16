@@ -6,14 +6,11 @@ wrong its arrival time was. The error is what the recording exists for, so it is
 against the clock rather than one number at the end: a prediction that converges on the water
 and one that never does look nothing alike over a run.
 
-What to draw and drawing it are separate. `drawings` decides the entity paths, the instants
-and the values, and answers them as data a test can read; `draw` turns each into the rerun
-archetype it is logged as. Nothing about rerun reaches the first, and no decision reaches the
-second.
+Every entity is logged through the recording it is given, so what is drawn can be read back by
+standing in for one. Nothing here reaches for the recording rerun holds globally.
 """
 
-from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
+from collections.abc import Iterable
 from datetime import datetime
 
 import rerun as rr
@@ -38,46 +35,6 @@ ERROR = "error"
 PASSING = "passing"
 
 
-@dataclass(frozen=True)
-class Marker:
-    """Places on the map, at `at` — or for the whole recording where that is `None`."""
-
-    path: str
-    lat_lon: list[tuple[float, float]]
-    at: datetime | None = None
-
-
-@dataclass(frozen=True)
-class Line:
-    """A path across the map, through `lat_lon` in order."""
-
-    path: str
-    lat_lon: list[tuple[float, float]]
-    at: datetime | None = None
-
-
-@dataclass(frozen=True)
-class Measure:
-    """A number against the clock, one point of a series."""
-
-    path: str
-    value: float
-    at: datetime | None = None
-
-
-@dataclass(frozen=True)
-class Note:
-    """A line of text at a moment, for something that happens rather than something that
-    holds a value."""
-
-    path: str
-    text: str
-    at: datetime | None = None
-
-
-Drawing = Marker | Line | Measure | Note
-
-
 def error_seconds(predicted_at: datetime | None, passed_at: datetime | None) -> float | None:
     """How wrong a predicted arrival was, in seconds, positive where it was late.
 
@@ -90,79 +47,71 @@ def error_seconds(predicted_at: datetime | None, passed_at: datetime | None) -> 
     return (predicted_at - passed_at).total_seconds()
 
 
-def drawings(
+def draw(
+    recording: rr.RecordingStream,
     steps: Iterable[Step],
     crossings: Iterable[tuple[int, float, float]],
     passings: Iterable[Passing],
-) -> Iterator[Drawing]:
-    """What a replay draws, in the order it is drawn.
+) -> None:
+    """Draws a replay, on a timeline of the fixes' own instants.
 
     `crossings` are those the predictor scans, drawn once as the map it scans them on.
     `passings` are the ground truth: which of them the session actually reached and when,
     which is what a predicted time is compared against. A crossing the session never reached
     is drawn as a prediction with nothing to answer to.
 
-    The track comes last, because it is the whole of the run rather than a step of it.
+    What holds for the whole recording — the map, the track — is logged as static rather than
+    at an instant of it.
     """
     crossings = list(crossings)
     passed = {passing.crossing: passing for passing in passings}
     where = {crossing: (lat, lon) for crossing, lat, lon in crossings}
 
-    yield Marker(CROSSINGS, [(lat, lon) for _, lat, lon in crossings])
-    yield Marker(PASSED, [where[crossing] for crossing in passed if crossing in where])
+    recording.log(
+        CROSSINGS, rr.GeoPoints(lat_lon=[(lat, lon) for _, lat, lon in crossings]), static=True
+    )
+    recording.log(
+        PASSED,
+        rr.GeoPoints(lat_lon=[where[crossing] for crossing in passed if crossing in where]),
+        static=True,
+    )
 
     for passing in passed.values():
-        yield Note(
+        recording.set_time(TIMELINE, timestamp=passing.at)
+        recording.log(
             f"{PASSING}/{passing.crossing}",
-            f"passed, nearest sample {passing.distance_metres:.0f}m away",
-            passing.at,
+            rr.TextLog(f"passed, nearest sample {passing.distance_metres:.0f}m away"),
         )
 
     track: list[tuple[float, float]] = []
     for step in steps:
         at = step.sample.t
+        recording.set_time(TIMELINE, timestamp=at)
         track.append((step.sample.lat, step.sample.lon))
-        yield Marker(FIX, [track[-1]], at)
+        recording.log(FIX, rr.GeoPoints(lat_lon=[track[-1]]))
 
         for prediction in step.predictions:
             crossing = prediction.crossing
-            yield Measure(f"{DISTANCE}/{crossing}", prediction.metres, at)
+            recording.log(f"{DISTANCE}/{crossing}", rr.Scalars(prediction.metres))
 
             if prediction.at is not None:
-                yield Measure(
-                    f"{PREDICTED_ETA}/{crossing}", (prediction.at - at).total_seconds(), at
+                recording.log(
+                    f"{PREDICTED_ETA}/{crossing}",
+                    rr.Scalars((prediction.at - at).total_seconds()),
                 )
 
             passing = passed.get(crossing)
             if passing is not None:
                 # The same countdown the prediction is guessing at, so the two lie on one
                 # plot and the gap between them is the error.
-                yield Measure(
-                    f"{ACTUAL_ETA}/{crossing}", (passing.at - at).total_seconds(), at
+                recording.log(
+                    f"{ACTUAL_ETA}/{crossing}", rr.Scalars((passing.at - at).total_seconds())
                 )
 
             error = error_seconds(prediction.at, passing.at if passing else None)
             if error is not None:
-                yield Measure(f"{ERROR}/{crossing}", error, at)
+                recording.log(f"{ERROR}/{crossing}", rr.Scalars(error))
 
-    yield Line(TRACK, track)
-
-
-def draw(recording: rr.RecordingStream, drawn: Iterable[Drawing]) -> None:
-    """Logs each drawing to `recording`, on a timeline of the fixes' own instants.
-
-    One without an instant is logged for the whole recording rather than at a point in it.
-    """
-    for drawing in drawn:
-        if drawing.at is not None:
-            recording.set_time(TIMELINE, timestamp=drawing.at)
-
-        match drawing:
-            case Marker(path, lat_lon, at):
-                recording.log(path, rr.GeoPoints(lat_lon=lat_lon), static=at is None)
-            case Line(path, lat_lon, at):
-                recording.log(path, rr.GeoLineStrings(lat_lon=[lat_lon]), static=at is None)
-            case Measure(path, value, at):
-                recording.log(path, rr.Scalars(value), static=at is None)
-            case Note(path, text, at):
-                recording.log(path, rr.TextLog(text), static=at is None)
+    # The track is the whole of the run rather than a step of it, so it is drawn once every
+    # step has been taken.
+    recording.log(TRACK, rr.GeoLineStrings(lat_lon=[track]), static=True)

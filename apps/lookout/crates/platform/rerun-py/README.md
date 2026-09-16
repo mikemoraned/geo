@@ -9,9 +9,12 @@ session through the predictor itself rather than through a second one written in
 
 `runner/` is the python beside the extension: `store.py` reads a session's samples and the
 crossings to scan them against, through `lookout_medallion.query_silver`; `replay.py` feeds
-those samples through a predictor the caller built, a step per sample; `log.py` says what that
-draws and draws it; `blueprint.py` lays out the views a recording opens as; and `main.py` is
-the command that puts them together.
+those samples through a predictor the caller built, a step per sample; `log.py` draws that
+into a recording; `blueprint.py` lays out the views a recording opens as; and `main.py` is the
+command that puts them together.
+
+A replay draws through the recording it is handed, never through the one rerun holds globally,
+so a test reads back what was drawn by standing in for one.
 
 ```
 just sessions                   # the sessions the store holds
