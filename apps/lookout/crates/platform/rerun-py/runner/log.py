@@ -57,6 +57,9 @@ def draw(
         t = step.sample.t
         recording.set_time(TIMELINE, timestamp=t)
         recording.log(f"steps/{step_index}/log", rr.TextLog(f"Step {step_index}", level=rr.TextLogLevel.INFO))
+        sample_position = (step.sample.lat, step.sample.lon)
+        recording.log(f"steps/{step_index}/sample/position", 
+                      rr.GeoPoints(lat_lon=[sample_position], radii=rr.Radius.ui_points(20.0)))
 
     # """Draws a replay, on a timeline of the fixes' own instants.
 
