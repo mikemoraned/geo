@@ -25,7 +25,7 @@ from .log import draw
 from .replay import replay
 from .store import Store
 
-APPLICATION = "lookout-predictor21"
+APPLICATION = "lookout-predictor25"
 
 # Where a viewer started as `rerun` listens.
 DEFAULT_VIEWER = "rerun+http://127.0.0.1:9876/proxy"
