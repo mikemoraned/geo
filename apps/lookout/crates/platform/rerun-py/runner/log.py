@@ -53,6 +53,8 @@ def draw(
     crossings: Iterable[tuple[int, float, float]],
     passings: Iterable[Passing],
 ) -> None:
+    crossing_locations = {crossing: (lat, lon) for crossing, lat, lon in crossings}
+    
     recording.log(
         "steps/sample/position/accuracy",
         rr.SeriesPoints(
@@ -64,10 +66,11 @@ def draw(
         static=True,
     )
     positions = []
+    max_distance_metres = 1000 # 1km
     for step_index, step in enumerate(steps):
         t = step.sample.t
         recording.set_time(TIMELINE, timestamp=t)
-        recording.log(f"steps/log", rr.TextLog(f"Step {step_index}", level=rr.TextLogLevel.INFO))
+        recording.log(f"steps/log", rr.TextLog(f"{step_index}: Step", level=rr.TextLogLevel.INFO))
         sample = step.sample
         position = (sample.lat, sample.lon)
         positions.append(position)
@@ -77,6 +80,20 @@ def draw(
                       rr.GeoLineStrings(lat_lon=positions, radii=rr.Radius.ui_points(2.0)))
         if sample.accuracy_metres:
             recording.log(f"steps/sample/position/accuracy", rr.Scalars(sample.accuracy_metres))
+        predicted_crossings = []
+        for prediction in step.predictions:
+            crossing = crossing_locations.get(prediction.crossing)
+            if crossing and prediction.metres < max_distance_metres:
+                print(f"{prediction.crossing}->{crossing}: {prediction.metres}")
+                predicted_crossings.append(crossing)
+        if len(predicted_crossings) > 0:
+            recording.log(f"steps/log", rr.TextLog(f"{step_index}: found {len(predicted_crossings)} within {max_distance_metres}metres", level=rr.TextLogLevel.INFO))
+            recording.log(f"steps/predictions",
+                        rr.GeoPoints(lat_lon=predicted_crossings, radii=rr.Radius.ui_points(5.0)))
+        
+
+
+    # next: show positions of predicted passings at each time
 
     # """Draws a replay, on a timeline of the fixes' own instants.
 

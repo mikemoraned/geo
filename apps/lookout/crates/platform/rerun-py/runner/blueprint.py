@@ -42,11 +42,19 @@ def blueprint() -> rrb.Blueprint:
     return rrb.Blueprint(
         rrb.Vertical(
             rrb.Horizontal(
-                rrb.MapView(
-                    origin="steps/sample",
-                    name="Sample Positions",
-                    zoom=16.0,
-                    background=rrb.MapProvider.OpenStreetMap
+                rrb.Vertical(
+                    rrb.MapView(
+                        origin="steps/sample",
+                        name="Sample Positions",
+                        zoom=16.0,
+                        background=rrb.MapProvider.OpenStreetMap
+                    ),
+                    rrb.MapView(
+                        origin="steps/predictions",
+                        name="Predictions",
+                        zoom=16.0,
+                        background=rrb.MapProvider.OpenStreetMap
+                    ),
                 ),
                 rrb.TimeSeriesView(
                     origin="steps/sample/position/accuracy"
