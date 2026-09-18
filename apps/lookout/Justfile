@@ -70,19 +70,16 @@ deploy:
 summarise *args:
     cargo run -q -p summary --bin summarise -- {{args}}
 
-# Bring bronze up to date: drain the telemetry queue, then take a fresh Overture extract.
-# `bronze-poll-motis` is deliberately not here — it runs until stopped. Args reach both.
+# Bring bronze up to date: drain the telemetry queue, then take a fresh Overture extract. `bronze-poll-motis` is deliberately not here — it runs until stopped. Args reach both.
 bronze *args:
     just bronze-record drain {{args}}
     just bronze-extract new {{args}}
 
-# Read the upstash telemetry queue into the bronze telemetry datasets, with the redis URL
-# from 1Password.
+# Read the upstash telemetry queue into the bronze telemetry datasets, with the redis URL from 1Password.
 bronze-record *args:
     op run --env-file=deploy/lookout.env -- cargo run -p recorder --bin recorder -- {{args}}
 
-# Poll Motis for train trips near recently logged GPS and log them to bronze, with the redis
-# URL from 1Password.
+# Poll Motis for train trips near recently logged GPS and log them to bronze, with the redis URL from 1Password.
 bronze-poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 
