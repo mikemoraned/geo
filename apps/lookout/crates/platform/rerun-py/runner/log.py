@@ -90,6 +90,8 @@ def draw(
             recording.log(f"steps/log", rr.TextLog(f"{step_index}: found {len(predicted_crossings)} within {max_distance_metres}metres", level=rr.TextLogLevel.INFO))
             recording.log(f"steps/predictions",
                         rr.GeoPoints(lat_lon=predicted_crossings, radii=rr.Radius.ui_points(5.0)))
+            for predicted_crossing in predicted_crossings:
+                recording.log(f"steps/predictions", rr.GeoLineStrings(lat_lon=[position,predicted_crossing], radii=rr.Radius.ui_points(2.0)))
         
 
 
