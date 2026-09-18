@@ -24,8 +24,8 @@
 
 use chrono::{DateTime, FixedOffset, Utc};
 use predictor::{
-    Crossing, CrossingId, CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS_METRES, Event,
-    ObserveError, Predict, Sample, Trending,
+    Crossing, CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS_METRES, Event, ObserveError, Predict,
+    Sample,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -55,28 +55,6 @@ impl Prediction {
                 None => "None".to_string(),
             }
         )
-    }
-}
-
-/// Which way a crossing is going, over the noise a fix carries.
-#[pyclass(eq, eq_int, frozen, skip_from_py_object)]
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Trend {
-    /// Nearer than at the fix before.
-    Closing,
-    /// Neither, by enough to tell over the noise in a fix.
-    Holding,
-    /// Further than at the fix before, so we are leaving it behind.
-    Receding,
-}
-
-impl From<predictor::Trend> for Trend {
-    fn from(trend: predictor::Trend) -> Self {
-        match trend {
-            predictor::Trend::Closing => Self::Closing,
-            predictor::Trend::Holding => Self::Holding,
-            predictor::Trend::Receding => Self::Receding,
-        }
     }
 }
 
@@ -156,11 +134,6 @@ impl CrowFlies {
         self.observe(Event::Sampled(sample))
     }
 
-    /// Observes time passing with no fix, so a stale prediction can be told from a fresh one.
-    fn observe_elapsed(&mut self, t: DateTime<FixedOffset>) -> PyResult<()> {
-        self.observe(Event::Elapsed(t.to_utc()))
-    }
-
     /// The crossings it predicts we reach, nearest first.
     fn predictions(&self) -> Vec<Prediction> {
         self.inner
@@ -172,18 +145,6 @@ impl CrowFlies {
                 at: prediction.at,
             })
             .collect()
-    }
-
-    /// How the distance to `crossing` changed at the last fix. `None` for one the fix before
-    /// did not predict, which leaves nothing to compare it against.
-    fn trend(&self, crossing: u32) -> Option<Trend> {
-        self.inner.trend(CrossingId::new(crossing)).map(Trend::from)
-    }
-
-    /// The clock, as the last event left it. `None` before the first one.
-    #[getter]
-    fn now(&self) -> Option<DateTime<Utc>> {
-        self.inner.now()
     }
 }
 
@@ -201,7 +162,6 @@ impl CrowFlies {
 fn lookout_predictor(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<CrowFlies>()?;
     module.add_class::<Prediction>()?;
-    module.add_class::<Trend>()?;
     module.add("DEFAULT_RADIUS_METRES", DEFAULT_RADIUS_METRES)?;
     Ok(())
 }

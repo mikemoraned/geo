@@ -1,10 +1,3 @@
-//! What a predictor is, as an interface: events in, predictions out.
-//!
-//! Two traits, because a shell needs two different amounts. [`Predict`] is what every shell
-//! needs and stays small enough that a second implementation is worth writing. [`Trending`]
-//! is what a panel with room to spare can also show, kept apart so that needing it is a
-//! choice.
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -15,10 +8,7 @@ use crate::sample::Sample;
 /// What a predictor is told.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Event<T: Measure> {
-    /// A fix. It carries its own timestamp, so it advances the clock as well as moving the
-    /// position.
     Sampled(Sample<T>),
-    /// Time passing with no fix, so a predictor can tell a stale answer from a fresh one.
     Elapsed(DateTime<Utc>),
 }
 
@@ -60,22 +50,4 @@ pub trait Predict<T: Measure> {
 
     /// The crossings it predicts we reach, nearest first.
     fn predictions(&self) -> &[Prediction<T>];
-}
-
-/// Which way a crossing is going.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Trend {
-    /// Nearer than at the fix before.
-    Closing,
-    /// Neither, by enough to tell over the noise in a fix.
-    Holding,
-    /// Further than at the fix before, so we are leaving it behind.
-    Receding,
-}
-
-/// What a predictor can say beyond the prediction itself.
-pub trait Trending {
-    /// How the distance to `crossing` changed at the last fix. `None` for one the fix before
-    /// did not predict, which leaves nothing to compare it against.
-    fn trend(&self, crossing: CrossingId) -> Option<Trend>;
 }

@@ -6,7 +6,7 @@ import pytest
 
 from runner.store import Store
 
-from conftest import COUNTRY, FAR, LON, NEAR, SESSION, T0
+from conftest import COUNTRY, FAR, FAR_LAT, LON, NEAR, NEAR_LAT, SESSION, T0
 
 
 def test_a_sessions_samples_come_back_oldest_first_across_its_partitions(store):
@@ -39,7 +39,7 @@ def test_the_crossings_come_back_named_by_the_id_a_device_holds(store):
     """Coordinates, not the WKB the file holds: the reader asks the store for a point."""
     crossings = Store(store).crossings()
 
-    assert sorted(crossings) == sorted([(NEAR, 50.04, LON), (FAR, 50.06, LON)])
+    assert sorted(crossings) == sorted([(NEAR, NEAR_LAT, LON), (FAR, FAR_LAT, LON)])
 
 
 def test_a_country_restricts_the_crossings_to_its_own_partition(store):

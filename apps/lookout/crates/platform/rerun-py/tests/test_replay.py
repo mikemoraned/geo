@@ -32,7 +32,7 @@ def test_a_crossing_ahead_draws_nearer_as_the_session_runs(store):
 
     metres = [step.predictions[0].metres for step in steps]
     assert metres == sorted(metres, reverse=True)
-    assert metres[0] > 4_000.0 and metres[-1] < 1_500.0
+    assert metres[0] > 3_000.0 and metres[-1] < 1_000.0
 
 
 def test_the_first_fix_predicts_no_time_and_the_rest_do(store):

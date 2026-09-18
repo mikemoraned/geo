@@ -16,6 +16,9 @@ command that puts them together.
 A replay draws through the recording it is handed, never through the one rerun holds globally,
 so a test reads back what was drawn by standing in for one.
 
+The recording holds two maps — where the session went, and the crossings it expected to reach
+— beside the accuracy each fix reported, over a log of the steps.
+
 ```
 just sessions                   # the sessions the store holds
 just replay <session-id>        # replay one into a .rrd beside the store

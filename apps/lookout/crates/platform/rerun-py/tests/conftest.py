@@ -6,8 +6,6 @@ the file states. A schema change lands here as a write that is refused, which is
 """
 
 import datetime
-from collections import namedtuple
-from typing import Any
 from unittest.mock import create_autospec
 
 import lookout_medallion
@@ -26,13 +24,11 @@ COUNTRY = "DE"
 T0 = datetime.datetime(2026, 7, 25, 23, 58, tzinfo=datetime.UTC)
 LON = 8.6
 START_LAT = 50.0
-# Two crossings ahead of the run: the nearer about 4.4km from the first fix, the further
-# about 6.7km.
+# Two crossings ahead of the run: the nearer about 3.9km from the first fix and about 560m
+# from the last, so it comes inside the radius a line is drawn within; the further about
+# 6.7km, which never does.
 NEAR, FAR = 0x292E417A, 0x51B0C33D
-NEAR_LAT, FAR_LAT = 50.04, 50.06
-# When the run reached the nearer crossing, four minutes past its last sample. The further one
-# it never reached.
-PASSED_AT = T0 + datetime.timedelta(minutes=4)
+NEAR_LAT, FAR_LAT = 50.035, 50.06
 
 
 def _projected(points):
@@ -112,26 +108,6 @@ def _crossing_table():
     )
 
 
-def _passing_table():
-    """The ground truth: the run passed the nearer crossing, and never reached the further.
-
-    Dated by when it happened, as `session_crossing` is partitioned, and carrying the full
-    `crossing_id` that names the crossing in `water_crossing`.
-    """
-    return pa.table(
-        {
-            "session_id": pa.array([SESSION], pa.string()),
-            "crossing_id": pa.array(["w1-t1"], pa.string()),
-            "device_id": pa.array([DEVICE], pa.string()),
-            "crossed_at": pa.array([PASSED_AT], pa.timestamp("ms", tz="UTC")),
-            "distance_m": pa.array([8.2], pa.float64()),
-            "samples_within": pa.array([3], pa.uint32()),
-            "match_radius_m": pa.array([50.0], pa.float64()),
-            "crossed_date": pa.array([PASSED_AT.date()], pa.date32()),
-        }
-    )
-
-
 @pytest.fixture
 def empty_store(tmp_path):
     """A store with nothing derived into it yet."""
@@ -140,26 +116,10 @@ def empty_store(tmp_path):
 
 @pytest.fixture
 def store(tmp_path):
-    """One session that crosses midnight, the two crossings ahead of it, and the one it
-    passed."""
+    """One session that crosses midnight, and the two crossings ahead of it."""
     lookout_medallion.write_silver("session_sample", _sample_table(), root=str(tmp_path))
     lookout_medallion.write_silver("water_crossing", _crossing_table(), root=str(tmp_path))
-    lookout_medallion.write_silver("session_crossing", _passing_table(), root=str(tmp_path))
     return tmp_path
-
-
-# One call a replay made on the recording it drew into: where it went, what it drew, and the
-# instant the clock stood at — `None` for something logged for the whole recording.
-Logged = namedtuple("Logged", "path archetype at")
-
-# Which component of an archetype holds what was drawn, where the name differs from the
-# archetype's own.
-DRAWN_COMPONENT = {
-    "GeoPoints": "positions",
-    "GeoLineStrings": "line_strings",
-    "Scalars": "scalars",
-    "TextLog": "text",
-}
 
 
 @pytest.fixture
@@ -173,26 +133,6 @@ def recording():
     return create_autospec(rr.RecordingStream, instance=True)
 
 
-def drawn(recording, path: str | None = None) -> list[Logged]:
-    """What was drawn into `recording`, in order, and under `path` where one is named.
-
-    The clock is followed alongside the drawing, since what a viewer shows at an instant is
-    decided by the `set_time` that preceded the log rather than by the log itself.
-    """
-    at: datetime.datetime | None = None
-    logged = []
-
-    for name, args, kwargs in recording.method_calls:
-        if name == "set_time":
-            at = kwargs["timestamp"]
-        elif name == "log":
-            entity, archetype = args[0], args[1]
-            logged.append(Logged(entity, archetype, None if kwargs.get("static") else at))
-
-    return [one for one in logged if path is None or one.path == path]
-
-
-def values(archetype: Any, component: str = "") -> list:
-    """What an archetype carries, as plain python."""
-    named = component or DRAWN_COMPONENT[type(archetype).__name__]
-    return getattr(archetype, named).as_arrow_array().to_pylist()
+def streams(recording) -> set[str]:
+    """The streams drawn to, taken from the entity path each log named."""
+    return {call.args[0] for call in recording.log.call_args_list}

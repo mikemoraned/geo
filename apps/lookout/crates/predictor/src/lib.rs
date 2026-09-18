@@ -21,6 +21,6 @@ pub use crossing::{Crossing, CrossingId, Crossings};
 pub use crow_flies::{CrowFlies, DEFAULT_RADIUS_METRES};
 pub use measure::Measure;
 pub use parser::Parser;
-pub use predict::{Event, ObserveError, Predict, Prediction, Trend, Trending};
+pub use predict::{Event, ObserveError, Predict, Prediction};
 pub use sample::{CoordinateError, Sample, position};
 pub use sentence::{Sentence, SentenceError};

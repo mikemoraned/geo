@@ -250,7 +250,25 @@ run on the board — and it crosses: `predictor` and `platform-core` both build 
       crossings and one with two thousand lay out the same way — which is why the entity paths
       group by what is measured rather than by which crossing it is measured against: a plot is
       one subtree, and a crossing is a series within it.
-- [ ] Draw the predictions as a 2D plot of predicted against actual: x is when a crossing was
+- [ ] Change to a very simple rerun usage, that is easier to understand even if it doesn't look fancy:
+      * [x] show samples and predictions
+      * [x] get rid of any cruft we don't need now which includes code no longer used in log.py/draw method
+      * [x] reduces tests down to just being very simple i.e. just verifying that when something is replayed and predictions made, we log something to these streams:
+            * "steps/log"
+            * "steps/sample/position"
+            * "steps/sample/positions"
+            * "steps/predictions"
+
+      The stream names are constants in `log.py`, so the blueprint and the tests name the same
+      thing the drawing does. **Everything the deferred plot would have needed is deleted
+      rather than kept**: `Store.passings` and the `Passing` it answered, the
+      `session_crossing` rows in the fixture, and — dead once nothing drew a trend —
+      `Trending`, `Trend` and their tests, in the python binding and in `predictor` alike.
+      Git is the archive.
+- [-] **Deferred**, to be picked up on its own rather than here: the simple rerun usage above
+      is what this slice ends with, and the ground truth this needs has been deleted along
+      with everything else the plot alone would have used. Draw the predictions as a 2D plot
+      of predicted against actual: x is when a crossing was
       really passed and y is when the latest fix expects to pass it, both measured from the
       start of the session. A crossing sits at a fixed x and moves up or down as
       the prediction changes, so a perfect predictor puts every crossing on the y = x

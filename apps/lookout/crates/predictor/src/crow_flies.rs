@@ -7,20 +7,14 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
-use crate::crossing::{Crossing, CrossingId, Crossings};
+use crate::crossing::{Crossing, Crossings};
 use crate::measure::Measure;
-use crate::predict::{Event, ObserveError, Predict, Prediction, Trend, Trending};
+use crate::predict::{Event, ObserveError, Predict, Prediction};
 use crate::sample::Sample;
 
 /// How far ahead to predict. Wide enough that a train at speed has a minute or two of
 /// warning, narrow enough to mean something at walking pace.
 pub const DEFAULT_RADIUS_METRES: f64 = 5_000.0;
-
-/// How much a distance has to change between fixes before it counts as changing at all.
-///
-/// A fix wanders by metres from one second to the next when the satellite geometry is poor.
-/// Without a band, the trend of a crossing we are standing still beside would flicker.
-const HOLDING_METRES: f64 = 10.0;
 
 /// A predictor that measures in straight lines.
 ///
@@ -34,8 +28,6 @@ pub struct CrowFlies<T: Measure, C: Crossings<T> = Vec<Crossing<T>>> {
     /// The most recent fix, kept to derive a speed for a receiver that reports none.
     latest: Option<Sample<T>>,
     predictions: Vec<Prediction<T>>,
-    /// What was predicted at the fix before, which is what a trend is measured against.
-    previous: Vec<Prediction<T>>,
 }
 
 impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
@@ -50,7 +42,6 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
             now: None,
             latest: None,
             predictions: Vec::new(),
-            previous: Vec::new(),
         }
     }
 
@@ -78,8 +69,7 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
         }
     }
 
-    /// Predicts afresh from `sample`, keeping what was predicted before it as the trend to
-    /// measure the new answer against.
+    /// Predicts afresh from `sample`.
     fn predict(&mut self, sample: Sample<T>) {
         let speed = speed_mps(&sample, self.latest.as_ref());
         let from = sample.position;
@@ -105,7 +95,7 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
                 .expect("a distance is never NaN")
         });
 
-        self.previous = std::mem::replace(&mut self.predictions, predicted);
+        self.predictions = predicted;
         self.latest = Some(sample);
     }
 }
@@ -144,8 +134,8 @@ fn arrival<T: Measure>(at: DateTime<Utc>, metres: T, speed_mps: T) -> Option<Dat
 }
 
 impl<T: Measure, C: Crossings<T>> Predict<T> for CrowFlies<T, C> {
-    /// An event out of order leaves the clock, the predictions, and the trend as they were,
-    /// rather than half applied.
+    /// An event out of order leaves the clock and the predictions as they were, rather than
+    /// half applied.
     fn observe(&mut self, event: Event<T>) -> Result<(), ObserveError> {
         match event {
             Event::Sampled(sample) => {
@@ -159,24 +149,6 @@ impl<T: Measure, C: Crossings<T>> Predict<T> for CrowFlies<T, C> {
 
     fn predictions(&self) -> &[Prediction<T>] {
         &self.predictions
-    }
-}
-
-impl<T: Measure, C: Crossings<T>> Trending for CrowFlies<T, C> {
-    fn trend(&self, crossing: CrossingId) -> Option<Trend> {
-        let metres = |predictions: &[Prediction<T>]| {
-            predictions
-                .iter()
-                .find(|prediction| prediction.crossing == crossing)
-                .and_then(|prediction| prediction.metres.to_f64())
-        };
-        let change = metres(&self.predictions)? - metres(&self.previous)?;
-
-        Some(match change {
-            change if change < -HOLDING_METRES => Trend::Closing,
-            change if change > HOLDING_METRES => Trend::Receding,
-            _ => Trend::Holding,
-        })
     }
 }
 
@@ -429,64 +401,6 @@ mod tests {
 
         assert!(again.is_ok());
         assert!(predictor.predictions()[0].at.is_some(), "the speed landed");
-    }
-
-    #[test]
-    fn a_crossing_has_no_trend_until_there_is_a_fix_to_compare_it_against() {
-        let mut predictor = predictor();
-
-        predictor
-            .observe(Event::Sampled(fix()))
-            .expect("an event in order");
-
-        assert_eq!(predictor.trend(CrossingId::new(1)), None);
-    }
-
-    /// Running north from 50.0 to 50.03: the crossing at 50.02 is nearer than it was, and the
-    /// one at 50.01 is now further behind us than it was ahead. A trend is the distance
-    /// changing, not the crossing being passed. One we have already gone by keeps closing
-    /// until we are further from it than we started.
-    #[test]
-    fn a_crossing_we_are_moving_towards_is_closing_and_one_we_have_left_behind_recedes() {
-        let mut predictor = predictor();
-
-        predictor
-            .observe(Event::Sampled(fix_at(50.0, 0)))
-            .expect("an event in order");
-        predictor
-            .observe(Event::Sampled(fix_at(50.03, 10)))
-            .expect("an event in order");
-
-        assert_eq!(predictor.trend(CrossingId::new(2)), Some(Trend::Closing));
-        assert_eq!(predictor.trend(CrossingId::new(1)), Some(Trend::Receding));
-    }
-
-    /// A fix that has barely moved is not a trend, it is noise.
-    #[test]
-    fn a_crossing_we_have_hardly_moved_towards_is_holding() {
-        let mut predictor = predictor();
-
-        predictor
-            .observe(Event::Sampled(fix_at(50.0, 0)))
-            .expect("an event in order");
-        predictor
-            .observe(Event::Sampled(fix_at(50.00001, 10)))
-            .expect("an event in order");
-
-        assert_eq!(predictor.trend(CrossingId::new(1)), Some(Trend::Holding));
-    }
-
-    #[test]
-    fn a_crossing_that_was_never_predicted_has_no_trend() {
-        let mut predictor = predictor();
-        predictor
-            .observe(Event::Sampled(fix_at(50.0, 0)))
-            .expect("an event in order");
-        predictor
-            .observe(Event::Sampled(fix_at(50.0, 10)))
-            .expect("an event in order");
-
-        assert_eq!(predictor.trend(CrossingId::new(99)), None);
     }
 
     /// The whole prediction at the measure the device runs in, which is the point of the

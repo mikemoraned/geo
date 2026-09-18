@@ -119,11 +119,10 @@ def replayed(store: Store, args: argparse.Namespace) -> rr.RecordingStream:
         print(f"writing {output}")
 
     crossings = store.crossings(country=args.country)
-    passings = store.passings(args.session)
     predictor = CrowFlies(crossings, radius_metres=args.radius_metres)
     steps = replay(predictor, store.samples(args.session))
 
-    draw(recording, steps, crossings, passings)
+    draw(recording, steps, crossings)
     return recording
 
 
