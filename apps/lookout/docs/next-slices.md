@@ -1,29 +1,5 @@
 # Next Slices
 
-## Slice: Embed Predictor on website
-
-### Target
-
-We now want to take our simple crow-flies predictor and embed it into the existing https://lookout-hom.fly.dev website. We want to end up with a few things:
-* The existing homepage, which records data, moved to a `/record` sub-page but pretty-much stays as-is and works the same way
-* Two new pages:
-  * `/live` : shows the App (see below) taking gps positions from live browser data
-  * `/kiosk` : shows the App but in "kiosk mode" i.e. with replayed data; this data can be taken from one of the sessions recorded in the past and replayed as if it was real
-* The homepage becomes a simple textual summary/explanation of the project with links to these pages
-* An App which:
-  * Embeds the Crux App as a WASM widget which can receive injected GPS recordings
-  * Has a simple canvas-based display which:
-    * shows a simple dot in the middle (representing current position), where size of dot is proportional to estimated current speed
-    * the predicted crossings displayed as small dots. the positions of these are based on a hyperbolic mapping where closer distances are given more spatial detail. all predictions should always sit some max distance away from current position, so dots on the border of a circle are those at max distance.
-
-### Straw Man
-
-We can keep the website pretty simple i.e. not need for a framework like cot.rs yet. The Crux App should have in-built support for what we need. The display probably should be a simple canvas but with calculations done by D3. So, for example, the Crux App should return a View which contains real lat/lon positions, with no hyperbolic mapping, and we use D3 to take these and map to a circular display.
-
-### Tasks
-
-...
-
 ## Slice: Evaluation framework based on sampled sessions from myself and motis
 
 ### Target
