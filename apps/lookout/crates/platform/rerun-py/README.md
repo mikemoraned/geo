@@ -21,8 +21,7 @@ The recording holds two maps — where the session went, and the crossings it ex
 
 ```
 just sessions                   # the sessions the store holds
-just replay <session-id>        # draw one in a viewer already running
-just record <session-id>        # write one to a .rrd beside the store
+just replay <session-id>        # draw one in a viewer already running, started with `rerun`
 ```
 
 ```python

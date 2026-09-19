@@ -179,9 +179,6 @@ sessions *args:
 replay session *args:
     uv run --directory crates/platform/rerun-py python -m runner.main replay {{session}} {{args}}
 
-# The same, written to a .rrd to keep rather than drawn in a viewer.
-record session *args:
-    uv run --directory crates/platform/rerun-py python -m runner.main record {{session}} {{args}}
 
 # Push the upstash redis URL secret to fly from 1Password.
 push-secrets:

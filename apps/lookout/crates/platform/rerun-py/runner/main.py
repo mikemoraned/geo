@@ -1,14 +1,13 @@
-"""Replay a recorded session through the predictor, into a rerun viewer or a file.
+"""Replay a recorded session through the predictor, into a running rerun viewer.
 
-Three commands, each doing one thing:
+Two commands, each doing one thing:
 
     just sessions               the sessions the store holds
     just replay <session-id>    that session, drawn in a viewer already running
-    just record <session-id>    the same, written to a .rrd to keep
 
-`replay` needs a viewer listening, which `rerun` on its own starts. `record` answers the
-other need: a recording that can be opened later, or held beside another run of the same
-session to compare.
+`replay` needs a viewer listening, which `rerun` on its own starts. It draws into that viewer
+rather than into a file: a viewer reads only recordings from its own minor version and the one
+before it, so a `.rrd` kept any longer than that is a file nothing will open.
 """
 
 import argparse
@@ -16,7 +15,6 @@ import socket
 from pathlib import Path
 from urllib.parse import urlparse
 
-import lookout_medallion
 import rerun as rr
 from lookout_predictor import DEFAULT_RADIUS_METRES, CrowFlies
 
@@ -50,11 +48,6 @@ def listening(address: tuple[str, int]) -> bool:
         return False
 
 
-def default_output() -> Path:
-    """Beside the store, so a recording lands in the same place wherever it is run from."""
-    return Path(lookout_medallion.default_root()).parent / "predictor.rrd"
-
-
 def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
 
@@ -83,11 +76,6 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     )
     live.add_argument("--url", help="the viewer to draw in, if not the one on this machine")
 
-    saved = commands.add_parser(
-        "record", parents=[store, session], help="write a session to a .rrd"
-    )
-    saved.add_argument("--output", type=Path, help="where to write the recording")
-
     return parser.parse_args(argv)
 
 
@@ -97,26 +85,20 @@ def sessions(store: Store) -> None:
 
 
 def replayed(store: Store, args: argparse.Namespace) -> rr.RecordingStream:
-    """A recording of `args.session` replayed, with its sink already chosen.
+    """A recording of `args.session` replayed, connected to the viewer it draws into.
 
-    The sink is set before anything is drawn, since a stream sends as it is logged rather
-    than keeping what was logged before it had somewhere to send it.
+    The viewer is connected before anything is drawn, since a stream sends as it is logged
+    rather than keeping what was logged before it had somewhere to send it.
     """
     recording = rr.RecordingStream(APPLICATION)
 
-    if args.command == "replay":
-        address = viewer_address(args.url)
-        if not listening(address):
-            host, port = address
-            raise SystemExit(
-                f"no rerun viewer is listening on {host}:{port}; start one with `rerun`"
-            )
-        recording.connect_grpc(args.url, default_blueprint=blueprint())
-    else:
-        output = args.output or default_output()
-        output.parent.mkdir(parents=True, exist_ok=True)
-        recording.save(str(output), default_blueprint=blueprint())
-        print(f"writing {output}")
+    address = viewer_address(args.url)
+    if not listening(address):
+        host, port = address
+        raise SystemExit(
+            f"no rerun viewer is listening on {host}:{port}; start one with `rerun`"
+        )
+    recording.connect_grpc(args.url, default_blueprint=blueprint())
 
     crossings = store.crossings(country=args.country)
     predictor = CrowFlies(crossings, radius_metres=args.radius_metres)

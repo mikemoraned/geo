@@ -1,8 +1,7 @@
 """What the command does with its arguments.
 
 Each command says what it does in its own name, so nothing is decided by an argument being
-absent: `sessions` lists, `replay` draws in a viewer, `record` writes a file, and none of the
-three becomes another.
+absent: `sessions` lists, `replay` draws in a viewer, and neither becomes the other.
 """
 
 import socket
@@ -12,10 +11,9 @@ import pytest
 from runner.main import arguments, listening, viewer_address
 
 
-def test_listing_drawing_and_writing_are_separate_commands():
+def test_listing_and_drawing_are_separate_commands():
     assert arguments(["sessions"]).command == "sessions"
     assert arguments(["replay", "abc"]).command == "replay"
-    assert arguments(["record", "abc"]).command == "record"
 
 
 def test_a_viewer_is_the_one_on_this_machine_unless_another_is_named():
@@ -25,11 +23,6 @@ def test_a_viewer_is_the_one_on_this_machine_unless_another_is_named():
     )
 
 
-def test_only_a_recording_written_to_a_file_names_one():
-    assert arguments(["record", "abc"]).output is None
-    assert not hasattr(arguments(["replay", "abc"]), "output")
-
-
 def test_a_replay_names_the_session_it_replays():
     assert arguments(["replay", "abc"]).session == "abc"
 
@@ -37,9 +30,6 @@ def test_a_replay_names_the_session_it_replays():
 def test_a_replay_without_a_session_is_an_error():
     with pytest.raises(SystemExit):
         arguments(["replay"])
-
-    with pytest.raises(SystemExit):
-        arguments(["record"])
 
 
 def test_naming_no_command_is_an_error():
