@@ -21,6 +21,14 @@ What a passing test run does and doesn't prove when Claude runs it.
   water-crossings notebook run, so `just test-python` — and therefore `just test-no-docker`
   as a whole — cannot complete here. Run the three Python suites separately to see which
   half is real, and have the user run the notebook recipes.
+- **`wasm-pack` writes to `~/Library/Caches` and is refused**, so `just wasm` dies with a bare
+  "Operation not permitted" before it compiles anything. It caches the `wasm-bindgen` and
+  `wasm-opt` it downloads there, through the `dirs` crate, which ignores `XDG_CACHE_HOME` on
+  macOS. Running it with `HOME` pointed at a scratch dir works, as long as `CARGO_HOME` and
+  `RUSTUP_HOME` are given their real values in the same command — the first run then fetches
+  the tools again into that scratch cache. What the built wasm does can be checked under node
+  without a browser: import the `--target web` module and pass the `.wasm` bytes to `init` as
+  `{ module_or_path }`.
 - **The sandbox denies by default and grants only what it is given**, so a path outside the
   app directory is unreachable — for reading as much as for writing — unless the launcher
   lists it. That `~/.cargo` and `~/.rustup` are readable says nothing about any other home

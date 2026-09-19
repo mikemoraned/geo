@@ -82,6 +82,7 @@ recorder = { path = "crates/recorder" }
 session_crossings = { path = "crates/session_crossings" }
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
+web-core = { path = "crates/web-core" }
 transport = { path = "crates/transport" }
 
 [workspace.lints.clippy]

@@ -4,9 +4,12 @@
 # startup and served at /version.
 git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git diff --quiet 2>/dev/null || echo -dirty)"`
 
-# Tools the build needs: DuckDB for the multi-engine test, PROJ and jq for `crs-definitions`.
+# Tools the build needs: DuckDB for the multi-engine test, PROJ and jq for `crs-definitions`,
+# and wasm-pack and its target for `wasm`.
 prerequisites:
     cargo install rerun-cli --locked
+    cargo install wasm-pack --locked
+    rustup target add wasm32-unknown-unknown
     brew install duckdb proj jq
 
 # Regenerate the PROJJSON CRS definitions medallion embeds and commits; nothing else emits them.
@@ -26,8 +29,18 @@ serve-redis:
 build:
     cargo build --release -p server
 
+# Compile the core to wasm, into the dir `server` serves it from. Generated, so gitignored:
+# the Docker builder stage runs the same command for a deploy.
+wasm:
+    wasm-pack build crates/web-bridge --target web --out-dir ../server/static/wasm --out-name lookout
+
+# Serve on http://localhost:3000 with the wasm freshly built.
+serve-web: wasm serve
+
 # Every test: the Rust workspace, Docker ones included, and the Python ones.
-test: test-python
+test: test-python test-rust
+
+test-rust:
     cargo nextest run --workspace
 
 # Every test but the Docker ones. The sandbox-safe run.

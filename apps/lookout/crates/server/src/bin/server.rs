@@ -55,6 +55,6 @@ async fn main() {
         .unwrap_or(3000);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    tracing::info!("listening on http://{addr}");
+    tracing::info!(bound = %addr, "listening on http://localhost:{port}");
     axum::serve(listener, app).await.unwrap();
 }

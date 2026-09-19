@@ -53,11 +53,15 @@ the shell. What that settles:
 - **The element owns the core; the page owns the source.** Positions arrive through a method
   the element exposes, so `/live` and `/kiosk` differ in where they read them and in nothing
   else, and a replay is as easy to drive as a fix.
-- **The bridge is crux's, over Bincode.** `process_event` and `view` go out through
-  `wasm-bindgen`, and typegen emits the TypeScript for the events and the ViewModel. A
-  position and an instant are not primitives, so both need registering there. The crate
-  holding the bridge needs a name other than `shared`, which already holds the telemetry wire
-  models.
+- **The bridge is crux's, over JSON.** `process_event` and `view` go out through
+  `wasm-bindgen` as strings, and the shell reads them with `JSON.parse`. Bincode was the first
+  choice, but crux 0.16.2 generates TypeScript by shelling out to `pnpm install` and
+  `pnpm exec tsc` — a Node toolchain locally and in the Docker builder, for a site that is
+  hand-written pages. `BridgeWithSerializer` takes any serde serializer, so `serde_json` buys
+  the same bridge for none of that. The cost is that nothing checks the shapes across the
+  boundary, which `web-bridge`'s tests cover instead: they assert the exact JSON of an event,
+  a request and a view. The crate holding the bridge is `web-bridge`, since `shared` already
+  holds the telemetry wire models, and the core behind it is `web-core`.
 - **Repaint on `Render`, not on dispatch.** The core answers an event that moved nothing with
   no request at all, which is what stops a replay at speed from redrawing the canvas per
   sample. The shell honours the empty answer.
@@ -70,6 +74,9 @@ the shell. What that settles:
   the shared core stays on the pinned version, and the web shell with it.
 - **`/live` shows, `/record` records.** Moving the recording page to `/record` is a move, not a
   rewrite, and `/live` predicts from browser GPS while queueing nothing.
+- **A page is a directory.** `server` serves the static dir as it finds it, so `/live` is
+  `static/live/index.html` and the bare path redirects to `/live/`. That keeps every page a
+  file on disk rather than a route in the binary.
 
 ### Tasks
 
@@ -80,14 +87,16 @@ remaining pages.
 
 #### Phase 1 — the whole path, over a counter core
 
-- [ ] Add a counter core: a `Tick` in, a count out as text. Phase 2 throws it away and keeps
+- [x] Add a counter core: a `Tick` in, a count out as text. Phase 2 throws it away and keeps
       the bridge and the element it proved.
-- [ ] Add a bridge crate exposing that core to `wasm-bindgen`, with typegen for its event and
-      ViewModel.
-- [ ] Build the wasm with a `just` recipe, into the server's static dir.
-- [ ] Define the custom element: it loads the wasm, runs the tick, and repaints on `Render`.
-- [ ] Serve it at `/live`, showing the count.
-- [ ] Build the wasm in the Docker builder stage, and deploy.
+- [x] Add a bridge crate exposing that core to `wasm-bindgen`, with typegen for its event and
+      ViewModel. Over JSON, and so without typegen — see the choice above.
+- [x] Build the wasm with a `just` recipe, into the server's static dir.
+- [x] Define the custom element: it loads the wasm, runs the tick, and repaints on `Render`.
+- [x] Serve it at `/live`, showing the count.
+- [ ] Build the wasm in the Docker builder stage, and deploy. The Dockerfile is written; the
+      deploy is not run. Neither Docker nor a browser runs in the sandbox, so `/live` has been
+      proved only through the wasm module itself, under node.
 
 #### Phase 2 — the predictor behind it
 
