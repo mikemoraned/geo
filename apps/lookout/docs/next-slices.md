@@ -1,5 +1,22 @@
 # Next Slices
 
+## Slice: Embed Predictor on website
+
+### Target
+
+We now want to take our simple predictor and start applying it for real. This means a few things:
+* 
+
+### Straw Man
+
+This should involve refactoring the existing lookout fly.io website so that its sensor gathering follows the crux / ports-and-adaptors pattern. Then we can extend it to apply the predictor and visualise it in a simple way.
+
+This also is where we need to be publishing data about crossings for it to download client-side e.g. a PMTiles file.
+
+### Tasks
+
+...
+
 ## Slice: Evaluation framework based on sampled sessions from myself and motis
 
 ### Target
@@ -47,21 +64,6 @@ become urgent at a size we are not at yet, and both are cheaper to build before 
   them. The definitions are plain data every engine can read; a catalog is one engine's view
   of it, and those traits move between that engine's releases.
 
-## Slice: embed predictor on website
-
-### Target
-
-We now want to take our simple predictor and start applying it for real.
-
-### Straw Man
-
-This should involve refactoring the existing lookout fly.io website so that its sensor gathering follows the crux / ports-and-adaptors pattern. Then we can extend it to apply the predictor and visualise it in a simple way.
-
-This also is where we need to be publishing data about crossings for it to download client-side e.g. a PMTiles file.
-
-### Tasks
-
-...
 
 ## Slice: extend to UK
 
@@ -81,39 +83,6 @@ dataset's own partition key by the shared silver write path, not declared per da
 second country lands in its own partitions and its own CRS as soon as `Country` knows it.
 
 ...
-
-## Slice: Deploy predictor on M5 device
-
-### Target
-
-Run the real predictor on the M5StickC PLUS2, fed by its own GPS unit rather than by replayed
-traces — the point the device spikes were building towards.
-
-### What the spikes already established
-
-The spikes leave a working skeleton to hang the predictor on: a Crux core split from an
-esp-idf shell, so the core stays testable on the laptop. The predictor should *be* that core.
-Everything the spikes established about the board — power hold, panel offset, RX pin, stack
-sizing, UART buffer, and what the receiver's numbers are worth — is in [device.md](device.md),
-so the spike code itself can go.
-
-Three things there bear directly on this slice:
-
-- **Build the predictor core against the current `crux_core`**, and soak it on device with
-  BLE running. 0.19 rebooted the board every few minutes and 0.16.2 did not; whether later
-  releases still do is unknown. [device.md](device.md) has the evidence and what dropping
-  back would cost.
-- **The predictor should take fix quality as an input, not just lat/lon.** Held still in
-  poor geometry the receiver showed metres per second of phantom motion and a false
-  multi-knot speed, so a straw man deriving velocity by differencing position between fixes
-  may emit confident nonsense from a stationary device. That rests on two observations only
-  — see [device.md](device.md) — so it is a reason to design against the failure, not an
-  established characterisation of the receiver.
-- **Wall-clock time can come from the receiver**, before any position fix, so the device
-  needs neither NTP nor the BM8563 RTC.
-
-Worth checking whether the phone traces show the same noise before assuming it is specific
-to this receiver.
 
 ## Slice: rail track geometry from pfaedle (parked)
 
