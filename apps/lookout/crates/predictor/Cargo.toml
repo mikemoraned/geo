@@ -1,0 +1,23 @@
+[package]
+name = "predictor"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+# Some entries are written out rather than inherited from the workspace: see docs/device.md.
+chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+geo-types = { workspace = true, features = ["serde"] }
+geo = { version = "0.31", default-features = false }
+nmea = "0.7"
+num-traits = { version = "0.2", default-features = false }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[features]
+fixtures = []
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

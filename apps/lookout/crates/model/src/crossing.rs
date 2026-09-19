@@ -91,7 +91,7 @@ pub enum OverlapKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WaterCrossingRow {
     pub crossing_id: CrossingId,
-    /// The same crossing named in four bytes, for a device with no room for the id above.
+    /// The crossing named in four bytes, for a device with no room for `crossing_id`.
     ///
     /// Derived from `crossing_id` and carried here rather than worked out by whoever packs a
     /// buffer, so there is one answer to what a crossing is called on a device, and it is
@@ -112,7 +112,7 @@ pub struct WaterCrossingRow {
     /// The length of the representative part's overlap, in metres. Zero for a point overlap,
     /// which has no length.
     pub overlap_m: f64,
-    /// The same summed over every part merged into this crossing.
+    /// `overlap_m` summed over every part merged into this crossing.
     pub total_overlap_m: f64,
     pub merged_parts: u32,
     /// Where along `rail_id` the crossing sits, from 0 at its start to 1 at its end.

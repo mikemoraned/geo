@@ -1,0 +1,44 @@
+[build-system]
+requires = ["maturin>=1.14,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "lookout-predictor"
+version = "0.1.0"
+description = "Replay a recorded session through the crow-flies predictor"
+requires-python = ">=3.13"
+classifiers = ["Private :: Do Not Upload"]
+
+[tool.maturin]
+# Linking against libpython is what an extension module must not do; the feature is enabled
+# here rather than in Cargo.toml so `cargo check --workspace` still builds this crate.
+features = ["pyo3/extension-module"]
+module-name = "lookout_predictor"
+
+# The wheel is the extension module alone, and it depends on nothing. What is listed here is
+# what the runner beside it needs: it shares this project rather than having one of its own,
+# so that driving the predictor takes no install step.
+[dependency-groups]
+dev = [
+    # The store's own reader and writer, so the runner reads a dataset by name rather than
+    # working out which files hold it.
+    "lookout-medallion",
+    "pyarrow>=25",
+    "pytest>=9",
+    # Builds the fixtures the tests read back: geometry as WKB, and the projected column in
+    # the zone the store states for the country.
+    "pyproj>=3.7",
+    # Pinned to the rerun-cli the recordings are opened with: a viewer refuses an .rrd from a
+    # newer SDK than itself.
+    "rerun-sdk==0.37.1",
+    "shapely>=2.1",
+]
+
+[tool.uv.sources]
+lookout-medallion = { path = "../../medallion-py" }
+
+[tool.pytest.ini_options]
+# The runner's own python sits beside the extension module rather than inside the wheel: it
+# is what drives the predictor, not part of it.
+pythonpath = ["."]
+testpaths = ["tests"]

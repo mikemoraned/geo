@@ -1,14 +1,20 @@
 # lookout_medallion
 
-Writing the medallion store from python, so a derivation prototyped as a notebook produces
-the same silver a Rust one does — see [`docs/medallion.md`](../../docs/medallion.md) for the
-store itself, and `src/lib.rs` for the API, whose doc comments are the module's `__doc__`.
+The medallion store from python, so a derivation prototyped as a notebook produces the same
+silver a Rust one does, and a reader asks for a dataset by name rather than working out which
+files hold it — see [`docs/medallion.md`](../../docs/medallion.md) for the store itself, and
+`src/lib.rs` for the API, whose doc comments are the module's `__doc__`.
 
 ```python
 import lookout_medallion
 
 written = lookout_medallion.write_silver("train_segment", table)
 written = lookout_medallion.write_silver("train_segment", table, root="/some/store")
+
+table = lookout_medallion.query_silver(
+    "SELECT trip_id, ST_X(geometry) AS lon FROM train_segment WHERE country = $country",
+    params={"country": "DE"},
+)
 ```
 
 ## What the table has to hold

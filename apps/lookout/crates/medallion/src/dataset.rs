@@ -61,7 +61,7 @@ impl<L: LayerKind> DatasetSpec<L> {
         L::LAYER
     }
 
-    /// The same definition with its layer as a value, for a caller holding datasets of
+    /// This definition with its layer as a value, for a caller holding datasets of
     /// several layers at once.
     pub const fn info(&self) -> DatasetInfo {
         DatasetInfo {

@@ -72,7 +72,7 @@ impl Release {
         }
     }
 
-    /// The same release read from a local mirror rooted at `path`, which contains the
+    /// A release read from a local mirror rooted at `path`, which contains the
     /// release's `theme=…` directories.
     pub fn mirrored(id: impl Into<String>, path: impl Into<PathBuf>) -> Self {
         Self {

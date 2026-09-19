@@ -1,0 +1,30 @@
+# Rust commits a function's whole frame on entry, so main's stack follows from everything it
+# declares rather than from what has run. This shell declares a display buffer, a UART buffer,
+# and a core whose model embeds a parser, and reaches 26,564 bytes before its loop has drawn
+# anything — well past the template's 8192. What is left over is the headroom for everything
+# the loop then calls into, and an overflow does not report itself as one: it lands as a fault
+# in whatever code is nearby. See docs/device.md.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=49152
+
+# Traps an overflow where it happens and names the task, rather than leaving it to surface as a
+# corrupt pointer inside an unrelated driver. Every hard-to-diagnose crash on this board has
+# been a stack overflow, and none of them presented as one.
+CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK=y
+
+# Increase a bit these stack sizes as they are also a bit too small by default
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+CONFIG_FREERTOS_IDLE_TASK_STACKSIZE=4096
+
+# You might have to increase this further if you spawn your own Rust threads
+# that allocate large stack variables; or better yet - use
+# `std::thread::Builder::new().stack_size(XXX)` for spawning
+CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT=4096
+
+# The ESP32-PICO-V3-02 packages 2MB of quad SPI PSRAM alongside the die. `IGNORE_NOTFOUND`
+# keeps a failed probe from aborting boot, so the startup log reports the size actually found
+# rather than the device dropping into a boot loop.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_QUAD=y
+CONFIG_SPIRAM_SPEED_40M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_IGNORE_NOTFOUND=y

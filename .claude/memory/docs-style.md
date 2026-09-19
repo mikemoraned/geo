@@ -8,6 +8,12 @@ How docs under `docs/` (as opposed to slice docs) are written in this repo.
   as those parts move. State the rule over the role instead: "the capture log a polling
   process appends to". Concrete examples are occasionally worth including, but they decay
   and need maintaining, so the abstract description carries the weight.
+- **Name what is referred to; never point at it by position.** "The same, with `params`
+  bound", "the id above", "as described below" all break the moment an item moves, and read
+  as nothing to someone arriving at that item first. Name the thing, or say it in full again.
+  Where a general form and a convenience form both exist, the general one carries the
+  description and the convenience one refers to it by name. This holds in doc comments and
+  READMEs as much as in `docs/`.
 - **Use dry, impassionate language.** No colloquialism or emphasis for its own sake:
   "not allowed" rather than "not on the table"; "permitted" rather than "fine and
   expected"; "expected at this layer" rather than "the point here". Prefer plain

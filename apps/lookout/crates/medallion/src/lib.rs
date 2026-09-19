@@ -55,6 +55,7 @@ mod write;
 
 pub use args::MedallionArgs;
 pub use country::{COUNTRY, Countries, Country, UnknownCountry};
+pub use datafusion::scalar::ScalarValue;
 pub use dataset::{DatasetInfo, DatasetSpec};
 pub use derive::{GeoRow, write_geo_rows, write_rows};
 pub use geo::{
@@ -64,7 +65,7 @@ pub use geo::{
 pub use layer::{Layer, LayerKind, Replaceable, layers};
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
 pub use path::{AppendError, Dataset, ReplaceError, Replaced, Root, Written};
-pub use query::{Query, QueryError};
+pub use query::{Query, QueryError, table_references};
 pub use rows::{Dated, Geometry, Row, RowError, batch, fields};
 pub use table::{SilverTarget, TableError, TableWritten, write_table};
 pub use write::WriteError;
