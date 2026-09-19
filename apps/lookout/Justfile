@@ -51,9 +51,21 @@ deploy:
 # Set up a fresh worktree's store from what the checkout carries. Gold waits until needed.
 init: bronze-init silver-init
 
-# Fill in the bronze a checkout leaves out: the Overture extract. No live source is touched.
+# Where a local mirror of the Overture bucket's `release/` prefix lives, when its drive is mounted.
+overture_mirror := "/Volumes/PRO-G40/OvertureMaps/data/release"
+
+# Fill in the bronze a checkout leaves out: the Overture extract. Reads the local mirror when
+# it is mounted and the public bucket otherwise. No live source is touched.
 bronze-init *args:
-    just bronze-extract {{args}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -d "{{overture_mirror}}" ]; then
+        echo "reading the Overture mirror at {{overture_mirror}}"
+        just bronze-extract --mirror "{{overture_mirror}}" {{args}}
+    else
+        echo "no Overture mirror at {{overture_mirror}}; reading the public bucket"
+        just bronze-extract {{args}}
+    fi
 
 # Report what the store holds, layer by layer.
 summarise *args:

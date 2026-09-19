@@ -30,8 +30,9 @@ struct Args {
     command: Option<Command>,
     #[command(flatten)]
     medallion: MedallionArgs,
-    /// Read the release from a local mirror rooted here, rather than from S3. The path
-    /// holds the release's own `theme=…` directories.
+    /// Read the release from a local mirror of the bucket's `release/` prefix rooted
+    /// here, rather than from S3. The path holds a directory per release, named by its
+    /// id.
     #[arg(long, global = true)]
     mirror: Option<PathBuf>,
 }

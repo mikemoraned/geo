@@ -72,8 +72,9 @@ impl Release {
         }
     }
 
-    /// A release read from a local mirror rooted at `path`, which contains the
-    /// release's `theme=…` directories.
+    /// A release read from a local mirror of the bucket's `release/` prefix, rooted at
+    /// `path`: a directory per release, named by its id, each holding that release's
+    /// `theme=…` directories.
     pub fn mirrored(id: impl Into<String>, path: impl Into<PathBuf>) -> Self {
         Self {
             id: id.into(),
@@ -92,7 +93,11 @@ impl Release {
     fn path(&self, overture_type: OvertureType) -> String {
         let OvertureType { theme, name } = overture_type;
         match &self.mirror {
-            Some(root) => format!("{}/theme={theme}/type={name}/", root.display()),
+            Some(root) => format!(
+                "{}/{}/theme={theme}/type={name}/",
+                root.display(),
+                self.id
+            ),
             None => format!(
                 "s3://overturemaps-{S3_REGION}/release/{}/theme={theme}/type={name}/",
                 self.id
@@ -180,14 +185,16 @@ mod tests {
         );
     }
 
-    /// A mirror is the same layout under a local root, so only the prefix differs.
+    /// A mirror is the same layout under a local root, so only the prefix differs: the
+    /// root stands in for `s3://overturemaps-…/release/`, and the release names a
+    /// directory under it.
     #[test]
     fn a_mirrored_release_reads_the_same_layout_from_disk() {
-        let release = Release::mirrored("2025-08-20.0", "/mirror/2025-08-20.0");
+        let release = Release::mirrored("2025-08-20.0", "/mirror/release");
 
         assert_eq!(
             release.path(OvertureType::WATER),
-            "/mirror/2025-08-20.0/theme=base/type=water/"
+            "/mirror/release/2025-08-20.0/theme=base/type=water/"
         );
         assert_eq!(
             release.id(),
