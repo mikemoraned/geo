@@ -1,32 +1,24 @@
 # Lookout app recipes. Run from `apps/lookout`.
 
-# Short git hash of the working tree, with a -dirty suffix if uncommitted. Baked
-# into the binary (BUILD_GIT_HASH) so it's logged at startup and served at /version.
+# Short git hash, `-dirty` if uncommitted. Baked in as BUILD_GIT_HASH, so it is logged at
+# startup and served at /version.
 git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git diff --quiet 2>/dev/null || echo -dirty)"`
 
-# DuckDB is linked by the medallion multi-engine test, which reads one silver file
-# back through every engine; `.cargo/config.toml` points libduckdb-sys at the brew prefix.
-# PROJ provides `projinfo`, which generates the CRS definitions `crs-definitions` writes,
-# and `jq` formats them.
+# Tools the build needs: DuckDB for the multi-engine test, PROJ and jq for `crs-definitions`.
 prerequisites:
     cargo install rerun-cli --locked
     brew install duckdb proj jq
 
-# Regenerate the PROJJSON CRS definitions the medallion crate embeds, from PROJ's own
-# database. GeoParquet requires the CRS as PROJJSON and nothing in the dependency tree
-# emits it, so the definitions are generated here and committed. Not part of the build:
-# run it when a definition needs adding or refreshing, and commit the result.
+# Regenerate the PROJJSON CRS definitions medallion embeds and commits; nothing else emits them.
 crs-definitions:
     projinfo -o PROJJSON -q "OGC:CRS84" | jq . > crates/medallion/src/crs84.projjson.json
     projinfo -o PROJJSON -q "EPSG:25832" | jq . > crates/medallion/src/etrs89_utm32n.projjson.json
 
-# Run the server locally on http://localhost:3000 (override with PORT).
-# Log-only: LOOKOUT_REDIS_URL is unset, so received samples are logged, not queued.
+# Serve on http://localhost:3000 (override with PORT). No redis, so samples are logged, not queued.
 serve:
     BUILD_GIT_HASH={{git_hash}} cargo run -p server
 
-# Run the server locally with the upstash redis URL resolved from 1Password, so
-# received samples are LPUSHed onto the lookout-telemetry queue.
+# As `serve`, with the redis URL from 1Password, so samples are queued.
 serve-redis:
     BUILD_GIT_HASH={{git_hash}} op run --env-file=deploy/lookout.env -- cargo run -p server
 
@@ -34,139 +26,109 @@ serve-redis:
 build:
     cargo build --release -p server
 
-# Run all tests: the Rust workspace (incl _docker tests — requires Docker) and the
-# Python ones.
+# Every test: the Rust workspace, Docker ones included, and the Python ones.
 test: test-python
     cargo nextest run --workspace
 
-# Run tests without Docker: the no-docker profile skips _docker-named tests. Still
-# runs the Python tests (they need no Docker).
+# Every test but the Docker ones. The sandbox-safe run.
 test-no-docker: test-python
     cargo nextest run --workspace --profile no-docker
 
-# Run the Python tests: the store's python writer driven from pyarrow and DuckDB, the
-# predictor the rerun runner replays through (uv builds each extension module with maturin;
-# nothing to install first), and the modules the water-crossings notebooks import.
-# The rebuild is forced because uv caches the built wheel against the extension crate's own
-# sources — a change to the rust crates it wraps would otherwise be tested as the last build.
+# The Python tests. `--reinstall-package` defeats uv's wheel cache, which misses rust changes.
 test-python:
     uv run --directory crates/medallion-py --reinstall-package lookout-medallion pytest -q
     uv run --directory crates/platform/rerun-py --reinstall-package lookout-predictor pytest -q
     uv run --directory notebooks/water_crossings pytest -q
 
-# Run the end_to_end tests against real services (release mode), with real
-# credentials injected from 1Password. Hits the real upstash redis.
+# Tests against real services, in release, with credentials from 1Password. Hits the real redis.
 end_to_end_test:
     op run --env-file=deploy/lookout.env -- cargo nextest run --release --workspace --profile end-to-end
 
-# Deploy the server to fly.io (lookout.fly.dev), using ./fly.toml + ./Dockerfile.
-# Bakes the git hash into the build so /version and startup logs identify the deploy.
+# Deploy the server to fly.io (lookout.fly.dev), with the git hash baked in.
 deploy:
     fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}"
+
+# Set up a fresh worktree's store from what the checkout carries. Gold waits until needed.
+init: bronze-init silver-init
+
+# Fill in the bronze a checkout leaves out: the Overture extract. No live source is touched.
+bronze-init *args:
+    just bronze-extract {{args}}
 
 # Report what the store holds, layer by layer.
 summarise *args:
     cargo run -q -p summary --bin summarise -- {{args}}
 
-# Bring bronze up to date: drain the telemetry queue, then take a fresh Overture extract. `bronze-poll-motis` is deliberately not here — it runs until stopped. Args reach both.
-bronze *args:
-    just bronze-record drain {{args}}
-    just bronze-extract new {{args}}
-
-# Read the upstash telemetry queue into the bronze telemetry datasets, with the redis URL from 1Password.
+# Read the telemetry queue into bronze, with the redis URL from 1Password.
 bronze-record *args:
     op run --env-file=deploy/lookout.env -- cargo run -p recorder --bin recorder -- {{args}}
 
-# Poll Motis for train trips near recently logged GPS and log them to bronze, with the redis URL from 1Password.
+# Poll Motis for trips near recent GPS into bronze, redis URL from 1Password. Runs until stopped.
 bronze-poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 
-# Fill in or take an Overture extract in bronze. No args backfills the newest recorded
-# extract; `new` takes a fresh one. Reads the public Overture S3 anonymously.
+# Take an Overture extract into bronze. No args backfills the recorded one; `new` takes a fresh one.
 bronze-extract *args:
     cargo run --release -p transport --bin extract -- {{args}}
 
-# Re-derive every silver dataset from bronze, in dependency order. Safe to re-run, and the
-# way to bring a copy of the store up to date. Needs `just bronze-extract` to have been run.
-silver *args:
+# Re-derive every silver dataset from bronze, in order. Safe to re-run; needs `bronze-init` first.
+silver-init *args:
     just silver-sessionise {{args}}
     just silver-motis-ingest {{args}}
     just silver-crossings {{args}}
 
-# Derive the silver `train_segment` dataset from the bronze motis capture log.
+# Derive silver `train_segment` from the bronze motis capture log.
 silver-motis-ingest *args:
     cargo run -p motis --bin motis_ingest -- {{args}}
 
-# Derive the silver `session` and `session_sample` datasets from the bronze telemetry.
+# Derive silver `session` and `session_sample` from the bronze telemetry.
 silver-sessionise *args:
     cargo run --release -p recorder --bin sessionise -- {{args}}
 
-# Derive both crossing datasets: the water crossings from the Overture extract, then the
-# ones each recorded session passed. The first is the slow half, and only changes when the
-# extract does, so run `silver-session-crossings` alone after a drain. Args reach the session
-# half only; see `silver-water-crossings` for why.
+# Derive both crossing datasets. The water half is the slow one; args reach the session half only.
 silver-crossings *args:
     just silver-water-crossings
     just silver-session-crossings {{args}}
 
-# Derive the silver `water_crossing` dataset by running the crossings notebook headlessly:
-# every place a stretch of track meets a body of water, collapsed to one crossing per place.
-# Reads the extract the notebook pins and writes one partition per country.
-# **Writes into the repo store whichever store other recipes are pointed at**: the notebook
-# resolves the store by walking up for the workspace, and a marimo script takes no arguments
-# of ours. Pass a different store by editing the notebook, or run the notebook interactively.
-# The extension module is reinstalled because uv caches the built wheel against its own
-# sources and would not otherwise notice a change to the rust crates it wraps.
+# Derive silver `water_crossing` from the crossings notebook. **Always writes the repo store.**
 silver-water-crossings:
     uv run --no-project --reinstall-package lookout-medallion notebooks/water_crossings/v9.py
 
-# Derive the silver `session_crossing` dataset: the crossings each recorded session passed.
+# Derive silver `session_crossing`: the crossings each recorded session passed.
 silver-session-crossings *args:
     cargo run --release -p session_crossings --bin match_crossings -- {{args}}
 
-# Pack the silver water crossings into the flat point buffer the M5 device scans, written to
-# the store's own gold layer. See crates/crossings/README.md for the file's layout.
+# Pack the silver water crossings into the flat buffer the device scans, into gold.
 gold-pack-crossings *args:
     cargo run -p crossings --bin pack_crossings -- {{args}}
 
-# Regenerate the crossings the device carries in flash. Same arguments as gold-pack-crossings.
+# Regenerate the crossings the device carries in flash. Same arguments as `gold-pack-crossings`.
 carried-crossings *args:
     cargo run -p crossings --bin pack_crossings -- \
         --output crates/platform-core/src/water-crossings.pointset {{args}}
 
-# The M5StickC PLUS2 shell, in `crates/platform/m5plus`. Recipes are named for the platform
-# rather than for "the device", since a second one would need its own: each shell has its own
-# workspace, its own toolchain and its own target dir, so every recipe below runs cargo in that
-# directory rather than this one.
-#
-# espup writes `~/export-esp.sh` to put the Xtensa clang on LIBCLANG_PATH. Resolving it here
-# means the recipes work in a shell that has not sourced it: without it, `esp-idf-sys`'s
-# bindgen step fails with `unknown target triple 'xtensa'`, around ten minutes into a build.
+# The M5StickC PLUS2 shell has its own workspace, toolchain, and target dir, so the recipes below
+# run cargo in it. LIBCLANG_PATH stands in for espup's `~/export-esp.sh`, unsourced.
 export LIBCLANG_PATH := `ls -d "$HOME"/.rustup/toolchains/esp/xtensa-esp32-elf-clang/*/esp-clang/lib 2>/dev/null | tail -1`
 
 m5plus_dir := "crates/platform/m5plus"
 
-# Build the M5StickC PLUS2 shell. The first run installs ESP-IDF and its toolchains under
-# `crates/platform/m5plus/.embuild`, which takes several gigabytes and the best part of an hour.
-# **A build that dies with a SIGSEGV inside LLVM's Xtensa backend is the compiler, not the
-# source** — run it again.
+# Build the shell. First run installs ESP-IDF, for hours. A SIGSEGV in LLVM's backend: retry.
 m5plus-build:
     cd {{m5plus_dir}} && cargo build
 
-# The same, in release. Worth having: the dev profile carries `debug-assertions` and
-# `overflow-checks`, which put a branch on every arithmetic operation in the crossing scan, and
-# builds at `opt-level = "z"` rather than "s". Release is 1.7x faster over the same scan.
+# The same, in release: 1.7x faster over the crossing scan.
 m5plus-build-release:
     cd {{m5plus_dir}} && cargo build --release
 
-# Flash the M5StickC PLUS2 and tail its serial console. Ctrl-C to leave the monitor.
+# Flash the device and tail its console. Ctrl-C leaves the monitor.
 m5plus-flash: m5plus-build
     cd {{m5plus_dir}} && espflash flash --monitor target/xtensa-esp32-espidf/debug/m5plus
 
 m5plus-flash-release: m5plus-build-release
     cd {{m5plus_dir}} && espflash flash --monitor target/xtensa-esp32-espidf/release/m5plus
 
-# Tail the serial console of whatever is already flashed on the M5StickC PLUS2.
+# Tail the console of whatever is already flashed.
 m5plus-monitor:
     cd {{m5plus_dir}} && espflash monitor
 
@@ -174,12 +136,10 @@ m5plus-monitor:
 sessions *args:
     uv run --directory crates/platform/rerun-py python -m runner.main sessions {{args}}
 
-# Replay a recorded session through the predictor, drawing it in a rerun viewer that is
-# already running — start one with `rerun`.
+# Replay a session through the predictor, into a rerun viewer already running — start one with `rerun`.
 replay session *args:
     uv run --directory crates/platform/rerun-py python -m runner.main replay {{session}} {{args}}
 
-
-# Push the upstash redis URL secret to fly from 1Password.
+# Push the redis URL to fly from 1Password.
 push-secrets:
     fly secrets set LOOKOUT_REDIS_URL="$(op read 'op://Dev/lookout-upstash-redis-url/password')"
