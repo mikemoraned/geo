@@ -293,3 +293,38 @@ documentation state what is true now rather than how it came to be. No new crate
 - **Checking the docs against the code caught two errors**: the crossings README claimed the
   packed point set lives in RAM when it is `static` in rodata, and the UK slice still planned
   country partitioning that the medallion refactor had already landed.
+
+## Crow-flies predictor on the M5 device and in rerun
+
+Turned the M5 spikes into production code and gave the predictor a replay view. New crates:
+`predictor` (the normalised sample, an NMEA parser, and the crow-flies state machine),
+`platform-core` (the Crux core and its panel view model), `platform/m5plus` (the device shell,
+in its own workspace), and `platform/rerun-py` (a pyo3 extension and the python runner).
+`visualise/` and `spikes/m5/` are gone.
+
+- **The core consumes a normalised sample, not GNSS strings** — timestamp, position, and
+  optional speed, heading, and quality — so the device parses NMEA while the runner reads
+  silver columns straight through. A position is a `geo_types::Point`; the spikes' own
+  coordinate newtypes were ours to maintain for nothing.
+- **Everything that measures is generic over its float.** The ESP32 emulates `f64` in
+  software, which a per-fix scan of thousands of crossings cannot afford, while off the device
+  `f64` is free and is what the store holds. `f32` resolves latitude to 0.42 m, near 1% error
+  at train speed.
+- **The state machine knows nothing of crux**, taking a sample or a clock advance and
+  answering distances and arrival instants. An event dated before the clock is refused rather
+  than absorbed. Unknown speed falls back to the step from the previous fix; zero speed gives a
+  distance and no time.
+- **Crux stays pinned to `=0.16.2`.** 0.20 double-faults on the first event with no radio on
+  the board at all, refuting the earlier belief that BLE was the precondition. Only hardware
+  could settle it.
+- **The device shell was written fresh from the esp-idf template**, from the board facts in
+  `device.md` rather than the spikes' accreted shape, and confirmed on a live fix. The M5
+  helper crates pin ESP-IDF below what this board runs, so they were declined. ESP-IDF now
+  installs globally, one copy per machine instead of 4.3 GB per worktree.
+- **Crux has no python shell, so we wrote the binding**: pyo3 over the state machine directly,
+  with the core left on the device. The runner reads sessions through `medallion-py`'s new
+  `query_silver` rather than opening DuckDB itself, and `medallion` grew bound parameters and
+  derives a query's datasets from its parsed table references.
+- **The runner replays a named session through the same state machine**, drawing the samples
+  and the predictions on four streams. Their names are constants, so the blueprint, the tests,
+  and the drawing all name the same thing.
