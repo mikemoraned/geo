@@ -12,12 +12,16 @@ with four pages:
   arriving now
 * `/` — a short description of the project, linking to the other three
 
-The app embeds the Crux app as a WASM widget that takes injected GPS, and draws a canvas:
+The app ships as a web component: a custom element owning the Crux core compiled to WASM,
+which takes injected GPS and draws a canvas:
 
 * a dot in the middle for where we are, its size proportional to our estimated speed
 * the predicted crossings as small dots, placed by a hyperbolic mapping that gives nearer
   distances more of the canvas. Nothing is drawn beyond a maximum distance, so a dot on the
   rim is a crossing at that maximum.
+
+A page then places the tag and feeds it: `/live` from the browser's geolocation, `/kiosk`
+from the replayed session.
 
 ### Implementation Choices
 
@@ -41,6 +45,25 @@ the shell. What that settles:
   the widget is a library those pages load. A `just` recipe builds it for local work and the
   Docker builder stage builds it for a deploy, which keeps generated files out of version
   control.
+- **A custom element is the shell.** It owns the wasm instance, the clock, and the canvas in a
+  shadow root, so a page adds the predictor by writing one tag. The core stays pure, and the
+  element is left with nothing but I/O — see
+  [2026-09-19-web-component-shell.md](2026-09-19-web-component-shell.md), which sketches this
+  against the device panel rather than the web view.
+- **The element owns the core; the page owns the source.** Positions arrive through a method
+  the element exposes, so `/live` and `/kiosk` differ in where they read them and in nothing
+  else, and a replay is as easy to drive as a fix.
+- **The bridge is crux's, over Bincode.** `process_event` and `view` go out through
+  `wasm-bindgen`, and typegen emits the TypeScript for the events and the ViewModel. A
+  position and an instant are not primitives, so both need registering there. The crate
+  holding the bridge needs a name other than `shared`, which already holds the telemetry wire
+  models.
+- **Repaint on `Render`, not on dispatch.** The core answers an event that moved nothing with
+  no request at all, which is what stops a replay at speed from redrawing the canvas per
+  sample. The shell honours the empty answer.
+- **One wasm instance per page.** `init()` is hoisted to module scope so several elements share
+  a load, and the first paint waits on that promise, since the browser cannot await
+  `connectedCallback`.
 - **The kiosk replays an exported session.** The fly deploy has no store, so a recipe exports a
   recorded session to a file served with the site, and the page replays it in the browser.
 - **`crux_core` stays pinned at `=0.16.2`.** 0.20 reboots the board (see `docs/device.md`), so
@@ -56,10 +79,15 @@ the shell. What that settles:
 - [ ] Project a web ViewModel: current position, speed, and each prediction's lat/lon,
       distance, and arrival.
 - [ ] Let the point set reader borrow owned bytes, so the core can scan a fetched set.
-- [ ] Add a web shell crate, built to wasm by a `just` recipe and by the Docker builder stage.
+- [ ] Add a bridge crate exposing the core to `wasm-bindgen`, with typegen for the events and
+      the ViewModel, built by a `just` recipe and by the Docker builder stage.
 - [ ] Serve the packed crossings as a static asset.
+- [ ] Define the custom element: it loads the wasm, runs the tick, takes positions, and
+      repaints on `Render`.
 - [ ] Draw the canvas with D3: the centre dot sized by speed, the predictions placed by a
       hyperbolic mapping, and the radius standing for the maximum distance.
 - [ ] Move the recording page to `/record`, and make `/` a summary linking to the three pages.
 - [ ] Add `/live`, feeding browser geolocation into the widget.
 - [ ] Add a recipe exporting a recorded session, and `/kiosk` replaying it.
+- [ ] Fold what holds from `docs/2026-09-19-web-component-shell.md` into the code and its docs,
+      and delete the note. Its shape is the slice; its plumbing moves with the typegen build.
