@@ -304,27 +304,27 @@ in its own workspace), and `platform/rerun-py` (a pyo3 extension and the python 
 
 - **The core consumes a normalised sample, not GNSS strings** — timestamp, position, and
   optional speed, heading, and quality — so the device parses NMEA while the runner reads
-  silver columns straight through. A position is a `geo_types::Point`; the spikes' own
-  coordinate newtypes were ours to maintain for nothing.
-- **Everything that measures is generic over its float.** The ESP32 emulates `f64` in
-  software, which a per-fix scan of thousands of crossings cannot afford, while off the device
-  `f64` is free and is what the store holds. `f32` resolves latitude to 0.42 m, near 1% error
-  at train speed.
-- **The state machine knows nothing of crux**, taking a sample or a clock advance and
-  answering distances and arrival instants. An event dated before the clock is refused rather
-  than absorbed. Unknown speed falls back to the step from the previous fix; zero speed gives a
-  distance and no time.
-- **Crux stays pinned to `=0.16.2`.** 0.20 double-faults on the first event with no radio on
-  the board at all, refuting the earlier belief that BLE was the precondition. Only hardware
+  silver columns straight through. A position is a `geo_types::Point`: georust already has the
+  type, and the spikes' own coordinate newtypes bought nothing.
+- **Everything that measures is generic over its float.** The ESP32 emulates `f64` in software,
+  which a per-fix scan of thousands of crossings cannot afford. Off the device `f64` costs
+  nothing and is what the store holds. `f32` resolves latitude to 0.42 m, so a speed derived from
+  two fixes carries that error in each — near 1% for a train covering 30 m a second.
+- **The state machine knows nothing of crux.** It takes a sample or a clock advance, and
+  answers the distance to each crossing ahead and the instant we reach it. It refuses an event
+  dated before the clock rather than absorbing it. Unknown speed falls back to the step from
+  the previous fix; zero speed gives a distance and no time.
+- **Crux stays pinned to `=0.16.2`.** 0.20 double-faults on the first event with no radio on the
+  board at all, which refutes the earlier belief that BLE was the precondition. Only hardware
   could settle it.
-- **The device shell was written fresh from the esp-idf template**, from the board facts in
-  `device.md` rather than the spikes' accreted shape, and confirmed on a live fix. The M5
-  helper crates pin ESP-IDF below what this board runs, so they were declined. ESP-IDF now
-  installs globally, one copy per machine instead of 4.3 GB per worktree.
+- **The device shell starts fresh from the esp-idf template**, built from the board facts in
+  `device.md` rather than the spikes' accreted shape, and confirmed on a live fix. The M5 helper
+  crates pin ESP-IDF below what this board runs, so we declined them. ESP-IDF now installs
+  globally, one copy per machine instead of 4.3 GB per worktree.
 - **Crux has no python shell, so we wrote the binding**: pyo3 over the state machine directly,
-  with the core left on the device. The runner reads sessions through `medallion-py`'s new
-  `query_silver` rather than opening DuckDB itself, and `medallion` grew bound parameters and
-  derives a query's datasets from its parsed table references.
-- **The runner replays a named session through the same state machine**, drawing the samples
-  and the predictions on four streams. Their names are constants, so the blueprint, the tests,
-  and the drawing all name the same thing.
+  leaving the core on the device. The runner reads sessions through `medallion-py`'s new
+  `query_silver` rather than opening DuckDB itself, and `medallion` gained bound parameters and
+  now derives a query's datasets from its parsed table references.
+- **The runner replays a named session through the same state machine**, drawing the samples and
+  the predictions on four streams. Their names are constants, so the blueprint, the tests, and
+  the drawing all name the same thing.
