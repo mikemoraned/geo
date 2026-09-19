@@ -73,21 +73,38 @@ the shell. What that settles:
 
 ### Tasks
 
+Three phases, so an integration failure shows early. The first carries a throwaway counter
+core the whole way — through the bridge and the element to the deployed site — because every
+part of that path is new here. The second puts the predictor behind it. The third adds the
+remaining pages.
+
+#### Phase 1 — the whole path, over a counter core
+
+- [ ] Add a counter core: a `Tick` in, a count out as text. Phase 2 throws it away and keeps
+      the bridge and the element it proved.
+- [ ] Add a bridge crate exposing that core to `wasm-bindgen`, with typegen for its event and
+      ViewModel.
+- [ ] Build the wasm with a `just` recipe, into the server's static dir.
+- [ ] Define the custom element: it loads the wasm, runs the tick, and repaints on `Render`.
+- [ ] Serve it at `/live`, showing the count.
+- [ ] Build the wasm in the Docker builder stage, and deploy.
+
+#### Phase 2 — the predictor behind it
+
 - [ ] Split `platform-core` into a shared prediction core and a device-panel projection,
       leaving the device shell as it is.
 - [ ] Take a position as an event, alongside an NMEA sentence.
 - [ ] Project a web ViewModel: current position, speed, and each prediction's lat/lon,
       distance, and arrival.
 - [ ] Let the point set reader borrow owned bytes, so the core can scan a fetched set.
-- [ ] Add a bridge crate exposing the core to `wasm-bindgen`, with typegen for the events and
-      the ViewModel, built by a `just` recipe and by the Docker builder stage.
-- [ ] Serve the packed crossings as a static asset.
-- [ ] Define the custom element: it loads the wasm, runs the tick, takes positions, and
-      repaints on `Render`.
+- [ ] Serve the packed crossings as a static asset, and fetch them into the element.
+- [ ] Swap the counter core for the predictor, and feed `/live` from browser geolocation.
 - [ ] Draw the canvas with D3: the centre dot sized by speed, the predictions placed by a
       hyperbolic mapping, and the radius standing for the maximum distance.
-- [ ] Move the recording page to `/record`, and make `/` a summary linking to the three pages.
-- [ ] Add `/live`, feeding browser geolocation into the widget.
+
+#### Phase 3 — the rest of the site
+
 - [ ] Add a recipe exporting a recorded session, and `/kiosk` replaying it.
+- [ ] Move the recording page to `/record`, and make `/` a summary linking to the three pages.
 - [ ] Fold what holds from `docs/2026-09-19-web-component-shell.md` into the code and its docs,
       and delete the note. Its shape is the slice; its plumbing moves with the typegen build.
