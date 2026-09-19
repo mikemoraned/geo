@@ -1,5 +1,4 @@
-"""Drawing a replay into a rerun recording.
-"""
+"""Drawing a replay into a rerun recording."""
 
 from collections.abc import Iterable
 

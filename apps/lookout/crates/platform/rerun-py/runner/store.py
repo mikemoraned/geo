@@ -1,9 +1,9 @@
-"""Reading a session, and the crossings it might have passed.
+"""Reading a session's samples, and the crossings to scan them against.
 
-Queried through `lookout_medallion.query_silver`, which registers a dataset under its own name:
-which files hold it, and what CRS its geometry is in, are the store's to know rather than
-this reader's. So no path is spelled out here, and a crossing's position arrives as a pair of
-coordinates rather than as WKB to decode.
+Queried through `lookout_medallion.query_silver`, which registers a dataset under its own
+name: which files hold it, and what CRS its geometry is in, are the store's to know rather
+than this reader's. So no path is spelled out here, and a crossing's position arrives as a
+pair of coordinates rather than as WKB to decode.
 """
 
 from collections.abc import Iterator

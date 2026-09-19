@@ -47,7 +47,7 @@ Two properties of that graph matter more than the order:
 **Rust derives; Python reads.** Every derivation that writes the store is Rust, or is a
 notebook writing through the Rust implementation — there is one implementation of the silver
 format and no second one to keep in step. Python reads: the rerun runner replays a recorded
-session against the predictor, and notebooks explore the store.
+session through the predictor, and notebooks explore the store.
 
 The one exception proves the rule. The water crossings derivation stays a marimo notebook,
 because the work is spatial SQL and iteration on it is visual, but its write goes through
@@ -55,8 +55,8 @@ the `lookout_medallion` extension module rather than through a python parquet wr
 
 ## Consumers
 
-The rerun runner replays a session's samples through the predictor and draws where it went
-against the crossings it expected to reach; see
+The rerun runner replays a session's samples through the predictor, and draws where the
+session went against the crossings the predictor expected it to reach; see
 [`crates/platform/rerun-py`](../crates/platform/rerun-py/README.md). The M5 device holds the
 gold point buffer in flash and scans it against each GPS fix; see [device.md](device.md).
 

@@ -1,8 +1,8 @@
 """A store to read, and a stand-in for the recording a replay draws into.
 
-Written rather than laid out by hand, so what these tests read back is a real dataset: the
-columns `crates/model` declares, the partitions the store chose, and geometry with the CRS
-the file states. A schema change lands here as a write that is refused, which is the point.
+The store is written rather than laid out by hand, so what a test reads back is a real
+dataset: the columns `crates/model` declares, the partitions the store chose, and geometry
+with the CRS the file states. A schema change then lands here as a write the store refuses.
 """
 
 import datetime

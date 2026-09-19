@@ -132,8 +132,8 @@ multi-constellation (`$GN*` sentences with per-system `GSV`). Cold start is arou
 seconds and needs sky view, so iteration on anything that consumes its output has to be
 possible without it.
 
-- **The Grove port is G32/G33, and never UART0** — that one is the USB console, so opening
-  it takes the console with it.
+- **Never UART0.** It is the USB console, so opening it for the receiver takes the console
+  with it.
 - **The Stick's RX is G33.** Community sources say G32 and are wrong. Choosing wrong is
   indistinguishable from a dead peripheral. The two pins are electrically independent, so
   listening on both at once and keeping whichever carries NMEA costs nothing.
