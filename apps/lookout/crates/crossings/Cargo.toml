@@ -9,8 +9,6 @@ clap = { workspace = true }
 geo-types = { workspace = true }
 medallion = { workspace = true }
 model = { workspace = true }
-rand = { workspace = true }
-rand_chacha = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

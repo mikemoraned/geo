@@ -293,8 +293,14 @@ run on the board — and it crosses: `predictor` and `platform-core` both build 
 
 ### 6. Delete what is replaced
 
-- [ ] Delete `visualise/` and its `just visualise` recipe. The bronze GPS and accelerometer
+- [x] Delete `visualise/` and its `just visualise` recipe. The bronze GPS and accelerometer
       views and the moving `train_segment` dots go with it. The rerun runner draws the
-      predictor and nothing else.
-- [ ] Delete `spikes/m5/`, after checking [device.md](device.md) carries every board fact
-      worth keeping.
+      predictor and nothing else. `docs/architecture.md` named it twice and now names the
+      runner. **`just test-python` runs in the sandbox again**: the suite that could not
+      complete there was `visualise`'s, which needed a DuckDB extension the sandbox refuses to
+      install.
+- [x] Delete `spikes/m5/`, after checking [device.md](device.md) carries every board fact
+      worth keeping. One was missing and is now recorded: the Grove port is G32/G33 and never
+      UART0, which is the USB console. The `just random-crossings` recipe went with them,
+      since it wrote its point set into spike 5; `just carried-crossings` is the one that
+      feeds the device.

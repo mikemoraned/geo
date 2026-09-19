@@ -6,7 +6,6 @@
 
 pub mod bbox;
 pub mod pointset;
-pub mod random;
 pub mod silver;
 
 pub use bbox::{Bbox, BboxError};
