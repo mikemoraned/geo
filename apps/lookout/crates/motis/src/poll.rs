@@ -147,7 +147,7 @@ async fn resolve_details(
 fn sample_gps(raw: &RawSample) -> Option<(i64, f64, f64)> {
     match raw.parse().ok()? {
         Message::Version0(V0Message::Gps(r)) | Message::Version1(V1Message::Gps(r)) => {
-            Some((r.t, r.gps.lat, r.gps.lon))
+            Some((r.t, r.gps.latitude, r.gps.longitude))
         }
         _ => None,
     }

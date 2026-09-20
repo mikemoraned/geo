@@ -15,7 +15,7 @@
 use chrono::{DateTime, Utc};
 use geo::{Distance, Euclidean};
 use geo_types::{Point, Rect};
-use model::{CrossingId, DeviceId, SessionCrossingRow, SessionId};
+use medallion_model::{CrossingId, DeviceId, SessionCrossingRow, SessionId};
 
 /// How near a sample has to come to a crossing for the crossing to count as passed.
 ///

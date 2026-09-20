@@ -12,12 +12,13 @@ use medallion::{
     COUNTRY, Countries, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Query, Root, geo_batch,
     projected_wkb_field, wkb_field,
 };
-use model::{CrossingId, OverlapKind, WaterCrossingRow};
+use medallion_model::{CrossingId, OverlapKind, WaterCrossingRow};
+use model::Gps;
 use recorder::bronze::{Archive, Payload};
 use recorder::sessions::{Gap, Lead, sessions};
 use recorder::silver;
 use serde::Deserialize;
-use shared::{Gps, GpsReading, Message, V1Message};
+use shared::{GpsReading, Message, V1Message};
 use uuid::Uuid;
 
 use session_crossings::matching::Radius;
@@ -60,12 +61,12 @@ fn gps(id: Uuid, t: DateTime<Utc>, lon: f64) -> Message {
         id,
         t: t.timestamp_millis(),
         gps: Gps {
-            lat: LAT,
-            lon,
-            alt: Some(38.0),
-            acc: 5.0,
-            speed: Some(27.0),
-            heading: Some(91.0),
+            latitude: LAT,
+            longitude: lon,
+            altitude_metres: Some(38.0),
+            accuracy_metres: 5.0,
+            speed_mps: Some(27.0),
+            heading_degrees: Some(91.0),
         },
     }))
 }
@@ -168,7 +169,7 @@ async fn store_with_crossings(root: &Root, at_metres: &[f64]) {
 async fn passes_in(root: &Root) -> Vec<Pass> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(model::SESSION_CROSSING, "session_crossing")
+        .register_if_present(medallion_model::SESSION_CROSSING, "session_crossing")
         .await
         .expect("register")
     {

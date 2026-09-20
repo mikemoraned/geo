@@ -27,7 +27,7 @@ use arrow::array::{Array, Float64Array};
 use chrono::{DateTime, Utc};
 use geo_types::{Coord, Rect};
 use medallion::{Country, PartitionValue, Query, Root};
-use model::ExtractManifestRow;
+use medallion_model::ExtractManifestRow;
 
 use crate::overture::{Overture, OvertureError, OvertureType};
 
@@ -81,7 +81,9 @@ impl Display for ExtractId {
 /// The extractions a store has recorded, newest first.
 pub async fn recorded(root: &Root) -> Result<Vec<ExtractManifestRow>, ExtractError> {
     let query = Query::new(root.clone());
-    query.register_by_name(model::EXTRACT_MANIFEST).await?;
+    query
+        .register_by_name(medallion_model::EXTRACT_MANIFEST)
+        .await?;
     Ok(query.rows(RECORDED).await?)
 }
 
@@ -220,7 +222,7 @@ impl<'a> Extractor<'a> {
         }
         if self
             .root
-            .dataset(model::OVERTURE_EXTRACT)
+            .dataset(medallion_model::OVERTURE_EXTRACT)
             .for_id(&id)?
             .holds_files()
         {
@@ -310,7 +312,7 @@ impl<'a> Extractor<'a> {
             .await?;
         Ok(self
             .root
-            .dataset(model::OVERTURE_EXTRACT)
+            .dataset(medallion_model::OVERTURE_EXTRACT)
             .for_id(id)?
             .partition("theme", overture_type.theme)?
             .partition("type", overture_type.name)?
@@ -536,7 +538,7 @@ mod tests {
         let recorded = manifest_row("20260727T193628Z", 19, "2026-06-17.0");
         let (_tmp, root) = store_recording(std::slice::from_ref(&recorded)).await;
         let extract = root
-            .dataset(model::OVERTURE_EXTRACT)
+            .dataset(medallion_model::OVERTURE_EXTRACT)
             .for_id(&recorded.extract_id)
             .unwrap()
             .partition("theme", "base")

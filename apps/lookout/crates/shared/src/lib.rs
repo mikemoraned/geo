@@ -11,5 +11,5 @@ pub mod sensor;
 pub mod session;
 
 pub use message::{AccelReading, GpsReading, Message, SessionStart, V0Message, V1Message};
-pub use sensor::{Accel, Gps};
+pub use sensor::Accel;
 pub use session::{DeviceInfo, DeviceType};

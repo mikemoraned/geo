@@ -12,7 +12,7 @@ use medallion::{
     COUNTRY, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Root, geo_batch,
     projected_wkb_field, wkb_field,
 };
-use model::{CrossingId, OverlapKind, WaterCrossingRow};
+use medallion_model::{CrossingId, OverlapKind, WaterCrossingRow};
 
 /// The four-byte name the store gives the nth crossing of a test store. Distinct per crossing,
 /// which is all the dataset promises and all the packer relies on; how the real derivation
@@ -78,7 +78,7 @@ async fn store_with_crossings(root: &Root, country: &str, positions: &[(f64, f64
     )
     .expect("build the batch");
 
-    root.dataset(model::WATER_CROSSING)
+    root.dataset(medallion_model::WATER_CROSSING)
         .partition(COUNTRY, country)
         .expect("partition")
         .replace_with_geo(&[batch])

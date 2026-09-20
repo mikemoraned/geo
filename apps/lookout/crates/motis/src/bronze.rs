@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use medallion::Root;
-use model::MotisSegmentRow;
+use medallion_model::MotisSegmentRow;
 use motis_openapi_progenitor::types::TripSegment;
 
 use crate::client::TripDetails;

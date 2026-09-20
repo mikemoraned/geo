@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use medallion::{Country, MedallionArgs, Root};
-use model::ExtractManifestRow;
+use medallion_model::ExtractManifestRow;
 use transport::{
     extract::{self, ExtractId, Extraction, Extractor},
     overture::{DEFAULT_RELEASE, Overture, Release},

@@ -16,7 +16,7 @@
 
 use chrono::{DateTime, Utc};
 use medallion::{Dataset, DatasetSpec, Root, Row};
-use model::{AccelReadingRow, DeviceSessionRow, GpsReadingRow, RawSampleRow};
+use medallion_model::{AccelReadingRow, DeviceSessionRow, GpsReadingRow, RawSampleRow};
 use shared::{AccelReading, GpsReading, Message, SessionStart, V0Message, V1Message};
 use telemetry::RawSample;
 
@@ -194,12 +194,12 @@ fn gps_row(reading: &GpsReading) -> GpsReadingRow {
     GpsReadingRow {
         device_id: reading.id.into(),
         t: reading.t,
-        lat: reading.gps.lat,
-        lon: reading.gps.lon,
-        alt: reading.gps.alt,
-        acc: reading.gps.acc,
-        speed: reading.gps.speed,
-        heading: reading.gps.heading,
+        lat: reading.gps.latitude,
+        lon: reading.gps.longitude,
+        alt: reading.gps.altitude_metres,
+        acc: reading.gps.accuracy_metres,
+        speed: reading.gps.speed_mps,
+        heading: reading.gps.heading_degrees,
     }
 }
 
@@ -232,7 +232,8 @@ fn device_session_row(start: &SessionStart) -> DeviceSessionRow {
 mod tests {
     use chrono::TimeZone;
     use medallion::Query;
-    use shared::{Accel, AccelReading, DeviceInfo, DeviceType, Gps, GpsReading, SessionStart};
+    use model::Gps;
+    use shared::{Accel, AccelReading, DeviceInfo, DeviceType, GpsReading, SessionStart};
     use uuid::Uuid;
 
     use super::*;
@@ -259,12 +260,12 @@ mod tests {
             id: Uuid::from_u128(1),
             t,
             gps: Gps {
-                lat,
-                lon: -3.19,
-                alt: Some(80.0),
-                acc: 5.0,
-                speed: Some(31.4),
-                heading: Some(275.0),
+                latitude: lat,
+                longitude: -3.19,
+                altitude_metres: Some(80.0),
+                accuracy_metres: 5.0,
+                speed_mps: Some(31.4),
+                heading_degrees: Some(275.0),
             },
         }))
     }
@@ -337,10 +338,10 @@ mod tests {
                 unparseable: 0
             }
         );
-        assert_eq!(rows_in(&root, model::RAW_SAMPLE).await, 4);
-        assert_eq!(rows_in(&root, model::GPS_READING).await, 2);
-        assert_eq!(rows_in(&root, model::ACCEL_READING).await, 1);
-        assert_eq!(rows_in(&root, model::DEVICE_SESSION).await, 1);
+        assert_eq!(rows_in(&root, medallion_model::RAW_SAMPLE).await, 4);
+        assert_eq!(rows_in(&root, medallion_model::GPS_READING).await, 2);
+        assert_eq!(rows_in(&root, medallion_model::ACCEL_READING).await, 1);
+        assert_eq!(rows_in(&root, medallion_model::DEVICE_SESSION).await, 1);
     }
 
     #[tokio::test]
@@ -357,7 +358,7 @@ mod tests {
             .expect("write");
 
         let path = archive
-            .ingestion_file(model::GPS_READING, ingested_at())
+            .ingestion_file(medallion_model::GPS_READING, ingested_at())
             .expect("path");
         assert!(
             path.ends_with(
@@ -387,7 +388,7 @@ mod tests {
 
         assert_eq!(written.raw, 1);
         assert_eq!(written.unparseable, 1);
-        assert_eq!(rows_in(&root, model::RAW_SAMPLE).await, 1);
+        assert_eq!(rows_in(&root, medallion_model::RAW_SAMPLE).await, 1);
     }
 
     /// A payload whose receipt was never timed is archived with that unknown, rather than
@@ -411,7 +412,7 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(model::RAW_SAMPLE, "d")
+            .register(medallion_model::RAW_SAMPLE, "d")
             .await
             .expect("register");
         assert_eq!(
@@ -440,7 +441,7 @@ mod tests {
 
         assert!(
             !archive
-                .ingestion_file(model::ACCEL_READING, ingested_at())
+                .ingestion_file(medallion_model::ACCEL_READING, ingested_at())
                 .expect("path")
                 .exists()
         );
@@ -469,7 +470,7 @@ mod tests {
             .await
             .expect("second batch");
 
-        assert_eq!(rows_in(&root, model::GPS_READING).await, 2);
+        assert_eq!(rows_in(&root, medallion_model::GPS_READING).await, 2);
     }
 
     /// Several ingestions sum, so a run made of batches reports its total.
@@ -514,7 +515,7 @@ mod tests {
         assert_eq!(written, Written::default());
         assert!(
             !archive
-                .ingestion_file(model::RAW_SAMPLE, ingested_at())
+                .ingestion_file(medallion_model::RAW_SAMPLE, ingested_at())
                 .expect("path")
                 .exists()
         );

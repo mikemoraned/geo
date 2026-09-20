@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let root = args.medallion.root()?;
 
-    let datasets = model::ALL
+    let datasets = medallion_model::ALL
         .into_iter()
         .map(|dataset| medallion::summary::dataset(&root, dataset))
         .collect::<Result<Vec<_>, _>>()?;

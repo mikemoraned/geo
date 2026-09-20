@@ -44,6 +44,15 @@ the shell. What that settles:
   crossings come from, and how to project what it shows from the model. `Lookout<S>` is then
   one `App` over one `Event` and one `Model`, with `view` delegating to `S`. The state cannot
   fork, because there is only one of it.
+- **One fix shape, in a cross-platform `model`.** A browser's fix already has a type:
+  `shared::sensor::Gps`, which `/record` sends and the store keeps. A core taking it reads a
+  live browser and a replayed session without translating between two spellings of one thing.
+  It moves to a `model` crate holding what a device and the store both use, and `shared` keeps
+  the versioned envelope around it. Today's `model` is the store's schema: it depends on
+  `medallion`, and so on arrow, which neither Xtensa nor wasm can build. So it becomes
+  `medallion-model` and frees the name. `predictor::Sample` was the alternative and needs no
+  new type at all, but it names its coordinates `x` and `y`, and a shell that swaps them
+  reports a position off Somalia that nothing can catch.
 - **Positions in the web ViewModel.** A `Prediction` carries a `CrossingId`, a distance, and
   an arrival instant, but no position. The core already holds the point set, so it resolves
   ids to lat/lon as it projects the web view, leaving `Prediction` as it is.
@@ -112,6 +121,9 @@ remaining pages.
       leaving the device shell as it is. The shell's own code is unchanged bar its imports and
       one type parameter, but it moved to `crates/platform/m5/m5plus` and gained an `m5-core`
       dependency. Nothing here can build it: it needs `just m5plus-build-release`.
+- [x] Split `model` in two: `medallion-model` for the store's schema, and a `model` holding
+      what a device and the store share. Only the fix has moved, which is what this phase
+      needs; what else belongs on the far side of that line is phase 4's.
 - [ ] Take a position as an event, alongside an NMEA sentence.
 - [ ] Project a web ViewModel: current position, speed, and each prediction's lat/lon,
       distance, and arrival.
@@ -127,3 +139,22 @@ remaining pages.
 - [ ] Move the recording page to `/record`, and make `/` a summary linking to the three pages.
 - [ ] Fold what holds from `docs/2026-09-19-web-component-shell.md` into the code and its docs,
       and delete the note. Its shape is the slice; its plumbing moves with the typegen build.
+
+#### Phase 4 — store rules out of shared types
+
+Splitting the core by platform found store rules inside types that are not the store's. None of
+it is needed for the pages to work, so it comes last. Left undone, the next core written has to
+import arrow to name a crossing.
+
+- [ ] Decide what a `CrossingId` is, and keep one of them. There are two: a `String` in
+      `medallion-model`, whose constructor refuses anything that could not name a partition,
+      and a `u32` in `predictor`, which is what a device has room for. `WaterCrossingRow`
+      carries both, as `crossing_id` and `crossing_short_id`, so the store already treats them
+      as one thing named twice. The `String` one cannot move to `model` while it validates a
+      medallion rule. So: is an id a name for a crossing that also suits a partition, or a
+      partition value that also names a crossing? Answer that, then move it.
+- [ ] Find the same pattern elsewhere: a type everything needs, holding a constraint only the
+      store has. It hides until something that cannot build arrow — a device, a browser —
+      imports one. Such a type belongs in `model`, and the store's rule about it belongs in a
+      `medallion-model` type wrapping it. Read every public type in `medallion-model` against
+      that line, and move the ones that fall outside it.

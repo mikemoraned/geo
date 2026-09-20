@@ -31,7 +31,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use medallion::{Country, Query, QueryError, Root, ScalarValue, TableError, UnknownCountry};
-use model::TargetError;
+use medallion_model::TargetError;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3_arrow::PyTable;
@@ -72,7 +72,7 @@ fn write_silver(
     table: PyTable,
     root: Option<PathBuf>,
 ) -> PyResult<Written> {
-    let target = model::silver_target(dataset).map_err(target_error)?;
+    let target = medallion_model::silver_target(dataset).map_err(target_error)?;
     let root = root_or_default(root)?;
     let (batches, _) = table.into_inner();
 
@@ -132,7 +132,7 @@ fn query_silver(
     let targets = medallion::table_references(sql)
         .map_err(query_error)?
         .iter()
-        .map(|dataset| model::silver_target(dataset).map_err(target_error))
+        .map(|dataset| medallion_model::silver_target(dataset).map_err(target_error))
         .collect::<PyResult<Vec<_>>>()?;
     let root = root_or_default(root)?;
     let params = params

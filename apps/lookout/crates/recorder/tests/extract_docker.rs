@@ -9,9 +9,10 @@ use std::process::Command;
 use std::time::Duration;
 
 use medallion::{Query, Root};
+use model::Gps;
 use redis::aio::MultiplexedConnection;
 use serde::Deserialize;
-use shared::{Accel, AccelReading, Gps, GpsReading, Message, V1Message};
+use shared::{Accel, AccelReading, GpsReading, Message, V1Message};
 use telemetry::{QUEUE_KEY, RawSample};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
@@ -88,12 +89,12 @@ fn gps_sample(id: Uuid, t: i64, lat: f64) -> Message {
         id,
         t,
         gps: Gps {
-            lat,
-            lon: -3.19,
-            alt: Some(80.0),
-            acc: 5.0,
-            speed: Some(31.4),
-            heading: Some(275.0),
+            latitude: lat,
+            longitude: -3.19,
+            altitude_metres: Some(80.0),
+            accuracy_metres: 5.0,
+            speed_mps: Some(31.4),
+            heading_degrees: Some(275.0),
         },
     }))
 }
@@ -131,14 +132,22 @@ async fn extract_queue_to_store_docker() {
     // Query the store and assert it holds the lossless payloads plus the readings
     // interpreted from them.
     let query = Query::new(Root::new(dir.path()));
-    for dataset in [model::RAW_SAMPLE, model::GPS_READING, model::ACCEL_READING] {
+    for dataset in [
+        medallion_model::RAW_SAMPLE,
+        medallion_model::GPS_READING,
+        medallion_model::ACCEL_READING,
+    ] {
         query
             .register(dataset, dataset.name)
             .await
             .expect("register dataset");
     }
     let mut counts = Vec::new();
-    for dataset in [model::RAW_SAMPLE, model::ACCEL_READING, model::GPS_READING] {
+    for dataset in [
+        medallion_model::RAW_SAMPLE,
+        medallion_model::ACCEL_READING,
+        medallion_model::GPS_READING,
+    ] {
         counts.push(
             query
                 .count(&format!("SELECT COUNT(*) AS count FROM {}", dataset.name))
@@ -155,7 +164,7 @@ async fn extract_queue_to_store_docker() {
     let fixes: Vec<Fix> = query
         .rows(&format!(
             "SELECT lat FROM {} ORDER BY t",
-            model::GPS_READING.name
+            medallion_model::GPS_READING.name
         ))
         .await
         .expect("gps fixes");

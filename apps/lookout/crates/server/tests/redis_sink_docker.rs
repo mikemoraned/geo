@@ -10,9 +10,10 @@
 
 use std::time::Duration;
 
+use model::Gps;
 use redis::aio::MultiplexedConnection;
 use server::queue::{QUEUE_KEY, RedisSink, SampleSink};
-use shared::{Accel, AccelReading, Gps, GpsReading, Message, V1Message};
+use shared::{Accel, AccelReading, GpsReading, Message, V1Message};
 use telemetry::RawSample;
 use testcontainers::ContainerAsync;
 use testcontainers::runners::AsyncRunner;
@@ -81,12 +82,12 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
         id: Uuid::from_u128(2),
         t: 1_700_000_000_002,
         gps: Gps {
-            lat: 55.95,
-            lon: -3.19,
-            alt: None,
-            acc: 8.5,
-            speed: Some(31.4),
-            heading: Some(275.0),
+            latitude: 55.95,
+            longitude: -3.19,
+            altitude_metres: None,
+            accuracy_metres: 8.5,
+            speed_mps: Some(31.4),
+            heading_degrees: Some(275.0),
         },
     }));
 

@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use chrono::{DateTime, Utc};
 use geo_types::{Point, Rect};
 use medallion::{COUNTRY, Country, Query, Replaced, Root};
-use model::{Bbox, CrossingId, DeviceId, SessionCrossingRow, SessionId};
+use medallion_model::{Bbox, CrossingId, DeviceId, SessionCrossingRow, SessionId};
 use serde::Deserialize;
 
 use crate::matching::{Crossing, Radius, Sample, Session, passes};
@@ -79,9 +79,9 @@ struct StoredCrossing {
 pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, CrossingError> {
     let query = Query::new(root.clone());
     for (dataset, table) in [
-        (model::SESSION, "session"),
-        (model::SESSION_SAMPLE, "session_sample"),
-        (model::WATER_CROSSING, "water_crossing"),
+        (medallion_model::SESSION, "session"),
+        (medallion_model::SESSION_SAMPLE, "session_sample"),
+        (medallion_model::WATER_CROSSING, "water_crossing"),
     ] {
         if !query.register_if_present(dataset, table).await? {
             return Err(CrossingError::Missing {

@@ -8,9 +8,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
+use model::Gps;
 use server::queue::{PushError, SampleSink};
 use server::{AppState, build_app};
-use shared::{Accel, AccelReading, Gps, GpsReading, Message, V0Message, V1Message};
+use shared::{Accel, AccelReading, GpsReading, Message, V0Message, V1Message};
 use telemetry::RawSample;
 use tokio::net::TcpListener;
 use tokio::time::{Instant, sleep, timeout};
@@ -70,12 +71,12 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
         id: Uuid::from_u128(7),
         t: 1_700_000_000_007,
         gps: Gps {
-            lat: 55.95,
-            lon: -3.19,
-            alt: None,
-            acc: 8.5,
-            speed: None,
-            heading: None,
+            latitude: 55.95,
+            longitude: -3.19,
+            altitude_metres: None,
+            accuracy_metres: 8.5,
+            speed_mps: None,
+            heading_degrees: None,
         },
     }));
 

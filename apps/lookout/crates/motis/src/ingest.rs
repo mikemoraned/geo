@@ -9,7 +9,7 @@
 use chrono::{DateTime, Utc};
 use geo_types::{LineString, Point};
 use medallion::{Countries, GeoRow, Query, Root};
-use model::TrainSegmentRow;
+use medallion_model::TrainSegmentRow;
 use serde::{Deserialize, Serialize};
 
 /// Precision the Motis `map/trips` polylines are encoded at.
@@ -107,7 +107,7 @@ impl From<&Leg> for TrainSegmentRow {
 pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOutcome, IngestError> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(model::MOTIS_SEGMENT, CAPTURED)
+        .register_if_present(medallion_model::MOTIS_SEGMENT, CAPTURED)
         .await?
     {
         return Ok(IngestOutcome::default());
@@ -220,7 +220,7 @@ mod tests {
     async fn derived(root: &Root) -> Query {
         let query = Query::new(root.clone());
         query
-            .register(model::TRAIN_SEGMENT, "derived")
+            .register(medallion_model::TRAIN_SEGMENT, "derived")
             .await
             .expect("register derived dataset");
         query

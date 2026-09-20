@@ -3,8 +3,9 @@
 
 use std::time::Duration;
 
+use model::Gps;
 use redis::aio::MultiplexedConnection;
-use shared::{Gps, GpsReading, Message, V1Message};
+use shared::{GpsReading, Message, V1Message};
 use telemetry::{QUEUE_KEY, RawSample};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
@@ -63,12 +64,12 @@ pub fn gps(id: u128, t: i64, lat: f64, lon: f64) -> Message {
         id: Uuid::from_u128(id),
         t,
         gps: Gps {
-            lat,
-            lon,
-            alt: None,
-            acc: 5.0,
-            speed: None,
-            heading: None,
+            latitude: lat,
+            longitude: lon,
+            altitude_metres: None,
+            accuracy_metres: 5.0,
+            speed_mps: None,
+            heading_degrees: None,
         },
     }))
 }
@@ -98,7 +99,7 @@ pub struct CapturedSegment {
 pub async fn captured_segments(root: &medallion::Root) -> Vec<CapturedSegment> {
     let query = medallion::Query::new(root.clone());
     query
-        .register(model::MOTIS_SEGMENT, "captured")
+        .register(medallion_model::MOTIS_SEGMENT, "captured")
         .await
         .expect("register capture log");
     query

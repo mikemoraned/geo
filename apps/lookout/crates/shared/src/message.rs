@@ -32,7 +32,9 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::sensor::{Accel, Gps};
+use model::Gps;
+
+use crate::sensor::Accel;
 use crate::session::DeviceInfo;
 
 /// A GPS reading from a device at a point in time.
@@ -155,12 +157,12 @@ mod tests {
             id: Uuid::from_u128(1),
             t: 1_700_000_000_000,
             gps: Gps {
-                lat: 55.95,
-                lon: -3.19,
-                alt: None,
-                acc: 8.5,
-                speed: Some(31.4),
-                heading: None,
+                latitude: 55.95,
+                longitude: -3.19,
+                altitude_metres: None,
+                accuracy_metres: 8.5,
+                speed_mps: Some(31.4),
+                heading_degrees: None,
             },
         }
     }
@@ -269,8 +271,8 @@ mod tests {
             panic!("expected v0 gps, got {gps:?}");
         };
         // The fields v0 never carried default rather than failing to parse.
-        assert_eq!(r.gps.speed, None);
-        assert_eq!(r.gps.heading, None);
+        assert_eq!(r.gps.speed_mps, None);
+        assert_eq!(r.gps.heading_degrees, None);
 
         let accel: Message = serde_json::from_str(stored_accel).expect("parse stored accel");
         let Message::Version0(V0Message::Acceleration(r)) = accel else {

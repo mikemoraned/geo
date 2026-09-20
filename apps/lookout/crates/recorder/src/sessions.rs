@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Duration, Utc};
 use geo_types::Point;
 use medallion::{Query, Root};
-use model::{DeviceId, SessionId, StartedBy};
+use medallion_model::{DeviceId, SessionId, StartedBy};
 use serde::{Deserialize, Serialize};
 
 /// The deduped samples under their query name.
@@ -193,7 +193,7 @@ impl Session {
 pub async fn sessions(root: &Root, gap: Gap, lead: Lead) -> Result<Vec<Session>, SessionError> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(model::GPS_READING, SAMPLES)
+        .register_if_present(medallion_model::GPS_READING, SAMPLES)
         .await?
     {
         return Ok(Vec::new());
@@ -201,7 +201,7 @@ pub async fn sessions(root: &Root, gap: Gap, lead: Lead) -> Result<Vec<Session>,
     let samples: Vec<Sample> = query.rows(DISTINCT_SAMPLES).await?;
 
     let started = if query
-        .register_if_present(model::DEVICE_SESSION, SESSION_STARTS)
+        .register_if_present(medallion_model::DEVICE_SESSION, SESSION_STARTS)
         .await?
     {
         started_by_device(query.rows(DISTINCT_SESSION_STARTS).await?)
@@ -314,7 +314,8 @@ fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap, lead: Lead) ->
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
-    use shared::{DeviceInfo, DeviceType, Gps, GpsReading, Message, V1Message};
+    use model::Gps;
+    use shared::{DeviceInfo, DeviceType, GpsReading, Message, V1Message};
     use uuid::Uuid;
 
     use crate::bronze::{Archive, Payload};
@@ -335,12 +336,12 @@ mod tests {
             id,
             t: at.timestamp_millis(),
             gps: Gps {
-                lat,
-                lon: 13.4,
-                alt: Some(38.0),
-                acc: 5.0,
-                speed: Some(27.0),
-                heading: Some(91.0),
+                latitude: lat,
+                longitude: 13.4,
+                altitude_metres: Some(38.0),
+                accuracy_metres: 5.0,
+                speed_mps: Some(27.0),
+                heading_degrees: Some(91.0),
             },
         }))
     }

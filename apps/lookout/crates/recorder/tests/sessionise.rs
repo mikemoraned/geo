@@ -9,12 +9,13 @@
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use geo_types::Point;
 use medallion::{Countries, Country, Query, Root};
-use model::{DeviceId, SessionId};
+use medallion_model::{DeviceId, SessionId};
+use model::Gps;
 use recorder::bronze::{Archive, Payload};
 use recorder::sessions::{Gap, Lead, sessions};
 use recorder::silver;
 use serde::Deserialize;
-use shared::{Gps, GpsReading, Message, V1Message};
+use shared::{GpsReading, Message, V1Message};
 use uuid::Uuid;
 
 /// These samples are all in Germany, which the containment lookup would say of the real
@@ -48,12 +49,12 @@ fn gps(id: Uuid, t: DateTime<Utc>, lat: f64) -> Message {
         id,
         t: t.timestamp_millis(),
         gps: Gps {
-            lat,
-            lon: 13.4,
-            alt: Some(38.0),
-            acc: 5.0,
-            speed: Some(27.0),
-            heading: Some(91.0),
+            latitude: lat,
+            longitude: 13.4,
+            altitude_metres: Some(38.0),
+            accuracy_metres: 5.0,
+            speed_mps: Some(27.0),
+            heading_degrees: Some(91.0),
         },
     }))
 }
@@ -90,7 +91,7 @@ async fn sessionise(root: &Root) -> silver::WriteOutcome {
 async fn stored_sessions(root: &Root) -> Vec<Session> {
     let query = Query::new(root.clone());
     query
-        .register(model::SESSION, "sessions")
+        .register(medallion_model::SESSION, "sessions")
         .await
         .expect("register");
     query
@@ -144,11 +145,11 @@ fn partitions(root: &Root) -> Vec<(String, u64)> {
 async fn contents(root: &Root) -> String {
     let query = Query::new(root.clone());
     query
-        .register(model::SESSION, "sessions")
+        .register(medallion_model::SESSION, "sessions")
         .await
         .expect("register sessions");
     query
-        .register(model::SESSION_SAMPLE, "samples")
+        .register(medallion_model::SESSION_SAMPLE, "samples")
         .await
         .expect("register samples");
 

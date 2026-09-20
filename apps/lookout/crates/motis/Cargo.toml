@@ -10,7 +10,7 @@ clap = { workspace = true }
 geo = { workspace = true }
 geo-types = { workspace = true }
 medallion = { workspace = true }
-model = { workspace = true }
+medallion-model = { workspace = true }
 motis-openapi-progenitor = { workspace = true }
 polyline = { workspace = true }
 redis = { workspace = true }
@@ -29,6 +29,7 @@ wkb = { workspace = true }
 
 
 [dev-dependencies]
+model = { workspace = true }
 geo-traits = { workspace = true }
 parquet = { workspace = true }
 proptest = { workspace = true }

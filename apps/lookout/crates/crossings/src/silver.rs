@@ -14,7 +14,7 @@
 
 use geo_types::{Coord, coord};
 use medallion::{Query, Root};
-use model::CrossingId;
+use medallion_model::CrossingId;
 use serde::Deserialize;
 
 use crate::pointset::PackedId;
@@ -59,11 +59,11 @@ struct StoredCrossing {
 pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(model::WATER_CROSSING, "water_crossing")
+        .register_if_present(medallion_model::WATER_CROSSING, "water_crossing")
         .await?
     {
         return Err(ReadError::Missing {
-            dataset: model::WATER_CROSSING.name,
+            dataset: medallion_model::WATER_CROSSING.name,
         });
     }
 

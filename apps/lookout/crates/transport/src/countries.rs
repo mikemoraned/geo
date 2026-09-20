@@ -46,12 +46,14 @@ impl CountryAreas {
     /// Load the areas from the newest extract in `root`.
     pub async fn newest(root: &Root) -> Result<Self, CountryError> {
         let query = Query::new(root.clone());
-        query.register_by_name(model::EXTRACT_MANIFEST).await?;
+        query
+            .register_by_name(medallion_model::EXTRACT_MANIFEST)
+            .await?;
         let newest: Vec<Extracted> = query.rows(NEWEST_EXTRACT).await?;
         let newest = newest.first().ok_or(CountryError::NoExtract)?;
 
         let areas = root
-            .dataset(model::OVERTURE_EXTRACT)
+            .dataset(medallion_model::OVERTURE_EXTRACT)
             .for_id(&newest.extract_id)?
             .partition("theme", "divisions")?
             .partition("type", "division_area")?;

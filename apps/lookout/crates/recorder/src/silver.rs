@@ -20,7 +20,7 @@ use chrono::{DateTime, Utc};
 use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
 use medallion::{Countries, GeoRow, Projector, Replaced, Root};
-use model::{Bbox, SessionRow, SessionSampleRow};
+use medallion_model::{Bbox, SessionRow, SessionSampleRow};
 
 use crate::sessions::Session;
 
@@ -203,9 +203,10 @@ mod tests {
     use arrow::array::RecordBatch;
     use chrono::{Duration, TimeZone};
     use medallion::{Country, GEOMETRY, PROJECTED_GEOMETRY, Query};
-    use model::{DeviceId, SessionId};
+    use medallion_model::{DeviceId, SessionId};
+    use model::Gps;
     use serde::Deserialize;
-    use shared::{Gps, GpsReading, Message, V1Message};
+    use shared::{GpsReading, Message, V1Message};
     use uuid::Uuid;
 
     use crate::bronze::{Archive, Payload};
@@ -249,12 +250,12 @@ mod tests {
             id,
             t: t.timestamp_millis(),
             gps: Gps {
-                lat,
-                lon,
-                alt: Some(38.0),
-                acc: 5.0,
-                speed: Some(27.0),
-                heading: Some(91.0),
+                latitude: lat,
+                longitude: lon,
+                altitude_metres: Some(38.0),
+                accuracy_metres: 5.0,
+                speed_mps: Some(27.0),
+                heading_degrees: Some(91.0),
             },
         }))
     }
@@ -305,7 +306,7 @@ mod tests {
     async fn dataset(root: &Root) -> Query {
         let query = Query::new(root.clone());
         query
-            .register(model::SESSION_SAMPLE, "samples")
+            .register(medallion_model::SESSION_SAMPLE, "samples")
             .await
             .expect("register");
         query
@@ -506,7 +507,7 @@ mod tests {
     async fn session_rows(root: &Root) -> Vec<WrittenSession> {
         let query = Query::new(root.clone());
         query
-            .register(model::SESSION, "sessions")
+            .register(medallion_model::SESSION, "sessions")
             .await
             .expect("register");
         query
@@ -621,7 +622,7 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(model::SESSION, "sessions")
+            .register(medallion_model::SESSION, "sessions")
             .await
             .expect("register");
         let batches = query
@@ -655,7 +656,7 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(model::SESSION, "sessions")
+            .register(medallion_model::SESSION, "sessions")
             .await
             .expect("register");
         let batches = query
