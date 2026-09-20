@@ -127,8 +127,18 @@ remaining pages.
 - [x] Take a position as an event, alongside an NMEA sentence.
 - [x] Project a web ViewModel: current position, speed, and each prediction's lat/lon,
       distance, and arrival.
+- [ ] Have the core ask for its crossings instead of being handed them. `Shell::crossings()`
+      is called when the model is built, which suits flash and not a download. Replace it with
+      a second effect beside `Render`: the core requests a set, the shell answers with bytes —
+      immediately on the device, where they are in flash, and after a fetch in a browser. The
+      model then starts with no predictor, so decide what the core does in the meantime: a fix
+      arriving first should still move `here` and predict nothing, which is either an `Option`
+      or a small state machine, and the work will say which. This is also the first effect with
+      a response, so `handle_response` stops being unused and the bridge has to expose it.
+      Watch the size: a response through the JSON bridge is a number per byte, and the set is
+      69 KB. The device shell has to answer the new effect too, and nothing here can build it.
 - [ ] Let the point set reader borrow owned bytes, so the core can scan a fetched set.
-- [ ] Serve the packed crossings as a static asset, and fetch them into the element.
+- [ ] Serve the packed crossings as a static asset, and answer the core's request with them.
 - [ ] Swap the counter core for the predictor, and feed `/live` from browser geolocation.
 - [ ] Draw the canvas with D3: the centre dot sized by speed, the predictions placed by a
       hyperbolic mapping, and the radius standing for the maximum distance.
