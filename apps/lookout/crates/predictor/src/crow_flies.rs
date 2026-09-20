@@ -81,6 +81,13 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
         }
     }
 
+    /// Takes `at` as a time that has been reached, where it is later than any reported so far.
+    fn reached(&mut self, at: DateTime<Utc>) {
+        if self.now.is_none_or(|now| at > now) {
+            self.now = Some(at);
+        }
+    }
+
     /// Predicts afresh from `sample`.
     fn predict(&mut self, sample: Sample<T>) {
         let speed = speed_mps(&sample, self.latest.as_ref());
@@ -151,8 +158,18 @@ impl<T: Measure, C: Crossings<T>> Predict<T> for CrowFlies<T, C> {
     /// half applied.
     fn observe(&mut self, event: Event<T>) -> Result<(), ObserveError> {
         match event {
+            // Ordered against the fix it replaces, not against the clock: what makes a fix
+            // stale is a newer fix, and the clock may have run on without one.
             Event::Sampled(sample) => {
-                self.advance(sample.t)?;
+                if let Some(latest) = &self.latest
+                    && sample.t < latest.t
+                {
+                    return Err(ObserveError::OutOfOrder {
+                        now: latest.t,
+                        at: sample.t,
+                    });
+                }
+                self.reached(sample.t);
                 self.predict(sample);
             }
             Event::Elapsed(t) => self.advance(t)?,
@@ -310,6 +327,41 @@ mod tests {
             (derived - HUNDREDTH_DEGREE_M / 100.0).abs() < TOLERANCE_M,
             "{derived}m/s is not a hundredth of a degree in a hundred seconds",
         );
+    }
+
+    /// A shell may learn the time between fixes, and a receiver stamps a fix when it took it.
+    /// So a fix can arrive behind the clock and still be the newest there is.
+    #[test]
+    fn a_fix_behind_the_clock_but_ahead_of_the_last_fix_is_taken() {
+        let mut predictor = predictor();
+        predictor
+            .observe(Event::Sampled(fix_at(49.99, 0)))
+            .expect("an event in order");
+        predictor
+            .observe(Event::Elapsed(instant() + TimeDelta::seconds(60)))
+            .expect("a time signal");
+
+        predictor
+            .observe(Event::Sampled(fix_at(50.0, 10)))
+            .expect("a fix newer than the last one");
+
+        assert_eq!(predictor.latest().expect("a fix").latitude(), 50.0);
+        // The clock stays where the signal put it rather than winding back to the fix.
+        assert_eq!(predictor.now(), Some(instant() + TimeDelta::seconds(60)));
+    }
+
+    /// What makes a fix stale is a newer fix.
+    #[test]
+    fn a_fix_behind_the_last_fix_is_refused() {
+        let mut predictor = predictor();
+        predictor
+            .observe(Event::Sampled(fix_at(50.0, 30)))
+            .expect("an event in order");
+
+        let refused = predictor.observe(Event::Sampled(fix_at(49.99, 10)));
+
+        assert!(refused.is_err());
+        assert_eq!(predictor.latest().expect("a fix").latitude(), 50.0);
     }
 
     #[test]

@@ -92,6 +92,12 @@ the shell. What that settles:
   boundary, which `web-bridge`'s tests cover instead: they assert the exact JSON of an event,
   a request and a view. The crate holding the bridge is `web-bridge`, since `shared` already
   holds the telemetry wire models, and the core behind it is `web-core`.
+- **Two sources of time, and the clock takes the later.** A fix carries one and a tick carries
+  one, and they are not the same clock: a `watchPosition` fix is stamped when it was taken,
+  seconds before the browser delivers it. A clock that refused anything behind it would run on
+  with the ticks and throw away every fix that followed. So a fix is ordered against the fix it
+  replaces — what makes one stale is a newer one — and the clock advances to the later of
+  whatever arrives. The device is unaffected: its fixes and its time come from the receiver.
 - **Repaint on `Render`, not on dispatch.** The core answers an event that moved nothing with
   no request at all, which is what stops a replay at speed from redrawing the canvas per
   sample. The shell honours the empty answer.
@@ -138,7 +144,7 @@ remaining pages.
 - [x] Take a position as an event, alongside an NMEA sentence.
 - [x] Project a web ViewModel: current position, speed, and each prediction's lat/lon,
       distance, and arrival.
-- [ ] Have the core ask for its crossings instead of being handed them. `Shell::crossings()`
+- [x] Have the core ask for its crossings instead of being handed them. `Shell::crossings()`
       is called when the model is built, which suits flash and not a download. Replace it with
       a second effect beside `Render`: the core requests a set, the shell answers with bytes —
       immediately on the device, where they are in flash, and after a fetch in a browser. The
@@ -151,10 +157,10 @@ remaining pages.
 - [-] Let the point set reader borrow owned bytes, so the core can scan a fetched set. Moot:
       the browser holds a `Vec<Crossing<Float>>` rather than reading packed bytes, so nothing
       fetched is borrowed.
-- [ ] Serve the crossings as a JSON static asset, and answer the core's request with them.
+- [x] Serve the crossings as a JSON static asset, and answer the core's request with them.
       Add a `CompressionLayer` while here: 180 KB of coordinates is the first response big
       enough to notice, and it covers every other response too.
-- [ ] Swap the counter core for the predictor, and feed `/live` from browser geolocation.
+- [x] Swap the counter core for the predictor, and feed `/live` from browser geolocation.
 - [ ] Draw the canvas with D3: the centre dot sized by speed, the predictions placed by a
       hyperbolic mapping, and the radius standing for the maximum distance.
 
