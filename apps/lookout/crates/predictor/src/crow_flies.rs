@@ -62,6 +62,11 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
         self.speed_mps
     }
 
+    /// How far out it looks, which is what a prediction is measured against.
+    pub fn radius_metres(&self) -> T {
+        self.radius_metres
+    }
+
     /// The crossings it predicts against
     pub fn crossings(&self) -> &C {
         &self.crossings

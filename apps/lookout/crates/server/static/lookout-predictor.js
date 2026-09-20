@@ -2,6 +2,8 @@
 // for, and paints what it says. No prediction, no clock discipline and no formatting live
 // here — the core holds all three, and answers an event that moved nothing with no request.
 import init, { process_event, view } from "/wasm/lookout.js";
+import { geoAzimuthalEquidistant } from "/vendor/d3-geo-3.1.1.js";
+import { scaleSymlog } from "/vendor/d3-scale-4.0.2.js";
 
 // Hoisted to module scope, so several elements on a page share one load. `connectedCallback`
 // cannot be awaited by the browser, so the first paint waits on this promise instead.
@@ -11,21 +13,40 @@ const CROSSINGS = "/crossings.json";
 const TICK_INTERVAL_MS = 1000;
 const GEOLOCATION = { enableHighAccuracy: true, maximumAge: 0, timeout: 30_000 };
 
+// How far out the scale stays close to linear, in metres. Below it a crossing moves across
+// the picture about as fast as it moves over the ground; above it, distances compress. So the
+// smaller this is, the more of the picture goes to what is close — which is what is about to
+// matter.
+const LINEAR_WITHIN_METRES = 500;
+const CANVAS_SIZE = 320;
+const TAU = Math.PI * 2;
+
 class LookoutPredictor extends HTMLElement {
   #timer;
   #watch;
   #screen;
+  #canvas;
 
   connectedCallback() {
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `
       <style>
-        :host { display: block; }
-        .screen { font: 1rem ui-monospace, monospace; padding: 1rem; background: #032; color: #7f8; }
-        .screen p { margin: 0 0 .3rem; }
+        :host { display: block; font: 0.9rem ui-monospace, monospace; color: #7f8; }
+        .screen { display: inline-block; padding: 1rem; background: #032; }
+        canvas { display: block; width: ${CANVAS_SIZE}px; height: ${CANVAS_SIZE}px; }
+        .status { margin: .6rem 0 0; }
       </style>
-      <div class="screen">…</div>`;
-    this.#screen = root.querySelector(".screen");
+      <div class="screen">
+        <canvas></canvas>
+        <p class="status">…</p>
+      </div>`;
+    this.#screen = root.querySelector(".status");
+    this.#canvas = root.querySelector("canvas");
+    // Drawn at the device's own resolution, so the dots are not blurred on a phone.
+    const density = window.devicePixelRatio || 1;
+    this.#canvas.width = CANVAS_SIZE * density;
+    this.#canvas.height = CANVAS_SIZE * density;
+    this.#canvas.getContext("2d").scale(density, density);
 
     loaded.then(() => {
       this.dispatch("Start");
@@ -106,12 +127,61 @@ class LookoutPredictor extends HTMLElement {
   }
 
   #paint() {
-    const { now, crossings, here, predicted } = JSON.parse(view());
-    this.#screen.innerHTML = `
-      <p>${crossings.toLocaleString()} crossings</p>
-      <p>${now ? new Date(now).toLocaleTimeString() : "no time yet"}</p>
-      <p>${here ? `${here.position.y.toFixed(5)}, ${here.position.x.toFixed(5)}` : "no position yet"}</p>
-      <p>${predicted.length} within range</p>`;
+    const { crossings, radius_metres, here, predicted } = JSON.parse(view());
+    this.#draw(here, predicted, radius_metres);
+    this.#screen.textContent = here
+      ? `${predicted.length} within ${(radius_metres / 1000).toFixed(0)}km of ${crossings.toLocaleString()}`
+      : `${crossings.toLocaleString()} crossings, waiting for a position`;
+  }
+
+  // Where we are in the middle, what is about to be crossed around it, and nothing beyond the
+  // radius: a dot on the rim is a crossing at the furthest the core looks.
+  #draw(here, predicted, maximum) {
+    const context = this.#canvas.getContext("2d");
+    const middle = CANVAS_SIZE / 2;
+    const radius = middle - 4;
+    context.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+    context.strokeStyle = "#175";
+    for (const fraction of [1, 0.5]) {
+      context.beginPath();
+      context.arc(middle, middle, radius * fraction, 0, TAU);
+      context.stroke();
+    }
+
+    if (!here) return;
+
+    // Centred on us and true in every direction from there, so a crossing is drawn where it
+    // actually lies; only how far out is remapped.
+    const project = geoAzimuthalEquidistant()
+      .rotate([-here.position.x, -here.position.y])
+      .translate([0, 0])
+      .scale(1);
+
+    // Near distances given more of the picture than far ones, and the furthest the core looks
+    // landing on the rim. Symmetric-log rather than log because a crossing can be underneath
+    // us, and log has nowhere to put nought.
+    const reach = scaleSymlog()
+      .domain([0, maximum])
+      .range([0, radius])
+      .constant(LINEAR_WITHIN_METRES)
+      .clamp(true);
+
+    context.fillStyle = "#7f8";
+    for (const crossing of predicted) {
+      const [x, y] = project([crossing.position.x, crossing.position.y]);
+      const angle = Math.atan2(x, -y);
+      const out = reach(crossing.metres);
+      context.beginPath();
+      context.arc(middle + out * Math.sin(angle), middle - out * Math.cos(angle), 3, 0, TAU);
+      context.fill();
+    }
+
+    // Us, sized by how fast the core reckons we are going.
+    context.fillStyle = "#cfd";
+    context.beginPath();
+    context.arc(middle, middle, 3 + Math.min(here.speed_mps ?? 0, 30) / 3, 0, TAU);
+    context.fill();
   }
 }
 

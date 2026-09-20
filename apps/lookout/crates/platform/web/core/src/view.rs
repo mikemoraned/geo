@@ -32,6 +32,8 @@ pub struct ViewModel {
     pub now: Option<DateTime<Utc>>,
     /// How many crossings are being predicted against. Zero until a set has arrived.
     pub crossings: usize,
+    /// How far out the predictions reach. What a drawing puts at its edge.
+    pub radius_metres: Float,
     /// Absent until a position has arrived.
     pub here: Option<Here>,
     /// Nearest first, and never more than the radius holds.
@@ -69,6 +71,7 @@ impl Shell for Browser {
         ViewModel {
             now: model.now(),
             crossings: model.crossings().map_or(0, Vec::len),
+            radius_metres: model.radius_metres().unwrap_or_default(),
             here: model.fix().map(|fix| Here {
                 position: fix.position,
                 speed_mps: model.speed_mps(),

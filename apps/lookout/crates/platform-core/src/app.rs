@@ -113,6 +113,11 @@ impl<S: Shell> Model<S> {
         self.ready().and_then(CrowFlies::speed_mps)
     }
 
+    /// How far out the predictions reach, absent until there is a predictor to ask.
+    pub fn radius_metres(&self) -> Option<Float> {
+        self.ready().map(CrowFlies::radius_metres)
+    }
+
     /// The crossings predicted against, absent until a shell has provided a set.
     pub fn crossings(&self) -> Option<&S::Crossings> {
         self.ready().map(CrowFlies::crossings)

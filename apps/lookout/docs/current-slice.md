@@ -71,6 +71,16 @@ the shell. What that settles:
   point encoding with an id column and no envelope — but reading it needs arrow, which will not
   build for Xtensa at all and, in wasm, costs more than the 67 KB it would be reading. Tracks
   are the change that reopens this: a linestring is where hand-parsing stops being twenty lines.
+- **`d3-geo` for the direction, `d3-scale` for how far out.** A crossing is drawn where it
+  lies, which needs a bearing from where we are, and a bearing is geodesy rather than
+  arithmetic — `geoAzimuthalEquidistant` centred on the fix gives one by construction. How far
+  out is `scaleSymlog`, over the core's own distance: d3 has no scale called hyperbolic, and
+  symmetric-log is the one that does what that asks for — near distances spread, far ones
+  compressed, and unlike `scaleLog` it has somewhere to put a crossing directly underneath us.
+  Its `constant` is where the curve stops being straight, and is the dial for how much of the
+  picture the near field takes. Both are files in `static/vendor` named for the version they
+  are, not CDN imports, so the page depends on nothing at runtime it does not serve itself and
+  an upgrade shows up as a filename.
 - **wasm-pack, into the server's static dir.** Trunk owns a page and `server` serves three, so
   the widget is a library those pages load. A `just` recipe builds it for local work and the
   Docker builder stage builds it for a deploy, which keeps generated files out of version
@@ -161,12 +171,18 @@ remaining pages.
       Add a `CompressionLayer` while here: 180 KB of coordinates is the first response big
       enough to notice, and it covers every other response too.
 - [x] Swap the counter core for the predictor, and feed `/live` from browser geolocation.
-- [ ] Draw the canvas with D3: the centre dot sized by speed, the predictions placed by a
-      hyperbolic mapping, and the radius standing for the maximum distance.
+- [x] Draw the canvas with D3: the centre dot sized by speed, the predictions placed by a
+      hyperbolic mapping, and the radius standing for the maximum distance. `d3-geo` is used
+      for the projection and `d3-scale` for the radial mapping; the distances themselves are
+      the core's. Drawn against a standing start and a single fix, never against a journey, so
+      what it looks like in motion is untested.
 
 #### Phase 3 — the rest of the site
 
-- [ ] Add a recipe exporting a recorded session, and `/kiosk` replaying it.
+- [ ] Add a recipe exporting a recorded session, and `/kiosk` replaying it. First sight of the
+      canvas against real movement, so correct there what phase 2 could only guess at: how
+      often the picture should redraw, how much of it the near field should take — the scale's
+      `constant` — and whether a dot reaching the rim reads as something approaching.
 - [ ] Move the recording page to `/record`, and make `/` a summary linking to the three pages.
 - [ ] Fold what holds from `docs/2026-09-19-web-component-shell.md` into the code and its docs,
       and delete the note. Its shape is the slice; its plumbing moves with the typegen build.

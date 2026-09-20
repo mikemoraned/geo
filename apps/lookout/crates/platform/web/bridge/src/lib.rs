@@ -71,7 +71,7 @@ mod tests {
     fn a_page_is_asked_for_crossings_and_answers_with_them() {
         assert_eq!(
             projection().unwrap(),
-            r#"{"now":null,"crossings":0,"here":null,"predicted":[]}"#
+            r#"{"now":null,"crossings":0,"radius_metres":0.0,"here":null,"predicted":[]}"#
         );
 
         let requests = dispatch(r#""Start""#).unwrap();
@@ -82,7 +82,7 @@ mod tests {
         assert_eq!(answered.unwrap(), r#"[{"id":1,"effect":{"Render":null}}]"#);
         assert_eq!(
             projection().unwrap(),
-            r#"{"now":null,"crossings":2,"here":null,"predicted":[]}"#
+            r#"{"now":null,"crossings":2,"radius_metres":5000.0,"here":null,"predicted":[]}"#
         );
 
         // Asked once, and not again now it has them.
