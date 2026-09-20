@@ -30,6 +30,8 @@ pub struct Predicted {
 pub struct ViewModel {
     /// The time the core is working to, which a countdown is subtracted from.
     pub now: Option<DateTime<Utc>>,
+    /// How many crossings are being predicted against. Zero until a set has arrived.
+    pub crossings: usize,
     /// Absent until a position has arrived.
     pub here: Option<Here>,
     /// Nearest first, and never more than the radius holds.
@@ -66,6 +68,7 @@ impl Shell for Browser {
     fn project(model: &Model<Self>) -> ViewModel {
         ViewModel {
             now: model.now(),
+            crossings: model.crossings().map_or(0, Vec::len),
             here: model.fix().map(|fix| Here {
                 position: fix.position,
                 speed_mps: model.speed_mps(),

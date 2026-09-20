@@ -1,12 +1,13 @@
-// The shell around the core: it loads the wasm, runs the clock, and paints what the core
-// says. No prediction, no clock discipline and no formatting live here — the core holds all
-// three, and answers an event that moved nothing with no request at all.
+// The shell around the core: it loads the wasm, runs the clock, answers what the core asks
+// for, and paints what it says. No prediction, no clock discipline and no formatting live
+// here — the core holds all three, and answers an event that moved nothing with no request.
 import init, { process_event, view } from "/wasm/lookout.js";
 
 // Hoisted to module scope, so several elements on a page share one load. `connectedCallback`
 // cannot be awaited by the browser, so the first paint waits on this promise instead.
 const loaded = init();
 
+const CROSSINGS = "/crossings.json";
 const TICK_INTERVAL_MS = 1000;
 
 class LookoutPredictor extends HTMLElement {
@@ -17,14 +18,15 @@ class LookoutPredictor extends HTMLElement {
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `
       <style>
-        :host { display: inline-block; }
-        .screen { font: 2rem ui-monospace, monospace; padding: 1rem; background: #032; color: #7f8; }
+        :host { display: block; }
+        .screen { font: 1rem ui-monospace, monospace; padding: 1rem; background: #032; color: #7f8; }
+        .screen p { margin: 0 0 .3rem; }
       </style>
       <div class="screen">…</div>`;
     this.#screen = root.querySelector(".screen");
 
     loaded.then(() => {
-      this.#paint();
+      this.dispatch("Start");
       this.#timer = setInterval(() => this.#tick(), TICK_INTERVAL_MS);
     });
   }
@@ -39,14 +41,36 @@ class LookoutPredictor extends HTMLElement {
     this.dispatch({ Tick: new Date().toISOString() });
   }
 
-  // Applies one event, repainting only where the core asked for it.
-  dispatch(event) {
+  // Applies one event, doing what the core asks for and repainting only where it asked.
+  async dispatch(event) {
     const requests = JSON.parse(process_event(JSON.stringify(event)));
-    if (requests.some((request) => "Render" in request.effect)) this.#paint();
+    let moved = false;
+    for (const request of requests) {
+      if ("Render" in request.effect) moved = true;
+      if ("Crossings" in request.effect) await this.#fetchCrossings();
+    }
+    if (moved) this.#paint();
+  }
+
+  // The core asks once, when it has no set to predict against. A failure leaves it asking for
+  // nothing more, so the page says so rather than sitting blank.
+  async #fetchCrossings() {
+    try {
+      const response = await fetch(CROSSINGS);
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      await this.dispatch({ Crossings: await response.json() });
+    } catch (failed) {
+      this.#screen.textContent = `could not load ${CROSSINGS}: ${failed.message}`;
+    }
   }
 
   #paint() {
-    this.#screen.textContent = JSON.parse(view()).count;
+    const { now, crossings, here, predicted } = JSON.parse(view());
+    this.#screen.innerHTML = `
+      <p>${crossings.toLocaleString()} crossings</p>
+      <p>${now ? new Date(now).toLocaleTimeString() : "no time yet"}</p>
+      <p>${here ? `${here.position.y.toFixed(5)}, ${here.position.x.toFixed(5)}` : "no position yet"}</p>
+      <p>${predicted.length} within range</p>`;
   }
 }
 

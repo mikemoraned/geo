@@ -1,12 +1,9 @@
-//! A counter core, standing in for the predictor while the path to the browser is built.
+//! What a browser makes of the core: the crossings it fetches, and the view it draws.
 //!
-//! It exists to be replaced. What it proves is everything around it — the bridge, the custom
-//! element, the wasm build and the deploy — so it takes the shape the predictor will take: an
-//! event carrying a time, a clock discipline that refuses a stale one, and a `Render` asked for
-//! only where something moved.
+//! Where anything is and what is about to be crossed is [`platform_core`]'s, and shared with
+//! the device. What only a browser has is here: a set arriving over the network rather than
+//! sitting in flash, and positions rather than pixels for whatever draws them.
 
-mod app;
 pub mod view;
 
-pub use app::{Counter, Effect, Event, Model, ViewModel};
-pub use view::Browser;
+pub use view::{Browser, Here, Predicted, ViewModel};

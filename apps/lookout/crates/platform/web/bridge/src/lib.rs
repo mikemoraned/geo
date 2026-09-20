@@ -1,8 +1,8 @@
 //! The core, as two functions over JSON strings.
 //!
 //! `BridgeWithSerializer` takes any serde serializer, so the shell speaks JSON and needs no
-//! generated bindings to read it: an event is the serde tagging of [`web_core::Event`], and a
-//! view is that of [`web_core::ViewModel`]. Nothing here knows what either holds.
+//! generated bindings to read it: an event is the serde tagging of [`platform_core::Event`],
+//! and a view is that of [`web_core::ViewModel`]. Nothing here knows what either holds.
 //!
 //! Each exported function wraps one that answers a plain `Result<String, String>`, since a
 //! `JsError` can only be built on wasm and the JSON is what the tests are about.
@@ -10,12 +10,13 @@
 use std::sync::LazyLock;
 
 use crux_core::{Core, bridge::BridgeWithSerializer};
+use platform_core::Lookout;
 use wasm_bindgen::prelude::*;
-use web_core::Counter;
+use web_core::Browser;
 
 /// One core per wasm instance, and one instance per page: the shell loads the module once and
 /// every element on the page shares it.
-static BRIDGE: LazyLock<BridgeWithSerializer<Counter>> =
+static BRIDGE: LazyLock<BridgeWithSerializer<Lookout<Browser>>> =
     LazyLock::new(|| BridgeWithSerializer::new(Core::new()));
 
 /// Applies one event, answering the requests it raised as a JSON array. An event that moved
@@ -64,22 +65,28 @@ fn projection() -> Result<String, String> {
 mod tests {
     use super::*;
 
-    /// One core is shared by the whole process, so the round trip runs as a single test, in
-    /// order.
+    /// One core is shared by the whole process, so the sequence runs as a single test, in
+    /// order: the page starts, is asked for crossings, and answers.
     #[test]
-    fn a_tick_renders_and_moves_the_count() {
-        assert_eq!(projection().unwrap(), r#"{"count":"0"}"#);
-
-        let requests = dispatch(r#"{"Tick":"2026-09-19T12:00:00Z"}"#).unwrap();
-
-        assert_eq!(requests, r#"[{"id":0,"effect":{"Render":null}}]"#);
-        assert_eq!(projection().unwrap(), r#"{"count":"1"}"#);
-
-        // The same tick again: no request at all, which is what tells the shell not to repaint.
+    fn a_page_is_asked_for_crossings_and_answers_with_them() {
         assert_eq!(
-            dispatch(r#"{"Tick":"2026-09-19T12:00:00Z"}"#).unwrap(),
-            "[]"
+            projection().unwrap(),
+            r#"{"now":null,"crossings":0,"here":null,"predicted":[]}"#
         );
+
+        let requests = dispatch(r#""Start""#).unwrap();
+        assert_eq!(requests, r#"[{"id":0,"effect":{"Crossings":null}}]"#);
+
+        let answered = dispatch(r#"{"Crossings":[[7,51.0403,13.7322],[8,51.0503,13.7322]]}"#);
+
+        assert_eq!(answered.unwrap(), r#"[{"id":1,"effect":{"Render":null}}]"#);
+        assert_eq!(
+            projection().unwrap(),
+            r#"{"now":null,"crossings":2,"here":null,"predicted":[]}"#
+        );
+
+        // Asked once, and not again now it has them.
+        assert_eq!(dispatch(r#""Start""#).unwrap(), "[]");
     }
 
     #[test]
