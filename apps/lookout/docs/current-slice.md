@@ -85,11 +85,9 @@ the shell. What that settles:
   the widget is a library those pages load. A `just` recipe builds it for local work and the
   Docker builder stage builds it for a deploy, which keeps generated files out of version
   control.
-- **A custom element is the shell.** It owns the wasm instance, the clock, and the canvas in a
-  shadow root, so a page adds the predictor by writing one tag. The core stays pure, and the
-  element is left with nothing but I/O — see
-  [2026-09-19-web-component-shell.md](2026-09-19-web-component-shell.md), which sketches this
-  against the device panel rather than the web view.
+- **A custom element is the shell.** It owns the wasm instance and the canvas in a shadow
+  root, so a page adds the predictor by writing one tag. The core stays pure, and the element
+  is left with nothing but I/O — see [web.md](web.md).
 - **The bridge is crux's, over JSON.** `process_event` and `view` go out through
   `wasm-bindgen` as strings, and the shell reads them with `JSON.parse`. Bincode was the first
   choice, but crux 0.16.2 generates TypeScript by shelling out to `pnpm install` and
@@ -231,8 +229,11 @@ remaining pages.
       much of it the near field should take — the scale's `constant` — and whether a dot
       reaching the rim reads as something approaching.
 - [x] Move the recording page to `/record`, and make `/` a summary linking to the three pages.
-- [ ] Fold what holds from `docs/2026-09-19-web-component-shell.md` into the code and its docs,
-      and delete the note. Its shape is the slice; its plumbing moves with the typegen build.
+- [x] Fold what holds from `docs/2026-09-19-web-component-shell.md` into the code and its docs,
+      and delete the note. What held is in `docs/web.md` and in the element's own comments;
+      what did not is most of the rest — it sketched three functions over Bincode with
+      generated bindings, one effect, and a panel of strings, against a core that now has two
+      functions over JSON, two effects, and a view of positions.
 
 #### Phase 4 — refactors
 

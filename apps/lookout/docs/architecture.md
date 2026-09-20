@@ -58,7 +58,9 @@ the `lookout_medallion` extension module rather than through a python parquet wr
 The rerun runner replays a session's samples through the predictor, and draws where the
 session went against the crossings the predictor expected it to reach; see
 [`crates/platform/rerun-py`](../crates/platform/rerun-py/README.md). The M5 device holds the
-gold point buffer in flash and scans it against each GPS fix; see [device.md](device.md).
+gold point buffer in flash and scans it against each GPS fix; see [device.md](device.md). A
+browser runs the same core compiled to WebAssembly, fetching the crossings and the sessions
+it replays rather than carrying them; see [web.md](web.md).
 
 ## Secrets
 
