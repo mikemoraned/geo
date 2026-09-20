@@ -94,9 +94,7 @@ remaining pages.
 - [x] Build the wasm with a `just` recipe, into the server's static dir.
 - [x] Define the custom element: it loads the wasm, runs the tick, and repaints on `Render`.
 - [x] Serve it at `/live`, showing the count.
-- [ ] Build the wasm in the Docker builder stage, and deploy. The Dockerfile is written; the
-      deploy is not run. Neither Docker nor a browser runs in the sandbox, so `/live` has been
-      proved only through the wasm module itself, under node.
+- [x] Build the wasm in the Docker builder stage, and deploy.
 
 #### Phase 2 — the predictor behind it
 
