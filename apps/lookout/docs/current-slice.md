@@ -234,7 +234,9 @@ remaining pages.
 - [ ] Fold what holds from `docs/2026-09-19-web-component-shell.md` into the code and its docs,
       and delete the note. Its shape is the slice; its plumbing moves with the typegen build.
 
-#### Phase 4 — store rules out of shared types
+#### Phase 4 — refactors
+
+##### Split model layers
 
 Splitting the core by platform found store rules inside types that are not the store's. None of
 it is needed for the pages to work, so it comes last. Left undone, the next core written has to
@@ -250,6 +252,14 @@ import arrow to name a crossing.
       one level down. The `String` id cannot move to `model` while it validates a medallion
       rule. So: is an id a name for a crossing that also suits a partition, or a partition
       value that also names a crossing? Answer that, then move them.
+- [ ] Find the same pattern elsewhere: a type everything needs, holding a constraint only the
+      store has. It hides until something that cannot build arrow — a device, a browser —
+      imports one. Such a type belongs in `model`, and the store's rule about it belongs in a
+      `medallion-model` type wrapping it. Read every public type in `medallion-model` against
+      that line, and move the ones that fall outside it.
+
+##### Shell split
+
 - [ ] Split `Shell` by what a platform can do, not by what it happens to have. One kind is
       standalone: it brings its crossings, asks for nothing, and needs only somewhere to send
       fixes. That is the board. The other is connected: it can call out, so it can be asked for
@@ -260,8 +270,3 @@ import arrow to name a crossing.
       an effect that never arrives. The thing to work out is what one core does with two of
       these, since crux builds one effect enum per app and a standalone shell's effects are a
       subset of a connected one's.
-- [ ] Find the same pattern elsewhere: a type everything needs, holding a constraint only the
-      store has. It hides until something that cannot build arrow — a device, a browser —
-      imports one. Such a type belongs in `model`, and the store's rule about it belongs in a
-      `medallion-model` type wrapping it. Read every public type in `medallion-model` against
-      that line, and move the ones that fall outside it.
