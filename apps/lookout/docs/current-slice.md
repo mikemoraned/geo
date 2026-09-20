@@ -114,8 +114,25 @@ the shell. What that settles:
 - **One wasm instance per page.** `init()` is hoisted to module scope so several elements share
   a load, and the first paint waits on that promise, since the browser cannot await
   `connectedCallback`.
-- **The kiosk replays an exported session.** The fly deploy has no store, so a recipe exports a
-  recorded session to a file served with the site, and the page replays it in the browser.
+- **The kiosk replays exported sessions, and which ones is decided in gold.** The fly deploy
+  has no store, so what it replays has to be packed into a file served with the site — and if
+  a run has to choose anyway, it should choose the sessions worth watching rather than the
+  first one to hand. A session is worth watching if it passes crossings, and silver already
+  says which: `session_crossing` holds a row per session per crossing passed, so the choosing
+  is a count over a dataset that exists rather than a second matching pass.
+- **The kiosk replays at its own rate, not the recording's.** A train takes minutes between
+  crossings and nobody watches a kiosk for minutes, so the page emits a sample a second
+  regardless of how far apart they were recorded. The samples keep their recorded timestamps:
+  the speed the core derives and the arrivals it predicts come from the real gaps between
+  fixes, and only the watching is sped up.
+- **The kiosk's clock is the recording's, not the browser's.** The core takes the later of a
+  fix and a tick, so a page ticking wall time while replaying fixes from last month would
+  measure every countdown against today and read them all as long past. So `/kiosk` ticks the
+  replayed time — and that is the difference between the two pages' shells, which is the
+  slice's claim about them: `/live` and `/kiosk` differ in where they read time and position,
+  and in nothing else.
+- **The replay never ends.** It runs each chosen session in turn and then starts again, since
+  a kiosk is left running and a screen that stops is one that looks broken.
 - **`crux_core` stays pinned at `=0.16.2`.** 0.20 reboots the board (see `docs/device.md`), so
   the shared core stays on the pinned version, and the web shell with it.
 - **`/live` shows, `/record` records.** Moving the recording page to `/record` is a move, not a
@@ -179,10 +196,18 @@ remaining pages.
 
 #### Phase 3 — the rest of the site
 
-- [ ] Add a recipe exporting a recorded session, and `/kiosk` replaying it. First sight of the
-      canvas against real movement, so correct there what phase 2 could only guess at: how
-      often the picture should redraw, how much of it the near field should take — the scale's
-      `constant` — and whether a dot reaching the rim reads as something approaching.
+- [ ] Add a gold step choosing the sessions worth replaying, and writing them as
+      `sessions.json`. It counts the crossings each recorded session passed, which is a group
+      over silver `session_crossing`; keeps those passing at least `--min-crossings`; sorts by
+      that count and keeps the first `--max-sessions`; and writes each with the samples that
+      replay it. Both are arguments, defaulted in the recipe that runs it at 5 and 3. Versioned
+      and adopted as `pack_crossings` does, into `sessions.version`, so the page and any build
+      read the same recording.
+- [ ] Serve `sessions.json` and add `/kiosk` replaying it: a sample a second, each session in
+      turn, round again from the first. First sight of the canvas against real movement, so
+      correct there what phase 2 could only guess at: how often the picture should redraw, how
+      much of it the near field should take — the scale's `constant` — and whether a dot
+      reaching the rim reads as something approaching.
 - [ ] Move the recording page to `/record`, and make `/` a summary linking to the three pages.
 - [ ] Fold what holds from `docs/2026-09-19-web-component-shell.md` into the code and its docs,
       and delete the note. Its shape is the slice; its plumbing moves with the typegen build.
