@@ -6,5 +6,7 @@
 //! only where something moved.
 
 mod app;
+pub mod view;
 
 pub use app::{Counter, Effect, Event, Model, ViewModel};
+pub use view::Browser;

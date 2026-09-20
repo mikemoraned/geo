@@ -1,0 +1,203 @@
+//! What a browser draws: where we are, how fast, and what is about to be crossed.
+
+use chrono::{DateTime, Utc};
+use geo_types::Point;
+use platform_core::pointset::PointSet;
+use platform_core::{Float, Model, Shell};
+use predictor::{Crossings, Prediction};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Here {
+    pub position: Point<Float>,
+    /// The speed the arrivals below were worked out at.
+    pub speed_mps: Option<Float>,
+}
+
+/// One crossing we expect to reach.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Predicted {
+    pub position: Point<Float>,
+    /// Straight-line distance from here. Crow-flies, so a bend in the track puts a
+    /// crossing nearer than the rails do.
+    pub metres: Float,
+    /// When we reach it, absent where there is no speed to divide by. An instant rather than
+    /// a countdown, so it stays true while the clock advances between fixes.
+    pub at: Option<DateTime<Utc>>,
+}
+
+/// Everything the page draws.
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ViewModel {
+    /// The time the core is working to, which a countdown is subtracted from.
+    pub now: Option<DateTime<Utc>>,
+    /// Absent until a position has arrived.
+    pub here: Option<Here>,
+    /// Nearest first, and never more than the radius holds.
+    pub predicted: Vec<Predicted>,
+}
+
+/// A browser as a shell.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Browser;
+
+impl Shell for Browser {
+    type ViewModel = ViewModel;
+
+    /// Nothing, until the page has fetched a set. The core exists from the moment the module
+    /// loads, and the bytes arrive over the network after it.
+    fn crossings() -> PointSet<'static> {
+        PointSet::empty()
+    }
+
+    fn project(model: &Model<Self>) -> ViewModel {
+        ViewModel {
+            now: model.now(),
+            here: model.fix().map(|fix| Here {
+                position: fix.position,
+                speed_mps: model.speed_mps(),
+            }),
+            predicted: located(model.crossings(), model.predictions()),
+        }
+    }
+}
+
+/// Each prediction with the crossing's position beside it.
+///
+/// A prediction names a crossing by id, and the set it was predicted against is the only place
+/// that id means anything, so the set is read once here rather than per prediction. A crossing
+/// the set no longer holds is dropped: the canvas draws a position, and there is none for it.
+fn located(crossings: &impl Crossings<Float>, predictions: &[Prediction<Float>]) -> Vec<Predicted> {
+    let mut located: Vec<Predicted> = crossings
+        .all()
+        .filter_map(|crossing| {
+            let prediction = predictions
+                .iter()
+                .find(|prediction| prediction.crossing == crossing.id)?;
+            Some(Predicted {
+                position: crossing.position,
+                metres: prediction.metres,
+                at: prediction.at,
+            })
+        })
+        .collect();
+    // The set is in whatever order it was packed in; the view is nearest first, as the
+    // predictions are.
+    located.sort_by(|one, other| {
+        one.metres
+            .partial_cmp(&other.metres)
+            .expect("a distance is never NaN")
+    });
+    located
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::{DateTime, TimeDelta, Utc};
+    use crux_core::Core;
+    use model::Gps;
+    use platform_core::{Event, Lookout};
+    use predictor::{Crossing, CrossingId};
+
+    use super::*;
+
+    fn instant() -> DateTime<Utc> {
+        DateTime::from_timestamp(1_785_098_609, 0).expect("an instant")
+    }
+
+    /// Three crossings due north of the fix, a hundredth of a degree apart, so the nearest is
+    /// about 1,112m away. Packed out of order, so what sorts the view is the view.
+    fn crossings() -> Vec<Crossing<Float>> {
+        vec![
+            Crossing::at(2, 51.06, 13.7322).expect("on the globe"),
+            Crossing::at(0, 51.04, 13.7322).expect("on the globe"),
+            Crossing::at(1, 51.05, 13.7322).expect("on the globe"),
+        ]
+    }
+
+    fn prediction(id: u32, metres: Float, at: Option<DateTime<Utc>>) -> Prediction<Float> {
+        Prediction {
+            crossing: CrossingId::new(id),
+            metres,
+            at,
+        }
+    }
+
+    #[test]
+    fn a_prediction_is_placed_where_its_crossing_is() {
+        let placed = located(&crossings(), &[prediction(1, 2_000.0, None)]);
+
+        assert_eq!(placed.len(), 1);
+        assert!((placed[0].position.y() - 51.05).abs() < 1e-4);
+        assert!((placed[0].position.x() - 13.7322).abs() < 1e-4);
+        assert_eq!(placed[0].metres, 2_000.0);
+    }
+
+    #[test]
+    fn the_nearest_is_first_however_the_set_was_packed() {
+        let placed = located(
+            &crossings(),
+            &[
+                prediction(0, 1_000.0, None),
+                prediction(2, 3_000.0, None),
+                prediction(1, 2_000.0, None),
+            ],
+        );
+
+        let metres: Vec<Float> = placed.iter().map(|one| one.metres).collect();
+        assert_eq!(metres, vec![1_000.0, 2_000.0, 3_000.0]);
+    }
+
+    /// The canvas draws a position, so a prediction the set cannot place is not in the view.
+    #[test]
+    fn a_prediction_naming_a_crossing_the_set_lacks_is_dropped() {
+        let placed = located(&crossings(), &[prediction(99, 1_000.0, None)]);
+
+        assert!(placed.is_empty());
+    }
+
+    #[test]
+    fn an_arrival_is_carried_as_the_instant_it_was_predicted_for() {
+        let at = instant() + TimeDelta::seconds(84);
+
+        let placed = located(&crossings(), &[prediction(0, 1_000.0, Some(at))]);
+
+        assert_eq!(placed[0].at, Some(at));
+    }
+
+    #[test]
+    fn there_is_nothing_to_centre_on_before_a_fix() {
+        let core: Core<Lookout<Browser>> = Core::new();
+
+        let view = core.view();
+
+        assert_eq!(view.here, None);
+        assert_eq!(view.now, None);
+        assert!(view.predicted.is_empty());
+    }
+
+    /// The browser has no crossings until it has fetched a set, so it predicts nothing — but
+    /// it still knows where it is, which is what the canvas centres on.
+    #[test]
+    fn a_fix_is_shown_with_the_speed_it_was_predicted_at() {
+        let core: Core<Lookout<Browser>> = Core::new();
+
+        core.process_event(Event::Position {
+            t: instant(),
+            gps: Gps {
+                latitude: 51.0403,
+                longitude: 13.7322,
+                altitude_metres: None,
+                accuracy_metres: 5.0,
+                speed_mps: Some(27.8),
+                heading_degrees: None,
+            },
+        });
+
+        let here = core.view().here.expect("a fix");
+        assert!((here.position.y() - 51.0403).abs() < 1e-4);
+        assert!((here.position.x() - 13.7322).abs() < 1e-4);
+        assert_eq!(here.speed_mps, Some(27.8));
+        assert!(core.view().predicted.is_empty());
+    }
+}

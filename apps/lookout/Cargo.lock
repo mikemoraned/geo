@@ -5326,8 +5326,10 @@ dependencies = [
  "chrono",
  "crux_core",
  "geo-types",
+ "model",
  "predictor",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 
@@ -8206,6 +8208,10 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crux_core",
+ "geo-types",
+ "model",
+ "platform-core",
+ "predictor",
  "serde",
 ]
 

@@ -65,6 +65,19 @@ pub struct PointSet<'a> {
     ids: &'a [u32],
 }
 
+impl PointSet<'static> {
+    /// A set with nothing in it: no crossings, and so no predictions.
+    pub fn empty() -> Self {
+        /// Magic, version, and a count of zero. The columns after it are empty, so this is a
+        /// whole file.
+        static EMPTY: &Aligned<[u8; HEADER_LEN]> = &Aligned([
+            MAGIC[0], MAGIC[1], MAGIC[2], MAGIC[3], 1, 0, 0, 0, 0, 0, 0, 0,
+        ]);
+
+        Self::new(&EMPTY.0).expect("a header this module wrote")
+    }
+}
+
 impl<'a> PointSet<'a> {
     /// Borrows the points from a packed buffer, checking that it is one.
     pub fn new(packed: &'a [u8]) -> Result<Self, FormatError> {
@@ -314,6 +327,14 @@ mod tests {
             read(&words, bytes.len()),
             Err(FormatError::OffTheGlobe { .. })
         ));
+    }
+
+    #[test]
+    fn the_empty_set_holds_nothing() {
+        let points = PointSet::empty();
+
+        assert!(points.is_empty());
+        assert_eq!(points.iter().count(), 0);
     }
 
     #[test]

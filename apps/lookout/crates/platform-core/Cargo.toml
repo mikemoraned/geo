@@ -5,14 +5,16 @@ edition.workspace = true
 
 [dependencies]
 # Some entries are written out rather than inherited from the workspace: see docs/device.md.
-# Pinned back from 0.20, which reboots this board within seconds of its first event, inside
-# its own per-effect machinery and with no BLE anywhere near it. See docs/device.md. Unpinning
-# costs an associated type; leaving it unpinned costs a device that does not stay up.
+# Pinned back from 0.20, which reboots the M5 board within seconds of its first event, inside
+# its own per-effect machinery and with no BLE anywhere near it. See docs/device.md. One core
+# means one version, so every shell is held to this one. Unpinning costs an associated type;
+# leaving it unpinned costs a device that does not stay up.
 crux_core = "=0.16.2"
 battery-estimator = "0.3"
 bytemuck = "1"
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
 geo-types = { workspace = true }
+model = { workspace = true }
 predictor = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
@@ -23,9 +25,10 @@ thiserror = "2"
 typegen = ["crux_core/typegen"]
 
 [dev-dependencies]
-# The same crate again, for the captured sentences its tests share with this crate's. A
+# The same crate again, for the captured sentences its tests drive the core with. A
 # dev-dependency, so the feature is off in anything built for the device.
 predictor = { workspace = true, features = ["fixtures"] }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

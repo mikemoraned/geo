@@ -27,6 +27,8 @@ pub struct CrowFlies<T: Measure, C: Crossings<T> = Vec<Crossing<T>>> {
     now: Option<DateTime<Utc>>,
     /// The most recent fix, kept to derive a speed for a receiver that reports none.
     latest: Option<Sample<T>>,
+    /// The speed the current predictions were made at.
+    speed_mps: Option<T>,
     predictions: Vec<Prediction<T>>,
 }
 
@@ -41,6 +43,7 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
             radius_metres,
             now: None,
             latest: None,
+            speed_mps: None,
             predictions: Vec::new(),
         }
     }
@@ -53,6 +56,15 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
     /// The fix the predictions were made from, which is the most recent one it accepted.
     pub fn latest(&self) -> Option<&Sample<T>> {
         self.latest.as_ref()
+    }
+
+    pub fn speed_mps(&self) -> Option<T> {
+        self.speed_mps
+    }
+
+    /// The crossings it predicts against
+    pub fn crossings(&self) -> &C {
+        &self.crossings
     }
 
     /// Moves the clock to `to`, refusing to wind it back.
@@ -96,6 +108,7 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
         });
 
         self.predictions = predicted;
+        self.speed_mps = speed;
         self.latest = Some(sample);
     }
 }
@@ -259,6 +272,51 @@ mod tests {
             (seconds - HUNDREDTH_DEGREE_M / 10.0).abs() < 1.0,
             "{seconds}s is not the time to cover {HUNDREDTH_DEGREE_M}m at 10m/s",
         );
+    }
+
+    #[test]
+    fn nothing_is_said_about_speed_before_a_fix_has_been_predicted_from() {
+        let predictor = predictor();
+
+        assert_eq!(predictor.speed_mps(), None);
+    }
+
+    /// The speed a view draws and the speed the arrivals were divided by are the one number.
+    #[test]
+    fn the_speed_it_predicted_at_is_the_one_the_receiver_reported() {
+        let mut predictor = predictor();
+
+        predictor
+            .observe(Event::Sampled(fix().with_speed_mps(Some(10.0))))
+            .expect("an event in order");
+
+        assert_eq!(predictor.speed_mps(), Some(10.0));
+    }
+
+    /// A receiver reporting none leaves the derived speed, which is what the arrivals used.
+    #[test]
+    fn the_speed_it_predicted_at_is_the_derived_one_where_none_was_reported() {
+        let mut predictor = predictor();
+        predictor
+            .observe(Event::Sampled(fix_at(49.99, 0)))
+            .expect("an event in order");
+
+        predictor
+            .observe(Event::Sampled(fix_at(50.0, 100)))
+            .expect("an event in order");
+
+        let derived = predictor.speed_mps().expect("a derived speed");
+        assert!(
+            (derived - HUNDREDTH_DEGREE_M / 100.0).abs() < TOLERANCE_M,
+            "{derived}m/s is not a hundredth of a degree in a hundred seconds",
+        );
+    }
+
+    #[test]
+    fn the_crossings_it_predicts_against_are_the_ones_it_was_given() {
+        let predictor = predictor();
+
+        assert_eq!(predictor.crossings().len(), crossings::<f64>().len());
     }
 
     /// A phone that reports no speed still moves, and the two fixes say how fast: a

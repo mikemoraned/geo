@@ -9,10 +9,10 @@ use serde::{Deserialize, Serialize};
 /// reports no heading when standing still, and a null there means "not moving" rather than
 /// "unknown", so the nulls are kept rather than dropped.
 ///
-/// **The wire abbreviates these names and the code does not.** A browser has sent the short
+/// **Recordings abbreviate these names and the code does not.** A browser has sent the short
 /// names since the first recording and the archive still holds them, so they are fixed.
-/// Renaming a field here means adjusting its `rename` to leave the wire alone; renaming it on
-/// the wire strands every fix already recorded.
+/// Renaming a field here means adjusting its `rename` to leave the stored shape alone;
+/// renaming that strands every fix already recorded.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Gps {
     #[serde(rename = "lat")]

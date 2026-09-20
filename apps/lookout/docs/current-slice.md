@@ -124,8 +124,8 @@ remaining pages.
 - [x] Split `model` in two: `medallion-model` for the store's schema, and a `model` holding
       what a device and the store share. Only the fix has moved, which is what this phase
       needs; what else belongs on the far side of that line is phase 4's.
-- [ ] Take a position as an event, alongside an NMEA sentence.
-- [ ] Project a web ViewModel: current position, speed, and each prediction's lat/lon,
+- [x] Take a position as an event, alongside an NMEA sentence.
+- [x] Project a web ViewModel: current position, speed, and each prediction's lat/lon,
       distance, and arrival.
 - [ ] Let the point set reader borrow owned bytes, so the core can scan a fetched set.
 - [ ] Serve the packed crossings as a static asset, and fetch them into the element.
