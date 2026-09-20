@@ -11,6 +11,10 @@
 !Cargo.lock
 !crates
 
+# The crossings a browser fetches, which the builder copies into the static dir. The only
+# part of the store a deploy needs: everything else it holds is read by a query, not served.
+!data/medallion/gold/artifact=crossings
+
 # What the tree carries but the build makes for itself. The uv environments alone
 # are 1.2 GB, and the wasm is written by the builder stage.
 crates/**/.venv
@@ -18,3 +22,4 @@ crates/**/target
 crates/**/__pycache__
 crates/**/.pytest_cache
 crates/server/static/wasm
+crates/server/static/crossings.json

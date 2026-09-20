@@ -12,18 +12,9 @@
 
 use platform_core::pointset::{Aligned, PointSet, holds_points};
 
-/// The crossings, as the store's gold layer last packed them.
-///
-/// A pinned version rather than the newest: what a board holds is decided when its firmware is
-/// built, and a path that moved with the store would flash a different set depending on when
-/// the build ran. `just gold-pack-crossings` writes a new one; carrying it means changing the
-/// version here and committing the artefact it names.
-///
-/// The size is written out because `include_bytes!` yields a sized array. Repointing this at a
-/// set of a different size then stops the build, which is when to notice.
-static PACKED: &Aligned<[u8; 69_132]> = &Aligned(*include_bytes!(
-    "../../../../../data/medallion/gold/artifact=crossings/version=20260920T145731684Z/crossings.pointset"
-));
+// Written by `build.rs`, which resolves the version in `crossings.version` to a path and a
+// length. Declares `PACKED`.
+include!(concat!(env!("OUT_DIR"), "/carried.rs"));
 
 /// A set the reader cannot make sense of stops the build. The bytes are the same on every
 /// boot, so a device is the wrong place to find out they are the wrong bytes.

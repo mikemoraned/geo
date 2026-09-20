@@ -34,8 +34,18 @@ build:
 wasm:
     wasm-pack build crates/platform/web/bridge --target web --out-dir ../../../server/static/wasm --out-name lookout
 
-# Serve on http://localhost:3000 with the wasm freshly built.
-serve-web: wasm serve
+# Which packed crossings both shells use. Gold keeps every version that was packed; this names
+# the one in play, and `m5-core`'s build script reads the same file to decide what to embed.
+crossings_version := trim(`cat crossings.version`)
+
+# Copy the crossings a browser fetches into the dir `server` serves them from. Generated, so
+# gitignored: the Docker builder stage runs the same copy for a deploy.
+crossings:
+    cp "data/medallion/gold/artifact=crossings/version={{crossings_version}}/crossings.json" \
+        crates/server/static/crossings.json
+
+# Serve on http://localhost:3000 with the wasm and the crossings freshly built.
+serve-web: wasm crossings serve
 
 # Every test: the Rust workspace, Docker ones included, and the Python ones.
 test: test-python test-rust
@@ -57,9 +67,10 @@ test-python:
 end_to_end_test:
     op run --env-file=deploy/lookout.env -- cargo nextest run --release --workspace --profile end-to-end
 
-# Deploy the server to fly.io (lookout.fly.dev), with the git hash baked in.
+# Deploy the server to fly.io (lookout.fly.dev), with the git hash and the crossings baked in.
 deploy:
-    fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}"
+    fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}" \
+        --build-arg CROSSINGS_VERSION="{{crossings_version}}"
 
 # Set up a fresh worktree's store from what the checkout carries. Gold waits until needed.
 init: bronze-init silver-init
@@ -124,9 +135,9 @@ silver-session-crossings *args:
     cargo run --release -p session_crossings --bin match_crossings -- {{args}}
 
 # Pack the silver water crossings into gold, as the buffer a device scans and the array a
-# browser fetches. Carrying a new version means pointing `m5-core`'s `carried` at it.
+# browser fetches, and adopt what it wrote: both shells build against `crossings.version`.
 gold-pack-crossings *args:
-    cargo run -p crossings --bin pack_crossings -- {{args}}
+    cargo run -p crossings --bin pack_crossings -- --version-file crossings.version {{args}}
 
 # The M5StickC PLUS2 shell has its own workspace, toolchain, and target dir, so the recipes below
 # run cargo in it. LIBCLANG_PATH stands in for espup's `~/export-esp.sh`, unsourced.

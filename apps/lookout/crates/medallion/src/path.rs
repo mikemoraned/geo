@@ -145,7 +145,7 @@ impl Root {
         run: DateTime<Utc>,
         name: &str,
     ) -> Result<PathBuf, PathError> {
-        let version = run.format(BATCH_STEM_FORMAT).to_string();
+        let version = gold_version(run);
         Ok(self
             .0
             .join(Layer::Gold.as_str())
@@ -153,6 +153,15 @@ impl Root {
             .join(Partition::new(VERSION, version)?.to_string())
             .join(name))
     }
+}
+
+/// What a gold artefact produced by `run` is versioned as.
+///
+/// Public because a caller that names a version elsewhere — a build embedding an artefact, a
+/// deploy serving one — has to spell it the same way the path does.
+#[must_use]
+pub fn gold_version(run: DateTime<Utc>) -> String {
+    run.format(BATCH_STEM_FORMAT).to_string()
 }
 
 /// How a gold artefact is laid out: what it is, and which run produced it.

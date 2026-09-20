@@ -10,6 +10,7 @@ use axum::routing::{any, get};
 use shared::Message as TelemetryMessage;
 use std::time::{SystemTime, UNIX_EPOCH};
 use telemetry::RawSample;
+use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
@@ -35,6 +36,7 @@ pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
         .route("/ws", any(ws_upgrade))
         .route("/version", get(version))
         .fallback_service(ServeDir::new(static_dir.into()))
+        .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

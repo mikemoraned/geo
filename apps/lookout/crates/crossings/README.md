@@ -114,6 +114,7 @@ One read produces both, so a board and a page cannot disagree about which places
 differ only in precision, and in neither case by more than a fix is accurate to.
 
 Gold is derivable and mostly unversioned, but this artefact is read by a build rather than by a
-query: `m5-core` embeds the buffer from a version it names, and the server serves the array. So
-the carried version is committed, and repointing means committing the new one and deleting the
-old. `--output` names a directory somewhere else.
+query: `m5-core` embeds the buffer and the server serves the array. So the versions packed are
+committed, and `apps/lookout/crossings.version` names the one both build against — the device's
+build script reads it to resolve what to embed, and `just deploy` passes it to the image build.
+Moving to a newly packed version is that one line. `--output` names a directory somewhere else.

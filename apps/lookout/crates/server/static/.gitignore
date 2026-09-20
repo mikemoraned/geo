@@ -1,2 +1,4 @@
 # Built by `just wasm`, from crates/platform/web/bridge.
 wasm/
+# Copied by `just crossings`, from the store's gold layer.
+crossings.json

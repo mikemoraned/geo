@@ -8,9 +8,9 @@
 /silver/
 
 # Gold is derived too, and ignored but for one artefact: the crossings a device carries in
-# flash and a browser fetches. Those are read by a build rather than by a query, so the version
-# being carried is versioned alongside the code naming it. Repointing means committing the new
-# version and deleting the one it replaces.
+# flash and a browser fetches. Those are read by a build rather than by a query, so they are
+# versioned alongside the code. Every version packed is kept, and `crossings.version` names the
+# one both shells build against.
 /gold/*
 !/gold/artifact=crossings/
 

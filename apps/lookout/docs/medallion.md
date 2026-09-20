@@ -199,8 +199,9 @@ Laid out by what was produced and which run produced it, rather than by a partit
 **Gold is derived, and so is not versioned in git — with one exception.** An artefact a build
 reads is an input to something outside the store, and cannot be re-derived by whoever builds
 it: a checkout has no silver to pack from. The crossings are the case today, embedded in the
-device's firmware and served to the browser, so the version being carried is committed and the
-rest are ignored. `data/medallion/.gitignore` states which.
+device's firmware and served to the browser, so every version packed is committed and
+`apps/lookout/crossings.version` names the one being built against.
+`data/medallion/.gitignore` states which datasets this covers.
 
 ## No table format
 

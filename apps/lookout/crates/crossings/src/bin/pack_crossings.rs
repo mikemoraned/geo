@@ -44,6 +44,10 @@ struct Args {
     /// Keep only crossings inside this `west,south,east,north` window. Omit to keep them all.
     #[arg(long)]
     bbox: Option<Bbox>,
+    /// A file to write this run's version into, naming what was just packed. What reads it
+    /// decides what to build against, so packing and adopting are one step.
+    #[arg(long, conflicts_with = "output")]
+    version_file: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -57,10 +61,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let args = Args::parse();
     let root = args.medallion.root()?;
+    let run = Utc::now();
     let output = match args.output {
         Some(path) => path,
         None => root
-            .gold_artefact(ARTIFACT, Utc::now(), PACKED)?
+            .gold_artefact(ARTIFACT, run, PACKED)?
             .parent()
             .expect("an artefact sits in a directory")
             .to_path_buf(),
@@ -103,6 +108,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     fs::write(output.join(PACKED), &packed)?;
     fs::write(output.join(ARRAY), &json)?;
 
+    // Last, so a run that failed to write its artefacts does not leave something pointing at
+    // a version that is not there.
+    let version = medallion::gold_version(run);
+    if let Some(file) = &args.version_file {
+        fs::write(file, format!("{version}\n"))?;
+    }
+
     tracing::info!(
         crossings = crossings.len(),
         // Which extraction of the reference data the packed crossings came from, so a buffer
@@ -113,7 +125,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .collect::<BTreeSet<_>>(),
         packed_bytes = packed.len(),
         json_bytes = json.len(),
-        output = %output.display(),
+        %version,
+        adopted = args.version_file.as_ref().map(|file| file.display().to_string()),
         "packed crossings",
     );
 
@@ -129,6 +142,7 @@ fn round(degrees: f64) -> f64 {
 mod tests {
     use chrono::TimeZone;
     use clap::CommandFactory;
+    use medallion::Root;
 
     use super::*;
 
@@ -167,6 +181,38 @@ mod tests {
     fn a_coordinate_is_kept_to_six_places() {
         assert_eq!(round(50.772_051_974_934_95), 50.772_052);
         assert_eq!(round(13.089_276_802_196_796), 13.089_277);
+    }
+
+    /// Adopting means naming the version that was written, so a run sending its artefacts
+    /// somewhere else has no version to adopt.
+    #[test]
+    fn a_redirected_run_cannot_also_adopt_a_version() {
+        assert!(
+            Args::try_parse_from([
+                "pack_crossings",
+                "--output",
+                "/tmp/elsewhere",
+                "--version-file",
+                "crossings.version",
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn the_version_adopted_is_the_one_the_path_was_built_from() {
+        let run = Utc.with_ymd_and_hms(2026, 8, 1, 19, 48, 57).unwrap();
+
+        let version = medallion::gold_version(run);
+
+        assert_eq!(version, "20260801T194857000Z");
+        assert!(
+            Root::new("/somewhere/store")
+                .gold_artefact(ARTIFACT, run, PACKED)
+                .unwrap()
+                .to_string_lossy()
+                .contains(&format!("version={version}"))
+        );
     }
 
     #[test]
