@@ -44,6 +44,15 @@ crossings:
     cp "data/medallion/gold/artifact=crossings/version={{crossings_version}}/crossings.json" \
         crates/server/static/crossings.json
 
+# Which chosen sessions the kiosk replays, named as the crossings are.
+sessions_version := trim(`cat sessions.version`)
+
+# Choose the recorded sessions worth replaying into gold, and adopt what was written. A session
+# is kept where it passed at least five crossings, and the best three of those are written.
+gold-pack-sessions *args:
+    cargo run --release -p session_crossings --bin pack_sessions -- \
+        --version-file sessions.version --min-crossings 5 --max-sessions 3 {{args}}
+
 # Serve on http://localhost:3000 with the wasm and the crossings freshly built.
 serve-web: wasm crossings serve
 

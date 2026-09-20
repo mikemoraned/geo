@@ -6,6 +6,8 @@
 //!
 //!   - [`matching`] — the rule: a crossing is passed when a sample comes within the radius.
 //!   - [`silver`] — reading both datasets and writing the `session_crossing` dataset.
+//!   - [`gold`] — choosing which of those sessions are worth replaying, from the same rows.
 
+pub mod gold;
 pub mod matching;
 pub mod silver;

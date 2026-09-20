@@ -120,11 +120,14 @@ the shell. What that settles:
   first one to hand. A session is worth watching if it passes crossings, and silver already
   says which: `session_crossing` holds a row per session per crossing passed, so the choosing
   is a count over a dataset that exists rather than a second matching pass.
-- **The kiosk replays at its own rate, not the recording's.** A train takes minutes between
-  crossings and nobody watches a kiosk for minutes, so the page emits a sample a second
-  regardless of how far apart they were recorded. The samples keep their recorded timestamps:
-  the speed the core derives and the arrivals it predicts come from the real gaps between
-  fixes, and only the watching is sped up.
+- **A session replays in a minute, whatever it took to record.** A train takes minutes between
+  crossings and nobody watches a kiosk for minutes, so the recorded intervals are ignored and
+  the page spends a minute on each session: the delay between samples is that minute divided by
+  how many the session has, worked out per session as it starts. Sessions differ by a factor of
+  four in length, so one delay for all of them would leave the long ones interminable and the
+  short ones over before they read. The samples keep their recorded timestamps, so the speed
+  the core derives and the arrivals it predicts come from the real gaps between fixes; only the
+  watching is sped up.
 - **The kiosk's clock is the recording's, not the browser's.** The core takes the later of a
   fix and a tick, so a page ticking wall time while replaying fixes from last month would
   measure every countdown against today and read them all as long past. So `/kiosk` ticks the
@@ -203,8 +206,10 @@ remaining pages.
       replay it. Both are arguments, defaulted in the recipe that runs it at 5 and 3. Versioned
       and adopted as `pack_crossings` does, into `sessions.version`, so the page and any build
       read the same recording.
-- [ ] Serve `sessions.json` and add `/kiosk` replaying it: a sample a second, each session in
-      turn, round again from the first. First sight of the canvas against real movement, so
+- [ ] Serve `sessions.json` and add `/kiosk` replaying it: each session in a minute, in turn,
+      round again from the first. The shortest of the three has 252 samples and the longest
+      967, so that is a sample every 240ms against one every 62ms — and each one scans the
+      whole crossing set and redraws, so watch that the fastest still keeps up. First sight of the canvas against real movement, so
       correct there what phase 2 could only guess at: how often the picture should redraw, how
       much of it the near field should take — the scale's `constant` — and whether a dot
       reaching the rim reads as something approaching.
