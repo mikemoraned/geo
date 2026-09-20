@@ -93,11 +93,7 @@ impl Release {
     fn path(&self, overture_type: OvertureType) -> String {
         let OvertureType { theme, name } = overture_type;
         match &self.mirror {
-            Some(root) => format!(
-                "{}/{}/theme={theme}/type={name}/",
-                root.display(),
-                self.id
-            ),
+            Some(root) => format!("{}/{}/theme={theme}/type={name}/", root.display(), self.id),
             None => format!(
                 "s3://overturemaps-{S3_REGION}/release/{}/theme={theme}/type={name}/",
                 self.id
