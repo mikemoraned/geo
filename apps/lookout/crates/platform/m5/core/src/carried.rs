@@ -7,13 +7,23 @@
 //! the flash either way, so a filesystem would save nothing. It would cost a partition table,
 //! a mount at boot, and a way for the device to hold a set the code reading it disagrees with.
 //!
-//! Regenerate the file with `just carried-crossings`.
+//! The bytes are the store's, read from the gold artefact `pack_crossings` wrote, so a board
+//! and a browser are carrying versions of one thing rather than two files that drifted.
 
 use platform_core::pointset::{Aligned, PointSet, holds_points};
 
-/// The size is written out because `include_bytes!` yields a sized array. A regenerated file
-/// of a different size then stops the build, which is when to notice.
-static PACKED: &Aligned<[u8; 69_000]> = &Aligned(*include_bytes!("water-crossings.pointset"));
+/// The crossings, as the store's gold layer last packed them.
+///
+/// A pinned version rather than the newest: what a board holds is decided when its firmware is
+/// built, and a path that moved with the store would flash a different set depending on when
+/// the build ran. `just gold-pack-crossings` writes a new one; carrying it means changing the
+/// version here and committing the artefact it names.
+///
+/// The size is written out because `include_bytes!` yields a sized array. Repointing this at a
+/// set of a different size then stops the build, which is when to notice.
+static PACKED: &Aligned<[u8; 69_132]> = &Aligned(*include_bytes!(
+    "../../../../../data/medallion/gold/artifact=crossings/version=20260920T145731684Z/crossings.pointset"
+));
 
 /// A set the reader cannot make sense of stops the build. The bytes are the same on every
 /// boot, so a device is the wrong place to find out they are the wrong bytes.
@@ -67,11 +77,11 @@ mod tests {
     /// independent haversine in `f64`, so the tests below compare two answers rather than one.
     const DRESDEN_HBF: (f64, f64) = (51.0403, 13.7322);
     const NEAREST_TO_DRESDEN: [(u32, f32); 5] = [
-        (0x2620_a981, 2334.9),
-        (0x6ad4_b654, 2338.5),
-        (0x0ea2_0750, 2343.1),
-        (0xe6c6_312b, 2347.3),
-        (0x4efe_dc58, 2351.6),
+        (0x5c9f_65c9, 2335.0),
+        (0x3a81_47c0, 2338.4),
+        (0xb85f_3371, 2343.1),
+        (0xf51f_7627, 2347.4),
+        (0xfd00_6a89, 2351.6),
     ];
     /// How far the device's answer may sit from the notebook's. They agree to 0.27 m over
     /// 2.3 km — about what `f32` coordinates cost at this latitude, plus two implementations

@@ -123,14 +123,10 @@ silver-water-crossings:
 silver-session-crossings *args:
     cargo run --release -p session_crossings --bin match_crossings -- {{args}}
 
-# Pack the silver water crossings into the flat buffer the device scans, into gold.
+# Pack the silver water crossings into gold, as the buffer a device scans and the array a
+# browser fetches. Carrying a new version means pointing `m5-core`'s `carried` at it.
 gold-pack-crossings *args:
     cargo run -p crossings --bin pack_crossings -- {{args}}
-
-# Regenerate the crossings the device carries in flash. Same arguments as `gold-pack-crossings`.
-carried-crossings *args:
-    cargo run -p crossings --bin pack_crossings -- \
-        --output crates/platform/m5/core/src/water-crossings.pointset {{args}}
 
 # The M5StickC PLUS2 shell has its own workspace, toolchain, and target dir, so the recipes below
 # run cargo in it. LIBCLANG_PATH stands in for espup's `~/export-esp.sh`, unsourced.

@@ -6,7 +6,13 @@
 
 # Derived wholesale from bronze, in seconds, by `just sessionise` and `just ingest-motis`.
 /silver/
-/gold/
+
+# Gold is derived too, and ignored but for one artefact: the crossings a device carries in
+# flash and a browser fetches. Those are read by a build rather than by a query, so the version
+# being carried is versioned alongside the code naming it. Repointing means committing the new
+# version and deleting the one it replaces.
+/gold/*
+!/gold/artifact=crossings/
 
 # Point-in-time extracts of Overture: 1.5 GB, and re-derivable — `bronze/extract_manifest`
 # records the release and window each one took, and an Overture release never changes.

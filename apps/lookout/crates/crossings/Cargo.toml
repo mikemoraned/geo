@@ -9,7 +9,9 @@ clap = { workspace = true }
 geo-types = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }
+model = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

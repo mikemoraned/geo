@@ -29,7 +29,7 @@ bronze telemetry    ──sessionise──────▶ session, session_sampl
 bronze motis log    ──motis_ingest────▶ train_segment
 bronze overture     ──notebook────────▶ water_crossing
 session + crossings ──match_crossings─▶ session_crossing
-water_crossing      ──pack_crossings──▶ gold crossings.pointset
+water_crossing      ──pack_crossings──▶ gold crossings.pointset, crossings.json
 ```
 
 Two properties of that graph matter more than the order:

@@ -190,6 +190,18 @@ permitted again. Where no specialised format fits, use
 [GeoArrow 0.2](https://geoarrow.org) for fast export/import, **uncompressed**, since
 compressed GeoArrow is not universally supported by consuming viewers.
 
+Laid out by what was produced and which run produced it, rather than by a partition key:
+
+```
+<root>/gold/artifact=<name>/version=<run>/<file>
+```
+
+**Gold is derived, and so is not versioned in git — with one exception.** An artefact a build
+reads is an input to something outside the store, and cannot be re-derived by whoever builds
+it: a checkout has no silver to pack from. The crossings are the case today, embedded in the
+device's firmware and served to the browser, so the version being carried is committed and the
+rest are ignored. `data/medallion/.gitignore` states which.
+
 ## No table format
 
 The layout above *is* the metadata: partitioning is directory names, schema is the files',

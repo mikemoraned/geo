@@ -1,6 +1,7 @@
 # crossings
 
-Turns the silver water-crossings dataset into the flat point buffer the M5 device scans.
+Turns the silver water-crossings dataset into the forms a shell predicts against: the flat
+point buffer the M5 device scans, and the array a browser fetches.
 
 ```sh
 just gold-pack-crossings                                   # defaults, run from apps/lookout
@@ -10,8 +11,9 @@ just gold-pack-crossings --bbox 13.0,50.9,14.5,51.9        # west,south,east,nor
 
 The device holds every crossing in flash and brute-force scans the lot against each GPS fix,
 so what it needs is not a queryable dataset but a packed array of coordinates. At the measured
-size — 5,749 crossings for Germany — that is **69,000 bytes**, small enough to `include_bytes!`
-into the firmware, and small enough that an index would waste the effort.
+size — 5,760 crossings for Germany — that is **69,132 bytes**, small enough to `include_bytes!`
+into the firmware, and small enough that an index would waste the effort. The same crossings as
+JSON are 184,342 bytes, which is the cost of the browser reading them without a parser.
 
 ## The `.pointset` layout
 
@@ -79,9 +81,9 @@ laptop: both names of a crossing come from the same row, so nothing can come to 
 what one crossing is. It also means an id survives a rebuild of the dataset, a `--bbox` that
 keeps only part of it, and any reordering, since none of those change the row.
 
-Four bytes is few enough that two distinct crossings can collide by chance (~0.4% over 5,749
-points), which is why the uniqueness check exists at all. The real dataset is clean: 5,749
-crossings, 5,749 distinct ids.
+Four bytes is few enough that two distinct crossings can collide by chance (~0.4% over 5,760
+points), which is why the uniqueness check exists at all. The real dataset is clean: 5,760
+crossings, 5,760 distinct ids.
 
 ## Points are written in id order
 
@@ -102,6 +104,16 @@ what a device can hold is a window, not a border.
 
 ## Output
 
-`<store>/gold/crossings.pointset` — inside the store, in the layer that exists to produce
-formats for something outside it. Gold is derivable, so it is not versioned; `--output` names
-somewhere else.
+`<store>/gold/artifact=crossings/version=<run>/`, holding both forms of the same crossings:
+
+- `crossings.pointset` — the flat buffer a device scans in flash, `f32`
+- `crossings.json` — `[[id, latitude, longitude], …]`, which a browser fetches, in degrees
+  kept to six places
+
+One read produces both, so a board and a page cannot disagree about which places exist. They
+differ only in precision, and in neither case by more than a fix is accurate to.
+
+Gold is derivable and mostly unversioned, but this artefact is read by a build rather than by a
+query: `m5-core` embeds the buffer from a version it names, and the server serves the array. So
+the carried version is committed, and repointing means committing the new one and deleting the
+old. `--output` names a directory somewhere else.
