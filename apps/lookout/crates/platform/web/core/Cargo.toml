@@ -10,12 +10,10 @@ crux_core = "=0.16.2"
 chrono = { workspace = true }
 # `serde`, because a position goes out to the page as part of the view.
 geo-types = { workspace = true, features = ["serde"] }
+model = { workspace = true }
 platform-core = { workspace = true }
 predictor = { workspace = true }
 serde = { workspace = true }
-
-[dev-dependencies]
-model = { workspace = true }
 
 [features]
 # Declared so the generator `#[effect(typegen)]` emits behind it compiles when asked for.

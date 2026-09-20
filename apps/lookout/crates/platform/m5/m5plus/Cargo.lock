@@ -1430,6 +1430,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crux_core",
+ "model",
  "platform-core",
  "predictor",
 ]
@@ -1476,6 +1477,14 @@ dependencies = [
  "embedded-graphics-core",
  "embedded-hal 1.0.0",
  "heapless 0.8.0",
+]
+
+[[package]]
+name = "model"
+version = "0.1.0"
+dependencies = [
+ "geo-types",
+ "serde",
 ]
 
 [[package]]
@@ -1611,6 +1620,7 @@ dependencies = [
  "chrono",
  "crux_core",
  "geo-types",
+ "model",
  "predictor",
  "serde",
  "thiserror 2.0.20",

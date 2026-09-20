@@ -172,6 +172,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for effect in effects {
             match effect {
                 Effect::Render(_) => panel.show(core.view()).expect("draw the panel"),
+                // The core asks only where it has no crossings, and this board brought its
+                // own. Answering keeps the arm honest rather than unreachable.
+                Effect::Crossings(_) => {
+                    core.process_event(Event::Crossings(Vec::new()));
+                }
             }
         }
 

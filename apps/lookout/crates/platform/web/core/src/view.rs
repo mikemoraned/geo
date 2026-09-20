@@ -2,9 +2,8 @@
 
 use chrono::{DateTime, Utc};
 use geo_types::Point;
-use platform_core::pointset::PointSet;
 use platform_core::{Float, Model, Shell};
-use predictor::{Crossings, Prediction};
+use predictor::{Crossing, Crossings, Prediction};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -43,11 +42,25 @@ pub struct Browser;
 
 impl Shell for Browser {
     type ViewModel = ViewModel;
+    type Crossings = Vec<Crossing<Float>>;
 
-    /// Nothing, until the page has fetched a set. The core exists from the moment the module
-    /// loads, and the bytes arrive over the network after it.
-    fn crossings() -> PointSet<'static> {
-        PointSet::empty()
+    /// Nothing: the core exists from the moment the module loads, and the points arrive over
+    /// the network after it.
+    fn carried() -> Option<Self::Crossings> {
+        None
+    }
+
+    /// A point the globe has no room for is dropped rather than refusing the whole set: one
+    /// bad row should not cost a page every crossing near it.
+    fn received(points: Vec<model::Crossing>) -> Option<Self::Crossings> {
+        Some(
+            points
+                .into_iter()
+                .filter_map(|point| {
+                    Crossing::at(point.id, point.latitude(), point.longitude()).ok()
+                })
+                .collect(),
+        )
     }
 
     fn project(model: &Model<Self>) -> ViewModel {
@@ -57,7 +70,10 @@ impl Shell for Browser {
                 position: fix.position,
                 speed_mps: model.speed_mps(),
             }),
-            predicted: located(model.crossings(), model.predictions()),
+            predicted: model
+                .crossings()
+                .map(|crossings| located(crossings, model.predictions()))
+                .unwrap_or_default(),
         }
     }
 }
@@ -97,7 +113,7 @@ mod tests {
     use crux_core::Core;
     use model::Gps;
     use platform_core::{Event, Lookout};
-    use predictor::{Crossing, CrossingId};
+    use predictor::CrossingId;
 
     use super::*;
 
@@ -176,11 +192,12 @@ mod tests {
         assert!(view.predicted.is_empty());
     }
 
-    /// The browser has no crossings until it has fetched a set, so it predicts nothing — but
-    /// it still knows where it is, which is what the canvas centres on.
     #[test]
     fn a_fix_is_shown_with_the_speed_it_was_predicted_at() {
         let core: Core<Lookout<Browser>> = Core::new();
+        core.process_event(Event::Crossings(vec![model::Crossing::new(
+            1, 51.0503, 13.7322,
+        )]));
 
         core.process_event(Event::Position {
             t: instant(),
@@ -198,6 +215,27 @@ mod tests {
         assert!((here.position.y() - 51.0403).abs() < 1e-4);
         assert!((here.position.x() - 13.7322).abs() < 1e-4);
         assert_eq!(here.speed_mps, Some(27.8));
-        assert!(core.view().predicted.is_empty());
+        assert_eq!(core.view().predicted.len(), 1);
+    }
+
+    /// The page fetches its crossings and the browser reports a position, and the two race.
+    /// Until the set lands there is nothing to measure a fix against, so the view stays empty.
+    #[test]
+    fn nothing_is_shown_from_a_fix_that_beat_the_crossings() {
+        let core: Core<Lookout<Browser>> = Core::new();
+
+        core.process_event(Event::Position {
+            t: instant(),
+            gps: Gps {
+                latitude: 51.0403,
+                longitude: 13.7322,
+                altitude_metres: None,
+                accuracy_metres: 5.0,
+                speed_mps: Some(27.8),
+                heading_degrees: None,
+            },
+        });
+
+        assert_eq!(core.view().here, None);
     }
 }

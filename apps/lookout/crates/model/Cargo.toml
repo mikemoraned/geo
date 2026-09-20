@@ -4,6 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
+geo-types = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]

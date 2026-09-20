@@ -7,6 +7,7 @@ edition.workspace = true
 # Must match the core's pin — see `../../../platform-core/Cargo.toml`.
 crux_core = "=0.16.2"
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+model = { workspace = true }
 platform-core = { workspace = true }
 predictor = { workspace = true }
 

@@ -78,6 +78,12 @@ impl PointSet<'static> {
     }
 }
 
+impl Default for PointSet<'static> {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 impl<'a> PointSet<'a> {
     /// Borrows the points from a packed buffer, checking that it is one.
     pub fn new(packed: &'a [u8]) -> Result<Self, FormatError> {

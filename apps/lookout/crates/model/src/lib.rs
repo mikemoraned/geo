@@ -8,6 +8,8 @@
 //! wasm, and neither has any of the three. The store's schema — which datasets exist, how they
 //! are partitioned, what columns they have — is `medallion-model`, which depends on all three.
 
+pub mod crossing;
 pub mod gps;
 
+pub use crossing::Crossing;
 pub use gps::Gps;

@@ -4504,6 +4504,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crux_core",
+ "model",
  "platform-core",
  "predictor",
 ]
@@ -4671,6 +4672,7 @@ dependencies = [
 name = "model"
 version = "0.1.0"
 dependencies = [
+ "geo-types",
  "serde",
  "serde_json",
 ]

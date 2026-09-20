@@ -11,9 +11,17 @@ pub struct Device;
 
 impl Shell for Device {
     type ViewModel = ViewModel;
+    type Crossings = PointSet<'static>;
 
-    fn crossings() -> PointSet<'static> {
-        carried::crossings()
+    fn carried() -> Option<Self::Crossings> {
+        Some(carried::crossings())
+    }
+
+    /// Nothing can tell this device its crossings: they are in flash, and reading them there
+    /// is what keeps thousands of them out of its RAM. A board given a set over a connection
+    /// would answer here.
+    fn received(_points: Vec<model::Crossing>) -> Option<Self::Crossings> {
+        None
     }
 
     fn project(model: &Model<Self>) -> ViewModel {
