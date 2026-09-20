@@ -90,9 +90,6 @@ the shell. What that settles:
   element is left with nothing but I/O — see
   [2026-09-19-web-component-shell.md](2026-09-19-web-component-shell.md), which sketches this
   against the device panel rather than the web view.
-- **The element owns the core; the page owns the source.** Positions arrive through a method
-  the element exposes, so `/live` and `/kiosk` differ in where they read them and in nothing
-  else, and a replay is as easy to drive as a fix.
 - **The bridge is crux's, over JSON.** `process_event` and `view` go out through
   `wasm-bindgen` as strings, and the shell reads them with `JSON.parse`. Bincode was the first
   choice, but crux 0.16.2 generates TypeScript by shelling out to `pnpm install` and
@@ -128,14 +125,34 @@ the shell. What that settles:
   short ones over before they read. The samples keep their recorded timestamps, so the speed
   the core derives and the arrivals it predicts come from the real gaps between fixes; only the
   watching is sped up.
-- **The kiosk's clock is the recording's, not the browser's.** The core takes the later of a
-  fix and a tick, so a page ticking wall time while replaying fixes from last month would
-  measure every countdown against today and read them all as long past. So `/kiosk` ticks the
-  replayed time — and that is the difference between the two pages' shells, which is the
-  slice's claim about them: `/live` and `/kiosk` differ in where they read time and position,
-  and in nothing else.
-- **The replay never ends.** It runs each chosen session in turn and then starts again, since
-  a kiosk is left running and a screen that stops is one that looks broken.
+- **The replay is driven by the clock, not by a timer.** Each frame works out how far into the
+  minute it is and sends the sample that far through the session, so the page runs as fast as
+  the browser will paint and skips fixes where it cannot keep up, rather than queueing them and
+  falling steadily further behind. Skipping costs nothing the view can show: a fix not sent is
+  a position not drawn, and the one that is sent carries its own instant, so the speed between
+  them is still measured over the real interval.
+- **The element owns the core; the page owns the source and the clock.** Positions arrive
+  through a method the element exposes, so a replay is as easy to drive as a fix. The clock
+  arrives the same way, and has to: the core takes
+  the later of a fix and a tick, so a page ticking wall time while replaying fixes from last
+  month would measure every countdown against today and read them all as long past. `/kiosk`
+  therefore sends no ticks: a replayed fix carries the recording's own instant, and at a sample
+  every few hundred milliseconds there is nothing a tick between them would add. `/live` ticks,
+  because a browser fix is seconds apart and a countdown should shorten in between. So the
+  element holds the core, the canvas and the crossings it asks for, and takes positions and
+  time through one method; where those come from is each page's business.
+- **One event starts the core, and starting is all it is.** `Reset` puts the model back to
+  what it was built as, which is also what decides whether there are crossings to ask for — so
+  a shell sends it when it comes up, and again whenever what follows has nothing to do with
+  what came before. That second case is the kiosk: the journeys are chosen by how many
+  crossings they pass, not by when they happened, so one recorded in the morning can follow one
+  recorded that evening, and looping back to the first always goes backwards. A fix behind the
+  last one is refused, and rightly — so each journey begins by saying the last one is over, and
+  the page then sends every sample exactly as it was recorded. The alternative was for the page
+  to shift each journey onto the end of the one before, which works and puts arithmetic about
+  clocks in a shell that should not be doing any.
+- **The replay never ends.** It runs each chosen session in turn and then starts again, since a
+  kiosk is left running and a screen that stops is one that looks broken.
 - **`crux_core` stays pinned at `=0.16.2`.** 0.20 reboots the board (see `docs/device.md`), so
   the shared core stays on the pinned version, and the web shell with it.
 - **`/live` shows, `/record` records.** Moving the recording page to `/record` is a move, not a

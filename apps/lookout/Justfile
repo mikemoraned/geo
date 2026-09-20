@@ -53,8 +53,14 @@ gold-pack-sessions *args:
     cargo run --release -p session_crossings --bin pack_sessions -- \
         --version-file sessions.version --min-crossings 5 --max-sessions 3 {{args}}
 
-# Serve on http://localhost:3000 with the wasm and the crossings freshly built.
-serve-web: wasm crossings serve
+# Copy the sessions a kiosk replays into the dir `server` serves them from. Generated, so
+# gitignored: the Docker builder stage runs the same copy for a deploy.
+kiosk-sessions:
+    cp "data/medallion/gold/artifact=sessions/version={{sessions_version}}/sessions.json" \
+        crates/server/static/sessions.json
+
+# Serve on http://localhost:3000 with the wasm and the data freshly copied.
+serve-web: wasm crossings kiosk-sessions serve
 
 # Every test: the Rust workspace, Docker ones included, and the Python ones.
 test: test-python test-rust
@@ -79,7 +85,8 @@ end_to_end_test:
 # Deploy the server to fly.io (lookout.fly.dev), with the git hash and the crossings baked in.
 deploy:
     fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}" \
-        --build-arg CROSSINGS_VERSION="{{crossings_version}}"
+        --build-arg CROSSINGS_VERSION="{{crossings_version}}" \
+        --build-arg SESSIONS_VERSION="{{sessions_version}}"
 
 # Set up a fresh worktree's store from what the checkout carries. Gold waits until needed.
 init: bronze-init silver-init

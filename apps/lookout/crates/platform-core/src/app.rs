@@ -74,7 +74,7 @@ enum Predicting<S: Shell> {
 }
 
 /// A shell with no set of its own starts scanning an empty one, which predicts nothing, until
-/// it answers the request the core makes on [`Event::Start`].
+/// it answers the request the core makes on [`Event::Reset`].
 impl<S: Shell> Default for Model<S> {
     fn default() -> Self {
         Self {
@@ -138,9 +138,14 @@ impl<S: Shell> Model<S> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Event {
-    /// The shell is up and driving the core. It answers with a request for crossings where it
-    /// has none, so a shell that brought its own is asked for nothing.
-    Start,
+    /// Start again, knowing nothing. A shell sends this when it comes up, and again whenever
+    /// what follows has nothing to do with what came before — a kiosk between the recordings
+    /// it replays, where the next journey happened before the last one and every fix in it
+    /// would otherwise be refused as stale.
+    ///
+    /// The core answers with a request for crossings where it has none, so a shell that
+    /// carries its own is asked for nothing and a shell that fetches them fetches again.
+    Reset,
     /// The crossings a shell was asked for. A shell may send these unasked, and one that
     /// already has a set ignores them: a predictor keeps the crossings it was built with.
     Crossings(Vec<model::Crossing>),
@@ -253,12 +258,16 @@ impl<S: Shell> App for Lookout<S> {
     /// A render is asked for only where a shell would draw something different.
     fn update(&self, event: Event, model: &mut Model<S>, _caps: &()) -> Command<Effect, Event> {
         let change = match event {
-            // The one event answered with something other than a render. A shell that brought
-            // its own set is asked for nothing, and one already asked is not asked twice.
-            Event::Start => {
+            // The one event answered with something other than a render alone. Everything the
+            // core knows came from what a shell told it, so starting again is the model as it
+            // was built — which is also what decides whether there are crossings to ask for.
+            Event::Reset => {
+                *model = Model::default();
                 return match model.predictor {
-                    Predicting::Waiting => Command::notify_shell(GetCrossings).into(),
-                    Predicting::Ready(_) => Command::done(),
+                    Predicting::Waiting => {
+                        Command::all([render::render(), Command::notify_shell(GetCrossings).into()])
+                    }
+                    Predicting::Ready(_) => render::render(),
                 };
             }
             // A predictor keeps the crossings it was built with, so a set arriving for one
@@ -425,28 +434,42 @@ mod tests {
     fn a_shell_with_no_crossings_is_asked_for_them() {
         let core = waiting();
 
-        let effects = core.process_event(Event::Start);
+        let effects = core.process_event(Event::Reset);
 
-        assert!(matches!(effects.as_slice(), [Effect::Crossings(_)]));
+        assert!(
+            effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::Crossings(_)))
+        );
     }
 
     #[test]
     fn a_shell_that_brought_its_own_is_asked_for_nothing() {
         let core = core();
 
-        assert!(core.process_event(Event::Start).is_empty());
+        let effects = core.process_event(Event::Reset);
+
+        assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
     }
 
     #[test]
-    fn a_shell_that_has_answered_is_not_asked_again() {
+    fn starting_again_asks_for_the_crossings_again() {
         let core = waiting();
-        core.process_event(Event::Start);
+        core.process_event(Event::Reset);
 
         core.process_event(Event::Crossings(vec![model::Crossing::new(
             1, 51.0503, 13.7322,
         )]));
 
-        assert!(core.process_event(Event::Start).is_empty());
+        // Starting again drops them, and asks for them afresh.
+        let effects = core.process_event(Event::Reset);
+
+        assert!(
+            effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::Crossings(_)))
+        );
+        assert_eq!(core.view().predicted, 0);
     }
 
     /// Nothing is measured against a set that is not there, so a fix sent before one is
@@ -465,7 +488,7 @@ mod tests {
     #[test]
     fn crossings_arriving_are_what_a_later_fix_is_measured_against() {
         let core = waiting();
-        core.process_event(Event::Start);
+        core.process_event(Event::Reset);
 
         core.process_event(Event::Crossings(vec![
             model::Crossing::new(1, 51.0503, 13.7322),
@@ -585,6 +608,25 @@ mod tests {
         assert!(effects.is_empty());
     }
 
+    /// A kiosk replaying one recording after another goes back in time between them, and what
+    /// makes a fix stale is a newer fix. Starting again is how a shell says so.
+    #[test]
+    fn a_position_before_the_last_one_is_taken_after_starting_again() {
+        let core = core();
+        core.process_event(reported(instant(), at_the_station()));
+
+        core.process_event(Event::Reset);
+        core.process_event(reported(
+            instant() - TimeDelta::seconds(3_600),
+            Gps {
+                latitude: 52.0,
+                ..at_the_station()
+            },
+        ));
+
+        assert!((core.view().latitude.expect("a fix") - 52.0).abs() < 1e-4);
+    }
+
     #[test]
     fn a_position_behind_the_clock_is_refused() {
         let core = core();
@@ -660,14 +702,14 @@ mod tests {
 
         bridge
             .process_event(
-                &mut serde_json::Deserializer::from_str(r#""Start""#),
+                &mut serde_json::Deserializer::from_str(r#""Reset""#),
                 &mut serde_json::Serializer::new(&mut requests),
             )
             .expect("an event this core knows");
 
         assert_eq!(
             String::from_utf8(requests).expect("utf-8"),
-            r#"[{"id":0,"effect":{"Crossings":null}}]"#
+            r#"[{"id":0,"effect":{"Render":null}},{"id":1,"effect":{"Crossings":null}}]"#
         );
     }
 

@@ -24,13 +24,17 @@ RUN cargo build --release -p server
 # Into the static dir, which is then copied from the builder rather than from the context: the
 # wasm is generated, so a checkout does not carry it.
 RUN wasm-pack build crates/platform/web/bridge --target web --out-dir ../../../server/static/wasm --out-name lookout
-# The crossings a browser fetches, beside it. Which version is `just deploy`'s to say, from
-# the same `crossings.version` the device's build script reads, so a deploy and a board are
-# never carrying different sets.
+# The crossings a browser fetches and the sessions a kiosk replays, beside it. Which versions
+# is `just deploy`'s to say, from the same files the device's build script reads, so a deploy
+# and a board are never carrying different sets.
 ARG CROSSINGS_VERSION
+ARG SESSIONS_VERSION
 RUN test -n "$CROSSINGS_VERSION" || { echo "CROSSINGS_VERSION is required" >&2; exit 1; }; \
+    test -n "$SESSIONS_VERSION" || { echo "SESSIONS_VERSION is required" >&2; exit 1; }; \
     cp "data/medallion/gold/artifact=crossings/version=$CROSSINGS_VERSION/crossings.json" \
-        crates/server/static/crossings.json
+        crates/server/static/crossings.json; \
+    cp "data/medallion/gold/artifact=sessions/version=$SESSIONS_VERSION/sessions.json" \
+        crates/server/static/sessions.json
 
 FROM debian:bookworm-slim AS runner
 

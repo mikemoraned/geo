@@ -66,7 +66,7 @@ mod tests {
     use super::*;
 
     /// One core is shared by the whole process, so the sequence runs as a single test, in
-    /// order: the page starts, is asked for crossings, and answers.
+    /// order: the page starts, is asked for crossings, answers, and starts again.
     #[test]
     fn a_page_is_asked_for_crossings_and_answers_with_them() {
         assert_eq!(
@@ -74,19 +74,31 @@ mod tests {
             r#"{"now":null,"crossings":0,"radius_metres":0.0,"here":null,"predicted":[]}"#
         );
 
-        let requests = dispatch(r#""Start""#).unwrap();
-        assert_eq!(requests, r#"[{"id":0,"effect":{"Crossings":null}}]"#);
+        let requests = dispatch(r#""Reset""#).unwrap();
+        assert_eq!(
+            requests,
+            r#"[{"id":0,"effect":{"Render":null}},{"id":1,"effect":{"Crossings":null}}]"#
+        );
 
         let answered = dispatch(r#"{"Crossings":[[7,51.0403,13.7322],[8,51.0503,13.7322]]}"#);
 
-        assert_eq!(answered.unwrap(), r#"[{"id":1,"effect":{"Render":null}}]"#);
+        assert_eq!(answered.unwrap(), r#"[{"id":2,"effect":{"Render":null}}]"#);
         assert_eq!(
             projection().unwrap(),
             r#"{"now":null,"crossings":2,"radius_metres":5000.0,"here":null,"predicted":[]}"#
         );
 
-        // Asked once, and not again now it has them.
-        assert_eq!(dispatch(r#""Start""#).unwrap(), "[]");
+        // Starting again drops them and asks afresh, which is how a kiosk begins a journey
+        // that happened before the one it just showed.
+        assert!(
+            dispatch(r#""Reset""#)
+                .unwrap()
+                .contains(r#"{"Crossings":null}"#)
+        );
+        assert_eq!(
+            projection().unwrap(),
+            r#"{"now":null,"crossings":0,"radius_metres":0.0,"here":null,"predicted":[]}"#
+        );
     }
 
     #[test]

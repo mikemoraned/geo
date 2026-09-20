@@ -1,6 +1,9 @@
-// The shell around the core: it loads the wasm, runs the clock, answers what the core asks
-// for, and paints what it says. No prediction, no clock discipline and no formatting live
-// here — the core holds all three, and answers an event that moved nothing with no request.
+// The core, in an element: it loads the wasm, answers what the core asks for, and paints what
+// it says. No prediction, no clock discipline and no formatting live here — the core holds all
+// three, and answers an event that moved nothing with no request.
+//
+// Where positions and time come from is not its business either. A page sends them through
+// `dispatch`, which is what lets one element serve a live receiver and a replay.
 import init, { process_event, view } from "/wasm/lookout.js";
 import { geoAzimuthalEquidistant } from "/vendor/d3-geo-3.1.1.js";
 import { scaleSymlog } from "/vendor/d3-scale-4.0.2.js";
@@ -10,9 +13,6 @@ import { scaleSymlog } from "/vendor/d3-scale-4.0.2.js";
 const loaded = init();
 
 const CROSSINGS = "/crossings.json";
-const TICK_INTERVAL_MS = 1000;
-const GEOLOCATION = { enableHighAccuracy: true, maximumAge: 0, timeout: 30_000 };
-
 // How far out the scale stays close to linear, in metres. Below it a crossing moves across
 // the picture about as fast as it moves over the ground; above it, distances compress. So the
 // smaller this is, the more of the picture goes to what is close — which is what is about to
@@ -22,8 +22,6 @@ const CANVAS_SIZE = 320;
 const TAU = Math.PI * 2;
 
 class LookoutPredictor extends HTMLElement {
-  #timer;
-  #watch;
   #screen;
   #canvas;
 
@@ -48,62 +46,12 @@ class LookoutPredictor extends HTMLElement {
     this.#canvas.height = CANVAS_SIZE * density;
     this.#canvas.getContext("2d").scale(density, density);
 
-    loaded.then(() => {
-      this.dispatch("Start");
-      this.#timer = setInterval(() => this.#tick(), TICK_INTERVAL_MS);
-      this.#watch = this.#follow();
-    });
+    // What it is fed, and when it is started, are the page's business.
+    this.ready = loaded;
   }
 
-  disconnectedCallback() {
-    clearInterval(this.#timer);
-    if (this.#watch !== undefined) navigator.geolocation.clearWatch(this.#watch);
-  }
-
-  // Every fix the browser will give, until the element goes away. Returns the watch id, or
-  // undefined where there is no geolocation to read — which is also what a page served over
-  // plain HTTP sees, since browsers withhold it outside a secure context.
-  #follow() {
-    if (!navigator.geolocation) {
-      this.#screen.textContent = "no geolocation in this browser";
-      return undefined;
-    }
-    return navigator.geolocation.watchPosition(
-      (position) => this.#reported(position),
-      (failed) => {
-        this.#screen.textContent = `no position: ${failed.message}`;
-      },
-      GEOLOCATION,
-    );
-  }
-
-  // One fix, as the browser measured it. Its own timestamp is sent, not the time it arrived:
-  // it says where we were when it was taken, and an arrival counted from it is counted from
-  // the right instant.
-  #reported(position) {
-    const { latitude, longitude, altitude, accuracy, speed, heading } = position.coords;
-    this.dispatch({
-      Position: {
-        t: new Date(position.timestamp).toISOString(),
-        gps: {
-          lat: latitude,
-          lon: longitude,
-          alt: altitude,
-          acc: accuracy,
-          speed,
-          heading,
-        },
-      },
-    });
-  }
-
-  // The core refuses a time it has already counted, so sending one per interval is safe
-  // however the browser schedules them.
-  #tick() {
-    this.dispatch({ Tick: new Date().toISOString() });
-  }
-
-  // Applies one event, doing what the core asks for and repainting only where it asked.
+  // Applies one event, doing what the core asks for and repainting only where it asked. This
+  // is the whole surface a page drives: a position, or a time.
   async dispatch(event) {
     const requests = JSON.parse(process_event(JSON.stringify(event)));
     let moved = false;
