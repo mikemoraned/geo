@@ -171,13 +171,26 @@ Splitting the core by platform found store rules inside types that are not the s
 it is needed for the pages to work, so it comes last. Left undone, the next core written has to
 import arrow to name a crossing.
 
-- [ ] Decide what a `CrossingId` is, and keep one of them. There are two: a `String` in
+- [ ] Decide what a crossing is, and keep one of it. There are two ids — a `String` in
       `medallion-model`, whose constructor refuses anything that could not name a partition,
-      and a `u32` in `predictor`, which is what a device has room for. `WaterCrossingRow`
+      and a `u32` in `predictor`, which is what a device has room for — and `WaterCrossingRow`
       carries both, as `crossing_id` and `crossing_short_id`, so the store already treats them
-      as one thing named twice. The `String` one cannot move to `model` while it validates a
-      medallion rule. So: is an id a name for a crossing that also suits a partition, or a
-      partition value that also names a crossing? Answer that, then move it.
+      as one thing named twice. There are also two `Crossing` types: `model`'s, which is what a
+      source reports, and `predictor`'s, which is the same crossing in the float a scan
+      measures in. Collapsing those needs `Measure` to move as well, which is the same question
+      one level down. The `String` id cannot move to `model` while it validates a medallion
+      rule. So: is an id a name for a crossing that also suits a partition, or a partition
+      value that also names a crossing? Answer that, then move them.
+- [ ] Split `Shell` by what a platform can do, not by what it happens to have. One kind is
+      standalone: it brings its crossings, asks for nothing, and needs only somewhere to send
+      fixes. That is the board. The other is connected: it can call out, so it can be asked for
+      a set it does not hold. That is a browser, and later a board with a radio. One trait
+      covers both today, and each implementation answers `None` to the half that is not its
+      own — the device cannot be told its crossings, the browser carries none. The device also
+      builds an `Effect::Crossings` it can never receive, and its shell carries a match arm for
+      an effect that never arrives. The thing to work out is what one core does with two of
+      these, since crux builds one effect enum per app and a standalone shell's effects are a
+      subset of a connected one's.
 - [ ] Find the same pattern elsewhere: a type everything needs, holding a constraint only the
       store has. It hides until something that cannot build arrow — a device, a browser —
       imports one. Such a type belongs in `model`, and the store's rule about it belongs in a
