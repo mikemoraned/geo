@@ -4499,6 +4499,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "m5-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "crux_core",
+ "platform-core",
+ "predictor",
+]
+
+[[package]]
 name = "marrow"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

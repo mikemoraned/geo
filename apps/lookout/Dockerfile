@@ -23,7 +23,7 @@ COPY . .
 RUN cargo build --release -p server
 # Into the static dir, which is then copied from the builder rather than from the context: the
 # wasm is generated, so a checkout does not carry it.
-RUN wasm-pack build crates/web-bridge --target web --out-dir ../server/static/wasm --out-name lookout
+RUN wasm-pack build crates/platform/web/bridge --target web --out-dir ../../../server/static/wasm --out-name lookout
 
 FROM debian:bookworm-slim AS runner
 

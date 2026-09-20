@@ -34,6 +34,16 @@ the shell. What that settles:
   into a shared core, and each shell projects its own ViewModel from it — the panel's strings
   for the device, structured lat/lon for the web. A second core over the same `predictor`
   would drift from the first.
+- **A crate per platform, under `crates/platform/`.** `platform-core` is the core itself and
+  nothing else; what a platform makes of it lives in a crate of its own — `m5/core` for the
+  panel and the carried crossings, `web/core` and `web/bridge` for the browser, with each
+  platform's untestable shell (`m5/m5plus`) beside its testable core. The alternative was a
+  second core crate named apart from the first, which would have prefixed a name to
+  disambiguate it rather than to say what it holds.
+- **The projection is a trait, not a second core.** A shell implements `Shell`: where its
+  crossings come from, and how to project what it shows from the model. `Lookout<S>` is then
+  one `App` over one `Event` and one `Model`, with `view` delegating to `S`. The state cannot
+  fork, because there is only one of it.
 - **Positions in the web ViewModel.** A `Prediction` carries a `CrossingId`, a distance, and
   an arrival instant, but no position. The core already holds the point set, so it resolves
   ids to lat/lon as it projects the web view, leaving `Prediction` as it is.
@@ -98,8 +108,10 @@ remaining pages.
 
 #### Phase 2 — the predictor behind it
 
-- [ ] Split `platform-core` into a shared prediction core and a device-panel projection,
-      leaving the device shell as it is.
+- [x] Split `platform-core` into a shared prediction core and a device-panel projection,
+      leaving the device shell as it is. The shell's own code is unchanged bar its imports and
+      one type parameter, but it moved to `crates/platform/m5/m5plus` and gained an `m5-core`
+      dependency. Nothing here can build it: it needs `just m5plus-build-release`.
 - [ ] Take a position as an event, alongside an NMEA sentence.
 - [ ] Project a web ViewModel: current position, speed, and each prediction's lat/lon,
       distance, and arrival.

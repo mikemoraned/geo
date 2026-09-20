@@ -1,9 +1,15 @@
 [workspace]
-members = ["crates/*", "crates/platform/rerun-py"]
+members = [
+    "crates/*",
+    "crates/platform/m5/core",
+    "crates/platform/rerun-py",
+    "crates/platform/web/bridge",
+    "crates/platform/web/core",
+]
 # `crates/platform` holds the shells that drive the core, and is not a crate itself. The glob
 # above would still try to read a manifest there, so it is excluded — which also keeps
-# `crates/platform/m5plus` out, as a crate targeting Xtensa with its own workspace must be.
-# A shell that does belong here, such as `crates/platform/rerun-py`, is listed by name.
+# `crates/platform/m5/m5plus` out, as a crate targeting Xtensa with its own workspace must be.
+# A shell that does belong here — the browser's and the replay runner's — is listed by name.
 exclude = ["crates/platform"]
 resolver = "2"
 
@@ -75,6 +81,7 @@ pyo3 = "0.28"
 pyo3-arrow = "0.16"
 crossings = { path = "crates/crossings" }
 platform-core = { path = "crates/platform-core" }
+m5-core = { path = "crates/platform/m5/core" }
 medallion = { path = "crates/medallion" }
 model = { path = "crates/model" }
 predictor = { path = "crates/predictor" }
@@ -82,7 +89,7 @@ recorder = { path = "crates/recorder" }
 session_crossings = { path = "crates/session_crossings" }
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
-web-core = { path = "crates/web-core" }
+web-core = { path = "crates/platform/web/core" }
 transport = { path = "crates/transport" }
 
 [workspace.lints.clippy]

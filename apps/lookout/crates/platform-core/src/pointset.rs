@@ -55,7 +55,7 @@ pub struct Point {
 /// Forces the 4-byte alignment the columns are cast at. Anything holding packed bytes goes
 /// behind it, because `include_bytes!` yields a buffer aligned to 1.
 #[repr(C, align(4))]
-pub(crate) struct Aligned<T: ?Sized>(pub T);
+pub struct Aligned<T: ?Sized>(pub T);
 
 /// The crossings, borrowed from the bytes they are stored in.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -154,7 +154,7 @@ impl<'a> PointSet<'a> {
 /// the length matches the count claimed — of bytes built into the binary, so a set the reader
 /// cannot make sense of stops the build rather than reaching a device. The answer is a `bool`
 /// because that is what a `const` assertion acts on. `new` is where a failure is described.
-pub(crate) const fn holds_points(packed: &[u8]) -> bool {
+pub const fn holds_points(packed: &[u8]) -> bool {
     if packed.len() < HEADER_LEN {
         return false;
     }

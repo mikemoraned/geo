@@ -9,7 +9,7 @@ use embedded_graphics::{
     prelude::*,
     text::Text,
 };
-use platform_core::{NEAREST_ON_SCREEN, ViewModel};
+use m5_core::{NEAREST_ON_SCREEN, ViewModel};
 
 /// Panel geometry and wiring, from M5GFX's `board_M5StickCPlus2`. **The offset is the part
 /// that has to be right**: the controller addresses a window larger than the visible panel,

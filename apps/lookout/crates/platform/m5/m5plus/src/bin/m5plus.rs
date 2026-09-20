@@ -21,6 +21,7 @@ use mipidsi::{
     models::ST7789,
     options::{ColorInversion, Orientation, Rotation},
 };
+use m5_core::Device;
 use platform_core::{Effect, Event, Lookout};
 
 use m5plus::{battery, gnss, gnss::Gnss, panel, panel::Panel};
@@ -124,10 +125,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Boxed so the model lives on the heap rather than in this task's frame. It embeds a parser
     // carrying per-constellation satellite tables, several KB on its own, and it only grows.
-    let core: Box<Core<Lookout>> = Box::new(Core::new());
+    let core: Box<Core<Lookout<Device>>> = Box::new(Core::new());
     log::info!(
         "carrying {} crossings; {} bytes of main task stack never used",
-        platform_core::carried::crossings().len(),
+        m5_core::carried::crossings().len(),
         stack_unused(),
     );
 

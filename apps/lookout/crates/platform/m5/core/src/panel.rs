@@ -7,8 +7,8 @@
 use chrono::{DateTime, Utc};
 use predictor::{DEFAULT_RADIUS_METRES, Prediction};
 
-use crate::Float;
-use crate::battery::Charge;
+use platform_core::Float;
+use platform_core::battery::Charge;
 
 /// Shown before the shell has reported a time.
 pub(crate) const NO_TIME_YET: &str = "--:--:--";

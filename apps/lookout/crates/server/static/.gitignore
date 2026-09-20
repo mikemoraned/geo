@@ -1,2 +1,2 @@
-# Built by `just wasm`, from crates/web-bridge.
+# Built by `just wasm`, from crates/platform/web/bridge.
 wasm/

@@ -1,0 +1,19 @@
+[package]
+name = "m5-core"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+# Must match the core's pin — see `../../../platform-core/Cargo.toml`.
+crux_core = "=0.16.2"
+chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+platform-core = { workspace = true }
+predictor = { workspace = true }
+
+[dev-dependencies]
+# The same crate again, for the captured sentences its tests share with this crate's. A
+# dev-dependency, so the feature is off in anything built for the device.
+predictor = { workspace = true, features = ["fixtures"] }
+
+[lints]
+workspace = true

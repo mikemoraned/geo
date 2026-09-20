@@ -17,6 +17,11 @@ predictor = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 
+[features]
+# Declared so the generator `#[effect(typegen)]` emits behind it compiles when asked for.
+# Nothing enables it: the web shell reads the bridge's JSON without generated bindings.
+typegen = ["crux_core/typegen"]
+
 [dev-dependencies]
 # The same crate again, for the captured sentences its tests share with this crate's. A
 # dev-dependency, so the feature is off in anything built for the device.

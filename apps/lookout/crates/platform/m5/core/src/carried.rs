@@ -9,7 +9,7 @@
 //!
 //! Regenerate the file with `just carried-crossings`.
 
-use crate::pointset::{Aligned, PointSet, holds_points};
+use platform_core::pointset::{Aligned, PointSet, holds_points};
 
 /// The size is written out because `include_bytes!` yields a sized array. A regenerated file
 /// of a different size then stops the build, which is when to notice.

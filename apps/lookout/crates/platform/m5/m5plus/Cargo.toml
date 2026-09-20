@@ -28,12 +28,13 @@ log = "0.4"
 esp-idf-svc = { version = "0.52.1", features = ["critical-section"] }
 mipidsi = "0.10"
 embedded-graphics = "0.8"
-# Must match the core's pin — see `../../platform-core/Cargo.toml`.
+# Must match the core's pin — see `../../../platform-core/Cargo.toml`.
 crux_core = "=0.16.2"
-# Both imported directly, not over FFI: a Rust shell needs no typegen or bridge. They inherit
+# All imported directly, not over FFI: a Rust shell needs no typegen or bridge. They inherit
 # `edition` and `[lints]` from the lookout workspace, which they still belong to.
-platform-core = { path = "../../platform-core" }
-predictor = { path = "../../predictor" }
+m5-core = { path = "../core" }
+platform-core = { path = "../../../platform-core" }
+predictor = { path = "../../../predictor" }
 
 [build-dependencies]
 embuild = "0.33"
