@@ -216,21 +216,21 @@ remaining pages.
 
 #### Phase 3 — the rest of the site
 
-- [ ] Add a gold step choosing the sessions worth replaying, and writing them as
+- [x] Add a gold step choosing the sessions worth replaying, and writing them as
       `sessions.json`. It counts the crossings each recorded session passed, which is a group
       over silver `session_crossing`; keeps those passing at least `--min-crossings`; sorts by
       that count and keeps the first `--max-sessions`; and writes each with the samples that
       replay it. Both are arguments, defaulted in the recipe that runs it at 5 and 3. Versioned
       and adopted as `pack_crossings` does, into `sessions.version`, so the page and any build
       read the same recording.
-- [ ] Serve `sessions.json` and add `/kiosk` replaying it: each session in a minute, in turn,
+- [x] Serve `sessions.json` and add `/kiosk` replaying it: each session in a minute, in turn,
       round again from the first. The shortest of the three has 252 samples and the longest
       967, so that is a sample every 240ms against one every 62ms — and each one scans the
       whole crossing set and redraws, so watch that the fastest still keeps up. First sight of the canvas against real movement, so
       correct there what phase 2 could only guess at: how often the picture should redraw, how
       much of it the near field should take — the scale's `constant` — and whether a dot
       reaching the rim reads as something approaching.
-- [ ] Move the recording page to `/record`, and make `/` a summary linking to the three pages.
+- [x] Move the recording page to `/record`, and make `/` a summary linking to the three pages.
 - [ ] Fold what holds from `docs/2026-09-19-web-component-shell.md` into the code and its docs,
       and delete the note. Its shape is the slice; its plumbing moves with the typegen build.
 

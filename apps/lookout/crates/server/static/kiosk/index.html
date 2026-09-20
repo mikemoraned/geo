@@ -6,13 +6,18 @@
     <title>Lookout — kiosk</title>
     <style>
       body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.5; }
+      h1 a { color: inherit; text-decoration: none; }
+      footer { margin-top: 2rem; color: #888; font-size: 0.85rem; }
+      #version { font-family: ui-monospace, monospace; }
     </style>
   </head>
   <body>
-    <h1>Lookout — kiosk</h1>
+    <h1><a href="/">Lookout</a> — kiosk</h1>
     <p id="intro">Recorded journeys, replayed.</p>
     <lookout-predictor></lookout-predictor>
     <p id="said"></p>
+    <footer>version: <span id="version">…</span></footer>
     <script type="module" src="/kiosk/kiosk.js"></script>
+    <script type="module" src="/version.js"></script>
   </body>
 </html>

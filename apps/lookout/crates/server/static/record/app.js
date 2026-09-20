@@ -395,12 +395,3 @@ startBtn.addEventListener("click", start);
 // delivering, so connect and re-flush on startup even before the user hits start.
 if (outbox.length) ensureWs();
 
-// Show the server build's git hash, so a running deploy can be matched to source.
-fetch("/version")
-  .then((r) => r.text())
-  .then((v) => {
-    el("version").textContent = v;
-  })
-  .catch(() => {
-    el("version").textContent = "unknown";
-  });
