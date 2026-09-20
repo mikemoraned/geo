@@ -57,9 +57,20 @@ the shell. What that settles:
   an arrival instant, but no position. The core already holds the point set, so it resolves
   ids to lat/lon as it projects the web view, leaving `Prediction` as it is.
 - **The crossings are fetched, not baked.** The device carries its set in flash because flash
-  is what it has; the browser fetches a packed set as a static asset. The web is then free of
-  the size flash allows, at the cost of a load path: the reader borrows its bytes, so fetched
-  bytes need an owned, aligned buffer behind them.
+  is what it has; the browser fetches one as a static asset, and is then free of the size flash
+  allows, at the cost of a load path.
+- **The browser fetches `[[id, lat, lon], …]` and holds a `Vec`.** Each platform reads the set
+  the way that suits it: the device scans packed columns where they lie, since copying them
+  would cost RAM it has better uses for, and the browser parses JSON into
+  `Vec<Crossing<Float>>`, which costs the same 12 bytes a point either way in a process that
+  has just allocated the response. About 180 KB, and a third of that compressed.
+- **`predictor::Crossings` is the seam.** The core names the trait, not a representation, so
+  changing what the browser fetches touches one implementation and nothing else. That is what
+  makes JSON affordable as a first answer: the packed format, GeoArrow and anything else stay
+  open. GeoArrow is the one to weigh again, because the packed format is already its separated
+  point encoding with an id column and no envelope — but reading it needs arrow, which will not
+  build for Xtensa at all and, in wasm, costs more than the 67 KB it would be reading. Tracks
+  are the change that reopens this: a linestring is where hand-parsing stops being twenty lines.
 - **wasm-pack, into the server's static dir.** Trunk owns a page and `server` serves three, so
   the widget is a library those pages load. A `just` recipe builds it for local work and the
   Docker builder stage builds it for a deploy, which keeps generated files out of version
@@ -137,8 +148,12 @@ remaining pages.
       a response, so `handle_response` stops being unused and the bridge has to expose it.
       Watch the size: a response through the JSON bridge is a number per byte, and the set is
       69 KB. The device shell has to answer the new effect too, and nothing here can build it.
-- [ ] Let the point set reader borrow owned bytes, so the core can scan a fetched set.
-- [ ] Serve the packed crossings as a static asset, and answer the core's request with them.
+- [-] Let the point set reader borrow owned bytes, so the core can scan a fetched set. Moot:
+      the browser holds a `Vec<Crossing<Float>>` rather than reading packed bytes, so nothing
+      fetched is borrowed.
+- [ ] Serve the crossings as a JSON static asset, and answer the core's request with them.
+      Add a `CompressionLayer` while here: 180 KB of coordinates is the first response big
+      enough to notice, and it covers every other response too.
 - [ ] Swap the counter core for the predictor, and feed `/live` from browser geolocation.
 - [ ] Draw the canvas with D3: the centre dot sized by speed, the predictions placed by a
       hyperbolic mapping, and the radius standing for the maximum distance.
