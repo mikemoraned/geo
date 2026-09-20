@@ -9,5 +9,5 @@ pub mod pointset;
 pub mod silver;
 
 pub use bbox::{Bbox, BboxError};
-pub use pointset::{FormatError, PackedId, Point};
+pub use pointset::{FormatError, compacted};
 pub use silver::{Crossing, ReadError};

@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 use clap::Parser;
-use crossings::{Bbox, Point, pointset, silver};
+use crossings::{Bbox, pointset, silver};
 use medallion::MedallionArgs;
 
 /// What the crossings are called in gold, and the files each version of them holds.
@@ -82,26 +82,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let crossings: Vec<_> = match args.bbox {
         Some(window) => read
             .into_iter()
-            .filter(|crossing| window.contains(crossing.position.x, crossing.position.y))
+            .filter(|crossing| {
+                window.contains(crossing.crossing.longitude(), crossing.crossing.latitude())
+            })
             .collect(),
         None => read,
     };
 
-    let points: Vec<_> = crossings.iter().map(Point::of).collect();
+    let points: Vec<_> = crossings
+        .iter()
+        .map(crossings::compacted)
+        .collect::<Result<Vec<_>, _>>()?;
     let packed = pointset::pack(&points)?;
 
     // The degrees silver recorded, not the `f32` the buffer rounds them to: a browser has no
     // reason to inherit the board's precision, only to stop short of absurd.
-    let array: Vec<model::Crossing> = crossings
+    let array: Vec<model::CrossingCompact<f64>> = crossings
         .iter()
         .map(|crossing| {
-            model::Crossing::new(
-                crossing.short_id.get(),
-                round(crossing.position.y),
-                round(crossing.position.x),
+            model::CrossingCompact::at(
+                crossing.compact_id,
+                round(crossing.crossing.latitude()),
+                round(crossing.crossing.longitude()),
             )
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
     let json = serde_json::to_vec(&array)?;
 
     fs::create_dir_all(&output)?;

@@ -1484,7 +1484,9 @@ name = "model"
 version = "0.1.0"
 dependencies = [
  "geo-types",
+ "num-traits",
  "serde",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -1639,6 +1641,7 @@ dependencies = [
  "chrono",
  "geo",
  "geo-types",
+ "model",
  "nmea",
  "num-traits",
  "serde",

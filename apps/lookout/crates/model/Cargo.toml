@@ -5,7 +5,11 @@ edition.workspace = true
 
 [dependencies]
 geo-types = { workspace = true }
+# Written out rather than inherited: this crate builds for Xtensa and for wasm, and neither
+# has the `std` the workspace default would bring. See docs/device.md.
+num-traits = { version = "0.2", default-features = false }
 serde = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

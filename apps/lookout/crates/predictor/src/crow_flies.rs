@@ -7,8 +7,9 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
-use crate::crossing::{Crossing, Crossings};
-use crate::measure::Measure;
+use model::{CrossingCompact, Measure};
+
+use crate::crossings::Crossings;
 use crate::predict::{Event, ObserveError, Predict, Prediction};
 use crate::sample::Sample;
 
@@ -21,7 +22,7 @@ pub const DEFAULT_RADIUS_METRES: f64 = 5_000.0;
 /// `C` is where the crossings come from, defaulting to the `Vec` anything off the device
 /// holds them in. The device passes the columns it scans in flash instead.
 #[derive(Debug, Clone)]
-pub struct CrowFlies<T: Measure, C: Crossings<T> = Vec<Crossing<T>>> {
+pub struct CrowFlies<T: Measure, C: Crossings<T> = Vec<CrossingCompact<T>>> {
     crossings: C,
     radius_metres: T,
     now: Option<DateTime<Utc>>,
@@ -204,11 +205,11 @@ mod tests {
 
     /// Three crossings due north of 50.0N, a hundredth of a degree apart, so the nearest is
     /// about 1,112m away and the furthest about 3,336m.
-    fn crossings<T: Measure>() -> Vec<Crossing<T>> {
+    fn crossings<T: Measure>() -> Vec<CrossingCompact<T>> {
         vec![
-            Crossing::at(1, 50.01, 0.0).expect("on the globe"),
-            Crossing::at(2, 50.02, 0.0).expect("on the globe"),
-            Crossing::at(3, 50.03, 0.0).expect("on the globe"),
+            CrossingCompact::at(1, 50.01, 0.0).expect("on the globe"),
+            CrossingCompact::at(2, 50.02, 0.0).expect("on the globe"),
+            CrossingCompact::at(3, 50.03, 0.0).expect("on the globe"),
         ]
     }
 
@@ -233,7 +234,7 @@ mod tests {
         predictor
             .predictions()
             .iter()
-            .map(|prediction| prediction.crossing.value())
+            .map(|prediction| prediction.crossing.get())
             .collect()
     }
 

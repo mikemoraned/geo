@@ -6,19 +6,20 @@
 
 use std::collections::HashMap;
 
-use crossings::{PackedId, Point, pointset, silver};
+use crossings::{pointset, silver};
 use geo_types::Point as GeoPoint;
 use medallion::{
     COUNTRY, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Root, geo_batch,
     projected_wkb_field, wkb_field,
 };
-use medallion_model::{CrossingId, OverlapKind, WaterCrossingRow};
+use medallion_model::{OverlapKind, WaterCrossingRow};
+use model::{CrossingCompactId, CrossingId};
 
 /// The four-byte name the store gives the nth crossing of a test store. Distinct per crossing,
 /// which is all the dataset promises and all the packer relies on; how the real derivation
 /// mints one is the notebook's business, not this crate's.
-fn short_id(n: usize) -> u32 {
-    0x1000_0000 + n as u32
+fn short_id(n: usize) -> CrossingCompactId {
+    CrossingCompactId::new(0x1000_0000 + n as u32)
 }
 
 /// Ruhland, where a line crosses the Schwarze Elster.
@@ -96,11 +97,11 @@ async fn a_crossing_is_read_with_its_position_and_the_name_the_store_gave_it() {
 
     assert_eq!(crossings.len(), 1);
     let crossing = &crossings[0];
-    assert_eq!(crossing.crossing_id.to_string(), "water:track:rail@0");
-    assert_eq!(crossing.short_id, PackedId::from_bits(short_id(0)));
+    assert_eq!(crossing.crossing.id.to_string(), "water:track:rail@0");
+    assert_eq!(crossing.compact_id, short_id(0));
     assert_eq!(crossing.extract_id, EXTRACT);
-    assert!((crossing.position.x - LON).abs() < 1e-9);
-    assert!((crossing.position.y - LAT).abs() < 1e-9);
+    assert!((crossing.crossing.longitude() - LON).abs() < 1e-9);
+    assert!((crossing.crossing.latitude() - LAT).abs() < 1e-9);
 }
 
 /// The device is switched on wherever its owner takes it, and the buffer's coordinates are
@@ -146,9 +147,9 @@ async fn what_the_store_holds_survives_being_packed_and_read_back() {
     for crossing in &crossings {
         let point = unpacked
             .iter()
-            .find(|point| point.longitude == crossing.position.x as f32)
+            .find(|point| point.longitude() == crossing.crossing.longitude() as f32)
             .expect("the crossing is in the buffer");
-        assert_eq!(point.latitude, crossing.position.y as f32);
+        assert_eq!(point.latitude(), crossing.crossing.latitude() as f32);
     }
 }
 
@@ -167,9 +168,9 @@ async fn every_packed_id_maps_back_to_exactly_one_crossing_the_store_named() {
     let crossings = silver::read(&root).await.unwrap();
     let unpacked = pointset::unpack(&packed(&crossings)).unwrap();
 
-    let by_id: HashMap<PackedId, &CrossingId> = crossings
+    let by_id: HashMap<CrossingCompactId, &CrossingId> = crossings
         .iter()
-        .map(|crossing| (crossing.short_id, &crossing.crossing_id))
+        .map(|crossing| (crossing.compact_id, &crossing.crossing.id))
         .collect();
     assert_eq!(by_id.len(), crossings.len(), "ids are distinct");
     for point in &unpacked {
@@ -183,7 +184,11 @@ async fn every_packed_id_maps_back_to_exactly_one_crossing_the_store_named() {
 
 /// The buffer for these crossings, packed the way the bin packs it.
 fn packed(crossings: &[silver::Crossing]) -> Vec<u8> {
-    let points: Vec<Point> = crossings.iter().map(Point::of).collect();
+    let points: Vec<_> = crossings
+        .iter()
+        .map(crossings::compacted)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("on the globe");
 
     pointset::pack(&points).unwrap()
 }

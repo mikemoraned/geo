@@ -243,7 +243,7 @@ Splitting the core by platform found store rules inside types that are not the s
 it is needed for the pages to work, so it comes last. Left undone, the next core written has to
 import arrow to name a crossing.
 
-- [ ] Decide what a crossing is, and keep one of it. There are two ids — a `String` in
+- [x] Decide what a crossing is, and keep one of it. There are two ids — a `String` in
       `medallion-model`, whose constructor refuses anything that could not name a partition,
       and a `u32` in `predictor`, which is what a device has room for — and `WaterCrossingRow`
       carries both, as `crossing_id` and `crossing_short_id`, so the store already treats them
@@ -253,11 +253,45 @@ import arrow to name a crossing.
       one level down. The `String` id cannot move to `model` while it validates a medallion
       rule. So: is an id a name for a crossing that also suits a partition, or a partition
       value that also names a crossing? Answer that, then move them.
+
+      **A name for a crossing that also suits a partition.** Two names, one of each, both in
+      `model`: `CrossingId` says what the crossing is made of, and `CrossingCompactId` is the
+      same crossing in the four bytes a device has room for. A crossing has two names because
+      the places holding one have different room for it, and neither name is the store's.
+      The rule the store seemed to own turned out to be the name's: an id is written out as a
+      directory, asked for in a URL and read by a person, so `CrossingId` refuses what any of
+      those would misread, and `medallion-model` holds no wrapper around it — a wrapper would
+      be the second representation this task exists to remove. Collapsed onto those two names:
+      `crossings::PackedId`, `predictor::CrossingId`, and the bare `u32` on `WaterCrossingRow`.
+      The store's column still reads `crossing_short_id`, which the task below renames.
+
+      Two crossings, for the same reason. `Crossing` is the name and the place, which is what
+      anything with room for it holds; `CrossingCompact<T>` is the crossing where there is not
+      room — named in four bytes, measured in whatever float the holder scans in, and sent as
+      three numbers rather than three named fields. Those are one decision, so they are one
+      type, and the positional serialisation is `CrossingCompactRow` against it rather than a
+      surprise default on the general crossing, which is not serialised at all. `Measure`,
+      `position` and `CoordinateError` moved to `model` with them. What a derivation needs
+      beyond a crossing it adds beside one: `crossings::silver` adds the compact id and the
+      extraction, and `session_crossings::matching` adds the same place in projected metres —
+      which is what its `at` had meant, against a `lat_lon` that was the crossing's own
+      position under another name.
+- [ ] Finish the rename: nothing calls a compact id short. `CrossingCompactId` is the name
+      now, and `crossing_short_id` is what the store still calls the column — so silver's
+      `water_crossing` is rewritten to `crossing_compact_id`, along with everything naming it:
+      the SQL in `crossings::silver` and `rerun-py`'s `runner/store.py`, the `UNIQUE` key and
+      the column test in `medallion-model`, the notebook that mints one
+      (`notebooks/water_crossings/v9.py`), and the python fixtures under `medallion-py` and
+      `rerun-py`. A rebuild is the cost and it is one we can pay; a column called one thing and
+      typed as another is what a reader has to hold in their head forever. Also the leftovers
+      in code that are only names: `silver::Crossing`'s builders, `pack.rs`'s `short_id`
+      helper.
 - [ ] Find the same pattern elsewhere: a type everything needs, holding a constraint only the
       store has. It hides until something that cannot build arrow — a device, a browser —
-      imports one. Such a type belongs in `model`, and the store's rule about it belongs in a
-      `medallion-model` type wrapping it. Read every public type in `medallion-model` against
-      that line, and move the ones that fall outside it.
+      imports one. Such a type belongs in `model`, with as much of the constraint as is the
+      type's own rather than the store's — which is how the crossing id landed, and the first
+      thing to ask of each of these. Read every public type in `medallion-model` against that
+      line, and move the ones that fall outside it.
 
 ##### Shell split
 

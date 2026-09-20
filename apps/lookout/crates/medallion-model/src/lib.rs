@@ -25,7 +25,7 @@ mod telemetry;
 use medallion::DatasetInfo;
 
 pub use crossing::{
-    CrossingId, OverlapKind, SESSION_CROSSING, SessionCrossingRow, WATER_CROSSING, WaterCrossingRow,
+    OverlapKind, SESSION_CROSSING, SessionCrossingRow, WATER_CROSSING, WaterCrossingRow,
 };
 pub use device::{DeviceId, EmptyDeviceId};
 pub use motis::{MOTIS_SEGMENT, MotisSegmentRow, TRAIN_SEGMENT, TrainSegmentRow};

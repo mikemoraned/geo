@@ -15,11 +15,9 @@
 //! prediction that count different things cannot be compared. Retuning is therefore a rebuild,
 //! and the columns say which tuning a row was built under.
 
-use std::fmt::{self, Display};
-use std::str::FromStr;
-
 use chrono::{DateTime, NaiveDate, Utc};
-use medallion::{COUNTRY, DatasetSpec, Dated, Geometry, PartitionValue, PathError, Row, layers};
+use medallion::{COUNTRY, DatasetSpec, Dated, Geometry, Row, layers};
+use model::{CrossingCompactId, CrossingId};
 use serde::{Deserialize, Serialize};
 
 use crate::device::DeviceId;
@@ -32,43 +30,6 @@ pub const WATER_CROSSING: DatasetSpec<layers::Silver> =
 /// The ground truth: a crossing having been passed in a session.
 pub const SESSION_CROSSING: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("session_crossing", "crossed_date");
-
-/// Identifies one crossing, on the crossing and on every record of it having been passed.
-///
-/// Derived from what the crossing *is* — the water, the stretch of track, and where along that
-/// track the two meet — so a ground truth recorded by one run and a prediction made by another
-/// refer to the same crossing, and a rerun over the same reference data lands on the same ids.
-///
-/// The place is part of the identity because one track crosses one body of water more than
-/// once: a line following a valley crosses the river beside it repeatedly, and those are
-/// separate sightings rather than one.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct CrossingId(String);
-
-impl CrossingId {
-    /// An existing id, rejecting anything that could not also name a partition — an id is a
-    /// candidate key for a partition wherever a reader chooses to lay one out by it.
-    pub fn new(id: impl Into<String>) -> Result<Self, PathError> {
-        let id = id.into();
-        PartitionValue::new(id.clone())?;
-        Ok(Self(id))
-    }
-}
-
-impl FromStr for CrossingId {
-    type Err = PathError;
-
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        Self::new(id)
-    }
-}
-
-impl Display for CrossingId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
 
 /// How a stretch of track and a body of water meet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,7 +57,7 @@ pub struct WaterCrossingRow {
     /// Derived from `crossing_id` and carried here rather than worked out by whoever packs a
     /// buffer, so there is one answer to what a crossing is called on a device, and it is
     /// checked for uniqueness where every other property of the dataset is.
-    pub crossing_short_id: u32,
+    pub crossing_short_id: CrossingCompactId,
     /// The water body, by its id in the upstream reference data.
     pub water_id: String,
     pub water_subtype: Option<String>,
@@ -190,6 +151,16 @@ mod tests {
             .clone()
     }
 
+    /// Both names of a crossing are stored as the values they are, rather than as whatever a
+    /// newtype around them might become: the long one as text, the short one as four bytes.
+    #[test]
+    fn a_short_id_is_a_four_byte_column() {
+        assert_eq!(
+            column::<WaterCrossingRow>("crossing_short_id"),
+            DataType::UInt32
+        );
+    }
+
     /// The id joining the two datasets is the same kind of value in both, so a reader joins
     /// them by comparing values rather than by converting one side.
     #[test]
@@ -214,19 +185,14 @@ mod tests {
         ));
     }
 
-    /// An id names a partition wherever a reader lays one out by it, so one that could not
-    /// is rejected at construction rather than when a path is built from it.
+    /// An id is a candidate key for a partition wherever a reader lays one out by it. What
+    /// makes an id writable is the id's own rule; what is asserted here is that the store
+    /// depends on it, so a change to either side fails rather than waiting for a path.
     #[test]
-    fn an_id_that_could_not_name_a_partition_is_rejected() {
-        assert!(CrossingId::new("water/track").is_err());
-        assert!(CrossingId::new("").is_err());
-        assert_eq!(
-            "08b2a5c1fffffff-08f2a5c1"
-                .parse::<CrossingId>()
-                .unwrap()
-                .to_string(),
-            "08b2a5c1fffffff-08f2a5c1"
-        );
+    fn any_id_can_name_a_partition() {
+        let id: CrossingId = "08b2a5c1fffffff-08f2a5c1".parse().expect("a name");
+
+        assert!(medallion::PartitionValue::new(id.to_string()).is_ok());
     }
 
     /// The tuning a row was built under travels with the row, since two rows collapsed

@@ -5,9 +5,9 @@
 
 use nmea::Nmea;
 
-use crate::measure::Measure;
 use crate::sample::Sample;
 use crate::sentence::Sentence;
+use model::Measure;
 
 /// One knot in metres per second, by definition — a nautical mile an hour, and a nautical
 /// mile is 1,852 metres.

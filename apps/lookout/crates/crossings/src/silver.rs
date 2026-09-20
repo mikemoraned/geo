@@ -12,12 +12,9 @@
 //! Position is taken from the geometry column rather than from any plain `lat`/`lon` columns,
 //! because the geometry is where the dataset keeps it.
 
-use geo_types::{Coord, coord};
 use medallion::{Query, Root};
-use medallion_model::CrossingId;
+use model::{CoordinateError, CrossingCompactId, CrossingId};
 use serde::Deserialize;
-
-use crate::pointset::PackedId;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReadError {
@@ -25,6 +22,8 @@ pub enum ReadError {
     Query(#[from] medallion::QueryError),
     #[error("{dataset} has not been derived yet, so there is nothing to pack")]
     Missing { dataset: &'static str },
+    #[error("the store holds a crossing that is not on the globe: {0}")]
+    OffTheGlobe(#[from] CoordinateError),
 }
 
 /// One crossing, as silver holds it: what the store calls it, where it is, and which
@@ -35,11 +34,10 @@ pub enum ReadError {
 /// and said so in the id.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Crossing {
-    pub crossing_id: CrossingId,
+    /// The name the store gave it, and where it is in WGS84 degrees.
+    pub crossing: model::Crossing,
     /// The four-byte name the store gives the same crossing, which is what the device holds.
-    pub short_id: PackedId,
-    /// Longitude in `x`, latitude in `y`, in WGS84 degrees.
-    pub position: Coord<f64>,
+    pub compact_id: CrossingCompactId,
     /// The extraction the upstream reference rows came from.
     pub extract_id: String,
 }
@@ -49,7 +47,7 @@ pub struct Crossing {
 #[derive(Debug, Deserialize)]
 struct StoredCrossing {
     crossing_id: CrossingId,
-    crossing_short_id: u32,
+    crossing_short_id: CrossingCompactId,
     extract_id: String,
     lon: f64,
     lat: f64,
@@ -75,13 +73,14 @@ pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
         )
         .await?;
 
-    Ok(stored
+    stored
         .into_iter()
-        .map(|crossing| Crossing {
-            crossing_id: crossing.crossing_id,
-            short_id: PackedId::from_bits(crossing.crossing_short_id),
-            position: coord! { x: crossing.lon, y: crossing.lat },
-            extract_id: crossing.extract_id,
+        .map(|crossing| {
+            Ok(Crossing {
+                crossing: model::Crossing::at(crossing.crossing_id, crossing.lat, crossing.lon)?,
+                compact_id: crossing.crossing_short_id,
+                extract_id: crossing.extract_id,
+            })
         })
-        .collect())
+        .collect()
 }

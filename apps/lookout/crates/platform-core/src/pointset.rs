@@ -10,7 +10,8 @@
 //! is what makes the repetition safe.
 
 use bytemuck::PodCastError;
-use predictor::{Crossing, CrossingId, Crossings};
+use model::CrossingCompact;
+use predictor::Crossings;
 
 /// Names the format in the first bytes of the file.
 const MAGIC: [u8; 4] = *b"XING";
@@ -204,10 +205,10 @@ const fn word(packed: &[u8], at: usize) -> u32 {
 /// they already hold the float the scan measures in — which matters on a board that emulates
 /// `f64` in software and scans the whole set every second.
 impl Crossings<f32> for PointSet<'_> {
-    fn all(&self) -> impl Iterator<Item = Crossing<f32>> {
+    fn all(&self) -> impl Iterator<Item = CrossingCompact<f32>> {
         PointSet::iter(self).map(|point| {
-            Crossing::new(
-                CrossingId::new(point.id),
+            CrossingCompact::new(
+                point.id,
                 geo_types::Point::new(point.longitude, point.latitude),
             )
         })

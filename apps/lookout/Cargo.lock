@@ -4606,6 +4606,7 @@ dependencies = [
  "arrow 57.3.1",
  "chrono",
  "medallion",
+ "model",
  "serde",
  "thiserror 2.0.18",
  "uuid",
@@ -4676,8 +4677,10 @@ name = "model"
 version = "0.1.0"
 dependencies = [
  "geo-types",
+ "num-traits",
  "serde",
  "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -5393,6 +5396,7 @@ dependencies = [
  "chrono",
  "geo",
  "geo-types",
+ "model",
  "nmea",
  "num-traits",
  "serde",
@@ -6066,6 +6070,7 @@ name = "rerun-py"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "model",
  "predictor",
  "pyo3",
 ]

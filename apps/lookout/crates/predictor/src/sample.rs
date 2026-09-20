@@ -11,50 +11,9 @@
 
 use chrono::{DateTime, Utc};
 use geo_types::Point;
+use model::Measure;
+use model::position::{CoordinateError, position};
 use serde::{Deserialize, Serialize};
-
-use crate::measure::Measure;
-
-/// A coordinate off the globe.
-///
-/// It holds `f64` whatever the sample measures in, because a coordinate is checked before it
-/// is converted — the value worth reporting is the one that was wrong.
-#[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
-pub enum CoordinateError {
-    #[error("latitude {0} outside -90..=90")]
-    Latitude(f64),
-    #[error("longitude {0} outside -180..=180")]
-    Longitude(f64),
-}
-
-/// A position from degrees of latitude and longitude, in the axis order georust uses: `x` is
-/// the longitude and `y` the latitude.
-///
-/// This is where a coordinate is checked, and where it takes on the measure. Sentences arrive
-/// corrupt and columns arrive unchecked, so every path into a [`Sample`] comes through here.
-pub fn position<T: Measure>(
-    latitude_degrees: f64,
-    longitude_degrees: f64,
-) -> Result<Point<T>, CoordinateError> {
-    if !(-90.0..=90.0).contains(&latitude_degrees) {
-        return Err(CoordinateError::Latitude(latitude_degrees));
-    }
-    if !(-180.0..=180.0).contains(&longitude_degrees) {
-        return Err(CoordinateError::Longitude(longitude_degrees));
-    }
-    Ok(Point::new(
-        degrees(longitude_degrees),
-        degrees(latitude_degrees),
-    ))
-}
-
-/// A checked degree value in the measure.
-///
-/// Infallible by construction: `from_f64` only declines a value the target cannot represent,
-/// and every float can hold a number between -180 and 180.
-fn degrees<T: Measure>(value: f64) -> T {
-    T::from_f64(value).expect("a degree fits in any float")
-}
 
 /// A reading in the measure, dropping one the measure cannot hold.
 fn measured<T: Measure>(value: Option<f64>) -> Option<T> {
@@ -166,19 +125,6 @@ mod tests {
 
     fn instant() -> DateTime<Utc> {
         DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
-    }
-
-    #[test]
-    fn coordinates_outside_the_valid_range_are_rejected() {
-        assert_eq!(
-            position::<f64>(91.0, 8.5),
-            Err(CoordinateError::Latitude(91.0))
-        );
-        assert_eq!(
-            position::<f64>(50.5, -181.0),
-            Err(CoordinateError::Longitude(-181.0))
-        );
-        assert!(position::<f64>(50.5, 8.5).is_ok());
     }
 
     /// The axes are the same type, so swapping them is silent.

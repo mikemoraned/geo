@@ -15,7 +15,7 @@
 use chrono::{DateTime, Utc};
 use geo::{Distance, Euclidean};
 use geo_types::{Point, Rect};
-use medallion_model::{CrossingId, DeviceId, SessionCrossingRow, SessionId};
+use medallion_model::{DeviceId, SessionCrossingRow, SessionId};
 
 /// How near a sample has to come to a crossing for the crossing to count as passed.
 ///
@@ -59,20 +59,23 @@ pub struct Session {
     pub samples: Vec<Sample>,
 }
 
-/// One sample of a session: when it was taken, and where in metres.
+/// One sample of a session: when it was taken, and where.
 #[derive(Debug, Clone, Copy)]
 pub struct Sample {
     pub t: DateTime<Utc>,
-    pub at: Point<f64>,
+    /// The country's projected metres, which is what a distance is measured in.
+    pub projected: Point<f64>,
 }
 
-/// One crossing as this matches against it: in metres for the distance, and in lat/lon for
-/// the envelope prune.
+/// One crossing as this matches against it.
+///
+/// It carries the same place twice, because the two steps want different units: the prune is
+/// against an envelope in degrees, and the distance is a subtraction in metres.
 #[derive(Debug, Clone)]
 pub struct Crossing {
-    pub crossing_id: CrossingId,
-    pub at: Point<f64>,
-    pub lat_lon: Point<f64>,
+    pub crossing: model::Crossing,
+    /// The country's projected metres, which is what a distance is measured in.
+    pub projected: Point<f64>,
 }
 
 /// The crossings each session passed, as the rows of the ground truth.
@@ -99,7 +102,7 @@ fn passes_of(session: &Session, crossings: &[Crossing], radius: Radius) -> Vec<S
     let reachable = grown(session.envelope, radius);
     crossings
         .iter()
-        .filter(|crossing| contains(&reachable, crossing.lat_lon))
+        .filter(|crossing| contains(&reachable, crossing.crossing.position))
         .filter_map(|crossing| passed(session, crossing, radius))
         .collect()
 }
@@ -109,7 +112,12 @@ fn passed(session: &Session, crossing: &Crossing, radius: Radius) -> Option<Sess
     let within: Vec<(f64, &Sample)> = session
         .samples
         .iter()
-        .map(|sample| (Euclidean.distance(sample.at, crossing.at), sample))
+        .map(|sample| {
+            (
+                Euclidean.distance(sample.projected, crossing.projected),
+                sample,
+            )
+        })
         .filter(|(distance, _)| *distance <= radius.as_metres())
         .collect();
 
@@ -120,7 +128,7 @@ fn passed(session: &Session, crossing: &Crossing, radius: Radius) -> Option<Sess
 
     Some(SessionCrossingRow {
         session_id: session.session_id.clone(),
-        crossing_id: crossing.crossing_id.clone(),
+        crossing_id: crossing.crossing.id.clone(),
         device_id: session.device_id.clone(),
         crossed_at: nearest.t,
         distance_m,
@@ -183,7 +191,7 @@ mod tests {
     /// within anyway.
     fn envelope_of(samples: &[Sample]) -> Rect<f64> {
         let degrees = |metres: f64| metres / 111_320.0 / f64::cos(BERLIN.1.to_radians());
-        let east = |sample: &Sample| BERLIN.0 + degrees(sample.at.x() - BERLIN_METRES.0);
+        let east = |sample: &Sample| BERLIN.0 + degrees(sample.projected.x() - BERLIN_METRES.0);
         let min = samples.iter().map(east).fold(f64::MAX, f64::min);
         let max = samples.iter().map(east).fold(f64::MIN, f64::max);
         Rect::new((min, BERLIN.1), (max, BERLIN.1))
@@ -193,7 +201,7 @@ mod tests {
     fn sample(minute: u32, east: f64) -> Sample {
         Sample {
             t: at(minute),
-            at: Point::new(BERLIN_METRES.0 + east, BERLIN_METRES.1),
+            projected: Point::new(BERLIN_METRES.0 + east, BERLIN_METRES.1),
         }
     }
 
@@ -201,9 +209,13 @@ mod tests {
     fn crossing(id: &str, east: f64) -> Crossing {
         let degrees = east / 111_320.0 / f64::cos(BERLIN.1.to_radians());
         Crossing {
-            crossing_id: CrossingId::new(id).unwrap(),
-            at: Point::new(BERLIN_METRES.0 + east, BERLIN_METRES.1),
-            lat_lon: Point::new(BERLIN.0 + degrees, BERLIN.1),
+            crossing: model::Crossing::at(
+                model::CrossingId::new(id).expect("a name"),
+                BERLIN.1,
+                BERLIN.0 + degrees,
+            )
+            .expect("on the globe"),
+            projected: Point::new(BERLIN_METRES.0 + east, BERLIN_METRES.1),
         }
     }
 

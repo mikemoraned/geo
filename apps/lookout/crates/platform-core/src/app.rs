@@ -9,7 +9,7 @@ use crux_core::{
     macros::effect,
     render::{self, RenderOperation},
 };
-use model::Gps;
+use model::{CrossingCompact, Gps};
 use predictor::{
     Crossings, CrowFlies, DEFAULT_RADIUS_METRES, Event as Observed, Parser, Predict, Sample,
     Sentence,
@@ -45,7 +45,7 @@ pub trait Shell: Sized + 'static {
     /// is in flash, moving thousands of points into RAM is what keeping it there avoids, and
     /// nothing sends it any. A device that could be given a set over a connection would answer
     /// here instead.
-    fn received(points: Vec<model::Crossing>) -> Option<Self::Crossings>;
+    fn received(points: Vec<CrossingCompact<f64>>) -> Option<Self::Crossings>;
 
     /// What the shell shows, from the state the core holds.
     fn project(model: &Model<Self>) -> Self::ViewModel;
@@ -148,7 +148,7 @@ pub enum Event {
     Reset,
     /// The crossings a shell was asked for. A shell may send these unasked, and one that
     /// already has a set ignores them: a predictor keeps the crossings it was built with.
-    Crossings(Vec<model::Crossing>),
+    Crossings(Vec<CrossingCompact<f64>>),
     /// The time, as the shell reads it, so a countdown shortens between fixes rather than
     /// waiting for the next one. A time behind what the receiver has already reported is
     /// refused, so a shell with no real clock — no NTP and no RTC, which is the device — can
@@ -193,7 +193,7 @@ impl Operation for GetCrossings {
 /// # Errors
 ///
 /// Returns an error where the coordinates are not on the globe.
-fn fix(t: DateTime<Utc>, gps: &Gps) -> Result<Sample<Float>, predictor::CoordinateError> {
+fn fix(t: DateTime<Utc>, gps: &Gps) -> Result<Sample<Float>, model::CoordinateError> {
     Ok(Sample::at(t, gps.latitude, gps.longitude)?.with_speed_mps(gps.speed_mps))
 }
 
@@ -348,13 +348,13 @@ mod tests {
     /// to the state is this crate's.
     impl Shell for Bare {
         type ViewModel = State;
-        type Crossings = Vec<predictor::Crossing<Float>>;
+        type Crossings = Vec<CrossingCompact<Float>>;
 
         fn carried() -> Option<Self::Crossings> {
             Some(Vec::new())
         }
 
-        fn received(points: Vec<model::Crossing>) -> Option<Self::Crossings> {
+        fn received(points: Vec<CrossingCompact<f64>>) -> Option<Self::Crossings> {
             Some(taken(points))
         }
 
@@ -371,13 +371,13 @@ mod tests {
 
     impl Shell for Late {
         type ViewModel = State;
-        type Crossings = Vec<predictor::Crossing<Float>>;
+        type Crossings = Vec<CrossingCompact<Float>>;
 
         fn carried() -> Option<Self::Crossings> {
             None
         }
 
-        fn received(points: Vec<model::Crossing>) -> Option<Self::Crossings> {
+        fn received(points: Vec<CrossingCompact<f64>>) -> Option<Self::Crossings> {
             Some(taken(points))
         }
 
@@ -393,11 +393,11 @@ mod tests {
     }
 
     /// A point the globe has no room for is dropped rather than refusing the whole set.
-    fn taken(points: Vec<model::Crossing>) -> Vec<predictor::Crossing<Float>> {
+    fn taken(points: Vec<CrossingCompact<f64>>) -> Vec<CrossingCompact<Float>> {
         points
             .into_iter()
             .filter_map(|point| {
-                predictor::Crossing::at(point.id, point.latitude(), point.longitude()).ok()
+                CrossingCompact::at(point.id, point.latitude(), point.longitude()).ok()
             })
             .collect()
     }
@@ -424,6 +424,11 @@ mod tests {
             speed_mps: Some(27.8),
             heading_degrees: None,
         }
+    }
+
+    /// A crossing as a shell sends one: degrees, latitude first.
+    fn crossing(id: u32, latitude: f64, longitude: f64) -> CrossingCompact<f64> {
+        CrossingCompact::at(id, latitude, longitude).expect("on the globe")
     }
 
     fn reported(t: DateTime<Utc>, gps: Gps) -> Event {
@@ -457,9 +462,7 @@ mod tests {
         let core = waiting();
         core.process_event(Event::Reset);
 
-        core.process_event(Event::Crossings(vec![model::Crossing::new(
-            1, 51.0503, 13.7322,
-        )]));
+        core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
 
         // Starting again drops them, and asks for them afresh.
         let effects = core.process_event(Event::Reset);
@@ -491,8 +494,8 @@ mod tests {
         core.process_event(Event::Reset);
 
         core.process_event(Event::Crossings(vec![
-            model::Crossing::new(1, 51.0503, 13.7322),
-            model::Crossing::new(2, 60.0, 13.7322),
+            crossing(1, 51.0503, 13.7322),
+            crossing(2, 60.0, 13.7322),
         ]));
         core.process_event(reported(instant(), at_the_station()));
 
@@ -505,9 +508,7 @@ mod tests {
     fn crossings_arriving_before_the_shell_starts_are_taken() {
         let core = waiting();
 
-        core.process_event(Event::Crossings(vec![model::Crossing::new(
-            1, 51.0503, 13.7322,
-        )]));
+        core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
         core.process_event(reported(instant(), at_the_station()));
 
         assert_eq!(core.view().predicted, 1);
@@ -519,9 +520,7 @@ mod tests {
         let core = core();
         core.process_event(reported(instant(), at_the_station()));
 
-        let effects = core.process_event(Event::Crossings(vec![model::Crossing::new(
-            1, 51.0503, 13.7322,
-        )]));
+        let effects = core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
 
         assert_eq!(core.view().predicted, 0);
         assert!(effects.is_empty());
@@ -532,8 +531,10 @@ mod tests {
         let core = waiting();
 
         core.process_event(Event::Crossings(vec![
-            model::Crossing::new(1, 91.0, 13.7322),
-            model::Crossing::new(2, 51.0503, 13.7322),
+            // Built unchecked, as one read off a wire is: nothing refuses a set for holding
+            // this, so the shell is what has to drop the row.
+            CrossingCompact::new(1, geo_types::Point::new(13.7322, 91.0)),
+            crossing(2, 51.0503, 13.7322),
         ]));
         core.process_event(reported(instant(), at_the_station()));
 

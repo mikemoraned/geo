@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::crossing::CrossingId;
-use crate::measure::Measure;
+use model::{CrossingCompactId, Measure};
+
 use crate::sample::Sample;
 
 /// What a predictor is told.
@@ -15,7 +15,7 @@ pub enum Event<T: Measure> {
 /// One crossing a predictor expects us to reach.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Prediction<T: Measure> {
-    pub crossing: CrossingId,
+    pub crossing: CrossingCompactId,
     /// The straight-line distance from the latest fix. Crow-flies: the track's own geometry
     /// plays no part, so a bend or a river meander puts a crossing nearer than the rails do.
     pub metres: T,

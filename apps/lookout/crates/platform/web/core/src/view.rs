@@ -2,8 +2,9 @@
 
 use chrono::{DateTime, Utc};
 use geo_types::Point;
+use model::CrossingCompact;
 use platform_core::{Float, Model, Shell};
-use predictor::{Crossing, Crossings, Prediction};
+use predictor::{Crossings, Prediction};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -46,7 +47,7 @@ pub struct Browser;
 
 impl Shell for Browser {
     type ViewModel = ViewModel;
-    type Crossings = Vec<Crossing<Float>>;
+    type Crossings = Vec<CrossingCompact<Float>>;
 
     /// Nothing: the core exists from the moment the module loads, and the points arrive over
     /// the network after it.
@@ -56,12 +57,12 @@ impl Shell for Browser {
 
     /// A point the globe has no room for is dropped rather than refusing the whole set: one
     /// bad row should not cost a page every crossing near it.
-    fn received(points: Vec<model::Crossing>) -> Option<Self::Crossings> {
+    fn received(points: Vec<CrossingCompact<f64>>) -> Option<Self::Crossings> {
         Some(
             points
                 .into_iter()
                 .filter_map(|point| {
-                    Crossing::at(point.id, point.latitude(), point.longitude()).ok()
+                    CrossingCompact::at(point.id, point.latitude(), point.longitude()).ok()
                 })
                 .collect(),
         )
@@ -117,9 +118,8 @@ fn located(crossings: &impl Crossings<Float>, predictions: &[Prediction<Float>])
 mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
     use crux_core::Core;
-    use model::Gps;
+    use model::{CrossingCompactId, Gps};
     use platform_core::{Event, Lookout};
-    use predictor::CrossingId;
 
     use super::*;
 
@@ -129,17 +129,17 @@ mod tests {
 
     /// Three crossings due north of the fix, a hundredth of a degree apart, so the nearest is
     /// about 1,112m away. Packed out of order, so what sorts the view is the view.
-    fn crossings() -> Vec<Crossing<Float>> {
+    fn crossings() -> Vec<CrossingCompact<Float>> {
         vec![
-            Crossing::at(2, 51.06, 13.7322).expect("on the globe"),
-            Crossing::at(0, 51.04, 13.7322).expect("on the globe"),
-            Crossing::at(1, 51.05, 13.7322).expect("on the globe"),
+            CrossingCompact::at(2, 51.06, 13.7322).expect("on the globe"),
+            CrossingCompact::at(0, 51.04, 13.7322).expect("on the globe"),
+            CrossingCompact::at(1, 51.05, 13.7322).expect("on the globe"),
         ]
     }
 
     fn prediction(id: u32, metres: Float, at: Option<DateTime<Utc>>) -> Prediction<Float> {
         Prediction {
-            crossing: CrossingId::new(id),
+            crossing: CrossingCompactId::new(id),
             metres,
             at,
         }
@@ -201,9 +201,9 @@ mod tests {
     #[test]
     fn a_fix_is_shown_with_the_speed_it_was_predicted_at() {
         let core: Core<Lookout<Browser>> = Core::new();
-        core.process_event(Event::Crossings(vec![model::Crossing::new(
-            1, 51.0503, 13.7322,
-        )]));
+        core.process_event(Event::Crossings(vec![
+            CrossingCompact::at(1, 51.0503, 13.7322).expect("on the globe"),
+        ]));
 
         core.process_event(Event::Position {
             t: instant(),

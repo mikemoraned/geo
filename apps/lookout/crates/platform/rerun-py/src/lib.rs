@@ -23,9 +23,9 @@
 //! are aware datetimes, in whatever timezone the caller has them in.
 
 use chrono::{DateTime, FixedOffset, Utc};
+use model::CrossingCompact;
 use predictor::{
-    Crossing, CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS_METRES, Event, ObserveError, Predict,
-    Sample,
+    CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS_METRES, Event, ObserveError, Predict, Sample,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -78,7 +78,7 @@ impl CrowFlies {
         let crossings = crossings
             .into_iter()
             .map(|(id, latitude, longitude)| {
-                Crossing::at(id, latitude, longitude)
+                CrossingCompact::at(id, latitude, longitude)
                     .map_err(|err| PyValueError::new_err(err.to_string()))
             })
             .collect::<PyResult<Vec<_>>>()?;
@@ -140,7 +140,7 @@ impl CrowFlies {
             .predictions()
             .iter()
             .map(|prediction| Prediction {
-                crossing: prediction.crossing.value(),
+                crossing: prediction.crossing.get(),
                 metres: prediction.metres,
                 at: prediction.at,
             })
