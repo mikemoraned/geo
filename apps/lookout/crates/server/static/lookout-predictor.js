@@ -21,6 +21,13 @@ const LINEAR_WITHIN_METRES = 500;
 const CANVAS_SIZE = 320;
 const TAU = Math.PI * 2;
 
+// The core measures in metres a second, which is the unit a distance divided by a time comes
+// out in. Nobody reads a train that way.
+function speed(metres_per_second) {
+  if (metres_per_second === null || metres_per_second === undefined) return "no speed yet";
+  return `${(metres_per_second * 3.6).toFixed(0)} km/h`;
+}
+
 class LookoutPredictor extends HTMLElement {
   #screen;
   #canvas;
@@ -32,7 +39,7 @@ class LookoutPredictor extends HTMLElement {
         :host { display: block; font: 0.9rem ui-monospace, monospace; color: #7f8; }
         .screen { display: inline-block; padding: 1rem; background: #032; }
         canvas { display: block; width: ${CANVAS_SIZE}px; height: ${CANVAS_SIZE}px; }
-        .status { margin: .6rem 0 0; }
+        .status { margin: .6rem 0 0; white-space: pre-line; }
       </style>
       <div class="screen">
         <canvas></canvas>
@@ -74,12 +81,19 @@ class LookoutPredictor extends HTMLElement {
     }
   }
 
+  // What the core believes, rather than what the browser could say for itself: the clock is
+  // the latest instant anything reported, and the speed is the one the arrivals were worked
+  // out at, which for a source reporting none is derived from the step between fixes.
   #paint() {
-    const { crossings, radius_metres, here, predicted } = JSON.parse(view());
+    const { now, crossings, radius_metres, here, predicted } = JSON.parse(view());
     this.#draw(here, predicted, radius_metres);
-    this.#screen.textContent = here
-      ? `${predicted.length} within ${(radius_metres / 1000).toFixed(0)}km of ${crossings.toLocaleString()}`
-      : `${crossings.toLocaleString()} crossings, waiting for a position`;
+    this.#screen.textContent = [
+      now ? new Date(now).toLocaleTimeString() : "no time yet",
+      here ? speed(here.speed_mps) : "no position yet",
+      here
+        ? `${predicted.length} within ${(radius_metres / 1000).toFixed(0)}km`
+        : `${crossings.toLocaleString()} crossings`,
+    ].join("\n");
   }
 
   // Where we are in the middle, what is about to be crossed around it, and nothing beyond the

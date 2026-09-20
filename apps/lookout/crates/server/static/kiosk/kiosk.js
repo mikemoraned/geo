@@ -8,6 +8,24 @@ const SESSIONS = "/sessions.json";
 // hours and nobody stands in front of a screen for that.
 const SESSION_MS = 60_000;
 
+// What is being replayed and for how long is decided by the file and by `SESSION_MS`, so the
+// page says what it is doing rather than what it was written expecting.
+function introduce(count) {
+  const each = SESSION_MS % 60_000 === 0
+    ? plural(SESSION_MS / 60_000, "minute")
+    : plural(Math.round(SESSION_MS / 1_000), "second");
+  const journeys = plural(count, "journey");
+  document.querySelector("#intro").textContent =
+    `${journeys[0].toUpperCase()}${journeys.slice(1)}, replayed. ` +
+    `Each takes ${each} to replay, and ` +
+    `${count === 1 ? "it runs" : "they run in turn"} for as long as this is left open.`;
+}
+
+function plural(count, thing) {
+  if (count === 1) return `a ${thing}`;
+  return `${count} ${thing}s`;
+}
+
 const predictor = document.querySelector("lookout-predictor");
 const said = (message) => {
   document.querySelector("#said").textContent = message;
@@ -20,8 +38,12 @@ if (!response.ok) {
   said(`could not load ${SESSIONS}: ${response.status} ${response.statusText}`);
 } else {
   const sessions = (await response.json()).filter((session) => session.samples.length > 0);
-  if (sessions.length === 0) said(`${SESSIONS} holds no sessions to replay`);
-  else replay(sessions);
+  if (sessions.length === 0) {
+    said(`${SESSIONS} holds no sessions to replay`);
+  } else {
+    introduce(sessions.length);
+    replay(sessions);
+  }
 }
 
 // Which sample to send is worked out from the clock rather than counted off by a timer: each
