@@ -4,7 +4,17 @@
 *
 
 # The Rust workspace `cargo build --release -p server` compiles, plus the static
-# assets the runtime image copies from crates/server/static.
+# assets the runtime image copies from crates/server/static. Every member's
+# manifest is needed to resolve the workspace, so the whole tree is allowed and
+# the generated parts are taken back out below.
 !Cargo.toml
 !Cargo.lock
 !crates
+
+# What the tree carries but the build makes for itself. The uv environments alone
+# are 1.2 GB, and the wasm is written by the builder stage.
+crates/**/.venv
+crates/**/target
+crates/**/__pycache__
+crates/**/.pytest_cache
+crates/server/static/wasm
