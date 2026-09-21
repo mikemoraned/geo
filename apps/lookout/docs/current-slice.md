@@ -293,8 +293,9 @@ import arrow to name a crossing.
       new entity in the domain crate by default. Under that line the answer is not one type
       but most of them: a session, a sample, a pass, a device, a leg and an extract are all
       described only as store rows today. The sweep, the evidence and the order to move them
-      in are [2026-09-21-model-layers.md](2026-09-21-model-layers.md). Each move below is
-      argued there, including what its row keeps.
+      in were `2026-09-21-model-layers.md`, written as this phase started and deleted at the
+      end of it: what held is `crates/domain/README.md`, and what each move settled is on the
+      move itself.
 - [x] Rename `model` to `domain`, first, so every move below lands under the name it keeps.
 - [x] Move `Sample`: a fix and the instant it was taken at. Two of the three shapes the note
       names, since `matching::Sample` turned out not to be one: it holds an instant and a
@@ -380,12 +381,15 @@ import arrow to name a crossing.
       refuse. It holds a `u32` rather than a `NonZeroU32` because a schema is traced by
       probing the type with values, zero among them, so a number that cannot be zero cannot
       describe a column.
-- [ ] Two things in the extract duplicate what the domain now holds, both on the store's side
-      of the line rather than the domain's: `ExtractId` checks itself against `PartitionValue`
-      where `domain::name` is the same rule, and `ExtractManifestRow` carries its window as
-      four floats where `Bbox` exists. The second is a bronze schema change, so weigh that
-      before doing it.
-- [ ] Capture the rule from the note in `domain`'s `README.md`, and delete the note. The note
+- [-] Two things in the extract looked like duplicates of what the domain holds. Neither is.
+      `ExtractId` names a partition of a store-only dataset, so `medallion::PartitionValue` is
+      the rule it is actually held to rather than an indirection through `domain::name` — and
+      a test already ties the domain's copy of that rule to medallion's. The manifest's window
+      is four scalars by a documented choice, since provenance is read by comparing numbers,
+      and it comes from an aggregate over Overture's own boxes: a `Rect` in order already,
+      with no user input for a checked window to check.
+
+- [x] Capture the rule from the note in `domain`'s `README.md`, and delete the note. The note
       is the reasoning and the evidence, which goes stale once the moves land; the README is
       the default and the entity-to-projection relationship, which does not.
 
