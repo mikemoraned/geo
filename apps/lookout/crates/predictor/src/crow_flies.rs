@@ -105,7 +105,7 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
             .filter_map(|crossing| {
                 let metres = Haversine.distance(from, crossing.position);
                 (metres <= radius_metres).then(|| Prediction {
-                    crossing: crossing.id,
+                    crossing_compact_id: crossing.id,
                     metres,
                     at: speed.and_then(|speed| arrival(sample.t, metres, speed)),
                 })
@@ -235,7 +235,7 @@ mod tests {
         predictor
             .predictions()
             .iter()
-            .map(|prediction| prediction.crossing.get())
+            .map(|prediction| prediction.crossing_compact_id.get())
             .collect()
     }
 

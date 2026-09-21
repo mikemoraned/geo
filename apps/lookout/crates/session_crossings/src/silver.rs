@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use domain::CrossingId;
-use domain::{DeviceId, SessionId};
+use domain::{DeviceId, Pass, SessionId};
 use geo_types::{Point, Rect};
 use medallion::{COUNTRY, Country, Query, Replaced, Root};
 use medallion_model::{Bbox, SessionCrossingRow};
@@ -108,7 +108,15 @@ pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, Crossin
             .map(|pass| &pass.session_id)
             .collect::<HashSet<_>>()
             .len();
-        passed.extend(country_passes);
+        let devices: HashMap<&SessionId, &DeviceId> = sessions
+            .iter()
+            .map(|session| (&session.session_id, &session.device_id))
+            .collect();
+        passed.extend(
+            country_passes
+                .iter()
+                .map(|pass| row(pass, devices[&pass.session_id], radius)),
+        );
     }
 
     passed.sort_by(|a, b| (a.crossed_at, &a.crossing_id).cmp(&(b.crossed_at, &b.crossing_id)));
@@ -185,7 +193,68 @@ async fn crossings_in(query: &Query, country: Country) -> Result<Vec<Crossing>, 
         .collect()
 }
 
+/// One pass as the store keeps it: what was found, the device it was found on, and how hard
+/// the run looked.
+///
+/// The device is derivable from the session and is carried anyway, so a partition of these is
+/// readable without joining back to the sessions — as `session_sample` carries it for the same
+/// reason. The radius is the run's, kept on the row so a match made under one is still
+/// interpretable after it changes.
+fn row(pass: &Pass, device: &DeviceId, radius: Radius) -> SessionCrossingRow {
+    SessionCrossingRow {
+        session_id: pass.session_id.clone(),
+        crossing_id: pass.crossing_id.clone(),
+        device_id: device.clone(),
+        crossed_at: pass.crossed_at,
+        distance_m: pass.distance_metres,
+        samples_within: pass.samples_within,
+        match_radius_m: radius.as_metres(),
+    }
+}
+
 /// The stored envelope as a rectangle to prune against.
 fn envelope(bbox: &Bbox) -> Rect<f64> {
     Rect::new((bbox.xmin, bbox.ymin), (bbox.xmax, bbox.ymax))
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeDelta;
+    use domain::CrossingId;
+
+    use super::*;
+
+    fn pass() -> Pass {
+        Pass {
+            session_id: SessionId::new("session-a").expect("an id"),
+            crossing_id: CrossingId::new("water:track:rail@0.5").expect("an id"),
+            crossed_at: DateTime::UNIX_EPOCH + TimeDelta::seconds(1),
+            distance_metres: 20.0,
+            samples_within: 3,
+        }
+    }
+
+    /// The tuning a row was matched under travels with it, since a match made at 150 m and
+    /// one made at 20 m are not the same claim. A pass does not carry it: the radius is how
+    /// hard the run looked, not what it found.
+    #[test]
+    fn a_row_records_the_radius_it_was_matched_under() {
+        let device = DeviceId::new("device-a").expect("an id");
+
+        let row = row(&pass(), &device, Radius::new(150.0));
+
+        assert_eq!(row.match_radius_m, 150.0);
+        assert_eq!(row.distance_m, 20.0);
+    }
+
+    /// Carried so a partition of these is readable without joining back to the sessions.
+    #[test]
+    fn a_row_names_the_device_the_session_ran_on() {
+        let device = DeviceId::new("device-a").expect("an id");
+
+        let row = row(&pass(), &device, Radius::new(150.0));
+
+        assert_eq!(row.device_id, device);
+        assert_eq!(row.session_id, pass().session_id);
+    }
 }

@@ -13,7 +13,7 @@ pub enum Event<P: Precision> {
 /// One crossing a predictor expects us to reach.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Prediction<P: Precision> {
-    pub crossing: CrossingCompactId,
+    pub crossing_compact_id: CrossingCompactId,
     /// The straight-line distance from the latest fix. Crow-flies: the track's own geometry
     /// plays no part, so a bend or a river meander puts a crossing nearer than the rails do.
     pub metres: P,

@@ -330,9 +330,13 @@ import arrow to name a crossing.
       pinned to a session the store already holds, since a change to the namespace or to what
       is hashed would still derive consistently while renaming every session recorded.
 
-- [ ] Move `Pass`: a crossing met in a session. The move that decouples `matching` from the
-      store's columns. `device_id` stays on the row, where it is carried so a partition reads
-      without joining back to the sessions.
+- [x] Move `Pass`: a crossing met in a session. `matching` now computes passes and names
+      nothing of the store's — it was a prune, a distance and a nearest sample written in
+      column names. What the row adds, `silver` adds: the device, which is derivable from the
+      session and carried so a partition reads without joining back, and the radius, which is
+      how hard the run looked rather than what it found. The 253 passes the store holds
+      re-derive identically, column for column.
+
 - [ ] Move `Session`, the run of samples itself.
 - [ ] Move `DeviceType`, and have `DeviceSessionRow` name it rather than a `String`.
 - [ ] Keep one window: the checked `Bbox`.

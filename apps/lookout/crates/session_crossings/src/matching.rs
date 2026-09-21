@@ -13,10 +13,9 @@
 //! moved can produce the first without having gone anywhere.
 
 use chrono::{DateTime, Utc};
-use domain::{DeviceId, SessionId};
+use domain::{DeviceId, Pass, SessionId};
 use geo::{Distance, Euclidean};
 use geo_types::{Point, Rect};
-use medallion_model::SessionCrossingRow;
 
 /// How near a sample has to come to a crossing for the crossing to count as passed.
 ///
@@ -79,18 +78,14 @@ pub struct Crossing {
     pub projected: Point<f64>,
 }
 
-/// The crossings each session passed, as the rows of the ground truth.
+/// The crossings each session passed.
 ///
 /// Every session is matched against only the crossings inside its own envelope, grown by the
 /// radius, so the distance is computed for the pairs that could possibly be within it rather
-/// than for every pair. The rows come back ordered by instant, which is the order they are
+/// than for every pair. They come back ordered by instant, which is the order they are
 /// partitioned and written in.
-pub fn passes(
-    sessions: &[Session],
-    crossings: &[Crossing],
-    radius: Radius,
-) -> Vec<SessionCrossingRow> {
-    let mut passed: Vec<SessionCrossingRow> = sessions
+pub fn passes(sessions: &[Session], crossings: &[Crossing], radius: Radius) -> Vec<Pass> {
+    let mut passed: Vec<Pass> = sessions
         .iter()
         .flat_map(|session| passes_of(session, crossings, radius))
         .collect();
@@ -99,7 +94,7 @@ pub fn passes(
 }
 
 /// The crossings one session passed.
-fn passes_of(session: &Session, crossings: &[Crossing], radius: Radius) -> Vec<SessionCrossingRow> {
+fn passes_of(session: &Session, crossings: &[Crossing], radius: Radius) -> Vec<Pass> {
     let reachable = grown(session.envelope, radius);
     crossings
         .iter()
@@ -109,7 +104,7 @@ fn passes_of(session: &Session, crossings: &[Crossing], radius: Radius) -> Vec<S
 }
 
 /// One crossing as a session passed it, or `None` where no sample came within the radius.
-fn passed(session: &Session, crossing: &Crossing, radius: Radius) -> Option<SessionCrossingRow> {
+fn passed(session: &Session, crossing: &Crossing, radius: Radius) -> Option<Pass> {
     let within: Vec<(f64, &Sample)> = session
         .samples
         .iter()
@@ -122,19 +117,17 @@ fn passed(session: &Session, crossing: &Crossing, radius: Radius) -> Option<Sess
         .filter(|(distance, _)| *distance <= radius.as_metres())
         .collect();
 
-    let (distance_m, nearest) = within
+    let (distance_metres, nearest) = within
         .iter()
         .min_by(|(a, _), (b, _)| a.total_cmp(b))
         .copied()?;
 
-    Some(SessionCrossingRow {
+    Some(Pass {
         session_id: session.session_id.clone(),
         crossing_id: crossing.crossing.id.clone(),
-        device_id: session.device_id.clone(),
         crossed_at: nearest.t,
-        distance_m,
+        distance_metres,
         samples_within: within.len().try_into().unwrap_or(u32::MAX),
-        match_radius_m: radius.as_metres(),
     })
 }
 
@@ -248,7 +241,10 @@ mod tests {
         let passed = passes(&[session], &[crossing("c", 200.0)], Radius::new(150.0));
 
         assert_eq!(passed[0].crossed_at, at(2));
-        assert!((passed[0].distance_m - 20.0).abs() < 0.001, "{passed:?}");
+        assert!(
+            (passed[0].distance_metres - 20.0).abs() < 0.001,
+            "{passed:?}"
+        );
     }
 
     /// How many samples fell inside the radius is what separates a session that ran past a
@@ -281,17 +277,6 @@ mod tests {
         let passed = passes(&[session], &[crossing("c", 100.0)], Radius::new(100.0));
 
         assert_eq!(passed.len(), 1);
-    }
-
-    /// The tuning a row was matched under travels with it, since a match made at 150 m and
-    /// one made at 20 m are not the same claim.
-    #[test]
-    fn a_row_records_the_radius_it_was_matched_under() {
-        let session = session(vec![sample(0, 0.0)]);
-
-        let passed = passes(&[session], &[crossing("c", 10.0)], Radius::new(100.0));
-
-        assert_eq!(passed[0].match_radius_m, 100.0);
     }
 
     /// A session that never moved still passes a crossing it was parked beside, and says so

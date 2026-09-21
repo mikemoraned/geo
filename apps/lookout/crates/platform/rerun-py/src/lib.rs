@@ -34,7 +34,7 @@ use pyo3::prelude::*;
 #[pyclass(frozen, get_all, eq, skip_from_py_object)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Prediction {
-    crossing: u32,
+    crossing_compact_id: u32,
     /// The straight-line distance from the latest fix, in metres.
     metres: f64,
     /// When we reach it at the speed of the latest fix, absent where there is no speed to
@@ -47,8 +47,8 @@ pub struct Prediction {
 impl Prediction {
     fn __repr__(&self) -> String {
         format!(
-            "Prediction(crossing={}, metres={:.1}, at={})",
-            self.crossing,
+            "Prediction(crossing_compact_id={}, metres={:.1}, at={})",
+            self.crossing_compact_id,
             self.metres,
             match self.at {
                 Some(at) => at.to_rfc3339(),
@@ -140,7 +140,7 @@ impl CrowFlies {
             .predictions()
             .iter()
             .map(|prediction| Prediction {
-                crossing: prediction.crossing.get(),
+                crossing_compact_id: prediction.crossing_compact_id.get(),
                 metres: prediction.metres,
                 at: prediction.at,
             })

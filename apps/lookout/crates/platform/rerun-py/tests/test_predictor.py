@@ -26,7 +26,7 @@ def test_a_fix_predicts_every_crossing_inside_the_radius_nearest_first(predictor
 
     predicted = predictor.predictions()
 
-    assert [prediction.crossing for prediction in predicted] == [1, 2, 3]
+    assert [prediction.crossing_compact_id for prediction in predicted] == [1, 2, 3]
     assert predicted[0].metres == pytest.approx(HUNDREDTH_DEGREE_M, abs=10.0)
     assert isinstance(predicted[0], Prediction)
 
@@ -36,7 +36,7 @@ def test_the_radius_is_the_callers_to_choose():
 
     predictor.observe_sample(T0, 50.0, 0.0)
 
-    assert [prediction.crossing for prediction in predictor.predictions()] == [1]
+    assert [prediction.crossing_compact_id for prediction in predictor.predictions()] == [1]
     assert DEFAULT_RADIUS_METRES == 5_000.0
 
 

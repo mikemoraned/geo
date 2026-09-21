@@ -164,7 +164,7 @@ mod tests {
             for seconds in [-1, 0, 1, 59, 60, 599, 600, 3_599, 3_600, 86_400] {
                 let line = line(
                     &Prediction {
-                        crossing: CrossingCompactId::new(u32::MAX),
+                        crossing_compact_id: CrossingCompactId::new(u32::MAX),
                         metres,
                         at: Some(now + TimeDelta::seconds(seconds)),
                     },
@@ -183,7 +183,7 @@ mod tests {
     fn a_line_with_no_countdown_still_fits() {
         let line = line(
             &Prediction {
-                crossing: CrossingCompactId::new(u32::MAX),
+                crossing_compact_id: CrossingCompactId::new(u32::MAX),
                 metres: 999_999.0,
                 at: None,
             },

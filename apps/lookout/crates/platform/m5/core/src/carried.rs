@@ -100,7 +100,7 @@ mod tests {
             .predictions()
             .iter()
             .take(NEAREST_TO_DRESDEN.len())
-            .map(|prediction| prediction.crossing.get())
+            .map(|prediction| prediction.crossing_compact_id.get())
             .collect();
 
         assert_eq!(
@@ -115,7 +115,7 @@ mod tests {
         let predictor = at_dresden();
 
         for (prediction, (id, metres)) in predictor.predictions().iter().zip(NEAREST_TO_DRESDEN) {
-            assert_eq!(prediction.crossing.get(), id);
+            assert_eq!(prediction.crossing_compact_id.get(), id);
             assert!(
                 (prediction.metres - metres).abs() < TOLERANCE_M,
                 "{:08x}: the device says {}m, the notebook says {metres}m",

@@ -93,12 +93,12 @@ impl Shell for Browser {
 fn located(crossings: &impl Crossings<Float>, predictions: &[Prediction<Float>]) -> Vec<Predicted> {
     let mut located: Vec<Predicted> = crossings
         .all()
-        .filter_map(|crossing| {
+        .filter_map(|crossing_compact| {
             let prediction = predictions
                 .iter()
-                .find(|prediction| prediction.crossing == crossing.id)?;
+                .find(|prediction| prediction.crossing_compact_id == crossing_compact.id)?;
             Some(Predicted {
-                position: crossing.position,
+                position: crossing_compact.position,
                 metres: prediction.metres,
                 at: prediction.at,
             })
@@ -147,7 +147,7 @@ mod tests {
 
     fn prediction(id: u32, metres: Float, at: Option<DateTime<Utc>>) -> Prediction<Float> {
         Prediction {
-            crossing: CrossingCompactId::new(id),
+            crossing_compact_id: CrossingCompactId::new(id),
             metres,
             at,
         }
