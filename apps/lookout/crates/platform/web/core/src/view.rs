@@ -118,10 +118,22 @@ fn located(crossings: &impl Crossings<Float>, predictions: &[Prediction<Float>])
 mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
     use crux_core::Core;
-    use domain::{CrossingCompactId, Gps};
+    use domain::{CrossingCompactId, Gps, Sample};
     use platform_core::{Event, Lookout};
 
     use super::*;
+
+    /// Dresden Hauptbahnhof, at a train's speed.
+    fn at_the_station() -> Gps {
+        Gps {
+            latitude: 51.0403,
+            longitude: 13.7322,
+            altitude_metres: None,
+            accuracy_metres: 5.0,
+            speed_mps: Some(27.8),
+            heading_degrees: None,
+        }
+    }
 
     fn instant() -> DateTime<Utc> {
         DateTime::from_timestamp(1_785_098_609, 0).expect("an instant")
@@ -205,17 +217,7 @@ mod tests {
             CrossingCompact::at(1, 51.0503, 13.7322).expect("on the globe"),
         ]));
 
-        core.process_event(Event::Position {
-            t: instant(),
-            gps: Gps {
-                latitude: 51.0403,
-                longitude: 13.7322,
-                altitude_metres: None,
-                accuracy_metres: 5.0,
-                speed_mps: Some(27.8),
-                heading_degrees: None,
-            },
-        });
+        core.process_event(Event::Position(Sample::new(instant(), at_the_station())));
 
         let here = core.view().here.expect("a fix");
         assert!((here.position.y() - 51.0403).abs() < 1e-4);
@@ -230,17 +232,7 @@ mod tests {
     fn nothing_is_shown_from_a_fix_that_beat_the_crossings() {
         let core: Core<Lookout<Browser>> = Core::new();
 
-        core.process_event(Event::Position {
-            t: instant(),
-            gps: Gps {
-                latitude: 51.0403,
-                longitude: 13.7322,
-                altitude_metres: None,
-                accuracy_metres: 5.0,
-                speed_mps: Some(27.8),
-                heading_degrees: None,
-            },
-        });
+        core.process_event(Event::Position(Sample::new(instant(), at_the_station())));
 
         assert_eq!(core.view().here, None);
     }

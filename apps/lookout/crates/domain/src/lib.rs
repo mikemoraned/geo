@@ -15,8 +15,10 @@ pub mod crossing;
 pub mod gps;
 pub mod measure;
 pub mod position;
+pub mod sample;
 
 pub use crossing::{Crossing, CrossingCompact, CrossingCompactId, CrossingId, CrossingIdError};
 pub use gps::Gps;
 pub use measure::Measure;
 pub use position::{CoordinateError, position};
+pub use sample::Sample;

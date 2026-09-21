@@ -295,8 +295,16 @@ import arrow to name a crossing.
       described only as store rows today. The sweep, the evidence and the order to move them
       in are [2026-09-21-model-layers.md](2026-09-21-model-layers.md). Each move below is
       argued there, including what its row keeps.
-- [ ] Rename `model` to `domain`, first, so every move below lands under the name it keeps.
-- [ ] Move `Sample`: a fix and the instant it was taken at.
+- [x] Rename `model` to `domain`, first, so every move below lands under the name it keeps.
+- [x] Move `Sample`: a fix and the instant it was taken at. Two of the three shapes the note
+      names, since `matching::Sample` turned out not to be one: it holds an instant and a
+      position in projected metres, read from the store without lat/lon, so it is a timed
+      projected point rather than a reported fix. `predictor::Sample<T>` is the third, and is
+      the same fix in the measure with what a receiver adds — the `Crossing`/`CrossingCompact`
+      relationship again, left for the task below.
+- [ ] Collapse `predictor::Sample<T>` onto `domain::Sample`, as `CrossingCompact` is to
+      `Crossing`: one entity, one measured projection, named so that two crates do not both
+      export a `Sample`.
 - [ ] Move `Pass`: a crossing met in a session. The move that decouples `matching` from the
       store's columns.
 - [ ] Move `Session`, and `SessionId` with it.

@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use domain::Gps;
+use domain::{Gps, Sample};
 use medallion::{Query, Root};
 use medallion_model::SessionId;
 use serde::{Deserialize, Serialize};
@@ -37,15 +37,7 @@ pub struct Replay {
     pub session: SessionId,
     /// How many crossings it passed, which is why it was chosen.
     pub crossings: usize,
-    pub samples: Vec<Fix>,
-}
-
-/// One sample, shaped as the event a shell sends: a page replays a session by sending these in
-/// order, and needs to reshape nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub struct Fix {
-    pub t: DateTime<Utc>,
-    pub gps: Gps,
+    pub samples: Vec<Sample>,
 }
 
 /// A failure choosing what to replay.
@@ -104,12 +96,12 @@ pub async fn choose(root: &Root, choosing: Choosing) -> Result<Vec<Replay>, Choo
         ))
         .await?;
 
-    let mut by_session: HashMap<SessionId, Vec<Fix>> = HashMap::new();
+    let mut by_session: HashMap<SessionId, Vec<Sample>> = HashMap::new();
     for sample in samples {
         by_session
             .entry(sample.session_id.clone())
             .or_default()
-            .push(Fix {
+            .push(Sample {
                 t: sample.t,
                 gps: Gps {
                     latitude: round(sample.lat, COORDINATE_PLACES),

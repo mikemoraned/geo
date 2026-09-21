@@ -160,7 +160,7 @@ pub enum Event {
     /// A fix from a shell with no receiver to read — a browser's geolocation, or a replay of
     /// one recorded. It arrives parsed, where a sentence arrives as text, and carries its own
     /// instant because the fix is dated by whatever produced it rather than by the shell.
-    Position { t: DateTime<Utc>, gps: Gps },
+    Position(domain::Sample),
     /// The battery terminal voltage the shell measured, in millivolts. What it means is
     /// decided here, not there — see [`crate::battery`]. A shell with no battery to read,
     /// such as a browser, never sends one.
@@ -285,7 +285,7 @@ impl<S: Shell> App for Lookout<S> {
             Event::Sentence(sentence) => self.absorb(&sentence, model),
             // A coordinate off the globe is refused here as a corrupt sentence is refused in
             // `absorb`: it leaves the last fix and its predictions where they were.
-            Event::Position { t, gps } => match fix(t, &gps) {
+            Event::Position(reported) => match fix(reported.t, &reported.gps) {
                 Ok(sample) => self.observe(Observed::Sampled(sample), model),
                 Err(_) => Change::Unchanged,
             },
@@ -432,7 +432,7 @@ mod tests {
     }
 
     fn reported(t: DateTime<Utc>, gps: Gps) -> Event {
-        Event::Position { t, gps }
+        Event::Position(domain::Sample::new(t, gps))
     }
 
     #[test]
