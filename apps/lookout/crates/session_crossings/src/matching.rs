@@ -73,7 +73,7 @@ pub struct Sample {
 /// against an envelope in degrees, and the distance is a subtraction in metres.
 #[derive(Debug, Clone)]
 pub struct Crossing {
-    pub crossing: model::Crossing,
+    pub crossing: domain::Crossing,
     /// The country's projected metres, which is what a distance is measured in.
     pub projected: Point<f64>,
 }
@@ -209,8 +209,8 @@ mod tests {
     fn crossing(id: &str, east: f64) -> Crossing {
         let degrees = east / 111_320.0 / f64::cos(BERLIN.1.to_radians());
         Crossing {
-            crossing: model::Crossing::at(
-                model::CrossingId::new(id).expect("a name"),
+            crossing: domain::Crossing::at(
+                domain::CrossingId::new(id).expect("a name"),
                 BERLIN.1,
                 BERLIN.0 + degrees,
             )

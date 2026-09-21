@@ -23,7 +23,7 @@
 //! are aware datetimes, in whatever timezone the caller has them in.
 
 use chrono::{DateTime, FixedOffset, Utc};
-use model::CrossingCompact;
+use domain::CrossingCompact;
 use predictor::{
     CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS_METRES, Event, ObserveError, Predict, Sample,
 };

@@ -86,7 +86,7 @@ platform-core = { path = "crates/platform-core" }
 m5-core = { path = "crates/platform/m5/core" }
 medallion = { path = "crates/medallion" }
 medallion-model = { path = "crates/medallion-model" }
-model = { path = "crates/model" }
+domain = { path = "crates/domain" }
 predictor = { path = "crates/predictor" }
 recorder = { path = "crates/recorder" }
 session_crossings = { path = "crates/session_crossings" }

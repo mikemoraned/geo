@@ -11,10 +11,10 @@
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
+use domain::CrossingId;
 use geo_types::{Point, Rect};
 use medallion::{COUNTRY, Country, Query, Replaced, Root};
 use medallion_model::{Bbox, DeviceId, SessionCrossingRow, SessionId};
-use model::CrossingId;
 use serde::Deserialize;
 
 use crate::matching::{Crossing, Radius, Sample, Session, passes};
@@ -43,7 +43,7 @@ pub enum CrossingError {
     #[error("writing the dataset: {0}")]
     Write(#[from] medallion::TableError),
     #[error("the store holds a crossing that is not on the globe: {0}")]
-    OffTheGlobe(#[from] model::CoordinateError),
+    OffTheGlobe(#[from] domain::CoordinateError),
 }
 
 /// One session as the store holds it: its identity and the envelope of its path.
@@ -177,7 +177,7 @@ async fn crossings_in(query: &Query, country: Country) -> Result<Vec<Crossing>, 
         .into_iter()
         .map(|crossing| {
             Ok(Crossing {
-                crossing: model::Crossing::at(crossing.crossing_id, crossing.lat, crossing.lon)?,
+                crossing: domain::Crossing::at(crossing.crossing_id, crossing.lat, crossing.lon)?,
                 projected: Point::new(crossing.x, crossing.y),
             })
         })

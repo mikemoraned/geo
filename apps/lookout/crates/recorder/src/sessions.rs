@@ -314,7 +314,7 @@ fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap, lead: Lead) ->
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
-    use model::Gps;
+    use domain::Gps;
     use shared::{DeviceInfo, DeviceType, GpsReading, Message, V1Message};
     use uuid::Uuid;
 

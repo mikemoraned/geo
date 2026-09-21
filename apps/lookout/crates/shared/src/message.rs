@@ -32,7 +32,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
 
-use model::Gps;
+use domain::Gps;
 
 use crate::sensor::Accel;
 use crate::session::DeviceInfo;

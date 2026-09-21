@@ -105,7 +105,7 @@ fn countdown(at: Option<DateTime<Utc>>, now: Option<DateTime<Utc>>) -> String {
 #[cfg(test)]
 mod tests {
     use chrono::{TimeDelta, TimeZone};
-    use model::CrossingCompactId;
+    use domain::CrossingCompactId;
 
     use super::*;
 

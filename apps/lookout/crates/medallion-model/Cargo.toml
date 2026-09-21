@@ -5,8 +5,8 @@ edition.workspace = true
 
 [dependencies]
 chrono = { workspace = true }
+domain = { workspace = true }
 medallion = { workspace = true }
-model = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }

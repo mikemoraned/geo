@@ -1,7 +1,7 @@
 //! The per-source sensor readings a device captures. They arrive at different rates
 //! and are carried by their own message variants, so each is an independent payload.
 //!
-//! The GPS fix is [`model::Gps`]: a fix means the same thing on a device, in a message and in
+//! The GPS fix is [`domain::Gps`]: a fix means the same thing on a device, in a message and in
 //! the store, so it is described where all three can reach it.
 
 use serde::{Deserialize, Serialize};

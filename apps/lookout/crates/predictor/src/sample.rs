@@ -10,9 +10,9 @@
 //! downstream has to ask which unit it is holding.
 
 use chrono::{DateTime, Utc};
+use domain::Measure;
+use domain::position::{CoordinateError, position};
 use geo_types::Point;
-use model::Measure;
-use model::position::{CoordinateError, position};
 use serde::{Deserialize, Serialize};
 
 /// A reading in the measure, dropping one the measure cannot hold.

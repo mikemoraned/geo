@@ -202,9 +202,9 @@ fn implied_speed(from: (Point<f64>, DateTime<Utc>), to: (Point<f64>, DateTime<Ut
 mod tests {
     use arrow::array::RecordBatch;
     use chrono::{Duration, TimeZone};
+    use domain::Gps;
     use medallion::{Country, GEOMETRY, PROJECTED_GEOMETRY, Query};
     use medallion_model::{DeviceId, SessionId};
-    use model::Gps;
     use serde::Deserialize;
     use shared::{GpsReading, Message, V1Message};
     use uuid::Uuid;

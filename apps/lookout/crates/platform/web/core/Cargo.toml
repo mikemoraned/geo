@@ -9,8 +9,8 @@ edition.workspace = true
 crux_core = "=0.16.2"
 chrono = { workspace = true }
 # `serde`, because a position goes out to the page as part of the view.
+domain = { workspace = true }
 geo-types = { workspace = true, features = ["serde"] }
-model = { workspace = true }
 platform-core = { workspace = true }
 predictor = { workspace = true }
 serde = { workspace = true }

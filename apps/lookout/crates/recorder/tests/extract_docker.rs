@@ -8,8 +8,8 @@
 use std::process::Command;
 use std::time::Duration;
 
+use domain::Gps;
 use medallion::{Query, Root};
-use model::Gps;
 use redis::aio::MultiplexedConnection;
 use serde::Deserialize;
 use shared::{Accel, AccelReading, GpsReading, Message, V1Message};

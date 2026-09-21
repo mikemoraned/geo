@@ -7,8 +7,8 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use domain::Gps;
 use futures_util::{SinkExt, StreamExt};
-use model::Gps;
 use server::queue::{PushError, SampleSink};
 use server::{AppState, build_app};
 use shared::{Accel, AccelReading, GpsReading, Message, V0Message, V1Message};

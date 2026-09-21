@@ -20,7 +20,7 @@ impl Shell for Device {
     /// Nothing can tell this device its crossings: they are in flash, and reading them there
     /// is what keeps thousands of them out of its RAM. A board given a set over a connection
     /// would answer here.
-    fn received(_points: Vec<model::CrossingCompact<f64>>) -> Option<Self::Crossings> {
+    fn received(_points: Vec<domain::CrossingCompact<f64>>) -> Option<Self::Crossings> {
         None
     }
 

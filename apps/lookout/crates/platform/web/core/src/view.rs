@@ -1,8 +1,8 @@
 //! What a browser draws: where we are, how fast, and what is about to be crossed.
 
 use chrono::{DateTime, Utc};
+use domain::CrossingCompact;
 use geo_types::Point;
-use model::CrossingCompact;
 use platform_core::{Float, Model, Shell};
 use predictor::{Crossings, Prediction};
 use serde::{Deserialize, Serialize};
@@ -118,7 +118,7 @@ fn located(crossings: &impl Crossings<Float>, predictions: &[Prediction<Float>])
 mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
     use crux_core::Core;
-    use model::{CrossingCompactId, Gps};
+    use domain::{CrossingCompactId, Gps};
     use platform_core::{Event, Lookout};
 
     use super::*;

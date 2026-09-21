@@ -10,7 +10,7 @@
 //! is what makes the repetition safe.
 
 use bytemuck::PodCastError;
-use model::CrossingCompact;
+use domain::CrossingCompact;
 use predictor::Crossings;
 
 /// Names the format in the first bytes of the file.

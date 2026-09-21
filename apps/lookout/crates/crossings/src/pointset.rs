@@ -8,7 +8,7 @@
 //! position, far under what GPS resolves, and it is what the ESP32's single-precision FPU
 //! wants: `f64` there is emulated in software.
 
-use model::{CoordinateError, CrossingCompact, CrossingCompactId};
+use domain::{CoordinateError, CrossingCompact, CrossingCompactId};
 
 use crate::silver::Crossing;
 
@@ -288,7 +288,7 @@ mod tests {
     #[test]
     fn a_point_carries_its_crossings_position() {
         let crossing = Crossing {
-            crossing: model::Crossing::at(
+            crossing: domain::Crossing::at(
                 "water:rail@0.5".parse().expect("id"),
                 RUHLAND.1,
                 RUHLAND.0,

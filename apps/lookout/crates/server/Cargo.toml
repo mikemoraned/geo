@@ -18,7 +18,7 @@ shared = { workspace = true }
 telemetry = { workspace = true }
 
 [dev-dependencies]
-model = { workspace = true }
+domain = { workspace = true }
 tokio-tungstenite = "0.29"
 futures-util = "0.3"
 tower = { version = "0.5", features = ["util"] }

@@ -16,7 +16,7 @@ doctest = false
 
 [dependencies]
 chrono = { workspace = true }
-model = { workspace = true }
+domain = { workspace = true }
 predictor = { workspace = true }
 pyo3 = { workspace = true, features = ["chrono"] }
 

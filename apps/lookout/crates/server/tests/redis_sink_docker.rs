@@ -10,7 +10,7 @@
 
 use std::time::Duration;
 
-use model::Gps;
+use domain::Gps;
 use redis::aio::MultiplexedConnection;
 use server::queue::{QUEUE_KEY, RedisSink, SampleSink};
 use shared::{Accel, AccelReading, GpsReading, Message, V1Message};

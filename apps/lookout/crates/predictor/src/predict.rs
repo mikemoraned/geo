@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use model::{CrossingCompactId, Measure};
+use domain::{CrossingCompactId, Measure};
 
 use crate::sample::Sample;
 

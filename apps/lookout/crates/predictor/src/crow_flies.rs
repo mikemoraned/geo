@@ -7,7 +7,7 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
-use model::{CrossingCompact, Measure};
+use domain::{CrossingCompact, Measure};
 
 use crate::crossings::Crossings;
 use crate::predict::{Event, ObserveError, Predict, Prediction};

@@ -1,6 +1,6 @@
 //! Where a predictor reads the crossings it scans.
 
-use model::{CrossingCompact, Measure};
+use domain::{CrossingCompact, Measure};
 
 /// A source rather than a slice, because the platforms hold a set differently. The device
 /// keeps thousands of crossings in flash, as three parallel columns, and scans them where they

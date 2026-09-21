@@ -231,8 +231,8 @@ fn device_session_row(start: &SessionStart) -> DeviceSessionRow {
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
+    use domain::Gps;
     use medallion::Query;
-    use model::Gps;
     use shared::{Accel, AccelReading, DeviceInfo, DeviceType, GpsReading, SessionStart};
     use uuid::Uuid;
 

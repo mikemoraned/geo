@@ -7,13 +7,13 @@
 //! same code paths that write the real one.
 
 use chrono::{DateTime, TimeZone, Utc};
+use domain::{CrossingCompactId, CrossingId, Gps};
 use geo_types::Point;
 use medallion::{
     COUNTRY, Countries, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Query, Root, geo_batch,
     projected_wkb_field, wkb_field,
 };
 use medallion_model::{OverlapKind, WaterCrossingRow};
-use model::{CrossingCompactId, CrossingId, Gps};
 use recorder::bronze::{Archive, Payload};
 use recorder::sessions::{Gap, Lead, sessions};
 use recorder::silver;

@@ -7,13 +7,13 @@
 use std::collections::HashMap;
 
 use crossings::{pointset, silver};
+use domain::{CrossingCompactId, CrossingId};
 use geo_types::Point as GeoPoint;
 use medallion::{
     COUNTRY, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Root, geo_batch,
     projected_wkb_field, wkb_field,
 };
 use medallion_model::{OverlapKind, WaterCrossingRow};
-use model::{CrossingCompactId, CrossingId};
 
 /// The four-byte name the store gives the nth crossing of a test store. Distinct per crossing,
 /// which is all the dataset promises and all the packer relies on; how the real derivation

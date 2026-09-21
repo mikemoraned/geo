@@ -29,7 +29,7 @@ wkb = { workspace = true }
 
 
 [dev-dependencies]
-model = { workspace = true }
+domain = { workspace = true }
 geo-traits = { workspace = true }
 parquet = { workspace = true }
 proptest = { workspace = true }

@@ -13,8 +13,8 @@ crux_core = "=0.16.2"
 battery-estimator = "0.3"
 bytemuck = "1"
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+domain = { workspace = true }
 geo-types = { workspace = true }
-model = { workspace = true }
 predictor = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"

@@ -97,10 +97,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // The degrees silver recorded, not the `f32` the buffer rounds them to: a browser has no
     // reason to inherit the board's precision, only to stop short of absurd.
-    let array: Vec<model::CrossingCompact<f64>> = crossings
+    let array: Vec<domain::CrossingCompact<f64>> = crossings
         .iter()
         .map(|crossing| {
-            model::CrossingCompact::at(
+            domain::CrossingCompact::at(
                 crossing.compact_id,
                 round(crossing.crossing.latitude()),
                 round(crossing.crossing.longitude()),

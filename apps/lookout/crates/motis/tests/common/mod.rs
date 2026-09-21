@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use model::Gps;
+use domain::Gps;
 use redis::aio::MultiplexedConnection;
 use shared::{GpsReading, Message, V1Message};
 use telemetry::{QUEUE_KEY, RawSample};

@@ -16,8 +16,8 @@
 //! and the columns say which tuning a row was built under.
 
 use chrono::{DateTime, NaiveDate, Utc};
+use domain::{CrossingCompactId, CrossingId};
 use medallion::{COUNTRY, DatasetSpec, Dated, Geometry, Row, layers};
-use model::{CrossingCompactId, CrossingId};
 use serde::{Deserialize, Serialize};
 
 use crate::device::DeviceId;

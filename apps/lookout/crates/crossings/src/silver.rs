@@ -12,8 +12,8 @@
 //! Position is taken from the geometry column rather than from any plain `lat`/`lon` columns,
 //! because the geometry is where the dataset keeps it.
 
+use domain::{CoordinateError, CrossingCompactId, CrossingId};
 use medallion::{Query, Root};
-use model::{CoordinateError, CrossingCompactId, CrossingId};
 use serde::Deserialize;
 
 #[derive(Debug, thiserror::Error)]
@@ -35,7 +35,7 @@ pub enum ReadError {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Crossing {
     /// The name the store gave it, and where it is in WGS84 degrees.
-    pub crossing: model::Crossing,
+    pub crossing: domain::Crossing,
     /// The four-byte name the store gives the same crossing, which is what the device holds.
     pub compact_id: CrossingCompactId,
     /// The extraction the upstream reference rows came from.
@@ -77,7 +77,7 @@ pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
         .into_iter()
         .map(|crossing| {
             Ok(Crossing {
-                crossing: model::Crossing::at(crossing.crossing_id, crossing.lat, crossing.lon)?,
+                crossing: domain::Crossing::at(crossing.crossing_id, crossing.lat, crossing.lon)?,
                 compact_id: crossing.crossing_compact_id,
                 extract_id: crossing.extract_id,
             })

@@ -9,7 +9,7 @@ use crux_core::{
     macros::effect,
     render::{self, RenderOperation},
 };
-use model::{CrossingCompact, Gps};
+use domain::{CrossingCompact, Gps};
 use predictor::{
     Crossings, CrowFlies, DEFAULT_RADIUS_METRES, Event as Observed, Parser, Predict, Sample,
     Sentence,
@@ -193,7 +193,7 @@ impl Operation for GetCrossings {
 /// # Errors
 ///
 /// Returns an error where the coordinates are not on the globe.
-fn fix(t: DateTime<Utc>, gps: &Gps) -> Result<Sample<Float>, model::CoordinateError> {
+fn fix(t: DateTime<Utc>, gps: &Gps) -> Result<Sample<Float>, domain::CoordinateError> {
     Ok(Sample::at(t, gps.latitude, gps.longitude)?.with_speed_mps(gps.speed_mps))
 }
 
