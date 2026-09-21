@@ -11,6 +11,7 @@
 //! It names the types here rather than restating them, so a device and a store hold one
 //! description of a fix or a crossing between them.
 
+pub mod bbox;
 pub mod crossing;
 pub mod device;
 pub mod gps;
@@ -21,6 +22,7 @@ pub mod precision;
 pub mod sample;
 pub mod session;
 
+pub use bbox::{Bbox, BboxError};
 pub use crossing::{Crossing, CrossingCompact, CrossingCompactId, CrossingId};
 pub use device::{DeviceId, DeviceInfo, DeviceType, EmptyDeviceId};
 pub use gps::Gps;

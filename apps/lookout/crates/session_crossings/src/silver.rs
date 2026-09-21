@@ -11,11 +11,12 @@
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
+use domain::Bbox;
 use domain::CrossingId;
 use domain::{DeviceId, Pass, SessionId};
-use geo_types::{Point, Rect};
+use geo_types::Point;
 use medallion::{COUNTRY, Country, Query, Replaced, Root};
-use medallion_model::{Bbox, SessionCrossingRow};
+use medallion_model::SessionCrossingRow;
 use serde::Deserialize;
 
 use crate::matching::{Crossing, Radius, Sample, Session, passes};
@@ -163,7 +164,7 @@ async fn sessions_in(query: &Query, country: Country) -> Result<Vec<Session>, Cr
             Session {
                 session_id: session.session_id,
                 device_id: session.device_id,
-                envelope: envelope(&session.bbox),
+                envelope: session.bbox.rect(),
                 samples,
             }
         })
@@ -210,11 +211,6 @@ fn row(pass: &Pass, device: &DeviceId, radius: Radius) -> SessionCrossingRow {
         samples_within: pass.samples_within,
         match_radius_m: radius.as_metres(),
     }
-}
-
-/// The stored envelope as a rectangle to prune against.
-fn envelope(bbox: &Bbox) -> Rect<f64> {
-    Rect::new((bbox.xmin, bbox.ymin), (bbox.xmax, bbox.ymax))
 }
 
 #[cfg(test)]

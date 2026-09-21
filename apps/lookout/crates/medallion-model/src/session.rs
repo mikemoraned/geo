@@ -17,7 +17,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
-use domain::{DeviceId, SessionId, StartedBy};
+use domain::{Bbox, DeviceId, SessionId, StartedBy};
 
 /// One contiguous run of samples from one device.
 pub const SESSION: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("session", "start_date");
@@ -25,20 +25,6 @@ pub const SESSION: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("sessi
 /// The samples making up the sessions, one row per deduped bronze reading.
 pub const SESSION_SAMPLE: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("session_sample", "sample_date");
-
-/// The envelope of a session's samples, in the same axis names the upstream reference data
-/// uses for its own envelopes.
-///
-/// It is stored rather than derived on read because "which sessions could have come near
-/// this place" is the question sessions are searched by, and answering it should not
-/// require opening the samples.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct Bbox {
-    pub xmin: f64,
-    pub ymin: f64,
-    pub xmax: f64,
-    pub ymax: f64,
-}
 
 /// One session: which device recorded it, when it ran, and the path it took.
 ///
@@ -169,7 +155,8 @@ mod tests {
     }
 
     /// The envelope is one struct column of four bounds, so a predicate on it names the
-    /// axis it means rather than an offset into something.
+    /// axis it means rather than an offset into something. The window itself is georust's
+    /// box, which serialises differently, so this is what holds the stored shape steady.
     #[test]
     fn the_envelope_is_a_struct_of_its_four_bounds() {
         let DataType::Struct(bounds) = column::<SessionRow>("bbox") else {

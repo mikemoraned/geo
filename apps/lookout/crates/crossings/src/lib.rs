@@ -4,10 +4,8 @@
 //! so what it needs is not a queryable dataset but a packed array of coordinates. Deriving
 //! that is this crate's whole job.
 
-pub mod bbox;
 pub mod pointset;
 pub mod silver;
 
-pub use bbox::{Bbox, BboxError};
 pub use pointset::{FormatError, compacted};
 pub use silver::{Crossing, ReadError};

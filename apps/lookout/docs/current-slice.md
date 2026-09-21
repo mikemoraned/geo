@@ -356,7 +356,16 @@ import arrow to name a crossing.
       itself belongs beside the device. That empties `shared::session`, and `shared` is left
       holding the wire: a versioned message and the sensor payloads it carries.
 
-- [ ] Keep one window: the checked `Bbox`.
+- [x] Keep one window. The two were `crossings::Bbox`, which parsed a command line and
+      checked its corners, and `medallion_model::Bbox`, four public floats a writer filled in
+      by hand. One `domain::Bbox` now, and it is georust's `Rect` underneath: a box orders its
+      own corners, so the inversion the note warned about cannot arise — that warning was
+      hypothetical, since the envelope is built from `bounding_rect` either way. `contains`
+      delegates to `Intersects` rather than being written out, which is also the one that
+      includes the boundary; `Contains` follows the OGC and excludes it. What the wrapper adds
+      is what geo has no way to know: that the numbers are degrees, and the two forms a window
+      is written in — a command line's, and the stored column's four named corners, which an
+      existing test holds steady.
 - [ ] Weigh a leg and an extract, which the note lists and does not rank.
 - [ ] Capture the rule from the note in `domain`'s `README.md`, and delete the note. The note
       is the reasoning and the evidence, which goes stale once the moves land; the README is

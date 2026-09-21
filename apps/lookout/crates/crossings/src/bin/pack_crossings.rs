@@ -17,7 +17,8 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 use clap::Parser;
-use crossings::{Bbox, pointset, silver};
+use crossings::{pointset, silver};
+use domain::Bbox;
 use medallion::MedallionArgs;
 
 /// What the crossings are called in gold, and the files each version of them holds.

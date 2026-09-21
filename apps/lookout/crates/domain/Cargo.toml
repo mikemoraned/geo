@@ -7,6 +7,9 @@ edition.workspace = true
 # Written out rather than inherited: this crate builds for Xtensa and for wasm, and neither
 # has the `std` the workspace default would bring. See docs/device.md.
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+# Written out with `default-features = false` for the same reason as the entries around
+# it: this crate builds for Xtensa and for wasm. See docs/device.md.
+geo = { version = "0.31", default-features = false }
 geo-types = { workspace = true }
 num-traits = { version = "0.2", default-features = false }
 # `v5` alone: a session id is a name-based UUID, and `v4` would pull in a random source

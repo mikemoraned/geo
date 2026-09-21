@@ -1,10 +1,13 @@
-//! A geographic window restricting which crossings a pack run includes.
+//! An axis-aligned window of degrees: the extent of what was recorded, or the region a run
+//! was asked to restrict itself to.
 
 use std::fmt::{self, Display};
 use std::num::ParseFloatError;
 use std::str::FromStr;
 
+use geo::Intersects;
 use geo_types::{Coord, Rect, coord};
+use serde::{Deserialize, Serialize};
 
 /// West, south, east, north — the order Overture and the OGC use, and the order the
 /// command line takes.
@@ -28,10 +31,15 @@ pub enum BboxError {
 
 /// An axis-aligned lon/lat window, inclusive on every edge.
 ///
-/// Edges are inclusive because this selects points for a dataset rather than partitioning
-/// space: a crossing sitting exactly on a boundary a caller drew around a region is one they
-/// meant to include.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Edges are inclusive because this selects points rather than partitioning space: a crossing
+/// sitting exactly on a boundary a caller drew around a region is one they meant to include.
+///
+/// A [`Rect`] underneath, which is georust's own box and orders its corners for itself, so
+/// a window is never inside out whatever it was built from. What this adds is what geo has no
+/// way to know: that the numbers are degrees, and the two forms a window is written in — the
+/// `west,south,east,north` of a command line, and the four named corners of a stored column.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(from = "Corners", into = "Corners")]
 pub struct Bbox(Rect<f64>);
 
 impl Bbox {
@@ -59,9 +67,24 @@ impl Bbox {
         )))
     }
 
+    /// The window a set of coordinates falls inside, which georust computed and which is
+    /// therefore already in order.
+    pub fn of(rect: Rect<f64>) -> Self {
+        Self(rect)
+    }
+
+    /// The window as georust's own box, for whoever measures against it.
+    pub fn rect(&self) -> Rect<f64> {
+        self.0
+    }
+
+    /// Whether the window holds this position, its edges included.
+    ///
+    /// `intersects` rather than `contains`: georust follows the OGC there, where a rectangle
+    /// contains only its interior, and a point on the boundary is one a caller who drew the
+    /// boundary meant to include.
     pub fn contains(&self, longitude: f64, latitude: f64) -> bool {
-        let (min, max) = (self.0.min(), self.0.max());
-        (min.x..=max.x).contains(&longitude) && (min.y..=max.y).contains(&latitude)
+        self.0.intersects(&coord! { x: longitude, y: latitude })
     }
 
     pub fn min(&self) -> Coord<f64> {
@@ -70,6 +93,44 @@ impl Bbox {
 
     pub fn max(&self) -> Coord<f64> {
         self.0.max()
+    }
+}
+
+/// How a window is stored: the four corners under the axis names the upstream reference data
+/// uses for its own envelopes, which is what a reader of the column already expects.
+#[derive(Serialize, Deserialize)]
+struct Corners {
+    xmin: f64,
+    ymin: f64,
+    xmax: f64,
+    ymax: f64,
+}
+
+impl From<Corners> for Bbox {
+    fn from(
+        Corners {
+            xmin,
+            ymin,
+            xmax,
+            ymax,
+        }: Corners,
+    ) -> Self {
+        Self(Rect::new(
+            coord! { x: xmin, y: ymin },
+            coord! { x: xmax, y: ymax },
+        ))
+    }
+}
+
+impl From<Bbox> for Corners {
+    fn from(bbox: Bbox) -> Self {
+        let (min, max) = (bbox.0.min(), bbox.0.max());
+        Self {
+            xmin: min.x,
+            ymin: min.y,
+            xmax: max.x,
+            ymax: max.y,
+        }
     }
 }
 

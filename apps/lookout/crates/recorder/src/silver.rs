@@ -17,10 +17,11 @@
 //! there is no zone to project it into — and counted.
 
 use chrono::{DateTime, Utc};
+use domain::Bbox;
 use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
 use medallion::{Countries, GeoRow, Projector, Replaced, Root};
-use medallion_model::{Bbox, SessionRow, SessionSampleRow};
+use medallion_model::{SessionRow, SessionSampleRow};
 
 use crate::sessions::Session;
 
@@ -145,15 +146,10 @@ fn path_through(points: impl Iterator<Item = Point<f64>>) -> LineString<f64> {
 
 /// The envelope of `path`, in the axis names the upstream reference data uses.
 fn envelope(path: &LineString<f64>) -> Bbox {
-    let rect = path
-        .bounding_rect()
-        .expect("a path holds at least one coordinate");
-    Bbox {
-        xmin: rect.min().x,
-        ymin: rect.min().y,
-        xmax: rect.max().x,
-        ymax: rect.max().y,
-    }
+    Bbox::of(
+        path.bounding_rect()
+            .expect("a path holds at least one coordinate"),
+    )
 }
 
 /// One session's samples as rows.
@@ -546,12 +542,7 @@ mod tests {
         assert_eq!(session.gap_seconds, 600);
         assert_eq!(
             session.bbox,
-            Bbox {
-                xmin: 13.3,
-                ymin: 52.4,
-                xmax: 13.5,
-                ymax: 52.6
-            },
+            Bbox::new(13.3, 52.4, 13.5, 52.6).expect("a window"),
             "the envelope covers every sample, in lat/lon"
         );
     }

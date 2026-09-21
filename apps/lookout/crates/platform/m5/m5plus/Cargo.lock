@@ -486,6 +486,7 @@ name = "domain"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "geo",
  "geo-types",
  "num-traits",
  "serde",
