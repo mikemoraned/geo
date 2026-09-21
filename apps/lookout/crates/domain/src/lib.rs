@@ -22,7 +22,7 @@ pub mod sample;
 pub mod session;
 
 pub use crossing::{Crossing, CrossingCompact, CrossingCompactId, CrossingId};
-pub use device::{DeviceId, EmptyDeviceId};
+pub use device::{DeviceId, DeviceInfo, DeviceType, EmptyDeviceId};
 pub use gps::Gps;
 pub use name::NameError;
 pub use pass::Pass;

@@ -35,7 +35,7 @@ use uuid::Uuid;
 use domain::Gps;
 
 use crate::sensor::Accel;
-use crate::session::DeviceInfo;
+use domain::DeviceInfo;
 
 /// A GPS reading from a device at a point in time.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -149,8 +149,9 @@ impl<'de> Deserialize<'de> for Message {
 
 #[cfg(test)]
 mod tests {
+    use domain::DeviceType;
+
     use super::*;
-    use crate::session::DeviceType;
 
     fn gps_reading() -> GpsReading {
         GpsReading {

@@ -347,7 +347,15 @@ import arrow to name a crossing.
       the tuning and the envelope, which are how a run was made and a denormalisation of
       what it found.
 
-- [ ] Move `DeviceType`, and have `DeviceSessionRow` name it rather than a `String`.
+- [x] Move `DeviceType`, and have `DeviceSessionRow` name it rather than a `String`.
+      `DeviceType::as_str` existed, by its own doc, "for storing in a text column", and had
+      one caller — so the store's handling of the enum had leaked onto a type a browser
+      reports. It is unnecessary: `medallion::fields` traces with
+      `enums_without_data_as_strings(true)`, so the row names the set and the column is the
+      same text it always was. `DeviceInfo` moved with it, since what a device says about
+      itself belongs beside the device. That empties `shared::session`, and `shared` is left
+      holding the wire: a versioned message and the sensor payloads it carries.
+
 - [ ] Keep one window: the checked `Bbox`.
 - [ ] Weigh a leg and an extract, which the note lists and does not rank.
 - [ ] Capture the rule from the note in `domain`'s `README.md`, and delete the note. The note

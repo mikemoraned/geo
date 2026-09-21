@@ -7,7 +7,7 @@
 use medallion::{DatasetSpec, Row, layers};
 use serde::{Deserialize, Serialize};
 
-use domain::DeviceId;
+use domain::{DeviceId, DeviceType};
 
 /// Every payload the telemetry queue carried, verbatim. The lossless record the other
 /// telemetry datasets are interpreted from.
@@ -89,7 +89,7 @@ impl Row for AccelReadingRow {
 pub struct DeviceSessionRow {
     pub device_id: DeviceId,
     pub t: i64,
-    pub device_type: String,
+    pub device_type: DeviceType,
     pub platform: String,
     pub user_agent: String,
     pub os: Option<String>,
@@ -100,4 +100,44 @@ impl Row for DeviceSessionRow {
     type Layer = layers::Bronze;
     const DATASET: DatasetSpec<Self::Layer> = DEVICE_SESSION;
     const INSTANTS: &'static [&'static str] = &["t"];
+}
+
+#[cfg(test)]
+mod tests {
+    use arrow::datatypes::DataType;
+
+    use super::*;
+
+    /// What class of device a session ran on is one of a closed set of names, and is stored
+    /// as that name. The row holds the set rather than any string, so a column that has only
+    /// ever held four values cannot come to hold a fifth.
+    #[test]
+    fn the_class_of_device_is_a_string_column() {
+        let fields = medallion::fields::<DeviceSessionRow>().expect("describe the rows");
+        let column = fields
+            .iter()
+            .find(|field| field.name() == "device_type")
+            .expect("a device_type column");
+
+        assert!(matches!(
+            column.data_type(),
+            DataType::Utf8 | DataType::LargeUtf8
+        ));
+    }
+
+    /// The names an archive of sessions is already written in.
+    #[test]
+    fn a_class_is_written_under_the_name_it_was_stored_as() {
+        for (class, name) in [
+            (DeviceType::Iphone, "iphone"),
+            (DeviceType::Ipad, "ipad"),
+            (DeviceType::Laptop, "laptop"),
+            (DeviceType::Unknown, "unknown"),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&class).expect("write"),
+                format!("\"{name}\"")
+            );
+        }
+    }
 }

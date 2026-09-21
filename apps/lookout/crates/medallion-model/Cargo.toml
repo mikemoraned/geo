@@ -13,6 +13,7 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 arrow = { workspace = true }
+serde_json = { workspace = true }
 medallion = { workspace = true }
 
 [lints]

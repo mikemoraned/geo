@@ -315,7 +315,8 @@ fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap, lead: Lead) ->
 mod tests {
     use chrono::TimeZone;
     use domain::Gps;
-    use shared::{DeviceInfo, DeviceType, GpsReading, Message, V1Message};
+    use domain::{DeviceInfo, DeviceType};
+    use shared::{GpsReading, Message, V1Message};
     use uuid::Uuid;
 
     use crate::bronze::{Archive, Payload};

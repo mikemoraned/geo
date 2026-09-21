@@ -4,12 +4,10 @@
 //!
 //! The wire model is a versioned [`Message`] enum — see the [`message`] module for
 //! the on-the-wire shape and how the protocol version is carried. Sensor payloads
-//! live in [`sensor`]; per-session device metadata in [`session`].
+//! live in [`sensor`]; what a device says about itself is [`domain::DeviceInfo`].
 
 pub mod message;
 pub mod sensor;
-pub mod session;
 
 pub use message::{AccelReading, GpsReading, Message, SessionStart, V0Message, V1Message};
 pub use sensor::Accel;
-pub use session::{DeviceInfo, DeviceType};

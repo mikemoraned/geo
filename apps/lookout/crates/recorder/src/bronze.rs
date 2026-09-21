@@ -224,7 +224,7 @@ fn device_session_row(start: &SessionStart) -> DeviceSessionRow {
     DeviceSessionRow {
         device_id: start.id.into(),
         t: start.t,
-        device_type: start.device.device_type.as_str().to_string(),
+        device_type: start.device.device_type,
         platform: start.device.platform.clone(),
         user_agent: start.device.user_agent.clone(),
         os: start.device.os.clone(),
@@ -236,8 +236,9 @@ fn device_session_row(start: &SessionStart) -> DeviceSessionRow {
 mod tests {
     use chrono::TimeZone;
     use domain::Gps;
+    use domain::{DeviceInfo, DeviceType};
     use medallion::Query;
-    use shared::{Accel, AccelReading, DeviceInfo, DeviceType, GpsReading, SessionStart};
+    use shared::{Accel, AccelReading, GpsReading, SessionStart};
     use uuid::Uuid;
 
     use super::*;
