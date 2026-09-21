@@ -366,7 +366,25 @@ import arrow to name a crossing.
       is what geo has no way to know: that the numbers are degrees, and the two forms a window
       is written in — a command line's, and the stored column's four named corners, which an
       existing test holds steady.
-- [ ] Weigh a leg and an extract, which the note lists and does not rank.
+- [x] Weigh a leg and an extract, which the note lists and does not rank. Neither moves.
+      A leg has three shapes — the polled row, the deduped row, and the query's own — and
+      they are nearly the same fields, so it is one thing written thrice. But nothing holds
+      a leg: `ingest` reads columns and writes columns, and nothing computes over one the
+      way `matching` computes over sessions and crossings. It earns a type when something
+      reasons about legs, which is matching a session to the train it was on. An extraction
+      is not a domain thing at all: it is how reference data got into the store, which is the
+      store's business.
+
+      `TrainNumber` did move, being the `DeviceType` case again — a checked type unwrapped to
+      a bare integer at the row, in a column that could then hold the zero the type exists to
+      refuse. It holds a `u32` rather than a `NonZeroU32` because a schema is traced by
+      probing the type with values, zero among them, so a number that cannot be zero cannot
+      describe a column.
+- [ ] Two things in the extract duplicate what the domain now holds, both on the store's side
+      of the line rather than the domain's: `ExtractId` checks itself against `PartitionValue`
+      where `domain::name` is the same rule, and `ExtractManifestRow` carries its window as
+      four floats where `Bbox` exists. The second is a bronze schema change, so weigh that
+      before doing it.
 - [ ] Capture the rule from the note in `domain`'s `README.md`, and delete the note. The note
       is the reasoning and the evidence, which goes stale once the moves land; the README is
       the default and the entity-to-projection relationship, which does not.

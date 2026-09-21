@@ -7,6 +7,7 @@
 //! it touches: re-running over unchanged bronze produces an identical dataset.
 
 use chrono::{DateTime, Utc};
+use domain::TrainNumber;
 use geo_types::{LineString, Point};
 use medallion::{Countries, GeoRow, Query, Root};
 use medallion_model::TrainSegmentRow;
@@ -64,7 +65,7 @@ pub enum IngestError {
 struct Leg {
     trip_id: String,
     route_name: Option<String>,
-    train_number: Option<u32>,
+    train_number: Option<TrainNumber>,
     agency_id: Option<String>,
     agency_name: Option<String>,
     mode: String,

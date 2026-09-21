@@ -21,6 +21,7 @@ pub mod position;
 pub mod precision;
 pub mod sample;
 pub mod session;
+pub mod train;
 
 pub use bbox::{Bbox, BboxError};
 pub use crossing::{Crossing, CrossingCompact, CrossingCompactId, CrossingId};
@@ -32,3 +33,4 @@ pub use position::{CoordinateError, position};
 pub use precision::Precision;
 pub use sample::Sample;
 pub use session::{SessionId, StartedBy};
+pub use train::TrainNumber;

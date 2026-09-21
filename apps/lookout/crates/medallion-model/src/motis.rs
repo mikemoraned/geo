@@ -1,6 +1,7 @@
 //! The transit datasets: segments as polled, and the scheduled legs derived from them.
 
 use chrono::{DateTime, NaiveDate, Utc};
+use domain::TrainNumber;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +25,7 @@ pub struct MotisSegmentRow {
     pub captured_at: DateTime<Utc>,
     pub trip_id: String,
     pub route_name: Option<String>,
-    pub train_number: Option<u32>,
+    pub train_number: Option<TrainNumber>,
     pub agency_id: Option<String>,
     pub agency_name: Option<String>,
     pub mode: String,
@@ -72,7 +73,7 @@ impl Row for MotisSegmentRow {
 pub struct TrainSegmentRow {
     pub trip_id: String,
     pub route_name: Option<String>,
-    pub train_number: Option<u32>,
+    pub train_number: Option<TrainNumber>,
     pub agency_id: Option<String>,
     pub agency_name: Option<String>,
     pub mode: String,
@@ -95,5 +96,37 @@ impl Row for TrainSegmentRow {
 impl Dated for TrainSegmentRow {
     fn partition_date(&self) -> NaiveDate {
         self.departure.date_naive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use arrow::datatypes::DataType;
+
+    use super::*;
+
+    /// A train number is stored as the four bytes it is, in both datasets. The row names the
+    /// type rather than an integer, which is what keeps a zero — a number no train has — out
+    /// of a column that would otherwise accept one.
+    #[test]
+    fn a_train_number_is_a_four_byte_column_in_both_datasets() {
+        for column in [
+            medallion::fields::<MotisSegmentRow>()
+                .expect("describe the rows")
+                .iter()
+                .find(|field| field.name() == "train_number")
+                .expect("a train_number column")
+                .data_type()
+                .clone(),
+            medallion::fields::<TrainSegmentRow>()
+                .expect("describe the rows")
+                .iter()
+                .find(|field| field.name() == "train_number")
+                .expect("a train_number column")
+                .data_type()
+                .clone(),
+        ] {
+            assert_eq!(column, DataType::UInt32);
+        }
     }
 }

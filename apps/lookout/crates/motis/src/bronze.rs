@@ -47,7 +47,7 @@ fn segment_row(
                 .clone()
                 .or_else(|| t.route_short_name.clone())
         }),
-        train_number: details.and_then(|d| d.train_number.map(|n| n.get())),
+        train_number: details.and_then(|d| d.train_number),
         agency_id: agency.and_then(|a| a.id.clone()),
         agency_name: agency.and_then(|a| a.name.clone()),
         mode: segment.mode.to_string(),

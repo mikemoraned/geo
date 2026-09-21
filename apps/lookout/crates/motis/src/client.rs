@@ -1,9 +1,8 @@
 //! A thin wrapper over the generated `motis-openapi-progenitor` client that queries the
 //! Motis `map/trips` endpoint for train trips within a bounding box and time window.
 
-use std::num::NonZeroU32;
-
 use chrono::{DateTime, Duration, Timelike, Utc};
+use domain::TrainNumber;
 use geo_types::Rect;
 use motis_openapi_progenitor::{
     Client,
@@ -29,26 +28,6 @@ pub enum MotisError {
 pub struct Agency {
     pub id: Option<String>,
     pub name: Option<String>,
-}
-
-/// A train's operating number — the integer GTFS `trip_short_name`, e.g. `2569` from the
-/// raw `002569`. Distinct from the *line* (`route_short_name`, e.g. `55`) and from `mode`,
-/// which already carries the product family. Non-zero: `0` is not a real train number.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TrainNumber(NonZeroU32);
-
-impl TrainNumber {
-    /// From a raw GTFS `trip_short_name`; `None` when it names no number — empty, all zeros
-    /// (some long-distance trips report `0` / `000000`), or non-numeric. Leading zeros are
-    /// dropped by the integer parse.
-    pub fn from_gtfs(raw: &str) -> Option<Self> {
-        raw.parse::<NonZeroU32>().ok().map(Self)
-    }
-
-    /// The number, e.g. `2569`.
-    pub fn get(self) -> u32 {
-        self.0.get()
-    }
 }
 
 /// What the Motis `trip` endpoint adds to a `map/trips` segment: the operating [`Agency`]
