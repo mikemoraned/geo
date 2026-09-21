@@ -285,12 +285,28 @@ import arrow to name a crossing.
       is the old name and anything reading it — `pack_crossings`, `match_crossings` — fails
       against the checked-in store. Follow it with `just silver-session-crossings` and
       `just crossings`.
-- [ ] Find the same pattern elsewhere: a type everything needs, holding a constraint only the
+- [x] Find the same pattern elsewhere: a type everything needs, holding a constraint only the
       store has. It hides until something that cannot build arrow — a device, a browser —
       imports one. Such a type belongs in `model`, with as much of the constraint as is the
       type's own rather than the store's — which is how the crossing id landed, and the first
       thing to ask of each of these. Read every public type in `medallion-model` against that
       line, and move the ones that fall outside it.
+
+      Read, and the line was wrong. "Something that cannot build arrow needs it" is a symptom,
+      and finds a type only once a platform importing it exists — one platform too late. The
+      criterion is whether the type says what something *is*, and the bias is to describe a
+      new entity in the domain crate by default. Under that line the answer is not one type
+      but most of them: a session, a sample, a pass, a device, a leg and an extract are all
+      described only as store rows today. The sweep, the evidence and the order to move them
+      in are [2026-09-21-model-layers.md](2026-09-21-model-layers.md), which the moves below
+      work from.
+- [ ] Capture what holds from `docs/2026-09-21-model-layers.md` in the renamed `domain`
+      crate's `README.md`, and delete the note. What belongs there is the default — a new
+      entity is described in `domain` unless something argues otherwise — and the relationship
+      that makes it work: an entity here, a projection of it in whoever stores or sends one,
+      conversions with the entity. The dated note is the reasoning and the evidence, which
+      goes stale the moment the moves land; the README is the rule, which does not. Written
+      for anyone working on the code, as `.claude/memory/docs-style.md` asks.
 
 ##### Shell split
 
