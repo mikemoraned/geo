@@ -313,7 +313,7 @@ mod tests {
 
     /// The four bytes a device holds, written the width they are.
     #[test]
-    fn a_short_id_reads_as_the_four_bytes_it_is() {
+    fn a_compact_id_reads_as_the_four_bytes_it_is() {
         assert_eq!(CrossingCompactId::new(0x2620_a981).to_string(), "2620a981");
         assert_eq!(CrossingCompactId::new(7).to_string(), "00000007");
     }

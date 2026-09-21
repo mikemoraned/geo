@@ -245,14 +245,14 @@ class TestNamesThatIdentifyARow:
     """A crossing is named twice — by the store's id and by the four bytes a device holds —
     and either naming two crossings would let a reader take one for the other."""
 
-    def crossings(self, ids: list[str], short_ids: list[int]) -> pa.Table:
+    def crossings(self, ids: list[str], compact_ids: list[int]) -> pa.Table:
         point = shapely.to_wkb(shapely.Point(BERLIN))
         projected = shapely.to_wkb(shapely.Point(BERLIN_UTM32N))
         rows = len(ids)
         return pa.table(
             {
                 "crossing_id": pa.array(ids, pa.string()),
-                "crossing_short_id": pa.array(short_ids, pa.uint32()),
+                "crossing_compact_id": pa.array(compact_ids, pa.uint32()),
                 "water_id": pa.array(["water-1"] * rows, pa.string()),
                 "water_subtype": pa.array(["river"] * rows, pa.string()),
                 "water_class": pa.array(["river"] * rows, pa.string()),
@@ -279,10 +279,10 @@ class TestNamesThatIdentifyARow:
         with pytest.raises(ValueError, match="crossing_id"):
             lookout_medallion.write_silver("water_crossing", table, root=str(store))
 
-    def test_two_crossings_of_one_short_id_are_refused(self, store):
+    def test_two_crossings_of_one_compact_id_are_refused(self, store):
         table = self.crossings(["w1-t1", "w1-t2"], [7, 7])
 
-        with pytest.raises(ValueError, match="crossing_short_id"):
+        with pytest.raises(ValueError, match="crossing_compact_id"):
             lookout_medallion.write_silver("water_crossing", table, root=str(store))
 
     def test_distinct_names_are_written(self, store):

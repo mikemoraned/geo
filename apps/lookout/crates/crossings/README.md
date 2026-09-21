@@ -71,7 +71,7 @@ against a GPS error budget measured in metres.
 
 ## Ids name a crossing, not a row
 
-`id` is the silver `crossing_short_id` column, read rather than derived. The dataset mints it —
+`id` is the silver `crossing_compact_id` column, read rather than derived. The dataset mints it —
 the low 4 bytes of the md5 of the crossing's `crossing_id`, in the water-crossings notebook —
 and the store refuses a write in which two crossings share one, so the packer takes the column
 as given.

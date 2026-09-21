@@ -84,7 +84,7 @@ def _crossing_table():
     return pa.table(
         {
             "crossing_id": pa.array(["w1-t1", "w2-t1"], pa.string()),
-            "crossing_short_id": pa.array([NEAR, FAR], pa.uint32()),
+            "crossing_compact_id": pa.array([NEAR, FAR], pa.uint32()),
             "water_id": pa.array(["water-1", "water-2"], pa.string()),
             "water_subtype": pa.array(["river"] * rows, pa.string()),
             "water_class": pa.array(["river"] * rows, pa.string()),

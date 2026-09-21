@@ -263,7 +263,7 @@ import arrow to name a crossing.
       those would misread, and `medallion-model` holds no wrapper around it — a wrapper would
       be the second representation this task exists to remove. Collapsed onto those two names:
       `crossings::PackedId`, `predictor::CrossingId`, and the bare `u32` on `WaterCrossingRow`.
-      The store's column still reads `crossing_short_id`, which the task below renames.
+      The store's column is renamed to `crossing_compact_id` by the task below.
 
       Two crossings, for the same reason. `Crossing` is the name and the place, which is what
       anything with room for it holds; `CrossingCompact<T>` is the crossing where there is not
@@ -276,16 +276,15 @@ import arrow to name a crossing.
       extraction, and `session_crossings::matching` adds the same place in projected metres —
       which is what its `at` had meant, against a `lat_lon` that was the crossing's own
       position under another name.
-- [ ] Finish the rename: nothing calls a compact id short. `CrossingCompactId` is the name
-      now, and `crossing_short_id` is what the store still calls the column — so silver's
-      `water_crossing` is rewritten to `crossing_compact_id`, along with everything naming it:
-      the SQL in `crossings::silver` and `rerun-py`'s `runner/store.py`, the `UNIQUE` key and
-      the column test in `medallion-model`, the notebook that mints one
-      (`notebooks/water_crossings/v9.py`), and the python fixtures under `medallion-py` and
-      `rerun-py`. A rebuild is the cost and it is one we can pay; a column called one thing and
-      typed as another is what a reader has to hold in their head forever. Also the leftovers
-      in code that are only names: `silver::Crossing`'s builders, `pack.rs`'s `short_id`
-      helper.
+- [ ] Finish the rename: nothing calls a compact id short. Done in code — the column is
+      `crossing_compact_id` in the row type, the `UNIQUE` key, both SQL readers, the notebook
+      that mints one, and every python fixture — and what is left is the run that rewrites
+      silver `water_crossing` under the new name. `just silver-water-crossings` does it and
+      cannot run in the sandbox: the notebook needs DuckDB's spatial extension, which cannot
+      install here (see `.claude/memory/testing-limits.md`). Until it runs, the store's column
+      is the old name and anything reading it — `pack_crossings`, `match_crossings` — fails
+      against the checked-in store. Follow it with `just silver-session-crossings` and
+      `just crossings`.
 - [ ] Find the same pattern elsewhere: a type everything needs, holding a constraint only the
       store has. It hides until something that cannot build arrow — a device, a browser —
       imports one. Such a type belongs in `model`, with as much of the constraint as is the

@@ -53,17 +53,17 @@ def leg_table(trip_ids, departures, countries):
 
 
 
-def crossing_table(short_ids, points, projected):
+def crossing_table(compact_ids, points, projected):
     """A table shaped like the silver `water_crossing` dataset.
 
     `points` are lat/lon and `projected` the same places in the country's zone, since the
     dataset carries both and the caller of the writer is what projects them.
     """
-    rows = len(short_ids)
+    rows = len(compact_ids)
     return pa.table(
         {
             "crossing_id": pa.array([f"w{n}-t{n}" for n in range(rows)], pa.string()),
-            "crossing_short_id": pa.array(short_ids, pa.uint32()),
+            "crossing_compact_id": pa.array(compact_ids, pa.uint32()),
             "water_id": pa.array(["water-1"] * rows, pa.string()),
             "water_subtype": pa.array(["river"] * rows, pa.string()),
             "water_class": pa.array(["river"] * rows, pa.string()),

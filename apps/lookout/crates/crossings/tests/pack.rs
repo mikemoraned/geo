@@ -18,7 +18,7 @@ use model::{CrossingCompactId, CrossingId};
 /// The four-byte name the store gives the nth crossing of a test store. Distinct per crossing,
 /// which is all the dataset promises and all the packer relies on; how the real derivation
 /// mints one is the notebook's business, not this crate's.
-fn short_id(n: usize) -> CrossingCompactId {
+fn compact_id(n: usize) -> CrossingCompactId {
     CrossingCompactId::new(0x1000_0000 + n as u32)
 }
 
@@ -41,7 +41,7 @@ async fn store_with_crossings(root: &Root, country: &str, positions: &[(f64, f64
         .map(|(n, _)| WaterCrossingRow {
             // The position is not among these columns: it is the geometry below.
             crossing_id: CrossingId::new(format!("water:track:rail@{n}")).expect("id"),
-            crossing_short_id: short_id(n),
+            crossing_compact_id: compact_id(n),
             water_id: "water".into(),
             water_subtype: Some("river".into()),
             water_class: Some("river".into()),
@@ -98,7 +98,7 @@ async fn a_crossing_is_read_with_its_position_and_the_name_the_store_gave_it() {
     assert_eq!(crossings.len(), 1);
     let crossing = &crossings[0];
     assert_eq!(crossing.crossing.id.to_string(), "water:track:rail@0");
-    assert_eq!(crossing.compact_id, short_id(0));
+    assert_eq!(crossing.compact_id, compact_id(0));
     assert_eq!(crossing.extract_id, EXTRACT);
     assert!((crossing.crossing.longitude() - LON).abs() < 1e-9);
     assert!((crossing.crossing.latitude() - LAT).abs() < 1e-9);

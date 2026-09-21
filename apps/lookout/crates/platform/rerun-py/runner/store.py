@@ -79,13 +79,13 @@ class Store:
     def crossings(self, country: str | None = None) -> list[tuple[int, float, float]]:
         """The crossings to scan against, each `(id, latitude, longitude)`.
 
-        Named by `crossing_short_id`, which is the name a prediction comes back under.
+        Named by `crossing_compact_id`, which is the name a prediction comes back under.
         `country` restricts to one partition.
         """
         where = "WHERE country = $country" if country else ""
         table = self._query(
             f"""
-            SELECT crossing_short_id AS id, ST_Y(geometry) AS lat, ST_X(geometry) AS lon
+            SELECT crossing_compact_id AS id, ST_Y(geometry) AS lat, ST_X(geometry) AS lon
             FROM water_crossing
             {where}
             """,

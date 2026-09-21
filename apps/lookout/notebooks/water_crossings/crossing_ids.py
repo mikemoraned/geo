@@ -98,13 +98,13 @@ def crossing_ids(
     ]
 
 
-# Bytes of the digest a short id is taken from, and the order they are read in. Four bytes is
+# Bytes of the digest a compact id is taken from, and the order they are read in. Four bytes is
 # what a device has room for beside each coordinate, and little-endian is what it casts them as.
-SHORT_ID_BYTES = 4
-SHORT_ID_ORDER = "little"
+COMPACT_ID_BYTES = 4
+COMPACT_ID_ORDER = "little"
 
 
-def short_id(crossing_id: str) -> int:
+def compact_id(crossing_id: str) -> int:
     """The four-byte name of the crossing `crossing_id` names, as an unsigned integer.
 
     A device holds a crossing as a coordinate and a name, and has no room for the composite id
@@ -116,12 +116,12 @@ def short_id(crossing_id: str) -> int:
     store's to refuse when the dataset is written, not this function's to avoid.
     """
     digest = hashlib.md5(crossing_id.encode()).digest()
-    return int.from_bytes(digest[:SHORT_ID_BYTES], SHORT_ID_ORDER)
+    return int.from_bytes(digest[:COMPACT_ID_BYTES], COMPACT_ID_ORDER)
 
 
-def short_ids(ids: Iterable[str]) -> list[int]:
-    """The short name of each of `ids`, pairwise."""
-    return [short_id(crossing_id) for crossing_id in ids]
+def compact_ids(ids: Iterable[str]) -> list[int]:
+    """The compact name of each of `ids`, pairwise."""
+    return [compact_id(crossing_id) for crossing_id in ids]
 
 
 def _shared_connectors(segments, index) -> np.ndarray:

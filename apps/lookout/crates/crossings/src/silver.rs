@@ -47,7 +47,7 @@ pub struct Crossing {
 #[derive(Debug, Deserialize)]
 struct StoredCrossing {
     crossing_id: CrossingId,
-    crossing_short_id: CrossingCompactId,
+    crossing_compact_id: CrossingCompactId,
     extract_id: String,
     lon: f64,
     lat: f64,
@@ -67,7 +67,7 @@ pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
 
     let stored: Vec<StoredCrossing> = query
         .rows(
-            "SELECT crossing_id, crossing_short_id, extract_id,
+            "SELECT crossing_id, crossing_compact_id, extract_id,
                     ST_X(geometry) AS lon, ST_Y(geometry) AS lat
              FROM water_crossing",
         )
@@ -78,7 +78,7 @@ pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
         .map(|crossing| {
             Ok(Crossing {
                 crossing: model::Crossing::at(crossing.crossing_id, crossing.lat, crossing.lon)?,
-                compact_id: crossing.crossing_short_id,
+                compact_id: crossing.crossing_compact_id,
                 extract_id: crossing.extract_id,
             })
         })

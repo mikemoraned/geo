@@ -13,8 +13,8 @@ from crossing_ids import (
     SEPARATOR,
     crossing_id,
     crossing_ids,
-    short_id,
-    short_ids,
+    compact_id,
+    compact_ids,
     track_ids,
 )
 
@@ -130,21 +130,21 @@ class TestNamingACrossing:
 
 
 class TestNamingACrossingInFourBytes:
-    def test_the_short_name_follows_from_the_id_and_from_nothing_else(self):
+    def test_the_compact_name_follows_from_the_id_and_from_nothing_else(self):
         one = crossing_id("water-1", "seg-a", "seg-a", 0.5)
 
-        assert short_id(one) == short_id(one)
-        assert short_id(one) != short_id(
+        assert compact_id(one) == compact_id(one)
+        assert compact_id(one) != compact_id(
             crossing_id("water-1", "seg-a", "seg-a", 0.6)
         )
 
     def test_it_fits_in_the_four_bytes_a_device_holds(self):
         ids = [crossing_id("w", "t", "r", n / 1000) for n in range(1000)]
 
-        assert all(0 <= name < 2**32 for name in short_ids(ids))
+        assert all(0 <= name < 2**32 for name in compact_ids(ids))
 
     def test_the_names_are_produced_pairwise(self):
         ids = [crossing_id("w", "t", "r", n / 10) for n in range(5)]
 
-        assert short_ids(ids) == [short_id(one) for one in ids]
+        assert compact_ids(ids) == [compact_id(one) for one in ids]
 

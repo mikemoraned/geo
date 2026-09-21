@@ -89,7 +89,7 @@ def test_geometry_reads_back_as_geometry_rather_than_as_bytes(written):
 def test_two_datasets_can_be_read_in_one_query(written):
     table = query(
         written,
-        "SELECT c.crossing_short_id, s.trip_id FROM water_crossing c, train_segment s "
+        "SELECT c.crossing_compact_id, s.trip_id FROM water_crossing c, train_segment s "
         "WHERE s.trip_id = 'a'",
     )
 

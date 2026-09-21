@@ -57,7 +57,7 @@ pub struct WaterCrossingRow {
     /// Derived from `crossing_id` and carried here rather than worked out by whoever packs a
     /// buffer, so there is one answer to what a crossing is called on a device, and it is
     /// checked for uniqueness where every other property of the dataset is.
-    pub crossing_short_id: CrossingCompactId,
+    pub crossing_compact_id: CrossingCompactId,
     /// The water body, by its id in the upstream reference data.
     pub water_id: String,
     pub water_subtype: Option<String>,
@@ -92,9 +92,9 @@ impl Row for WaterCrossingRow {
     const DATASET: DatasetSpec<Self::Layer> = WATER_CROSSING;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     /// Both names of a crossing identify it on their own: the store's, and the four bytes a
-    /// device holds instead. A short id shared by two crossings is one a device could not tell
+    /// device holds instead. A compact id shared by two crossings is one a device could not tell
     /// apart, which is why it is refused here rather than at the buffer.
-    const UNIQUE: &'static [&'static str] = &["crossing_id", "crossing_short_id"];
+    const UNIQUE: &'static [&'static str] = &["crossing_id", "crossing_compact_id"];
 }
 
 /// One crossing passed in one session: when, and on what evidence.
@@ -152,11 +152,11 @@ mod tests {
     }
 
     /// Both names of a crossing are stored as the values they are, rather than as whatever a
-    /// newtype around them might become: the long one as text, the short one as four bytes.
+    /// newtype around them might become: the long one as text, the compact one as four bytes.
     #[test]
-    fn a_short_id_is_a_four_byte_column() {
+    fn a_compact_id_is_a_four_byte_column() {
         assert_eq!(
-            column::<WaterCrossingRow>("crossing_short_id"),
+            column::<WaterCrossingRow>("crossing_compact_id"),
             DataType::UInt32
         );
     }

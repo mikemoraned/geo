@@ -137,7 +137,7 @@ and scalable lookup. Metadata that makes queries faster, such as bounding boxes,
   each writer and each consumer. The check spans the dataset rather than a partition of it.
   Which partition a row lands in is a fact about how it is stored, not about what it is
   called. A dataset may carry more than one such name, each identifying a row on its own. That
-  second name exists for a shorter form of an id, meant for a consumer with no room for the
+  second name exists for a compact form of an id, meant for a consumer with no room for the
   first — exactly the case where a collision would otherwise surface downstream.
 
 #### Writing silver

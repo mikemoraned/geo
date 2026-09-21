@@ -75,7 +75,9 @@ test-no-docker: test-python
 # The Python tests. `--reinstall-package` defeats uv's wheel cache, which misses rust changes.
 test-python:
     uv run --directory crates/medallion-py --reinstall-package lookout-medallion pytest -q
-    uv run --directory crates/platform/rerun-py --reinstall-package lookout-predictor pytest -q
+    # Both extensions: these tests write the store through `lookout-medallion`, so a schema
+    # change reaches them only if it is rebuilt here too.
+    uv run --directory crates/platform/rerun-py --reinstall-package lookout-predictor --reinstall-package lookout-medallion pytest -q
     uv run --directory notebooks/water_crossings pytest -q
 
 # Tests against real services, in release, with credentials from 1Password. Hits the real redis.
