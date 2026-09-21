@@ -28,7 +28,7 @@ pub use crossing::{
 };
 pub use motis::{MOTIS_SEGMENT, MotisSegmentRow, TRAIN_SEGMENT, TrainSegmentRow};
 pub use overture::{EXTRACT_MANIFEST, ExtractManifestRow, OVERTURE_EXTRACT};
-pub use session::{Bbox, SESSION, SESSION_SAMPLE, SessionRow, SessionSampleRow, StartedBy};
+pub use session::{Bbox, SESSION, SESSION_SAMPLE, SessionRow, SessionSampleRow};
 pub use silver::{TargetError, silver_target};
 pub use telemetry::{
     ACCEL_READING, AccelReadingRow, DEVICE_SESSION, DeviceSessionRow, GPS_READING, GpsReadingRow,

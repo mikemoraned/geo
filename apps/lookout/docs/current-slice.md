@@ -337,7 +337,16 @@ import arrow to name a crossing.
       how hard the run looked rather than what it found. The 253 passes the store holds
       re-derive identically, column for column.
 
-- [ ] Move `Session`, the run of samples itself.
+- [x] Move `Session`, the run of samples itself — and it turned out to be `StartedBy` that
+      moved. A session is written three other ways and none is the same thing: `matching`
+      holds an id, a device and an envelope; `gold::Replay` an id, a count and its samples;
+      `recorder` the samples and the tuning it derived them under. Each selects the columns
+      it uses, so a `domain::Session` would have been a type built only to become a row.
+      `StartedBy` is the part that was misplaced: what began a session is decided in
+      `recorder`, which was importing the store's schema crate to name it. Left as it was:
+      the tuning and the envelope, which are how a run was made and a denormalisation of
+      what it found.
+
 - [ ] Move `DeviceType`, and have `DeviceSessionRow` name it rather than a `String`.
 - [ ] Keep one window: the checked `Bbox`.
 - [ ] Weigh a leg and an extract, which the note lists and does not rank.

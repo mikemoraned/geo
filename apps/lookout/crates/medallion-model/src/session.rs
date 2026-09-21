@@ -17,7 +17,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
-use domain::{DeviceId, SessionId};
+use domain::{DeviceId, SessionId, StartedBy};
 
 /// One contiguous run of samples from one device.
 pub const SESSION: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("session", "start_date");
@@ -25,19 +25,6 @@ pub const SESSION: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("sessi
 /// The samples making up the sessions, one row per deduped bronze reading.
 pub const SESSION_SAMPLE: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("session_sample", "sample_date");
-
-/// What ended the previous session and so began this one.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StartedBy {
-    /// The device reported the start of a session.
-    StartSession,
-    /// The interval since the previous sample exceeded the threshold.
-    Gap,
-    /// The first sample recorded for this device, with nothing before it. Sessions begin this
-    /// way where the device reported no session start at all.
-    FirstSeen,
-}
 
 /// The envelope of a session's samples, in the same axis names the upstream reference data
 /// uses for its own envelopes.

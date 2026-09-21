@@ -29,4 +29,4 @@ pub use pass::Pass;
 pub use position::{CoordinateError, position};
 pub use precision::Precision;
 pub use sample::Sample;
-pub use session::SessionId;
+pub use session::{SessionId, StartedBy};

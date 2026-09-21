@@ -14,6 +14,19 @@ use crate::name::{NameError, checked};
 /// name-based id derived from the same values for anything else.
 const SESSION_NAMESPACE: Uuid = Uuid::from_u128(0x8f9c_1d3a_6b47_4e21_9a05_c7d8_e2f4_1b60);
 
+/// What ended the previous session and so began this one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StartedBy {
+    /// The device reported the start of a session.
+    StartSession,
+    /// The interval since the previous sample exceeded the threshold.
+    Gap,
+    /// The first sample recorded for this device, with nothing before it. Sessions begin this
+    /// way where the device reported no session start at all.
+    FirstSeen,
+}
+
 /// Identifies one session, on the session and on each of its samples.
 ///
 /// Derived from what the session *is* rather than minted per run, so a run that re-derives a
