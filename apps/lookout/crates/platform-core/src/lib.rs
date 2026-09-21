@@ -19,10 +19,10 @@ pub mod pointset;
 
 pub use app::{Effect, Event, Lookout, Model, Shell};
 
-/// The float everything here measures in, and one [`domain::Measure`] admits.
+/// The float everything here measures in, and one [`domain::Precision`] admits.
 ///
 /// `f32`, because the ESP32's FPU is single precision: `f64` there runs in software, and a
 /// scan of thousands of crossings a second cannot afford it. The browser would not mind
-/// `f64`, but one core means one float, and the board is the one with no choice. A measure,
+/// `f64`, but one core means one float, and the board is the one with no choice. A precision,
 /// not a unit — a position held in it is degrees, a distance metres.
 pub type Float = f32;

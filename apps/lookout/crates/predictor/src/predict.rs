@@ -1,22 +1,22 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use domain::{CrossingCompactId, Measure, Sample};
+use domain::{CrossingCompactId, Precision, Sample};
 
 /// What a predictor is told.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum Event<T: Measure> {
-    Sampled(Sample<T>),
+pub enum Event<P: Precision> {
+    Sampled(Sample<P>),
     Elapsed(DateTime<Utc>),
 }
 
 /// One crossing a predictor expects us to reach.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct Prediction<T: Measure> {
+pub struct Prediction<P: Precision> {
     pub crossing: CrossingCompactId,
     /// The straight-line distance from the latest fix. Crow-flies: the track's own geometry
     /// plays no part, so a bend or a river meander puts a crossing nearer than the rails do.
-    pub metres: T,
+    pub metres: P,
     /// When we reach it at the speed of the latest fix, absent where there is no speed to
     /// divide by.
     ///
@@ -39,13 +39,13 @@ pub enum ObserveError {
 }
 
 /// Events in, predictions out: everything a shell needs from a predictor, and no more.
-pub trait Predict<T: Measure> {
+pub trait Predict<P: Precision> {
     /// Takes one event and transitions.
     ///
     /// An event the predictor refuses changes nothing: the clock, the predictions and the
     /// trend are all left as the last accepted event left them.
-    fn observe(&mut self, event: Event<T>) -> Result<(), ObserveError>;
+    fn observe(&mut self, event: Event<P>) -> Result<(), ObserveError>;
 
     /// The crossings it predicts we reach, nearest first.
-    fn predictions(&self) -> &[Prediction<T>];
+    fn predictions(&self) -> &[Prediction<P>];
 }

@@ -316,12 +316,13 @@ import arrow to name a crossing.
       is read unchecked, so that is where an impossible position is stopped rather than being
       scanned against every crossing.
 
-- [ ] Rename the `Measure` trait to `Precision`: what it bounds is how finely a coordinate is
+- [x] Rename the `Measure` trait to `Precision`: what it bounds is how finely a coordinate is
       held — `f32` or `f64` — and `Measure` reads as the measurement rather than its
       resolution. Not `Accuracy`, which this codebase already uses for something else and
       uses correctly: `accuracy_metres` is how far out a fix is, as its source judged it,
       which is unrelated to the float it is held in. `Gps::to_measure` and `Sample::to_measure`
-      become `to_precision` with it — what they convert between is the float, not the reading.
+      became `to_precision` with it, and the parameter is `P` rather than `T`.
+
 - [ ] Move `DeviceId` and `SessionId`. A device mints its own id and a session is derived from
       that id and its start, so both say what something is rather than how the store keeps it.
       The `PartitionValue` rule on `SessionId` is the name's own, as it was for `CrossingId`:

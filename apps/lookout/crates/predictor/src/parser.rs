@@ -6,7 +6,7 @@
 use nmea::Nmea;
 
 use crate::sentence::Sentence;
-use domain::{Measure, Sample};
+use domain::{Precision, Sample};
 
 /// One knot in metres per second, by definition — a nautical mile an hour, and a nautical
 /// mile is 1,852 metres.
@@ -18,18 +18,18 @@ const METRES_PER_SECOND_PER_KNOT: f64 = 1_852.0 / 3_600.0;
 /// GGA the altitude, the satellite count and the HDOP. So the parser keeps state across them
 /// and reports a sample from everything it knows, each time a sentence adds to it.
 #[derive(Debug, Clone)]
-pub struct Parser<T: Measure> {
+pub struct Parser<P: Precision> {
     /// The `nmea` crate's own accumulator, which merges each sentence into the picture so
     /// far. A sentence carrying no position clears the position, so a sample is built from
     /// what the accumulator holds rather than from the sentence last parsed.
     sentences: Nmea,
     /// The last sample reported, so that a sentence adding nothing reports nothing.
-    last: Option<Sample<T>>,
+    last: Option<Sample<P>>,
 }
 
-/// Hand-written, because deriving it would demand a `Default` measure that a parser with no
+/// Hand-written, because deriving it would demand a `Default` precision that a parser with no
 /// sample yet has no use for.
-impl<T: Measure> Default for Parser<T> {
+impl<P: Precision> Default for Parser<P> {
     fn default() -> Self {
         Self {
             sentences: Nmea::default(),
@@ -38,7 +38,7 @@ impl<T: Measure> Default for Parser<T> {
     }
 }
 
-impl<T: Measure> Parser<T> {
+impl<P: Precision> Parser<P> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -50,7 +50,7 @@ impl<T: Measure> Parser<T> {
     /// Three kinds of sentence report nothing and leave what is known intact: one whose
     /// checksum does not match its body, one the receiver emits before it has a fix, and one
     /// that repeats what is already known.
-    pub fn absorb(&mut self, sentence: &Sentence) -> Option<Sample<T>> {
+    pub fn absorb(&mut self, sentence: &Sentence) -> Option<Sample<P>> {
         self.sentences.parse(sentence.as_str()).ok()?;
 
         let sample = self.sample()?;
@@ -62,7 +62,7 @@ impl<T: Measure> Parser<T> {
     }
 
     /// Everything accumulated so far as a sample, once it amounts to one.
-    fn sample(&self) -> Option<Sample<T>> {
+    fn sample(&self) -> Option<Sample<P>> {
         let at = self.sentences.fix_date?.and_time(self.sentences.fix_time?);
 
         Some(
@@ -115,7 +115,7 @@ mod tests {
         assert!((got - want).abs() < 1e-5, "{got} is not near {want}");
     }
 
-    /// The measure a test parser holds: `f64`, since nothing here is measuring distances.
+    /// The precision a test parser holds: `f64`, since nothing here is measuring distances.
     fn parser() -> Parser<f64> {
         Parser::new()
     }

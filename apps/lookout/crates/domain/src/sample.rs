@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::gps::Gps;
-use crate::measure::Measure;
 use crate::position::CoordinateError;
+use crate::precision::Precision;
 
 /// One reported fix: what a source knew about where it was, and the instant it knew it for.
 ///
@@ -17,13 +17,13 @@ use crate::position::CoordinateError;
 /// source reports degrees in `f64`, and the board measures in `f32`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(bound = "")]
-pub struct Sample<T: Measure> {
+pub struct Sample<P: Precision> {
     pub t: DateTime<Utc>,
-    pub gps: Gps<T>,
+    pub gps: Gps<P>,
 }
 
-impl<T: Measure> Sample<T> {
-    pub fn new(t: DateTime<Utc>, gps: Gps<T>) -> Self {
+impl<P: Precision> Sample<P> {
+    pub fn new(t: DateTime<Utc>, gps: Gps<P>) -> Self {
         Self { t, gps }
     }
 
@@ -41,11 +41,11 @@ impl<T: Measure> Sample<T> {
         Ok(Self::new(t, Gps::at(latitude_degrees, longitude_degrees)?))
     }
 
-    pub fn latitude(&self) -> T {
+    pub fn latitude(&self) -> P {
         self.gps.latitude()
     }
 
-    pub fn longitude(&self) -> T {
+    pub fn longitude(&self) -> P {
         self.gps.longitude()
     }
 }
@@ -53,7 +53,7 @@ impl<T: Measure> Sample<T> {
 /// What a source knew, set a field at a time. Each names the one field it sets, so no call
 /// site depends on the order of two arguments of the same type, and each delegates to the fix
 /// itself — a sample adds only the instant.
-impl<T: Measure> Sample<T> {
+impl<P: Precision> Sample<P> {
     pub fn with_altitude_metres(self, altitude_metres: Option<f64>) -> Self {
         Self {
             gps: self.gps.with_altitude_metres(altitude_metres),
@@ -96,13 +96,13 @@ impl<T: Measure> Sample<T> {
         }
     }
 
-    /// The same sample in another measure. See [`Gps::to_measure`].
+    /// The same sample at another precision. See [`Gps::to_precision`].
     ///
     /// # Errors
     ///
     /// Returns an error where the coordinates are not on the globe.
-    pub fn to_measure<U: Measure>(&self) -> Result<Sample<U>, CoordinateError> {
-        Ok(Sample::new(self.t, self.gps.to_measure()?))
+    pub fn to_precision<Q: Precision>(&self) -> Result<Sample<Q>, CoordinateError> {
+        Ok(Sample::new(self.t, self.gps.to_precision()?))
     }
 }
 
@@ -166,7 +166,7 @@ mod tests {
     /// A coordinate is checked before it is converted, so the error reports the value that
     /// was actually wrong rather than what it became.
     #[test]
-    fn a_sample_off_the_globe_is_refused_in_either_measure() {
+    fn a_sample_off_the_globe_is_refused_at_either_precision() {
         assert_eq!(
             Sample::<f32>::at(instant(), 91.0, 8.5).unwrap_err(),
             CoordinateError::Latitude(91.0)
@@ -180,11 +180,11 @@ mod tests {
     /// How a reported fix reaches the board: everything the source knew, in the float the
     /// scan measures in.
     #[test]
-    fn a_sample_carries_what_it_knew_into_another_measure() {
+    fn a_sample_carries_what_it_knew_into_another_precision() {
         let held: Sample<f32> = sample()
             .with_satellites(Some(6))
             .with_hdop(Some(4.4))
-            .to_measure()
+            .to_precision()
             .expect("on the globe");
 
         assert!((held.latitude() - 51.0403).abs() < 1e-4);
@@ -193,7 +193,7 @@ mod tests {
         assert_eq!(held.gps.satellites, Some(6));
     }
 
-    /// A fix read off a wire is read unchecked, so the conversion into the measure a scan
+    /// A fix read off a wire is read unchecked, so the conversion into the precision a scan
     /// runs in is where an impossible position is stopped.
     #[test]
     fn a_sample_read_off_the_globe_is_refused_on_the_way_into_a_scan() {
@@ -203,7 +203,7 @@ mod tests {
         .expect("read");
 
         assert_eq!(
-            read.to_measure::<f32>().unwrap_err(),
+            read.to_precision::<f32>().unwrap_err(),
             CoordinateError::Latitude(91.0)
         );
     }

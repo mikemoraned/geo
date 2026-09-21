@@ -1,12 +1,12 @@
-//! Where degrees are checked, and where they take on the measure.
+//! Where degrees are checked, and where they take on the precision they are held at.
 
 use geo_types::Point;
 
-use crate::measure::Measure;
+use crate::precision::Precision;
 
 /// A coordinate off the globe.
 ///
-/// It holds `f64` whatever it was going to be measured in, because a coordinate is checked
+/// It holds `f64` whatever it was going to be held at, because a coordinate is checked
 /// before it is converted — the value worth reporting is the one that was wrong.
 #[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
 pub enum CoordinateError {
@@ -21,10 +21,10 @@ pub enum CoordinateError {
 ///
 /// Sentences arrive corrupt and columns arrive unchecked, so every path into a fix or a
 /// crossing comes through here.
-pub fn position<T: Measure>(
+pub fn position<P: Precision>(
     latitude_degrees: f64,
     longitude_degrees: f64,
-) -> Result<Point<T>, CoordinateError> {
+) -> Result<Point<P>, CoordinateError> {
     if !(-90.0..=90.0).contains(&latitude_degrees) {
         return Err(CoordinateError::Latitude(latitude_degrees));
     }
@@ -37,12 +37,12 @@ pub fn position<T: Measure>(
     ))
 }
 
-/// A degree value in the measure.
+/// A degree value at the precision asked for.
 ///
 /// Infallible by construction: `from_f64` only declines a value the target cannot represent,
 /// and every float can hold a number between -180 and 180.
-pub fn degrees<T: Measure>(value: f64) -> T {
-    T::from_f64(value).expect("a degree fits in any float")
+pub fn degrees<P: Precision>(value: f64) -> P {
+    P::from_f64(value).expect("a degree fits in any float")
 }
 
 #[cfg(test)]

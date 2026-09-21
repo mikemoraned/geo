@@ -275,7 +275,7 @@ impl<S: Shell> App for Lookout<S> {
             Event::Sentence(sentence) => self.absorb(&sentence, model),
             // A coordinate off the globe is refused here as a corrupt sentence is refused in
             // `absorb`: it leaves the last fix and its predictions where they were.
-            Event::Position(reported) => match reported.to_measure() {
+            Event::Position(reported) => match reported.to_precision() {
                 Ok(sample) => self.observe(Observed::Sampled(sample), model),
                 Err(_) => Change::Unchanged,
             },

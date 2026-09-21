@@ -7,7 +7,7 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
-use domain::{CrossingCompact, Measure, Sample};
+use domain::{CrossingCompact, Precision, Sample};
 
 use crate::crossings::Crossings;
 use crate::predict::{Event, ObserveError, Predict, Prediction};
@@ -21,23 +21,23 @@ pub const DEFAULT_RADIUS_METRES: f64 = 5_000.0;
 /// `C` is where the crossings come from, defaulting to the `Vec` anything off the device
 /// holds them in. The device passes the columns it scans in flash instead.
 #[derive(Debug, Clone)]
-pub struct CrowFlies<T: Measure, C: Crossings<T> = Vec<CrossingCompact<T>>> {
+pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
     crossings: C,
-    radius_metres: T,
+    radius_metres: P,
     now: Option<DateTime<Utc>>,
     /// The most recent fix, kept to derive a speed for a receiver that reports none.
-    latest: Option<Sample<T>>,
+    latest: Option<Sample<P>>,
     /// The speed the current predictions were made at.
-    speed_mps: Option<T>,
-    predictions: Vec<Prediction<T>>,
+    speed_mps: Option<P>,
+    predictions: Vec<Prediction<P>>,
 }
 
-impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
+impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
     /// A predictor over `crossings`, reporting everything within `radius_metres`.
     pub fn new(crossings: C, radius_metres: f64) -> Self {
         // Infallible: `from_f64` only declines a value the target cannot represent, and a
         // radius in metres is an ordinary magnitude in any float.
-        let radius_metres = T::from_f64(radius_metres).expect("a radius fits in any float");
+        let radius_metres = P::from_f64(radius_metres).expect("a radius fits in any float");
         Self {
             crossings,
             radius_metres,
@@ -54,16 +54,16 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
     }
 
     /// The fix the predictions were made from, which is the most recent one it accepted.
-    pub fn latest(&self) -> Option<&Sample<T>> {
+    pub fn latest(&self) -> Option<&Sample<P>> {
         self.latest.as_ref()
     }
 
-    pub fn speed_mps(&self) -> Option<T> {
+    pub fn speed_mps(&self) -> Option<P> {
         self.speed_mps
     }
 
     /// How far out it looks, which is what a prediction is measured against.
-    pub fn radius_metres(&self) -> T {
+    pub fn radius_metres(&self) -> P {
         self.radius_metres
     }
 
@@ -94,12 +94,12 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
     }
 
     /// Predicts afresh from `sample`.
-    fn predict(&mut self, sample: Sample<T>) {
+    fn predict(&mut self, sample: Sample<P>) {
         let speed = speed_mps(&sample, self.latest.as_ref());
         let from = sample.gps.position;
         let radius_metres = self.radius_metres;
 
-        let mut predicted: Vec<Prediction<T>> = self
+        let mut predicted: Vec<Prediction<P>> = self
             .crossings
             .all()
             .filter_map(|crossing| {
@@ -135,16 +135,16 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
 /// `f32` resolves latitude to about 0.42m, so each fix carries that much error, and so does
 /// the step between two of them. A train covers 30m in a second, which puts the error near
 /// 1%. Walking pace covers 1.4m, which puts it near 30%. At `f64` the error does not arise.
-fn speed_mps<T: Measure>(sample: &Sample<T>, previous: Option<&Sample<T>>) -> Option<T> {
+fn speed_mps<P: Precision>(sample: &Sample<P>, previous: Option<&Sample<P>>) -> Option<P> {
     sample
         .gps
         .speed_mps
         .or_else(|| implied_speed_mps(sample, previous?))
 }
 
-fn implied_speed_mps<T: Measure>(sample: &Sample<T>, previous: &Sample<T>) -> Option<T> {
-    let seconds = T::from_f64((sample.t - previous.t).num_milliseconds() as f64 / 1_000.0)?;
-    (seconds > T::zero())
+fn implied_speed_mps<P: Precision>(sample: &Sample<P>, previous: &Sample<P>) -> Option<P> {
+    let seconds = P::from_f64((sample.t - previous.t).num_milliseconds() as f64 / 1_000.0)?;
+    (seconds > P::zero())
         .then(|| Haversine.distance(previous.gps.position, sample.gps.position) / seconds)
 }
 
@@ -152,18 +152,18 @@ fn implied_speed_mps<T: Measure>(sample: &Sample<T>, previous: &Sample<T>) -> Op
 ///
 /// Nothing at a standstill, because we never arrive. Nothing either at a speed so small that
 /// the answer falls outside the range an instant can be expressed in.
-fn arrival<T: Measure>(at: DateTime<Utc>, metres: T, speed_mps: T) -> Option<DateTime<Utc>> {
-    if speed_mps <= T::zero() {
+fn arrival<P: Precision>(at: DateTime<Utc>, metres: P, speed_mps: P) -> Option<DateTime<Utc>> {
+    if speed_mps <= P::zero() {
         return None;
     }
     let milliseconds = (metres / speed_mps).to_f64()? * 1_000.0;
     at.checked_add_signed(TimeDelta::try_milliseconds(milliseconds as i64)?)
 }
 
-impl<T: Measure, C: Crossings<T>> Predict<T> for CrowFlies<T, C> {
+impl<P: Precision, C: Crossings<P>> Predict<P> for CrowFlies<P, C> {
     /// An event out of order leaves the clock and the predictions as they were, rather than
     /// half applied.
-    fn observe(&mut self, event: Event<T>) -> Result<(), ObserveError> {
+    fn observe(&mut self, event: Event<P>) -> Result<(), ObserveError> {
         match event {
             // Ordered against the fix it replaces, not against the clock: what makes a fix
             // stale is a newer fix, and the clock may have run on without one.
@@ -184,7 +184,7 @@ impl<T: Measure, C: Crossings<T>> Predict<T> for CrowFlies<T, C> {
         Ok(())
     }
 
-    fn predictions(&self) -> &[Prediction<T>] {
+    fn predictions(&self) -> &[Prediction<P>] {
         &self.predictions
     }
 }
@@ -206,7 +206,7 @@ mod tests {
 
     /// Three crossings due north of 50.0N, a hundredth of a degree apart, so the nearest is
     /// about 1,112m away and the furthest about 3,336m.
-    fn crossings<T: Measure>() -> Vec<CrossingCompact<T>> {
+    fn crossings<P: Precision>() -> Vec<CrossingCompact<P>> {
         vec![
             CrossingCompact::at(1, 50.01, 0.0).expect("on the globe"),
             CrossingCompact::at(2, 50.02, 0.0).expect("on the globe"),
@@ -231,7 +231,7 @@ mod tests {
         assert!((got - want).abs() < TOLERANCE_M, "{got} is not near {want}");
     }
 
-    fn ids<T: Measure>(predictor: &CrowFlies<T>) -> Vec<u32> {
+    fn ids<P: Precision>(predictor: &CrowFlies<P>) -> Vec<u32> {
         predictor
             .predictions()
             .iter()
@@ -520,11 +520,11 @@ mod tests {
         assert!(predictor.predictions()[0].at.is_some(), "the speed landed");
     }
 
-    /// The whole prediction at the measure the device runs in, which is the point of the
-    /// measure being a parameter at all. `f32` is not a lesser answer here: over a kilometre
+    /// The whole prediction at the precision the device runs at, which is the point of the
+    /// precision being a parameter at all. `f32` is not a lesser answer here: over a kilometre
     /// it resolves to about a tenth of a metre, far finer than the fix being measured.
     #[test]
-    fn the_whole_prediction_runs_at_the_measure_the_device_uses() {
+    fn the_whole_prediction_runs_at_the_precision_the_device_uses() {
         let mut predictor: CrowFlies<f32> = CrowFlies::new(crossings(), DEFAULT_RADIUS_METRES);
         let fix = Sample::<f32>::at(instant(), 50.0, 0.0)
             .expect("on the globe")

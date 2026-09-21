@@ -3,8 +3,8 @@
 use geo_types::Point;
 use serde::{Deserialize, Serialize, Serializer, de::Deserializer};
 
-use crate::measure::Measure;
 use crate::position::{CoordinateError, degrees, position};
+use crate::precision::Precision;
 
 /// One fix: where, how well, and how fast.
 ///
@@ -20,30 +20,30 @@ use crate::position::{CoordinateError, degrees, position};
 ///
 /// **Recordings abbreviate the names and the code does not.** A browser has sent the short
 /// names since the first recording and the archive still holds them, so what goes over a wire
-/// is [`Reported`] and the fields here are free to be named in full.
+/// is written in those names and the fields here are free to be named in full.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Gps<T: Measure> {
+pub struct Gps<P: Precision> {
     /// Degrees, longitude in `x` and latitude in `y`.
-    pub position: Point<T>,
-    pub altitude_metres: Option<T>,
+    pub position: Point<P>,
+    pub altitude_metres: Option<P>,
     /// How far out the fix is, in metres, as the source judged it. Absent from a receiver
     /// that reports [`Gps::hdop`] instead.
-    pub accuracy_metres: Option<T>,
+    pub accuracy_metres: Option<P>,
     /// Metres per second, Doppler-derived where the source can.
-    pub speed_mps: Option<T>,
+    pub speed_mps: Option<P>,
     /// Course over ground, degrees clockwise from true north. Absent when standing still,
     /// since there is no course to report.
-    pub heading_degrees: Option<T>,
+    pub heading_degrees: Option<P>,
     /// How many satellites the fix was taken from, where the source counts them.
     pub satellites: Option<u32>,
     /// Horizontal dilution of precision: how much the satellite geometry multiplies the
     /// error. Lower is better, and above about 5 a position wanders metres a second.
-    pub hdop: Option<T>,
+    pub hdop: Option<P>,
 }
 
-impl<T: Measure> Gps<T> {
+impl<P: Precision> Gps<P> {
     /// A fix carrying only what every fix has: where it was.
-    pub fn new(position: Point<T>) -> Self {
+    pub fn new(position: Point<P>) -> Self {
         Self {
             position,
             altitude_metres: None,
@@ -65,41 +65,41 @@ impl<T: Measure> Gps<T> {
         Ok(Self::new(position(latitude_degrees, longitude_degrees)?))
     }
 
-    pub fn latitude(&self) -> T {
+    pub fn latitude(&self) -> P {
         self.position.y()
     }
 
-    pub fn longitude(&self) -> T {
+    pub fn longitude(&self) -> P {
         self.position.x()
     }
 
     /// Each `with_` method names the one field it sets, so no call site depends on the order
     /// of two arguments of the same type. They take `f64` and convert, since that is what
-    /// every source hands over whatever the fix is held in.
+    /// every source hands over whatever precision the fix is held at.
     pub fn with_altitude_metres(self, altitude_metres: Option<f64>) -> Self {
         Self {
-            altitude_metres: measured(altitude_metres),
+            altitude_metres: held(altitude_metres),
             ..self
         }
     }
 
     pub fn with_accuracy_metres(self, accuracy_metres: Option<f64>) -> Self {
         Self {
-            accuracy_metres: measured(accuracy_metres),
+            accuracy_metres: held(accuracy_metres),
             ..self
         }
     }
 
     pub fn with_speed_mps(self, speed_mps: Option<f64>) -> Self {
         Self {
-            speed_mps: measured(speed_mps),
+            speed_mps: held(speed_mps),
             ..self
         }
     }
 
     pub fn with_heading_degrees(self, heading_degrees: Option<f64>) -> Self {
         Self {
-            heading_degrees: measured(heading_degrees),
+            heading_degrees: held(heading_degrees),
             ..self
         }
     }
@@ -110,12 +110,12 @@ impl<T: Measure> Gps<T> {
 
     pub fn with_hdop(self, hdop: Option<f64>) -> Self {
         Self {
-            hdop: measured(hdop),
+            hdop: held(hdop),
             ..self
         }
     }
 
-    /// The same fix in another measure, which is how a reported `f64` reaches a board that
+    /// The same fix at another precision, which is how a reported `f64` reaches a board that
     /// scans in `f32`.
     ///
     /// # Errors
@@ -123,7 +123,7 @@ impl<T: Measure> Gps<T> {
     /// Returns an error where the coordinates are not on the globe. A fix read off a wire is
     /// read unchecked — one bad row should not cost an archive — so this is where it is
     /// checked, before an impossible position is subtracted from every crossing.
-    pub fn to_measure<U: Measure>(&self) -> Result<Gps<U>, CoordinateError> {
+    pub fn to_precision<Q: Precision>(&self) -> Result<Gps<Q>, CoordinateError> {
         Ok(
             Gps::at(reported(self.latitude()), reported(self.longitude()))?
                 .with_altitude_metres(self.altitude_metres.map(reported))
@@ -136,13 +136,13 @@ impl<T: Measure> Gps<T> {
     }
 }
 
-/// A reading in the measure, dropping one the measure cannot hold.
-fn measured<T: Measure>(value: Option<f64>) -> Option<T> {
-    value.and_then(T::from_f64)
+/// A reading at the precision asked for, dropping one it cannot hold.
+fn held<P: Precision>(value: Option<f64>) -> Option<P> {
+    value.and_then(P::from_f64)
 }
 
-/// A degree value out of the measure, for writing one back as a source reported it.
-fn reported<T: Measure>(value: T) -> f64 {
+/// A degree value out of the precision it is held at, for writing one back as reported.
+fn reported<P: Precision>(value: P) -> f64 {
     value.to_f64().expect("a degree is a number")
 }
 
@@ -165,7 +165,7 @@ struct Reported {
 }
 
 /// Written as a source reported it, whatever the fix is held in.
-impl<T: Measure> Serialize for Gps<T> {
+impl<P: Precision> Serialize for Gps<P> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         Reported {
             lat: reported(self.latitude()),
@@ -181,7 +181,7 @@ impl<T: Measure> Serialize for Gps<T> {
 
 /// Read unchecked, as every recorded fix is: a coordinate off the globe is one row to drop,
 /// not a reason to refuse the archive it is in.
-impl<'de, T: Measure> Deserialize<'de> for Gps<T> {
+impl<'de, P: Precision> Deserialize<'de> for Gps<P> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let read = Reported::deserialize(deserializer)?;
         Ok(Self::new(Point::new(degrees(read.lon), degrees(read.lat)))
@@ -259,10 +259,10 @@ mod tests {
         assert_eq!(read.longitude(), -3.19);
     }
 
-    /// A fix held in the measure the device uses. `f32` resolves a degree to about a tenth of
+    /// A fix held at the precision the device uses. `f32` resolves a degree to about a tenth of
     /// a metre here, so the position survives the conversion at the precision a scan needs.
     #[test]
-    fn a_fix_can_be_held_in_the_measure_the_device_uses() {
+    fn a_fix_can_be_held_at_the_precision_the_device_uses() {
         let fix = Gps::<f32>::at(50.5, 8.5).expect("on the globe");
 
         assert!((fix.latitude() - 50.5).abs() < 1e-5);

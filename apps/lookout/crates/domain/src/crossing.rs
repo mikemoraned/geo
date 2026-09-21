@@ -17,8 +17,8 @@ use std::str::FromStr;
 use geo_types::Point;
 use serde::{Deserialize, Serialize};
 
-use crate::measure::Measure;
 use crate::position::{CoordinateError, degrees, position};
+use crate::precision::Precision;
 
 /// A name that could not be written as one.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -164,14 +164,14 @@ impl Crossing {
 /// every fix affordable; a source reports degrees in `f64`, and that is what a set is sent in.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(from = "CrossingCompactRow", into = "CrossingCompactRow", bound = "")]
-pub struct CrossingCompact<T: Measure> {
+pub struct CrossingCompact<P: Precision> {
     pub id: CrossingCompactId,
     /// Degrees, longitude in `x` and latitude in `y`.
-    pub position: Point<T>,
+    pub position: Point<P>,
 }
 
-impl<T: Measure> CrossingCompact<T> {
-    pub fn new(id: impl Into<CrossingCompactId>, position: Point<T>) -> Self {
+impl<P: Precision> CrossingCompact<P> {
+    pub fn new(id: impl Into<CrossingCompactId>, position: Point<P>) -> Self {
         Self {
             id: id.into(),
             position,
@@ -194,11 +194,11 @@ impl<T: Measure> CrossingCompact<T> {
         ))
     }
 
-    pub fn latitude(&self) -> T {
+    pub fn latitude(&self) -> P {
         self.position.y()
     }
 
-    pub fn longitude(&self) -> T {
+    pub fn longitude(&self) -> P {
         self.position.x()
     }
 }
@@ -214,14 +214,14 @@ impl<T: Measure> CrossingCompact<T> {
 #[derive(Serialize, Deserialize)]
 struct CrossingCompactRow(CrossingCompactId, f64, f64);
 
-impl<T: Measure> From<CrossingCompactRow> for CrossingCompact<T> {
+impl<P: Precision> From<CrossingCompactRow> for CrossingCompact<P> {
     fn from(CrossingCompactRow(id, latitude, longitude): CrossingCompactRow) -> Self {
         Self::new(id, Point::new(degrees(longitude), degrees(latitude)))
     }
 }
 
-impl<T: Measure> From<CrossingCompact<T>> for CrossingCompactRow {
-    fn from(crossing: CrossingCompact<T>) -> Self {
+impl<P: Precision> From<CrossingCompact<P>> for CrossingCompactRow {
+    fn from(crossing: CrossingCompact<P>) -> Self {
         Self(
             crossing.id,
             crossing.latitude().to_f64().expect("a degree is a number"),
