@@ -5,9 +5,8 @@
 
 use nmea::Nmea;
 
-use crate::sample::Sample;
 use crate::sentence::Sentence;
-use domain::Measure;
+use domain::{Measure, Sample};
 
 /// One knot in metres per second, by definition — a nautical mile an hour, and a nautical
 /// mile is 1,852 metres.
@@ -144,8 +143,8 @@ mod tests {
     fn a_speed_in_knots_becomes_metres_per_second() {
         let sample = parser().absorb(&fix().rmc()).expect("a sample");
 
-        assert_near(sample.speed_mps, 4.13 * 1_852.0 / 3_600.0);
-        assert_near(sample.heading_degrees, 79.94);
+        assert_near(sample.gps.speed_mps, 4.13 * 1_852.0 / 3_600.0);
+        assert_near(sample.gps.heading_degrees, 79.94);
     }
 
     /// GGA carries no date, so nothing it says can be placed on a timeline on its own.
@@ -160,9 +159,9 @@ mod tests {
     fn a_gga_after_an_rmc_makes_a_sample_reporting_the_fix_quality() {
         let sample = fixed().absorb(&fix().gga()).expect("a sample");
 
-        assert_eq!(sample.satellites, Some(6));
-        assert_near(sample.hdop, 4.4);
-        assert_near(sample.altitude_metres, 262.46);
+        assert_eq!(sample.gps.satellites, Some(6));
+        assert_near(sample.gps.hdop, 4.4);
+        assert_near(sample.gps.altitude_metres, 262.46);
     }
 
     #[test]
@@ -183,7 +182,7 @@ mod tests {
         let sample = parser().absorb(&stationary.rmc()).expect("a sample");
 
         assert_eq!(sample.latitude(), 50.5);
-        assert_eq!(sample.heading_degrees, None);
+        assert_eq!(sample.gps.heading_degrees, None);
     }
 
     /// The receiver reports its own doubt by dropping the position, and a sample without a

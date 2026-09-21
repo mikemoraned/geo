@@ -302,12 +302,36 @@ import arrow to name a crossing.
       projected point rather than a reported fix. `predictor::Sample<T>` is the third, and is
       the same fix in the measure with what a receiver adds — the `Crossing`/`CrossingCompact`
       relationship again, left for the task below.
-- [ ] Collapse `predictor::Sample<T>` onto `domain::Sample`, as `CrossingCompact` is to
-      `Crossing`: one entity, one measured projection, named so that two crates do not both
-      export a `Sample`.
+- [x] Keep one sample. `predictor::Sample<T>` is gone and `domain::Sample<T>` is the only one:
+      `Gps` became generic over the measure and took the two fields a receiver reports and a
+      browser has no equivalent for, which is what the two types differed by. The
+      `Crossing`/`CrossingCompact` split does not apply here — those need two types because
+      their *ids* differ, where a fix differs only by the float it is held in, which a
+      generic covers.
+
+      Two things fell out. `accuracy_metres` is now optional, since NMEA reports HDOP and no
+      metres: the store's columns are unchanged, and a reported fix without one is malformed,
+      so its payload stays in `raw` as an uninterpretable one does. And the conversion between
+      precisions is `Sample::to_measure`, which checks the coordinates — a fix read off a wire
+      is read unchecked, so that is where an impossible position is stopped rather than being
+      scanned against every crossing.
+
+- [ ] Rename the `Measure` trait to `Precision`: what it bounds is how finely a coordinate is
+      held — `f32` or `f64` — and `Measure` reads as the measurement rather than its
+      resolution. Not `Accuracy`, which this codebase already uses for something else and
+      uses correctly: `accuracy_metres` is how far out a fix is, as its source judged it,
+      which is unrelated to the float it is held in. `Gps::to_measure` and `Sample::to_measure`
+      become `to_precision` with it — what they convert between is the float, not the reading.
+- [ ] Move `DeviceId` and `SessionId`. A device mints its own id and a session is derived from
+      that id and its start, so both say what something is rather than how the store keeps it.
+      The `PartitionValue` rule on `SessionId` is the name's own, as it was for `CrossingId`:
+      an id is written into a path and asked for in a URL. This comes before the two below,
+      which is not the order the note gives — a pass is a session and a crossing, so it cannot
+      be described until the session's identity is somewhere a device can reach.
 - [ ] Move `Pass`: a crossing met in a session. The move that decouples `matching` from the
-      store's columns.
-- [ ] Move `Session`, and `SessionId` with it.
+      store's columns. `device_id` stays on the row, where it is carried so a partition reads
+      without joining back to the sessions.
+- [ ] Move `Session`, the run of samples itself.
 - [ ] Move `DeviceType`, and have `DeviceSessionRow` name it rather than a `String`.
 - [ ] Keep one window: the checked `Bbox`.
 - [ ] Weigh a leg and an extract, which the note lists and does not rank.

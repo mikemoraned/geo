@@ -1,9 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use domain::{CrossingCompactId, Measure};
-
-use crate::sample::Sample;
+use domain::{CrossingCompactId, Measure, Sample};
 
 /// What a predictor is told.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

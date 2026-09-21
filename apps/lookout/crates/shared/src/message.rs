@@ -44,7 +44,7 @@ pub struct GpsReading {
     pub id: Uuid,
     /// Capture time as epoch milliseconds.
     pub t: i64,
-    pub gps: Gps,
+    pub gps: Gps<f64>,
 }
 
 /// An accelerometer reading from a device at a point in time.
@@ -156,14 +156,10 @@ mod tests {
         GpsReading {
             id: Uuid::from_u128(1),
             t: 1_700_000_000_000,
-            gps: Gps {
-                latitude: 55.95,
-                longitude: -3.19,
-                altitude_metres: None,
-                accuracy_metres: 8.5,
-                speed_mps: Some(31.4),
-                heading_degrees: None,
-            },
+            gps: Gps::at(55.95, -3.19)
+                .expect("on the globe")
+                .with_accuracy_metres(Some(8.5))
+                .with_speed_mps(Some(31.4)),
         }
     }
 

@@ -7,11 +7,10 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
-use domain::{CrossingCompact, Measure};
+use domain::{CrossingCompact, Measure, Sample};
 
 use crate::crossings::Crossings;
 use crate::predict::{Event, ObserveError, Predict, Prediction};
-use crate::sample::Sample;
 
 /// How far ahead to predict. Wide enough that a train at speed has a minute or two of
 /// warning, narrow enough to mean something at walking pace.
@@ -97,7 +96,7 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
     /// Predicts afresh from `sample`.
     fn predict(&mut self, sample: Sample<T>) {
         let speed = speed_mps(&sample, self.latest.as_ref());
-        let from = sample.position;
+        let from = sample.gps.position;
         let radius_metres = self.radius_metres;
 
         let mut predicted: Vec<Prediction<T>> = self
@@ -138,13 +137,15 @@ impl<T: Measure, C: Crossings<T>> CrowFlies<T, C> {
 /// 1%. Walking pace covers 1.4m, which puts it near 30%. At `f64` the error does not arise.
 fn speed_mps<T: Measure>(sample: &Sample<T>, previous: Option<&Sample<T>>) -> Option<T> {
     sample
+        .gps
         .speed_mps
         .or_else(|| implied_speed_mps(sample, previous?))
 }
 
 fn implied_speed_mps<T: Measure>(sample: &Sample<T>, previous: &Sample<T>) -> Option<T> {
     let seconds = T::from_f64((sample.t - previous.t).num_milliseconds() as f64 / 1_000.0)?;
-    (seconds > T::zero()).then(|| Haversine.distance(previous.position, sample.position) / seconds)
+    (seconds > T::zero())
+        .then(|| Haversine.distance(previous.gps.position, sample.gps.position) / seconds)
 }
 
 /// When we cover `metres` at `speed_mps`, having set off at `at`.

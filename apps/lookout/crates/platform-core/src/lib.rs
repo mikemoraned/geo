@@ -19,7 +19,7 @@ pub mod pointset;
 
 pub use app::{Effect, Event, Lookout, Model, Shell};
 
-/// The float everything here measures in, and one [`predictor::Measure`] admits.
+/// The float everything here measures in, and one [`domain::Measure`] admits.
 ///
 /// `f32`, because the ESP32's FPU is single precision: `f64` there runs in software, and a
 /// scan of thousands of crossings a second cannot afford it. The browser would not mind

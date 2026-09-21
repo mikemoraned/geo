@@ -1,9 +1,10 @@
 //! The crow-flies predictor, and the sample it works from.
 //!
 //! Everything here runs on the device and in the runner replaying a recorded session alike,
-//! so it reads no store and touches no hardware. What reaches it is a [`Sample`]: one GPS fix
-//! in metric units, however it was produced. The device builds samples from its receiver's
-//! sentences, through [`Parser`]. The runner builds them from the columns silver holds.
+//! so it reads no store and touches no hardware. What reaches it is a [`domain::Sample`]: one
+//! GPS fix in the float this measures in, however it was produced. The device builds samples
+//! from its receiver's sentences, through [`Parser`]. The runner builds them from the columns
+//! silver holds.
 
 pub mod crossings;
 pub mod crow_flies;
@@ -13,12 +14,10 @@ pub mod crow_flies;
 pub mod fixtures;
 pub mod parser;
 pub mod predict;
-pub mod sample;
 pub mod sentence;
 
 pub use crossings::Crossings;
 pub use crow_flies::{CrowFlies, DEFAULT_RADIUS_METRES};
 pub use parser::Parser;
 pub use predict::{Event, ObserveError, Predict, Prediction};
-pub use sample::Sample;
 pub use sentence::{Sentence, SentenceError};

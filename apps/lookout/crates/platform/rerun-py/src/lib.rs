@@ -23,9 +23,9 @@
 //! are aware datetimes, in whatever timezone the caller has them in.
 
 use chrono::{DateTime, FixedOffset, Utc};
-use domain::CrossingCompact;
+use domain::{CrossingCompact, Sample};
 use predictor::{
-    CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS_METRES, Event, ObserveError, Predict, Sample,
+    CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS_METRES, Event, ObserveError, Predict,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;

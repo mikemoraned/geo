@@ -34,7 +34,8 @@ pub fn crossings() -> PointSet<'static> {
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, Utc};
-    use predictor::{CrowFlies, DEFAULT_RADIUS_METRES, Event, Predict, Sample};
+    use domain::Sample;
+    use predictor::{CrowFlies, DEFAULT_RADIUS_METRES, Event, Predict};
 
     use super::*;
 

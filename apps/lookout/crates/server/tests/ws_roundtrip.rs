@@ -70,14 +70,9 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
     let v0_expected = Message::Version0(V0Message::Gps(GpsReading {
         id: Uuid::from_u128(7),
         t: 1_700_000_000_007,
-        gps: Gps {
-            latitude: 55.95,
-            longitude: -3.19,
-            altitude_metres: None,
-            accuracy_metres: 8.5,
-            speed_mps: None,
-            heading_degrees: None,
-        },
+        gps: Gps::at(55.95, -3.19)
+            .expect("on the globe")
+            .with_accuracy_metres(Some(8.5)),
     }));
 
     let v1 = Message::Version1(V1Message::Acceleration(AccelReading {

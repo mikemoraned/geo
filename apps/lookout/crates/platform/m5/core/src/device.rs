@@ -50,8 +50,8 @@ impl Shell for Device {
                 .unwrap_or_default()
                 .to_string(),
             quality: match (
-                fix.and_then(|fix| fix.satellites),
-                fix.and_then(|fix| fix.hdop),
+                fix.and_then(|fix| fix.gps.satellites),
+                fix.and_then(|fix| fix.gps.hdop),
             ) {
                 (Some(satellites), Some(hdop)) => format!("{satellites}sat h{hdop:.1}"),
                 (Some(satellites), None) => format!("{satellites}sat"),

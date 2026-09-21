@@ -63,14 +63,9 @@ pub fn gps(id: u128, t: i64, lat: f64, lon: f64) -> Message {
     Message::Version1(V1Message::Gps(GpsReading {
         id: Uuid::from_u128(id),
         t,
-        gps: Gps {
-            latitude: lat,
-            longitude: lon,
-            altitude_metres: None,
-            accuracy_metres: 5.0,
-            speed_mps: None,
-            heading_degrees: None,
-        },
+        gps: Gps::at(lat, lon)
+            .expect("on the globe")
+            .with_accuracy_metres(Some(5.0)),
     }))
 }
 

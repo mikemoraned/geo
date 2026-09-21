@@ -9,10 +9,9 @@ use crux_core::{
     macros::effect,
     render::{self, RenderOperation},
 };
-use domain::{CrossingCompact, Gps};
+use domain::{CrossingCompact, Sample};
 use predictor::{
-    Crossings, CrowFlies, DEFAULT_RADIUS_METRES, Event as Observed, Parser, Predict, Sample,
-    Sentence,
+    Crossings, CrowFlies, DEFAULT_RADIUS_METRES, Event as Observed, Parser, Predict, Sentence,
 };
 use serde::{Deserialize, Serialize};
 
@@ -100,7 +99,7 @@ impl<S: Shell> Model<S> {
     }
 
     /// The fix the current predictions were made from.
-    pub fn fix(&self) -> Option<&predictor::Sample<Float>> {
+    pub fn fix(&self) -> Option<&Sample<Float>> {
         self.ready().and_then(CrowFlies::latest)
     }
 
@@ -160,7 +159,7 @@ pub enum Event {
     /// A fix from a shell with no receiver to read — a browser's geolocation, or a replay of
     /// one recorded. It arrives parsed, where a sentence arrives as text, and carries its own
     /// instant because the fix is dated by whatever produced it rather than by the shell.
-    Position(domain::Sample),
+    Position(Sample<f64>),
     /// The battery terminal voltage the shell measured, in millivolts. What it means is
     /// decided here, not there — see [`crate::battery`]. A shell with no battery to read,
     /// such as a browser, never sends one.
@@ -186,15 +185,6 @@ pub struct GetCrossings;
 
 impl Operation for GetCrossings {
     type Output = ();
-}
-
-/// A reported fix as the predictor takes one.
-///
-/// # Errors
-///
-/// Returns an error where the coordinates are not on the globe.
-fn fix(t: DateTime<Utc>, gps: &Gps) -> Result<Sample<Float>, domain::CoordinateError> {
-    Ok(Sample::at(t, gps.latitude, gps.longitude)?.with_speed_mps(gps.speed_mps))
 }
 
 /// Whether an event moved anything a shell shows, which is what decides a redraw.
@@ -285,7 +275,7 @@ impl<S: Shell> App for Lookout<S> {
             Event::Sentence(sentence) => self.absorb(&sentence, model),
             // A coordinate off the globe is refused here as a corrupt sentence is refused in
             // `absorb`: it leaves the last fix and its predictions where they were.
-            Event::Position(reported) => match fix(reported.t, &reported.gps) {
+            Event::Position(reported) => match reported.to_measure() {
                 Ok(sample) => self.observe(Observed::Sampled(sample), model),
                 Err(_) => Change::Unchanged,
             },
@@ -316,6 +306,8 @@ mod tests {
     use chrono::TimeDelta;
     use crux_core::Core;
     use crux_core::bridge::BridgeWithSerializer;
+    use domain::Gps;
+    use geo_types::Point;
     use predictor::fixtures::{Fix, captured};
 
     use super::*;
@@ -361,7 +353,7 @@ mod tests {
         fn project(model: &Model<Self>) -> State {
             State {
                 now: model.now(),
-                latitude: model.fix().map(predictor::Sample::latitude),
+                latitude: model.fix().map(Sample::latitude),
                 speed_mps: model.speed_mps(),
                 charge: model.charge(),
                 predicted: model.predictions().len(),
@@ -384,7 +376,7 @@ mod tests {
         fn project(model: &Model<Self>) -> State {
             State {
                 now: model.now(),
-                latitude: model.fix().map(predictor::Sample::latitude),
+                latitude: model.fix().map(Sample::latitude),
                 speed_mps: model.speed_mps(),
                 charge: model.charge(),
                 predicted: model.predictions().len(),
@@ -414,16 +406,16 @@ mod tests {
         DateTime::from_timestamp(1_785_098_609, 0).expect("an instant")
     }
 
+    /// Dresden Hauptbahnhof's longitude, which the fixes below stay on while the latitude
+    /// moves them north.
+    const DRESDEN_LON: f64 = 13.7322;
+
     /// Dresden Hauptbahnhof, at a train's speed.
-    fn at_the_station() -> Gps {
-        Gps {
-            latitude: 51.0403,
-            longitude: 13.7322,
-            altitude_metres: None,
-            accuracy_metres: 5.0,
-            speed_mps: Some(27.8),
-            heading_degrees: None,
-        }
+    fn at_the_station() -> Gps<f64> {
+        Gps::at(51.0403, 13.7322)
+            .expect("on the globe")
+            .with_accuracy_metres(Some(5.0))
+            .with_speed_mps(Some(27.8))
     }
 
     /// A crossing as a shell sends one: degrees, latitude first.
@@ -431,7 +423,7 @@ mod tests {
         CrossingCompact::at(id, latitude, longitude).expect("on the globe")
     }
 
-    fn reported(t: DateTime<Utc>, gps: Gps) -> Event {
+    fn reported(t: DateTime<Utc>, gps: Gps<f64>) -> Event {
         Event::Position(domain::Sample::new(t, gps))
     }
 
@@ -583,7 +575,7 @@ mod tests {
         core.process_event(reported(
             sentence.t() + TimeDelta::seconds(1),
             Gps {
-                latitude: 52.0,
+                position: Point::new(DRESDEN_LON, 52.0),
                 ..at_the_station()
             },
         ));
@@ -600,7 +592,7 @@ mod tests {
         let effects = core.process_event(reported(
             instant() + TimeDelta::seconds(1),
             Gps {
-                latitude: 91.0,
+                position: Point::new(DRESDEN_LON, 91.0),
                 ..at_the_station()
             },
         ));
@@ -620,7 +612,7 @@ mod tests {
         core.process_event(reported(
             instant() - TimeDelta::seconds(3_600),
             Gps {
-                latitude: 52.0,
+                position: Point::new(DRESDEN_LON, 52.0),
                 ..at_the_station()
             },
         ));
@@ -636,7 +628,7 @@ mod tests {
         let effects = core.process_event(reported(
             instant() - TimeDelta::seconds(1),
             Gps {
-                latitude: 52.0,
+                position: Point::new(DRESDEN_LON, 52.0),
                 ..at_the_station()
             },
         ));
@@ -661,7 +653,7 @@ mod tests {
         core.process_event(reported(
             instant() + TimeDelta::seconds(10),
             Gps {
-                latitude: 51.0503,
+                position: Point::new(DRESDEN_LON, 51.0503),
                 speed_mps: None,
                 ..at_the_station()
             },

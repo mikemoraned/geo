@@ -165,7 +165,7 @@ impl Rows {
             rows.raw.push(raw_row(payload));
             match serde_json::from_str::<Message>(payload.json) {
                 Ok(Message::Version0(V0Message::Gps(r)) | Message::Version1(V1Message::Gps(r))) => {
-                    rows.gps.push(gps_row(&r))
+                    rows.gps.extend(gps_row(&r))
                 }
                 Ok(
                     Message::Version0(V0Message::Acceleration(r))
@@ -190,17 +190,21 @@ fn raw_row(payload: &Payload<'_>) -> RawSampleRow {
     }
 }
 
-fn gps_row(reading: &GpsReading) -> GpsReadingRow {
-    GpsReadingRow {
+/// The typed row for a reported fix, absent where the fix carries no accuracy.
+///
+/// Every browser reports one, and every recording ever made carries one, so a payload without
+/// it is malformed — and malformed payloads land in `raw` alone, as uninterpretable ones do.
+fn gps_row(reading: &GpsReading) -> Option<GpsReadingRow> {
+    Some(GpsReadingRow {
         device_id: reading.id.into(),
         t: reading.t,
-        lat: reading.gps.latitude,
-        lon: reading.gps.longitude,
+        lat: reading.gps.latitude(),
+        lon: reading.gps.longitude(),
         alt: reading.gps.altitude_metres,
-        acc: reading.gps.accuracy_metres,
+        acc: reading.gps.accuracy_metres?,
         speed: reading.gps.speed_mps,
         heading: reading.gps.heading_degrees,
-    }
+    })
 }
 
 fn accel_row(reading: &AccelReading) -> AccelReadingRow {
@@ -259,14 +263,12 @@ mod tests {
         Message::Version1(V1Message::Gps(GpsReading {
             id: Uuid::from_u128(1),
             t,
-            gps: Gps {
-                latitude: lat,
-                longitude: -3.19,
-                altitude_metres: Some(80.0),
-                accuracy_metres: 5.0,
-                speed_mps: Some(31.4),
-                heading_degrees: Some(275.0),
-            },
+            gps: Gps::at(lat, -3.19)
+                .expect("on the globe")
+                .with_altitude_metres(Some(80.0))
+                .with_accuracy_metres(Some(5.0))
+                .with_speed_mps(Some(31.4))
+                .with_heading_degrees(Some(275.0)),
         }))
     }
 

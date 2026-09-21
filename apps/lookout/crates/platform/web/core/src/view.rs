@@ -74,7 +74,7 @@ impl Shell for Browser {
             crossings: model.crossings().map_or(0, Vec::len),
             radius_metres: model.radius_metres().unwrap_or_default(),
             here: model.fix().map(|fix| Here {
-                position: fix.position,
+                position: fix.gps.position,
                 speed_mps: model.speed_mps(),
             }),
             predicted: model
@@ -124,15 +124,11 @@ mod tests {
     use super::*;
 
     /// Dresden Hauptbahnhof, at a train's speed.
-    fn at_the_station() -> Gps {
-        Gps {
-            latitude: 51.0403,
-            longitude: 13.7322,
-            altitude_metres: None,
-            accuracy_metres: 5.0,
-            speed_mps: Some(27.8),
-            heading_degrees: None,
-        }
+    fn at_the_station() -> Gps<f64> {
+        Gps::at(51.0403, 13.7322)
+            .expect("on the globe")
+            .with_accuracy_metres(Some(5.0))
+            .with_speed_mps(Some(27.8))
     }
 
     fn instant() -> DateTime<Utc> {

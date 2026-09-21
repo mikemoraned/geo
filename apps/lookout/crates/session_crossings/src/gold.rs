@@ -37,7 +37,7 @@ pub struct Replay {
     pub session: SessionId,
     /// How many crossings it passed, which is why it was chosen.
     pub crossings: usize,
-    pub samples: Vec<Sample>,
+    pub samples: Vec<Sample<f64>>,
 }
 
 /// A failure choosing what to replay.
@@ -96,21 +96,22 @@ pub async fn choose(root: &Root, choosing: Choosing) -> Result<Vec<Replay>, Choo
         ))
         .await?;
 
-    let mut by_session: HashMap<SessionId, Vec<Sample>> = HashMap::new();
+    let mut by_session: HashMap<SessionId, Vec<Sample<f64>>> = HashMap::new();
     for sample in samples {
         by_session
             .entry(sample.session_id.clone())
             .or_default()
             .push(Sample {
                 t: sample.t,
-                gps: Gps {
-                    latitude: round(sample.lat, COORDINATE_PLACES),
-                    longitude: round(sample.lon, COORDINATE_PLACES),
-                    altitude_metres: sample.alt.map(|alt| round(alt, READING_PLACES)),
-                    accuracy_metres: round(sample.acc, READING_PLACES),
-                    speed_mps: sample.speed.map(|speed| round(speed, READING_PLACES)),
-                    heading_degrees: sample.heading.map(|to| round(to, READING_PLACES)),
-                },
+                gps: Gps::at(
+                    round(sample.lat, COORDINATE_PLACES),
+                    round(sample.lon, COORDINATE_PLACES),
+                )
+                .expect("on the globe")
+                .with_altitude_metres(sample.alt.map(|alt| round(alt, READING_PLACES)))
+                .with_accuracy_metres(Some(round(sample.acc, READING_PLACES)))
+                .with_speed_mps(sample.speed.map(|speed| round(speed, READING_PLACES)))
+                .with_heading_degrees(sample.heading.map(|to| round(to, READING_PLACES))),
             });
     }
 

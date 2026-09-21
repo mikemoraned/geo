@@ -48,14 +48,12 @@ fn gps(id: Uuid, t: DateTime<Utc>, lat: f64) -> Message {
     Message::Version1(V1Message::Gps(GpsReading {
         id,
         t: t.timestamp_millis(),
-        gps: Gps {
-            latitude: lat,
-            longitude: 13.4,
-            altitude_metres: Some(38.0),
-            accuracy_metres: 5.0,
-            speed_mps: Some(27.0),
-            heading_degrees: Some(91.0),
-        },
+        gps: Gps::at(lat, 13.4)
+            .expect("on the globe")
+            .with_altitude_metres(Some(38.0))
+            .with_accuracy_metres(Some(5.0))
+            .with_speed_mps(Some(27.0))
+            .with_heading_degrees(Some(91.0)),
     }))
 }
 

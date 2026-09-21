@@ -81,14 +81,11 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
     let gps_sample = Message::Version1(V1Message::Gps(GpsReading {
         id: Uuid::from_u128(2),
         t: 1_700_000_000_002,
-        gps: Gps {
-            latitude: 55.95,
-            longitude: -3.19,
-            altitude_metres: None,
-            accuracy_metres: 8.5,
-            speed_mps: Some(31.4),
-            heading_degrees: Some(275.0),
-        },
+        gps: Gps::at(55.95, -3.19)
+            .expect("on the globe")
+            .with_accuracy_metres(Some(8.5))
+            .with_speed_mps(Some(31.4))
+            .with_heading_degrees(Some(275.0)),
     }));
 
     // The sink enqueues RawSample envelopes (payload + received_at), the way the
