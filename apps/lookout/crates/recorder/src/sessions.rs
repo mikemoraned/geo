@@ -14,9 +14,10 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
+use domain::{DeviceId, SessionId};
 use geo_types::Point;
 use medallion::{Query, Root};
-use medallion_model::{DeviceId, SessionId, StartedBy};
+use medallion_model::StartedBy;
 use serde::{Deserialize, Serialize};
 
 /// The deduped samples under their query name.

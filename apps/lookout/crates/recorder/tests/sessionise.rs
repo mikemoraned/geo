@@ -8,9 +8,9 @@
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use domain::Gps;
+use domain::{DeviceId, SessionId};
 use geo_types::Point;
 use medallion::{Countries, Country, Query, Root};
-use medallion_model::{DeviceId, SessionId};
 use recorder::bronze::{Archive, Payload};
 use recorder::sessions::{Gap, Lead, sessions};
 use recorder::silver;

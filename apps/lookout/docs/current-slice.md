@@ -323,12 +323,13 @@ import arrow to name a crossing.
       which is unrelated to the float it is held in. `Gps::to_measure` and `Sample::to_measure`
       became `to_precision` with it, and the parameter is `P` rather than `T`.
 
-- [ ] Move `DeviceId` and `SessionId`. A device mints its own id and a session is derived from
+- [x] Move `DeviceId` and `SessionId`. A device mints its own id and a session is derived from
       that id and its start, so both say what something is rather than how the store keeps it.
-      The `PartitionValue` rule on `SessionId` is the name's own, as it was for `CrossingId`:
-      an id is written into a path and asked for in a URL. This comes before the two below,
-      which is not the order the note gives — a pass is a session and a crossing, so it cannot
-      be described until the session's identity is somewhere a device can reach.
+      The `PartitionValue` rule on `SessionId` is the name's own, as it was for `CrossingId`,
+      and is now one rule in `domain::name` rather than a copy per id. The derivation is
+      pinned to a session the store already holds, since a change to the namespace or to what
+      is hashed would still derive consistently while renaming every session recorded.
+
 - [ ] Move `Pass`: a crossing met in a session. The move that decouples `matching` from the
       store's columns. `device_id` stays on the row, where it is carried so a partition reads
       without joining back to the sessions.

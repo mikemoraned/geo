@@ -13,15 +13,11 @@
 //! predictor are entitled to disagree about it — so the columns a filter needs are carried
 //! and the line is drawn by the consumer, not baked into the store.
 
-use std::fmt::{self, Display};
-use std::str::FromStr;
-
 use chrono::{DateTime, NaiveDate, Utc};
-use medallion::{DatasetSpec, Dated, Geometry, PartitionValue, PathError, Row, layers};
+use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
-use crate::device::DeviceId;
+use domain::{DeviceId, SessionId};
 
 /// One contiguous run of samples from one device.
 pub const SESSION: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("session", "start_date");
@@ -29,52 +25,6 @@ pub const SESSION: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("sessi
 /// The samples making up the sessions, one row per deduped bronze reading.
 pub const SESSION_SAMPLE: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("session_sample", "sample_date");
-
-/// The namespace session ids are minted in, so an id derived here cannot collide with a
-/// name-based id derived from the same values for anything else.
-const SESSION_NAMESPACE: Uuid = Uuid::from_u128(0x8f9c_1d3a_6b47_4e21_9a05_c7d8_e2f4_1b60);
-
-/// Identifies one session, on the session and on each of its samples.
-///
-/// Derived from what the session *is* rather than minted per run, so a run that re-derives
-/// a session it has already written lands on the same id and rewrites it in place.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct SessionId(String);
-
-impl SessionId {
-    /// An existing id, rejecting anything that could not also name a partition — an id is
-    /// a candidate key for a partition wherever a reader chooses to lay one out by it.
-    pub fn new(id: impl Into<String>) -> Result<Self, PathError> {
-        let id = id.into();
-        PartitionValue::new(id.clone())?;
-        Ok(Self(id))
-    }
-
-    /// The id of the session `device` began at `started_at`.
-    ///
-    /// A name-based UUID over exactly what identifies the session, so any run — or any
-    /// reader wanting to name a session it has only the boundaries of — arrives at the
-    /// same id without consulting what has already been written.
-    pub fn of(device: &DeviceId, started_at: DateTime<Utc>) -> Self {
-        let name = format!("{device}/{}", started_at.timestamp_millis());
-        Self(Uuid::new_v5(&SESSION_NAMESPACE, name.as_bytes()).to_string())
-    }
-}
-
-impl FromStr for SessionId {
-    type Err = PathError;
-
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        Self::new(id)
-    }
-}
-
-impl Display for SessionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
 
 /// What ended the previous session and so began this one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

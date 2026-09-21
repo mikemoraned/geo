@@ -12,9 +12,10 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use domain::CrossingId;
+use domain::{DeviceId, SessionId};
 use geo_types::{Point, Rect};
 use medallion::{COUNTRY, Country, Query, Replaced, Root};
-use medallion_model::{Bbox, DeviceId, SessionCrossingRow, SessionId};
+use medallion_model::{Bbox, SessionCrossingRow};
 use serde::Deserialize;
 
 use crate::matching::{Crossing, Radius, Sample, Session, passes};

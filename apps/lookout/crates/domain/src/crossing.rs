@@ -17,17 +17,9 @@ use std::str::FromStr;
 use geo_types::Point;
 use serde::{Deserialize, Serialize};
 
+use crate::name::{NameError, checked};
 use crate::position::{CoordinateError, degrees, position};
 use crate::precision::Precision;
-
-/// A name that could not be written as one.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("`{0}` is empty or holds a character a name cannot be written with")]
-pub struct CrossingIdError(String);
-
-/// Characters an id cannot hold, because whatever writes one out — a directory a store
-/// partitions by, a path, a query — would read them as punctuation rather than as the name.
-const RESERVED: [char; 3] = ['/', ' ', '='];
 
 /// Identifies one crossing.
 ///
@@ -47,13 +39,11 @@ const RESERVED: [char; 3] = ['/', ' ', '='];
 pub struct CrossingId(String);
 
 impl CrossingId {
-    pub fn new(id: impl Into<String>) -> Result<Self, CrossingIdError> {
-        let id = id.into();
-        if id.is_empty() || id.contains(RESERVED) {
-            Err(CrossingIdError(id))
-        } else {
-            Ok(Self(id))
-        }
+    /// # Errors
+    ///
+    /// Returns an error where the id could not be written as a name.
+    pub fn new(id: impl Into<String>) -> Result<Self, NameError> {
+        Ok(Self(checked(id.into())?))
     }
 
     pub fn as_str(&self) -> &str {
@@ -62,7 +52,7 @@ impl CrossingId {
 }
 
 impl FromStr for CrossingId {
-    type Err = CrossingIdError;
+    type Err = NameError;
 
     fn from_str(id: &str) -> Result<Self, Self::Err> {
         Self::new(id)

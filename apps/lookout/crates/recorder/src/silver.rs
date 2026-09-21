@@ -203,8 +203,8 @@ mod tests {
     use arrow::array::RecordBatch;
     use chrono::{Duration, TimeZone};
     use domain::Gps;
+    use domain::{DeviceId, SessionId};
     use medallion::{Country, GEOMETRY, PROJECTED_GEOMETRY, Query};
-    use medallion_model::{DeviceId, SessionId};
     use serde::Deserialize;
     use shared::{GpsReading, Message, V1Message};
     use uuid::Uuid;

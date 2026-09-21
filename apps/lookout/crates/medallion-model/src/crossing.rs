@@ -16,12 +16,9 @@
 //! and the columns say which tuning a row was built under.
 
 use chrono::{DateTime, NaiveDate, Utc};
-use domain::{CrossingCompactId, CrossingId};
+use domain::{CrossingCompactId, CrossingId, DeviceId, SessionId};
 use medallion::{COUNTRY, DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
-
-use crate::device::DeviceId;
-use crate::session::SessionId;
 
 /// One place a stretch of track meets one body of water.
 pub const WATER_CROSSING: DatasetSpec<layers::Silver> =

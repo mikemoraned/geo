@@ -15,7 +15,6 @@
 //! them.
 
 mod crossing;
-mod device;
 mod motis;
 mod overture;
 mod session;
@@ -27,12 +26,9 @@ use medallion::DatasetInfo;
 pub use crossing::{
     OverlapKind, SESSION_CROSSING, SessionCrossingRow, WATER_CROSSING, WaterCrossingRow,
 };
-pub use device::{DeviceId, EmptyDeviceId};
 pub use motis::{MOTIS_SEGMENT, MotisSegmentRow, TRAIN_SEGMENT, TrainSegmentRow};
 pub use overture::{EXTRACT_MANIFEST, ExtractManifestRow, OVERTURE_EXTRACT};
-pub use session::{
-    Bbox, SESSION, SESSION_SAMPLE, SessionId, SessionRow, SessionSampleRow, StartedBy,
-};
+pub use session::{Bbox, SESSION, SESSION_SAMPLE, SessionRow, SessionSampleRow, StartedBy};
 pub use silver::{TargetError, silver_target};
 pub use telemetry::{
     ACCEL_READING, AccelReadingRow, DEVICE_SESSION, DeviceSessionRow, GPS_READING, GpsReadingRow,

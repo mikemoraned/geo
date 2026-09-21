@@ -14,6 +14,7 @@ geo = { workspace = true }
 geo-types = { workspace = true }
 geo-traits = { workspace = true }
 clap = { workspace = true }
+domain = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }
 redis = { workspace = true }
@@ -27,7 +28,6 @@ telemetry = { workspace = true }
 transport = { workspace = true }
 
 [dev-dependencies]
-domain = { workspace = true }
 uuid = { workspace = true }
 tempfile = { workspace = true }
 testcontainers = "0.27"

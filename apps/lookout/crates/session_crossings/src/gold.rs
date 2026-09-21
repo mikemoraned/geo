@@ -9,9 +9,9 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
+use domain::SessionId;
 use domain::{Gps, Sample};
 use medallion::{Query, Root};
-use medallion_model::SessionId;
 use serde::{Deserialize, Serialize};
 
 /// How a session is chosen.

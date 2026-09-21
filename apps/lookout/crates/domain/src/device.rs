@@ -1,4 +1,4 @@
-//! The identity a device carries through the store.
+//! The identity a device carries, from the fix it reports to the row that keeps it.
 
 use std::fmt::{self, Display};
 use std::str::FromStr;
@@ -6,11 +6,11 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Which device a row came from.
+/// Which device a reading came from.
 ///
-/// Stored as the string it reads as, since it joins across datasets by value and every
-/// engine reading the store compares strings the same way. Devices mint their own ids, so
-/// the store holds whatever a device sent rather than a shape it must conform to.
+/// Held as the string it reads as, since it joins by value and every engine comparing two of
+/// them compares strings. Devices mint their own, so whoever holds one holds whatever the
+/// device sent rather than a shape it must conform to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct DeviceId(String);
@@ -59,15 +59,11 @@ mod tests {
         let id = Uuid::from_u128(1);
 
         assert_eq!(DeviceId::from(id).to_string(), id.to_string());
-        assert_eq!(
-            "device-a".parse::<DeviceId>().unwrap().to_string(),
-            "device-a"
-        );
     }
 
-    /// An empty id joins every row of every device together, so it is not an id.
     #[test]
     fn an_empty_id_is_rejected() {
         assert!(DeviceId::new("").is_err());
+        assert!("".parse::<DeviceId>().is_err());
     }
 }

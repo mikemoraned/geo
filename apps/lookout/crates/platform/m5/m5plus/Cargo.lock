@@ -485,10 +485,12 @@ dependencies = [
 name = "domain"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "geo-types",
  "num-traits",
  "serde",
  "thiserror 2.0.20",
+ "uuid",
 ]
 
 [[package]]
@@ -1970,6 +1972,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1_smol"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
+
+[[package]]
 name = "shadow_counted"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2258,6 +2266,15 @@ dependencies = [
  "mutants",
  "proc-macro2",
  "shadow_counted",
+]
+
+[[package]]
+name = "uuid"
+version = "1.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
+dependencies = [
+ "sha1_smol",
 ]
 
 [[package]]

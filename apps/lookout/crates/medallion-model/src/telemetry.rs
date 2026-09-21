@@ -7,7 +7,7 @@
 use medallion::{DatasetSpec, Row, layers};
 use serde::{Deserialize, Serialize};
 
-use crate::device::DeviceId;
+use domain::DeviceId;
 
 /// Every payload the telemetry queue carried, verbatim. The lossless record the other
 /// telemetry datasets are interpreted from.

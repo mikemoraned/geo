@@ -13,9 +13,10 @@
 //! moved can produce the first without having gone anywhere.
 
 use chrono::{DateTime, Utc};
+use domain::{DeviceId, SessionId};
 use geo::{Distance, Euclidean};
 use geo_types::{Point, Rect};
-use medallion_model::{DeviceId, SessionCrossingRow, SessionId};
+use medallion_model::SessionCrossingRow;
 
 /// How near a sample has to come to a crossing for the crossing to count as passed.
 ///
