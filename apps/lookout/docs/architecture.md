@@ -6,9 +6,10 @@ formats and rules are in [medallion.md](medallion.md); this is what fills it.
 ## Capture
 
 A phone runs the recording page the `server` crate serves from fly.io, samples GPS and
-accelerometer, and sends timestamped JSON over a websocket. The server `LPUSH`es each sample onto an
-Upstash redis list. Redis is optional: unset, the server logs samples rather than queueing
-them, which is how it runs locally.
+accelerometer, and sends timestamped JSON over a websocket; the format is [the telemetry
+wire](telemetry.md). The server `LPUSH`es each sample onto an Upstash redis list. Redis is
+optional: unset, the server logs samples rather than queueing them, which is how it runs
+locally.
 
 The queue is a landing format, not an archive. `recorder` drains it into the bronze
 telemetry datasets — the verbatim payload alongside the readings interpreted from it — and

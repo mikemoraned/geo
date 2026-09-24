@@ -441,3 +441,6 @@ where the other refactors do.
       `apps/linzer`, the notebooks under `notebooks/` and `questions/`, and `spikes/`. A
       notebook is a record of an exploration where a `#` is often a cell's only narration, and
       `spikes/` is a record by definition.
+
+      Swept so far: `shared` — the wire format and what a reading holds moved to
+      `docs/telemetry.md`, the crate's purpose to a README.

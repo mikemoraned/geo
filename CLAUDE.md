@@ -36,8 +36,9 @@ for working practice and for the limits of this environment. Current notes:
   why Claude cannot flash the device
 
 Lookout's own facts are in [`apps/lookout/docs/`](apps/lookout/docs/): `medallion.md` (the
-store), `architecture.md` (the pipeline), `device.md` (the M5 board and its GNSS receiver),
-`motis.md` (the Motis API and the German timetable feed).
+store), `architecture.md` (the pipeline), `telemetry.md` (the wire a device sends),
+`device.md` (the M5 board and its GNSS receiver), `motis.md` (the Motis API and the German
+timetable feed).
 
 ## Running Claude
 

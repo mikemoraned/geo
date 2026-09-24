@@ -103,7 +103,7 @@ async fn handle_sample(state: &AppState, text: &str) -> Ingest {
     match &state.sink {
         Some(sink) => match sink.push(&sample).await {
             Ok(depth) => {
-                tracing::info!(id = %message.id(), t = message.t(), depth, "queued sample");
+                tracing::info!(id = %message.device_id(), t = message.captured_at_millis(), depth, "queued sample");
                 Ingest::Accepted
             }
             Err(err) => {
@@ -112,7 +112,7 @@ async fn handle_sample(state: &AppState, text: &str) -> Ingest {
             }
         },
         None => {
-            tracing::info!(id = %message.id(), t = message.t(), "sample (not queued)");
+            tracing::info!(id = %message.device_id(), t = message.captured_at_millis(), "sample (not queued)");
             Ingest::Accepted
         }
     }
