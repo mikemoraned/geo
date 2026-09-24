@@ -421,7 +421,7 @@ would have said belongs in the naming and the structure, and a convention belong
 Nothing here is the website's, but retro-applying it is a sweep of every crate, so it lands
 where the other refactors do.
 
-- [ ] Add `.claude/rules/does-it-bring-joy.md`, over `**/*.rs` and `**/*.py`. No comment is
+- [x] Add `.claude/rules/does-it-bring-joy.md`, over `**/*.rs` and `**/*.py`. No comment is
       written by default, in any form — `//`, `///`, `//!` or a docstring. What one would have
       said is carried by naming and structure, with a well-known pattern named as such wherever
       one fits. A convention used or invented is explained in a README or another `.md`, away
