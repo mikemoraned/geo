@@ -1,21 +1,3 @@
-//! Writing derived sessions into silver: a session's path and envelope, and a row per
-//! sample within it.
-//!
-//! Every geometry is carried twice: in lat/lon, and projected into metres. The projected
-//! one is what makes a distance a distance — an implied speed is metres per second, and
-//! degrees are neither metres nor the same size in both axes.
-//!
-//! The two datasets are partitioned by different dates — a sample by its own instant, a
-//! session by the instant it began — so a session crossing midnight has its samples split
-//! over two partitions while itself living in one. A run rebuilds every partition it
-//! produces rows for, since it re-derives every session from all of bronze.
-//!
-//! Both sit under a `country=` partition, because the projected column's CRS is declared
-//! per file and the zone is chosen per country: rows of two countries cannot share a file
-//! and state one CRS truthfully. Which country a session is in follows from where it
-//! started, so a session whose start is in no country the store knows is left unwritten —
-//! there is no zone to project it into — and counted.
-
 use chrono::{DateTime, Utc};
 use domain::Bbox;
 use geo::{BoundingRect, Distance, Euclidean};
@@ -25,18 +7,15 @@ use medallion_model::{SessionRow, SessionSampleRow};
 
 use crate::sessions::Session;
 
-/// What one write did, per dataset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct WriteOutcome {
     pub sessions: usize,
     pub session_partitions: Replaced,
     pub samples: usize,
     pub sample_partitions: Replaced,
-    /// Sessions starting outside every country the store knows, and so not written.
     pub unplaceable: usize,
 }
 
-/// A failure writing the sessions.
 #[derive(Debug, thiserror::Error)]
 pub enum SilverError {
     #[error("geometry: {0}")]
@@ -45,26 +24,17 @@ pub enum SilverError {
     Write(#[from] medallion::TableError),
 }
 
-/// One session placed on the map: its row and path, and its samples' rows and points.
 struct Placed {
     row: SessionRow,
     path: LineString<f64>,
     samples: Vec<Located>,
 }
 
-/// One sample's row, with the point its geometry column holds.
 struct Located {
     row: SessionSampleRow,
     point: Point<f64>,
 }
 
-/// Write `sessions` and their samples to the silver datasets under `root`.
-///
-/// Each session's country is looked up from where it started, since that fixes the CRS of
-/// its projected geometry — for its samples as much as for itself, so that a session and the
-/// samples it is made of are measured in the same metres wherever they later went. A session
-/// starting where `countries` knows no country is reported as unplaceable rather than
-/// written.
 pub async fn write(
     root: &Root,
     sessions: &[Session],
@@ -104,10 +74,6 @@ pub async fn write(
     Ok(outcome)
 }
 
-/// One session placed on the map: its row and path, and its samples' rows and points.
-///
-/// The projector is what makes an implied speed metres per second; the geometry columns
-/// themselves are projected by the writer, from the same country's zone.
 fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::GeoError> {
     let samples = locate(session, projector)?;
     let path = path_through(samples.iter().map(|sample| sample.point));
@@ -131,11 +97,6 @@ fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::
     Ok(Placed { row, path, samples })
 }
 
-/// The path through `points`.
-///
-/// A session of one sample stands still rather than having no path: its lone point is
-/// repeated, so every session's geometry is a line of at least two coordinates and a reader
-/// never meets a LineString that simple features would call malformed.
 fn path_through(points: impl Iterator<Item = Point<f64>>) -> LineString<f64> {
     let coords: Vec<_> = points.map(|point| point.0).collect();
     match coords.as_slice() {
@@ -144,7 +105,6 @@ fn path_through(points: impl Iterator<Item = Point<f64>>) -> LineString<f64> {
     }
 }
 
-/// The envelope of `path`, in the axis names the upstream reference data uses.
 fn envelope(path: &LineString<f64>) -> Bbox {
     Bbox::of(
         path.bounding_rect()
@@ -152,10 +112,6 @@ fn envelope(path: &LineString<f64>) -> Bbox {
     )
 }
 
-/// One session's samples as rows.
-///
-/// The position each row carries is in lat/lon; `projector` is here for the implied speed,
-/// which is metres per second and so is measured between the projected positions.
 fn locate(session: &Session, projector: &Projector) -> Result<Vec<Located>, medallion::GeoError> {
     let session_id = session.id();
     let mut located: Vec<Located> = Vec::with_capacity(session.samples.len());
@@ -185,10 +141,6 @@ fn locate(session: &Session, projector: &Projector) -> Result<Vec<Located>, meda
     Ok(located)
 }
 
-/// The speed the step between two projected positions implies, in metres per second.
-///
-/// Samples are deduped on `(device_id, t)` before they reach here, so no two samples of a
-/// session share an instant and the interval is never zero.
 fn implied_speed(from: (Point<f64>, DateTime<Utc>), to: (Point<f64>, DateTime<Utc>)) -> f64 {
     let seconds = (to.1 - from.1).num_milliseconds() as f64 / 1_000.0;
     Euclidean.distance(from.0, to.0) / seconds
@@ -210,7 +162,6 @@ mod tests {
 
     use super::*;
 
-    /// Every place is in Germany, which is where these samples are.
     struct Everywhere(Country);
 
     impl Countries for Everywhere {
@@ -219,7 +170,6 @@ mod tests {
         }
     }
 
-    /// Nowhere is in any country the store knows.
     struct Nowhere;
 
     impl Countries for Nowhere {
@@ -232,8 +182,6 @@ mod tests {
         Everywhere(Country::Germany)
     }
 
-    /// A degree of latitude is about this many metres, near enough to check that a speed
-    /// came out of the projected geometry rather than out of degrees.
     const METRES_PER_DEGREE_LATITUDE: f64 = 111_320.0;
 
     fn at(hour: u32, minute: u32, second: u32) -> DateTime<Utc> {
@@ -254,7 +202,6 @@ mod tests {
         }))
     }
 
-    /// The columns a reader takes back out of the dataset.
     #[derive(Debug, Deserialize)]
     struct Written {
         session_id: SessionId,
@@ -263,8 +210,6 @@ mod tests {
         implied_speed_mps: Option<f64>,
     }
 
-    /// Derive and write the sessions `messages` make, through the same archive the drain
-    /// writes bronze with.
     async fn drain(root: &Root, messages: &[Message]) {
         let json: Vec<String> = messages
             .iter()
@@ -296,7 +241,6 @@ mod tests {
         (root, outcome)
     }
 
-    /// The written dataset, registered the way any other reader would register it.
     async fn dataset(root: &Root) -> Query {
         let query = Query::new(root.clone());
         query
@@ -314,7 +258,6 @@ mod tests {
             .expect("query samples")
     }
 
-    /// The line held in `column` of the first row of `batch`.
     fn first_line(batch: &RecordBatch, column: &str) -> Vec<(f64, f64)> {
         let geometries = medallion::geometries(batch, column).expect("geometries");
         let geo_types::Geometry::LineString(line) = &geometries[0] else {
@@ -323,7 +266,6 @@ mod tests {
         line.coords().map(|coord| (coord.x, coord.y)).collect()
     }
 
-    /// The point held in `column` of the first row of `batch`.
     fn first_point(batch: &RecordBatch, column: &str) -> (f64, f64) {
         let geometries = medallion::geometries(batch, column).expect("geometries");
         let geo_types::Geometry::Point(point) = &geometries[0] else {
@@ -365,8 +307,6 @@ mod tests {
         );
     }
 
-    /// The id is the one derived from what the session is, so a reader can name a session
-    /// without reading it back.
     #[tokio::test]
     async fn a_sample_carries_the_derived_id_of_its_session() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -380,8 +320,6 @@ mod tests {
         );
     }
 
-    /// Implied speed is metres per second: a tenth of a degree of latitude in ten seconds
-    /// is about 1.1 km/s, which degrees would have made 0.01.
     #[tokio::test]
     async fn implied_speed_is_metres_per_second_over_the_previous_sample() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -409,8 +347,6 @@ mod tests {
         );
     }
 
-    /// Samples are partitioned by the date of the sample, so a session running over
-    /// midnight is written to both dates and reassembled by its id.
     #[tokio::test]
     async fn a_session_crossing_midnight_is_written_to_a_partition_per_date() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -460,8 +396,6 @@ mod tests {
         );
     }
 
-    /// A run re-derives every session from all of bronze, so writing again replaces each
-    /// partition rather than appending a second copy of it.
     #[tokio::test]
     async fn writing_again_replaces_the_partition() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -483,7 +417,6 @@ mod tests {
         assert_eq!(rows(&root).await.len(), 2);
     }
 
-    /// The columns a reader takes back out of the session dataset.
     #[derive(Debug, Deserialize)]
     struct WrittenSession {
         session_id: SessionId,
@@ -514,7 +447,6 @@ mod tests {
             .expect("query sessions")
     }
 
-    /// A session spans its samples: their instants, their count, and the ground they cover.
     #[tokio::test]
     async fn a_session_row_spans_its_samples() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -547,7 +479,6 @@ mod tests {
         );
     }
 
-    /// The id on a session is the one its samples carry, so the two datasets join.
     #[tokio::test]
     async fn a_session_and_its_samples_share_an_id() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -568,8 +499,6 @@ mod tests {
         );
     }
 
-    /// A session is one row wherever its samples fall, so a session over midnight lives in
-    /// the partition of the date it began.
     #[tokio::test]
     async fn a_session_crossing_midnight_is_one_row_under_its_start_date() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -594,7 +523,6 @@ mod tests {
         );
     }
 
-    /// The path is the line the session took, in degrees and in metres.
     #[tokio::test]
     async fn the_path_columns_hold_the_line_through_the_samples() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -634,8 +562,6 @@ mod tests {
         );
     }
 
-    /// A session of one sample stands still: its path is a line rather than a LineString of
-    /// a single coordinate, which simple features would call malformed.
     #[tokio::test]
     async fn a_session_of_one_sample_has_a_path_that_stands_still() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -661,31 +587,24 @@ mod tests {
         );
     }
 
-    /// The gap threshold moves a session's start into another day, so the partition the
-    /// earlier run wrote is no longer produced — and does not survive the run that
-    /// replaced it.
     #[tokio::test]
     async fn a_partition_a_rerun_no_longer_produces_is_removed() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let id = Uuid::from_u128(1);
         let midnight = Utc.with_ymd_and_hms(2026, 7, 27, 0, 0, 0).unwrap();
 
-        // Two samples an hour apart over midnight: at the default threshold they are two
-        // sessions, one starting on each date.
-        let (root, first) = written(
-            &tmp,
-            &[
-                gps(id, midnight - Duration::minutes(30), 52.5, 13.4),
-                gps(id, midnight + Duration::minutes(30), 52.6, 13.4),
-            ],
-        )
-        .await;
-        assert_eq!(first.sessions, 2);
+        let an_hour_apart_over_midnight = [
+            gps(id, midnight - Duration::minutes(30), 52.5, 13.4),
+            gps(id, midnight + Duration::minutes(30), 52.6, 13.4),
+        ];
+
+        let (root, first) = written(&tmp, &an_hour_apart_over_midnight).await;
+
+        assert_eq!(first.sessions, 2, "one session starting on each date");
         assert_eq!(first.session_partitions.written, 2);
 
-        // At a threshold longer than the silence they are one session, starting on the
-        // first date only.
-        let derived = sessions(&root, Gap::new(Duration::hours(2)), Lead::default())
+        let longer_than_the_silence = Gap::new(Duration::hours(2));
+        let derived = sessions(&root, longer_than_the_silence, Lead::default())
             .await
             .expect("derive sessions");
         let second = write(&root, &derived, &germany())
@@ -704,8 +623,6 @@ mod tests {
         assert_eq!(session_rows(&root).await.len(), 1);
     }
 
-    /// A session starting where no known country is has no zone to be projected into, so
-    /// it is reported rather than written into some other country's metres.
     #[tokio::test]
     async fn a_session_outside_every_known_country_is_not_written() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -728,8 +645,6 @@ mod tests {
         assert!(!root.path().join("silver").exists());
     }
 
-    /// The country a session is in decides which zone its geometry is written in, so it
-    /// names a partition rather than being a column of the file.
     #[tokio::test]
     async fn a_session_is_written_under_the_country_it_started_in() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -749,8 +664,6 @@ mod tests {
         );
     }
 
-    /// A country the run no longer derives any session for does not linger: the store holds
-    /// what the last run produced, down to which countries it produced anything in.
     #[tokio::test]
     async fn a_country_a_rerun_derives_nothing_in_is_removed() {
         let tmp = tempfile::tempdir().expect("tempdir");

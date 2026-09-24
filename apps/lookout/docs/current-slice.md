@@ -491,3 +491,8 @@ where the other refactors do.
       went into one: distance within a radius, the parallel-line failure it admits, the two
       evidence numbers, where the default radius comes from, and why the work is per country.
       Nothing left but clap help.
+
+      `recorder` — a new README holds the drain's safety (bounded batches, because taking a sample
+      has already removed it), what starts a session, and why silver carries every geometry twice.
+      One rename came out of it: the CLI said `view-latest` for what the queue calls a peek, so the
+      subcommand is `peek-latest` and the queue has one vocabulary.
