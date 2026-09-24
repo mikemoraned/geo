@@ -1,15 +1,15 @@
 # The telemetry wire
 
-The format a recording device sends and the archive keeps. What the samples become once
-drained is [architecture.md](architecture.md); the store that holds them is
-[medallion.md](medallion.md).
+The format a recording device sends and the archive keeps.
+[architecture.md](architecture.md) covers what the samples become once drained;
+[medallion.md](medallion.md) covers the store that holds them.
 
 ## A version in every message, and absent means 0
 
-Each message is a JSON object carrying its protocol version in a top-level `v`. A message
-without one is version 0, which is what the unversioned payloads already in the archive read
-as. Raw payloads are re-interpreted from the archive rather than migrated, so both versions
-stay readable and an unknown version is refused.
+Each message is a JSON object carrying its protocol version in a top-level `v`. A message without
+one is version 0, which is how the archive's unversioned payloads read. Nothing migrates a raw
+payload — it is re-interpreted from the archive — so both versions stay readable, and an unknown
+version is refused.
 
 Version 0 carries no message type: the variant is whichever sensor key is present.
 
@@ -58,9 +58,9 @@ carried only that reading, so the aggregates default to zero rather than failing
 
 ## The queue between sending and keeping
 
-A sample arrives over a websocket and is pushed onto a redis list, which a later run drains
+A sample arriving over a websocket is pushed onto a redis list, and a later run drains the list
 into the archive. The list is one key, `lookout-telemetry`, and an item on it is the payload
-verbatim beside `received_at` — the epoch millis stamped when the sample was received.
+verbatim beside `received_at` — the epoch millis of its receipt.
 
 That stamp is taken at receipt rather than at the drain, so queue latency does not distort it,
 and it is not the `t` inside the payload, which is the device's own clock and drifts. It rides
@@ -74,7 +74,7 @@ without removing starts at the head instead, newest first.
 
 The endpoint is TLS-only, so the URL is `rediss://` and the process negotiating it installs a
 rustls crypto provider at startup. Redis's own timeouts — a second to connect, half of one to
-answer — are too tight for a public-internet endpoint, and the ones used instead are generous
-enough to cross it while still bounding a hang. A fractional blocking-pop timeout needs redis 6
-or newer, which the test against a containerised queue pins its image for as
-`FRACTIONAL_TIMEOUT_TAG` — the module's own default image is older than that.
+answer — are too tight for a public-internet endpoint, so the timeouts here are generous enough to
+cross it and still bound a hang. A fractional blocking-pop timeout needs redis 6 or newer, so the
+test against a containerised queue pins an image new enough, as `FRACTIONAL_TIMEOUT_TAG`; the
+testcontainers module's own default is older.
