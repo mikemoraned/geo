@@ -1,28 +1,14 @@
-// The core, in an element: it loads the wasm, answers what the core asks for, and paints what
-// it says. No prediction, no clock discipline and no formatting live here — the core holds all
-// three, and answers an event that moved nothing with no request.
-//
-// Where positions and time come from is not its business either. A page sends them through
-// `dispatch`, which is what lets one element serve a live receiver and a replay.
 import init, { process_event, view } from "/wasm/lookout.js";
 import { geoAzimuthalEquidistant } from "/vendor/d3-geo-3.1.1.js";
 import { scaleSymlog } from "/vendor/d3-scale-4.0.2.js";
 
-// Hoisted to module scope, so several elements on a page share one load. `connectedCallback`
-// cannot be awaited by the browser, so the first paint waits on this promise instead.
 const loaded = init();
 
 const CROSSINGS = "/crossings.json";
-// How far out the scale stays close to linear, in metres. Below it a crossing moves across
-// the picture about as fast as it moves over the ground; above it, distances compress. So the
-// smaller this is, the more of the picture goes to what is close — which is what is about to
-// matter.
 const LINEAR_WITHIN_METRES = 500;
 const CANVAS_SIZE = 320;
 const TAU = Math.PI * 2;
 
-// The core measures in metres a second, which is the unit a distance divided by a time comes
-// out in. Nobody reads a train that way.
 function speed(metres_per_second) {
   if (metres_per_second === null || metres_per_second === undefined) return "no speed yet";
   return `${(metres_per_second * 3.6).toFixed(0)} km/h`;
@@ -47,18 +33,14 @@ class LookoutPredictor extends HTMLElement {
       </div>`;
     this.#screen = root.querySelector(".status");
     this.#canvas = root.querySelector("canvas");
-    // Drawn at the device's own resolution, so the dots are not blurred on a phone.
     const density = window.devicePixelRatio || 1;
     this.#canvas.width = CANVAS_SIZE * density;
     this.#canvas.height = CANVAS_SIZE * density;
     this.#canvas.getContext("2d").scale(density, density);
 
-    // What it is fed, and when it is started, are the page's business.
     this.ready = loaded;
   }
 
-  // Applies one event, doing what the core asks for and repainting only where it asked. This
-  // is the whole surface a page drives: a position, or a time.
   async dispatch(event) {
     const requests = JSON.parse(process_event(JSON.stringify(event)));
     let moved = false;
@@ -69,8 +51,6 @@ class LookoutPredictor extends HTMLElement {
     if (moved) this.#paint();
   }
 
-  // The core asks once, when it has no set to predict against. A failure leaves it asking for
-  // nothing more, so the page says so rather than sitting blank.
   async #fetchCrossings() {
     try {
       const response = await fetch(CROSSINGS);
@@ -81,9 +61,6 @@ class LookoutPredictor extends HTMLElement {
     }
   }
 
-  // What the core believes, rather than what the browser could say for itself: the clock is
-  // the latest instant anything reported, and the speed is the one the arrivals were worked
-  // out at, which for a source reporting none is derived from the step between fixes.
   #paint() {
     const { now, crossings, radius_metres, here, predicted } = JSON.parse(view());
     this.#draw(here, predicted, radius_metres);
@@ -96,8 +73,6 @@ class LookoutPredictor extends HTMLElement {
     ].join("\n");
   }
 
-  // Where we are in the middle, what is about to be crossed around it, and nothing beyond the
-  // radius: a dot on the rim is a crossing at the furthest the core looks.
   #draw(here, predicted, maximum) {
     const context = this.#canvas.getContext("2d");
     const middle = CANVAS_SIZE / 2;
@@ -113,16 +88,11 @@ class LookoutPredictor extends HTMLElement {
 
     if (!here) return;
 
-    // Centred on us and true in every direction from there, so a crossing is drawn where it
-    // actually lies; only how far out is remapped.
     const project = geoAzimuthalEquidistant()
       .rotate([-here.position.x, -here.position.y])
       .translate([0, 0])
       .scale(1);
 
-    // Near distances given more of the picture than far ones, and the furthest the core looks
-    // landing on the rim. Symmetric-log rather than log because a crossing can be underneath
-    // us, and log has nowhere to put nought.
     const reach = scaleSymlog()
       .domain([0, maximum])
       .range([0, radius])
@@ -139,7 +109,6 @@ class LookoutPredictor extends HTMLElement {
       context.fill();
     }
 
-    // Us, sized by how fast the core reckons we are going.
     context.fillStyle = "#cfd";
     context.beginPath();
     context.arc(middle, middle, 3 + Math.min(here.speed_mps ?? 0, 30) / 3, 0, TAU);

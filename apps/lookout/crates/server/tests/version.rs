@@ -1,11 +1,7 @@
-//! Integration test for the `/version` endpoint: it serves the build's git hash
-//! (`GIT_HASH`) so a running deploy can be matched to its source. Driven through the
-//! real router via `oneshot`, no network needed.
-
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use server::{AppState, GIT_HASH, build_app};
-use tower::ServiceExt; // for `oneshot`
+use tower::ServiceExt;
 
 fn static_dir() -> String {
     concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()

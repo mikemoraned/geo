@@ -1,8 +1,3 @@
-//! Integration test for the telemetry websocket, exercising the real router and a
-//! real websocket client end-to-end. A recording [`SampleSink`] stands in for redis
-//! so the whole `/ws` path — connect, receive, parse, enqueue — is driven without a
-//! container. (The redis adapter itself is covered separately against a real redis.)
-
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -18,7 +13,6 @@ use tokio::time::{Instant, sleep, timeout};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use uuid::Uuid;
 
-/// A [`SampleSink`] that records pushed queue items in memory for assertions.
 struct RecordingSink {
     samples: Arc<Mutex<Vec<RawSample>>>,
 }
@@ -36,8 +30,6 @@ fn static_dir() -> String {
     concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
 }
 
-/// Spawn the real router with a recording sink; returns its address and the shared
-/// buffer of pushed queue items.
 async fn spawn_app() -> (SocketAddr, Arc<Mutex<Vec<RawSample>>>) {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let app = build_app(
@@ -57,16 +49,11 @@ async fn spawn_app() -> (SocketAddr, Arc<Mutex<Vec<RawSample>>>) {
     (addr, recorded)
 }
 
-/// Both protocol versions must pass ingest: a historical v0 payload (no `v`, sensor
-/// key inferred) and a modern v1 message (tagged), while genuinely malformed JSON is
-/// dropped. The three are sent in order and the handler processes them in order, so
-/// the two valid ones land in the sink and the malformed one doesn't.
 #[tokio::test]
 async fn both_versions_enqueue_and_malformed_is_dropped() {
     let (addr, recorded) = spawn_app().await;
 
-    // A historical v0 payload: no `v`, variant inferred from the `gps` key.
-    let v0_raw = r#"{"id":"00000000-0000-0000-0000-000000000007","t":1700000000007,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5}}"#;
+    let unversioned_from_the_archive = r#"{"id":"00000000-0000-0000-0000-000000000007","t":1700000000007,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5}}"#;
     let v0_expected = Message::Version0(V0Message::Gps(GpsReading {
         id: Uuid::from_u128(7),
         t: 1_700_000_000_007,
@@ -92,12 +79,10 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
     let (mut ws, _resp) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
         .await
         .expect("connect");
-    // Malformed first so that, once both valid ones are recorded, we know the
-    // malformed one was already processed (and dropped) by the in-order handler.
     ws.send(WsMessage::Text("not-a-sample".into()))
         .await
         .expect("send malformed");
-    ws.send(WsMessage::Text(v0_raw.into()))
+    ws.send(WsMessage::Text(unversioned_from_the_archive.into()))
         .await
         .expect("send v0");
     ws.send(WsMessage::Text(v1_json.into()))
@@ -110,7 +95,12 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
         {
             let samples = recorded.lock().expect("lock");
             if samples.len() >= 2 {
-                assert_eq!(samples.len(), 2, "malformed sample must be dropped");
+                assert_eq!(
+                    samples.len(),
+                    2,
+                    "the malformed sample was sent before both valid ones, so two recorded \
+                     means the handler reached it and dropped it"
+                );
                 assert_eq!(samples[0].parse().expect("parse v0"), v0_expected);
                 assert_eq!(samples[1].parse().expect("parse v1"), v1);
                 assert!(
@@ -128,8 +118,6 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
     }
 }
 
-/// The server acks each accepted message so the client can drop it from its outbox
-/// only once delivery is confirmed. Sending one sample must yield one ack frame back.
 #[tokio::test]
 async fn server_acks_accepted_message() {
     let (addr, _recorded) = spawn_app().await;

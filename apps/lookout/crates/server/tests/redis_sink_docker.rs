@@ -1,13 +1,3 @@
-//! Integration test for the redis adapter (`RedisSink`) against a real redis.
-//!
-//! A testcontainers redis is started and samples are pushed through `RedisSink`,
-//! then read back off the `lookout-telemetry` list the way the `recorder` cli will
-//! (tail-first, FIFO) — covering LPUSH ordering, queue depth, and JSON round-trip
-//! through redis.
-//!
-//! Requires Docker; the `_docker`-suffixed name marks it for exclusion from
-//! no-docker test runs.
-
 use std::time::Duration;
 
 use domain::Gps;
@@ -34,11 +24,6 @@ async fn start_redis() -> (ContainerAsync<Redis>, String) {
     (container, format!("redis://{host}:{port}"))
 }
 
-/// Wait until redis answers a `PING`.
-///
-/// The container's `start()` only blocks until the "Ready to accept connections"
-/// log line, but Docker's host port-forward proxy can briefly still refuse
-/// connections after that (especially on macOS), so a single connect is racy.
 async fn wait_for_redis(url: &str) -> MultiplexedConnection {
     let client = redis::Client::open(url).expect("open redis client");
     let deadline = Instant::now() + Duration::from_secs(30);
@@ -88,14 +73,12 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
             .with_heading_degrees(Some(275.0)),
     }));
 
-    // The sink enqueues RawSample envelopes (payload + received_at), the way the
-    // server's handler builds them.
     let accel_item = wrap(&accel_sample);
     let gps_item = wrap(&gps_sample);
 
-    // push returns the resulting queue depth
-    assert_eq!(sink.push(&accel_item).await.expect("push accel"), 1);
-    assert_eq!(sink.push(&gps_item).await.expect("push gps"), 2);
+    let depth_after_accel = sink.push(&accel_item).await.expect("push accel");
+    let depth_after_gps = sink.push(&gps_item).await.expect("push gps");
+    assert_eq!((depth_after_accel, depth_after_gps), (1, 2));
 
     let len: i64 = redis::cmd("LLEN")
         .arg(QUEUE_KEY)
@@ -104,12 +87,10 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
         .expect("llen");
     assert_eq!(len, 2);
 
-    // The recorder drains with BRPOP (tail), and LPUSH prepends, so the tail is the
-    // oldest sample — draining yields insertion order (FIFO).
-    let first = rpop_sample(&mut conn).await;
-    let second = rpop_sample(&mut conn).await;
-    assert_eq!(first.parse().expect("parse accel"), accel_sample);
-    assert_eq!(second.parse().expect("parse gps"), gps_sample);
+    let oldest = rpop_sample(&mut conn).await;
+    let next_oldest = rpop_sample(&mut conn).await;
+    assert_eq!(oldest.parse().expect("parse accel"), accel_sample);
+    assert_eq!(next_oldest.parse().expect("parse gps"), gps_sample);
 }
 
 fn wrap(message: &Message) -> RawSample {

@@ -496,3 +496,10 @@ where the other refactors do.
       has already removed it), what starts a session, and why silver carries every geometry twice.
       One rename came out of it: the CLI said `view-latest` for what the queue calls a peek, so the
       subcommand is `peek-latest` and the queue has one vocabulary.
+
+      `server` — the first crate the JavaScript rule reaches, so `docs/web.md` grew from a
+      sketch into the browser's own doc: what the picture means, what separates the three pages,
+      and what iOS Safari makes the recording page do. The ack-and-outbox protocol joined
+      `docs/telemetry.md`, since it is the wire's, and the crate's own rules — a page is a
+      directory, the queue as a port, why a configured redis is fatal — are a README. Nothing is
+      left in the Rust or the JavaScript.

@@ -78,3 +78,22 @@ answer — are too tight for a public-internet endpoint, so the timeouts here ar
 cross it and still bound a hang. A fractional blocking-pop timeout needs redis 6 or newer, so the
 test against a containerised queue pins an image new enough, as `FRACTIONAL_TIMEOUT_TAG`; the
 testcontainers module's own default is older.
+
+## An ack is what lets a sample be forgotten
+
+A sample goes into an outbox before it goes over the socket, and leaves the outbox only once the
+server has acked it. The server acks after it has taken responsibility — the sample is queued, or
+there is no queue configured and it was logged — so a page reload or a mid-flush disconnect
+re-sends the un-acked tail rather than losing samples that looked sent. A transient failure to
+queue withholds the ack, which is what gets that sample retried.
+
+The server acks malformed JSON and discards it. Re-sending cannot fix it, and withholding the ack
+would block the outbox behind a message that can never succeed.
+
+One ack retires one sample: delivery over a single socket is in order, so the frame's content
+carries nothing and each ack retires the oldest sample in flight. Re-sending a sample twice costs
+nothing either, since a drain deduplicates on the device and the instant.
+
+A page persists its outbox, so one reloaded mid-journey still delivers what it captured. Where a
+browser refuses to store it — quota, or private browsing — the page keeps capturing in memory rather
+than failing the recording.
