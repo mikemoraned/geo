@@ -443,4 +443,10 @@ where the other refactors do.
       `spikes/` is a record by definition.
 
       Swept so far: `shared` — the wire format and what a reading holds moved to
-      `docs/telemetry.md`, the crate's purpose to a README.
+      `docs/telemetry.md`, the crate's purpose to a README. `summary` — the report's layout
+      and what it does not read moved to a README, and the one property it relies on of the
+      store to `docs/medallion.md`.
+
+      The sweep taught the rule two sections as it went: text a tool reads — a CLI's help, a
+      doctest — is not a comment and needs no case made for it, and the rule stays out of the
+      prose, so no `.md` explains it or lists what survived.

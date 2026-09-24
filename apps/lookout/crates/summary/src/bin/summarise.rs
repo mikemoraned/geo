@@ -1,10 +1,3 @@
-//! `summarise`: report what a medallion store currently holds — every dataset defined for
-//! this app, in every layer, plus the gold artefacts.
-//!
-//! Reads no rows: the counts come from each parquet file's own footer, so this stays cheap
-//! on a store far too large to scan. A dataset nothing has written is reported as absent
-//! rather than left out, since what is missing is half of what the question is asking.
-
 use clap::Parser;
 use medallion::MedallionArgs;
 use summary::{Detail, report};

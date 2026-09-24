@@ -273,8 +273,10 @@ returns the same rows, in both directions. Declaring the types buys nothing but 
 place for the layout to be written down, and one that drifts silently when a key is renamed.
 
 This holds because dates are formatted `YYYY-MM-DD`, whose lexical and chronological order
-agree — a date key compared as a string is still ordered correctly. A partition key in a
-format without that property cannot be relied on this way.
+agree — a date key compared as a string is still ordered correctly. An id minted from an
+instant, `YYYYMMDDTHHMMSSZ`, agrees the same way, so partition values sort in the order they
+were written whichever of the two a dataset is keyed on. A partition key in a format without
+that property cannot be relied on this way.
 
 ### Bronze
 
