@@ -395,7 +395,7 @@ import arrow to name a crossing.
 
 ##### Shell split
 
-- [ ] Split `Shell` by what a platform can do, not by what it happens to have. One kind is
+- [-] Split `Shell` by what a platform can do, not by what it happens to have. One kind is
       standalone: it brings its crossings, asks for nothing, and needs only somewhere to send
       fixes. That is the board. The other is connected: it can call out, so it can be asked for
       a set it does not hold. That is a browser, and later a board with a radio. One trait
@@ -405,3 +405,11 @@ import arrow to name a crossing.
       an effect that never arrives. The thing to work out is what one core does with two of
       these, since crux builds one effect enum per app and a standalone shell's effects are a
       subset of a connected one's.
+
+      Deferred, with the work in the history rather than the tree: 96ae8094 made the split
+      and 026c8ae0 took it back out. What it settled is on those two commits. Two kinds of
+      platform are two apps, because crux builds one effect enum per app. The state does not
+      fork with them: one `Model` and one `Event` underneath. An effect a platform cannot
+      perform costs its shell a dead match arm, where an event it never sends costs nothing.
+      That is why the effects split and the events did not. Whoever picks this up starts
+      from that diff.
