@@ -460,3 +460,7 @@ where the other refactors do.
       `requeue_as_oldest`, `peek_newest_samples`), which is what their comments had said. A take
       removes and a peek does not, which `read` against `take` did not separate clearly enough. The
       one comment left is the rustls precondition on `connect`, which no signature can state.
+
+      `transport` — the upstream's own properties and what an extract keeps became
+      `docs/overture.md`, a sibling of `motis.md`; the immutability rules were already in
+      `docs/medallion.md`. No comment left, and none survived as prose beyond the clap help.

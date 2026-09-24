@@ -1,8 +1,3 @@
-//! Access to Overture Maps data via SedonaDB, queried in-process against one release —
-//! either the public S3 bucket or a local mirror of it ([`Release`]). Opens a SedonaDB
-//! context, registers a release's `theme=…/type=…` GeoParquet as tables, and runs queries
-//! over them.
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -11,16 +6,10 @@ use datafusion::execution::SendableRecordBatchStream;
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
-/// Default Overture release to read. Overture publishes monthly and only keeps the
-/// most recent releases on S3, so this needs bumping as old ones age out; override
-/// with `--release`.
 pub const DEFAULT_RELEASE: &str = "2026-06-17.0";
 
-/// The public Overture bucket's region; the bucket name embeds it too.
 const S3_REGION: &str = "us-west-2";
 
-/// One `theme=…/type=…` partition of an Overture release — the unit a release is laid out
-/// in, and so the unit an extract of it is read from and written back into.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OvertureType {
     pub theme: &'static str,
@@ -32,19 +21,13 @@ impl OvertureType {
         Self { theme, name }
     }
 
-    /// Roads, railways and the like; the rail subtype is what concerns us.
     pub const SEGMENT: Self = Self::new("transportation", "segment");
-    /// The points segments join at.
     pub const CONNECTOR: Self = Self::new("transportation", "connector");
-    /// Rivers, canals, lakes and coastline.
     pub const WATER: Self = Self::new("base", "water");
-    /// Administrative boundaries as areas — where a country's own outline comes from.
     pub const DIVISION_AREA: Self = Self::new("divisions", "division_area");
-    /// Administrative entities as points, localities among them.
     pub const DIVISION: Self = Self::new("divisions", "division");
 }
 
-/// Failure opening or querying Overture.
 #[derive(Debug, thiserror::Error)]
 pub enum OvertureError {
     #[error("datafusion error: {0}")]
@@ -53,10 +36,6 @@ pub enum OvertureError {
     ReadOptions(String),
 }
 
-/// Where a release is read from. A local mirror of the bucket holds the identical files
-/// under the identical layout, so it is the same release by a shorter path — which is why
-/// the id is recorded independently of the location, and provenance does not record which
-/// of the two a given extraction happened to read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Release {
     id: String,
@@ -64,7 +43,6 @@ pub struct Release {
 }
 
 impl Release {
-    /// The release as published, read from the public S3 bucket.
     pub fn published(id: impl Into<String>) -> Self {
         Self {
             id: id.into(),
@@ -72,9 +50,6 @@ impl Release {
         }
     }
 
-    /// A release read from a local mirror of the bucket's `release/` prefix, rooted at
-    /// `path`: a directory per release, named by its id, each holding that release's
-    /// `theme=…` directories.
     pub fn mirrored(id: impl Into<String>, path: impl Into<PathBuf>) -> Self {
         Self {
             id: id.into(),
@@ -82,14 +57,10 @@ impl Release {
         }
     }
 
-    /// The release identifier, as Overture publishes it.
     pub fn id(&self) -> &str {
         &self.id
     }
 
-    /// The directory holding one type's parquet files. A trailing slash so the reader
-    /// lists the partition's `.parquet` files (a duckdb-style `/*` glob fails
-    /// DataFusion's `.parquet` extension check).
     fn path(&self, overture_type: OvertureType) -> String {
         let OvertureType { theme, name } = overture_type;
         match &self.mirror {
@@ -101,8 +72,6 @@ impl Release {
         }
     }
 
-    /// Read options for this location: anonymous, unsigned requests against the public
-    /// bucket; nothing special for a mirror, which is just files on disk.
     fn read_options(&self) -> Result<GeoParquetReadOptions<'static>, OvertureError> {
         if self.mirror.is_some() {
             return Ok(GeoParquetReadOptions::default());
@@ -115,15 +84,12 @@ impl Release {
     }
 }
 
-/// A SedonaDB context pointed at one Overture release.
 pub struct Overture {
     ctx: SedonaContext,
     release: Release,
 }
 
 impl Overture {
-    /// Open a SedonaDB context for `release`. Nothing is read until a table is registered
-    /// or queried.
     pub fn open(release: Release) -> Self {
         Self {
             ctx: SedonaContext::new(),
@@ -131,13 +97,10 @@ impl Overture {
         }
     }
 
-    /// The release this reads.
     pub fn release(&self) -> &Release {
         &self.release
     }
 
-    /// Register one type's GeoParquet as a queryable table `table`. Replaces any
-    /// existing registration of it.
     pub async fn register(
         &self,
         overture_type: OvertureType,
@@ -154,13 +117,10 @@ impl Overture {
         Ok(())
     }
 
-    /// Run `sql` over the registered tables and collect the result.
     pub async fn sql(&self, sql: &str) -> Result<Vec<RecordBatch>, OvertureError> {
         Ok(self.ctx.sql(sql).await?.collect().await?)
     }
 
-    /// Run `sql` over the registered tables, streaming the results rather than collecting
-    /// them, for queries whose answer is too large to hold.
     pub async fn stream(&self, sql: &str) -> Result<SendableRecordBatchStream, OvertureError> {
         Ok(self.ctx.sql(sql).await?.execute_stream().await?)
     }
@@ -169,8 +129,6 @@ impl Overture {
 #[cfg(test)]
 mod tests {
     use super::*;
-    /// The S3 path embeds the release, theme and type, against the public `us-west-2`
-    /// bucket. (A pure string check — nothing is read.)
     #[test]
     fn a_published_release_reads_from_the_public_bucket() {
         let release = Release::published("2025-08-20.0");
@@ -181,9 +139,6 @@ mod tests {
         );
     }
 
-    /// A mirror is the same layout under a local root, so only the prefix differs: the
-    /// root stands in for `s3://overturemaps-…/release/`, and the release names a
-    /// directory under it.
     #[test]
     fn a_mirrored_release_reads_the_same_layout_from_disk() {
         let release = Release::mirrored("2025-08-20.0", "/mirror/release");
@@ -199,8 +154,6 @@ mod tests {
         );
     }
 
-    /// The anonymous read options are accepted (the option names are validated by
-    /// `from_table_options`, which errors on typos).
     #[test]
     fn published_read_options_are_valid() {
         Release::published("2025-08-20.0")

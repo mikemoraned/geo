@@ -1,8 +1,7 @@
 # Motis and the German timetable
 
-What the Motis server and the feed behind it can and cannot answer. The client that asks is
-`crates/motis`, whose own doc comments carry the implementation; this records the properties
-of the external system that shaped it. Running the server is
+What the Motis server and the feed behind it can and cannot answer: the properties of the
+external system, rather than of whatever asks it. Running the server is
 [`tools/motis-server`](../../../tools/motis-server/Justfile).
 
 ## There is no vehicle position, from any German open feed
@@ -65,10 +64,10 @@ Timetables are minute-resolution, and two legs of one trip can depart *different
 within the same minute. Keying on `(trip_id, departure)` therefore drops legs silently, with
 nothing to indicate it.
 
-## Two server quirks the client absorbs
+## Two server quirks a caller has to absorb
 
 Both are Motis behaviours rather than ours, and both look like an empty or nonsensical
 result rather than an error: Motis binds IPv4 only, so `localhost` resolving to `::1` never
 connects; and `map/trips` mis-parses time bounds carrying fractional seconds, swinging
-between empty and wildly oversized responses. `crates/motis/src/client.rs` handles each and
-explains it at the point of the fix.
+between empty and wildly oversized responses. A request is built around each: an explicit
+IPv4 host, and time bounds truncated to the second.

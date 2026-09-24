@@ -1,23 +1,11 @@
-//! Which country a place is in, from the country areas an extract took.
-//!
-//! The areas are the reference data's own: the `division_area` rows of subtype `country`,
-//! read out of bronze rather than approximated by a bounding box, so "which country is this
-//! point in" is answered by the same boundaries everything else here is derived against.
-//!
-//! Only the countries the store knows a projected zone for are loaded — an area of any
-//! other is not something a derivation could write geometry for, so it would only be able
-//! to answer with a country nothing can be done with.
-
 use geo::Contains;
 use geo_types::{Geometry, Point};
 use medallion::{Countries, Country, GEOMETRY, Query, Root};
 
-/// The newest extract's country areas.
 const NEWEST_EXTRACT: &str = "
     SELECT extract_id FROM extract_manifest ORDER BY extracted_at DESC LIMIT 1
 ";
 
-/// A failure loading the country areas.
 #[derive(Debug, thiserror::Error)]
 pub enum CountryError {
     #[error("reading the extracts: {0}")]
@@ -30,20 +18,17 @@ pub enum CountryError {
     NoExtract,
 }
 
-/// The area of each country the store knows a projected zone for.
 #[derive(Debug, Clone, Default)]
 pub struct CountryAreas {
     areas: Vec<(Country, Geometry<f64>)>,
 }
 
-/// One country area as the extract holds it.
 #[derive(Debug, serde::Deserialize)]
 struct Extracted {
     extract_id: String,
 }
 
 impl CountryAreas {
-    /// Load the areas from the newest extract in `root`.
     pub async fn newest(root: &Root) -> Result<Self, CountryError> {
         let query = Query::new(root.clone());
         query
@@ -97,7 +82,6 @@ mod tests {
 
     use super::*;
 
-    /// A square of `size` degrees with its south-west corner at the origin.
     fn square(size: f64) -> Geometry<f64> {
         Geometry::Polygon(polygon![
             (x: 0.0, y: 0.0),
@@ -119,8 +103,6 @@ mod tests {
         );
     }
 
-    /// A place outside every known country is not attributed to one: there is no zone to
-    /// project it into, and guessing the nearest would put geometry in the wrong metres.
     #[test]
     fn a_point_outside_every_area_is_in_no_country() {
         let areas = CountryAreas {
@@ -130,8 +112,6 @@ mod tests {
         assert_eq!(areas.containing(Point::new(20.0, 20.0)), None);
     }
 
-    /// A store nothing has been extracted into cannot place a point, and says so rather
-    /// than answering as though everywhere were unknown territory.
     #[tokio::test]
     async fn a_store_with_no_extract_cannot_place_a_point() {
         let tmp = tempfile::tempdir().expect("tempdir");

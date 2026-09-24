@@ -1,25 +1,3 @@
-//! Taking a point-in-time extract of Overture into bronze.
-//!
-//! An extraction reads one release, restricted to one country, and writes the rows it
-//! finds in Overture's own shape under its own id — plus one manifest row saying what was
-//! taken, from which release, and over what window. The rows themselves gain a single
-//! column, `extract_id`, joining them back to that manifest row.
-//!
-//! An extraction can also be taken again from what the manifest recorded, under the id it
-//! was first taken under: a release is immutable, so the same release read again over the
-//! same window is the same rows. That is how a store holding the manifest but not the rows
-//! is filled, and it is a different operation from taking a new extract, which is why the
-//! two are separate entry points rather than one with a flag.
-//!
-//! Every theme goes under one id in a single extraction, because they are read together:
-//! the crossings derivation joins rail to water, and clips both against the country
-//! boundary the window was measured from. Splitting them across extractions would let a
-//! join span two releases.
-//!
-//! What is *not* done here is any shaping: no flattening of Overture's `bbox` struct, no
-//! re-encoding of geometry, no dropping of columns a current query happens not to read.
-//! Bronze keeps what arrived, and the derivations that read it shape it as they need.
-
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
@@ -31,32 +9,20 @@ use medallion_model::ExtractManifestRow;
 
 use crate::overture::{Overture, OvertureError, OvertureType};
 
-/// Rail `class`es left out of the extract: street `tram` lines aren't the transport we
-/// care about, and excluding them here keeps their connectors out too.
 const EXCLUDED_CLASSES: &[&str] = &["tram"];
 
-/// The format an id generated from an instant takes: compact UTC, so ids sort
-/// chronologically and carry no character a path or a column name would object to.
-const ID_FORMAT: &str = "%Y%m%dT%H%M%SZ";
+const COMPACT_UTC: &str = "%Y%m%dT%H%M%SZ";
 
-/// Every extraction a store has recorded, newest first.
 const RECORDED: &str = "SELECT * FROM extract_manifest ORDER BY extracted_at DESC";
 
-/// Identifies one extraction, and with it one immutable set of extracted rows.
-///
-/// An extract is keyed by an id rather than by a date because it is the unit of
-/// immutability: re-extracting the same release over the same window is a new id, never a
-/// replacement of an existing one.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtractId(String);
 
 impl ExtractId {
-    /// An id for an extraction beginning at `at`.
     pub fn at(at: DateTime<Utc>) -> Self {
-        Self(at.format(ID_FORMAT).to_string())
+        Self(at.format(COMPACT_UTC).to_string())
     }
 
-    /// An existing id, rejecting anything that could not name a partition.
     pub fn new(id: impl Into<String>) -> Result<Self, medallion::PathError> {
         let id = id.into();
         PartitionValue::new(id.clone())?;
@@ -78,7 +44,6 @@ impl Display for ExtractId {
     }
 }
 
-/// The extractions a store has recorded, newest first.
 pub async fn recorded(root: &Root) -> Result<Vec<ExtractManifestRow>, ExtractError> {
     let query = Query::new(root.clone());
     query
@@ -87,7 +52,6 @@ pub async fn recorded(root: &Root) -> Result<Vec<ExtractManifestRow>, ExtractErr
     Ok(query.rows(RECORDED).await?)
 }
 
-/// What the newest extraction took.
 pub async fn newest(root: &Root) -> Result<ExtractManifestRow, ExtractError> {
     recorded(root)
         .await?
@@ -96,7 +60,6 @@ pub async fn newest(root: &Root) -> Result<ExtractManifestRow, ExtractError> {
         .ok_or(ExtractError::NoExtract)
 }
 
-/// What the extraction with `id` took.
 pub async fn recorded_as(root: &Root, id: &ExtractId) -> Result<ExtractManifestRow, ExtractError> {
     recorded(root)
         .await?
@@ -105,7 +68,6 @@ pub async fn recorded_as(root: &Root, id: &ExtractId) -> Result<ExtractManifestR
         .ok_or_else(|| ExtractError::NoSuchExtract { id: id.clone() })
 }
 
-/// Failure taking an extract.
 #[derive(Debug, thiserror::Error)]
 pub enum ExtractError {
     #[error("querying Overture: {0}")]
@@ -147,7 +109,6 @@ pub enum ExtractError {
     },
 }
 
-/// What one extraction produced.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Extraction {
     pub id: ExtractId,
@@ -155,7 +116,6 @@ pub struct Extraction {
     pub rows: Vec<(OvertureType, usize)>,
 }
 
-/// Takes extracts of one release into one store.
 pub struct Extractor<'a> {
     overture: &'a Overture,
     root: &'a Root,
@@ -166,11 +126,6 @@ impl<'a> Extractor<'a> {
         Self { overture, root }
     }
 
-    /// Extract everything the crossings pipeline reads, for `country`, under a single id.
-    ///
-    /// The window is the country's own bounding box, taken from the release's boundary for
-    /// it, so it is a property of the release rather than of whatever has been observed so
-    /// far. Narrowing to an area of interest belongs to the derivations reading this.
     pub async fn extract(
         &self,
         id: ExtractId,
@@ -180,22 +135,12 @@ impl<'a> Extractor<'a> {
         self.register_themes().await?;
         let window = self.country_window(country).await?;
         let rows = self.write_types(&id, country, &window, at).await?;
-        self.write_manifest(&id, country, at, &window).await?;
+        self.record_extract_as_complete(&id, country, at, &window)
+            .await?;
 
         Ok(Extraction { id, window, rows })
     }
 
-    /// Take a recorded extraction again: the same release, country and window, written back
-    /// under the id it was taken under.
-    ///
-    /// This is how a store that has the manifest but not the rows is filled — the rows are
-    /// re-derivable from what the manifest records, since a release never changes. No
-    /// manifest row is written: the one being read is already the record of this extract,
-    /// and it names the instant the extraction was originally taken.
-    ///
-    /// An extract that already holds rows is not re-fetched. Extracts are immutable, so
-    /// there is nothing here that could replace them, and writing again would append a
-    /// second copy of every row.
     pub async fn backfill(
         &self,
         recorded: &ExtractManifestRow,
@@ -235,7 +180,6 @@ impl<'a> Extractor<'a> {
         Ok(Extraction { id, window, rows })
     }
 
-    /// Register every Overture type an extraction reads.
     async fn register_themes(&self) -> Result<(), ExtractError> {
         for (overture_type, table) in [
             (OvertureType::DIVISION_AREA, "division_area"),
@@ -249,8 +193,6 @@ impl<'a> Extractor<'a> {
         Ok(())
     }
 
-    /// Write every type the crossings pipeline reads, for one country over one window,
-    /// under a single id.
     async fn write_types(
         &self,
         id: &ExtractId,
@@ -262,7 +204,7 @@ impl<'a> Extractor<'a> {
         let of_country = format!("country = '{}'", country.code());
         let rail = format!(
             "subtype = 'rail' AND {class} AND {in_window}",
-            class = class_filter(),
+            class = excluding_classes(),
         );
 
         let mut rows = Vec::new();
@@ -294,8 +236,6 @@ impl<'a> Extractor<'a> {
         Ok(rows)
     }
 
-    /// Extract one type's rows matching `predicate` into the extract, verbatim but for the
-    /// `extract_id` joining them to the manifest.
     async fn write(
         &self,
         id: &ExtractId,
@@ -321,7 +261,6 @@ impl<'a> Extractor<'a> {
             .rows)
     }
 
-    /// The bounding box of `country`'s own boundary in this release.
     async fn country_window(&self, country: Country) -> Result<Rect<f64>, ExtractError> {
         let batches = self
             .overture
@@ -357,9 +296,7 @@ impl<'a> Extractor<'a> {
         ))
     }
 
-    /// Record what this extraction took. Written last: a manifest row is the claim that an
-    /// extract is complete, so it must not exist before the rows it describes.
-    async fn write_manifest(
+    async fn record_extract_as_complete(
         &self,
         id: &ExtractId,
         country: Country,
@@ -384,7 +321,6 @@ impl<'a> Extractor<'a> {
     }
 }
 
-/// The window a manifest row records, as the rectangle the predicates are built from.
 fn window_of(recorded: &ExtractManifestRow) -> Rect<f64> {
     Rect::new(
         Coord {
@@ -398,8 +334,6 @@ fn window_of(recorded: &ExtractManifestRow) -> Rect<f64> {
     )
 }
 
-/// A predicate keeping rows whose Overture `bbox` overlaps `window`. Overture stores the
-/// envelope on every row, so this prunes row groups before any geometry is decoded.
 fn bbox_overlaps(window: &Rect<f64>) -> String {
     format!(
         "bbox.xmin <= {max_lon} AND bbox.xmax >= {min_lon}
@@ -411,10 +345,6 @@ fn bbox_overlaps(window: &Rect<f64>) -> String {
     )
 }
 
-/// A predicate keeping connectors in the window that a kept rail segment refers to.
-///
-/// Restricting to referenced connectors rather than to every connector in the window is
-/// what keeps this to rail: the window holds every road junction in the country too.
 fn referenced_connectors(in_window: &str, rail: &str) -> String {
     format!(
         "{in_window}
@@ -425,10 +355,7 @@ fn referenced_connectors(in_window: &str, rail: &str) -> String {
     )
 }
 
-/// A SQL predicate excluding [`EXCLUDED_CLASSES`], keeping null-class rows (`coalesce` maps
-/// a null class to `''`, which is never an excluded class). `TRUE` when nothing is excluded,
-/// so it composes into an `AND` chain unconditionally.
-fn class_filter() -> String {
+fn excluding_classes() -> String {
     if EXCLUDED_CLASSES.is_empty() {
         return "TRUE".to_string();
     }
@@ -475,8 +402,6 @@ mod tests {
         (tmp, root)
     }
 
-    /// A recorded extraction comes back as it was written, which is what makes an extract
-    /// re-fetchable from the manifest alone.
     #[tokio::test]
     async fn the_newest_recorded_extraction_is_the_last_one_taken() {
         let (_tmp, root) = store_recording(&[
@@ -515,8 +440,6 @@ mod tests {
         assert!(matches!(err, Err(ExtractError::NoSuchExtract { .. })));
     }
 
-    /// A store nothing has been extracted into has no manifest to read, and so nothing to
-    /// take again.
     #[tokio::test]
     async fn a_store_with_no_manifest_has_no_extraction_to_take_again() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -531,8 +454,6 @@ mod tests {
         ));
     }
 
-    /// Re-fetching an extract whose rows are already there would append a second copy of
-    /// every one of them: bronze has no replace, so this is refused rather than doubled.
     #[tokio::test]
     async fn an_extract_already_in_the_store_is_not_taken_again() {
         let recorded = manifest_row("20260727T193628Z", 19, "2026-06-17.0");
@@ -554,8 +475,6 @@ mod tests {
         assert!(matches!(err, Err(ExtractError::AlreadyPresent { .. })));
     }
 
-    /// An extract's id names rows taken from one release, so filling it from a different
-    /// release would put rows under an id claiming provenance they do not have.
     #[tokio::test]
     async fn an_extract_is_not_filled_from_a_release_it_was_not_taken_from() {
         let recorded = manifest_row("20260727T193628Z", 19, "2026-06-17.0");
@@ -576,7 +495,6 @@ mod tests {
         assert_eq!(ExtractId::at(at).to_string(), "20260727T204530Z");
     }
 
-    /// Ids sort chronologically, so the latest extract of a release is the last one.
     #[test]
     fn ids_from_instants_sort_in_the_order_they_were_taken() {
         let earlier = ExtractId::at(Utc.with_ymd_and_hms(2026, 7, 27, 20, 45, 30).unwrap());
@@ -595,8 +513,6 @@ mod tests {
         );
     }
 
-    /// Overlap, not containment: a river running off the edge of the window still crosses
-    /// rail inside it, so a row is kept when its envelope touches the window at all.
     #[test]
     fn the_window_predicate_keeps_rows_whose_envelope_overlaps_it() {
         let predicate = bbox_overlaps(&window());
@@ -607,8 +523,6 @@ mod tests {
         assert!(predicate.contains("bbox.ymax >= 47.2"));
     }
 
-    /// Connectors are restricted to those a kept rail segment names, so the country's road
-    /// junctions don't come along with them.
     #[test]
     fn connectors_are_restricted_to_those_rail_segments_refer_to() {
         let predicate = referenced_connectors(&bbox_overlaps(&window()), "subtype = 'rail'");
@@ -619,12 +533,12 @@ mod tests {
     }
 
     #[test]
-    fn the_class_filter_excludes_configured_classes_keeping_nulls() {
+    fn excluded_classes_are_filtered_out_and_nulls_kept() {
         assert!(
             !EXCLUDED_CLASSES.is_empty(),
             "expects at least one exclusion"
         );
-        let filter = class_filter();
+        let filter = excluding_classes();
 
         assert!(filter.starts_with("coalesce(class, '') NOT IN ("));
         for class in EXCLUDED_CLASSES {
