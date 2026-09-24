@@ -1,14 +1,3 @@
-//! The bronze capture log: every `TripSegment` a poll returns, written verbatim as one
-//! parquet file per poll.
-//!
-//! Bronze is immutable and sample-shaped (see `docs/medallion.md`), so a poll never
-//! rewrites an earlier file: it lands a new one under its own `polled_date`, named for the
-//! instant of the poll. Duplication across overlapping polls is intentional — the same
-//! scheduled leg re-seen is a fresh row — and dedup happens downstream in silver.
-//!
-//! Times are kept as instants and the polyline as the Google-encoded string the service
-//! sent, since bronze records what arrived rather than a normalised form of it.
-
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
@@ -18,7 +7,6 @@ use motis_openapi_progenitor::types::TripSegment;
 
 use crate::client::TripDetails;
 
-/// Failure appending to the bronze capture log.
 #[derive(Debug, thiserror::Error)]
 pub enum BronzeError {
     #[error("partitioning the capture log: {0}")]
@@ -27,8 +15,6 @@ pub enum BronzeError {
     Write(#[from] medallion::AppendError),
 }
 
-/// One polled segment as the store holds it: the trip it belongs to, its resolved agency
-/// and train number, its endpoints, its times and its geometry as the encoded polyline.
 fn segment_row(
     captured_at: DateTime<Utc>,
     segment: &TripSegment,
@@ -67,7 +53,6 @@ fn segment_row(
     }
 }
 
-/// A handle on the bronze capture log within a medallion store.
 #[derive(Debug, Clone)]
 pub struct SegmentLog {
     root: Root,
@@ -78,7 +63,6 @@ impl SegmentLog {
         Self { root }
     }
 
-    /// The partition a poll at `captured_at` writes into.
     fn partition(
         &self,
         captured_at: DateTime<Utc>,
@@ -89,15 +73,10 @@ impl SegmentLog {
             .on_date(captured_at.date_naive())?)
     }
 
-    /// The file one poll at `captured_at` writes. Readers query the dataset rather than
-    /// opening its files, so this is only needed where a poll has to be recognised as
-    /// already logged.
     pub fn poll_file(&self, captured_at: DateTime<Utc>) -> Result<std::path::PathBuf, BronzeError> {
         Ok(self.partition(captured_at)?.batch_file(captured_at))
     }
 
-    /// Write one poll's `segments` as a single parquet file, returning how many rows
-    /// landed. An empty poll writes nothing, so no empty files accumulate.
     pub async fn append(
         &self,
         captured_at: DateTime<Utc>,
@@ -112,8 +91,6 @@ impl SegmentLog {
         self.append_rows(captured_at, &rows).await
     }
 
-    /// Write already-flattened `rows` as one poll's file, for a caller holding rows rather
-    /// than the service's own response shape.
     pub async fn append_rows(
         &self,
         captured_at: DateTime<Utc>,
@@ -133,7 +110,6 @@ mod tests {
 
     use super::*;
 
-    /// The captured real 4-segment, mode-varied fixture (rail/subway/tram/bus).
     fn fixture_segments() -> Vec<TripSegment> {
         serde_json::from_str(include_str!("../tests/fixtures/trips.json"))
             .expect("parse trips fixture")
@@ -173,7 +149,6 @@ mod tests {
     async fn the_polyline_is_stored_verbatim() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let log = SegmentLog::new(Root::new(tmp.path()));
-        // Whole milliseconds: instants are stored at millisecond precision.
         let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
         let segments = fixture_segments();
 
@@ -194,8 +169,6 @@ mod tests {
         );
     }
 
-    /// Two polls in the same second would collide on one filename; different instants get
-    /// their own files, so neither poll's capture is lost.
     #[tokio::test]
     async fn separate_polls_write_separate_files() {
         let tmp = tempfile::tempdir().expect("tempdir");

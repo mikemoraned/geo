@@ -1,6 +1,3 @@
-//! Shared setup for the motis integration tests: a throwaway redis (testcontainers) and
-//! helpers to seed GPS samples the way the server's `RedisSink` does.
-
 use std::time::Duration;
 
 use domain::Gps;
@@ -12,7 +9,6 @@ use testcontainers::{ContainerAsync, ImageExt};
 use testcontainers_modules::redis::{REDIS_PORT, Redis};
 use uuid::Uuid;
 
-/// Motis `mode`s the poll keeps — mainline and regional rail.
 pub const RAIL_MODES: [&str; 6] = [
     "HIGHSPEED_RAIL",
     "LONG_DISTANCE",
@@ -22,7 +18,6 @@ pub const RAIL_MODES: [&str; 6] = [
     "RAIL",
 ];
 
-/// Start a throwaway redis container, returning it (drop = stop) and its URL.
 pub async fn start_redis() -> (ContainerAsync<Redis>, String) {
     let container = Redis::default()
         .with_tag("7-alpine")
@@ -37,7 +32,6 @@ pub async fn start_redis() -> (ContainerAsync<Redis>, String) {
     (container, format!("redis://{host}:{port}"))
 }
 
-/// Wait until redis answers a `PING` (the host port-forward can lag `start()`).
 pub async fn wait_ready(url: &str) -> MultiplexedConnection {
     let client = redis::Client::open(url).expect("open client");
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
@@ -58,7 +52,6 @@ pub async fn wait_ready(url: &str) -> MultiplexedConnection {
     }
 }
 
-/// A GPS `Message` at time `t` (epoch ms) and position `(lat, lon)`.
 pub fn gps(id: u128, t: i64, lat: f64, lon: f64) -> Message {
     Message::Version1(V1Message::Gps(GpsReading {
         id: Uuid::from_u128(id),
@@ -69,7 +62,6 @@ pub fn gps(id: u128, t: i64, lat: f64, lon: f64) -> Message {
     }))
 }
 
-/// LPUSH a message the way the server's `RedisSink` does: as a `RawSample` envelope.
 pub async fn lpush(conn: &mut MultiplexedConnection, message: &Message) {
     let payload = serde_json::to_string(message).expect("serialize message");
     let item = serde_json::to_string(&RawSample::new(1_700_000_050_000, payload))
@@ -82,7 +74,6 @@ pub async fn lpush(conn: &mut MultiplexedConnection, message: &Message) {
         .expect("lpush");
 }
 
-/// One row of the bronze capture log, reduced to the fields the poll tests assert on.
 #[derive(Debug, serde::Deserialize)]
 pub struct CapturedSegment {
     pub mode: String,
@@ -90,7 +81,6 @@ pub struct CapturedSegment {
     pub train_number: Option<u32>,
 }
 
-/// Read back what a poll captured, the way any other reader would: as a table.
 pub async fn captured_segments(root: &medallion::Root) -> Vec<CapturedSegment> {
     let query = medallion::Query::new(root.clone());
     query

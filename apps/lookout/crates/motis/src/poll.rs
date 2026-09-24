@@ -1,8 +1,3 @@
-//! The core of one poll tick, independent of the CLI: refresh a rolling GPS window from
-//! the latest telemetry samples, then query Motis for trips in its buffered bbox and
-//! append them to the bronze capture log. The `motis_poll` binary is a thin loop around
-//! [`poll_once`]; tests drive it directly against a real redis and a mock Motis server.
-
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -16,25 +11,19 @@ use crate::bronze::{BronzeError, SegmentLog};
 use crate::client::{MotisClient, MotisError, TimeWindow, TripDetails};
 use crate::window::{Position, PositionWindow};
 
-/// Knobs for one poll tick.
 #[derive(Debug, Clone)]
 pub struct PollConfig {
-    /// Only ingest GPS samples captured within this age of `now`.
     pub recent_lookback: Duration,
-    /// Half-width of the `map/trips` time window queried around `now`.
     pub query_window_half: Duration,
-    /// Motis zoom level (higher adds subway/tram/bus on top of long-distance rail).
     pub zoom: f64,
-    /// How many of the most-recent queued samples to scan for GPS.
     pub sample_limit: usize,
 }
 
-/// The result of one [`poll_once`] tick.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PollOutcome {
-    /// No GPS in the recent window, so the Motis query was skipped.
-    NoRecentGps { ingested: usize },
-    /// Queried Motis and wrote `segments` rows to the bronze capture log.
+    NoRecentGps {
+        ingested: usize,
+    },
     Queried {
         ingested: usize,
         positions: usize,
@@ -42,7 +31,6 @@ pub enum PollOutcome {
     },
 }
 
-/// A failure during a poll tick.
 #[derive(Debug, thiserror::Error)]
 pub enum PollError {
     #[error("reading telemetry queue: {0}")]
@@ -53,8 +41,6 @@ pub enum PollError {
     Log(#[from] BronzeError),
 }
 
-/// One poll: ingest the latest recent GPS into `window`, then (if any) log the Motis
-/// trips in its buffered bbox over a short window around `now`.
 pub async fn poll_once(
     now: DateTime<Utc>,
     conn: &mut MultiplexedConnection,
@@ -101,9 +87,6 @@ pub async fn poll_once(
     })
 }
 
-/// Whether `mode` is a train we track — mainline or regional rail. Drops urban transit
-/// (tram/subway/metro), road modes (bus/coach), and everything non-rail, so the capture is
-/// trains rather than all transit.
 fn is_rail(mode: &Mode) -> bool {
     matches!(
         mode,
@@ -116,11 +99,6 @@ fn is_rail(mode: &Mode) -> bool {
     )
 }
 
-/// Resolve the [`TripDetails`] (agency + train number) of each distinct `trip_id` in
-/// `segments` via the Motis `trip` endpoint, keyed by `trip_id`. Stateless — no caching
-/// across ticks, since Motis is local and the poll interval is coarse. A trip whose lookup
-/// fails is omitted (its row records no agency or train number); the failure is logged, never
-/// fatal, so a resolve error can't drop the segment.
 async fn resolve_details(
     client: &MotisClient,
     segments: &[TripSegment],
@@ -142,8 +120,6 @@ async fn resolve_details(
     details
 }
 
-/// The `(t, lat, lon)` of a sample if it is a GPS fix, else `None` (accel/session or an
-/// unparseable payload are skipped).
 fn sample_gps(raw: &RawSample) -> Option<(i64, f64, f64)> {
     match raw.parse().ok()? {
         Message::Version0(V0Message::Gps(r)) | Message::Version1(V1Message::Gps(r)) => {

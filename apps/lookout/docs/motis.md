@@ -7,7 +7,7 @@ external system, rather than of whatever asks it. Running the server is
 ## There is no vehicle position, from any German open feed
 
 `GET /api/v1/map/trips` returns stop-to-stop legs (`TripSegment[]`) carrying mode, colour,
-from/to places, scheduled and realtime times, and a Google-encoded polyline. A train's
+from/to places, scheduled and realtime times, and a Google-encoded polyline at precision 5. A train's
 position at an instant is **interpolated** — walk the leg whose departure/arrival spans that
 instant along its decoded polyline — and never a reported GPS position.
 
@@ -46,6 +46,13 @@ What it still does not give:
 static timetable makes around 99.9% of trip updates fail to resolve, because the trip and
 stop ids differ. DELFI static with DELFI RT resolves 99.96%, and around 80% of segments in a
 city-sized box come back realtime-corrected.
+
+## Zoom selects modes, not detail
+
+`map/trips` takes a zoom, and raising it widens what comes back rather than refining it: urban
+transit — subway, tram, bus — appears on top of the long-distance and regional rail a low zoom
+answers with. A query therefore asks for the modes it wants by the zoom it sends, and filters the
+rest out of the answer.
 
 ## Train number and agency need a second call
 

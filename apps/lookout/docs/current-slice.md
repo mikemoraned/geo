@@ -464,3 +464,7 @@ where the other refactors do.
       `transport` — the upstream's own properties and what an extract keeps became
       `docs/overture.md`, a sibling of `motis.md`; the immutability rules were already in
       `docs/medallion.md`. No comment left, and none survived as prose beyond the clap help.
+
+      `motis` — most of what the comments said was already in `docs/motis.md`; what was missing
+      (polyline precision, what zoom selects) joined it, the poll-to-ingest shape went to a
+      crate README, and overlapping polls being collapsed downstream to `docs/architecture.md`.

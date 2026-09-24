@@ -1,9 +1,3 @@
-//! `motis_poll`: polls recent GPS positions off the redis telemetry queue, queries the
-//! local Motis server for train trips within a buffered bounding box around them, and
-//! writes the returned segments to the bronze capture log, one parquet file per poll.
-//!
-//! Runs a continuous loop until interrupted; Ctrl-C stops it cleanly, between polls.
-
 use std::time::Duration;
 
 use chrono::Utc;
@@ -21,10 +15,8 @@ const DEFAULT_WINDOW_AGE_MINS: u64 = 30;
 const DEFAULT_RECENT_LOOKBACK_MINS: u64 = 5;
 const DEFAULT_ZOOM: f64 = 8.0;
 
-/// How many of the most-recent queued samples to scan for GPS each tick.
 const SAMPLE_LIMIT: usize = 1000;
 
-/// Half-width (minutes) of the `map/trips` time window queried around now.
 const QUERY_WINDOW_HALF_MINS: u64 = 5;
 
 #[derive(Parser)]
@@ -60,7 +52,6 @@ async fn main() {
     let args = Args::parse();
     let root = args.medallion.root().expect("locate the medallion store");
 
-    // rustls needs a process-global crypto provider before any `rediss://` connection.
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("install rustls crypto provider");

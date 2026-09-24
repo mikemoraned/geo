@@ -1,11 +1,3 @@
-//! Integration test for the poll core [`motis::poll::poll_once`]: GPS samples on a real
-//! redis (testcontainers) drive a real [`MotisClient`] against a mock Motis server
-//! (wiremock) and land in a real bronze capture log. Exercises the whole tick — recent-GPS
-//! filtering, the buffered-bbox query, and writing the poll's segments — end to end.
-//!
-//! Requires Docker (redis); the `_docker`-suffixed name is skipped by the no-docker
-//! profile. The Motis server is mocked, so no live Motis is needed.
-
 mod common;
 
 use std::time::Duration;
@@ -22,10 +14,7 @@ use uuid::Uuid;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-/// The captured real 4-segment, mode-varied fixture (rail/subway/tram/bus). The poll
-/// filters to rail, so only the one rail segment is kept.
 const TRIPS_FIXTURE: &str = include_str!("fixtures/trips.json");
-/// A captured real long-distance `trip` itinerary: `DB Fernverkehr AG`, train number 2569.
 const TRIP_FIXTURE: &str = include_str!("fixtures/trip.json");
 
 fn accel(id: u128, t: i64) -> Message {
@@ -53,7 +42,6 @@ async fn mock_motis(segments_json: &str) -> MockServer {
         .expect(1)
         .mount(&server)
         .await;
-    // Every `trip` lookup (one per distinct tripId) resolves to the same itinerary.
     Mock::given(method("GET"))
         .and(path("/api/v4/trip"))
         .respond_with(
@@ -64,7 +52,6 @@ async fn mock_motis(segments_json: &str) -> MockServer {
     server
 }
 
-/// How many fixture segments are rail — the count the poll keeps after filtering.
 fn rail_fixture_len() -> usize {
     serde_json::from_str::<serde_json::Value>(TRIPS_FIXTURE)
         .expect("parse fixture")
@@ -82,9 +69,10 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
 
     let now = Utc::now();
     let now_ms = now.timestamp_millis();
-    // Pushed oldest→newest (LPUSH prepends, so index 0 ends up newest).
-    lpush(&mut conn, &accel(1, now_ms)).await; // not GPS → ignored
-    lpush(&mut conn, &gps(2, now_ms - 20 * 60_000, 50.0, 8.5)).await; // >5min old → filtered
+    let not_a_fix = accel(1, now_ms);
+    let older_than_the_lookback = gps(2, now_ms - 20 * 60_000, 50.0, 8.5);
+    lpush(&mut conn, &not_a_fix).await;
+    lpush(&mut conn, &older_than_the_lookback).await;
     lpush(&mut conn, &gps(3, now_ms - 2 * 60_000, 50.106, 8.662)).await;
     lpush(&mut conn, &gps(4, now_ms - 60_000, 50.133, 8.741)).await;
     lpush(&mut conn, &gps(5, now_ms, 50.122, 8.710)).await;
@@ -106,9 +94,6 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
         .await
         .expect("poll once");
 
-    // The accel sample and the 20-min-old GPS are excluded; the three recent GPS are
-    // ingested and their bbox queried, returning four segments of which only the one rail
-    // segment survives the filter.
     assert_eq!(
         outcome,
         PollOutcome::Queried {
@@ -118,7 +103,6 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
         }
     );
 
-    // Only the rail segment is persisted, with its resolved agency and train number.
     let captured = captured_segments(&Root::new(store.path())).await;
     assert_eq!(captured.len(), rail_fixture_len());
     assert!(

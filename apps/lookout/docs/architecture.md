@@ -17,7 +17,8 @@ draining is destructive, so what has not been drained is the only copy.
 
 The other two bronze writers pull rather than receive. `motis_poll` queries a local Motis
 server for trains near recently logged positions and appends each poll to a capture log; see
-[motis.md](motis.md). `extract` takes point-in-time Overture extracts of a country's rail,
+[motis.md](motis.md). Polls overlap, so the same scheduled leg is captured many times over — a
+capture is what one poll saw, and collapsing those into one row per leg is silver's work. `extract` takes point-in-time Overture extracts of a country's rail,
 water, and administrative divisions; see [overture.md](overture.md).
 
 ## Derivation

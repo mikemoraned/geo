@@ -1,11 +1,3 @@
-//! Derive the silver `train_segment` dataset from the bronze capture log: collapse the
-//! duplication-allowed rows down to one per scheduled leg (newest capture wins, so its
-//! realtime-corrected times survive), decode each Google polyline to a lat/lon line, and
-//! store it as WKB alongside the same line projected into metres.
-//!
-//! Silver holds one current row per leg, so a run rewrites each `departure_date` partition
-//! it touches: re-running over unchanged bronze produces an identical dataset.
-
 use chrono::{DateTime, Utc};
 use domain::TrainNumber;
 use geo_types::{LineString, Point};
@@ -13,17 +5,10 @@ use medallion::{Countries, GeoRow, Query, Root};
 use medallion_model::TrainSegmentRow;
 use serde::{Deserialize, Serialize};
 
-/// Precision the Motis `map/trips` polylines are encoded at.
 const POLYLINE_PRECISION: u32 = 5;
 
-/// The capture log under its query name.
 const CAPTURED: &str = "captured";
 
-/// One row per scheduled leg, newest capture kept.
-///
-/// A leg's identity is `(trip_id, from_stop_id, departure)`: `departure` alone is not
-/// unique per trip, since minute-resolution timetables let two legs of one trip depart
-/// different stops in the same minute.
 const DEDUPED: &str = "
     SELECT * EXCLUDE (rank)
     FROM (
@@ -35,20 +20,14 @@ const DEDUPED: &str = "
     WHERE rank = 1
 ";
 
-/// What one ingest run did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct IngestOutcome {
-    /// Rows read from the capture log.
     pub read: usize,
-    /// Distinct legs after dedup.
     pub deduped: usize,
-    /// Partitions rewritten.
     pub partitions: usize,
-    /// Legs starting outside every country the store knows, and so not written.
     pub unplaceable: usize,
 }
 
-/// A failure deriving the dataset.
 #[derive(Debug, thiserror::Error)]
 pub enum IngestError {
     #[error("querying the capture log: {0}")]
@@ -59,8 +38,6 @@ pub enum IngestError {
     Write(#[from] medallion::TableError),
 }
 
-/// One deduped leg as the query returns it: the columns the silver dataset holds, plus the
-/// still-encoded `polyline` the geometry columns are built from.
 #[derive(Debug, Serialize, Deserialize)]
 struct Leg {
     trip_id: String,
@@ -97,14 +74,6 @@ impl From<&Leg> for TrainSegmentRow {
     }
 }
 
-/// Derive the silver dataset from the bronze capture log in the same store.
-///
-/// The country each leg runs in is looked up from where it starts, since that fixes the CRS
-/// of its projected geometry — a property of the leg rather than of the run that ingested it.
-/// A leg starting outside every country the store knows is reported rather than written.
-///
-/// Dedup and partitioning are one SQL query each against the capture log; the polyline
-/// decoding and projection either query does not express happen per partition in Rust.
 pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOutcome, IngestError> {
     let query = Query::new(root.clone());
     if !query
@@ -152,14 +121,12 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
     Ok(outcome)
 }
 
-/// Where a leg starts, which decides the zone its projected geometry is written in.
 fn starts_from(line: &LineString<f64>) -> Point<f64> {
     line.points()
         .next()
         .expect("a polyline decodes to at least one point")
 }
 
-/// Decode a Google-encoded polyline to a `(lon, lat)` line.
 fn decode_polyline(encoded: &str) -> Result<LineString<f64>, IngestError> {
     polyline::decode_polyline(encoded, POLYLINE_PRECISION)
         .map_err(|e| IngestError::Polyline(e.to_string()))
@@ -178,8 +145,6 @@ mod tests {
 
     use super::*;
 
-    /// The fixture's legs all run in Germany, which the real country areas would say of
-    /// them; these tests are about dedup and geometry, not about placing.
     struct Everywhere(Country);
 
     impl Countries for Everywhere {
@@ -188,7 +153,6 @@ mod tests {
         }
     }
 
-    /// Nowhere is in any country the store knows.
     struct Nowhere;
 
     impl Countries for Nowhere {
@@ -205,8 +169,6 @@ mod tests {
         serde_json::from_str(include_str!("../tests/fixtures/trips.json")).expect("parse fixture")
     }
 
-    /// Seed the capture log with a poll of the fixture segments at each instant, then
-    /// derive from it.
     async fn ingest_polls(root: &Root, polls: &[DateTime<Utc>]) -> IngestOutcome {
         let log = SegmentLog::new(root.clone());
         for captured_at in polls {
@@ -217,7 +179,6 @@ mod tests {
         ingest(root, &germany()).await.expect("ingest")
     }
 
-    /// The derived dataset, registered the way any other reader would register it.
     async fn derived(root: &Root) -> Query {
         let query = Query::new(root.clone());
         query
@@ -227,7 +188,6 @@ mod tests {
         query
     }
 
-    /// Both geometry columns of the derived dataset.
     async fn geometry_batches(root: &Root) -> Vec<RecordBatch> {
         derived(root)
             .await
@@ -240,7 +200,6 @@ mod tests {
             .expect("query geometries")
     }
 
-    /// The line held in `column` of the first row of `batch`.
     fn first_line(batch: &RecordBatch, column: &str) -> Vec<(f64, f64)> {
         let geometries = medallion::geometries(batch, column).expect("geometries");
         let geo_types::Geometry::LineString(line) = &geometries[0] else {
@@ -325,8 +284,6 @@ mod tests {
         assert_eq!(first_line(&batches[0], PROJECTED_GEOMETRY).len(), expected);
     }
 
-    /// The lat/lon column holds degrees; the projected one holds metres in the German
-    /// zone, whose eastings and northings are orders of magnitude larger.
     #[tokio::test]
     async fn the_projected_column_holds_metres_and_the_other_degrees() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -352,7 +309,6 @@ mod tests {
         );
     }
 
-    /// Re-running over unchanged bronze rewrites the same partitions with the same rows.
     #[tokio::test]
     async fn re_ingesting_is_idempotent() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -382,8 +338,6 @@ mod tests {
         );
     }
 
-    /// The country a leg runs in decides which zone its geometry is written in, so it names a
-    /// partition above the departure date rather than being a parameter of the run.
     #[tokio::test]
     async fn a_leg_is_written_under_the_country_it_starts_in() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -408,8 +362,6 @@ mod tests {
         assert_eq!(partitions, ["country=DE"]);
     }
 
-    /// A leg starting outside every known country has no zone to be projected into, so it is
-    /// reported rather than written into some other country's metres.
     #[tokio::test]
     async fn a_leg_outside_every_known_country_is_not_written() {
         let tmp = tempfile::tempdir().expect("tempdir");
