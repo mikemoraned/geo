@@ -413,3 +413,31 @@ import arrow to name a crossing.
       perform costs its shell a dead match arm, where an event it never sends costs nothing.
       That is why the effects split and the events did not. Whoever picks this up starts
       from that diff.
+
+##### The does-it-bring-joy rule
+
+Most comments Claude writes are not worth their space. So none is written by default: what one
+would have said belongs in the naming and the structure, and a convention belongs in a README.
+Nothing here is the website's, but retro-applying it is a sweep of every crate, so it lands
+where the other refactors do.
+
+- [ ] Add `.claude/rules/does-it-bring-joy.md`, over `**/*.rs` and `**/*.py`. No comment is
+      written by default, in any form — `//`, `///`, `//!` or a docstring. What one would have
+      said is carried by naming and structure, with a well-known pattern named as such wherever
+      one fits. A convention used or invented is explained in a README or another `.md`, away
+      from the code. A comment survives only where specific justification is given for that one
+      comment. A doc comment on a public item is no exception, and comes under the same asking.
+      Whatever survives goes through `writing-clearly-and-concisely`. Index the rule in
+      `CLAUDE.md`, and reconcile `.claude/rules/rust.md`: its doc-comment section reads as how
+      to write the ones you are adding, where it should describe the rare one that earned its
+      place.
+
+- [ ] Apply it across `apps/lookout/crates/**`, one crate or module per commit. That is 3,482
+      doc-comment lines and 248 `//` lines over 154 Rust files, plus the `#` lines in
+      `rerun-py` and `medallion-py`. Naming and structure may change to absorb what a comment
+      said, which is the point of the rule; each commit keeps its tests green and changes no
+      behaviour. A durable fact about the system that no name can hold moves into the app's
+      `docs/` rather than going, as `CLAUDE.md` already directs. Out of the sweep:
+      `apps/linzer`, the notebooks under `notebooks/` and `questions/`, and `spikes/`. A
+      notebook is a record of an exploration where a `#` is often a cell's only narration, and
+      `spikes/` is a record by definition.
