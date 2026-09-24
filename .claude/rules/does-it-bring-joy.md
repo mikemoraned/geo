@@ -24,6 +24,19 @@ Whatever survives is prose, so it goes through `writing-clearly-and-concisely` a
 - **Why a change was made** — the commit message and the slice doc.
 - **Everything else** — a better name.
 
+## Text a tool reads is not a comment
+
+A CLI argument's help, a doctest, a macro's input: the compiler or the program consumes it, and
+removing it changes what the program does. Write what is needed, and hold it to the same prose
+standards as anything else a human reads.
+
+## The rule stays out of the prose
+
+No README, `docs/` page or other `.md` explains this rule, lists which comments survived a
+sweep, or defends one. Docs describe the system; a note about what the code does or does not
+say about itself describes the code's housekeeping, and belongs nowhere a reader of the system
+has to walk past it. Where a survivor needs a case made, make it in the commit message.
+
 ## Applying it to code that has comments
 
 Deleting the comment is one answer; absorbing it is the better one. Rename what it explained,
