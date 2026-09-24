@@ -1,7 +1,7 @@
 //! Boots the board and runs its loop: sentences and voltages into the core, a panel out.
 //!
-//! Every board fact here is established by running code on this hardware, and several
-//! contradict the vendor and community documentation. See `apps/lookout/docs/device.md`.
+//! Running code on this hardware established every board fact here, and several contradict
+//! the vendor and community documentation. See `apps/lookout/docs/device.md`.
 
 use std::time::Instant;
 
@@ -22,12 +22,13 @@ use mipidsi::{
     options::{ColorInversion, Orientation, Rotation},
 };
 use m5_core::Device;
-use platform_core::{Effect, Event, Lookout};
+use platform_core::Event;
+use platform_core::standalone::{Effect, Lookout};
 
 use m5plus::{battery, gnss, gnss::Gnss, panel, panel::Panel};
 
-/// The display interface's own scratch buffer, sized for a line of pixels rather than a frame:
-/// nothing here draws more than a row of text at a time.
+/// The display interface's own scratch buffer, sized for a line of pixels rather than a frame.
+/// Nothing here draws more than a row of text at a time.
 const DISPLAY_BUFFER: usize = 512;
 
 /// How often the battery is read. A cell changes over hours, but a conversion is cheap and it
@@ -48,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let peripherals = Peripherals::take()?;
 
     // **G4 high is what keeps the board alive on battery**, and the driver has to outlive the
-    // program: dropping it resets the pin and cuts power. On USB the board runs either way,
+    // program. Dropping it resets the pin and cuts power. On USB the board runs either way,
     // which is how this is missed. Set before anything else, so a slow start on battery is
     // still a start.
     let mut hold = PinDriver::output(peripherals.pins.gpio4)?;
@@ -68,8 +69,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut interface_buffer = [0u8; DISPLAY_BUFFER];
     let interface = SpiInterface::new(spi, dc, &mut interface_buffer);
-    // A display that will not initialise leaves the device with no output at all, and there is
-    // no recovery worth attempting.
+    // A display that will not initialise leaves the device with no output at all, and no
+    // recovery is worth attempting.
     let display = Builder::new(ST7789, interface)
         .reset_pin(rst)
         .display_size(panel::WIDTH, panel::HEIGHT)
@@ -136,8 +137,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reported = Instant::now();
 
     // No `Event::Tick` is sent: this board's clock counts from the epoch at boot, with no NTP
-    // and no RTC to set it from, so every tick would be behind the receiver and refused. The
-    // panel's clock and its countdowns run on the receiver's time, which arrives with each fix.
+    // and no RTC to set it from. Every tick would be behind the receiver, and refused. The
+    // panel's clock and its countdowns run on the receiver's time, which each fix carries.
     loop {
         let mut effects = Vec::new();
 
@@ -152,10 +153,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let millivolts = battery::terminal_millivolts(at_pin);
                     if reported.elapsed().as_secs() >= REPORT_INTERVAL_S {
                         reported = Instant::now();
-                        // The voltage raw as well as bars: the bars are deliberately too coarse
-                        // to check a divider or a calibration against. The stack and the heap
-                        // because a number over a run is what distinguishes a leak from a
-                        // level, and neither reports itself before it is fatal.
+                        // The voltage raw as well as bars: the bars are deliberately too
+                        // coarse to check a divider or a calibration against. The stack and
+                        // the heap because a number over a run distinguishes a leak from a
+                        // level. Neither reports itself before it is fatal.
                         log::info!(
                             "battery {millivolts}mV ({at_pin}mV at the pin); \
                              {} bytes of main task stack never used, {} bytes of free heap",
@@ -172,11 +173,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for effect in effects {
             match effect {
                 Effect::Render(_) => panel.show(core.view()).expect("draw the panel"),
-                // The core asks only where it has no crossings, and this board brought its
-                // own. Answering keeps the arm honest rather than unreachable.
-                Effect::Crossings(_) => {
-                    core.process_event(Event::Crossings(Vec::new()));
-                }
             }
         }
 
@@ -186,9 +182,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// How much of the main task's stack has never been touched.
 ///
-/// **Stack overflow has been the cause of every hard-to-diagnose crash on this board, and it
-/// never presents as one** — it lands as a fault in whatever code is nearby. Logging a number
-/// at startup means there is one to compare against rather than an estimate.
+/// **Stack overflow has caused every hard-to-diagnose crash on this board, and it never
+/// presents as one.** It lands as a fault in whatever code is nearby. Logging a number at
+/// startup means there is one to compare against rather than an estimate.
 fn stack_unused() -> u32 {
     // Safe: a null task handle means the calling task, and this reads FreeRTOS's own
     // bookkeeping without touching it.

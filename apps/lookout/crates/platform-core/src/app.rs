@@ -1,12 +1,13 @@
-//! The core itself: sentences, voltages and ticks in, whatever the shell draws out.
-
-use core::marker::PhantomData;
+//! The state every platform drives, and what each event does to it.
+//!
+//! Each kind of platform has its own app — [`crate::standalone`] and [`crate::connected`] —
+//! because crux builds one effect enum per app. The two kinds answer different ones. What
+//! they hold and what they are told are here, once: one [`Event`], one [`Model`], and one
+//! transition per event. The state cannot fork: there is only one of it.
 
 use chrono::{DateTime, Utc};
 use crux_core::{
-    App, Command,
-    capability::Operation,
-    macros::effect,
+    Command, Request,
     render::{self, RenderOperation},
 };
 use domain::{CrossingCompact, Sample};
@@ -18,33 +19,24 @@ use serde::{Deserialize, Serialize};
 use crate::Float;
 use crate::battery::{Battery, Charge};
 
-/// What a shell brings to the core: where its crossings come from, and what it shows.
+/// What every platform brings to the core: a set to scan, and a view to draw.
 ///
-/// The two belong together because both are answers to "which shell is this": the device
-/// carries its set in flash and draws a 13-character panel, and the browser fetches a set and
-/// draws a canvas. Everything between the two — the parsing, the scan, the clock — is the
-/// same code either way.
+/// The device holds thousands of points in flash and draws a 13-character panel; the browser
+/// holds a `Vec` it fetched and draws a canvas. Everything between the two — the parsing, the
+/// scan, the clock — is the same code either way.
+///
+/// What a platform can *do* is the other half, and the two traits extending this one split
+/// it. A [`Standalone`](crate::Standalone) platform carries its crossings; the core asks a
+/// [`Connected`](crate::Connected) one for a set it lacks. Every platform is one or the
+/// other, and which it is decides what its shell answers.
 pub trait Shell: Sized + 'static {
-    /// What [`App::view`] answers. A panel of strings, a structure of positions, whatever the
-    /// shell can draw.
+    /// What [`crux_core::App::view`] answers. A panel of strings, a structure of positions,
+    /// whatever the shell can draw.
     type ViewModel;
 
     /// How this platform holds the set it scans. The device reads packed columns where they
     /// lie; anything with room to spare holds a `Vec`.
-    type Crossings: Crossings<Float> + Default;
-
-    /// The set this platform already has when the model is built. The device's is in flash and
-    /// ready at boot; a browser has none until it has fetched one, and answers `None` so the
-    /// core knows to ask.
-    fn carried() -> Option<Self::Crossings>;
-
-    /// A set the shell has answered [`Effect::Crossings`] with.
-    ///
-    /// `None` where this platform cannot be told its crossings, which is the device: its set
-    /// is in flash, moving thousands of points into RAM is what keeping it there avoids, and
-    /// nothing sends it any. A device that could be given a set over a connection would answer
-    /// here instead.
-    fn received(points: Vec<CrossingCompact<f64>>) -> Option<Self::Crossings>;
+    type Crossings: Crossings<Float>;
 
     /// What the shell shows, from the state the core holds.
     fn project(model: &Model<Self>) -> Self::ViewModel;
@@ -53,7 +45,7 @@ pub trait Shell: Sized + 'static {
 /// The state every shell drives, whatever it draws.
 ///
 /// Nothing here is public: a projection reads it through the methods below, so a view cannot
-/// reach past what the core is willing to say it knows.
+/// reach past what the core says it knows.
 pub struct Model<S: Shell> {
     parser: Parser<Float>,
     battery: Battery,
@@ -62,8 +54,8 @@ pub struct Model<S: Shell> {
 
 /// Whether there is anything to predict against yet.
 ///
-/// A predictor is built from its crossings and keeps them for as long as it lives, so a core
-/// with no set has no predictor rather than a predictor scanning nothing. Everything measured
+/// A predictor is built from its crossings and keeps them for as long as it lives. A core with
+/// no set has no predictor, rather than a predictor scanning nothing. Everything measured
 /// against the set — the clock, the fix, the predictions — arrives with it.
 enum Predicting<S: Shell> {
     /// No crossings, and so nothing observed: whatever a shell sends before it has answered
@@ -72,25 +64,20 @@ enum Predicting<S: Shell> {
     Ready(CrowFlies<Float, S::Crossings>),
 }
 
-/// A shell with no set of its own starts scanning an empty one, which predicts nothing, until
-/// it answers the request the core makes on [`Event::Reset`].
+/// Waiting to be told, which is where a connected platform starts. One carrying its own set
+/// starts at [`Model::over`] instead.
 impl<S: Shell> Default for Model<S> {
     fn default() -> Self {
         Self {
             parser: Parser::new(),
             battery: Battery::default(),
-            predictor: match S::carried() {
-                Some(crossings) => {
-                    Predicting::Ready(CrowFlies::new(crossings, DEFAULT_RADIUS_METRES))
-                }
-                None => Predicting::Waiting,
-            },
+            predictor: Predicting::Waiting,
         }
     }
 }
 
 /// What a projection may ask the model. The clock and the fix come from the predictor rather
-/// than being held beside it, so a view cannot report a position the scan never ran from.
+/// than sitting beside it. Every position a view reports is one the scan ran from.
 impl<S: Shell> Model<S> {
     /// The time the core is working to: a receiver's, where one has reported, and otherwise
     /// the shell's own.
@@ -135,76 +122,32 @@ impl<S: Shell> Model<S> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum Event {
-    /// Start again, knowing nothing. A shell sends this when it comes up, and again whenever
-    /// what follows has nothing to do with what came before — a kiosk between the recordings
-    /// it replays, where the next journey happened before the last one and every fix in it
-    /// would otherwise be refused as stale.
-    ///
-    /// The core answers with a request for crossings where it has none, so a shell that
-    /// carries its own is asked for nothing and a shell that fetches them fetches again.
-    Reset,
-    /// The crossings a shell was asked for. A shell may send these unasked, and one that
-    /// already has a set ignores them: a predictor keeps the crossings it was built with.
-    Crossings(Vec<CrossingCompact<f64>>),
-    /// The time, as the shell reads it, so a countdown shortens between fixes rather than
-    /// waiting for the next one. A time behind what the receiver has already reported is
-    /// refused, so a shell with no real clock — no NTP and no RTC, which is the device — can
-    /// send these or not, and the panel reads the same either way.
-    Tick(DateTime<Utc>),
-    /// One sentence off the UART. The shell reads a line and checks it is one, so noise on
-    /// the wire is refused there rather than reaching here.
-    Sentence(Sentence),
-    /// A fix from a shell with no receiver to read — a browser's geolocation, or a replay of
-    /// one recorded. It arrives parsed, where a sentence arrives as text, and carries its own
-    /// instant because the fix is dated by whatever produced it rather than by the shell.
-    Position(Sample<f64>),
-    /// The battery terminal voltage the shell measured, in millivolts. What it means is
-    /// decided here, not there — see [`crate::battery`]. A shell with no battery to read,
-    /// such as a browser, never sends one.
-    Battery(u16),
-}
-
-/// `typegen` is what makes the effect serializable, which the web bridge needs; it generates
-/// nothing by itself. The generator it also declares stays behind this crate's `typegen`
-/// feature, and nothing enables it.
-#[effect(typegen)]
-pub enum Effect {
-    Render(RenderOperation),
-    Crossings(GetCrossings),
-}
-
-/// Asks the shell for the crossings to predict against.
-///
-/// Carries nothing: which set to send is the shell's business, and a shell reading flash has
-/// nothing to look up. The answer comes back as [`Event::Crossings`] rather than as a
-/// response, so a shell that has to fetch one need not hold the request open while it does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GetCrossings;
-
-impl Operation for GetCrossings {
-    type Output = ();
-}
-
-/// Whether an event moved anything a shell shows, which is what decides a redraw.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Change {
-    Moved,
-    Unchanged,
-}
-
-pub struct Lookout<S: Shell>(PhantomData<S>);
-
-/// Written out rather than derived: a derive would ask the shell to be `Default` too, and a
-/// shell is a name for a projection, not a value anyone builds.
-impl<S: Shell> Default for Lookout<S> {
-    fn default() -> Self {
-        Self(PhantomData)
+/// What each event does to the state. One rule per event about whether it moved anything
+/// worth drawing, the same on either kind of platform.
+impl<S: Shell> Model<S> {
+    /// The model as it starts on a platform carrying its own crossings.
+    pub(crate) fn over(crossings: S::Crossings) -> Self {
+        Self {
+            predictor: Predicting::Ready(CrowFlies::new(crossings, DEFAULT_RADIUS_METRES)),
+            ..Self::default()
+        }
     }
-}
 
-impl<S: Shell> Lookout<S> {
+    /// Takes a set to predict against, answering whether anything shown has moved.
+    ///
+    /// A predictor keeps the crossings it was built with, so a set arriving for one that
+    /// already has them changes nothing.
+    pub(crate) fn given(&mut self, crossings: S::Crossings) -> Change {
+        match self.predictor {
+            Predicting::Waiting => {
+                self.predictor =
+                    Predicting::Ready(CrowFlies::new(crossings, DEFAULT_RADIUS_METRES));
+                Change::Moved
+            }
+            Predicting::Ready(_) => Change::Unchanged,
+        }
+    }
+
     /// Takes one sentence off the wire, answering whether anything shown has moved.
     ///
     /// A sentence completing a fix moves to it and predicts afresh from it. One completing
@@ -213,20 +156,48 @@ impl<S: Shell> Lookout<S> {
     ///
     /// That matters at a dozen sentences a second. Otherwise one position would scan the
     /// whole set, and redraw the screen, a dozen times.
-    fn absorb(&self, sentence: &Sentence, model: &mut Model<S>) -> Change {
-        let Some(sample) = model.parser.absorb(sentence) else {
+    pub(crate) fn absorb(&mut self, sentence: &Sentence) -> Change {
+        let Some(sample) = self.parser.absorb(sentence) else {
             return Change::Unchanged;
         };
-        self.observe(Observed::Sampled(sample), model)
+        self.observe(Observed::Sampled(sample))
     }
 
-    /// Applies one event, answering whether anything shown has moved.
+    /// Takes the time as the shell reads it, so a countdown shortens between fixes.
+    pub(crate) fn elapsed(&mut self, now: DateTime<Utc>) -> Change {
+        self.observe(Observed::Elapsed(now))
+    }
+
+    /// Takes a fix from a shell with no receiver to read.
+    ///
+    /// A coordinate off the globe is refused as [`Model::absorb`] refuses a corrupt sentence:
+    /// it leaves the last fix and its predictions where they were.
+    pub(crate) fn positioned(&mut self, reported: Sample<f64>) -> Change {
+        match reported.to_precision() {
+            Ok(sample) => self.observe(Observed::Sampled(sample)),
+            Err(_) => Change::Unchanged,
+        }
+    }
+
+    /// Takes a terminal voltage in millivolts, answering whether what it means has changed.
+    /// The core decides what a voltage means, not the shell — see [`crate::battery`].
+    pub(crate) fn measured(&mut self, millivolts: u16) -> Change {
+        let before = self.battery.charge();
+        self.battery.measured(millivolts);
+        if self.battery.charge() == before {
+            Change::Unchanged
+        } else {
+            Change::Moved
+        }
+    }
+
+    /// Applies one event to the predictor, answering whether anything shown has moved.
     ///
     /// An event dated before the clock is refused, and leaves everything as it was. So is one
     /// arriving before there are crossings to measure it against: there is nowhere to put it,
-    /// and nothing it could move.
-    fn observe(&self, event: Observed<Float>, model: &mut Model<S>) -> Change {
-        let Predicting::Ready(predictor) = &mut model.predictor else {
+    /// and nothing for it to move.
+    fn observe(&mut self, event: Observed<Float>) -> Change {
+        let Predicting::Ready(predictor) = &mut self.predictor else {
             return Change::Unchanged;
         };
         match predictor.observe(event) {
@@ -236,68 +207,59 @@ impl<S: Shell> Lookout<S> {
     }
 }
 
-impl<S: Shell> App for Lookout<S> {
-    type Event = Event;
-    type Model = Model<S>;
-    type ViewModel = S::ViewModel;
-    type Effect = Effect;
-    /// Unused: an effect is described by the returned `Command`. The associated type is
-    /// required by this crux version and dropped in later ones.
-    type Capabilities = ();
+/// Everything a shell reports, and the set it answers a request with.
+///
+/// One enum for both kinds of platform, where the effects are two. A shell answers every
+/// effect, so one it cannot perform costs it a dead arm. Nothing obliges a shell to send
+/// every event, so one it never sends costs it nothing.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Event {
+    /// Start again, knowing nothing. A shell sends this when it comes up, and again whenever
+    /// what follows has nothing to do with what came before. A kiosk does so between the
+    /// recordings it replays. The next journey happened before the last one, so the clock
+    /// would otherwise refuse every fix in it.
+    ///
+    /// A platform carrying its crossings has them again; the core asks a connected one afresh.
+    Reset,
+    /// The crossings a shell was asked for. A shell may send these unasked. One that already
+    /// has a set ignores them: a predictor keeps the crossings it was built with.
+    Crossings(Vec<CrossingCompact<f64>>),
+    /// The time, as the shell reads it, so a countdown shortens between fixes rather than
+    /// waiting for the next one. A time behind what the receiver has already reported is
+    /// refused. A shell with no real clock can send these or not, and the panel reads the
+    /// same either way. The device is such a shell: no NTP, and no RTC.
+    Tick(DateTime<Utc>),
+    /// One sentence off the UART. The shell reads a line and checks it is one, so it refuses
+    /// noise on the wire rather than passing it here.
+    Sentence(Sentence),
+    /// A fix from a shell with no receiver to read — a browser's geolocation, or a replay of
+    /// one recorded. It arrives parsed, where a sentence arrives as text, and carries its own
+    /// instant: whatever produced the fix dated it, not the shell.
+    Position(Sample<f64>),
+    /// The battery terminal voltage the shell measured, in millivolts. A shell with no
+    /// battery to read, such as a browser, never sends one.
+    Battery(u16),
+}
 
-    /// A render is asked for only where a shell would draw something different.
-    fn update(&self, event: Event, model: &mut Model<S>, _caps: &()) -> Command<Effect, Event> {
-        let change = match event {
-            // The one event answered with something other than a render alone. Everything the
-            // core knows came from what a shell told it, so starting again is the model as it
-            // was built — which is also what decides whether there are crossings to ask for.
-            Event::Reset => {
-                *model = Model::default();
-                return match model.predictor {
-                    Predicting::Waiting => {
-                        Command::all([render::render(), Command::notify_shell(GetCrossings).into()])
-                    }
-                    Predicting::Ready(_) => render::render(),
-                };
-            }
-            // A predictor keeps the crossings it was built with, so a set arriving for one
-            // that already has them changes nothing. Nor does one a shell cannot hold, which
-            // is how the device answers: its set is in flash.
-            Event::Crossings(points) => match (&model.predictor, S::received(points)) {
-                (Predicting::Waiting, Some(crossings)) => {
-                    model.predictor =
-                        Predicting::Ready(CrowFlies::new(crossings, DEFAULT_RADIUS_METRES));
-                    Change::Moved
-                }
-                _ => Change::Unchanged,
-            },
-            Event::Tick(now) => self.observe(Observed::Elapsed(now), model),
-            Event::Sentence(sentence) => self.absorb(&sentence, model),
-            // A coordinate off the globe is refused here as a corrupt sentence is refused in
-            // `absorb`: it leaves the last fix and its predictions where they were.
-            Event::Position(reported) => match reported.to_precision() {
-                Ok(sample) => self.observe(Observed::Sampled(sample), model),
-                Err(_) => Change::Unchanged,
-            },
-            Event::Battery(millivolts) => {
-                let before = model.battery.charge();
-                model.battery.measured(millivolts);
-                if model.battery.charge() == before {
-                    Change::Unchanged
-                } else {
-                    Change::Moved
-                }
-            }
-        };
+/// Whether an event moved anything a shell shows, which is what decides a redraw.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Change {
+    Moved,
+    Unchanged,
+}
 
-        match change {
+impl Change {
+    /// What the core answers a shell with. An event that moved nothing raises no request at
+    /// all. That is what stops a replay at speed from redrawing the canvas per sample.
+    pub(crate) fn answered<E, Ev>(self) -> Command<E, Ev>
+    where
+        E: From<Request<RenderOperation>> + Send + 'static,
+        Ev: Send + 'static,
+    {
+        match self {
             Change::Moved => render::render(),
             Change::Unchanged => Command::done(),
         }
-    }
-
-    fn view(&self, model: &Model<S>) -> S::ViewModel {
-        S::project(model)
     }
 }
 
@@ -305,248 +267,30 @@ impl<S: Shell> App for Lookout<S> {
 mod tests {
     use chrono::TimeDelta;
     use crux_core::Core;
-    use crux_core::bridge::BridgeWithSerializer;
     use domain::Gps;
     use geo_types::Point;
-    use predictor::fixtures::{Fix, captured};
+    use predictor::fixtures::captured;
 
     use super::*;
+    use crate::fixtures::{Bare, DRESDEN_LON, at_the_station, instant, reported};
+    use crate::standalone::Lookout;
 
-    /// A shell that shows the state as it stands, so a test reads what the core holds rather
-    /// than how some platform formats it. The projections themselves are tested where they
-    /// live, against the screens they are for.
-    ///
-    /// It carries an empty set, as a device carries a full one: the predictor exists from the
-    /// start and predicts nothing, which is what most of these tests want. [`Late`] is the one
-    /// that has to be told.
-    #[derive(Debug, Default, Clone, Copy)]
-    struct Bare;
-
-    /// A shell with no set of its own, as a browser is before it has fetched one.
-    #[derive(Debug, Default, Clone, Copy)]
-    struct Late;
-
-    /// What the core knows, unformatted.
-    #[derive(Debug, PartialEq)]
-    struct State {
-        now: Option<DateTime<Utc>>,
-        latitude: Option<Float>,
-        speed_mps: Option<Float>,
-        charge: Option<Charge>,
-        predicted: usize,
-    }
-
-    /// What is predicted from a set is `predictor`'s to test, and it does; what an event does
-    /// to the state is this crate's.
-    impl Shell for Bare {
-        type ViewModel = State;
-        type Crossings = Vec<CrossingCompact<Float>>;
-
-        fn carried() -> Option<Self::Crossings> {
-            Some(Vec::new())
-        }
-
-        fn received(points: Vec<CrossingCompact<f64>>) -> Option<Self::Crossings> {
-            Some(taken(points))
-        }
-
-        fn project(model: &Model<Self>) -> State {
-            State {
-                now: model.now(),
-                latitude: model.fix().map(Sample::latitude),
-                speed_mps: model.speed_mps(),
-                charge: model.charge(),
-                predicted: model.predictions().len(),
-            }
-        }
-    }
-
-    impl Shell for Late {
-        type ViewModel = State;
-        type Crossings = Vec<CrossingCompact<Float>>;
-
-        fn carried() -> Option<Self::Crossings> {
-            None
-        }
-
-        fn received(points: Vec<CrossingCompact<f64>>) -> Option<Self::Crossings> {
-            Some(taken(points))
-        }
-
-        fn project(model: &Model<Self>) -> State {
-            State {
-                now: model.now(),
-                latitude: model.fix().map(Sample::latitude),
-                speed_mps: model.speed_mps(),
-                charge: model.charge(),
-                predicted: model.predictions().len(),
-            }
-        }
-    }
-
-    /// A point the globe has no room for is dropped rather than refusing the whole set.
-    fn taken(points: Vec<CrossingCompact<f64>>) -> Vec<CrossingCompact<Float>> {
-        points
-            .into_iter()
-            .filter_map(|point| {
-                CrossingCompact::at(point.id, point.latitude(), point.longitude()).ok()
-            })
-            .collect()
-    }
-
+    /// Every event but the two about crossings reaches the same state on either kind of
+    /// platform, so these tests drive the simpler kind.
     fn core() -> Core<Lookout<Bare>> {
         Core::new()
-    }
-
-    fn waiting() -> Core<Lookout<Late>> {
-        Core::new()
-    }
-
-    fn instant() -> DateTime<Utc> {
-        DateTime::from_timestamp(1_785_098_609, 0).expect("an instant")
-    }
-
-    /// Dresden Hauptbahnhof's longitude, which the fixes below stay on while the latitude
-    /// moves them north.
-    const DRESDEN_LON: f64 = 13.7322;
-
-    /// Dresden Hauptbahnhof, at a train's speed.
-    fn at_the_station() -> Gps<f64> {
-        Gps::at(51.0403, 13.7322)
-            .expect("on the globe")
-            .with_accuracy_metres(Some(5.0))
-            .with_speed_mps(Some(27.8))
-    }
-
-    /// A crossing as a shell sends one: degrees, latitude first.
-    fn crossing(id: u32, latitude: f64, longitude: f64) -> CrossingCompact<f64> {
-        CrossingCompact::at(id, latitude, longitude).expect("on the globe")
-    }
-
-    fn reported(t: DateTime<Utc>, gps: Gps<f64>) -> Event {
-        Event::Position(domain::Sample::new(t, gps))
-    }
-
-    #[test]
-    fn a_shell_with_no_crossings_is_asked_for_them() {
-        let core = waiting();
-
-        let effects = core.process_event(Event::Reset);
-
-        assert!(
-            effects
-                .iter()
-                .any(|effect| matches!(effect, Effect::Crossings(_)))
-        );
-    }
-
-    #[test]
-    fn a_shell_that_brought_its_own_is_asked_for_nothing() {
-        let core = core();
-
-        let effects = core.process_event(Event::Reset);
-
-        assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
-    }
-
-    #[test]
-    fn starting_again_asks_for_the_crossings_again() {
-        let core = waiting();
-        core.process_event(Event::Reset);
-
-        core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
-
-        // Starting again drops them, and asks for them afresh.
-        let effects = core.process_event(Event::Reset);
-
-        assert!(
-            effects
-                .iter()
-                .any(|effect| matches!(effect, Effect::Crossings(_)))
-        );
-        assert_eq!(core.view().predicted, 0);
-    }
-
-    /// Nothing is measured against a set that is not there, so a fix sent before one is
-    /// refused — as a fix behind the clock is. A shell answers before it starts reporting.
-    #[test]
-    fn a_fix_before_there_are_crossings_is_refused() {
-        let core = waiting();
-
-        let effects = core.process_event(reported(instant(), at_the_station()));
-
-        assert_eq!(core.view().latitude, None);
-        assert_eq!(core.view().now, None);
-        assert!(effects.is_empty());
-    }
-
-    #[test]
-    fn crossings_arriving_are_what_a_later_fix_is_measured_against() {
-        let core = waiting();
-        core.process_event(Event::Reset);
-
-        core.process_event(Event::Crossings(vec![
-            crossing(1, 51.0503, 13.7322),
-            crossing(2, 60.0, 13.7322),
-        ]));
-        core.process_event(reported(instant(), at_the_station()));
-
-        // The far one is outside the radius, so one of the two is predicted.
-        assert_eq!(core.view().predicted, 1);
-    }
-
-    /// Answering unasked is not an error.
-    #[test]
-    fn crossings_arriving_before_the_shell_starts_are_taken() {
-        let core = waiting();
-
-        core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
-        core.process_event(reported(instant(), at_the_station()));
-
-        assert_eq!(core.view().predicted, 1);
-    }
-
-    /// A predictor keeps the crossings it was built with.
-    #[test]
-    fn a_second_set_leaves_the_first_in_place() {
-        let core = core();
-        core.process_event(reported(instant(), at_the_station()));
-
-        let effects = core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
-
-        assert_eq!(core.view().predicted, 0);
-        assert!(effects.is_empty());
-    }
-
-    #[test]
-    fn a_point_off_the_globe_is_dropped_rather_than_losing_the_set() {
-        let core = waiting();
-
-        core.process_event(Event::Crossings(vec![
-            // Built unchecked, as one read off a wire is: nothing refuses a set for holding
-            // this, so the shell is what has to drop the row.
-            CrossingCompact::new(1, geo_types::Point::new(13.7322, 91.0)),
-            crossing(2, 51.0503, 13.7322),
-        ]));
-        core.process_event(reported(instant(), at_the_station()));
-
-        assert_eq!(core.view().predicted, 1);
     }
 
     #[test]
     fn nothing_is_known_before_an_event() {
         let core = core();
+        let view = core.view();
 
-        assert_eq!(
-            core.view(),
-            State {
-                now: None,
-                latitude: None,
-                speed_mps: None,
-                charge: None,
-                predicted: 0,
-            }
-        );
+        assert_eq!(view.now, None);
+        assert_eq!(view.latitude, None);
+        assert_eq!(view.speed_mps, None);
+        assert_eq!(view.charge, None);
+        assert_eq!(view.predicted, 0);
     }
 
     #[test]
@@ -559,17 +303,17 @@ mod tests {
         assert_eq!(view.now, Some(instant()));
         assert_eq!(view.speed_mps, Some(27.8));
         assert!((view.latitude.expect("a fix") - 51.0403).abs() < 1e-4);
-        assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
+        assert_eq!(effects.len(), 1);
     }
 
-    /// A shell reading a receiver and a shell reading a browser feed the same state, so the
+    /// A shell reading a receiver and a shell reading a browser feed the same state. So the
     /// second kind of event moves what the first kind left.
     #[test]
     fn a_position_and_a_sentence_move_the_same_fix() {
         let core = core();
         // The sentence carries its own instant, and the position that follows has to be
         // later, or the clock refuses it.
-        let sentence = Fix::at(20, 43, 29, 51.0403, 13.7322);
+        let sentence = predictor::fixtures::Fix::at(20, 43, 29, 51.0403, 13.7322);
         core.process_event(Event::Sentence(sentence.rmc()));
 
         core.process_event(reported(
@@ -672,6 +416,15 @@ mod tests {
         assert!(effects.is_empty());
     }
 
+    #[test]
+    fn a_battery_reading_is_judged_here_rather_than_by_the_shell() {
+        let core = core();
+
+        core.process_event(Event::Battery(4_200));
+
+        assert_eq!(core.view().charge, Some(Charge::Full));
+    }
+
     /// A shell with no generated bindings writes this by hand, so the shape is part of what
     /// the core promises. The fix keeps the names every recorded one is stored under.
     #[test]
@@ -684,34 +437,5 @@ mod tests {
             json,
             r#"{"Position":{"t":"2026-07-26T20:43:29Z","gps":{"lat":51.0403,"lon":13.7322,"alt":null,"acc":5.0,"speed":27.8,"heading":null}}}"#
         );
-    }
-
-    /// The request as a shell with no generated bindings sees it. An element matches on the
-    /// effect's name, so the name is part of what the core promises.
-    #[test]
-    fn the_request_for_crossings_reaches_a_shell_as_json() {
-        let bridge: BridgeWithSerializer<Lookout<Late>> = BridgeWithSerializer::new(Core::new());
-        let mut requests = Vec::new();
-
-        bridge
-            .process_event(
-                &mut serde_json::Deserializer::from_str(r#""Reset""#),
-                &mut serde_json::Serializer::new(&mut requests),
-            )
-            .expect("an event this core knows");
-
-        assert_eq!(
-            String::from_utf8(requests).expect("utf-8"),
-            r#"[{"id":0,"effect":{"Render":null}},{"id":1,"effect":{"Crossings":null}}]"#
-        );
-    }
-
-    #[test]
-    fn a_battery_reading_is_judged_here_rather_than_by_the_shell() {
-        let core = core();
-
-        core.process_event(Event::Battery(4_200));
-
-        assert_eq!(core.view().charge, Some(Charge::Full));
     }
 }

@@ -1,16 +1,16 @@
 //! The core, as two functions over JSON strings.
 //!
-//! `BridgeWithSerializer` takes any serde serializer, so the shell speaks JSON and needs no
-//! generated bindings to read it: an event is the serde tagging of [`platform_core::Event`],
-//! and a view is that of [`web_core::ViewModel`]. Nothing here knows what either holds.
+//! `BridgeWithSerializer` takes any serde serializer, so the shell speaks JSON and reads it
+//! without generated bindings. An event is the serde tagging of [`platform_core::Event`], and
+//! a view is that of [`web_core::ViewModel`]. Nothing here knows what either holds.
 //!
-//! Each exported function wraps one that answers a plain `Result<String, String>`, since a
-//! `JsError` can only be built on wasm and the JSON is what the tests are about.
+//! Each exported function wraps one that answers a plain `Result<String, String>`. A `JsError`
+//! builds only on wasm, and the JSON is what the tests are about.
 
 use std::sync::LazyLock;
 
 use crux_core::{Core, bridge::BridgeWithSerializer};
-use platform_core::Lookout;
+use platform_core::connected::Lookout;
 use wasm_bindgen::prelude::*;
 use web_core::Browser;
 
@@ -34,7 +34,7 @@ pub fn process_event(event: &str) -> Result<String, JsError> {
 ///
 /// # Errors
 ///
-/// Returns an error where the view could not be serialized.
+/// Returns an error where the view fails to serialize.
 #[wasm_bindgen]
 pub fn view() -> Result<String, JsError> {
     projection().map_err(|err| JsError::new(&err))
@@ -59,14 +59,14 @@ fn projection() -> Result<String, String> {
     Ok(String::from_utf8(view).expect("serde_json writes utf-8"))
 }
 
-/// The JSON these tests assert is the shell's whole contract, so a change to an event or to
+/// The JSON these tests assert is the shell's whole contract. So a change to an event or to
 /// the view fails here rather than in a browser.
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// One core is shared by the whole process, so the sequence runs as a single test, in
-    /// order: the page starts, is asked for crossings, answers, and starts again.
+    /// The whole process shares one core, so the sequence runs as a single test. In order:
+    /// the page starts, is asked for crossings, answers, and starts again.
     #[test]
     fn a_page_is_asked_for_crossings_and_answers_with_them() {
         assert_eq!(
@@ -89,7 +89,7 @@ mod tests {
         );
 
         // Starting again drops them and asks afresh, which is how a kiosk begins a journey
-        // that happened before the one it just showed.
+        // that happened before the one it showed last.
         assert!(
             dispatch(r#""Reset""#)
                 .unwrap()
