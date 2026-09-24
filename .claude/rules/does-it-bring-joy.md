@@ -31,6 +31,16 @@ A CLI argument's help, a doctest, a macro's input: the compiler or the program c
 removing it changes what the program does. Write what is needed, and hold it to the same prose
 standards as anything else a human reads.
 
+## A captured literal may say what it is
+
+A constant holding a sample of an external format — a line off a wire, a recorded payload, a byte
+sequence — is opaque by nature: its fields are positions in a string, and no name spells out which
+position means what, or which capture it came from. One comment beside such a literal, saying what
+it holds and where it came from, is justified.
+
+This covers the literal and nothing else. The code that reads it, builds one, or asserts against it
+is under the general rule, and a comment there earns its place the usual way.
+
 ## The rule stays out of the prose
 
 No README, `docs/` page or other `.md` explains this rule, lists which comments survived a
