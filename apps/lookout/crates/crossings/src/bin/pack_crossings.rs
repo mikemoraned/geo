@@ -1,15 +1,3 @@
-//! `pack_crossings`: read the silver water crossings out of the store and write the two forms
-//! a shell predicts against — the flat buffer the M5 device scans in flash, and the array a
-//! browser fetches.
-//!
-//! Both come from one read, so the crossings a device carries and the crossings a page draws
-//! cannot disagree about which places exist. They differ only in precision: the buffer holds
-//! `f32`, which is what the board's FPU measures in, and the array holds the degrees silver
-//! recorded.
-//!
-//! Every country the store holds is packed unless a window is given, since neither shell knows
-//! where it will be switched on.
-
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fs;
@@ -21,17 +9,11 @@ use crossings::{pointset, silver};
 use domain::Bbox;
 use medallion::MedallionArgs;
 
-/// What the crossings are called in gold, and the files each version of them holds.
 const ARTIFACT: &str = "crossings";
 const PACKED: &str = "crossings.pointset";
 const ARRAY: &str = "crossings.json";
 
-/// Decimal places kept in the array, worth about 11cm of latitude.
-///
-/// Silver holds a position as `f64` and writing one out takes seventeen significant digits,
-/// which is nanometres and sixteen characters a coordinate. The buffer rounds the same
-/// position to `f32`, worth about 40cm, and no fix is that good either.
-const PLACES: f64 = 1e6;
+const SIX_PLACES: f64 = 1e6;
 
 #[derive(Parser)]
 #[command(about = "Pack silver water crossings into the M5 device's point buffer")]
@@ -96,8 +78,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .collect::<Result<Vec<_>, _>>()?;
     let packed = pointset::pack(&points)?;
 
-    // The degrees silver recorded, not the `f32` the buffer rounds them to: a browser has no
-    // reason to inherit the board's precision, only to stop short of absurd.
     let array: Vec<domain::CrossingCompact<f64>> = crossings
         .iter()
         .map(|crossing| {
@@ -114,8 +94,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     fs::write(output.join(PACKED), &packed)?;
     fs::write(output.join(ARRAY), &json)?;
 
-    // Last, so a run that failed to write its artefacts does not leave something pointing at
-    // a version that is not there.
     let version = medallion::gold_version(run);
     if let Some(file) = &args.version_file {
         fs::write(file, format!("{version}\n"))?;
@@ -123,8 +101,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tracing::info!(
         crossings = crossings.len(),
-        // Which extraction of the reference data the packed crossings came from, so a buffer
-        // on a device can be traced back to a release. The format itself has no room for it.
         extracts = ?crossings
             .iter()
             .map(|crossing| crossing.extract_id.as_str())
@@ -139,9 +115,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// A coordinate at the precision the array keeps.
 fn round(degrees: f64) -> f64 {
-    (degrees * PLACES).round() / PLACES
+    (degrees * SIX_PLACES).round() / SIX_PLACES
 }
 
 #[cfg(test)]
@@ -165,9 +140,6 @@ mod tests {
         assert_eq!(args.bbox, None);
     }
 
-    /// The crossings belong in the store they were derived from, under the run that produced
-    /// them, so pointing a run at another store moves the output with it and a rerun leaves
-    /// the last one where a device that holds it can still be traced to it.
     #[test]
     fn the_default_output_is_a_versioned_gold_artefact_of_whichever_store_is_read() {
         let args = Args::parse_from(["pack_crossings", "--medallion-root", "/somewhere/store"]);
@@ -182,15 +154,12 @@ mod tests {
         );
     }
 
-    /// Eleven centimetres, and short enough to write.
     #[test]
     fn a_coordinate_is_kept_to_six_places() {
         assert_eq!(round(50.772_051_974_934_95), 50.772_052);
         assert_eq!(round(13.089_276_802_196_796), 13.089_277);
     }
 
-    /// Adopting means naming the version that was written, so a run sending its artefacts
-    /// somewhere else has no version to adopt.
     #[test]
     fn a_redirected_run_cannot_also_adopt_a_version() {
         assert!(

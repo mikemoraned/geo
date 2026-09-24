@@ -1,26 +1,10 @@
-//! The packed point buffer the device scans.
-//!
-//! Laid out for a brute-force scan on a 240 MHz microcontroller with no filesystem worth the
-//! name: a short header, then three parallel columns the device casts in place rather than
-//! parsing. See `README.md` for the byte layout and what a reader must check.
-//!
-//! Coordinates are `f32` degrees. Over the German crossings that costs at most 0.21 m of
-//! position, far under what GPS resolves, and it is what the ESP32's single-precision FPU
-//! wants: `f64` there is emulated in software.
-
 use domain::{CoordinateError, CrossingCompact, CrossingCompactId};
 
 use crate::silver::Crossing;
 
-/// Names the format in the first bytes of the file, so a reader handed the wrong file says so
-/// instead of reading coordinates out of it.
 pub const MAGIC: [u8; 4] = *b"XING";
-/// Bumped whenever the layout changes in a way an existing reader would misread.
 pub const VERSION: u32 = 1;
-/// Magic, version, count — 12 bytes, which is itself a multiple of 4, so the columns after it
-/// are aligned without padding.
 pub const HEADER_LEN: usize = 12;
-/// One `f32` latitude, one `f32` longitude, one `u32` id.
 pub const BYTES_PER_POINT: usize = 12;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -43,12 +27,6 @@ pub enum FormatError {
 #[error("{0} points is more than a u32 count can name")]
 pub struct TooManyPoints(usize);
 
-/// The crossing as the device holds it: the name the store gave it, in the float the board's
-/// FPU measures in.
-///
-/// # Errors
-///
-/// Returns an error where the store holds a position that is not on the globe.
 pub fn compacted(crossing: &Crossing) -> Result<CrossingCompact<f32>, CoordinateError> {
     CrossingCompact::at(
         crossing.compact_id,
@@ -57,10 +35,6 @@ pub fn compacted(crossing: &Crossing) -> Result<CrossingCompact<f32>, Coordinate
     )
 }
 
-/// The packed bytes for these points.
-///
-/// Points are written in id order, so the same crossings pack to the same bytes however the
-/// dataset that produced them happened to be ordered.
 pub fn pack(points: &[CrossingCompact<f32>]) -> Result<Vec<u8>, TooManyPoints> {
     let count = u32::try_from(points.len()).map_err(|_| TooManyPoints(points.len()))?;
 
@@ -91,10 +65,6 @@ pub fn pack(points: &[CrossingCompact<f32>]) -> Result<Vec<u8>, TooManyPoints> {
     Ok(packed)
 }
 
-/// The points a packed buffer holds.
-///
-/// The device reads the same bytes by casting them in place; this reads them field by field
-/// so that a round-trip here checks the layout rather than the host's memory representation.
 pub fn unpack(packed: &[u8]) -> Result<Vec<CrossingCompact<f32>>, FormatError> {
     let header = packed
         .get(..HEADER_LEN)
@@ -142,7 +112,6 @@ pub fn unpack(packed: &[u8]) -> Result<Vec<CrossingCompact<f32>>, FormatError> {
 mod tests {
     use super::*;
 
-    /// A crossing near Ruhland, and one near Dresden.
     const RUHLAND: (f64, f64) = (13.548209, 51.617567);
     const DRESDEN: (f64, f64) = (13.733, 51.05);
 
@@ -157,8 +126,6 @@ mod tests {
         ]
     }
 
-    /// The property the device depends on: what the packer wrote is what a reader of the
-    /// documented layout gets back.
     #[test]
     fn points_survive_a_round_trip() {
         let points = points();
@@ -171,8 +138,6 @@ mod tests {
         }
     }
 
-    /// f32 degrees are the whole reason the buffer is this small, so the loss they cost is
-    /// worth stating: under a metre, which is under what the receiver resolves.
     #[test]
     fn a_position_survives_to_within_a_metre() {
         const METRES_PER_DEGREE: f64 = 111_320.0;
@@ -207,8 +172,6 @@ mod tests {
         );
     }
 
-    /// The device casts the columns in place, which is only sound if each starts on a 4-byte
-    /// boundary — so the header's length has to stay a multiple of 4.
     #[test]
     fn every_column_starts_four_byte_aligned() {
         let packed = pack(&points()).unwrap();
@@ -217,8 +180,6 @@ mod tests {
         assert_eq!((packed.len() - HEADER_LEN) % 4, 0);
     }
 
-    /// So that the same crossings pack to the same bytes whatever order they arrive in, and a
-    /// rebuild that reorders rows doesn't reflash the device with an identical dataset.
     #[test]
     fn the_bytes_do_not_depend_on_the_order_the_points_arrive_in() {
         let mut reversed = points();
@@ -261,8 +222,6 @@ mod tests {
         assert_eq!(unpack(&MAGIC), Err(FormatError::NoHeader(4)));
     }
 
-    /// A truncated file would otherwise read as points made of whatever bytes followed, or
-    /// panic on the slice that runs off the end.
     #[test]
     fn a_buffer_that_does_not_hold_the_points_it_claims_is_rejected() {
         let packed = pack(&points()).unwrap();

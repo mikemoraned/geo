@@ -9,11 +9,11 @@ just gold-pack-crossings --medallion-root <store> --output <file>
 just gold-pack-crossings --bbox 13.0,50.9,14.5,51.9        # west,south,east,north
 ```
 
-The device holds every crossing in flash and brute-force scans the lot against each GPS fix,
-so what it needs is not a queryable dataset but a packed array of coordinates. At the measured
-size — 5,760 crossings for Germany — that is **69,132 bytes**, small enough to `include_bytes!`
-into the firmware, and small enough that an index would waste the effort. The same crossings as
-JSON are 184,342 bytes, which is the cost of the browser reading them without a parser.
+The device holds every crossing in flash and brute-force scans them all against each GPS fix, so
+it needs a packed array of coordinates rather than a queryable dataset. At the measured size —
+5,760 crossings for Germany — that is **69,132 bytes**, small enough to `include_bytes!` into the
+firmware, and small enough that an index would not pay. The same crossings as JSON are 184,342
+bytes, which is what the browser pays to read them with no parser of its own.
 
 ## The `.pointset` layout
 
@@ -41,7 +41,9 @@ of the way of the pass that has to be fast.
 ### What a reader must check
 
 `pointset::unpack` in this crate is one implementation; the device core is the other, and they
-have to agree. A reader has to reject:
+have to agree. It reads the columns field by field where the device casts them in place, so a
+round-trip through it checks the layout rather than the host's memory representation. A reader has
+to reject:
 
 - fewer than 12 bytes — there is no header to read
 - a magic that is not `XING` — some other file entirely
@@ -71,15 +73,14 @@ against a GPS error budget measured in metres.
 
 ## Ids name a crossing, not a row
 
-`id` is the silver `crossing_compact_id` column, read rather than derived. The dataset mints it —
-the low 4 bytes of the md5 of the crossing's `crossing_id`, in the water-crossings notebook —
-and the store refuses a write in which two crossings share one, so the packer takes the column
-as given.
+`id` is the silver `crossing_compact_id` column, read rather than derived. The dataset mints it:
+the low four bytes of the md5 of the crossing's `crossing_id`, in the water-crossings notebook. The
+store refuses a write where two crossings share one, so the packer takes the column as given.
 
-That is what lets a prediction made on the device be matched to a ground truth derived on the
-laptop: both names of a crossing come from the same row, so nothing can come to disagree about
-what one crossing is. It also means an id survives a rebuild of the dataset, a `--bbox` that
-keeps only part of it, and any reordering, since none of those change the row.
+That is what matches a prediction made on the device to a ground truth derived on the laptop: both
+names of a crossing come from the same row, so nothing can disagree about what one crossing is. An
+id also survives a rebuild of the dataset, a `--bbox` that keeps only part of it, and any
+reordering, since none of those change the row.
 
 Four bytes is few enough that two distinct crossings can collide by chance (~0.4% over 5,760
 points), which is why the uniqueness check exists at all. The real dataset is clean: 5,760
@@ -99,8 +100,8 @@ store. Position comes from the `geometry` column, which is where that dataset ke
 **Every country the store holds is packed**, rather than one named by a flag: the buffer holds
 lat/lon and the device's scan takes a great-circle distance, so the per-country projected zone
 the dataset is partitioned by never reaches the device — which in any case does not know which
-country it will be switched on in. `--bbox` is the way to restrict, and is the honest control:
-what a device can hold is a window, not a border.
+country it will be switched on in. `--bbox` is how to restrict it, and is the control that matches
+the device: what it can hold is a window, not a border.
 
 ## Output
 
@@ -111,10 +112,18 @@ what a device can hold is a window, not a border.
   kept to six places
 
 One read produces both, so a board and a page cannot disagree about which places exist. They
-differ only in precision, and in neither case by more than a fix is accurate to.
+differ only in precision, and in neither case by more than a fix is accurate to. Six places is
+about 11 cm; writing silver's `f64` out in full would take seventeen significant digits —
+nanometres, and sixteen characters a coordinate.
+
+A run logs which extractions its crossings came from, since neither format has room for it, and
+that is how a buffer on a device traces back to a release.
 
 Gold is derivable and mostly unversioned, but this artefact is read by a build rather than by a
 query: `m5-core` embeds the buffer and the server serves the array. So the versions packed are
 committed, and `apps/lookout/crossings.version` names the one both build against — the device's
 build script reads it to resolve what to embed, and `just deploy` passes it to the image build.
 Moving to a newly packed version is that one line. `--output` names a directory somewhere else.
+
+The run writes the version file after the artefacts, so one that failed to write them leaves
+nothing pointing at a version that is not there.

@@ -474,3 +474,7 @@ where the other refactors do.
       scanned, absence kept as a source reported it, how an id is derived, and evidence against
       effort in a `Pass`. Why the board wants `f32` at all — its single-precision FPU — went to
       `docs/device.md`, which had the measurements but not the reason.
+
+      `crossings` — the README already carried nearly all of it; what it lacked (what six decimal
+      places cost, why the version file is written last, why the extracts are only logged) joined
+      it. `SIX_PLACES` and `RUHLAND_LON` absorbed the rest.
