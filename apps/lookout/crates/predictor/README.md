@@ -9,8 +9,8 @@ in a replay of a recorded session.
 
 A distance here is the great-circle line to the crossing, and an arrival is that distance divided
 by the speed of the latest fix. The track plays no part, so a curve or a river meander puts a
-crossing nearer, and sooner, than the rails can reach it. That is the point: it is the baseline a
-better predictor has to beat, not an answer.
+crossing nearer, and sooner, than the rails can reach it. That is the point: it is a baseline
+rather than an answer.
 
 The radius is how far ahead to look — wide enough that a train at speed has a minute or two of
 warning, narrow enough to mean something at walking pace.

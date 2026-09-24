@@ -486,3 +486,8 @@ where the other refactors do.
       both the justification `rules/rust.md` asks of an `expect`; the captured sentences in
       `fixtures` keep theirs under a new exception in the rule, since a literal's fields are
       positions in a string that no name can spell out.
+
+      `session_crossings` — another crate with no README, so the matching rule and what it costs
+      went into one: distance within a radius, the parallel-line failure it admits, the two
+      evidence numbers, where the default radius comes from, and why the work is per country.
+      Nothing left but clap help.

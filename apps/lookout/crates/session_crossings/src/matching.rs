@@ -1,25 +1,8 @@
-//! Matching a session's samples against the crossings it came near.
-//!
-//! The rule is pure distance: a crossing was passed in a session if any sample of that session
-//! came within the match radius of it, and the sample that came nearest says when. That is
-//! deliberately simple, and its known failure is a crossing on a line running parallel to the
-//! one travelled: within the radius, so recorded as passed, though it never was. Fixing that
-//! means matching the session to track rather than to points, which is a piece of work in its
-//! own right and is not needed to get a first precision and recall number.
-//!
-//! Two numbers travel with each match so a reader can weigh it: how far the nearest sample
-//! was, and **how many** samples fell inside the radius. One sample within the radius and
-//! twenty are different evidence that a crossing was really passed — a session that never
-//! moved can produce the first without having gone anywhere.
-
 use chrono::{DateTime, Utc};
 use domain::{DeviceId, Pass, SessionId};
 use geo::{Distance, Euclidean};
 use geo_types::{Point, Rect};
 
-/// How near a sample has to come to a crossing for the crossing to count as passed.
-///
-/// Metres, so it is read against the projected geometry — the reason silver carries one.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Radius(f64);
 
@@ -34,23 +17,11 @@ impl Radius {
 }
 
 impl Default for Radius {
-    /// Where the nearest-sample distances stop looking like crossings that were passed.
-    ///
-    /// Their distribution has two parts: a decay from zero, which is a crossing actually gone
-    /// over — seen from however far the previous fix happened to be, since a train at 100 km/h
-    /// sampled every ten seconds leaves 280 m between fixes — and, beyond it, a flat spread
-    /// that is the density of crossings near a path rather than crossings on it. The default
-    /// is where the first ends; the evidence for the value is in the slice notes.
     fn default() -> Self {
         Self(250.0)
     }
 }
 
-/// One session as this matches it: where it went, and when it was at each point.
-///
-/// Positions are projected metres, and the envelope is the session's own in lat/lon — the
-/// column the store carries so that "which sessions could have come near this place" is
-/// answerable without opening their samples.
 #[derive(Debug, Clone)]
 pub struct Session {
     pub session_id: SessionId,
@@ -59,31 +30,18 @@ pub struct Session {
     pub samples: Vec<Sample>,
 }
 
-/// One sample of a session: when it was taken, and where.
 #[derive(Debug, Clone, Copy)]
 pub struct Sample {
     pub t: DateTime<Utc>,
-    /// The country's projected metres, which is what a distance is measured in.
     pub projected: Point<f64>,
 }
 
-/// One crossing as this matches against it.
-///
-/// It carries the same place twice, because the two steps want different units: the prune is
-/// against an envelope in degrees, and the distance is a subtraction in metres.
 #[derive(Debug, Clone)]
 pub struct Crossing {
     pub crossing: domain::Crossing,
-    /// The country's projected metres, which is what a distance is measured in.
     pub projected: Point<f64>,
 }
 
-/// The crossings each session passed.
-///
-/// Every session is matched against only the crossings inside its own envelope, grown by the
-/// radius, so the distance is computed for the pairs that could possibly be within it rather
-/// than for every pair. They come back ordered by instant, which is the order they are
-/// partitioned and written in.
 pub fn passes(sessions: &[Session], crossings: &[Crossing], radius: Radius) -> Vec<Pass> {
     let mut passed: Vec<Pass> = sessions
         .iter()
@@ -93,7 +51,6 @@ pub fn passes(sessions: &[Session], crossings: &[Crossing], radius: Radius) -> V
     passed
 }
 
-/// The crossings one session passed.
 fn passes_of(session: &Session, crossings: &[Crossing], radius: Radius) -> Vec<Pass> {
     let reachable = grown(session.envelope, radius);
     crossings
@@ -103,7 +60,6 @@ fn passes_of(session: &Session, crossings: &[Crossing], radius: Radius) -> Vec<P
         .collect()
 }
 
-/// One crossing as a session passed it, or `None` where no sample came within the radius.
 fn passed(session: &Session, crossing: &Crossing, radius: Radius) -> Option<Pass> {
     let within: Vec<(f64, &Sample)> = session
         .samples
@@ -131,8 +87,6 @@ fn passed(session: &Session, crossing: &Crossing, radius: Radius) -> Option<Pass
     })
 }
 
-/// `envelope` grown by `radius` in every direction, on the sphere rather than by treating a
-/// degree as a fixed distance — a degree of longitude is a different length at every latitude.
 fn grown(envelope: Rect<f64>, radius: Radius) -> Rect<f64> {
     use geo::{Destination, Haversine};
 
@@ -145,10 +99,6 @@ fn grown(envelope: Rect<f64>, radius: Radius) -> Rect<f64> {
     Rect::new(south_west.0, north_east.0)
 }
 
-/// Whether `point` falls within `envelope`, edges included.
-///
-/// `Rect`'s own containment excludes its edges, and a crossing exactly on the grown edge is
-/// one at exactly the radius, which the distance test does count.
 fn contains(envelope: &Rect<f64>, point: Point<f64>) -> bool {
     (envelope.min().x..=envelope.max().x).contains(&point.x())
         && (envelope.min().y..=envelope.max().y).contains(&point.y())
@@ -160,7 +110,6 @@ mod tests {
 
     use super::*;
 
-    /// Berlin, in lat/lon and in the zone Germany's projected geometry uses.
     const BERLIN: (f64, f64) = (13.404954, 52.520008);
     const BERLIN_METRES: (f64, f64) = (798_809.63, 5_828_000.60);
 
@@ -178,11 +127,6 @@ mod tests {
         }
     }
 
-    /// The samples' own envelope in lat/lon, standing in for the one the store carries.
-    ///
-    /// The samples here are laid out in metres east of Berlin, so a metre is converted at the
-    /// latitude they sit at — near enough for an envelope, which the distance test decides
-    /// within anyway.
     fn envelope_of(samples: &[Sample]) -> Rect<f64> {
         let degrees = |metres: f64| metres / 111_320.0 / f64::cos(BERLIN.1.to_radians());
         let east = |sample: &Sample| BERLIN.0 + degrees(sample.projected.x() - BERLIN_METRES.0);
@@ -191,7 +135,6 @@ mod tests {
         Rect::new((min, BERLIN.1), (max, BERLIN.1))
     }
 
-    /// A sample `east` metres east of Berlin, taken at `minute`.
     fn sample(minute: u32, east: f64) -> Sample {
         Sample {
             t: at(minute),
@@ -199,7 +142,6 @@ mod tests {
         }
     }
 
-    /// A crossing `east` metres east of Berlin.
     fn crossing(id: &str, east: f64) -> Crossing {
         let degrees = east / 111_320.0 / f64::cos(BERLIN.1.to_radians());
         Crossing {
@@ -232,8 +174,6 @@ mod tests {
         assert!(passed.is_empty(), "{passed:?}");
     }
 
-    /// The instant recorded is the nearest sample's, not the first one inside the radius:
-    /// the nearest is the best evidence of when the crossing was actually reached.
     #[test]
     fn the_nearest_sample_says_when_the_crossing_was_passed() {
         let session = session(vec![sample(0, 0.0), sample(1, 90.0), sample(2, 180.0)]);
@@ -247,8 +187,6 @@ mod tests {
         );
     }
 
-    /// How many samples fell inside the radius is what separates a session that ran past a
-    /// crossing from one that produced a single fix near it.
     #[test]
     fn every_sample_inside_the_radius_is_counted() {
         let session = session(vec![sample(0, 0.0), sample(1, 90.0), sample(2, 180.0)]);
@@ -258,7 +196,6 @@ mod tests {
         assert_eq!(passed[0].samples_within, 3);
     }
 
-    /// One row per `(session, crossing)`, however many samples came within the radius.
     #[test]
     fn a_crossing_passed_by_many_samples_is_one_row() {
         let session = session((0..10).map(|i| sample(i, f64::from(i) * 10.0)).collect());
@@ -268,8 +205,6 @@ mod tests {
         assert_eq!(passed.len(), 1);
     }
 
-    /// A sample exactly at the radius counts: the radius is the furthest a sample may be,
-    /// and the envelope grown by it must therefore keep the crossing too.
     #[test]
     fn a_crossing_at_exactly_the_radius_was_passed() {
         let session = session(vec![sample(0, 0.0)]);
@@ -279,8 +214,6 @@ mod tests {
         assert_eq!(passed.len(), 1);
     }
 
-    /// A session that never moved still passes a crossing it was parked beside, and says so
-    /// with one sample: the row is written, and `samples_within` is what a reader weighs.
     #[test]
     fn a_session_of_one_sample_passes_what_it_sat_next_to() {
         let session = session(vec![sample(0, 0.0)]);

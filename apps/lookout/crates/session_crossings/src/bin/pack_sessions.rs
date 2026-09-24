@@ -1,10 +1,3 @@
-//! `pack_sessions`: choose the recorded sessions worth replaying and write them as the file a
-//! kiosk fetches.
-//!
-//! A session is worth replaying if it passed crossings, so the choosing is by how many, and
-//! the best few are kept. What comes out is one file holding each chosen session and the
-//! samples that replay it.
-
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
@@ -14,7 +7,6 @@ use clap::Parser;
 use medallion::MedallionArgs;
 use session_crossings::gold::{Choosing, choose};
 
-/// What the chosen sessions are called in gold, and the file each version of them holds.
 const ARTIFACT: &str = "sessions";
 const FILE: &str = "sessions.json";
 
@@ -78,8 +70,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(&output)?;
     fs::write(output.join(FILE), &json)?;
 
-    // Last, so a run that failed to write does not leave something pointing at a version that
-    // is not there.
     let version = medallion::gold_version(run);
     if let Some(file) = &args.version_file {
         fs::write(file, format!("{version}\n"))?;
@@ -109,7 +99,6 @@ mod tests {
         Args::command().debug_assert();
     }
 
-    /// The defaults are the recipe's business, but a bare run still has to choose something.
     #[test]
     fn the_defaults_keep_the_best_three_of_those_passing_five() {
         let args = Args::parse_from(["pack_sessions"]);

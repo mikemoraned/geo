@@ -1,13 +1,3 @@
-//! Deriving the silver `session_crossing` dataset: which crossings each session passed.
-//!
-//! Both inputs are read a country at a time, because a distance is only a distance within one
-//! projected zone and the zone is chosen per country. The output carries no geometry — a match
-//! is a session, a crossing and an instant — so it is partitioned by the date it happened and
-//! by nothing else.
-//!
-//! A run derives the whole dataset from the whole of silver, and replaces what it produces, so
-//! a partition it no longer produces rows for goes with it.
-
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
@@ -21,21 +11,15 @@ use serde::Deserialize;
 
 use crate::matching::{Crossing, Radius, Sample, Session, passes};
 
-/// What one run derived.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MatchOutcome {
-    /// Sessions read, over every country.
     pub sessions: usize,
-    /// Crossings read.
     pub crossings: usize,
-    /// Sessions that passed at least one crossing.
     pub sessions_matched: usize,
-    /// Rows written: one per session and crossing passed.
     pub passes: usize,
     pub partitions: Replaced,
 }
 
-/// A failure deriving the crossings a session passed.
 #[derive(Debug, thiserror::Error)]
 pub enum CrossingError {
     #[error("reading the silver datasets: {0}")]
@@ -48,7 +32,6 @@ pub enum CrossingError {
     OffTheGlobe(#[from] domain::CoordinateError),
 }
 
-/// One session as the store holds it: its identity and the envelope of its path.
 #[derive(Debug, Deserialize)]
 struct StoredSession {
     session_id: SessionId,
@@ -56,8 +39,6 @@ struct StoredSession {
     bbox: Bbox,
 }
 
-/// One sample as the store holds it, with its position taken out of the projected geometry
-/// as plain numbers — this needs coordinates in metres, not a geometry to decode.
 #[derive(Debug, Deserialize)]
 struct StoredSample {
     session_id: SessionId,
@@ -67,7 +48,6 @@ struct StoredSample {
     y: f64,
 }
 
-/// One crossing as the store holds it: in metres for the distance, in lat/lon for the prune.
 #[derive(Debug, Deserialize)]
 struct StoredCrossing {
     crossing_id: CrossingId,
@@ -77,10 +57,6 @@ struct StoredCrossing {
     lat: f64,
 }
 
-/// Derive the crossings every session passed, and write them.
-///
-/// A country the store holds no sessions or no crossings for contributes nothing rather than
-/// failing: a store can legitimately hold sessions in a country no extract has covered yet.
 pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, CrossingError> {
     let query = Query::new(root.clone());
     for (dataset, table) in [
@@ -126,7 +102,6 @@ pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, Crossin
     Ok(outcome)
 }
 
-/// Every session of one country, with its samples in metres.
 async fn sessions_in(query: &Query, country: Country) -> Result<Vec<Session>, CrossingError> {
     let stored: Vec<StoredSession> = query
         .rows(&format!(
@@ -171,7 +146,6 @@ async fn sessions_in(query: &Query, country: Country) -> Result<Vec<Session>, Cr
         .collect())
 }
 
-/// Every crossing of one country.
 async fn crossings_in(query: &Query, country: Country) -> Result<Vec<Crossing>, CrossingError> {
     let stored: Vec<StoredCrossing> = query
         .rows(&format!(
@@ -194,13 +168,6 @@ async fn crossings_in(query: &Query, country: Country) -> Result<Vec<Crossing>, 
         .collect()
 }
 
-/// One pass as the store keeps it: what was found, the device it was found on, and how hard
-/// the run looked.
-///
-/// The device is derivable from the session and is carried anyway, so a partition of these is
-/// readable without joining back to the sessions — as `session_sample` carries it for the same
-/// reason. The radius is the run's, kept on the row so a match made under one is still
-/// interpretable after it changes.
 fn row(pass: &Pass, device: &DeviceId, radius: Radius) -> SessionCrossingRow {
     SessionCrossingRow {
         session_id: pass.session_id.clone(),
@@ -230,9 +197,6 @@ mod tests {
         }
     }
 
-    /// The tuning a row was matched under travels with it, since a match made at 150 m and
-    /// one made at 20 m are not the same claim. A pass does not carry it: the radius is how
-    /// hard the run looked, not what it found.
     #[test]
     fn a_row_records_the_radius_it_was_matched_under() {
         let device = DeviceId::new("device-a").expect("an id");
@@ -243,7 +207,6 @@ mod tests {
         assert_eq!(row.distance_m, 20.0);
     }
 
-    /// Carried so a partition of these is readable without joining back to the sessions.
     #[test]
     fn a_row_names_the_device_the_session_ran_on() {
         let device = DeviceId::new("device-a").expect("an id");

@@ -77,9 +77,9 @@ against a GPS error budget measured in metres.
 the low four bytes of the md5 of the crossing's `crossing_id`, in the water-crossings notebook. The
 store refuses a write where two crossings share one, so the packer takes the column as given.
 
-That is what matches a prediction made on the device to a ground truth derived on the laptop: both
-names of a crossing come from the same row, so nothing can disagree about what one crossing is. An
-id also survives a rebuild of the dataset, a `--bbox` that keeps only part of it, and any
+Both names of a crossing come from the same row, so a prediction made on the device and a crossing
+derived on the laptop name the same thing, and nothing can come to disagree about what one crossing
+is. An id also survives a rebuild of the dataset, a `--bbox` that keeps only part of it, and any
 reordering, since none of those change the row.
 
 Four bytes is few enough that two distinct crossings can collide by chance (~0.4% over 5,760
