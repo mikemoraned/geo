@@ -1,7 +1,7 @@
 //! The device as a shell: its crossings come from flash, and it draws a panel.
 
 use platform_core::pointset::PointSet;
-use platform_core::{Model, Shell, Standalone};
+use platform_core::{Model, Shell};
 
 use crate::carried;
 use crate::panel::{self, NEAREST_ON_SCREEN, NO_FIX_YET, NO_TIME_YET, ViewModel};
@@ -13,10 +13,21 @@ impl Shell for Device {
     type ViewModel = ViewModel;
     type Crossings = PointSet<'static>;
 
+    fn carried() -> Option<Self::Crossings> {
+        Some(carried::crossings())
+    }
+
+    /// Nothing can tell this device its crossings: they are in flash, and reading them there
+    /// is what keeps thousands of them out of its RAM. A board given a set over a connection
+    /// would answer here.
+    fn received(_points: Vec<domain::CrossingCompact<f64>>) -> Option<Self::Crossings> {
+        None
+    }
+
     fn project(model: &Model<Self>) -> ViewModel {
         // The clock is the predictor's, and so is everything shown against it. It advances on
-        // a tick and on a fix alike, and refuses either where it is behind. So the panel shows
-        // the receiver's time on a device whose own clock counts from the epoch at boot.
+        // a tick and on a fix alike, and refuses either where it is behind — so the panel
+        // shows the receiver's time on a device whose own clock counts from the epoch at boot.
         let now = model.now();
         // The fix the predictions were made from, so the panel cannot report a position the
         // scan never ran from.
@@ -60,14 +71,6 @@ impl Shell for Device {
     }
 }
 
-/// The set is in flash, and the scan reads it where it lies rather than copying thousands of
-/// points into this board's RAM.
-impl Standalone for Device {
-    fn carried() -> Self::Crossings {
-        carried::crossings()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
@@ -76,12 +79,11 @@ mod tests {
 
     use super::*;
     use crate::panel::{CHARACTERS_PER_LINE, NEAREST_ON_SCREEN, NO_ARRIVAL};
-    use platform_core::Event;
-    use platform_core::standalone::{Effect, Lookout};
+    use platform_core::{Effect, Event, Lookout};
 
-    /// Dresden Hauptbahnhof, the landmark [`crate::carried`] also checks the set against.
-    /// Twenty crossings lie inside the radius, and at 54 knots, about 100 km/h, the countdowns
-    /// are a train's.
+    /// Dresden Hauptbahnhof, the landmark [`crate::carried`] also checks the set against, and
+    /// a place with twenty crossings inside the radius. At 54 knots, about 100 km/h, the
+    /// countdowns are a train's.
     fn at_the_station() -> Fix {
         Fix::at(20, 43, 29, 51.0403, 13.7322)
             .with_speed_knots(54.0)
@@ -101,7 +103,8 @@ mod tests {
     }
 
     /// When the fixtures are dated. A sentence carries the time of day and the date in
-    /// separate fields. A countdown advances only where the shell's clock agrees with both.
+    /// separate fields, and a countdown advances only where the shell's clock agrees with
+    /// both.
     fn fix_instant() -> DateTime<Utc> {
         at_the_station().t()
     }
@@ -164,7 +167,8 @@ mod tests {
         assert!(effects.is_empty());
     }
 
-    /// A timer takes the reading; the bars it fills change a handful of times per discharge.
+    /// The reading is taken on a timer, and the bars it fills change a handful of times over a
+    /// whole discharge.
     #[test]
     fn a_battery_reading_that_fills_the_same_bars_asks_for_no_render() {
         let core = core();
@@ -196,8 +200,8 @@ mod tests {
         assert!(effects.is_empty());
     }
 
-    /// Both are needed to read a jittering distance. 8 satellites at HDOP 2.4 wanders about a
-    /// metre. 6 at HDOP 4.4 wanders metres a second, and lies about its speed too.
+    /// Both are needed to read a jittering distance: 8 satellites at HDOP 2.4 wanders about a
+    /// metre, 6 at HDOP 4.4 wanders metres a second and lies about its speed too.
     #[test]
     fn the_fix_reports_how_good_it_is() {
         let core = fixed();
@@ -220,8 +224,8 @@ mod tests {
         assert_eq!(core.view().nearest.len(), NEAREST_ON_SCREEN);
     }
 
-    /// The count beside the fix and the list under it come from one set of predictions. The
-    /// screen therefore cannot show a crossing 300 m away and claim none is near.
+    /// The count beside the fix and the list under it come from one set of predictions, so
+    /// the screen cannot show a crossing 300 m away and claim none is near.
     #[test]
     fn the_count_and_the_list_agree() {
         let core = fixed();
@@ -231,7 +235,7 @@ mod tests {
         assert!(view.nearest.len() <= 20);
     }
 
-    /// The prediction itself, on a line. The nearest crossing to the station is 2.3 km away,
+    /// The prediction itself, on a line: the nearest crossing to the station is 2.3 km away,
     /// and at 100 km/h we reach it in a minute and a half.
     #[test]
     fn a_line_says_how_far_and_how_long() {

@@ -395,7 +395,7 @@ import arrow to name a crossing.
 
 ##### Shell split
 
-- [x] Split `Shell` by what a platform can do, not by what it happens to have. One kind is
+- [ ] Split `Shell` by what a platform can do, not by what it happens to have. One kind is
       standalone: it brings its crossings, asks for nothing, and needs only somewhere to send
       fixes. That is the board. The other is connected: it can call out, so it can be asked for
       a set it does not hold. That is a browser, and later a board with a radio. One trait
@@ -405,23 +405,3 @@ import arrow to name a crossing.
       an effect that never arrives. The thing to work out is what one core does with two of
       these, since crux builds one effect enum per app and a standalone shell's effects are a
       subset of a connected one's.
-
-      **Two apps, one state.** One effect enum per app means two kinds of platform are two
-      apps: `standalone::Lookout` over `{Render}`, and `connected::Lookout` over
-      `{Render, Crossings}`. Everything else is shared: one `Event`, one `Model`, one
-      transition per event. What splits is what a platform is asked for, not what it knows,
-      so the state cannot fork. `Shell` keeps what both bring: how the set is held, and the
-      projection. `Standalone::carried` and `Connected::received` are each total, and each
-      platform implements only its own.
-
-      The effects are two and the events stay one, which is the difference between being
-      asked and being heard. A shell answers every effect, so one it cannot perform costs it
-      a dead arm — the board's loop now matches a single variant. Nothing obliges a shell to
-      send every event. Where a standalone core meets `Event::Crossings`, the answer is the
-      general rule rather than a special case. A predictor keeps the crossings it was built
-      with, and a carried set was there from the start.
-
-      One difference had to be a type rather than a branch. `Default` is one function per
-      type, and the two kinds begin at opposite ends. So `standalone::Carried` is a model
-      born holding the set — that, and nothing else. No shell names it. Nothing here can
-      build the device shell that lost its dead arm: it needs `just m5plus-build-release`.

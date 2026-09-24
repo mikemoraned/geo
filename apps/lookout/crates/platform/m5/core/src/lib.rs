@@ -3,13 +3,12 @@
 //!
 //! Where anything is and what is about to be crossed is [`platform_core`]'s, and shared with
 //! every other shell. What only this board has is here: the set built into its flash, and a
-//! 135-pixel screen's worth of strings. [`Device`] is the two of them, as a
-//! [`platform_core::Standalone`] platform: it carries its crossings, so the core only ever
-//! asks it to draw.
+//! 135-pixel screen's worth of strings. [`Device`] is the two of them as one
+//! [`platform_core::Shell`].
 //!
 //! Separate from the shell beside it because the shell cannot be tested. A crate depending on
-//! `esp-idf-*` does not compile for the host at all. So everything here — all of what the
-//! board decides, minus the pins — sits where a laptop can run it.
+//! `esp-idf-*` does not compile for the host at all, so everything here — which is all of what
+//! the board decides, minus the pins — sits where a laptop can run it.
 
 pub mod carried;
 pub mod device;

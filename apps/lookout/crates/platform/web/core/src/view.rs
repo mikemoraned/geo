@@ -3,8 +3,7 @@
 use chrono::{DateTime, Utc};
 use domain::CrossingCompact;
 use geo_types::Point;
-use platform_core::connected::on_the_globe;
-use platform_core::{Connected, Float, Model, Shell};
+use platform_core::{Float, Model, Shell};
 use predictor::{Crossings, Prediction};
 use serde::{Deserialize, Serialize};
 
@@ -32,7 +31,7 @@ pub struct Predicted {
 pub struct ViewModel {
     /// The time the core is working to, which a countdown is subtracted from.
     pub now: Option<DateTime<Utc>>,
-    /// How many crossings the core predicts against. Zero until a set has arrived.
+    /// How many crossings are being predicted against. Zero until a set has arrived.
     pub crossings: usize,
     /// How far out the predictions reach. What a drawing puts at its edge.
     pub radius_metres: Float,
@@ -49,6 +48,25 @@ pub struct Browser;
 impl Shell for Browser {
     type ViewModel = ViewModel;
     type Crossings = Vec<CrossingCompact<Float>>;
+
+    /// Nothing: the core exists from the moment the module loads, and the points arrive over
+    /// the network after it.
+    fn carried() -> Option<Self::Crossings> {
+        None
+    }
+
+    /// A point the globe has no room for is dropped rather than refusing the whole set: one
+    /// bad row should not cost a page every crossing near it.
+    fn received(points: Vec<CrossingCompact<f64>>) -> Option<Self::Crossings> {
+        Some(
+            points
+                .into_iter()
+                .filter_map(|point| {
+                    CrossingCompact::at(point.id, point.latitude(), point.longitude()).ok()
+                })
+                .collect(),
+        )
+    }
 
     fn project(model: &Model<Self>) -> ViewModel {
         ViewModel {
@@ -67,18 +85,10 @@ impl Shell for Browser {
     }
 }
 
-/// The core exists from the moment the module loads, and the points arrive over the network
-/// after it.
-impl Connected for Browser {
-    fn received(points: Vec<CrossingCompact<f64>>) -> Self::Crossings {
-        on_the_globe(points)
-    }
-}
-
 /// Each prediction with the crossing's position beside it.
 ///
 /// A prediction names a crossing by id, and the set it was predicted against is the only place
-/// that id means anything. So this reads the set once rather than per prediction. A crossing
+/// that id means anything, so the set is read once here rather than per prediction. A crossing
 /// the set no longer holds is dropped: the canvas draws a position, and there is none for it.
 fn located(crossings: &impl Crossings<Float>, predictions: &[Prediction<Float>]) -> Vec<Predicted> {
     let mut located: Vec<Predicted> = crossings
@@ -109,8 +119,7 @@ mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
     use crux_core::Core;
     use domain::{CrossingCompactId, Gps, Sample};
-    use platform_core::Event;
-    use platform_core::connected::Lookout;
+    use platform_core::{Event, Lookout};
 
     use super::*;
 
