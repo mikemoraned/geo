@@ -2,6 +2,7 @@
 paths:
   - "**/*.rs"
   - "**/*.py"
+  - "**/*.js"
 ---
 
 # The Does-It-Bring-Joy Rule
@@ -42,3 +43,6 @@ has to walk past it. Where a survivor needs a case made, make it in the commit m
 Deleting the comment is one answer; absorbing it is the better one. Rename what it explained,
 split the function it summarised, or give the value it described a type. Behaviour stays as it
 was, and the tests stay green.
+
+A file this repo did not write is out of it: a vendored library or a generated binding is read
+rather than maintained, and editing one only makes the next upgrade a merge.

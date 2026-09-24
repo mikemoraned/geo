@@ -102,8 +102,8 @@ When doing TDD, always keep the code compiling at every step:
     rather than softening a claim; possibility-sense `may` still becomes `can`. Everything
     else in both skills applies, including the serial comma.
 - **Write no comment by default** — see
-  [`.claude/rules/does-it-bring-joy.md`](.claude/rules/does-it-bring-joy.md), which covers Rust
-  and Python. Naming and structure carry what a comment would have said; a convention goes in a
+  [`.claude/rules/does-it-bring-joy.md`](.claude/rules/does-it-bring-joy.md), which covers Rust,
+  Python and JavaScript. Naming and structure carry what a comment would have said; a convention goes in a
   README, and a durable fact about the system goes in the app's `docs/`. A comment survives
   only where you can justify that one.
 - **Prefer existing libraries; don't hand-roll — especially in notebook cells.** Reach for a

@@ -450,3 +450,7 @@ where the other refactors do.
       The sweep taught the rule two sections as it went: text a tool reads — a CLI's help, a
       doctest — is not a comment and needs no case made for it, and the rule stays out of the
       prose, so no `.md` explains it or lists what survived.
+
+      The rule now covers `**/*.js` as well, so the sweep takes the pages `server` serves with
+      the crate that serves them. `static/vendor/` is out: a vendored library is read rather
+      than maintained.
