@@ -454,3 +454,9 @@ where the other refactors do.
       The rule now covers `**/*.js` as well, so the sweep takes the pages `server` serves with
       the crate that serves them. `static/vendor/` is out: a vendored library is read rather
       than maintained.
+
+      `telemetry` — the queue's contract joined `docs/telemetry.md` beside the wire, and the
+      three read paths were renamed for what they answer (`take_oldest_sample`,
+      `requeue_as_oldest`, `peek_newest_samples`), which is what their comments had said. A take
+      removes and a peek does not, which `read` against `take` did not separate clearly enough. The
+      one comment left is the rustls precondition on `connect`, which no signature can state.

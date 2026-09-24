@@ -66,7 +66,7 @@ pub async fn poll_once(
     let now_ms = now.timestamp_millis();
     let cutoff = now_ms - config.recent_lookback.as_millis() as i64;
 
-    let samples = telemetry::latest_samples(conn, config.sample_limit).await?;
+    let samples = telemetry::peek_newest_samples(conn, config.sample_limit).await?;
     let mut ingested = 0;
     for (t, lat, lon) in samples
         .iter()

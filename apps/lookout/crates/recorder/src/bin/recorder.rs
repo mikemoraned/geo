@@ -102,7 +102,7 @@ async fn view_latest(
     limit: usize,
 ) -> Written {
     tracing::info!(limit, "reading latest samples (non-destructive)");
-    let samples = telemetry::latest_samples(conn, limit)
+    let samples = telemetry::peek_newest_samples(conn, limit)
         .await
         .expect("read latest samples");
 
@@ -132,7 +132,7 @@ async fn drain(archive: &Archive, conn: &mut redis::aio::MultiplexedConnection) 
                 tracing::info!("interrupted; stopping");
                 true
             }
-            result = telemetry::brpop_sample(conn, IDLE_TIMEOUT) => match result {
+            result = telemetry::take_oldest_sample(conn, IDLE_TIMEOUT) => match result {
                 Ok(Some(raw)) => {
                     batch.push(raw);
                     false
@@ -184,7 +184,7 @@ async fn write(archive: &Archive, samples: &[RawSample]) -> Option<Written> {
 async fn requeue(conn: &mut redis::aio::MultiplexedConnection, samples: &[RawSample]) {
     let mut requeued = 0;
     for sample in samples {
-        match telemetry::requeue_sample(conn, sample).await {
+        match telemetry::requeue_as_oldest(conn, sample).await {
             Ok(()) => requeued += 1,
             Err(err) => tracing::error!(%err, "failed to requeue sample — sample lost"),
         }
