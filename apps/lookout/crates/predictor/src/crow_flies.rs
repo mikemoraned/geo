@@ -1,9 +1,3 @@
-//! The crow-flies predictor: distance in a straight line, divided by the speed we are going.
-//!
-//! This is a baseline, not an answer. It knows nothing of the track, so a curve or a river
-//! bend puts a crossing nearer, and sooner, than the rails can reach it. The evaluation
-//! measures a better predictor against it.
-
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
@@ -12,28 +6,19 @@ use domain::{CrossingCompact, Precision, Sample};
 use crate::crossings::Crossings;
 use crate::predict::{Event, ObserveError, Predict, Prediction};
 
-/// How far ahead to predict. Wide enough that a train at speed has a minute or two of
-/// warning, narrow enough to mean something at walking pace.
 pub const DEFAULT_RADIUS_METRES: f64 = 5_000.0;
 
-/// A predictor that measures in straight lines.
-///
-/// `C` is where the crossings come from, defaulting to the `Vec` anything off the device
-/// holds them in. The device passes the columns it scans in flash instead.
 #[derive(Debug, Clone)]
 pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
     crossings: C,
     radius_metres: P,
     now: Option<DateTime<Utc>>,
-    /// The most recent fix, kept to derive a speed for a receiver that reports none.
     latest: Option<Sample<P>>,
-    /// The speed the current predictions were made at.
     speed_mps: Option<P>,
     predictions: Vec<Prediction<P>>,
 }
 
 impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
-    /// A predictor over `crossings`, reporting everything within `radius_metres`.
     pub fn new(crossings: C, radius_metres: f64) -> Self {
         // Infallible: `from_f64` only declines a value the target cannot represent, and a
         // radius in metres is an ordinary magnitude in any float.
@@ -48,12 +33,10 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
         }
     }
 
-    /// The clock, as the last event left it.
     pub fn now(&self) -> Option<DateTime<Utc>> {
         self.now
     }
 
-    /// The fix the predictions were made from, which is the most recent one it accepted.
     pub fn latest(&self) -> Option<&Sample<P>> {
         self.latest.as_ref()
     }
@@ -62,20 +45,14 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
         self.speed_mps
     }
 
-    /// How far out it looks, which is what a prediction is measured against.
     pub fn radius_metres(&self) -> P {
         self.radius_metres
     }
 
-    /// The crossings it predicts against
     pub fn crossings(&self) -> &C {
         &self.crossings
     }
 
-    /// Moves the clock to `to`, refusing to wind it back.
-    ///
-    /// An instant equal to the clock is accepted. One fix arrives as several sentences
-    /// bearing the same epoch, each saying more than the last.
     fn advance(&mut self, to: DateTime<Utc>) -> Result<(), ObserveError> {
         match self.now {
             Some(now) if to < now => Err(ObserveError::OutOfOrder { now, at: to }),
@@ -86,14 +63,12 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
         }
     }
 
-    /// Takes `at` as a time that has been reached, where it is later than any reported so far.
     fn reached(&mut self, at: DateTime<Utc>) {
         if self.now.is_none_or(|now| at > now) {
             self.now = Some(at);
         }
     }
 
-    /// Predicts afresh from `sample`.
     fn predict(&mut self, sample: Sample<P>) {
         let speed = speed_mps(&sample, self.latest.as_ref());
         let from = sample.gps.position;
@@ -125,16 +100,6 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
     }
 }
 
-/// The speed to divide a distance by: what the receiver reported, or failing that what the
-/// step from the fix before implies.
-///
-/// A receiver reporting no speed is ordinary: a phone's geolocation leaves it out, and a
-/// stationary NMEA receiver reports no course to go with it. Two fixes say how fast.
-///
-/// At `f32` the derived speed is less exact, and the slower we go the less exact it gets.
-/// `f32` resolves latitude to about 0.42m, so each fix carries that much error, and so does
-/// the step between two of them. A train covers 30m in a second, which puts the error near
-/// 1%. Walking pace covers 1.4m, which puts it near 30%. At `f64` the error does not arise.
 fn speed_mps<P: Precision>(sample: &Sample<P>, previous: Option<&Sample<P>>) -> Option<P> {
     sample
         .gps
@@ -148,10 +113,6 @@ fn implied_speed_mps<P: Precision>(sample: &Sample<P>, previous: &Sample<P>) -> 
         .then(|| Haversine.distance(previous.gps.position, sample.gps.position) / seconds)
 }
 
-/// When we cover `metres` at `speed_mps`, having set off at `at`.
-///
-/// Nothing at a standstill, because we never arrive. Nothing either at a speed so small that
-/// the answer falls outside the range an instant can be expressed in.
 fn arrival<P: Precision>(at: DateTime<Utc>, metres: P, speed_mps: P) -> Option<DateTime<Utc>> {
     if speed_mps <= P::zero() {
         return None;
@@ -161,12 +122,8 @@ fn arrival<P: Precision>(at: DateTime<Utc>, metres: P, speed_mps: P) -> Option<D
 }
 
 impl<P: Precision, C: Crossings<P>> Predict<P> for CrowFlies<P, C> {
-    /// An event out of order leaves the clock and the predictions as they were, rather than
-    /// half applied.
     fn observe(&mut self, event: Event<P>) -> Result<(), ObserveError> {
         match event {
-            // Ordered against the fix it replaces, not against the clock: what makes a fix
-            // stale is a newer fix, and the clock may have run on without one.
             Event::Sampled(sample) => {
                 if let Some(latest) = &self.latest
                     && sample.t < latest.t
@@ -193,10 +150,7 @@ impl<P: Precision, C: Crossings<P>> Predict<P> for CrowFlies<P, C> {
 mod tests {
     use super::*;
 
-    /// Rounded to the metre from an independent haversine over the same mean-radius sphere,
-    /// so a distance here is checked against the formula rather than against `geo` itself.
     const DEGREE_OF_LATITUDE_M: f64 = 111_195.0;
-    /// A hundredth of a degree of latitude, which is what the fixtures below are apart.
     const HUNDREDTH_DEGREE_M: f64 = DEGREE_OF_LATITUDE_M / 100.0;
     const TOLERANCE_M: f64 = 10.0;
 
@@ -204,8 +158,6 @@ mod tests {
         DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
     }
 
-    /// Three crossings due north of 50.0N, a hundredth of a degree apart, so the nearest is
-    /// about 1,112m away and the furthest about 3,336m.
     fn crossings<P: Precision>() -> Vec<CrossingCompact<P>> {
         vec![
             CrossingCompact::at(1, 50.01, 0.0).expect("on the globe"),
@@ -218,7 +170,6 @@ mod tests {
         CrowFlies::new(crossings(), DEFAULT_RADIUS_METRES)
     }
 
-    /// A fix at 50.0N 0.0E, `after` seconds past the fixed instant.
     fn fix_at(latitude: f64, after: i64) -> Sample<f64> {
         Sample::at(instant() + TimeDelta::seconds(after), latitude, 0.0).expect("on the globe")
     }
@@ -266,8 +217,6 @@ mod tests {
         assert_eq!(ids(&predictor), vec![1], "only the one inside 2km");
     }
 
-    /// The crow-flies distance, which is the great-circle line between the two and takes no
-    /// notice of how the track gets there.
     #[test]
     fn the_distance_is_the_straight_line_to_the_crossing() {
         let mut predictor = predictor();
@@ -280,8 +229,6 @@ mod tests {
         assert_near(predictor.predictions()[2].metres, 3.0 * HUNDREDTH_DEGREE_M);
     }
 
-    /// The other half of a prediction: that distance at the speed the receiver reports.
-    /// 1,112m at 10m/s is 111 seconds from the instant of the fix.
     #[test]
     fn the_time_is_the_distance_at_the_reported_speed() {
         let mut predictor = predictor();
@@ -305,7 +252,6 @@ mod tests {
         assert_eq!(predictor.speed_mps(), None);
     }
 
-    /// The speed a view draws and the speed the arrivals were divided by are the one number.
     #[test]
     fn the_speed_it_predicted_at_is_the_one_the_receiver_reported() {
         let mut predictor = predictor();
@@ -317,7 +263,6 @@ mod tests {
         assert_eq!(predictor.speed_mps(), Some(10.0));
     }
 
-    /// A receiver reporting none leaves the derived speed, which is what the arrivals used.
     #[test]
     fn the_speed_it_predicted_at_is_the_derived_one_where_none_was_reported() {
         let mut predictor = predictor();
@@ -336,8 +281,6 @@ mod tests {
         );
     }
 
-    /// A shell may learn the time between fixes, and a receiver stamps a fix when it took it.
-    /// So a fix can arrive behind the clock and still be the newest there is.
     #[test]
     fn a_fix_behind_the_clock_but_ahead_of_the_last_fix_is_taken() {
         let mut predictor = predictor();
@@ -353,11 +296,13 @@ mod tests {
             .expect("a fix newer than the last one");
 
         assert_eq!(predictor.latest().expect("a fix").latitude(), 50.0);
-        // The clock stays where the signal put it rather than winding back to the fix.
-        assert_eq!(predictor.now(), Some(instant() + TimeDelta::seconds(60)));
+        assert_eq!(
+            predictor.now(),
+            Some(instant() + TimeDelta::seconds(60)),
+            "the clock stays where the signal put it rather than winding back to the fix"
+        );
     }
 
-    /// What makes a fix stale is a newer fix.
     #[test]
     fn a_fix_behind_the_last_fix_is_refused() {
         let mut predictor = predictor();
@@ -378,8 +323,6 @@ mod tests {
         assert_eq!(predictor.crossings().len(), crossings::<f64>().len());
     }
 
-    /// A phone that reports no speed still moves, and the two fixes say how fast: a
-    /// hundredth of a degree in a hundred seconds is about 11m/s.
     #[test]
     fn a_speed_the_receiver_does_not_report_is_derived_from_the_fix_before() {
         let mut predictor = predictor();
@@ -397,9 +340,6 @@ mod tests {
         assert!((seconds - 100.0f64).abs() < 1.0, "{seconds}s is not 100s");
     }
 
-    /// The first fix of a session has nothing to derive a speed from, so it says how far but
-    /// not when. Inventing a speed to put a time against it would be worse than saying
-    /// nothing.
     #[test]
     fn the_first_fix_predicts_a_distance_and_no_time() {
         let mut predictor = predictor();
@@ -412,7 +352,6 @@ mod tests {
         assert_eq!(predictor.predictions()[0].at, None);
     }
 
-    /// Standing still, we never arrive, so there is no time to give.
     #[test]
     fn a_stationary_fix_predicts_a_distance_and_no_time() {
         let mut predictor = predictor();
@@ -425,7 +364,6 @@ mod tests {
         assert_eq!(predictor.predictions()[0].at, None);
     }
 
-    /// Sitting at a platform: two fixes in the same place, so the derived speed is zero too.
     #[test]
     fn a_fix_that_has_not_moved_predicts_no_time() {
         let mut predictor = predictor();
@@ -467,8 +405,6 @@ mod tests {
         assert_eq!(predictor.predictions(), predicted, "the same instants");
     }
 
-    /// A clock only goes forwards. A shell ticking with a time it read before the fix it has
-    /// already handed over is told so, rather than having the tick dropped in silence.
     #[test]
     fn a_time_behind_the_clock_is_refused() {
         let mut predictor = predictor();
@@ -488,8 +424,6 @@ mod tests {
         assert_eq!(predictor.now(), Some(instant() + TimeDelta::seconds(30)));
     }
 
-    /// And a refused event changes nothing at all, so a late sample cannot move a prediction
-    /// while failing to move the clock.
     #[test]
     fn a_sample_behind_the_clock_is_refused_and_predicts_nothing() {
         let mut predictor = predictor();
@@ -505,8 +439,6 @@ mod tests {
         assert_eq!(predictor.now(), Some(instant() + TimeDelta::seconds(30)));
     }
 
-    /// A fix reaches the predictor as several sentences bearing one epoch, each saying more
-    /// than the last. The same instant twice is ordinary, not out of order.
     #[test]
     fn a_second_event_at_the_same_instant_is_accepted() {
         let mut predictor = predictor();
@@ -520,9 +452,6 @@ mod tests {
         assert!(predictor.predictions()[0].at.is_some(), "the speed landed");
     }
 
-    /// The whole prediction at the precision the device runs at, which is the point of the
-    /// precision being a parameter at all. `f32` is not a lesser answer here: over a kilometre
-    /// it resolves to about a tenth of a metre, far finer than the fix being measured.
     #[test]
     fn the_whole_prediction_runs_at_the_precision_the_device_uses() {
         let mut predictor: CrowFlies<f32> = CrowFlies::new(crossings(), DEFAULT_RADIUS_METRES);

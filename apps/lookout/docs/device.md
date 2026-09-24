@@ -140,6 +140,10 @@ possible without it.
 - **`RMC` carries a trailing mode/navigational-status pair** that plain 0183 examples lack,
   and its course field is empty when stationary. Fixtures written from 0183 documentation
   rather than from a capture get both wrong.
+- **One fix is spread over several sentences.** `RMC` carries the date, the speed in knots — a
+  nautical mile, 1,852 metres, an hour — and the course; `GGA` carries the altitude, the satellite
+  count and the HDOP. The date comes only from `RMC`, so a stream says nothing placeable until its
+  first one lands.
 - **True UTC arrives in `ZDA`/`RMC` before any position fix**, so the wall clock can be set
   from the receiver without waiting for a fix and without the BM8563 RTC.
 - **`$GPTXT,01,01,01,ANTENNA OPEN` repeats continuously even with a good fix.** It is

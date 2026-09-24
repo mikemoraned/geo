@@ -1,65 +1,34 @@
-//! Sentences in the shape the receiver emits them, for tests on either side of the parser.
-//!
-//! One place knows what an AT6668 sentence looks like: the field count, the NMEA 4.1
-//! mode/status pair RMC ends with, the empty course a stationary receiver reports. A test
-//! needing a fix somewhere else asks for one here rather than writing out another sentence,
-//! so a change in the receiver is a change in one file.
-//!
-//! The constants are captured — real sentences the receiver emitted, with the position
-//! replaced, since a real fix pins down where and when someone was. [`Fix`] builds the rest,
-//! and the tests below hold it to those captures, so what it builds is what the receiver
-//! sends.
-//!
-//! Off by default, behind the `fixtures` feature, so nothing here reaches a device binary. A
-//! crate wanting it puts `predictor` in its `[dev-dependencies]` with the feature on.
-
 use chrono::{DateTime, TimeZone, Utc};
 
 use crate::sentence::Sentence;
 
-/// Captured indoors, before the receiver had a fix. `RMC_VOID` carries the NMEA 4.1
-/// navigational-status field — the trailing `,V` — that a hand-written 0183 RMC lacks.
+// Captured indoors, before the receiver had a fix. RMC_VOID ends with the NMEA 4.1
+// navigational-status field — the trailing `,V` — that a hand-written 0183 RMC lacks.
 pub const RMC_VOID: &str = "$GNRMC,202725.00,V,,,,,,,290726,,,N,V*11";
 pub const GGA_NO_FIX: &str = "$GNGGA,202725.00,,,,,0,00,25.5,,,,,,*4A";
 pub const GSA_NO_FIX: &str = "$GNGSA,A,1,,,,,,,,,,,,,25.5,25.5,25.5,1*01";
-/// Also captured: an RX overrun spliced two sentences together. A shell sizes its UART ring
-/// buffer to avoid the overrun, but corruption on a serial line is never ruled out, so
-/// anything reading sentences has to survive one.
+// Also captured: an RX overrun spliced two sentences into one, leaving a checksum that
+// belongs to neither half.
 pub const SPLICED: &str = "$GAGSV,12724.00,V,N*55";
 
-/// The date every built sentence carries, `ddmmyy` as RMC spells it. GGA has no date field,
-/// which is why a stream reports nothing until its first RMC.
+// `ddmmyy`, as RMC spells a date.
 const DATE: &str = "290726";
-/// The same day as [`DATE`], for a test asserting when a sample landed.
 const YEAR: i32 = 2026;
 const MONTH: u32 = 7;
 const DAY: u32 = 29;
 
-/// What the captured GGA reported about the fix it carried: quality, satellites, HDOP,
-/// altitude in metres, and geoid separation. Fixed, because a test wanting different numbers
-/// wants a different capture, not a different builder.
-const QUALITY: &str = "1,06,4.4";
-const ALTITUDE: &str = "262.46,M,45.12,M";
+// What the captured GGA reported, in the order the sentence carries it.
+const QUALITY_SATELLITES_HDOP: &str = "1,06,4.4";
+const ALTITUDE_AND_GEOID_SEPARATION: &str = "262.46,M,45.12,M";
 
-/// A captured sentence, as a [`Sentence`].
-///
-/// Infallible for the constants above: each is a real line off the receiver, and the shape is
-/// all a [`Sentence`] asks for.
 pub fn captured(sentence: &str) -> Sentence {
     Sentence::new(sentence).expect("a captured sentence")
 }
 
-/// Wraps a sentence body into the on-the-wire form: `$`, the body, then `*` and the XOR of
-/// every body byte as two hex digits.
 fn sentence(body: &str) -> Sentence {
     Sentence::new(format!("${body}*{:02X}", checksum(body))).expect("a body and its checksum")
 }
 
-/// `sentence` corrupted: its contents intact and its checksum guaranteed wrong.
-///
-/// Still a [`Sentence`], because a checksum that fails to cover its body is the shape a real
-/// overrun takes. Inverting every bit cannot land back on the correct value, which fabricating
-/// one by hand can.
 pub fn with_bad_checksum(sentence: &Sentence) -> Sentence {
     let body = sentence.body();
 
@@ -70,10 +39,6 @@ fn checksum(body: &str) -> u8 {
     body.bytes().fold(0u8, |acc, byte| acc ^ byte)
 }
 
-/// One fix, as the sentences carrying it.
-///
-/// Build one with [`Fix::at`] and add what the receiver would have reported. A fix with no
-/// speed set is a receiver standing still, which reports a speed of zero and no course at all.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Fix {
     hour: u32,
@@ -86,7 +51,6 @@ pub struct Fix {
 }
 
 impl Fix {
-    /// A fix at a time of day, on the day every fixture is dated.
     pub fn at(
         hour: u32,
         minute: u32,
@@ -105,7 +69,6 @@ impl Fix {
         }
     }
 
-    /// Knots, which is what RMC reports and what a sample converts away from.
     pub fn with_speed_knots(self, speed_knots: f64) -> Self {
         Self {
             speed_knots,
@@ -120,19 +83,16 @@ impl Fix {
         }
     }
 
-    /// When this fix is, which is what a sample built from it carries.
     pub fn t(&self) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(YEAR, MONTH, DAY, self.hour, self.minute, self.second)
             .single()
             .expect("an instant on a real day")
     }
 
-    /// Position, speed, course and date, ready for the wire.
     pub fn rmc(&self) -> Sentence {
         sentence(&self.rmc_body())
     }
 
-    /// Position, fix quality and altitude, ready for the wire. No date: GGA carries none.
     pub fn gga(&self) -> Sentence {
         sentence(&self.gga_body())
     }
@@ -152,18 +112,16 @@ impl Fix {
 
     fn gga_body(&self) -> String {
         format!(
-            "GNGGA,{},{},{QUALITY},{ALTITUDE},,",
+            "GNGGA,{},{},{QUALITY_SATELLITES_HDOP},{ALTITUDE_AND_GEOID_SEPARATION},,",
             self.time(),
             self.position(),
         )
     }
 
-    /// `hhmmss.ss`, to the hundredth of a second the receiver reports.
     fn time(&self) -> String {
         format!("{:02}{:02}{:02}.00", self.hour, self.minute, self.second)
     }
 
-    /// Both axes with their hemispheres, in the degrees-and-decimal-minutes NMEA uses.
     fn position(&self) -> String {
         format!(
             "{},{},{},{}",
@@ -183,9 +141,6 @@ impl Fix {
     }
 }
 
-/// `ddmm.mmmmm`: whole degrees, then the remainder as minutes. `digits` is how wide the degrees
-/// are — two for a latitude, three for a longitude — and the hemisphere is a separate field, so
-/// what is formatted here is the magnitude.
 fn degrees_and_minutes(degrees: f64, digits: usize) -> String {
     let degrees = degrees.abs();
     let whole = degrees.trunc();
@@ -201,14 +156,13 @@ fn degrees_and_minutes(degrees: f64, digits: usize) -> String {
 mod tests {
     use super::*;
 
-    /// Bodies of sentences taken from a real outdoor capture, with the position replaced. They
-    /// are what [`Fix`] is held to: everything else here builds sentences, and these are the
-    /// evidence that what it builds is what the receiver emits.
+    // Captured bodies, checksum excluded, at 50.5N 8.5E: moving at 4.13 knots on a course of
+    // 79.94°, and — in the third — stationary at 0.08 knots, which the receiver reports with the
+    // course field left empty.
     const CAPTURED_RMC: &str =
         "GNRMC,204329.00,A,5030.00000,N,00830.00000,E,4.13,79.94,290726,,,A,V";
     const CAPTURED_GGA: &str =
         "GNGGA,204329.00,5030.00000,N,00830.00000,E,1,06,4.4,262.46,M,45.12,M,,";
-    /// A stationary receiver leaves the course field empty — the `0.08,,` here.
     const CAPTURED_RMC_STATIONARY: &str =
         "GNRMC,204858.00,A,5030.00000,N,00830.00000,E,0.08,,290726,,,A,V";
 
@@ -228,7 +182,6 @@ mod tests {
         assert_eq!(captured_fix().gga(), sentence(CAPTURED_GGA));
     }
 
-    /// The course field is empty rather than zero, which is the shape that once broke a parser.
     #[test]
     fn a_fix_with_no_course_is_the_captured_stationary_one() {
         let stationary = Fix::at(20, 48, 58, 50.5, 8.5).with_speed_knots(0.08);
@@ -236,15 +189,12 @@ mod tests {
         assert_eq!(stationary.rmc(), sentence(CAPTURED_RMC_STATIONARY));
     }
 
-    /// A minute is a sixtieth of a degree, and the field is degrees followed by minutes — so
-    /// 51.0403 N is 51 degrees and 2.418 minutes, not 51.0403 of anything.
     #[test]
     fn a_coordinate_is_degrees_then_minutes() {
         assert_eq!(degrees_and_minutes(51.0403, 2), "5102.41800");
         assert_eq!(degrees_and_minutes(13.7322, 3), "01343.93200");
     }
 
-    /// The hemisphere is its own field, so the magnitude is what is formatted.
     #[test]
     fn a_southern_or_western_fix_reports_its_hemisphere() {
         let fix = Fix::at(20, 43, 29, -33.9, -18.4);
@@ -252,8 +202,6 @@ mod tests {
         assert!(fix.rmc().body().contains("3354.00000,S,01824.00000,W"));
     }
 
-    /// The contents have to survive, or a reader would refuse the sentence for the wrong
-    /// reason — being unreadable rather than being unbelievable.
     #[test]
     fn a_corrupted_sentence_keeps_its_body_and_loses_its_checksum() {
         let corrupt = with_bad_checksum(&captured_fix().gga());

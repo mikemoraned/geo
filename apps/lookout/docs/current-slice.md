@@ -478,3 +478,11 @@ where the other refactors do.
       `crossings` — the README already carried nearly all of it; what it lacked (what six decimal
       places cost, why the version file is written last, why the extracts are only logged) joined
       it. `SIX_PLACES` and `RUHLAND_LON` absorbed the rest.
+
+      `predictor` — a new `crates/predictor/README.md` holds the model: crow flies as the
+      baseline, the crossings as a source rather than a slice, how a fix is ordered against a fix
+      while the clock only goes forwards, and what a derived speed costs at `f32`. Which NMEA
+      sentence carries which field went to `docs/device.md`. Two comments survive on that count,
+      both the justification `rules/rust.md` asks of an `expect`; the captured sentences in
+      `fixtures` keep theirs under a new exception in the rule, since a literal's fields are
+      positions in a string that no name can spell out.
