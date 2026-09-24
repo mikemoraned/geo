@@ -367,6 +367,9 @@ position, so they are upper bounds on the scan alone.
   mount at boot, and a way for the device to end up holding a set that disagrees with the
   code reading it. That it is really there can be checked by searching the release binary
   for the format's magic and reading the header after it.
+- **`f32` is what the board can afford.** Its FPU is single precision, so `f64` arithmetic runs
+  in software, and a scan of thousands of crossings against every fix cannot pay for that. At
+  these latitudes `f32` resolves about 0.42 m — finer than the fix it measures.
 - **`f32` coordinates are enough.** Device and notebook agree to 0.27 m over 2.3 km, about 1
   part in 10,000, and count the same crossings within 5 km. The count is the stricter of the
   two checks, since a distance can be slightly out and still rank correctly where a

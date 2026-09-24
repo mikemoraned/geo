@@ -1,5 +1,3 @@
-//! A session's identity: one contiguous run of samples from one device.
-
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
@@ -10,50 +8,25 @@ use uuid::Uuid;
 use crate::device::DeviceId;
 use crate::name::{NameError, checked};
 
-/// The namespace session ids are minted in, so an id derived here cannot collide with a
-/// name-based id derived from the same values for anything else.
 const SESSION_NAMESPACE: Uuid = Uuid::from_u128(0x8f9c_1d3a_6b47_4e21_9a05_c7d8_e2f4_1b60);
 
-/// What ended the previous session and so began this one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StartedBy {
-    /// The device reported the start of a session.
     StartSession,
-    /// The interval since the previous sample exceeded the threshold.
     Gap,
-    /// The first sample recorded for this device, with nothing before it. Sessions begin this
-    /// way where the device reported no session start at all.
     FirstSeen,
 }
 
-/// Identifies one session, on the session and on each of its samples.
-///
-/// Derived from what the session *is* rather than minted per run, so a run that re-derives a
-/// session it has already written lands on the same id and rewrites it in place.
-///
-/// It is a name and stays writable as one: an id reaches a store that lays data out in
-/// directories named by it, and a query that asks for one, so the characters those would
-/// misread are refused here rather than where a path is built.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct SessionId(String);
 
 impl SessionId {
-    /// An existing id.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error where the id could not be written as a name.
     pub fn new(id: impl Into<String>) -> Result<Self, NameError> {
         Ok(Self(checked(id.into())?))
     }
 
-    /// The id of the session `device` began at `started_at`.
-    ///
-    /// A name-based UUID over exactly what identifies the session, so any run — or any
-    /// reader wanting to name a session it has only the boundaries of — arrives at the
-    /// same id without consulting what has already been written.
     pub fn of(device: &DeviceId, started_at: DateTime<Utc>) -> Self {
         let name = format!("{device}/{}", started_at.timestamp_millis());
         Self(Uuid::new_v5(&SESSION_NAMESPACE, name.as_bytes()).to_string())
@@ -108,9 +81,6 @@ mod tests {
         );
     }
 
-    /// One session the store holds, and the id it was written under. Pinned rather than
-    /// merely checked for determinism: changing the namespace or what is hashed would still
-    /// derive consistently, and would rename every session already recorded.
     #[test]
     fn an_id_is_the_one_the_store_was_written_with() {
         let device = DeviceId::new("77a64f88-c65f-4f9f-90bb-0d069b9f55a1").expect("an id");
@@ -122,8 +92,6 @@ mod tests {
         );
     }
 
-    /// An id is written out as a directory name and asked for in a query, so a derived one
-    /// has to be writable as a name.
     #[test]
     fn a_derived_id_can_be_written_as_a_name() {
         let id = SessionId::of(&device(), instant());

@@ -1,5 +1,3 @@
-//! A fix, and when it was taken.
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -7,14 +5,6 @@ use crate::gps::Gps;
 use crate::position::CoordinateError;
 use crate::precision::Precision;
 
-/// One reported fix: what a source knew about where it was, and the instant it knew it for.
-///
-/// The instant is the reading's, not the moment anything received it. A browser's
-/// `watchPosition` fix is seconds old by the time it arrives, and a replayed one is months
-/// old, so whoever handles a sample reads the time from the sample rather than from a clock.
-///
-/// Held in the float the platform works in, since a scan subtracts a fix from a crossing: a
-/// source reports degrees in `f64`, and the board measures in `f32`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub struct Sample<P: Precision> {
@@ -27,12 +17,6 @@ impl<P: Precision> Sample<P> {
         Self { t, gps }
     }
 
-    /// A fix from degrees, latitude first, for a caller holding a store's columns or a parsed
-    /// sentence rather than a checked position.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error where the coordinates are not on the globe.
     pub fn at(
         t: DateTime<Utc>,
         latitude_degrees: f64,
@@ -50,9 +34,6 @@ impl<P: Precision> Sample<P> {
     }
 }
 
-/// What a source knew, set a field at a time. Each names the one field it sets, so no call
-/// site depends on the order of two arguments of the same type, and each delegates to the fix
-/// itself — a sample adds only the instant.
 impl<P: Precision> Sample<P> {
     pub fn with_altitude_metres(self, altitude_metres: Option<f64>) -> Self {
         Self {
@@ -96,11 +77,6 @@ impl<P: Precision> Sample<P> {
         }
     }
 
-    /// The same sample at another precision. See [`Gps::to_precision`].
-    ///
-    /// # Errors
-    ///
-    /// Returns an error where the coordinates are not on the globe.
     pub fn to_precision<Q: Precision>(&self) -> Result<Sample<Q>, CoordinateError> {
         Ok(Sample::new(self.t, self.gps.to_precision()?))
     }
@@ -121,8 +97,6 @@ mod tests {
             .with_accuracy_metres(Some(5.0))
     }
 
-    /// The shape a kiosk replays and a shell dispatches, written once here rather than at each
-    /// end: a page sends what it read, and reshapes nothing.
     #[test]
     fn a_sample_is_written_as_an_instant_beside_the_fix() {
         let json = serde_json::to_string(&sample()).expect("write");
@@ -143,9 +117,6 @@ mod tests {
         assert_eq!(sample.gps.accuracy_metres, None);
     }
 
-    /// The path the runner takes: `session_sample`'s columns, with no receiver and no
-    /// sentence anywhere in it. The columns it has no counterpart for stay absent rather
-    /// than being invented — a phone counts no satellites.
     #[test]
     fn a_sample_can_be_built_from_the_columns_silver_carries() {
         let sample = Sample::<f64>::at(instant(), 50.5, 8.5)
@@ -163,8 +134,6 @@ mod tests {
         assert_eq!(sample.gps.hdop, None);
     }
 
-    /// A coordinate is checked before it is converted, so the error reports the value that
-    /// was actually wrong rather than what it became.
     #[test]
     fn a_sample_off_the_globe_is_refused_at_either_precision() {
         assert_eq!(
@@ -177,8 +146,6 @@ mod tests {
         );
     }
 
-    /// How a reported fix reaches the board: everything the source knew, in the float the
-    /// scan measures in.
     #[test]
     fn a_sample_carries_what_it_knew_into_another_precision() {
         let held: Sample<f32> = sample()
@@ -193,8 +160,6 @@ mod tests {
         assert_eq!(held.gps.satellites, Some(6));
     }
 
-    /// A fix read off a wire is read unchecked, so the conversion into the precision a scan
-    /// runs in is where an impossible position is stopped.
     #[test]
     fn a_sample_read_off_the_globe_is_refused_on_the_way_into_a_scan() {
         let read: Sample<f64> = serde_json::from_str(

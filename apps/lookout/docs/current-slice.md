@@ -468,3 +468,9 @@ where the other refactors do.
       `motis` — most of what the comments said was already in `docs/motis.md`; what was missing
       (polyline precision, what zoom selects) joined it, the poll-to-ingest shape went to a
       crate README, and overlapping polls being collapsed downstream to `docs/architecture.md`.
+
+      `domain` — the conventions the doc comments carried are now sections of the crate's
+      README: degrees checked once at two precisions, what is read unchecked against what is
+      scanned, absence kept as a source reported it, how an id is derived, and evidence against
+      effort in a `Pass`. Why the board wants `f32` at all — its single-precision FPU — went to
+      `docs/device.md`, which had the measurements but not the reason.

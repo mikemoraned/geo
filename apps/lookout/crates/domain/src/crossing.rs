@@ -1,16 +1,3 @@
-//! A crossing: what it is called, and where it is.
-//!
-//! A crossing has two names, because the places that hold one have different room for it.
-//! [`CrossingId`] says what the crossing is made of, and is what a store, a query or a person
-//! reads. [`CrossingCompactId`] is the same crossing in four bytes, which is what a device has
-//! space for beside a coordinate. Both are names for one crossing, and both are defined here,
-//! so whoever holds a crossing picks the name its room allows rather than spelling out one of
-//! its own.
-//!
-//! [`CrossingCompact`] is the crossing where space is not free: named in four bytes, measured
-//! in whatever float the holder scans in, and sent as three numbers rather than three named
-//! fields. Those are one decision, not three, which is why they are one type.
-
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
@@ -21,27 +8,11 @@ use crate::name::{NameError, checked};
 use crate::position::{CoordinateError, degrees, position};
 use crate::precision::Precision;
 
-/// Identifies one crossing.
-///
-/// Derived from what the crossing *is* — the water, the stretch of track, and where along that
-/// track the two meet — so a ground truth recorded by one run and a prediction made by another
-/// refer to the same crossing, and a rerun over the same reference data lands on the same ids.
-///
-/// The place is part of the identity because one track crosses one body of water more than
-/// once: a line following a valley crosses the river beside it repeatedly, and those are
-/// separate sightings rather than one.
-///
-/// It is a name and stays writable as one: an id reaches a store that lays data out in
-/// directories named by it, and a URL that asks for one, so the characters those would misread
-/// are refused here rather than where a path is built.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct CrossingId(String);
 
 impl CrossingId {
-    /// # Errors
-    ///
-    /// Returns an error where the id could not be written as a name.
     pub fn new(id: impl Into<String>) -> Result<Self, NameError> {
         Ok(Self(checked(id.into())?))
     }
@@ -65,12 +36,6 @@ impl Display for CrossingId {
     }
 }
 
-/// The same crossing named in four bytes, which is what a device has room for beside a
-/// coordinate.
-///
-/// Minted from [`CrossingId`] where the crossing is derived, which is also where two crossings
-/// landing on one of these is refused, so nothing downstream derives one: a packer, a scan and
-/// a page all read the name they were given.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
 )]
@@ -93,27 +58,15 @@ impl From<u32> for CrossingCompactId {
     }
 }
 
-/// Written as the four bytes it is, so two ids are the same width however small the numbers.
 impl Display for CrossingCompactId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:08x}", self.0)
     }
 }
 
-/// One crossing: which one it is, and where.
-///
-/// Degrees in `f64`, and the name that says what the crossing is made of, which is what
-/// anything with room for it holds. [`CrossingCompact`] is the same crossing where there is
-/// not room. Whatever a derivation needs beyond this — the extraction it came from, the same
-/// place projected into metres — it adds beside one of these rather than restating the two
-/// fields every crossing has.
-///
-/// It is not serialised. What goes over a wire or into a buffer is [`CrossingCompact`], which
-/// is sized for that; this is what a derivation holds while it works.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Crossing {
     pub id: CrossingId,
-    /// Degrees, longitude in `x` and latitude in `y`.
     pub position: Point<f64>,
 }
 
@@ -122,11 +75,6 @@ impl Crossing {
         Self { id, position }
     }
 
-    /// A crossing from degrees, latitude first.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error where the coordinates are not on the globe.
     pub fn at(
         id: CrossingId,
         latitude_degrees: f64,
@@ -147,16 +95,10 @@ impl Crossing {
     }
 }
 
-/// One crossing where space is not free: which one it is, and where.
-///
-/// Measured in the float the platform holding it works in, since a scan subtracts a crossing
-/// from a fix. On the device that is `f32`, which is what makes scanning the whole set against
-/// every fix affordable; a source reports degrees in `f64`, and that is what a set is sent in.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(from = "CrossingCompactRow", into = "CrossingCompactRow", bound = "")]
 pub struct CrossingCompact<P: Precision> {
     pub id: CrossingCompactId,
-    /// Degrees, longitude in `x` and latitude in `y`.
     pub position: Point<P>,
 }
 
@@ -168,11 +110,6 @@ impl<P: Precision> CrossingCompact<P> {
         }
     }
 
-    /// A crossing from degrees, latitude first.
-    ///
-    /// Checked on the same terms as a fix. A set is read from a flash buffer that can arrive
-    /// corrupt, or fetched over a network, and an unchecked crossing off the globe is scanned
-    /// against every fix instead of failing once, here.
     pub fn at(
         id: impl Into<CrossingCompactId>,
         latitude_degrees: f64,
@@ -193,14 +130,6 @@ impl<P: Precision> CrossingCompact<P> {
     }
 }
 
-/// How a compact crossing is sent: `[id, latitude, longitude]`.
-///
-/// A set of thousands goes as one array, and this is a third the size of the same thing with
-/// its field names repeated on every row. Latitude leads, as it does everywhere a coordinate
-/// is written here in degrees, which is the opposite order to the `x`, `y` it is held in.
-///
-/// Nothing is checked on the way in: a set arrives with whatever a source put in it, and
-/// whoever reads it drops the rows it cannot use rather than losing the set to one of them.
 #[derive(Serialize, Deserialize)]
 struct CrossingCompactRow(CrossingCompactId, f64, f64);
 
@@ -245,8 +174,6 @@ mod tests {
         );
     }
 
-    /// The array leads with latitude and the point holds longitude first, so a swap between
-    /// the two would put every crossing somewhere else entirely.
     #[test]
     fn reading_one_back_keeps_latitude_and_longitude_apart() {
         let read: CrossingCompact<f64> = serde_json::from_str("[7,51.0403,13.7322]").expect("read");
@@ -256,7 +183,6 @@ mod tests {
         assert_eq!(read.position.x(), 13.7322);
     }
 
-    /// The axes are the same type, so swapping them is silent.
     #[test]
     fn a_crossing_holds_its_axes_the_way_round_georust_does() {
         let crossing = CrossingCompact::<f32>::at(7, 51.5, 13.5).expect("on the globe");
@@ -272,8 +198,6 @@ mod tests {
         assert!(CrossingCompact::<f32>::at(7, 91.0, 13.5).is_err());
     }
 
-    /// An id is written out as a directory name and asked for in a URL, so one holding what
-    /// either would misread is refused where it is made rather than where it is used.
     #[test]
     fn an_id_that_could_not_be_written_as_a_name_is_refused() {
         assert!(CrossingId::new("water/track").is_err());
@@ -301,7 +225,6 @@ mod tests {
         assert_eq!(crossing.position, Point::new(13.5, 51.5));
     }
 
-    /// The four bytes a device holds, written the width they are.
     #[test]
     fn a_compact_id_reads_as_the_four_bytes_it_is() {
         assert_eq!(CrossingCompactId::new(0x2620_a981).to_string(), "2620a981");
