@@ -4,8 +4,6 @@ import pytest
 
 from lookout_predictor import DEFAULT_RADIUS_METRES, CrowFlies, Prediction
 
-# Three crossings due north of 50.0N, a hundredth of a degree apart, so the nearest is about
-# 1,112m away and the furthest about 3,336m.
 CROSSINGS = [(1, 50.01, 0.0), (2, 50.02, 0.0), (3, 50.03, 0.0)]
 HUNDREDTH_DEGREE_M = 1111.95
 

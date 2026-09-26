@@ -15,8 +15,6 @@ def test_every_sample_is_a_step_carrying_what_was_predicted_from_it(store):
 
     assert len(steps) == 4
     assert [step.sample.lat for step in steps] == [50.0, 50.01, 50.02, 50.03]
-    # The further crossing starts outside the default 5km radius and comes into view as the
-    # run closes on it.
     assert [prediction.crossing_compact_id for prediction in steps[0].predictions] == [NEAR]
     assert [prediction.crossing_compact_id for prediction in steps[-1].predictions] == [NEAR, FAR]
 

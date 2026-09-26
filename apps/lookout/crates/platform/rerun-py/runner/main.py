@@ -22,7 +22,6 @@ from .store import Store
 
 APPLICATION = "lookout-predictor30"
 
-# Where a viewer started as `rerun` listens.
 DEFAULT_VIEWER = "rerun+http://127.0.0.1:9876/proxy"
 
 
@@ -102,11 +101,7 @@ def main(argv: list[str] | None = None) -> None:
         if args.command == "sessions":
             sessions(store)
         else:
-            # Blocking, so the process outlives what it is still sending: a viewer that
-            # receives half a session is worse than one that waits for all of it.
             replayed(store, args).flush()
-    # A store whose sessions or crossings have never been derived is an ordinary state to
-    # find it in, and says so in one line rather than as a stack.
     except ValueError as absent:
         raise SystemExit(str(absent)) from absent
 

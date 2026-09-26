@@ -61,6 +61,11 @@ It draws into a running viewer rather than into a file. A viewer reads only reco
 own minor version and the one before it, so a `.rrd` kept longer than that is a file nothing will
 open.
 
+The command blocks until the stream has flushed, so the process outlives what it is still sending:
+a viewer that receives half a session is worse than one that waits for all of it. A store whose
+sessions or crossings have never been derived is an ordinary state to find it in, so the command
+says so in a line rather than a stack.
+
 The viewer is checked for before drawing. A stream with nowhere to send drops what it is given and
 says nothing, so without that check a replay into no viewer is silent and looks like success.
 

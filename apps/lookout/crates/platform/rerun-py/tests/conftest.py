@@ -12,16 +12,15 @@ SESSION = "1e1b4a2c-0000-4000-8000-000000000001"
 DEVICE = "d0000000-0000-4000-8000-000000000001"
 COUNTRY = "DE"
 
-# A run north up the 8.6E meridian at a hundredth of a degree a minute, starting the minute
-# before midnight so its samples fall in two date partitions.
-T0 = datetime.datetime(2026, 7, 25, 23, 58, tzinfo=datetime.UTC)
+MINUTE_BEFORE_MIDNIGHT = datetime.datetime(2026, 7, 25, 23, 58, tzinfo=datetime.UTC)
+T0 = MINUTE_BEFORE_MIDNIGHT
 LON = 8.6
 START_LAT = 50.0
-# Two crossings ahead of the run: the nearer about 3.9km from the first fix and about 560m
-# from the last, so it comes inside the radius a line is drawn within; the further about
-# 6.7km, which never does.
+A_HUNDREDTH_OF_A_DEGREE_A_MINUTE = 1 / 100.0
+
 NEAR, FAR = 0x292E417A, 0x51B0C33D
-NEAR_LAT, FAR_LAT = 50.035, 50.06
+COMES_INSIDE_THE_RADIUS, STAYS_OUTSIDE_IT = 50.035, 50.06
+NEAR_LAT, FAR_LAT = COMES_INSIDE_THE_RADIUS, STAYS_OUTSIDE_IT
 
 
 def _projected(points):
@@ -38,10 +37,12 @@ def _wkb(points):
 def _sample_table():
     minutes = range(4)
     instants = [T0 + datetime.timedelta(minutes=minute) for minute in minutes]
-    points = [(LON, START_LAT + minute / 100.0) for minute in minutes]
-    # The first sample reports no speed and no altitude, as a device does before it has a
-    # fix good enough to derive them from.
-    absent_at_first = [None if minute == 0 else 18.5 for minute in minutes]
+    points = [
+        (LON, START_LAT + minute * A_HUNDREDTH_OF_A_DEGREE_A_MINUTE) for minute in minutes
+    ]
+    speed_absent_until_a_fix_can_derive_it = [
+        None if minute == 0 else 18.5 for minute in minutes
+    ]
 
     return pa.table(
         {
@@ -55,7 +56,7 @@ def _sample_table():
                 [None if minute == 0 else 12.5 for minute in minutes], pa.float64()
             ),
             "acc": pa.array([4.8] * len(instants), pa.float64()),
-            "speed": pa.array(absent_at_first, pa.float64()),
+            "speed": pa.array(speed_absent_until_a_fix_can_derive_it, pa.float64()),
             "heading": pa.array([0.0] * len(instants), pa.float64()),
             "implied_speed_mps": pa.array([None] * len(instants), pa.float64()),
             "geometry": _wkb(points),
