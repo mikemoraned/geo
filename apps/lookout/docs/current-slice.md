@@ -524,6 +524,11 @@ where the other refactors do.
       `crossings` defines, went with it. The `f32` reason points at `docs/device.md` rather than
       restating it.
 
+      `platform/web` — one README for the pair, since `core` and `bridge` are two halves of one
+      shell: what a browser answers about its crossings, why the set is read once while projecting,
+      and that the bridge's tests are the contract nothing else checks. What the page does with it
+      stays `docs/web.md`'s.
+
 - [ ] Once every crate is swept, read every `.md` the sweep wrote or grew against the rest, and
       replace duplication with a cross-reference. Where a concept is shared widely enough that no
       one doc owns it, extract a `GLOSSARY.md` defining each such term under its own heading, and
