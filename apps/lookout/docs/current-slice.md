@@ -509,3 +509,26 @@ where the other refactors do.
       tests pin. A dedupe pass over every README came with it: the coordinate precision an export
       keeps is one rule in `docs/medallion.md`, and the partition dates, the per-country zone and
       the board's `f32` are each stated once, where they belong, with pointers instead of copies.
+
+      `medallion-py` — the doc comments here are the python API's docstrings, which `pyo3`
+      publishes and `help()` reads, so they stay under the rule's text-a-tool-reads exception.
+      Verified rather than assumed: a built wheel reports each function's and each field's
+      `__doc__`, and reports `None` for the module, so the crate-level `//!` block moved to the
+      README. The private helpers, the two `py.detach` rationales and the `Param` ordering trap
+      went — the last as a test that fails if a `bool` ever binds as an `int`. The README now
+      holds only what a python caller needs, pointing at `docs/medallion.md` for the rest.
+
+- [ ] Once every crate is swept, read every `.md` the sweep wrote or grew against the rest, and
+      replace duplication with a cross-reference. Where a concept is shared widely enough that no
+      one doc owns it, extract a `GLOSSARY.md` defining each such term under its own heading, and
+      cross-reference the anchors rather than restating the definition. The sweep has already
+      found this twice by accident — the export precision, and the store's rules restated in a
+      binding's README — so doing it deliberately, over the whole set at once, is the point.
+
+- [ ] Then say the same in less text. Every doc grew by absorbing what a comment said, and prose
+      written to rescue a fact is longer than prose written to state one. Nothing should be lost,
+      including the reasoning, but a paragraph that earns its length should be the exception.
+
+- [ ] Then run `writing-clearly-and-concisely` over all of them once more, in one pass rather than
+      per crate, since the last edits each doc took were made against a crate rather than against
+      the set.

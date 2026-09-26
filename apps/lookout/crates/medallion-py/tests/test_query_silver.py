@@ -1,30 +1,22 @@
-"""What a reader gets when it queries the store.
-
-The store answers with an Arrow table, so what these check is the crossing: that the
-datasets a query reads are the tables it names, that a value binds as a value, that geometry
-comes back as geometry rather than as bytes to decode, and that a mistake is raised as one.
-"""
-
 import datetime
 
 import pyarrow as pa
 import pytest
 
 import lookout_medallion
-from conftest import BERLIN, BERLIN_UTM32N, crossing_table, leg_table
+from conftest import BERLIN, BERLIN_UTM32N, water_crossing_table, train_segment_table
 
 
 @pytest.fixture
 def written(store):
-    """A store holding two legs and one crossing."""
     lookout_medallion.write_silver(
         "train_segment",
-        leg_table(["a", "b"], ["2026-07-21", "2026-07-22"], ["DE", "DE"]),
+        train_segment_table(["a", "b"], ["2026-07-21", "2026-07-22"], ["DE", "DE"]),
         root=str(store),
     )
     lookout_medallion.write_silver(
         "water_crossing",
-        crossing_table([0x292E417A], [BERLIN], [BERLIN_UTM32N]),
+        water_crossing_table([0x292E417A], [BERLIN], [BERLIN_UTM32N]),
         root=str(store),
     )
     return store
@@ -65,6 +57,16 @@ def test_a_parameter_binds_as_a_value(written):
     assert table.column("trip_id").to_pylist() == ["b"]
 
 
+def test_a_boolean_parameter_binds_as_a_boolean_and_not_as_a_number(written):
+    table = query(
+        written,
+        "SELECT trip_id FROM train_segment WHERE realtime = $realtime ORDER BY trip_id",
+        params={"realtime": True},
+    )
+
+    assert table.column("trip_id").to_pylist() == ["a", "b"]
+
+
 def test_a_parameter_carrying_a_quote_matches_nothing(written):
     table = query(
         written,
@@ -76,8 +78,6 @@ def test_a_parameter_carrying_a_quote_matches_nothing(written):
 
 
 def test_geometry_reads_back_as_geometry_rather_than_as_bytes(written):
-    """The point of naming the dataset: its geometry column arrives with its CRS, so a
-    reader asks for a coordinate instead of decoding WKB itself."""
     table = query(
         written,
         "SELECT ST_X(geometry) AS lon, ST_Y(geometry) AS lat FROM water_crossing",

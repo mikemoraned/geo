@@ -1,12 +1,7 @@
-"""A store to write into, and a table shaped like one of its datasets."""
-
 import pyarrow as pa
 import pytest
 import shapely
 
-# Berlin and Frankfurt in lat/lon, and the same two points in the zone Germany's projected
-# geometry uses (EPSG:25832), so the table carries both columns the dataset holds without
-# needing a projection library here.
 BERLIN = (13.404954, 52.520008)
 FRANKFURT = (8.682127, 50.110924)
 BERLIN_UTM32N = (798809.63, 5828000.60)
@@ -19,8 +14,7 @@ def store(tmp_path):
     return tmp_path
 
 
-def leg_table(trip_ids, departures, countries):
-    """A table shaped like the silver `train_segment` dataset."""
+def train_segment_table(trip_ids, departures, countries):
     line = shapely.LineString([BERLIN, FRANKFURT])
     projected = shapely.LineString([BERLIN_UTM32N, FRANKFURT_UTM32N])
     rows = len(trip_ids)
@@ -53,12 +47,7 @@ def leg_table(trip_ids, departures, countries):
 
 
 
-def crossing_table(compact_ids, points, projected):
-    """A table shaped like the silver `water_crossing` dataset.
-
-    `points` are lat/lon and `projected` the same places in the country's zone, since the
-    dataset carries both and the caller of the writer is what projects them.
-    """
+def water_crossing_table(compact_ids, lat_lon, projected):
     rows = len(compact_ids)
     return pa.table(
         {
@@ -79,7 +68,7 @@ def crossing_table(compact_ids, points, projected):
             "merge_distance_m": pa.array([25.0] * rows, pa.float64()),
             "min_crossing_m": pa.array([5.0] * rows, pa.float64()),
             "geometry": pa.array(
-                [shapely.to_wkb(shapely.Point(point)) for point in points], pa.binary()
+                [shapely.to_wkb(shapely.Point(point)) for point in lat_lon], pa.binary()
             ),
             "geometry_projected": pa.array(
                 [shapely.to_wkb(shapely.Point(point)) for point in projected], pa.binary()

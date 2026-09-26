@@ -1,31 +1,3 @@
-//! The medallion store from python: writing a derivation's silver, and reading any of it back.
-//!
-//! A derivation prototyped as a notebook still has to produce silver in exactly the form
-//! every engine reads: WKB geometry, CRS as PROJJSON, the dataset's own columns, its
-//! partition layout, and a rebuild that replaces what it no longer produces. That is one
-//! implementation, in `medallion`, and this is the way into it from outside Rust — rather
-//! than a second one written in python that has to agree with it. Reading makes the same
-//! argument: which files hold a dataset, and what CRS its geometry is in, are the store's to
-//! know rather than each reader's.
-//!
-//! The caller names a dataset, and passes a table or a query:
-//!
-//! ```python
-//! import lookout_medallion
-//!
-//! written = lookout_medallion.write_silver("water_crossing", table)
-//! table = lookout_medallion.query_silver(
-//!     "SELECT crossing_id FROM water_crossing WHERE country = $country",
-//!     params={"country": "DE"},
-//! )
-//! ```
-//!
-//! A table crossing either way is anything exposing the Arrow PyCapsule interface — a pyarrow
-//! or DuckDB result, a GeoDataFrame's `to_arrow()` — so the rows are handed over without being
-//! copied through python objects. Nothing about the store's layout is stated here: the
-//! dataset's definition says which columns it holds and how it is partitioned, and a table
-//! that does not match is refused.
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -76,8 +48,6 @@ fn write_silver(
     let root = root_or_default(root)?;
     let (batches, _) = table.into_inner();
 
-    // The write is filesystem work that calls back into nothing python owns, so the
-    // interpreter is left free for the duration.
     let written = py
         .detach(|| runtime().block_on(medallion::write_table(&root, &target, &batches)))
         .map_err(table_error)?;
@@ -89,10 +59,8 @@ fn write_silver(
     })
 }
 
-/// A value bound to a `$name` placeholder in a query. Any other python type is refused.
 #[derive(Debug, Clone, FromPyObject)]
 enum Param {
-    // Ahead of `Int`, since a python `bool` is an `int` and would otherwise bind as one.
     Bool(bool),
     Int(i64),
     Float(f64),
@@ -141,8 +109,6 @@ fn query_silver(
         .map(|(name, param)| (name, ScalarValue::from(param)))
         .collect();
 
-    // Reading is filesystem work that calls back into nothing python owns, so the
-    // interpreter is left free for the duration.
     let batches = py
         .detach(|| {
             runtime().block_on(async {
@@ -188,7 +154,6 @@ fn default_root() -> PyResult<PathBuf> {
     Root::default_path().map_err(|err| PyRuntimeError::new_err(err.to_string()))
 }
 
-/// The store at `root`, or the one in the repo the caller is working in.
 fn root_or_default(root: Option<PathBuf>) -> PyResult<Root> {
     match root {
         Some(path) => Ok(Root::new(path)),
@@ -196,9 +161,6 @@ fn root_or_default(root: Option<PathBuf>) -> PyResult<Root> {
     }
 }
 
-/// The runtime the store's async writers run on: one per process, since a call arrives on
-/// whichever thread python is on and building a runtime per call would cost more than the
-/// write.
 fn runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
     RUNTIME.get_or_init(|| {
@@ -206,8 +168,6 @@ fn runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
-/// A dataset that has never been written, and a query that does not plan, are both the
-/// caller's mistake. What goes wrong reading the files it planned over is not.
 fn query_error(err: QueryError) -> PyErr {
     match err {
         QueryError::NoSuchDataset { .. } | QueryError::DataFusion(_) => {
@@ -217,7 +177,6 @@ fn query_error(err: QueryError) -> PyErr {
     }
 }
 
-/// A dataset that cannot be named is the caller's mistake, and is raised as one.
 fn target_error(err: TargetError) -> PyErr {
     match err {
         TargetError::NoSuchDataset { .. } => PyValueError::new_err(err.to_string()),
@@ -225,8 +184,6 @@ fn target_error(err: TargetError) -> PyErr {
     }
 }
 
-/// A table that does not match the dataset is the caller's mistake; anything that goes wrong
-/// while writing it is not.
 fn table_error(err: TableError) -> PyErr {
     match err {
         TableError::Missing { .. }

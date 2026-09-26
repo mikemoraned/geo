@@ -1,9 +1,12 @@
 # lookout_medallion
 
-The medallion store from python, so a derivation prototyped as a notebook produces the same
-silver a Rust one does, and a reader asks for a dataset by name rather than working out which
-files hold it — see [`docs/medallion.md`](../../docs/medallion.md) for the store itself, and
-`src/lib.rs` for the API, whose doc comments are the module's `__doc__`.
+The medallion store from python. Why the way in is a binding rather than a second implementation,
+and what a table has to carry, is
+[writing silver from another language](../../docs/medallion.md#writing-silver-from-another-language).
+What follows is only what a python caller has to know.
+
+Each function's own documentation is its docstring, which `pyo3` publishes from the doc comment in
+`src/lib.rs`, so `help(lookout_medallion.write_silver)` in a notebook is the reference.
 
 ```python
 import lookout_medallion
@@ -17,27 +20,29 @@ table = lookout_medallion.query_silver(
 )
 ```
 
-## What the table has to hold
+## Handing a table over
 
-The call **replaces the whole dataset**, so the table has to hold every row of it, not the
-rows that have changed: a partition the table covers is rewritten, and one it does not is
-deleted.
+A table crossing either way is anything exposing the Arrow PyCapsule interface — a pyarrow table, a
+DuckDB result, a GeoDataFrame's `to_arrow()` — so nothing is copied through python objects. Geometry
+goes in as WKB or as any GeoArrow encoding, whichever the library at hand produces.
 
-Its columns must be exactly the dataset's own, plus `geometry` and `geometry_projected`
-where it carries geometry, plus the columns its partition values are read from (`country`,
-and its date key where it has one). Those last are written into the path rather than into
-the file. Geometry is WKB, or any GeoArrow encoding; the coordinates are taken to be in the
-CRS the store states for each column — lat/lon for `geometry`, the country's projected zone
-for `geometry_projected`.
+Projecting is the caller's work: a notebook projects the coordinates itself and asks
+`projected_crs(country)` for the zone, rather than naming one of its own.
 
-Anything else is refused with a `ValueError` naming what was wrong: an unknown dataset, one
-outside silver, a missing or unexpected column, a column that cannot be read as the type the
-dataset defines, or a country the store does not know.
+Both calls release the interpreter while they run, since the work is filesystem work that calls back
+into nothing python owns.
+
+## What is raised
+
+A mistake in the call raises `ValueError` naming what was wrong — an unknown dataset, one outside
+silver, a missing or unexpected column, a column that cannot be read as the type the dataset
+defines, a country the store does not know. A failure while reading or writing the files raises
+`RuntimeError`, so a notebook can tell a typo from a broken store.
 
 ## Using it from a notebook
 
-marimo notebooks here run `--sandbox`, so the dependency goes in the notebook's own inline
-script metadata, with the path resolved relative to the notebook:
+marimo notebooks here run `--sandbox`, so the dependency goes in the notebook's own inline script
+metadata, with the path resolved relative to the notebook:
 
 ```python
 # /// script
@@ -49,7 +54,6 @@ script metadata, with the path resolved relative to the notebook:
 ```
 
 Run such a notebook with `uv run --no-project --reinstall-package lookout-medallion
-<notebook>.py`: uv caches the built wheel against this crate's own sources, and would
-otherwise not notice a change to the rust crates it wraps. `just test-python` (from
-`apps/lookout`) runs the tests the same way; nothing needs installing first, since uv builds
-the extension with maturin.
+<notebook>.py`: uv caches the built wheel against this crate's own sources, and would otherwise not
+notice a change to the rust crates it wraps. `just test-python` (from `apps/lookout`) runs the tests
+the same way; nothing needs installing first, since uv builds the extension with maturin.

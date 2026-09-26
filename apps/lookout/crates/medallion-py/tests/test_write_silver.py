@@ -1,10 +1,3 @@
-"""What a notebook gets when it writes a silver dataset.
-
-The checks that matter here are the ones a Rust test cannot make: that a table built by the
-engines a notebook actually uses — pyarrow, DuckDB — crosses into the store intact, and that
-what comes back out is readable by an engine that was not involved in writing it.
-"""
-
 import datetime
 
 import duckdb
@@ -13,21 +6,16 @@ import pytest
 import shapely
 
 import lookout_medallion
-from conftest import BERLIN, BERLIN_UTM32N, PROJECTED_CRS, crossing_table, leg_table
+from conftest import BERLIN, BERLIN_UTM32N, PROJECTED_CRS, water_crossing_table, train_segment_table
 
 
-def read(store, sql):
-    """Read the store back with DuckDB — an engine that had no part in writing it.
-
-    Plain DuckDB, without its spatial extension: a geometry column is WKB, so the geometry
-    can be decoded here, and the read then depends on nothing but parquet.
-    """
+def read_with_duckdb(store, sql):
     return duckdb.connect().sql(sql.format(store=store)).fetchall()
 
 
 class TestWritingATable:
     def test_a_table_lands_in_one_file_per_partition(self, store):
-        table = leg_table(["a", "b"], ["2026-07-21", "2026-07-22"], ["DE", "DE"])
+        table = train_segment_table(["a", "b"], ["2026-07-21", "2026-07-22"], ["DE", "DE"])
 
         written = lookout_medallion.write_silver(
             "train_segment", table, root=str(store)
@@ -42,10 +30,10 @@ class TestWritingATable:
         ).exists()
 
     def test_the_rows_read_back_through_another_engine(self, store):
-        table = leg_table(["a"], ["2026-07-21"], ["DE"])
+        table = train_segment_table(["a"], ["2026-07-21"], ["DE"])
         lookout_medallion.write_silver("train_segment", table, root=str(store))
 
-        rows = read(
+        rows = read_with_duckdb(
             store,
             "SELECT trip_id, departure, geometry, geometry_projected "
             "FROM read_parquet('{store}/silver/train_segment/**/*.parquet')",
@@ -60,10 +48,10 @@ class TestWritingATable:
         assert shapely.from_wkb(bytes(projected)).coords[0] == BERLIN_UTM32N
 
     def test_the_partition_values_come_back_as_columns(self, store):
-        table = leg_table(["a"], ["2026-07-21"], ["DE"])
+        table = train_segment_table(["a"], ["2026-07-21"], ["DE"])
         lookout_medallion.write_silver("train_segment", table, root=str(store))
 
-        rows = read(
+        rows = read_with_duckdb(
             store,
             "SELECT country, departure_date FROM read_parquet("
             "'{store}/silver/train_segment/**/*.parquet', hive_partitioning = true)",
@@ -72,8 +60,7 @@ class TestWritingATable:
         assert rows == [("DE", datetime.date(2026, 7, 21))]
 
     def test_a_duckdb_result_can_be_handed_over_directly(self, store):
-        """The engine a notebook queries with, passed with no copy through pyarrow."""
-        table = leg_table(["a"], ["2026-07-21"], ["DE"])
+        table = train_segment_table(["a"], ["2026-07-21"], ["DE"])
         con = duckdb.connect()
         con.register("legs", table)
 
@@ -88,13 +75,13 @@ class TestRewriting:
     def test_a_partition_the_table_no_longer_covers_is_removed(self, store):
         lookout_medallion.write_silver(
             "train_segment",
-            leg_table(["a", "b"], ["2026-07-21", "2026-07-22"], ["DE", "DE"]),
+            train_segment_table(["a", "b"], ["2026-07-21", "2026-07-22"], ["DE", "DE"]),
             root=str(store),
         )
 
         written = lookout_medallion.write_silver(
             "train_segment",
-            leg_table(["a"], ["2026-07-21"], ["DE"]),
+            train_segment_table(["a"], ["2026-07-21"], ["DE"]),
             root=str(store),
         )
 
@@ -104,11 +91,11 @@ class TestRewriting:
         ).exists()
 
     def test_rewriting_the_same_table_leaves_the_same_rows(self, store):
-        table = leg_table(["a"], ["2026-07-21"], ["DE"])
+        table = train_segment_table(["a"], ["2026-07-21"], ["DE"])
         lookout_medallion.write_silver("train_segment", table, root=str(store))
         lookout_medallion.write_silver("train_segment", table, root=str(store))
 
-        rows = read(
+        rows = read_with_duckdb(
             store,
             "SELECT count(*) FROM read_parquet("
             "'{store}/silver/train_segment/**/*.parquet')",
@@ -117,12 +104,10 @@ class TestRewriting:
         assert rows == [(1,)]
 
 
-class TestTheCrossingDatasets:
-    """The two layouts the sessions and legs do not exercise: a dataset partitioned by
-    country alone, and a dated one carrying no geometry at all."""
+class TestCountryOnlyAndGeometrylessLayouts:
 
     def test_a_water_crossing_lands_under_its_country(self, store):
-        table = crossing_table([0x292E417A], [BERLIN], [BERLIN_UTM32N])
+        table = water_crossing_table([0x292E417A], [BERLIN], [BERLIN_UTM32N])
 
         written = lookout_medallion.write_silver(
             "water_crossing", table, root=str(store)
@@ -130,7 +115,7 @@ class TestTheCrossingDatasets:
 
         assert written.rows == 1
         assert (store / "silver/water_crossing/country=DE/part-0.parquet").exists()
-        rows = read(
+        rows = read_with_duckdb(
             store,
             "SELECT overlap_kind, geometry FROM read_parquet("
             "'{store}/silver/water_crossing/**/*.parquet')",
@@ -166,7 +151,7 @@ class TestTheCrossingDatasets:
 
 class TestWhatIsRefused:
     def test_a_dataset_the_store_does_not_define(self, store):
-        table = leg_table(["a"], ["2026-07-21"], ["DE"])
+        table = train_segment_table(["a"], ["2026-07-21"], ["DE"])
 
         with pytest.raises(ValueError, match="crossing_candidates"):
             lookout_medallion.write_silver(
@@ -174,20 +159,19 @@ class TestWhatIsRefused:
             )
 
     def test_a_bronze_dataset(self, store):
-        """Bronze is what cannot be re-derived, and a table write replaces."""
-        table = leg_table(["a"], ["2026-07-21"], ["DE"])
+        table = train_segment_table(["a"], ["2026-07-21"], ["DE"])
 
         with pytest.raises(ValueError, match="gps_reading"):
             lookout_medallion.write_silver("gps_reading", table, root=str(store))
 
     def test_a_column_the_dataset_holds_but_the_table_does_not(self, store):
-        table = leg_table(["a"], ["2026-07-21"], ["DE"]).drop_columns(["mode"])
+        table = train_segment_table(["a"], ["2026-07-21"], ["DE"]).drop_columns(["mode"])
 
         with pytest.raises(ValueError, match="mode"):
             lookout_medallion.write_silver("train_segment", table, root=str(store))
 
     def test_a_column_the_dataset_does_not_hold(self, store):
-        table = leg_table(["a"], ["2026-07-21"], ["DE"]).append_column(
+        table = train_segment_table(["a"], ["2026-07-21"], ["DE"]).append_column(
             "scratch", pa.array(["x"], pa.string())
         )
 
@@ -195,13 +179,13 @@ class TestWhatIsRefused:
             lookout_medallion.write_silver("train_segment", table, root=str(store))
 
     def test_a_country_the_store_does_not_know(self, store):
-        table = leg_table(["a"], ["2026-07-21"], ["ZZ"])
+        table = train_segment_table(["a"], ["2026-07-21"], ["ZZ"])
 
         with pytest.raises(ValueError, match="ZZ"):
             lookout_medallion.write_silver("train_segment", table, root=str(store))
 
     def test_nothing_is_written_when_the_table_is_refused(self, store):
-        table = leg_table(["a"], ["2026-07-21"], ["DE"]).drop_columns(["mode"])
+        table = train_segment_table(["a"], ["2026-07-21"], ["DE"]).drop_columns(["mode"])
 
         with pytest.raises(ValueError):
             lookout_medallion.write_silver("train_segment", table, root=str(store))
@@ -228,12 +212,9 @@ class TestTheDefaultRoot:
         deep.mkdir(parents=True)
         (workspace / "Cargo.toml").write_text('[workspace]\nmembers = ["crates/*"]\n')
 
-        # Found from the workspace root itself, which is where a recipe runs from, and from
-        # any directory below it.
-        monkeypatch.chdir(workspace)
-        assert lookout_medallion.default_root() == workspace / "data/medallion"
-        monkeypatch.chdir(deep)
-        assert lookout_medallion.default_root() == workspace / "data/medallion"
+        for run_from in [workspace, deep]:
+            monkeypatch.chdir(run_from)
+            assert lookout_medallion.default_root() == workspace / "data/medallion"
 
     def test_no_workspace_above_the_caller(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -242,9 +223,6 @@ class TestTheDefaultRoot:
 
 
 class TestNamesThatIdentifyARow:
-    """A crossing is named twice — by the store's id and by the four bytes a device holds —
-    and either naming two crossings would let a reader take one for the other."""
-
     def crossings(self, ids: list[str], compact_ids: list[int]) -> pa.Table:
         point = shapely.to_wkb(shapely.Point(BERLIN))
         projected = shapely.to_wkb(shapely.Point(BERLIN_UTM32N))
