@@ -1,9 +1,3 @@
-//! Reading the store with SQL.
-//!
-//! A dataset is registered as a table by name, which handles walking its partition
-//! directories and reading the geometry columns back with their CRS, so callers express
-//! what they want of a dataset as a query rather than as file traversal.
-
 use std::collections::{BTreeSet, HashMap};
 
 use datafusion::arrow::array::RecordBatch;
@@ -20,7 +14,6 @@ use crate::layer::LayerKind;
 use crate::path::{Dataset, Root};
 use crate::table::SilverTarget;
 
-/// A failure querying the store.
 #[derive(Debug, thiserror::Error)]
 pub enum QueryError {
     #[error("dataset {dataset} in {layer} does not exist")]
@@ -34,11 +27,6 @@ pub enum QueryError {
     Rows(#[from] serde_arrow::Error),
 }
 
-/// The tables `sql` reads, in the order they are named.
-///
-/// A caller registering what a query needs asks the parser rather than reading the text, so
-/// a name inside a string literal or a comment is not one, and a name a `WITH` clause defines
-/// is not either — a CTE is the query's own table, not one to look for in the store.
 pub fn table_references(sql: &str) -> Result<Vec<String>, QueryError> {
     let mut names = BTreeSet::new();
 
@@ -50,14 +38,11 @@ pub fn table_references(sql: &str) -> Result<Vec<String>, QueryError> {
     Ok(names.into_iter().collect())
 }
 
-/// The single column a counting query returns. Its name is fixed, so callers alias their
-/// count to it: `SELECT COUNT(*) AS count …`.
 #[derive(Debug, serde::Deserialize)]
 struct Counted {
     count: i64,
 }
 
-/// A SQL session over one medallion store.
 pub struct Query {
     root: Root,
     ctx: SedonaContext,
@@ -71,11 +56,6 @@ impl Query {
         }
     }
 
-    /// Register `dataset` from `layer` under `table`, so queries can name it.
-    ///
-    /// A dataset that has never been written is not an error the caller has to
-    /// distinguish by hand: [`QueryError::NoSuchDataset`] says so, and
-    /// [`Self::register_if_present`] treats it as an empty table instead.
     pub async fn register<L: LayerKind>(
         &self,
         dataset: DatasetSpec<L>,
@@ -84,13 +64,10 @@ impl Query {
         self.register_at(&self.root.dataset(dataset), table).await
     }
 
-    /// Register the silver dataset `target` names, under that name.
     pub async fn register_silver(&self, target: &SilverTarget) -> Result<(), QueryError> {
         self.register_by_name(target.spec()).await
     }
 
-    /// Register `dataset` as a table of its own name, for a query that reads it as what it
-    /// is rather than under a name chosen for the query.
     pub async fn register_by_name<L: LayerKind>(
         &self,
         dataset: DatasetSpec<L>,
@@ -98,12 +75,6 @@ impl Query {
         self.register(dataset, dataset.name).await
     }
 
-    /// Register one partition of a dataset under `table`, for a dataset whose partitions
-    /// hold different schemas and so cannot be read as a single table.
-    ///
-    /// A dataset holding no files is absent, whether it was never written or a rebuild has
-    /// since swept every partition away: both leave a reader with nothing to read, and the
-    /// directory a sweep leaves behind is not something a caller should have to know about.
     pub async fn register_at<L: LayerKind>(
         &self,
         dataset: &Dataset<L>,
@@ -124,9 +95,6 @@ impl Query {
         Ok(())
     }
 
-    /// Register `dataset` if it exists, reporting whether it did. A dataset with no files
-    /// yet leaves `table` unregistered, so a query naming it is a planning error rather
-    /// than a silent empty result.
     pub async fn register_if_present<L: LayerKind>(
         &self,
         dataset: DatasetSpec<L>,
@@ -139,13 +107,6 @@ impl Query {
         }
     }
 
-    /// Run `sql` with `params` bound to its `$name` placeholders, and collect the result.
-    ///
-    /// A parameter is bound as a value, so an id carrying a quote reads as an id that does
-    /// not exist rather than as more query.
-    ///
-    /// Always at least one batch: a query matching nothing answers with an empty one under
-    /// the columns it would have returned, so the result describes itself either way.
     pub async fn sql_with_params(
         &self,
         sql: &str,
@@ -165,13 +126,10 @@ impl Query {
         })
     }
 
-    /// [`Self::sql_with_params`] with no parameters bound.
     pub async fn sql(&self, sql: &str) -> Result<Vec<RecordBatch>, QueryError> {
         self.sql_with_params(sql, HashMap::new()).await
     }
 
-    /// Run a `SELECT COUNT(*) …` and return the count. The query must select exactly one
-    /// row of one column.
     pub async fn count(&self, sql: &str) -> Result<i64, QueryError> {
         Ok(self
             .rows::<Counted>(sql)
@@ -180,8 +138,6 @@ impl Query {
             .map_or(0, |counted| counted.count))
     }
 
-    /// Run `sql` and deserialise the result into `T`, for queries whose columns map onto a
-    /// plain Rust type.
     pub async fn rows<T>(&self, sql: &str) -> Result<Vec<T>, QueryError>
     where
         T: for<'de> serde::Deserialize<'de>,
@@ -216,7 +172,6 @@ mod tests {
         name: String,
     }
 
-    /// A silver dataset with a row type behind it, to register by name.
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct PassRow {
         id: i64,
@@ -290,8 +245,6 @@ mod tests {
         );
     }
 
-    /// Every partition of a dataset is one table: registering walks the partition
-    /// directories so callers never do.
     #[tokio::test]
     async fn registering_covers_every_partition_of_the_dataset() {
         let tmp = tempfile::tempdir().unwrap();
@@ -327,8 +280,6 @@ mod tests {
         assert_eq!(rows.len(), 2);
     }
 
-    /// A query reading a dataset under its own name takes that name from the dataset, so
-    /// the two cannot drift apart.
     #[tokio::test]
     async fn a_dataset_can_be_registered_as_a_table_of_its_own_name() {
         let tmp = tempfile::tempdir().unwrap();
@@ -373,9 +324,6 @@ mod tests {
         assert!(!query.register_if_present(NOTHING, "nothing").await.unwrap());
     }
 
-    /// A rebuild that produces nothing sweeps every partition and leaves the dataset's own
-    /// directory standing. That is not a dataset a reader can read, so it reads as absent
-    /// rather than as a schema the engine cannot infer.
     #[tokio::test]
     async fn a_dataset_swept_empty_is_reported_as_absent() {
         let tmp = tempfile::tempdir().unwrap();
@@ -386,8 +334,6 @@ mod tests {
         assert!(!query.register_if_present(NOTHING, "nothing").await.unwrap());
     }
 
-    /// A dataset a caller names rather than types is read under the name it is stored as, so
-    /// the query and the store cannot drift apart.
     #[tokio::test]
     async fn a_silver_dataset_registers_under_its_own_name() {
         let tmp = tempfile::tempdir().unwrap();
@@ -433,8 +379,6 @@ mod tests {
         );
     }
 
-    /// A value is a value rather than more query, so a name that quotes its way out of the
-    /// literal matches nothing instead of selecting everything.
     #[tokio::test]
     async fn a_parameter_carrying_a_quote_matches_nothing() {
         let tmp = tempfile::tempdir().unwrap();
@@ -483,8 +427,6 @@ mod tests {
         assert_eq!(names, vec!["thing"]);
     }
 
-    /// A `WITH` clause defines a table the query carries with it, so it is not one to look
-    /// for in the store — but what the clause itself reads is.
     #[test]
     fn a_cte_is_not_a_table_to_look_for() {
         let names = table_references(
@@ -495,7 +437,6 @@ mod tests {
         assert_eq!(names, vec!["thing"]);
     }
 
-    /// Parsed rather than matched on, so a name that only looks like one is not read as one.
     #[test]
     fn a_name_inside_a_literal_is_not_a_table() {
         let names = table_references("SELECT id FROM thing WHERE name = 'from other'").unwrap();
@@ -513,8 +454,6 @@ mod tests {
         assert!(table_references("SELECT * FROM (").is_err());
     }
 
-    /// A caller handing an empty result to another engine still has the columns to hand it
-    /// under, which is what the empty batch carries.
     #[tokio::test]
     async fn a_query_matching_nothing_still_describes_its_columns() {
         let tmp = tempfile::tempdir().unwrap();

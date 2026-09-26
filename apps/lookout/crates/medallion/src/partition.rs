@@ -1,12 +1,8 @@
-//! Hive partition keys and values, and the naming rules they must meet.
-
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
-/// Date partition values, per `docs/medallion.md`.
 pub(crate) const DATE_FORMAT: &str = "%Y-%m-%d";
 
-/// A key or value that does not meet the store's naming rules.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum PathError {
     #[error("partition key `{0}` is not snake_case")]
@@ -17,8 +13,6 @@ pub enum PathError {
     Unpartitioned(String),
 }
 
-/// The left-hand side of a `key=value` partition directory: snake_case, so it is also a
-/// usable column name in every engine that reads the partitioning back.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PartitionKey(String);
 
@@ -50,8 +44,6 @@ impl Display for PartitionKey {
     }
 }
 
-/// The right-hand side of a `key=value` partition directory. Reserved characters are those
-/// that would make the directory name ambiguous to a Hive-style path parser.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PartitionValue(String);
 
@@ -80,7 +72,6 @@ impl Display for PartitionValue {
     }
 }
 
-/// One `key=value` directory.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Partition {
     pub key: PartitionKey,

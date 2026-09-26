@@ -535,6 +535,16 @@ where the other refactors do.
       stays `docs/device.md`'s. `m5-core`'s 34 tests pass, and `just m5plus-build-release` compiles
       the shell — run outside the sandbox, which cannot build it at all.
 
+      `medallion` — the last and largest. A README holds the engine's rules: a dataset as a value
+      with its layer as a type, appending that never overwrites, sweeping as what makes a rebuild
+      honest, two doors onto one format, and where the store is found. What the layers are for
+      stays `docs/medallion.md`'s.
+
+      The crate's one doc comment is the usage example, and it was stale: nextest does not run
+      doctests at all, so nothing had compiled it since `DatasetSpec` took its layer as a type
+      parameter. Fixed, and `just test-rust` and `just test-no-docker` now run
+      `cargo test --doc --workspace` beside nextest so it cannot rot again.
+
 - [ ] Once every crate is swept, read every `.md` the sweep wrote or grew against the rest, and
       replace duplication with a cross-reference. Where a concept is shared widely enough that no
       one doc owns it, extract a `GLOSSARY.md` defining each such term under its own heading, and

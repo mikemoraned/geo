@@ -1,11 +1,3 @@
-//! The multi-engine invariant from `docs/medallion.md`: **any file in silver must be
-//! readable by every engine in use, with no engine-specific handling**.
-//!
-//! One silver GeoParquet file is written from Rust, then read back by each engine — DuckDB,
-//! SedonaDB, and georust — and each must yield identical geometry and the same CRS. This is
-//! a standing check, not a one-off: it runs in the default test profile, so silver drifting
-//! engine-specific fails the build.
-
 use std::sync::Arc;
 
 use arrow::array::{Array, BinaryArray, Int64Array, RecordBatch};
@@ -14,7 +6,6 @@ use geo_types::{Geometry, Point};
 use medallion::{DatasetSpec, Root, layers, wkb_field};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
-/// Points chosen inside Germany, so the fixture is the shape silver actually holds.
 const POINTS: [(i64, f64, f64); 3] = [
     (1, 13.404954, 52.520008),
     (2, 11.581981, 48.135125),
@@ -28,7 +19,6 @@ fn expected_geometries() -> Vec<Geometry<f64>> {
         .collect()
 }
 
-/// A silver-shaped batch: an id column and a WKB geometry column carrying its CRS.
 fn silver_batch() -> RecordBatch {
     let schema = Arc::new(Schema::new(vec![
         Field::new("id", DataType::Int64, false),
@@ -61,8 +51,6 @@ fn decode(wkb_bytes: &[u8]) -> Geometry<f64> {
     geo_traits::to_geo::ToGeoGeometry::to_geometry(&geometry)
 }
 
-/// Decode a WKB column, whichever binary layout the engine handed back (`Binary`,
-/// `LargeBinary`, `BinaryView`), by casting it to `Binary` first.
 fn decode_column(batch: &RecordBatch) -> Vec<Geometry<f64>> {
     let column =
         arrow::compute::cast(batch.column_by_name("geometry").unwrap(), &DataType::Binary).unwrap();
@@ -70,7 +58,6 @@ fn decode_column(batch: &RecordBatch) -> Vec<Geometry<f64>> {
     (0..column.len()).map(|i| decode(column.value(i))).collect()
 }
 
-/// The `id` of the CRS recorded in a PROJJSON document, as `authority:code`.
 fn crs_id(projjson: &serde_json::Value) -> String {
     format!(
         "{}:{}",
@@ -79,7 +66,6 @@ fn crs_id(projjson: &serde_json::Value) -> String {
     )
 }
 
-/// Write the fixture into a silver partition of a throwaway store.
 async fn write_fixture(dir: &std::path::Path) -> std::path::PathBuf {
     const WATER_CROSSING: DatasetSpec<layers::Silver> =
         DatasetSpec::partitioned("water_crossing", "country");
@@ -93,8 +79,6 @@ async fn write_fixture(dir: &std::path::Path) -> std::path::PathBuf {
         .unwrap()
 }
 
-/// georust: the parquet reader plus `wkb` decoding into `geo-types`, with the GeoParquet
-/// metadata read straight off the file's key-value metadata.
 fn read_with_georust(path: &std::path::Path) -> (Vec<Geometry<f64>>, String) {
     let file = std::fs::File::open(path).unwrap();
     let builder = ParquetRecordBatchReaderBuilder::try_new(file).unwrap();
@@ -121,7 +105,6 @@ fn read_with_georust(path: &std::path::Path) -> (Vec<Geometry<f64>>, String) {
     (geometries, crs)
 }
 
-/// DuckDB, in-process: `read_parquet` for the rows, `parquet_kv_metadata` for the CRS.
 fn read_with_duckdb(path: &std::path::Path) -> (Vec<Geometry<f64>>, String) {
     let conn = duckdb::Connection::open_in_memory().unwrap();
     let path = path.display().to_string();
@@ -146,8 +129,6 @@ fn read_with_duckdb(path: &std::path::Path) -> (Vec<Geometry<f64>>, String) {
     (geometries, crs_id(&geo["columns"]["geometry"]["crs"]))
 }
 
-/// SedonaDB: reads the file as GeoParquet, so geometry comes back as a geometry type and
-/// the CRS off the schema rather than from raw file metadata.
 async fn read_with_sedona(path: &std::path::Path) -> (Vec<Geometry<f64>>, String) {
     let ctx = sedona::context::SedonaContext::new();
     let options = sedona_geoparquet::provider::GeoParquetReadOptions::default();

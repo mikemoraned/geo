@@ -1,39 +1,19 @@
-//! The countries the store holds geometry for, and the projected CRS each one uses.
-//!
-//! Silver carries a lat/lon geometry in a global CRS and may carry a second one in metres.
-//! The rule for that second column is **one projected zone per country**: several UTM zones
-//! may cover a country, but a single zone keeps every geometry within it directly
-//! comparable. This is where that choice is made, so a dataset states which country's
-//! geometry it holds and never picks a zone of its own.
-
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use geo_types::Point;
 
-/// The partition key a dataset carrying projected geometry is laid out by above its own key.
-///
-/// A file states one CRS for its projected column and the zone is chosen per country, so rows
-/// of two countries cannot share a file. Named here so every dataset spells it the same.
 pub const COUNTRY: &str = "country";
 
-/// Somewhere that can say which country a place is in.
-///
-/// A projected zone is chosen per country, so anything writing projected geometry has to
-/// know the country of each thing it writes. That is a property of where the thing is, not
-/// of the run that wrote it, so it is looked up rather than passed down.
 pub trait Countries {
-    /// The country containing `point`, or `None` where that is no country the store knows.
     fn containing(&self, point: Point<f64>) -> Option<Country>;
 }
 
-/// A country whose geometry the store can hold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Country {
     Germany,
 }
 
-/// A code naming no country the store knows.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("unknown country `{code}`; known: {known}", known = Country::codes())]
 pub struct UnknownCountry {
@@ -43,7 +23,6 @@ pub struct UnknownCountry {
 impl FromStr for Country {
     type Err = UnknownCountry;
 
-    /// Parses an ISO 3166-1 alpha-2 code, in either case.
     fn from_str(code: &str) -> Result<Self, Self::Err> {
         Country::ALL
             .into_iter()
@@ -61,10 +40,8 @@ impl Display for Country {
 }
 
 impl Country {
-    /// Every country the store knows, for checks that must cover all of them.
     pub const ALL: [Country; 1] = [Country::Germany];
 
-    /// The codes of every known country, for an error that lists the choices.
     pub fn codes() -> String {
         Country::ALL
             .iter()
@@ -73,22 +50,18 @@ impl Country {
             .join(", ")
     }
 
-    /// The ISO 3166-1 alpha-2 code, as used in a `country=` partition.
     pub fn code(self) -> &'static str {
         match self {
             Country::Germany => "DE",
         }
     }
 
-    /// EPSG code of the country's projected CRS.
     pub fn projected_epsg(self) -> u16 {
         match self {
             Country::Germany => 25832,
         }
     }
 
-    /// The country's projected CRS as PROJJSON, the encoding GeoParquet requires.
-    /// Generated from PROJ by `just crs-definitions`.
     pub fn projected_projjson(self) -> &'static str {
         match self {
             Country::Germany => include_str!("etrs89_utm32n.projjson.json"),
@@ -100,9 +73,6 @@ impl Country {
 mod tests {
     use super::*;
 
-    /// The bundled definition is the CRS the code claims it is — a mismatch here would
-    /// project geometry correctly but label it wrongly in the file metadata, or the
-    /// reverse.
     #[test]
     fn each_country_bundles_the_projjson_of_the_epsg_it_names() {
         for country in Country::ALL {
@@ -119,8 +89,6 @@ mod tests {
         }
     }
 
-    /// Round-trips through the code, so a country named on a command line is the one its
-    /// partition is named for.
     #[test]
     fn a_country_parses_from_its_own_code_in_either_case() {
         for country in Country::ALL {
