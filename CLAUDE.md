@@ -48,6 +48,10 @@ Launch Claude for an app under the safehouse sandbox with `just claude <app>`
 that app and read-only across the rest of the repo (needed so Claude can discover the
 shared `.claude/` skills and rules at the repo root).
 
+`~/.espressif` is granted read-only too, so a device build uses the one shared ESP-IDF install
+rather than several gigabytes under every worktree. Only the first install writes there, and that
+one is run outside the sandbox.
+
 ## Methodology
 
 Slices are tracked **per app**, in that app's own `docs/` dir (e.g.
@@ -103,7 +107,7 @@ When doing TDD, always keep the code compiling at every step:
     else in both skills applies, including the serial comma.
 - **Write no comment by default** — see
   [`.claude/rules/does-it-bring-joy.md`](.claude/rules/does-it-bring-joy.md), which covers Rust,
-  Python and JavaScript. Naming and structure carry what a comment would have said; a convention goes in a
+  Python, JavaScript and `Justfile`s. Naming and structure carry what a comment would have said; a convention goes in a
   README, and a durable fact about the system goes in the app's `docs/`. A comment survives
   only where you can justify that one.
 - **Prefer existing libraries; don't hand-roll — especially in notebook cells.** Reach for a

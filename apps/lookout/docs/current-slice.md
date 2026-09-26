@@ -545,6 +545,12 @@ where the other refactors do.
       parameter. Fixed, and `just test-rust` and `just test-no-docker` now run
       `cargo test --doc --workspace` beside nextest so it cannot rot again.
 
+      The rule then grew to cover `Justfile`s, a recipe's comment being `just --list`'s help. Three
+      descriptions were already fragments beginning mid-sentence, since `just` takes only the last
+      line of a comment: every recipe now has one line that stands alone, and what the longer ones
+      said is `apps/lookout/README.md` — the app had none — or, for the sandbox's ESP-IDF grant,
+      `CLAUDE.md`.
+
 - [ ] Once every crate is swept, read every `.md` the sweep wrote or grew against the rest, and
       replace duplication with a cross-reference. Where a concept is shared widely enough that no
       one doc owns it, extract a `GLOSSARY.md` defining each such term under its own heading, and

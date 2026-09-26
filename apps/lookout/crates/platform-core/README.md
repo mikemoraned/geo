@@ -82,8 +82,8 @@ could plausibly be a battery here is dropped before it reaches the curve. A disc
 near zero would otherwise come back as a confident 0%, and a misread of 9 V as a confident 100%;
 saying nothing is better than saying "full".
 
-Charge is reported in as many steps as the indicator can honestly claim. The curve is flat through
-the middle of a discharge, so finer steps would report noise as information. A step holds
+Charge is reported as three bars and no finer. The curve is flat through the middle of a discharge,
+so more steps would report noise as information. A step holds
 its place until the reading moves clear of its boundary. A reading sitting on one would otherwise
 flicker between two steps every time it is taken, and the panel redraws on every change.
 

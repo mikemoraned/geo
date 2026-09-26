@@ -3,6 +3,9 @@ paths:
   - "**/*.rs"
   - "**/*.py"
   - "**/*.js"
+  - "**/Justfile"
+  - "**/justfile"
+  - "**/*.just"
 ---
 
 # The Does-It-Bring-Joy Rule
@@ -30,6 +33,19 @@ Whatever survives is prose, so it goes through `writing-clearly-and-concisely` a
 A CLI argument's help, a doctest, a macro's input: the compiler or the program consumes it, and
 removing it changes what the program does. Write what is needed, and hold it to the same prose
 standards as anything else a human reads.
+
+## A recipe's comment is its help
+
+`just --list` prints the comment above a recipe as that recipe's description, so the comment is the
+tool's help output rather than a note about it. It takes one line — the last of them — so a comment
+spanning two lines shows up there as a fragment beginning mid-sentence.
+
+Write that one line as help for someone choosing between recipes: what running it does, and anything
+they have to know before they do. Everything else — why it works that way, what it costs, what it
+depends on — goes in a README or the app's `docs/`, where a line is not a line of output.
+
+A comment inside a recipe's body, or above a variable, is help to nobody and comes under the general
+rule.
 
 ## A captured literal may say what it is
 
