@@ -16,6 +16,6 @@ wants; every value is there on request. Those ends are the ends of the span beca
 values sort in the order they were written](../../docs/medallion.md#general-rules). An artefact
 has no rows, so it shows what it weighs and which versions of it exist.
 
-Nothing here reads a row. [The counts come from the files
-themselves](../medallion/README.md#reading-and-reading-about), so a store far too large to scan
-costs the same to summarise.
+Nothing here reads a row: [the counts come from the files
+themselves](../medallion/README.md#reading-the-store-and-summarising-it), so a store far too large
+to scan costs the same to summarise.

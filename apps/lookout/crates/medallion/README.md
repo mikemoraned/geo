@@ -9,8 +9,8 @@ that doc's; this is how the store is reached.
 
 A dataset is named once, as a spec carrying its name and its partition key, and passed around as
 that value, so readers and writers agree on the layout by construction rather than by each
-repeating a string. The datasets themselves are defined by whoever owns the data, so this crate
-holds no list of them.
+repeating a string. Whoever owns the data defines the datasets themselves, so this crate holds no
+list of them.
 
 The layer is the spec's type rather than a field. `DatasetSpec<layers::Bronze>` and
 `DatasetSpec<layers::Silver>` are different types, and the operations that rewrite or delete are
@@ -66,14 +66,14 @@ no batches at all carries no schema to check, and does nothing.
 
 ## Geometry, and the CRS it declares
 
-Silver geometry is WKB simple features, with the CRS in the file metadata as PROJJSON. That
-metadata is produced by the `geoparquet` encoder rather than assembled here, so a file conforms to
-the spec version that crate implements.
+Silver geometry is WKB simple features, with the CRS in the file metadata as PROJJSON. The
+`geoparquet` encoder produces that metadata rather than this crate assembling it, so a file
+conforms to the spec version that crate implements.
 
 [One projected zone per country](../../docs/medallion.md#silver), chosen here, so a dataset states
 which country's geometry it holds and never picks a zone of its own.
 
-## Reading, and reading about
+## Reading the store, and summarising it
 
 A dataset is registered as a table by name, which walks its partition directories and reads its
 geometry columns back with their CRS, so a caller expresses what it wants as a query rather than
@@ -95,5 +95,4 @@ from one flag defined here.
 A gold artefact is a file rather than a dataset, laid out by what it is and by the run that
 produced it. Something outside the store holding one has no way to say which run that was, so a
 rerun adds a version beside the last rather than replacing it. Wherever that version is named — a
-build embedding an artefact, a deploy serving one — it is spelled by the same function the path
-uses.
+build embedding an artefact, a deploy serving one — the same function the path uses spells it.

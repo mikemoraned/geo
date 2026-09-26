@@ -55,7 +55,7 @@ and a sample is identified by `(device_id, t)`, the identity it was deduped from
 sample carries `device_id` as well as its session's id, so a partition of samples reads without
 joining back.
 
-## How a crossing was collapsed is stored on the row, because the collapse defines it
+## A crossing carries how it was collapsed, because that defines it
 
 A crossing is the collapsed representative of the parts a stretch of track and one body of water
 overlap in — a bridge is one crossing, not one per span — so a row carries its own overlap, the

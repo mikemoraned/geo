@@ -432,7 +432,7 @@ where the other refactors do.
       to write the ones you are adding, where it should describe the rare one that earned its
       place.
 
-- [ ] Apply it across `apps/lookout/crates/**`, one crate or module per commit. That is 3,482
+- [x] Apply it across `apps/lookout/crates/**`, one crate or module per commit. That is 3,482
       doc-comment lines and 248 `//` lines over 154 Rust files, plus the `#` lines in
       `rerun-py` and `medallion-py`. Naming and structure may change to absorb what a comment
       said, which is the point of the rule; each commit keeps its tests green and changes no
@@ -585,6 +585,17 @@ where the other refactors do.
       sharing a subject. Nothing was cut for length alone. A paragraph that reads long here is
       carrying a reason, which is what the sweep moved out of the code in the first place.
 
-- [ ] Then run `writing-clearly-and-concisely` over all of them once more, in one pass rather than
+- [x] Then run `writing-clearly-and-concisely` over all of them once more, in one pass rather than
       per crate, since the last edits each doc took were made against a crate rather than against
       the set.
+
+      Reading them as a set found what a per-doc pass could not. The packed file had four names
+      across five docs — a flat point buffer, a packed array, a packed set, a gold point buffer —
+      and is now the point set everywhere, which is what the format is called. Six headings broke
+      the set's pattern of stating a rule: `crossings` had bare `Input` and `Output`, two used a
+      weak "which is", one was opaque (`Reading, and reading about`), and two were overlong. A
+      heading that took over a sentence's job let the sentence go.
+
+      Nothing from the skill's list of puffery appears in any doc the sweep wrote. Passive voice is
+      common and mostly right — the subject is the thing acted on — so only the four with an
+      explicit agent were turned round, which is Strunk's own test.

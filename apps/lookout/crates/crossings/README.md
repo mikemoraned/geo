@@ -1,7 +1,7 @@
 # crossings
 
-Turns the silver water-crossings dataset into the forms a shell predicts against: the flat point
-buffer the M5 device scans, and the array a browser fetches.
+Turns the silver water-crossings dataset into the forms a shell predicts against: the point set
+the M5 device scans, and the array a browser fetches.
 
 ```sh
 just gold-pack-crossings                                   # defaults, run from apps/lookout
@@ -87,7 +87,7 @@ that keeps part of it, and any reordering, since none of those change the row.
 The same crossings therefore pack to the same bytes whatever order the source stored them in, so a
 rebuild that only reorders rows produces an identical file and needs no reflash.
 
-## Input
+## What it reads
 
 The silver `water_crossing` dataset, read through `medallion` like every other reader of the
 store, taking each position from the `geometry` column that dataset keeps it in.
@@ -98,11 +98,11 @@ never reaches the device — which in any case does not know which country it wi
 in. `--bbox` is how to restrict it, and is the control that matches the device: what it can hold
 is a window, not a border.
 
-## Output
+## What it writes
 
 `<store>/gold/artifact=crossings/version=<run>/`, holding both forms of the same crossings:
 
-- `crossings.pointset` — the flat buffer a device scans in flash, `f32`
+- `crossings.pointset` — the point set a device scans in flash, `f32`
 - `crossings.json` — `[[id, latitude, longitude], …]`, which a browser fetches, in degrees
   kept to six places
 

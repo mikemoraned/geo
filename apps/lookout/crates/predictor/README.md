@@ -5,12 +5,11 @@ nearest first, each with the instant we reach it. Events in, predictions out, an
 no store, no hardware, no clock of its own — so the same code runs on the board, in a browser and
 in a replay of a recorded session.
 
-## Crow flies, which is the baseline
+## Crow flies is a baseline, not an answer
 
 A distance here is the great-circle line to the crossing, and an arrival is that distance divided
 by the speed of the latest fix. The track plays no part, so a curve or a river meander puts a
-crossing nearer, and sooner, than the rails can reach it. That is the point: a baseline rather
-than an answer.
+crossing nearer, and sooner, than the rails can reach it. That is the point.
 
 The radius is how far ahead to look — wide enough that a train at speed has a minute or two of
 warning, narrow enough to mean something at walking pace. An arrival is an instant rather than a

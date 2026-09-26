@@ -79,7 +79,7 @@ flicker between two steps every time it is taken — and the panel redraws on ev
 voltage outside what could plausibly be a battery here is dropped before it reaches the curve, so
 the panel says nothing rather than something confident.
 
-## Reading the packed set in place
+## Reading the point set in place
 
 The device holds the whole set in flash and scans it against every fix, so nothing here copies or
 allocates: the columns are the file's own bytes, cast where they lie. `include_bytes!` yields a

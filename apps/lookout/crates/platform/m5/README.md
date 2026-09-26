@@ -53,7 +53,7 @@ the others because a leak tells itself apart from a level only as a number over 
 ## What it carries, and how it is pointed at a version
 
 `include_bytes!` needs a literal path and a sized array, and both change with the version of the
-packed set. The build script writes that declaration, taking the path from `crossings.version` and
+point set. The build script writes that declaration, taking the path from `crossings.version` and
 the length from the file it names, so repointing the board is a one-line edit rather than a path
 and a number that can disagree.
 
