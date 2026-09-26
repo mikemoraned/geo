@@ -1,8 +1,8 @@
 # Overture Maps, and what an extract takes
 
-What the upstream source publishes, and what an extract keeps of it. An extract lands in the
-store [medallion.md](medallion.md) describes, whose rules on immutability and layout hold for
-this source as for any other.
+What the upstream source publishes, and what an extract keeps of it. An extract lands in the store
+[medallion.md](medallion.md) describes, whose rules on immutability and layout hold for this
+source as for any other.
 
 ## A release is immutable, and only the recent ones are reachable
 
@@ -23,7 +23,8 @@ layout, so it is the same release by a shorter path. The location is not the dat
 with the same extract, and provenance records the release rather than where it was read.
 
 The bucket takes anonymous, unsigned requests. Either location is named as a directory with a
-trailing slash rather than a glob, since a `/*` glob fails the reader's `.parquet` extension check.
+trailing slash rather than a glob, since a `/*` glob fails the reader's `.parquet` extension
+check.
 
 ## Every row carries its own envelope
 
@@ -65,4 +66,4 @@ read is already the record, and it names the instant the extraction was first ta
 
 Extracts are large — around 1.5 GB for one country — and re-derivable from the manifest, so a
 store commonly holds the manifest and none of the rows. Filling one in is the ordinary operation;
-taking a new extract is the rarer one.
+taking a new extract the rarer one.

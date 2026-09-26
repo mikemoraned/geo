@@ -1,21 +1,19 @@
 # The browser
 
-The same core the board runs, compiled to WebAssembly by `wasm-pack`. The board's
-counterpart is [device.md](device.md).
-
-Hand-written pages, no framework and no build step, so a page reaches the core over JSON rather
-than through a generated binding.
+The same core the board runs, compiled to WebAssembly by `wasm-pack`; the board's counterpart is
+[device.md](device.md). Hand-written pages, no framework and no build step, so a page reaches the
+core over JSON rather than through a generated binding.
 
 A Web Component owns the core and draws it, repainting when the core asks. A page adds it by
-writing a tag and sends it positions and time; where those come from is all that separates
-one page from another.
+writing a tag and sends it positions and time; where those come from is all that separates one
+page from another.
 
 ## The element holds the core, the page holds the source
 
-Prediction, clock discipline and formatting are all the core's, and the element has only I/O:
-it loads the wasm, answers what the core asks for, and paints what it says. An event that moved
+Prediction, clock discipline and formatting are all the core's, and the element has only I/O: it
+loads the wasm, answers what the core asks for, and paints what it says. An event that moved
 nothing comes back with no request, so the element does not repaint — which is what stops a replay
-at speed from redrawing per sample.
+at speed redrawing per sample.
 
 The wasm load sits at module scope, so several elements on a page share one, and the first paint
 waits on its promise: a browser cannot await `connectedCallback`.
@@ -50,8 +48,8 @@ has nowhere to put nought.
 
 The scale's constant is how far out it stays close to linear. Below it a crossing moves across the
 picture about as fast as it moves over the ground; above it distances compress. So the smaller the
-constant, the more of the picture goes to what is close. At a constant of 500 m and a maximum of
-5 km, a crossing sits this far out from the centre:
+constant, the more of the picture goes to what is close. At a constant of 500 m and a maximum of 5
+km, a crossing sits this far out from the centre:
 
 | distance | 250 m | 500 m | 1 km | 2 km | 5 km |
 | --- | --- | --- | --- | --- | --- |
@@ -71,26 +69,28 @@ out at.
 
 `/live` reads this browser's geolocation and ticks every second, since fixes arrive seconds apart
 and a countdown should shorten in between. A fix is sent under its own timestamp rather than the
-time it arrived: it says where we were when it was taken, and an arrival counted from it is counted
+time it arrived: it says where we were when it was taken, so an arrival counted from it is counted
 from the right instant.
 
-`/kiosk` replays recorded journeys and sends no time at all — a replayed fix carries the instant it
-was recorded at, which is the clock everything in the view is measured against. Each journey is
+`/kiosk` replays recorded journeys and sends no time at all — a replayed fix carries the instant
+it was recorded at, which is the clock everything in the view is measured against. Each journey is
 watched in a fixed span whatever it took to record, since a recording runs for hours and nobody
 stands in front of a screen for that.
 
 The clock decides which sample to send, rather than a timer counting them off: each frame asks how
 far through that span it is and sends the sample that far through the journey, so a browser that
-cannot keep up skips samples instead of falling behind. A fix not sent costs nothing, because the
+cannot keep up skips samples instead of falling behind. A fix not sent costs nothing, since the
 one that is sent carries its own instant and the speed between them is still measured over the
-interval that really separated them. Each journey begins by telling the core to start again knowing
-nothing, which is what lets a journey from the morning follow one from that evening, and the page
-runs the journeys in turn for as long as it is left open.
+interval that really separated them.
+
+Each journey begins by telling the core to start again knowing nothing, which is what lets a
+journey from the morning follow one from that evening. The page runs them in turn for as long as
+it is left open.
 
 `/record` captures and sends; [the telemetry wire](telemetry.md) describes what it sends.
 
-Every page shows the git hash of the build serving it, so a reader can match what is running to the
-source it came from.
+Every page shows the git hash of the build serving it, so a reader can match what is running to
+the source it came from.
 
 ## What iOS Safari makes the recording page do
 

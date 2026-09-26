@@ -1,9 +1,9 @@
 # medallion-model
 
 Every dataset lookout holds, defined once: its layer, its partition key, and its columns.
-[medallion.md](../../docs/medallion.md) describes the store's layout in prose, and this is that
-layout in code. A writer and a reader of one dataset therefore agree by referring to the same
-definition, rather than each spelling out a name, a key and a struct of its own.
+[medallion.md](../../docs/medallion.md) describes that layout in prose, and this is it in code, so
+a writer and a reader of one dataset agree by referring to one definition rather than each
+spelling out a name, a key and a struct of its own.
 
 Everything here is the store's, and all of it depends on arrow. What a device and the store both
 hold is [`domain`](../domain/README.md).
@@ -12,15 +12,14 @@ hold is [`domain`](../domain/README.md).
 
 The columns of a dataset are a row type declared beside its spec. Geometry is the exception: a
 geometry column is arrow the writer builds rather than a traced Rust field, so a row type declares
-the other columns and the writer appends the lat/lon and projected ones.
-
-The list of all of them holds summaries rather than the specs themselves, since a spec carries its
-layer in its type and datasets of different layers cannot sit in one array.
+the other columns and the writer appends the lat/lon and projected ones. The list of all the
+datasets holds summaries rather than the specs, since a spec carries its layer in its type and
+datasets of different layers cannot sit in one array.
 
 A caller that cannot hold a Rust row type — a table built in another language — names a silver
-dataset instead, and the name resolves to the same definition a Rust writer uses. Only silver
-datasets can be named that way, because writing a table replaces what it writes, and silver is the
-layer a derivation may replace.
+dataset instead, and the name resolves to the definition a Rust writer uses. Only silver datasets
+can be named that way, because writing a table replaces what it writes, and silver is the layer a
+derivation may replace.
 
 ## The bronze datasets: what arrived
 
@@ -38,10 +37,9 @@ rows have no row type here: they keep whatever columns the release gives them, p
 
 The manifest is one row per extraction, and its window is four bounds — `xmin`, `ymin`, `xmax`,
 `ymax` — rather than a geometry column in a Simple Features encoding. It is provenance, answering
-"what was this restricted to", and comparing numbers settles that. It is also the shape the upstream
-uses: [an extracted row](../../docs/overture.md#every-row-carries-its-own-envelope) carries a bbox
-of the same four bounds beside its own geometry, so a reader of the manifest and a reader of the
-extract see one thing.
+"what was this restricted to", which comparing numbers settles. It is also the upstream's own
+shape: [an extracted row](../../docs/overture.md#every-row-carries-its-own-envelope) carries a
+bbox of the same four bounds beside its geometry, so both are read the same way.
 
 ## Sessions keep every sample and flag the doubtful ones
 
@@ -68,10 +66,10 @@ physical track, named canonically from its own members rather than by a label a 
 up the track.
 
 The columns saying how close two parts had to be to merge, and the shortest overlap the run kept,
-travel with the row. This is deliberately unlike the sessions: there a threshold belongs to
-whoever is reading, whereas two runs that collapsed differently do not agree on what a crossing
-*is*, and a ground truth and a prediction that count different things cannot be compared. Changing
-how the collapse works therefore means rebuilding the dataset.
+travel with the row. Unlike the sessions, where a threshold belongs to whoever is reading: two
+runs that collapsed differently do not agree on what a crossing *is*, and a ground truth and a
+prediction counting different things cannot be compared. Changing how the collapse works therefore
+means rebuilding the dataset.
 
 A crossing carries both of its names, and each identifies it on its own: the store's, and the four
 bytes a device holds instead. A compact id shared by two crossings is one a device could not tell
@@ -79,9 +77,9 @@ apart, so it is refused here rather than at the buffer that packs it.
 
 ## What the tests hold steady
 
-Tracing the schema from Rust types means a change to a type changes the stored columns, so the tests
-assert the properties a reader already depends on rather than the schema itself: that a dataset's
+Tracing the schema from Rust types means a change to a type changes the stored columns, so the
+tests assert the properties a reader depends on rather than the schema itself: that a dataset's
 identity cannot collide or drift, that only what the store permits to be replaced is replaceable,
-that a column a row type calls an instant really is one, and that the values readers join and filter
-on keep the type they are stored as. Each test is named for the property it holds, so a failure
-reads as the rule that broke.
+that a column a row type calls an instant really is one, and that the values readers join and
+filter on keep the type they are stored as. Each test is named for the property it holds, so a
+failure reads as the rule that broke.

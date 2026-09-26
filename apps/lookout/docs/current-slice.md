@@ -574,9 +574,16 @@ where the other refactors do.
       names one the target has. `pulldown-cmark` reads the markdown — a hand-rolled scan for `](`
       counted a link inside a code span as a real one, which two of its tests now pin.
 
-- [ ] Then say the same in less text. Every doc grew by absorbing what a comment said, and prose
+- [x] Then say the same in less text. Every doc grew by absorbing what a comment said, and prose
       written to rescue a fact is longer than prose written to state one. Nothing should be lost,
       including the reasoning, but a paragraph that earns its length should be the exception.
+
+      The premise was mostly wrong: 280 words came out of 26,073, about 1%. The per-crate sweeps
+      had each run `writing-clearly-and-concisely` as they went, so what was left was structural
+      rather than sentence-level — `domain` lost 95 words to merging two sections that were both
+      about checking a coordinate, and the rest gave up a dozen or two each to sentence pairs
+      sharing a subject. Nothing was cut for length alone. A paragraph that reads long here is
+      carrying a reason, which is what the sweep moved out of the code in the first place.
 
 - [ ] Then run `writing-clearly-and-concisely` over all of them once more, in one pass rather than
       per crate, since the last edits each doc took were made against a crate rather than against

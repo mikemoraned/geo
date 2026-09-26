@@ -41,10 +41,9 @@ way of the pass that has to be fast.
 
 ### What a reader must check
 
-`pointset::unpack` in this crate is one implementation; the device core is the other, and they
-have to agree. It reads the columns field by field where the device casts them in place, so a
-round-trip through it checks the layout rather than the host's memory representation. A reader has
-to reject:
+`pointset::unpack` here is one implementation and the device core is the other, so they have to
+agree. It reads the columns field by field where the device casts them in place, so a round-trip
+through it checks the layout rather than the host's memory representation. A reader has to reject:
 
 - fewer than 12 bytes — there is no header to read
 - a magic that is not `XING` — some other file entirely
@@ -67,41 +66,37 @@ static POINTS: &Aligned<[u8]> = &Aligned(*include_bytes!("crossings.pointset"));
 ## Coordinates are `f32`
 
 `f32` degrees resolve to **≤0.21 m** over the German crossings (mean 0.11 m) — far under what the
-receiver resolves, and under the metre-scale wander a stationary fix shows even in good
-conditions. It is also [what the board can afford](../../docs/device.md#the-gnss-receiver). `i32`
-at 1e-7° would resolve to ~1 cm, and that extra precision buys nothing against a GPS error budget
-measured in metres.
+receiver resolves, and under the metre-scale wander a stationary fix shows in good conditions. It
+is also [what the board can afford](../../docs/device.md#the-gnss-receiver). `i32` at 1e-7° would
+resolve to ~1 cm, which buys nothing against an error budget measured in metres.
 
 ## Ids name a crossing, not a row
 
-`id` is the silver `crossing_compact_id` column, read rather than derived. The dataset mints it:
-the low four bytes of the md5 of the crossing's `crossing_id`, in the water-crossings notebook.
-The store refuses a write where two crossings share one, so the packer takes the column as given.
+`id` is the silver `crossing_compact_id` column, read rather than derived: the dataset mints it as
+the low four bytes of the md5 of the crossing's `crossing_id`, in the water-crossings notebook,
+and the store refuses a write where two crossings share one. Four bytes is few enough that two can
+collide by chance — ~0.4% over 5,760 points — which is why that check exists at all. The real
+dataset is clean: 5,760 crossings, 5,760 distinct ids.
 
 Both names of a crossing come from the same row, so a prediction made on the device and a crossing
-derived on the laptop name the same thing, and nothing can come to disagree about what one
-crossing is. An id also survives a rebuild of the dataset, a `--bbox` that keeps only part of it,
-and any reordering, since none of those change the row.
-
-Four bytes is few enough that two distinct crossings can collide by chance (~0.4% over 5,760
-points), which is why the uniqueness check exists at all. The real dataset is clean: 5,760
-crossings, 5,760 distinct ids.
+derived on the laptop name the same thing. An id survives a rebuild of the dataset, a `--bbox`
+that keeps part of it, and any reordering, since none of those change the row.
 
 ## Points are written in id order
 
-The same crossings therefore pack to the same bytes whatever order the source happened to store
-them in, so a rebuild that only reorders rows produces an identical file and needs no reflash.
+The same crossings therefore pack to the same bytes whatever order the source stored them in, so a
+rebuild that only reorders rows produces an identical file and needs no reflash.
 
 ## Input
 
 The silver `water_crossing` dataset, read through `medallion` like every other reader of the
-store. Position comes from the `geometry` column, which is where that dataset keeps it.
+store, taking each position from the `geometry` column that dataset keeps it in.
 
 **Every country the store holds is packed**, rather than one named by a flag: the buffer holds
-lat/lon and the device's scan takes a great-circle distance, so the per-country projected zone the
-dataset is partitioned by never reaches the device — which in any case does not know which country
-it will be switched on in. `--bbox` is how to restrict it, and is the control that matches the
-device: what it can hold is a window, not a border.
+lat/lon and the device's scan takes a great-circle distance, so the per-country projected zone
+never reaches the device — which in any case does not know which country it will be switched on
+in. `--bbox` is how to restrict it, and is the control that matches the device: what it can hold
+is a window, not a border.
 
 ## Output
 
@@ -122,7 +117,7 @@ Gold is derivable and mostly unversioned, but this artefact is [read by a build 
 query](../../docs/architecture.md#derivation): `m5-core` embeds the buffer and the server serves
 the array. So the versions packed are committed, and `apps/lookout/crossings.version` names the
 one both build against — the device's build script reads it to resolve what to embed, and `just
-deploy` passes it to the image build. Moving to a newly packed version is that one line.
+deploy` passes it to the image build. Moving to a newly packed version is that one line, and
 `--output` names a directory somewhere else.
 
 The run writes the version file after the artefacts, so one that failed to write them leaves

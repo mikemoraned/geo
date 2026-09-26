@@ -9,8 +9,8 @@ the blueprint API there than in Rust. What the predictor does is
 
 Each function's own documentation is [its docstring](../../../README.md#the-python-extensions).
 Nothing is serialised across the boundary: python holds the state machine, and a call into it runs
-the predictor's own code. It measures in `f64`, which is what the store holds and what a python
-float is, and takes aware datetimes in whatever timezone the caller has them in.
+the predictor's own code, in the `f64` the store holds and a python float is. Instants are aware
+datetimes in whatever timezone the caller has them.
 
 ```
 just sessions                   # the sessions the store holds
@@ -45,10 +45,10 @@ Samples come back ordered by instant and then by sequence, since two share an in
 device reports faster than its clock resolves. Every field past a position is what the device
 happened to report: what it left out stays unknown rather than being invented.
 
-Nothing here spells out a path or decodes WKB. `lookout_medallion.query_silver` registers a
+Nothing here spells out a path or decodes WKB: `lookout_medallion.query_silver` registers a
 dataset by name, so which files hold it and what CRS its geometry is in stay the store's to know.
-A dataset that has never been derived raises rather than reading as a dataset with no rows: a
-store without crossings cannot be replayed against, and saying so is more use than an empty map.
+A dataset never derived raises rather than reading as one with no rows — a store without crossings
+cannot be replayed against, and saying so is more use than an empty map.
 
 ## Drawing into a viewer
 

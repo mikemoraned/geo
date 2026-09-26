@@ -59,12 +59,12 @@ and a number that can disagree.
 
 ## Reading the receiver
 
-Both candidate pins are opened and whichever carries NMEA wins, rather than trusting either source
-that documents which one it is: choosing wrong is indistinguishable from a dead receiver, and the
-pins are electrically independent, so listening on the idle one costs nothing. A probe waits a few
+Both candidate pins are opened and whichever carries NMEA wins, rather than trusting a source that
+documents which one it is: choosing wrong is indistinguishable from a dead receiver, and the pins
+are electrically independent, so listening on the idle one costs nothing. A probe waits a few
 seconds — sentences arrive about once a second — and looks for the `$` that starts one, since any
 bytes at all would pass on the noise an idle pin picks up.
 
 Reads are short and blocking, so the loop keeps turning while the receiver is quiet, and a burst
-arrives over several of them; the UART's own ring buffer is what has to hold a whole one. A line
-not shaped like a sentence is dropped here, since a poor aerial produces those by the second.
+arrives over several of them; the UART's own ring buffer has to hold a whole one. A line not
+shaped like a sentence is dropped here, since a poor aerial produces those by the second.
