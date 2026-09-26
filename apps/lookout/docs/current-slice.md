@@ -518,6 +518,12 @@ where the other refactors do.
       went — the last as a test that fails if a `bool` ever binds as an `int`. The README now
       holds only what a python caller needs, pointing at `docs/medallion.md` for the rest.
 
+      `platform-core` — a README holds the core's rules: one core with a view each, nothing drawn
+      unless something moved, and a core with no crossings holding no predictor at all. What the
+      battery's voltage means, and why the packed reader is a second implementation of a format
+      `crossings` defines, went with it. The `f32` reason points at `docs/device.md` rather than
+      restating it.
+
 - [ ] Once every crate is swept, read every `.md` the sweep wrote or grew against the rest, and
       replace duplication with a cross-reference. Where a concept is shared widely enough that no
       one doc owns it, extract a `GLOSSARY.md` defining each such term under its own heading, and
