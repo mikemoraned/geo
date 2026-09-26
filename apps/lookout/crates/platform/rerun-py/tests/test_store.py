@@ -1,5 +1,3 @@
-"""Reading a session and its crossings out of the store."""
-
 import datetime
 
 import pytest
@@ -36,7 +34,6 @@ def test_a_session_the_store_has_never_seen_has_no_samples(store):
 
 
 def test_the_crossings_come_back_named_by_the_id_a_device_holds(store):
-    """Coordinates, not the WKB the file holds: the reader asks the store for a point."""
     crossings = Store(store).crossings()
 
     assert sorted(crossings) == sorted([(NEAR, NEAR_LAT, LON), (FAR, FAR_LAT, LON)])
@@ -48,8 +45,6 @@ def test_a_country_restricts_the_crossings_to_its_own_partition(store):
 
 
 def test_a_dataset_that_has_never_been_derived_says_so(empty_store):
-    """Rather than reading as a dataset with no rows, which would replay a session against
-    no crossings and draw an empty map."""
     empty = Store(empty_store)
 
     with pytest.raises(ValueError, match="water_crossing"):

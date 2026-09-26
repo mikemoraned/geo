@@ -1,27 +1,3 @@
-//! The crow-flies predictor, as a python object.
-//!
-//! The runner replaying a session lives in python, because the rerun SDK carries more of the
-//! blueprint API there than in Rust. It binds the predictor rather than reimplementing it, so
-//! what it draws is what every other shell answers.
-//!
-//! Feed a session through it in `t` order:
-//!
-//! ```python
-//! from lookout_predictor import CrowFlies
-//!
-//! predictor = CrowFlies([(crossing_id, lat, lon), ...], radius_metres=5000.0)
-//! for row in samples:
-//!     predictor.observe_sample(row.t, row.lat, row.lon, speed_mps=row.speed)
-//!     for prediction in predictor.predictions():
-//!         ...
-//! ```
-//!
-//! Nothing is serialised across the boundary: python holds the state machine itself, and a
-//! call into it runs the predictor's own code.
-//!
-//! It measures in `f64`, which is what the store holds and what a python float is. Instants
-//! are aware datetimes, in whatever timezone the caller has them in.
-
 use chrono::{DateTime, FixedOffset, Utc};
 use domain::{CrossingCompact, Sample};
 use predictor::{
@@ -97,6 +73,12 @@ impl CrowFlies {
     /// stays unknown rather than being invented: with no speed reported, the step from the
     /// previous fix says how fast we are going, and with no previous fix there is no time to
     /// give.
+    ///
+    /// # Errors
+    ///
+    /// Raises where the coordinates are not on the globe, or where the fix is behind the clock —
+    /// a session replays in `t` order, so an event out of order is the caller's mistake, and it
+    /// changes nothing.
     #[pyo3(signature = (
         t,
         latitude,
@@ -149,8 +131,6 @@ impl CrowFlies {
 }
 
 impl CrowFlies {
-    /// An event out of order is the caller's mistake — a session replays in `t` order — so it
-    /// raises rather than passing in silence, and changes nothing.
     fn observe(&mut self, event: Event<f64>) -> PyResult<()> {
         self.inner
             .observe(event)

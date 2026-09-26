@@ -51,8 +51,6 @@ def test_an_arrival_crosses_as_an_aware_instant(predictor):
 
 
 def test_a_speed_left_out_is_derived_from_the_fix_before(predictor):
-    """A source reporting no speed still moves, and two fixes say how fast: a hundredth of a
-    degree in a hundred seconds is about 11m/s, so the crossing 1,112m ahead is 100s away."""
     predictor.observe_sample(T0, 49.99, 0.0)
     assert predictor.predictions()[0].at is None, "nothing to derive a speed from yet"
 
@@ -90,6 +88,5 @@ def test_a_coordinate_off_the_globe_is_refused(predictor):
 
 
 def test_a_naive_instant_is_refused(predictor):
-    """The store's samples are tz-aware, and a naive one would be read as some other moment."""
     with pytest.raises(TypeError):
         predictor.observe_sample(T0.replace(tzinfo=None), 50.0, 0.0)

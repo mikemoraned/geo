@@ -1,9 +1,3 @@
-"""What the command does with its arguments.
-
-Each command says what it does in its own name, so nothing is decided by an argument being
-absent: `sessions` lists, `replay` draws in a viewer, and neither becomes the other.
-"""
-
 import socket
 
 import pytest

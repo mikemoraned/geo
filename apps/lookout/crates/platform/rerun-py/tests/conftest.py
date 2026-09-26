@@ -1,10 +1,3 @@
-"""A store to read, and a stand-in for the recording a replay draws into.
-
-The store is written rather than laid out by hand, so what a test reads back is a real
-dataset: the columns `crates/model` declares, the partitions the store chose, and geometry
-with the CRS the file states. A schema change then lands here as a write the store refuses.
-"""
-
 import datetime
 from unittest.mock import create_autospec
 
@@ -32,7 +25,6 @@ NEAR_LAT, FAR_LAT = 50.035, 50.06
 
 
 def _projected(points):
-    """`points` in the zone the store projects this country into."""
     transformer = pyproj.Transformer.from_crs(
         "EPSG:4326", lookout_medallion.projected_crs(COUNTRY), always_xy=True
     )
@@ -110,13 +102,11 @@ def _crossing_table():
 
 @pytest.fixture
 def empty_store(tmp_path):
-    """A store with nothing derived into it yet."""
     return tmp_path
 
 
 @pytest.fixture
 def store(tmp_path):
-    """One session that crosses midnight, and the two crossings ahead of it."""
     lookout_medallion.write_silver("session_sample", _sample_table(), root=str(tmp_path))
     lookout_medallion.write_silver("water_crossing", _crossing_table(), root=str(tmp_path))
     return tmp_path
@@ -124,15 +114,8 @@ def store(tmp_path):
 
 @pytest.fixture
 def recording():
-    """A stand-in for the recording a replay draws into.
-
-    Checked against the real `RecordingStream`, so a call this does not object to is one
-    rerun would also have accepted — a renamed method or a changed signature fails here
-    rather than passing against a hand-written double of an API that has moved on.
-    """
     return create_autospec(rr.RecordingStream, instance=True)
 
 
 def streams(recording) -> set[str]:
-    """The streams drawn to, taken from the entity path each log named."""
     return {call.args[0] for call in recording.log.call_args_list}

@@ -1,16 +1,9 @@
-"""How a replay is laid out when a viewer opens it.
-
-Two maps beside the accuracy each fix reported, over a log of the steps: where the session
-went, and what it expected to reach.
-"""
-
 import rerun.blueprint as rrb
 
 from .log import ACCURACY, LOG, PREDICTIONS, SAMPLE
 
 
 def blueprint() -> rrb.Blueprint:
-    """The layout a recording carries with it, so it opens as something to read."""
     return rrb.Blueprint(
         rrb.Vertical(
             rrb.Horizontal(

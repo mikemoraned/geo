@@ -1,9 +1,9 @@
-# lookout_medallion
+# medallion-py
 
-The medallion store from python. Why the way in is a binding rather than a second implementation,
-and what a table has to carry, is
-[writing silver from another language](../../docs/medallion.md#writing-silver-from-another-language).
-What follows is only what a python caller has to know.
+The medallion store from python, as the extension module `lookout_medallion`. Why the way in is a
+binding rather than a second implementation, and what a table has to carry, is [writing silver
+from another language](../../docs/medallion.md#writing-silver-from-another-language). What follows
+is only what a python caller has to know.
 
 Each function's own documentation is its docstring, which `pyo3` publishes from the doc comment in
 `src/lib.rs`, so `help(lookout_medallion.write_silver)` in a notebook is the reference.
@@ -22,15 +22,15 @@ table = lookout_medallion.query_silver(
 
 ## Handing a table over
 
-A table crossing either way is anything exposing the Arrow PyCapsule interface — a pyarrow table, a
-DuckDB result, a GeoDataFrame's `to_arrow()` — so nothing is copied through python objects. Geometry
-goes in as WKB or as any GeoArrow encoding, whichever the library at hand produces.
+A table crossing either way is anything exposing the Arrow PyCapsule interface — a pyarrow table,
+a DuckDB result, a GeoDataFrame's `to_arrow()` — so nothing is copied through python objects.
+Geometry goes in as WKB or as any GeoArrow encoding, whichever the library at hand produces.
 
 Projecting is the caller's work: a notebook projects the coordinates itself and asks
 `projected_crs(country)` for the zone, rather than naming one of its own.
 
-Both calls release the interpreter while they run, since the work is filesystem work that calls back
-into nothing python owns.
+Both calls release the interpreter while they run, since the work is filesystem work that calls
+back into nothing python owns.
 
 ## What is raised
 
@@ -54,6 +54,6 @@ metadata, with the path resolved relative to the notebook:
 ```
 
 Run such a notebook with `uv run --no-project --reinstall-package lookout-medallion
-<notebook>.py`: uv caches the built wheel against this crate's own sources, and would otherwise not
-notice a change to the rust crates it wraps. `just test-python` (from `apps/lookout`) runs the tests
-the same way; nothing needs installing first, since uv builds the extension with maturin.
+<notebook>.py`: uv caches the built wheel against this crate's own sources, and would otherwise
+not notice a change to the rust crates it wraps. `just test-python` (from `apps/lookout`) runs the
+tests the same way; nothing needs installing first, since uv builds the extension with maturin.

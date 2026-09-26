@@ -1,14 +1,11 @@
 """Replay a recorded session through the predictor, into a running rerun viewer.
 
-Two commands, each doing one thing:
-
     just sessions               the sessions the store holds
     just replay <session-id>    that session, drawn in a viewer already running
 
-`replay` needs a viewer listening, which `rerun` on its own starts. It draws into that viewer
-rather than into a file: a viewer reads only recordings from its own minor version and the one
-before it, so a `.rrd` kept any longer than that is a file nothing will open.
+`replay` needs a viewer listening, which `rerun` on its own starts.
 """
+
 
 import argparse
 import socket
@@ -30,17 +27,11 @@ DEFAULT_VIEWER = "rerun+http://127.0.0.1:9876/proxy"
 
 
 def viewer_address(url: str | None) -> tuple[str, int]:
-    """The host and port `url` names, or those a viewer on this machine listens on."""
     viewer = urlparse(url or DEFAULT_VIEWER)
     return viewer.hostname or "127.0.0.1", viewer.port or 9876
 
 
 def listening(address: tuple[str, int]) -> bool:
-    """Whether anything accepts a connection at `address`.
-
-    Asked before drawing, because a stream with nowhere to send drops what it is given and
-    says nothing: without this, a replay into no viewer is silent and looks like success.
-    """
     try:
         with socket.create_connection(address, timeout=1):
             return True
@@ -85,11 +76,6 @@ def sessions(store: Store) -> None:
 
 
 def replayed(store: Store, args: argparse.Namespace) -> rr.RecordingStream:
-    """A recording of `args.session` replayed, connected to the viewer it draws into.
-
-    The viewer is connected before anything is drawn, since a stream sends as it is logged
-    rather than keeping what was logged before it had somewhere to send it.
-    """
     recording = rr.RecordingStream(APPLICATION)
 
     address = viewer_address(args.url)

@@ -1,5 +1,3 @@
-"""Feeding a session through a predictor."""
-
 from lookout_predictor import CrowFlies
 
 from runner.replay import replay
@@ -36,8 +34,6 @@ def test_a_crossing_ahead_draws_nearer_as_the_session_runs(store):
 
 
 def test_the_first_fix_predicts_no_time_and_the_rest_do(store):
-    """The first sample of this session reports no speed and has no fix before it to derive
-    one from, so it says how far but not when. The rest report one."""
     reader = Store(store)
 
     steps = list(
