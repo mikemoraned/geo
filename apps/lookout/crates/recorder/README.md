@@ -69,14 +69,11 @@ distance: an implied speed is metres per second, and degrees are neither metres 
 in both axes. A sample's implied speed is therefore measured between projected positions, and the
 interval is never zero, since the samples were deduped before they got here.
 
-Which country a session is in follows from where it started, and that fixes the zone its projected
-geometry is measured in — for its samples as much as for itself, so a session and the samples
-making it up are measured in the same metres wherever they later went. A session starting outside
-every country the store knows has no zone to project into, so it is counted and left unwritten.
-
-A session and its samples are partitioned by different dates — a sample by its own instant, a
-session by the instant it began — so a session crossing midnight has its samples split over two
-partitions while itself living in one.
+Which country a session is in follows from where it started, and the country
+[fixes the zone](../../docs/medallion.md#silver) its projected geometry is measured in — for its
+samples as much as for itself, so a session and the samples making it up are measured in the same
+metres wherever they later went. A session starting outside every country the store knows has
+no zone to project into, so it is counted and left unwritten.
 
 A session of one sample stands still rather than having no path: its lone point is repeated, so
 every session's geometry is a line of at least two coordinates and no reader meets a `LineString`

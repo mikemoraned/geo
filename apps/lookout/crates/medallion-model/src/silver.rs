@@ -1,13 +1,3 @@
-//! The silver datasets a table built outside Rust can be written to.
-//!
-//! A caller that cannot hold a Rust row type names a dataset instead, and this is where the
-//! name is resolved to its definition — so the columns such a table is checked against and
-//! the layout it is written in come from the same place a Rust writer's do.
-//!
-//! Every silver dataset is here, not only the ones written from outside today. Which
-//! derivation owns which dataset is a matter of which one runs, exactly as it is in Rust;
-//! what the store enforces is the layer, and silver is the layer a derivation may replace.
-
 use medallion::{RowError, SilverTarget};
 
 use crate::{
@@ -15,7 +5,6 @@ use crate::{
     TRAIN_SEGMENT, TrainSegmentRow, WATER_CROSSING, WaterCrossingRow,
 };
 
-/// A failure naming a dataset to write to.
 #[derive(Debug, thiserror::Error)]
 pub enum TargetError {
     #[error("no silver dataset named `{name}`; known: {known}", known = known())]
@@ -24,13 +13,8 @@ pub enum TargetError {
     Row(#[from] RowError),
 }
 
-/// How one dataset's definition is built, kept as a function so the row type stays a type.
 type Definition = fn() -> Result<SilverTarget, RowError>;
 
-/// Every silver dataset, as somewhere a table can be written.
-///
-/// The name comes from the dataset's own definition rather than being spelled again here, so
-/// renaming a dataset moves its entry with it.
 const TARGETS: [(&str, Definition); 5] = [
     (SESSION.name, SilverTarget::of::<SessionRow>),
     (SESSION_SAMPLE.name, SilverTarget::of::<SessionSampleRow>),
@@ -42,7 +26,6 @@ const TARGETS: [(&str, Definition); 5] = [
     ),
 ];
 
-/// The dataset called `name`, as somewhere a table can be written.
 pub fn silver_target(name: &str) -> Result<SilverTarget, TargetError> {
     let (_, definition) = TARGETS
         .iter()
@@ -53,7 +36,6 @@ pub fn silver_target(name: &str) -> Result<SilverTarget, TargetError> {
     Ok(definition()?)
 }
 
-/// The datasets that can be named, for an error that lists the choices.
 fn known() -> String {
     TARGETS
         .iter()
@@ -69,8 +51,6 @@ mod tests {
     use super::*;
     use crate::ALL;
 
-    /// Every silver dataset is writable by name, so defining one and forgetting this is a
-    /// failure here rather than an error the first time a notebook names it.
     #[test]
     fn every_silver_dataset_can_be_named() {
         for dataset in ALL.iter().filter(|d| d.layer == Layer::Silver) {
@@ -82,8 +62,6 @@ mod tests {
         }
     }
 
-    /// And nothing outside silver is: the layer decides what may be replaced, and a table
-    /// write replaces.
     #[test]
     fn no_dataset_outside_silver_can_be_named() {
         for dataset in ALL.iter().filter(|d| d.layer != Layer::Silver) {

@@ -362,6 +362,10 @@ Gold partitions on **which run or version produced the output**, and nothing is 
 A run's configuration and input dataset versions are written as columns alongside its
 results, so a run is interpretable without reference to the code that produced it.
 
+**A coordinate written out for a consumer keeps six decimal places**, about 11 cm. Silver holds a
+position as `f64`, which takes seventeen significant digits to write in full: nanometres, against a
+fix accurate to metres at best. The digits past the sixth cost bytes in every row of every export.
+
 An export in a specialised format is a **file**, not a dataset: nothing queries it, and the
 format has no room for columns. It is laid out the same way and holds its file inside:
 `gold/artifact=<name>/version=<version>/<file>`. The version is the instant the run started,

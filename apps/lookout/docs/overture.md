@@ -27,8 +27,10 @@ trailing slash rather than a glob, since a `/*` glob fails the reader's `.parque
 
 ## Every row carries its own envelope
 
-Overture writes a `bbox` struct on each row. A predicate over it prunes row groups before any
-geometry is decoded, so a window is four comparisons on `bbox` rather than a spatial operation.
+Overture writes a `bbox` struct on each row — `xmin`, `ymin`, `xmax`, `ymax` — beside the geometry
+itself, and its [schema](https://docs.overturemaps.org/schema/reference/base/water/) calls it an
+optional bounding box for the feature. A predicate over those four bounds prunes row groups before
+any geometry is decoded, so a window is four comparisons rather than a spatial operation.
 
 A window keeps every row whose envelope touches it, rather than only the rows it contains: a river
 running off the edge still crosses a railway inside.

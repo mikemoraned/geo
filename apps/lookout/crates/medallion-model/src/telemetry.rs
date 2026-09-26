@@ -1,40 +1,23 @@
-//! The bronze telemetry datasets: what a device sent, and what was read out of it.
-//!
-//! Every payload lands verbatim in [`RAW_SAMPLE`], and the readings interpreted from it in
-//! one dataset per sensor. Sensors are split rather than sharing one under a `sensor=`
-//! partition because they carry different columns, and a dataset is one schema.
-
 use medallion::{DatasetSpec, Row, layers};
 use serde::{Deserialize, Serialize};
 
 use domain::{DeviceId, DeviceType};
 
-/// Every payload the telemetry queue carried, verbatim. The lossless record the other
-/// telemetry datasets are interpreted from.
 pub const RAW_SAMPLE: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("raw_sample", "ingested_date");
 
-/// GPS samples interpreted from the payloads.
 pub const GPS_READING: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("gps_reading", "ingested_date");
 
-/// Accelerometer readings interpreted from the payloads.
 pub const ACCEL_READING: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("accel_reading", "ingested_date");
 
-/// The metadata a device announces when it starts a session.
 pub const DEVICE_SESSION: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("device_session", "ingested_date");
 
-/// One archived payload, exactly as it arrived.
-///
-/// `received_at` is optional because a payload restored from an older archive may predate
-/// receipt times being recorded at all; a payload off the queue always carries one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RawSampleRow {
-    /// Identifies the payload, so re-ingesting the same one is recognisable downstream.
     pub md5: String,
-    /// When the server stamped it on receipt, where that was recorded.
     pub received_at: Option<i64>,
     pub json: String,
 }
@@ -45,7 +28,6 @@ impl Row for RawSampleRow {
     const INSTANTS: &'static [&'static str] = &["received_at"];
 }
 
-/// One GPS sample as the device reported it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GpsReadingRow {
     pub device_id: DeviceId,
@@ -64,8 +46,6 @@ impl Row for GpsReadingRow {
     const INSTANTS: &'static [&'static str] = &["t"];
 }
 
-/// One accelerometer reading: the aggregates over the window it covers, and the last raw
-/// sample within it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AccelReadingRow {
     pub device_id: DeviceId,
@@ -84,7 +64,6 @@ impl Row for AccelReadingRow {
     const INSTANTS: &'static [&'static str] = &["t"];
 }
 
-/// One session start: which device began recording, when, and what it is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceSessionRow {
     pub device_id: DeviceId,
@@ -108,9 +87,6 @@ mod tests {
 
     use super::*;
 
-    /// What class of device a session ran on is one of a closed set of names, and is stored
-    /// as that name. The row holds the set rather than any string, so a column that has only
-    /// ever held four values cannot come to hold a fifth.
     #[test]
     fn the_class_of_device_is_a_string_column() {
         let fields = medallion::fields::<DeviceSessionRow>().expect("describe the rows");
@@ -125,7 +101,6 @@ mod tests {
         ));
     }
 
-    /// The names an archive of sessions is already written in.
     #[test]
     fn a_class_is_written_under_the_name_it_was_stored_as() {
         for (class, name) in [

@@ -55,6 +55,5 @@ it.
 One query reads the samples of the chosen few and groups them in memory, rather than a query per
 session: the chosen are a handful, and the samples are one scan either way.
 
-A coordinate is written to six places, about 11 cm, and every other reading to one, about a tenth
-of a metre. The store holds a position as `f64`, which takes seventeen significant digits to write
-out in full — nanometres, against a fix accurate to tens of metres.
+A coordinate is written to the six places [an export keeps](../../docs/medallion.md#gold), and
+every other reading to one, about a tenth of a metre.

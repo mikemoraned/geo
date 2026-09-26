@@ -503,3 +503,9 @@ where the other refactors do.
       `docs/telemetry.md`, since it is the wire's, and the crate's own rules — a page is a
       directory, the queue as a port, why a configured redis is fatal — are a README. Nothing is
       left in the Rust or the JavaScript.
+
+      `medallion-model` — the store's data dictionary became a README: what each dataset holds,
+      why a session keeps every sample while a crossing carries how it was collapsed, and what the
+      tests pin. A dedupe pass over every README came with it: the coordinate precision an export
+      keeps is one rule in `docs/medallion.md`, and the partition dates, the per-country zone and
+      the board's `f32` are each stated once, where they belong, with pointers instead of copies.

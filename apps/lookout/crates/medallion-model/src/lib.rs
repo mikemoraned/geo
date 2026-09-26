@@ -1,19 +1,3 @@
-//! The datasets lookout holds: where each one lives in the store, and what columns it has.
-//!
-//! Every dataset is defined once here, so a writer and a reader of the same data agree on
-//! its layer, partitioning and shape by referring to the same values rather than by each
-//! spelling out a name, a key and a struct of its own. `docs/medallion.md` describes the
-//! layout in prose; this is its executable form.
-//!
-//! Everything here is the store's, and depends on arrow through [`medallion`]. What a device
-//! and the store both hold is `model`, which uses neither and builds for Xtensa and wasm.
-//!
-//! A dataset's columns are a [`medallion::Row`] type declared beside its
-//! [`medallion::DatasetSpec`]. Geometry columns are the exception: they are built as arrow
-//! rather than traced from a Rust type, so a row type declares the dataset's other columns
-//! and the writer appends [`medallion::GEOMETRY`] and [`medallion::PROJECTED_GEOMETRY`] to
-//! them.
-
 mod crossing;
 mod motis;
 mod overture;
@@ -35,10 +19,6 @@ pub use telemetry::{
     RAW_SAMPLE, RawSampleRow,
 };
 
-/// Every dataset defined here, for checks that must cover all of them.
-///
-/// Held as [`DatasetInfo`] rather than as the specs themselves: a spec carries its layer in
-/// its type, so datasets of different layers cannot sit in one array.
 pub const ALL: [DatasetInfo; 12] = [
     RAW_SAMPLE.info(),
     GPS_READING.info(),
@@ -61,7 +41,6 @@ mod tests {
 
     use super::*;
 
-    /// Two datasets sharing a name would share a directory, and so silently merge.
     #[test]
     fn dataset_names_are_unique() {
         let mut names: Vec<&str> = ALL.iter().map(|dataset| dataset.name).collect();
@@ -69,15 +48,14 @@ mod tests {
         let unique = names.len();
         names.dedup();
 
-        assert_eq!(names.len(), unique, "duplicate dataset name in {names:?}");
+        assert_eq!(
+            names.len(),
+            unique,
+            "duplicate dataset name in {names:?}: two datasets named alike share a directory, \
+             and merge into one without saying so"
+        );
     }
 
-    /// Which datasets a rebuild may replace, and so which a bug could destroy the only copy
-    /// of: the derived ones and no others.
-    ///
-    /// Written out rather than derived from the layer, so adding a dataset that holds
-    /// observations to a layer that permits replacement fails here instead of the first time
-    /// something sweeps it.
     #[test]
     fn only_the_derived_datasets_may_be_replaced() {
         let mut replaceable: Vec<&str> = ALL
@@ -99,21 +77,19 @@ mod tests {
         );
     }
 
-    /// The datasets that declare a partition key, as `(dataset name, key)`.
     fn partition_keys() -> Vec<(&'static str, &'static str)> {
         ALL.iter()
             .filter_map(|dataset| Some((dataset.name, dataset.partition_key?)))
             .collect()
     }
 
-    /// Names and keys have to meet the store's naming rules, which are otherwise only
-    /// checked when a path is built — at which point a bad definition is a runtime error.
     #[test]
-    fn every_name_and_partition_key_is_valid() {
+    fn every_name_and_partition_key_is_snake_case() {
         for dataset in ALL {
             assert!(
                 dataset.name.parse::<medallion::PartitionKey>().is_ok(),
-                "{}: dataset name is not snake_case",
+                "{}: dataset name is not snake_case, and nothing else checks it until a path is \
+                 built from it",
                 dataset.name
             );
         }
@@ -125,8 +101,6 @@ mod tests {
         }
     }
 
-    /// A date-valued key is named for the event it dates, never a bare `date`. Keys of
-    /// other kinds — an id, a region — are named for what they hold instead.
     #[test]
     fn a_date_valued_partition_key_names_the_event_it_records() {
         for (name, key) in partition_keys() {
@@ -137,9 +111,6 @@ mod tests {
         }
     }
 
-    /// A row type describes a dataset defined here, and every column it calls an instant
-    /// is a column it has — a name matching nothing would leave that column silently
-    /// stored as the integer it travels as.
     fn check_rows_of<T: Row>() {
         assert!(
             ALL.contains(&T::DATASET.info()),
@@ -152,7 +123,13 @@ mod tests {
             let field = fields
                 .iter()
                 .find(|field| field.name() == instant)
-                .unwrap_or_else(|| panic!("{}: no column named `{instant}`", T::DATASET.name));
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{}: no column named `{instant}`, so nothing would convert it and it \
+                         would be stored as the integer it travels as",
+                        T::DATASET.name
+                    )
+                });
             assert!(
                 matches!(field.data_type(), DataType::Timestamp(..)),
                 "{}: `{instant}` is {:?}, not a timestamp",

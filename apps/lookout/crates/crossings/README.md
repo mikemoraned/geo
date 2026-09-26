@@ -65,11 +65,11 @@ static POINTS: &Aligned<[u8]> = &Aligned(*include_bytes!("crossings.pointset"));
 
 ## Coordinates are `f32`
 
-`f32` degrees resolve to **≤0.21 m** over the German crossings (mean 0.11 m) — far under what
-the receiver resolves, and under the metre-scale wander a stationary fix shows even in good
-conditions. It also suits the ESP32's single-precision FPU, where `f64` is emulated in
-software. `i32` at 1e-7° would resolve to ~1 cm, and that extra precision buys nothing
-against a GPS error budget measured in metres.
+`f32` degrees resolve to **≤0.21 m** over the German crossings (mean 0.11 m) — far under what the
+receiver resolves, and under the metre-scale wander a stationary fix shows even in good conditions.
+It is also [what the board can afford](../../docs/device.md#the-gnss-receiver). `i32` at 1e-7° would
+resolve to ~1 cm, and that extra precision buys nothing against a GPS error budget measured in
+metres.
 
 ## Ids name a crossing, not a row
 
@@ -111,10 +111,9 @@ the device: what it can hold is a window, not a border.
 - `crossings.json` — `[[id, latitude, longitude], …]`, which a browser fetches, in degrees
   kept to six places
 
-One read produces both, so a board and a page cannot disagree about which places exist. They
-differ only in precision, and in neither case by more than a fix is accurate to. Six places is
-about 11 cm; writing silver's `f64` out in full would take seventeen significant digits —
-nanometres, and sixteen characters a coordinate.
+One read produces both, so a board and a page cannot disagree about which places exist. They differ
+only in precision, and in neither case by more than a fix is accurate to; six places is
+[what an export keeps](../../docs/medallion.md#gold).
 
 A run logs which extractions its crossings came from, since neither format has room for it, and
 that is how a buffer on a device traces back to a release.
