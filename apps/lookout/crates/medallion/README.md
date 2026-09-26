@@ -25,10 +25,10 @@ drift apart on how time is stored.
 ## Appending never overwrites; deriving always replaces
 
 The immutable layers append. A batch lands in a file named for the instant of the write, at
-millisecond precision. A writer that batches — a drain, a backfill — issues several writes in quick
-succession, and at second resolution the second would land on the first. A write that would land on
-a file already there fails rather than replacing it: the rows already written are not this caller's
-to discard.
+millisecond precision. A writer that batches — a drain, a backfill — issues several writes in
+quick succession, and at second resolution the second would land on the first. A write that would
+land on a file already there fails rather than replacing it: the rows already written are not this
+caller's to discard.
 
 A derived partition is one file, whose name never varies, replaced whenever the partition is
 derived again.
@@ -63,8 +63,8 @@ file.
 
 Emptiness has to be said with a table rather than implied by silence. A query matching nothing
 still writes a readable, correctly typed file, since a partition holding no rows is an answer. A
-table of no rows is a derivation that produced nothing, and sweeps the dataset away. A call with no
-batches at all carries no schema to check, and does nothing.
+table of no rows is a derivation that produced nothing, and sweeps the dataset away. A call with
+no batches at all carries no schema to check, and does nothing.
 
 ## Geometry, and the CRS it declares
 
@@ -72,9 +72,8 @@ Silver geometry is WKB simple features, with the CRS in the file metadata as PRO
 metadata is produced by the `geoparquet` encoder rather than assembled here, so a file conforms to
 the spec version that crate implements.
 
-One projected zone per country, chosen here. Several UTM zones may cover a country, but a single
-zone keeps every geometry within it directly comparable — so a dataset states which country's
-geometry it holds and never picks a zone of its own.
+[One projected zone per country](../../docs/medallion.md#silver), chosen here, so a dataset states
+which country's geometry it holds and never picks a zone of its own.
 
 ## Reading, and reading about
 
@@ -91,10 +90,9 @@ contents.
 
 ## Where the store is
 
-The default is the store in the repo the caller is working in, found by walking up for the
-manifest that declares the workspace, as cargo does. Resolving a relative path against wherever a
-binary happened to start would quietly make a second store instead of finding the one that exists.
-Every CLI takes the same `--medallion-root` to override it.
+The default is [the store in the repo the caller is working in](../../docs/medallion.md#root),
+found the way cargo finds a workspace. Every CLI takes the same `--medallion-root` to override it,
+from one flag defined here.
 
 A gold artefact is a file rather than a dataset, laid out by what it is and by the run that
 produced it. Something outside the store holding one has no way to say which run that was, so a

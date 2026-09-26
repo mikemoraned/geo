@@ -47,8 +47,8 @@ Only what changed is redrawn. A view model that has not moved costs no SPI traff
 the bus to redraw an unchanged screen takes long enough to lose incoming sentences.
 
 The console log carries the raw voltage beside the bars, and the stack and heap figures beside
-those: the bars are deliberately too coarse to check a divider or a calibration against, and a
-leak tells itself apart from a level only as a number over a run.
+those — [the first because the bars cannot check a calibration](../../../docs/device.md#battery),
+the others because a leak tells itself apart from a level only as a number over a run.
 
 ## What it carries, and how it is pointed at a version
 

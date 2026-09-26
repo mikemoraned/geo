@@ -7,8 +7,8 @@ external system, rather than of whatever asks it. Running the server is
 ## There is no vehicle position, from any German open feed
 
 `GET /api/v1/map/trips` returns stop-to-stop legs (`TripSegment[]`) carrying mode, colour,
-from/to places, scheduled and realtime times, and a Google-encoded polyline at precision 5. A train's
-position at an instant is **interpolated** — walk the leg whose departure/arrival spans that
+from/to places, scheduled and realtime times, and a Google-encoded polyline at precision 5. A
+train's position at an instant is **interpolated** — walk the leg whose departure/arrival spans that
 instant along its decoded polyline — and never a reported GPS position.
 
 This is a property of the data, not of Motis. Both gtfs.de and DELFI publish GTFS-RT with

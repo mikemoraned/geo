@@ -13,9 +13,10 @@ known failure: a crossing on a line running parallel to the one travelled is wit
 it is recorded as passed though it never was. Fixing that means matching a session to track rather
 than to points, which is work in its own right.
 
-Two numbers travel with each match so a reader can weigh it: how far the nearest sample was, and
-how many samples fell inside the radius. One sample within the radius and twenty are different
-evidence — a session that never moved can produce the first without having gone anywhere.
+[Two numbers travel with each match so a reader can weigh
+it](../domain/README.md#what-was-found-and-how-hard-something-looked-are-different-things): one
+sample within the radius and twenty are different evidence, and a session that never moved can
+produce the first without having gone anywhere.
 
 The default radius is where the nearest-sample distances stop looking like crossings that were
 passed. Their distribution has two parts. It decays from zero, which is a crossing actually gone

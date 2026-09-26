@@ -551,12 +551,23 @@ where the other refactors do.
       said is `apps/lookout/README.md` — the app had none — or, for the sandbox's ESP-IDF grant,
       `CLAUDE.md`.
 
-- [ ] Once every crate is swept, read every `.md` the sweep wrote or grew against the rest, and
+- [x] Once every crate is swept, read every `.md` the sweep wrote or grew against the rest, and
       replace duplication with a cross-reference. Where a concept is shared widely enough that no
       one doc owns it, extract a `GLOSSARY.md` defining each such term under its own heading, and
       cross-reference the anchors rather than restating the definition. The sweep has already
       found this twice by accident — the export precision, and the store's rules restated in a
       binding's README — so doing it deliberately, over the whole set at once, is the point.
+
+      No glossary: every duplicated passage turned out to have an owner, so the answer was a link
+      each time rather than a fourth place to define a term. Found by scanning for ten-word runs
+      appearing in two docs, which caught seven: the default root and the per-country zone
+      (`docs/medallion.md`), the parquet footers (`medallion`), the cell and the estimator
+      (`docs/device.md`, twice over), what a `Pass` carries (`domain`), the packed scan
+      (`docs/device.md`), and the pyo3 docstring convention, which had no owner and is now one
+      paragraph in the app README that both extension crates point at. What the scan still reports
+      is link text quoting the heading it points to, which is the shape the fix takes.
+
+      Two of the sweep's own edits had left lines past the wrap; both are back inside it.
 
 - [ ] Then say the same in less text. Every doc grew by absorbing what a comment said, and prose
       written to rescue a fact is longer than prose written to state one. Nothing should be lost,

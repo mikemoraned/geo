@@ -7,10 +7,10 @@ the blueprint API there than in Rust. What the predictor does is
 [`predictor`](../../predictor/README.md); where a replay sits in the pipeline is
 [architecture.md](../../../docs/architecture.md).
 
-Each function's own documentation is its docstring, which `pyo3` publishes from the doc comment in
-`src/lib.rs`. Nothing is serialised across the boundary: python holds the state machine, and a
-call into it runs the predictor's own code. It measures in `f64`, which is what the store holds
-and what a python float is, and takes aware datetimes in whatever timezone the caller has them in.
+Each function's own documentation is [its docstring](../../../README.md#the-python-extensions).
+Nothing is serialised across the boundary: python holds the state machine, and a call into it runs
+the predictor's own code. It measures in `f64`, which is what the store holds and what a python
+float is, and takes aware datetimes in whatever timezone the caller has them in.
 
 ```
 just sessions                   # the sessions the store holds

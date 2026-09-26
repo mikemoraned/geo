@@ -5,8 +5,8 @@ binding rather than a second implementation, and what a table has to carry, is [
 from another language](../../docs/medallion.md#writing-silver-from-another-language). What follows
 is only what a python caller has to know.
 
-Each function's own documentation is its docstring, which `pyo3` publishes from the doc comment in
-`src/lib.rs`, so `help(lookout_medallion.write_silver)` in a notebook is the reference.
+Each function's own documentation is [its docstring](../../README.md#the-python-extensions) —
+`help(lookout_medallion.write_silver)` in a notebook is the reference.
 
 ```python
 import lookout_medallion

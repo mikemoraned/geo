@@ -36,6 +36,13 @@ The wasm module, and the crossings and sessions a page fetches, are copied into 
 `server` serves them from. All three are gitignored: the Docker builder stage runs the same
 commands for a deploy, so what is served is built rather than committed.
 
+## The python extensions
+
+Two crates are pyo3 extension modules: [medallion-py](crates/medallion-py/README.md) for the
+store, and [rerun-py](crates/platform/rerun-py/README.md) for replaying a session through the
+predictor. Each one's API reference is its docstrings, which pyo3 publishes from the doc comments
+in its `src/lib.rs`, so `help(…)` in a notebook or a REPL is the documentation.
+
 ## Testing
 
 `just test` runs everything, `just test-no-docker` everything a sandbox can. Both run the doctests
