@@ -1,5 +1,3 @@
-//! The device as a shell: its crossings come from flash, and it draws a panel.
-
 use platform_core::pointset::PointSet;
 use platform_core::{Model, Shell};
 
@@ -17,20 +15,12 @@ impl Shell for Device {
         Some(carried::crossings())
     }
 
-    /// Nothing can tell this device its crossings: they are in flash, and reading them there
-    /// is what keeps thousands of them out of its RAM. A board given a set over a connection
-    /// would answer here.
     fn received(_points: Vec<domain::CrossingCompact<f64>>) -> Option<Self::Crossings> {
         None
     }
 
     fn project(model: &Model<Self>) -> ViewModel {
-        // The clock is the predictor's, and so is everything shown against it. It advances on
-        // a tick and on a fix alike, and refuses either where it is behind — so the panel
-        // shows the receiver's time on a device whose own clock counts from the epoch at boot.
         let now = model.now();
-        // The fix the predictions were made from, so the panel cannot report a position the
-        // scan never ran from.
         let fix = model.fix();
         let predictions = model.predictions();
 
@@ -57,7 +47,6 @@ impl Shell for Device {
                 (Some(satellites), None) => format!("{satellites}sat"),
                 _ => String::new(),
             },
-            // Nothing about crossings until there is a fix to have scanned them from.
             within: match fix {
                 None => String::new(),
                 Some(_) => panel::within(predictions.len()),
@@ -81,30 +70,22 @@ mod tests {
     use crate::panel::{CHARACTERS_PER_LINE, NEAREST_ON_SCREEN, NO_ARRIVAL};
     use platform_core::{Effect, Event, Lookout};
 
-    /// Dresden Hauptbahnhof, the landmark [`crate::carried`] also checks the set against, and
-    /// a place with twenty crossings inside the radius. At 54 knots, about 100 km/h, the
-    /// countdowns are a train's.
     fn at_the_station() -> Fix {
         Fix::at(20, 43, 29, 51.0403, 13.7322)
             .with_speed_knots(54.0)
             .with_course_degrees(79.94)
     }
 
-    /// A second later and a little north-east, so the fix moves and the scan runs again.
     fn moved_on() -> Fix {
         Fix::at(20, 43, 30, 51.0404, 13.73235)
             .with_speed_knots(54.0)
             .with_course_degrees(79.94)
     }
 
-    /// Standing at the station: a speed of zero and no course, so no arrival to count down to.
     fn stopped() -> Fix {
         Fix::at(20, 48, 58, 51.0403, 13.7322)
     }
 
-    /// When the fixtures are dated. A sentence carries the time of day and the date in
-    /// separate fields, and a countdown advances only where the shell's clock agrees with
-    /// both.
     fn fix_instant() -> DateTime<Utc> {
         at_the_station().t()
     }
@@ -113,7 +94,6 @@ mod tests {
         Core::new()
     }
 
-    /// A core that has seen one fix at the station, moving.
     fn fixed() -> Core<Lookout<Device>> {
         let core = core();
         core.process_event(Event::Sentence(at_the_station().rmc()));
@@ -156,8 +136,6 @@ mod tests {
         assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
     }
 
-    /// A dozen sentences a second arrive and most repeat the position of the one before. A
-    /// render for each would spend a second of screen redrawing one second of fixes.
     #[test]
     fn a_sentence_that_changes_nothing_asks_for_no_render() {
         let core = fixed();
@@ -167,8 +145,6 @@ mod tests {
         assert!(effects.is_empty());
     }
 
-    /// The reading is taken on a timer, and the bars it fills change a handful of times over a
-    /// whole discharge.
     #[test]
     fn a_battery_reading_that_fills_the_same_bars_asks_for_no_render() {
         let core = core();
@@ -186,9 +162,6 @@ mod tests {
         assert_eq!(core.view().clock, "20:43:29");
     }
 
-    /// A fix carries true UTC, and a board with no NTP and no RTC counts from the epoch at
-    /// boot. The panel shows the receiver's time rather than 1970, and a shell with no clock
-    /// worth reporting can leave [`Event::Tick`] out entirely.
     #[test]
     fn a_clock_behind_the_receiver_does_not_move_the_panel_back() {
         let core = fixed();
@@ -200,8 +173,6 @@ mod tests {
         assert!(effects.is_empty());
     }
 
-    /// Both are needed to read a jittering distance: 8 satellites at HDOP 2.4 wanders about a
-    /// metre, 6 at HDOP 4.4 wanders metres a second and lies about its speed too.
     #[test]
     fn the_fix_reports_how_good_it_is() {
         let core = fixed();
@@ -224,8 +195,6 @@ mod tests {
         assert_eq!(core.view().nearest.len(), NEAREST_ON_SCREEN);
     }
 
-    /// The count beside the fix and the list under it come from one set of predictions, so
-    /// the screen cannot show a crossing 300 m away and claim none is near.
     #[test]
     fn the_count_and_the_list_agree() {
         let core = fixed();
@@ -235,8 +204,6 @@ mod tests {
         assert!(view.nearest.len() <= 20);
     }
 
-    /// The prediction itself, on a line: the nearest crossing to the station is 2.3 km away,
-    /// and at 100 km/h we reach it in a minute and a half.
     #[test]
     fn a_line_says_how_far_and_how_long() {
         let core = fixed();
@@ -244,8 +211,6 @@ mod tests {
         assert_eq!(core.view().nearest[0], "2.3km 1:24");
     }
 
-    /// The countdown is a clock subtracted from an instant, so it shortens between fixes
-    /// rather than sitting at whatever the last fix said.
     #[test]
     fn a_countdown_shortens_as_time_passes() {
         let core = fixed();
@@ -274,8 +239,6 @@ mod tests {
         assert_ne!(core.view().nearest, before);
     }
 
-    /// Scanning the whole set again for a position already scanned would waste a second the
-    /// device does not have.
     #[test]
     fn the_predictions_do_not_change_while_the_fix_does_not() {
         let core = fixed();
@@ -286,8 +249,6 @@ mod tests {
         assert_eq!(core.view().nearest, first);
     }
 
-    /// The panel says nothing about the battery until a plausible reading arrives, rather
-    /// than showing an empty meter it has no grounds for.
     #[test]
     fn the_battery_is_blank_until_it_is_measured() {
         let core = core();

@@ -529,6 +529,12 @@ where the other refactors do.
       and that the bridge's tests are the contract nothing else checks. What the page does with it
       stays `docs/web.md`'s.
 
+      `platform/m5` — one README for the pair, as for the browser: what fits on a 135-pixel panel
+      and why every line is padded, how `crossings.version` becomes an `include_bytes!`, and how
+      the receiver's pin is found by listening rather than by trusting a source. Every board fact
+      stays `docs/device.md`'s. `m5-core`'s 34 tests pass, and `just m5plus-build-release` compiles
+      the shell — run outside the sandbox, which cannot build it at all.
+
 - [ ] Once every crate is swept, read every `.md` the sweep wrote or grew against the rest, and
       replace duplication with a cross-reference. Where a concept is shared widely enough that no
       one doc owns it, extract a `GLOSSARY.md` defining each such term under its own heading, and

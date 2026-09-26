@@ -1,28 +1,17 @@
-//! What the screen says, and what fits on it.
-//!
-//! A line is 13 characters of a 10-pixel font across 135 pixels, and nothing wraps: a longer
-//! line runs off the side. Every field is formatted to fit, and most of what is asserted
-//! below is width.
-
 use chrono::{DateTime, Utc};
 use predictor::{DEFAULT_RADIUS_METRES, Prediction};
 
 use platform_core::Float;
 use platform_core::battery::Charge;
 
-/// Shown before the shell has reported a time.
 pub(crate) const NO_TIME_YET: &str = "--:--:--";
-/// Shown while the receiver has yet to produce a fix.
 pub(crate) const NO_FIX_YET: &str = "no fix";
-/// Shown in place of a countdown to a crossing we are not moving towards.
 pub(crate) const NO_ARRIVAL: &str = "--:--";
+const ALREADY_DUE: &str = "0:00";
+const LONGER_THAN_FITS: i64 = 3_600;
 
-/// How many crossings the panel has room for beneath the fix: five 20-pixel lines, ending
-/// clear of the bottom of a 240-pixel screen.
 pub const NEAREST_ON_SCREEN: usize = 5;
 
-/// Every width assertion is against this. Nothing outside a test needs it, because the
-/// formatting that has to fit is all here.
 #[cfg(test)]
 pub(crate) const CHARACTERS_PER_LINE: usize = 13;
 
@@ -31,23 +20,12 @@ pub struct ViewModel {
     pub clock: String,
     pub latitude: String,
     pub longitude: String,
-    /// How full the battery is, drawn as bars in the corner of the first line. Empty while
-    /// nothing plausible has been measured, so the panel says nothing rather than "flat".
     pub battery: String,
-    /// Satellites and HDOP. The panel is the only output on a train, and without these a
-    /// jittering distance cannot be told from a jittering fix.
     pub quality: String,
-    /// How many crossings are inside the predictor's radius. The count and the list below it
-    /// are visibly one answer.
     pub within: String,
-    /// The nearest crossings, nearest first, each already formatted to fit a line.
     pub nearest: Vec<String>,
 }
 
-/// One crossing on one line: how far away it is, then how long until we reach it.
-///
-/// A line is too short for the crossing's id as well, and the id is the one to drop. It names
-/// a row in a dataset. The distance and the countdown are the prediction.
 pub(crate) fn line(prediction: &Prediction<Float>, now: Option<DateTime<Utc>>) -> String {
     format!(
         "{} {}",
@@ -56,23 +34,16 @@ pub(crate) fn line(prediction: &Prediction<Float>, now: Option<DateTime<Utc>>) -
     )
 }
 
-/// The battery as bars in brackets, one for each step of [`Charge`].
-///
-/// Five characters, which is what is left of the first line once the clock has taken eight of
-/// thirteen. `FONT_10X20` is an ASCII font, so a battery glyph is not an option.
 pub(crate) fn bars(charge: Charge) -> &'static str {
     const FILLED: [&str; Charge::BARS + 1] = ["[   ]", "[=  ]", "[== ]", "[===]"];
 
     FILLED[charge.bars()]
 }
 
-/// How many crossings the predictor reports, and how far out it looked.
 pub(crate) fn within(count: usize) -> String {
     format!("{count} in {:.0}km", DEFAULT_RADIUS_METRES / 1_000.0)
 }
 
-/// A distance in six characters at most: metres up to a kilometre, then kilometres, and past
-/// a thousand of those only that it is a long way.
 fn distance(metres: Float) -> String {
     match metres {
         metres if metres < 1_000.0 => format!("{metres:.0}m"),
@@ -82,22 +53,14 @@ fn distance(metres: Float) -> String {
     }
 }
 
-/// How long until we arrive, never more than five characters.
-///
-/// A prediction carries an instant rather than a countdown, so it stays true while the clock
-/// advances between fixes. This is where the clock is subtracted from it. A standstill, or a
-/// fix with no speed behind it, leaves nothing to count down to and reads as [`NO_ARRIVAL`].
 fn countdown(at: Option<DateTime<Utc>>, now: Option<DateTime<Utc>>) -> String {
     let (Some(at), Some(now)) = (at, now) else {
         return NO_ARRIVAL.to_string();
     };
 
     match (at - now).num_seconds() {
-        // Further ahead than a crossing inside the radius can honestly be, and hours would
-        // not fit beside the distance anyway.
-        seconds if seconds >= 3_600 => ">1h".to_string(),
-        // Past its arrival: the next fix moves it, and until then it is as near as it gets.
-        seconds if seconds <= 0 => "0:00".to_string(),
+        seconds if seconds >= LONGER_THAN_FITS => ">1h".to_string(),
+        seconds if seconds <= 0 => ALREADY_DUE.to_string(),
         seconds => format!("{}:{:02}", seconds / 60, seconds % 60),
     }
 }
@@ -137,7 +100,6 @@ mod tests {
         assert_eq!(counting(3_600), ">1h");
     }
 
-    /// Standing still there is a distance and no arrival, because we never arrive.
     #[test]
     fn a_crossing_we_are_not_moving_towards_counts_down_to_nothing() {
         let now = instant();
@@ -146,7 +108,6 @@ mod tests {
         assert_eq!(countdown(Some(now), None), NO_ARRIVAL);
     }
 
-    /// Every band the distance has a format for, against every band the countdown has one for.
     #[test]
     fn no_prediction_can_make_a_line_too_long() {
         let now = instant();
@@ -193,8 +154,6 @@ mod tests {
         assert!(line.chars().count() <= CHARACTERS_PER_LINE, "{line:?}");
     }
 
-    /// However many are near, the count fits. The whole carried set is the bound, which no
-    /// radius this small reaches, so a line surviving it survives anything real.
     #[test]
     fn the_count_fits_however_many_are_near() {
         let widest = within(crate::carried::crossings().len());
@@ -202,7 +161,6 @@ mod tests {
         assert!(widest.chars().count() <= CHARACTERS_PER_LINE, "{widest:?}");
     }
 
-    /// The battery shares the first line with the clock: eight characters of eight-plus-five.
     #[test]
     fn the_battery_fits_beside_the_clock() {
         assert_eq!(

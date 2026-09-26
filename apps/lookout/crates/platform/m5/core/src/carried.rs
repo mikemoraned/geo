@@ -1,32 +1,12 @@
-//! The crossings the device carries.
-//!
-//! The places a railway meets water, derived from Overture by the water-crossings notebook
-//! and packed by `apps/lookout/crates/crossings`.
-//!
-//! Built into the binary rather than read from a filesystem. The set is a small fraction of
-//! the flash either way, so a filesystem would save nothing. It would cost a partition table,
-//! a mount at boot, and a way for the device to hold a set the code reading it disagrees with.
-//!
-//! The bytes are the store's, read from the gold artefact `pack_crossings` wrote, so a board
-//! and a browser are carrying versions of one thing rather than two files that drifted.
-
 use platform_core::pointset::{Aligned, PointSet, holds_points};
 
-// Written by `build.rs`, which resolves the version in `crossings.version` to a path and a
-// length. Declares `PACKED`.
 include!(concat!(env!("OUT_DIR"), "/carried.rs"));
 
-/// A set the reader cannot make sense of stops the build. The bytes are the same on every
-/// boot, so a device is the wrong place to find out they are the wrong bytes.
 const _: () = assert!(
     holds_points(&PACKED.0),
     "the carried crossings are not a point set this reader understands — repack them",
 );
 
-/// The crossings, borrowed from flash.
-///
-/// Infallible in a binary that compiled. The assertion above asks the reader's own questions
-/// of the same bytes, and [`Aligned`] forces the alignment it also checks.
 pub fn crossings() -> PointSet<'static> {
     PointSet::new(&PACKED.0).expect("a set checked where it is built into the binary")
 }
@@ -39,14 +19,11 @@ mod tests {
 
     use super::*;
 
-    /// A set with nothing in it would read, scan, and predict nothing, all without failing.
     #[test]
     fn the_carried_crossings_are_not_empty() {
         assert!(!crossings().is_empty());
     }
 
-    /// The check that matters for the alignment wrapper: without it this is where the cast
-    /// would fail, rather than somewhere on the device.
     #[test]
     fn the_carried_bytes_are_aligned_for_casting() {
         assert_eq!(PACKED.0.as_ptr() as usize % 4, 0);
@@ -64,9 +41,6 @@ mod tests {
         }
     }
 
-    /// Dresden Hauptbahnhof, and the five crossings nearest it: the Elbe crossings a train
-    /// north out of the station passes. They come from the source GeoParquet, through an
-    /// independent haversine in `f64`, so the tests below compare two answers rather than one.
     const DRESDEN_HBF: (f64, f64) = (51.0403, 13.7322);
     const NEAREST_TO_DRESDEN: [(u32, f32); 5] = [
         (0x5c9f_65c9, 2335.0),
@@ -75,12 +49,8 @@ mod tests {
         (0xf51f_7627, 2347.4),
         (0xfd00_6a89, 2351.6),
     ];
-    /// How far the device's answer may sit from the notebook's. They agree to 0.27 m over
-    /// 2.3 km — about what `f32` coordinates cost at this latitude, plus two implementations
-    /// rounding the earth differently. A metre covers that and no real disagreement.
     const TOLERANCE_M: f32 = 1.0;
 
-    /// The predictor the device runs, over the carried set, at the station.
     fn at_dresden() -> CrowFlies<f32, PointSet<'static>> {
         let mut predictor = CrowFlies::new(crossings(), DEFAULT_RADIUS_METRES);
         let t = DateTime::<Utc>::from_timestamp_millis(1_785_098_609_000).expect("an instant");
@@ -125,9 +95,6 @@ mod tests {
         }
     }
 
-    /// Twenty crossings lie within the radius of the station. Membership is the stricter
-    /// check: a distance can be slightly out and still rank the same, where a crossing near
-    /// the radius falls one side of it or the other.
     #[test]
     fn the_device_agrees_with_the_notebook_about_what_is_near() {
         let predictor = at_dresden();
