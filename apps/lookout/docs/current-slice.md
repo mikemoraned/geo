@@ -569,6 +569,11 @@ where the other refactors do.
 
       Two of the sweep's own edits had left lines past the wrap; both are back inside it.
 
+      Checking it by hand was worth doing once, so `crates/doclinks` now does it with the tests: a
+      walk of every `.md` under the app, asserting each relative target exists and each `#heading`
+      names one the target has. `pulldown-cmark` reads the markdown — a hand-rolled scan for `](`
+      counted a link inside a code span as a real one, which two of its tests now pin.
+
 - [ ] Then say the same in less text. Every doc grew by absorbing what a comment said, and prose
       written to rescue a fact is longer than prose written to state one. Nothing should be lost,
       including the reasoning, but a paragraph that earns its length should be the exception.

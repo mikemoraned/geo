@@ -45,6 +45,7 @@ in its `src/lib.rs`, so `help(…)` in a notebook or a REPL is the documentation
 
 ## Testing
 
-`just test` runs everything, `just test-no-docker` everything a sandbox can. Both run the doctests
-separately from nextest, which does not support them, and both rebuild the two python extensions —
-uv's wheel cache does not notice a change to the rust crates underneath.
+`just test` runs everything, `just test-no-docker` everything a sandbox can. Among them,
+[doclinks](crates/doclinks/README.md) checks that the links between these docs still resolve. Both
+run the doctests separately from nextest, which does not support them, and both rebuild the two
+python extensions — uv's wheel cache does not notice a change to the rust crates underneath.
