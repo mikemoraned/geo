@@ -32,10 +32,8 @@ impl Written {
 
 /// Write `table` as the whole of the silver dataset `dataset`, replacing what is there.
 ///
-/// `root` names the store, defaulting to the one in the repo the caller is working in.
-///
-/// The table must hold every row of the dataset, since a partition it does not cover is
-/// taken to be one the derivation no longer produces, and is deleted.
+/// The table must hold every row: a partition it does not cover is deleted. `root` defaults to
+/// the store in the repo the caller is working in. See `docs/medallion.md`.
 #[pyfunction]
 #[pyo3(signature = (dataset, table, *, root=None))]
 fn write_silver(
@@ -78,17 +76,12 @@ impl From<Param> for ScalarValue {
     }
 }
 
-/// Query the store, returning an Arrow table.
+/// Query the store, returning an Arrow table: the datasets the query names are its tables.
 ///
-/// The datasets the query reads are the tables it names, each registered under that name with
-/// its partitions walked and its geometry columns read back with their CRS.
-///
-/// `params` binds the query's `$name` placeholders as values, so an id carrying a quote
-/// reads as an id that does not exist rather than as more query.
-///
-/// The result exposes the Arrow PyCapsule interface, so `pyarrow.table(...)` takes it
-/// without copying the rows through python objects. A dataset the store does not define, or
-/// that has never been written, raises a `ValueError` naming it.
+/// `params` binds the query's `$name` placeholders as values. The result exposes the Arrow
+/// PyCapsule interface, so `pyarrow.table(...)` takes it directly. A dataset the store does not
+/// define, or that has never been written, raises a `ValueError` naming it. See
+/// `docs/medallion.md`.
 #[pyfunction]
 #[pyo3(signature = (sql, *, params=None, root=None))]
 fn query_silver(
@@ -131,11 +124,7 @@ fn query_silver(
 }
 
 /// The CRS a country's projected geometry is stored in, as an authority string a python
-/// geometry library takes (`"EPSG:25832"`).
-///
-/// One zone per country, chosen by the store: a caller preparing the projected column asks
-/// rather than naming a zone of its own, so what it projects into and what the file declares
-/// cannot disagree.
+/// geometry library takes (`"EPSG:25832"`). See `docs/medallion.md`.
 #[pyfunction]
 fn projected_crs(country: &str) -> PyResult<String> {
     let country: Country = country
@@ -154,11 +143,7 @@ fn division_id(country: &str) -> PyResult<String> {
     Ok(medallion_model::division_id(country).to_string())
 }
 
-/// The store in the repo the caller is working in, as a path.
-///
-/// This is what [`write_silver`] writes into when it is not given a root, so a caller reading
-/// the store directly — with duckdb, say — asks for the path rather than working it out, and
-/// cannot end up reading one store and writing another.
+/// The store in the repo the caller is working in, as a path: what the writes here default to.
 #[pyfunction]
 fn default_root() -> PyResult<PathBuf> {
     Root::default_path().map_err(|err| PyRuntimeError::new_err(err.to_string()))
