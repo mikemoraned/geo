@@ -45,13 +45,13 @@ def train_segment_table(trip_ids, departures, countries):
     )
 
 
-
-
-def water_crossing_table(compact_ids, lat_lon, projected):
+def water_crossing_table(compact_ids, lat_lon, projected, ids=None):
     rows = len(compact_ids)
     return pa.table(
         {
-            "crossing_id": pa.array([f"w{n}-t{n}" for n in range(rows)], pa.string()),
+            "crossing_id": pa.array(
+                ids or [f"w{n}-t{n}" for n in range(rows)], pa.string()
+            ),
             "crossing_compact_id": pa.array(compact_ids, pa.uint32()),
             "water_id": pa.array(["water-1"] * rows, pa.string()),
             "water_subtype": pa.array(["river"] * rows, pa.string()),

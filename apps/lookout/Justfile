@@ -54,13 +54,15 @@ serve-web: wasm crossings kiosk-sessions serve
 test: test-python test-rust
 
 # Every Rust test, doctests included.
-test-rust:
+test-rust: test-doc
     cargo nextest run --workspace
-    cargo test --doc --workspace
 
 # Every test but the Docker ones. The sandbox-safe run.
-test-no-docker: test-python
+test-no-docker: test-python test-doc
     cargo nextest run --workspace --profile no-docker
+
+# The doctests alone. nextest cannot run them, so cargo does.
+test-doc:
     cargo test --doc --workspace
 
 # The Python tests, rebuilding both extensions so a change to the rust crates reaches them.

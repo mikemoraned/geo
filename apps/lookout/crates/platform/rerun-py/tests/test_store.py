@@ -4,14 +4,23 @@ import pytest
 
 from runner.store import Store
 
-from conftest import COUNTRY, FAR, FAR_LAT, LON, NEAR, NEAR_LAT, SESSION, T0
+from conftest import (
+    JUST_BEFORE_MIDNIGHT,
+    COMES_INSIDE_THE_RADIUS,
+    COUNTRY,
+    FAR,
+    LON,
+    NEAR,
+    SESSION,
+    STAYS_OUTSIDE_IT,
+)
 
 
 def test_a_sessions_samples_come_back_oldest_first_across_its_partitions(store):
     samples = list(Store(store).samples(SESSION))
 
     assert [sample.t for sample in samples] == [
-        T0 + datetime.timedelta(minutes=minute) for minute in range(4)
+        JUST_BEFORE_MIDNIGHT + datetime.timedelta(minutes=minute) for minute in range(4)
     ]
     assert samples[0].lat == 50.0
     assert samples[-1].lat == 50.03
@@ -36,7 +45,9 @@ def test_a_session_the_store_has_never_seen_has_no_samples(store):
 def test_the_crossings_come_back_named_by_the_id_a_device_holds(store):
     crossings = Store(store).crossings()
 
-    assert sorted(crossings) == sorted([(NEAR, NEAR_LAT, LON), (FAR, FAR_LAT, LON)])
+    assert sorted(crossings) == sorted(
+        [(NEAR, COMES_INSIDE_THE_RADIUS, LON), (FAR, STAYS_OUTSIDE_IT, LON)]
+    )
 
 
 def test_a_country_restricts_the_crossings_to_its_own_partition(store):
@@ -57,4 +68,6 @@ def test_a_dataset_that_has_never_been_derived_says_so(empty_store):
 def test_a_session_is_listed_with_the_span_and_count_that_name_it(store):
     listed = Store(store).sessions()
 
-    assert listed == [(SESSION, T0, T0 + datetime.timedelta(minutes=3), 4)]
+    last = JUST_BEFORE_MIDNIGHT + datetime.timedelta(minutes=3)
+
+    assert listed == [(SESSION, JUST_BEFORE_MIDNIGHT, last, 4)]

@@ -12,15 +12,13 @@ SESSION = "1e1b4a2c-0000-4000-8000-000000000001"
 DEVICE = "d0000000-0000-4000-8000-000000000001"
 COUNTRY = "DE"
 
-MINUTE_BEFORE_MIDNIGHT = datetime.datetime(2026, 7, 25, 23, 58, tzinfo=datetime.UTC)
-T0 = MINUTE_BEFORE_MIDNIGHT
+JUST_BEFORE_MIDNIGHT = datetime.datetime(2026, 7, 25, 23, 58, tzinfo=datetime.UTC)
 LON = 8.6
 START_LAT = 50.0
 A_HUNDREDTH_OF_A_DEGREE_A_MINUTE = 1 / 100.0
 
 NEAR, FAR = 0x292E417A, 0x51B0C33D
 COMES_INSIDE_THE_RADIUS, STAYS_OUTSIDE_IT = 50.035, 50.06
-NEAR_LAT, FAR_LAT = COMES_INSIDE_THE_RADIUS, STAYS_OUTSIDE_IT
 
 
 def _projected(points):
@@ -36,7 +34,9 @@ def _wkb(points):
 
 def _sample_table():
     minutes = range(4)
-    instants = [T0 + datetime.timedelta(minutes=minute) for minute in minutes]
+    instants = [
+        JUST_BEFORE_MIDNIGHT + datetime.timedelta(minutes=minute) for minute in minutes
+    ]
     points = [
         (LON, START_LAT + minute * A_HUNDREDTH_OF_A_DEGREE_A_MINUTE) for minute in minutes
     ]
@@ -72,7 +72,7 @@ def _sample_table():
 
 
 def _crossing_table():
-    points = [(LON, NEAR_LAT), (LON, FAR_LAT)]
+    points = [(LON, COMES_INSIDE_THE_RADIUS), (LON, STAYS_OUTSIDE_IT)]
     rows = len(points)
     return pa.table(
         {

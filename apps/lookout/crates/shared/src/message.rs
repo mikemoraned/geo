@@ -104,10 +104,10 @@ impl<'de> Deserialize<'de> for Message {
             .and_then(Value::as_u64)
             .unwrap_or(VERSION_WHEN_ABSENT);
         match version {
-            0 => serde_json::from_value(value)
+            VERSION_WHEN_ABSENT => serde_json::from_value(value)
                 .map(Message::Version0)
                 .map_err(D::Error::custom),
-            1 => serde_json::from_value(value)
+            VERSION_SENT => serde_json::from_value(value)
                 .map(Message::Version1)
                 .map_err(D::Error::custom),
             other => Err(D::Error::custom(format!("unknown message version {other}"))),

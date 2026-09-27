@@ -2920,6 +2920,7 @@ name = "doclinks"
 version = "0.1.0"
 dependencies = [
  "pulldown-cmark",
+ "walkdir",
 ]
 
 [[package]]
