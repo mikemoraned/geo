@@ -26,17 +26,17 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   column carries and what the `country=` partition already states. `UK` would match no
   upstream row.
 - **The UK's projected zone is EPSG:25830, ETRS89 / UTM zone 30N.** Every engine has to agree
-  on the projected column, and 25830 asks for no datum transformation at all: `+proj=utm
-  +zone=30 +ellps=GRS80`, the same shape as Germany's 25832, so there is nothing for one
-  engine to apply and another to skip, and nothing to keep in step as either moves. GB spans
-  zones 29 to 31, so the scale factor reaches about 1 m per km at the Western Isles and in
-  East Anglia — comparisons are made within one country, so a zone that is not comparable
-  with Germany's costs nothing. Checked against PROJ: 443,797.38, 6,200,880.49 for a point
-  near Edinburgh, to the centimetre. It beats British National Grid; see
-  [Rejected / deferred](#rejected--deferred).
+  on the projected column, and 25830 needs no datum transformation: `+proj=utm +zone=30
+  +ellps=GRS80`, the same shape as Germany's 25832. Nothing sits between the fix and the grid
+  for one engine to apply and another to skip, and nothing has to be kept in step as either
+  moves. GB spans zones 29 to 31, so the scale factor reaches about 1 m per km at the Western
+  Isles and in East Anglia — comparisons are made within one country, so a zone that is not
+  comparable with Germany's costs nothing. Checked against PROJ: 443,797.38, 6,200,880.49 for a
+  point near Edinburgh, to the centimetre. It beats British National Grid; see [Rejected /
+  deferred](#rejected--deferred).
 - **proj4rs goes to 0.2 in this slice, whatever zone the UK gets.** 0.1 resolves
   `crs-definitions` 0.4.0, whose definitions name no datum, so any CRS on a local datum
-  projects about 100 m out and says nothing about it. Nothing the store projects today sits on
+  projects about 100 m out and reports nothing. Nothing the store projects today sits on
   one — CRS84, 25832 and 25830 are all geocentric — which is the argument for doing it now
   rather than when a country whose zone is on a local datum arrives and the error lands in
   silver unannounced. Checked as a plain version bump: `from_epsg_code` and `transform` are
@@ -129,21 +129,21 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   applies the Helmert; PROJ applies OSTN15 where the grid data is installed, which is more
   accurate and therefore different. Whether the two agree then depends on what is installed on
   a given machine: with no OSTN15 grid they match to the centimetre, and `brew install
-  proj-data` moves the notebook while leaving the Rust where it was. That is not a property of
-  the store, and it is what 25830 avoids by needing no transformation at all. Revisit if a
-  derivation needs sub-metre truth across the whole of GB, and pin one transformation for both
-  engines when it does.
+  proj-data` moves the notebook while leaving the Rust where it was. That is a property of a
+  machine rather than of the store, and needing no transformation is how 25830 avoids it.
+  Revisit if a derivation needs sub-metre truth across the whole of GB, and pin one
+  transformation for both engines when it does.
 
   The definitions have to carry the datum for any of that to hold. `crs-definitions` 0.4.0
   defines 27700 as `+proj=tmerc +ellps=airy`, naming no datum, so the transformation is
   skipped and a point lands 81 m out in Glasgow, 89 m in Edinburgh and 125 m in London. This
   is the format rather than the library: PROJ's own `projinfo -o PROJ EPSG:27700` emits the
-  same bare string, a proj4 string being a lossy export of a modern CRS. proj4rs itself
-  carries OSGB36 with its seven parameters and honours `+datum=`, `+towgs84=` and
-  `+nadgrids=`, and `crs-definitions` 0.5.0 names the datum — on proj4rs 0.2 the grid answers
-  281,451.24, 674,626.69 against pyproj's 281,451.24135, 674,626.68754. A zone on a local
-  datum therefore depends on the dependency being current, which is one of the reasons the
-  store moves to proj4rs 0.2.
+  same bare string, a proj4 string being a lossy export of a modern CRS. proj4rs itself carries
+  OSGB36 with its seven parameters and honours `+datum=`, `+towgs84=` and `+nadgrids=`, and
+  `crs-definitions` 0.5.0 names the datum — on proj4rs 0.2 the grid answers 281,451.24,
+  674,626.69 against pyproj's 281,451.24135, 674,626.68754. A zone on a local datum is
+  therefore only as right as the definitions are current, which is one reason the store moves
+  to proj4rs 0.2.
 
   A CRS is a projection plus a datum, and it is the datum half that differs here. Ordnance
   Survey's [A Guide to Coordinate Systems in Great
@@ -166,15 +166,15 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   A GPS fix is in WGS84, whose origin is "the Geocentre (the centre of mass of the Earth)"
   (§4.1), so reaching the grid takes a datum transformation *and then* the projection — PROJ's
   [Geodetic transformation](https://proj.org/en/stable/usage/transformation.html) counts "5
-  steps" for the equivalent journey, a Helmert transformation among them. Leaving it out is
-  what the offsets above are. Nor is the offset a constant to subtract: it varies with position,
-  about 8 m over the Glasgow to Edinburgh corridor alone, and even done properly OS report
-  (§6.2):
+  steps" for the equivalent journey, a Helmert transformation among them. Skipping it is what
+  the offsets above measure. Nor is the offset a constant to subtract: it varies with position,
+  by about 8 m over the Glasgow to Edinburgh corridor alone, and even done properly it carries
+  error of its own. OS report (§6.2):
 
   > For the transformation from ETRS89 to OSGB36 in Britain, using a single Helmert
   > transformation will give errors of up to 3m (95%) in plan
 
-  ETRS89 raises none of this, which is why 25830 was chosen and why Germany's 25832 has never
+  ETRS89 raises none of this, which is why 25830 wins here and why Germany's 25832 has never
   shown the problem: it is geocentric like WGS84, close enough that
   [OS](https://docs.os.uk/more-than-maps/geographic-data-visualisation/guide-to-cartography/coordinate-reference-systems)
   say "the difference between ETRS89 and WGS84 can be ignored for most purposes", so nothing
@@ -186,7 +186,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 #### Open questions
 
 - How many crossings GB yields, and so the packed size and the scan cost. The tasks measure
-  both; the Target's fallback to a more compact representation waits on those numbers.
+  both, and the Target's fallback to a more compact representation waits on those numbers.
 - Whether the one recorded UK session — 402 fixes from Glasgow to Edinburgh, ingested
   2026-09-18 — passes five crossings and so reaches the kiosk. If it does not, either
   `--min-crossings` drops or a country's best is kept whatever it passed.
@@ -201,131 +201,134 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 The invariant above, in place before the GB extract is taken, and testable on the DE extract
 alone.
 
-* Take the country areas from the newest extract of each country in
-  `crates/transport/src/countries.rs`, registering each extract's `division_area`. A country
-  with no extract contributes no areas rather than failing, since `ALL` names a country before
-  its extract is taken.
-* Test that a later extract of one country leaves the other's points placeable, and that a
-  country extracted from an older release places its points the same.
-* Test that a second extract of one country supersedes the first rather than adding its areas
-  beside them.
-* Make a bare `extract` backfill every extract the manifest records, each from its own
-  recorded release, rather than the newest alone. `backfill <id>` keeps taking one.
-* Skip an extract whose rows are already in the store rather than failing on it, so filling in
-  a part-filled store is one command. `AlreadyPresent` stays the answer to being asked for one
-  by id.
-* Report what a backfill filled in and what it skipped, so a run over several extracts says
-  which of them the store now holds.
-* Check `just summarise` shows every extract the store holds, so what the store covers is one
-  command rather than a manifest query.
+- [ ] Take the country areas from the newest extract of each country in
+      `crates/transport/src/countries.rs`, registering each extract's `division_area`. A
+      country with no extract contributes no areas rather than failing, since `ALL` names a
+      country before its extract is taken.
+- [ ] Test that a later extract of one country leaves the other's points placeable, and that a
+      country extracted from an older release places its points the same.
+- [ ] Test that a second extract of one country supersedes the first rather than adding its
+      areas beside them.
+- [ ] Make a bare `extract` backfill every extract the manifest records, each from its own
+      recorded release, rather than the newest alone. `backfill <id>` keeps taking one.
+- [ ] Skip an extract whose rows are already in the store rather than failing on it, so filling
+      in a part-filled store takes one command. `AlreadyPresent` stays the answer to a named
+      id.
+- [ ] Report what a backfill filled in and what it skipped, so a run over several extracts says
+      which of them the store now holds.
+- [ ] Check `just summarise` shows every extract the store holds, so what the store covers
+      takes one command rather than a manifest query.
 
 #### Refactors / extensions: the UK as a country
 
-* Bump `proj4rs` to 0.2 in the workspace `Cargo.toml`, and check the pinned Berlin projection
-  is unchanged. Nothing else in the slice waits on it.
-* Read `division_area` for the UK from the mirror at release 2026-07-22.0, and record the
-  code it carries and the bbox of the `country` row. Decides the variant's code and the
-  window the extract takes.
-* Add `Country::UnitedKingdom` to `crates/medallion/src/country.rs`: code `GB`,
-  `projected_epsg` 25830, `projected_projjson` from `etrs89_utm30n.projjson.json`, and the
-  variant in `ALL`.
-* Add the `EPSG:25830` line to the `crs-definitions` recipe, and commit the
-  `crates/medallion/src/etrs89_utm30n.projjson.json` it emits.
-* Pin a GB point through `Projector::for_country` in `crates/medallion/src/geo.rs`, against
-  the easting and northing PROJ gives for EPSG:25830 — the check that proj4rs and the
-  notebook's projection agree for this zone.
+- [ ] Bump `proj4rs` to 0.2 in the workspace `Cargo.toml`, and check the pinned Berlin
+      projection is unchanged. Nothing else in the slice waits on it.
+- [ ] Read `division_area` for the UK from the mirror at release 2026-07-22.0, and record the
+      code it carries and the bbox of the `country` row. Decides the variant's code and the
+      window the extract takes.
+- [ ] Add `Country::UnitedKingdom` to `crates/medallion/src/country.rs`: code `GB`,
+      `projected_epsg` 25830, `projected_projjson` from `etrs89_utm30n.projjson.json`, and the
+      variant in `ALL`.
+- [ ] Add the `EPSG:25830` line to the `crs-definitions` recipe, and commit the
+      `crates/medallion/src/etrs89_utm30n.projjson.json` it emits.
+- [ ] Pin a GB point through `Projector::for_country` in `crates/medallion/src/geo.rs`, against
+      the easting and northing PROJ gives for EPSG:25830 — the check that proj4rs and the
+      notebook's projection agree for this zone.
 
 #### The GB extract
 
-* Mount the Overture mirror, and take the extract:
-  `just bronze-extract --mirror <path> new --release 2026-07-22.0 --country GB`. Record the
-  extract id, the rows per theme, and the bytes on disk.
-* Check `just summarise` reports both extracts and the rows each holds, and that a rebuild of
-  the DE silver datasets is unchanged by GB arriving beside them.
+- [ ] Mount the Overture mirror, and take the extract: `just bronze-extract --mirror <path> new
+      --release 2026-07-22.0 --country GB`. Record the extract id, the rows per theme, and the
+      bytes on disk.
+- [ ] Check `just summarise` reports both extracts and the rows each holds, and that a rebuild
+      of the DE silver datasets is unchanged by GB arriving beside them.
 
 #### Silver observations
 
-* Re-run `just silver-sessionise`, and check `unplaceable` falls to nought and the GB fixes
-  land in `country=GB`.
-* Re-run `just silver-motis-ingest`, and check a country with no legs writes no partition and
-  does not fail.
+- [ ] Re-run `just silver-sessionise`, and check `unplaceable` falls to nought and the GB fixes
+      land in `country=GB`.
+- [ ] Re-run `just silver-motis-ingest`, and check a country with no legs writes no partition
+      and does not fail.
 
 #### The crossings notebook
 
-* Copy `v9.py` to `v10.py` and point `silver-water-crossings` at it. The cells below change
-  `v10.py` alone.
-* Replace the pinned `EXTRACT_ID` and `COUNTRY` with a country-to-extract map covering DE and
-  GB, and drive the region window, rail, water and city cells from it — the two
-  `country = 'DE'` literals included.
-* Project each country's geometry with its own `lookout_medallion.projected_crs(country)`,
-  and carry `country` per row.
-* Write the union of both countries in one `write_silver`, so the sweep and the id checks
-  cover both.
-* Add a GB bbox case to `test_cases.geojson` with a hand-counted crossing, and run
-  `crossing_checks` over both countries.
-* Run `just silver-water-crossings`, and record the crossings each country yields.
+- [ ] Copy `v9.py` to `v10.py` and point `silver-water-crossings` at it. The cells below change
+      `v10.py` alone.
+- [ ] Replace the pinned `EXTRACT_ID` and `COUNTRY` with a country-to-extract map covering DE
+      and GB, and drive the region window, rail, water and city cells from it — the two
+      `country = 'DE'` literals included.
+- [ ] Project each country's geometry with its own `lookout_medallion.projected_crs(country)`,
+      and carry `country` per row.
+- [ ] Write the union of both countries in one `write_silver`, so the sweep and the id checks
+      cover both.
+- [ ] Add a GB bbox case to `test_cases.geojson` with a hand-counted crossing, and run
+      `crossing_checks` over both countries.
+- [ ] Run `just silver-water-crossings`, and record the crossings each country yields.
 
 #### Gold and the kiosk
 
-* Re-run `just silver-session-crossings`, and record what the GB session matched.
-* Take the best `max_sessions` per country in `crates/session_crossings/src/gold.rs`, joining
-  `session` for the country, and say per-country in the `--max-sessions` help.
-* Test that a country with fewer than `max_sessions` qualifying sessions contributes what it
-  has, and crowds out no other country.
-* Run `just gold-pack-sessions` and `just kiosk-sessions`. Record the sessions kept per
-  country and the bytes. Only after the crossings notebook has run.
-* Run `just gold-pack-crossings` and `just crossings`. Record `crossings`, `packed_bytes` and
-  `json_bytes`.
+- [ ] Re-run `just silver-session-crossings`, and record what the GB session matched.
+- [ ] Take the best `max_sessions` per country in `crates/session_crossings/src/gold.rs`,
+      joining `session` for the country, and say per-country in the `--max-sessions` help.
+- [ ] Test that a country with fewer than `max_sessions` qualifying sessions contributes what
+      it has, and crowds out no other country.
+- [ ] Run `just gold-pack-sessions` and `just kiosk-sessions`. Record the sessions kept per
+      country and the bytes. Only after the crossings notebook has run.
+- [ ] Run `just gold-pack-crossings` and `just crossings`. Record `crossings`, `packed_bytes`
+      and `json_bytes`.
 
 #### The invariant on the device
 
-An early read on the DE and GB set, before the release bump makes it expensive to find out.
+An early read on the DE and GB set, before the release bump makes finding out expensive.
 The release group below confirms it on the final set.
 
-* Build `just m5plus-build-release`, and measure the release ELF's total size and the rodata
-  carrying the point set, against the recorded 764,694 and 212,256 bytes.
-* Flash the release build and record the per-scan microseconds at the new count, against the
-  recorded 4,353 to 5,025 µs for 5,749 crossings. The user's to run: Claude cannot flash the
-  device.
-* Decide whether the invariant holds on those two numbers. Only if it does not, raise a slice
-  for a more compact representation.
+- [ ] Build `just m5plus-build-release`, and measure the release ELF's total size and the
+      rodata carrying the point set, against the recorded 764,694 and 212,256 bytes.
+- [ ] Flash the release build and record the per-scan microseconds at the new count, against
+      the recorded 4,353 to 5,025 µs for 5,749 crossings. The user's to run: Claude cannot
+      flash the device.
+- [ ] Decide whether the invariant holds on those two numbers. Raise a slice for a more compact
+      representation only if it does not.
 
 #### Up to date on the latest Overture release
 
 Last, so it moves both countries at once over work that is already proven on 2026-07-22.0.
 
-* Hold the mirror's path once, in `tools/overture-mirror/mirror.just`, and import it from that
-  dir's Justfile and from `apps/lookout/Justfile` in place of its `overture_mirror` literal.
-* Capture the mirroring in `tools/overture-mirror/Justfile`: a recipe listing the releases
-  `s3://overturemaps-us-west-2/release/` holds, and one syncing a named release whole to the
-  mirror with `--no-sign-request`. Reasoning in comments, as `tools/motis-server/Justfile` has it.
-* List the bucket's releases, and name the latest. It becomes the new pin.
-* Sync that release whole to the mirror, every theme. The user's to run: it needs the drive
-  mounted and hours of transfer. Everything below waits on it.
-* Bump `DEFAULT_RELEASE` in `crates/transport/src/overture.rs` to that release.
-* Take a DE and a GB extract at it, from the mirror. Each becomes its country's newest, so
-  what places a point follows with no further change.
-* Point the notebook's country-to-extract map at the two new ids, and re-run `just
-  silver-init`.
-* Re-run `crossing_checks` over both countries, and record any test case whose count moved
-  between the two releases.
-* Re-run `just gold-pack-crossings`, `just crossings`, `just gold-pack-sessions` and `just
-  kiosk-sessions`, and commit the packed artefacts with the versions adopted.
-* Re-measure the firmware size and the scan cost on this final set, and confirm the invariant
-  on those numbers rather than on the earlier ones.
+- [ ] Hold the mirror's path once, in `tools/overture-mirror/mirror.just`, and import it from
+      that dir's Justfile and from `apps/lookout/Justfile` in place of its `overture_mirror`
+      literal.
+- [ ] Capture the mirroring in `tools/overture-mirror/Justfile`: one recipe listing the
+      releases `s3://overturemaps-us-west-2/release/` holds, one syncing a named release whole
+      to the mirror with `--no-sign-request`. Reasoning in comments, as
+      `tools/motis-server/Justfile` has it.
+- [ ] List the bucket's releases, and name the latest. It becomes the new pin.
+- [ ] Sync that release whole to the mirror, every theme. The user's to run: it needs the drive
+      mounted and hours of transfer. Everything below waits on it.
+- [ ] Bump `DEFAULT_RELEASE` in `crates/transport/src/overture.rs` to that release.
+- [ ] Take a DE and a GB extract at it, from the mirror. Each becomes its country's newest, so
+      what places a point follows with no further change.
+- [ ] Point the notebook's country-to-extract map at the two new ids, and re-run `just
+      silver-init`.
+- [ ] Re-run `crossing_checks` over both countries, and record any test case whose count moved
+      between the two releases.
+- [ ] Re-run `just gold-pack-crossings`, `just crossings`, `just gold-pack-sessions` and `just
+      kiosk-sessions`, and commit the packed artefacts with the versions adopted.
+- [ ] Re-measure the firmware size and the scan cost on this final set, and confirm the
+      invariant on those numbers.
 
 #### Wrap-up
 
-* State in `docs/medallion.md`, beside the rule on one projected zone per country, that a
-  zone is chosen to need no datum transformation — every engine writing the column has to
-  reach the same numbers, and a transformation one applies and another skips is the way they
-  diverge. Carry the Ordnance Survey and PROJ references from
-  [Rejected / deferred](#rejected--deferred).
-* Record in `docs/overture.md` that a country is extracted on its own, that the areas placing
-  a point are the union of each country's newest extract, and that countries need not share a
-  release.
-* Fold the measured firmware size and scan cost into the scanning section of `docs/device.md`.
-* Record in `docs/architecture.md` that filling in bronze takes every recorded extract.
-* Point `apps/lookout/README.md` at `tools/overture-mirror/` where it says the extract comes
-  from a local mirror.
-* Run `just test-no-docker`.
+- [ ] State in `docs/medallion.md`, beside the rule on one projected zone per country, that a
+      zone is chosen to need no datum transformation — every engine writing the column has to
+      reach the same numbers, and a transformation one applies and another skips is the way
+      they diverge. Carry the Ordnance Survey and PROJ references from [Rejected /
+      deferred](#rejected--deferred).
+- [ ] Record in `docs/overture.md` that a country is extracted on its own, that the areas
+      placing a point are the union of each country's newest extract, and that countries need
+      not share a release.
+- [ ] Fold the measured firmware size and scan cost into the scanning section of
+      `docs/device.md`.
+- [ ] Record in `docs/architecture.md` that filling in bronze takes every recorded extract.
+- [ ] Point `apps/lookout/README.md` at `tools/overture-mirror/` where it says the extract
+      comes from a local mirror.
+- [ ] Run `just test-no-docker`.
