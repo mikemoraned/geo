@@ -229,6 +229,37 @@ therefore independent of any single engine. Which engine a given job uses is a l
 decision, not a division in the data, and an engine can be added or dropped without
 migrating silver.
 
+## One CRS to a geometry column
+
+**A geometry column carries one CRS wherever it appears: in a file, a result set, a dataframe or
+an Arrow record batch.** A column holding two CRSs describes none of its values, since no row says
+which of the two it is in, and a reader that averages, measures or indexes that column computes on
+mixed units.
+
+Silver and gold hold only countries the store can place: a country level names one of the
+countries the store defines a zone for, and a partition under any other code is a fault to report
+rather than rows to read. Bronze is free of that — it records what was observed, including an
+observation from a country the store cannot yet place, which is how the data arrives before the
+support for it does.
+
+A zone is chosen per country, so the projected column of a dataset partitioned by country differs
+from partition to partition. Two consequences follow:
+
+- **A read of such a dataset takes one country at a time.** A scan of the whole dataset would put
+  two zones in one column, and an engine that checks refuses rather than guesses: SedonaDB will
+  not plan it. A comparison in metres holds within one country anyway, so the read scopes to the
+  partition the comparison needs.
+- **A read across countries carries no projected column.** Every country shares the lat/lon
+  column, in CRS84, so a union reads that column — as coordinates, or as a geometry whose values
+  are all in one CRS — and appends the countries one after another. Which countries those are is
+  asked of the store, as the partition values the dataset holds rather than as the countries a
+  caller expects. That question is a query like any other — the engine projects the value out of
+  the layout — and it reads the files as ordinary parquet, so the column that differs declares
+  nothing and every partition answers together.
+
+The engines disagree: DuckDB reads a mixed-CRS scan without complaint, SedonaDB rejects it. The
+rule holds either way, since the data either describes itself or it does not.
+
 ## Column conventions
 
 A few representations are fixed across the whole store rather than chosen per dataset, so

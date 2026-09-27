@@ -1,7 +1,9 @@
 use std::collections::{BTreeSet, HashMap};
 
 use datafusion::arrow::array::RecordBatch;
+use datafusion::arrow::datatypes::DataType;
 use datafusion::common::ParamValues;
+use datafusion::prelude::ParquetReadOptions;
 use datafusion::scalar::ScalarValue;
 use datafusion::sql::TableReference;
 use datafusion::sql::parser::DFParser;
@@ -9,8 +11,9 @@ use datafusion::sql::resolve::resolve_table_references;
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
+use crate::country::{COUNTRY, Country};
 use crate::dataset::DatasetSpec;
-use crate::layer::LayerKind;
+use crate::layer::{LayerKind, layers};
 use crate::path::{Dataset, Root};
 use crate::table::SilverTarget;
 
@@ -25,6 +28,14 @@ pub enum QueryError {
     DataFusion(#[from] datafusion::error::DataFusionError),
     #[error("reading rows: {0}")]
     Rows(#[from] serde_arrow::Error),
+    #[error("naming a country's partition: {0}")]
+    Path(#[from] crate::partition::PathError),
+    #[error("{dataset} holds a partition for {source}")]
+    UnknownCountry {
+        dataset: &'static str,
+        #[source]
+        source: crate::country::UnknownCountry,
+    },
 }
 
 pub fn table_references(sql: &str) -> Result<Vec<String>, QueryError> {
@@ -36,6 +47,62 @@ pub fn table_references(sql: &str) -> Result<Vec<String>, QueryError> {
     }
 
     Ok(names.into_iter().collect())
+}
+
+pub async fn rows_of_every_country<T>(
+    root: &Root,
+    dataset: DatasetSpec<layers::Silver>,
+    table: &str,
+    sql: &str,
+) -> Result<Vec<T>, QueryError>
+where
+    T: for<'de> serde::Deserialize<'de>,
+{
+    let mut rows = Vec::new();
+    for country in countries_of(root, dataset).await? {
+        let query = Query::new(root.clone());
+        let of_country = root.dataset(dataset).partition(COUNTRY, country)?;
+        query.register_at(&of_country, table).await?;
+        rows.extend(query.rows::<T>(sql).await?);
+    }
+    Ok(rows)
+}
+
+pub async fn countries_of(
+    root: &Root,
+    dataset: DatasetSpec<layers::Silver>,
+) -> Result<Vec<Country>, QueryError> {
+    let query = Query::new(root.clone());
+    if !query
+        .register_without_geometry(dataset, PARTITIONS, COUNTRY)
+        .await?
+    {
+        return Ok(Vec::new());
+    }
+
+    query
+        .rows::<Named>(&format!(
+            "SELECT DISTINCT {COUNTRY} AS name FROM {PARTITIONS} ORDER BY name"
+        ))
+        .await?
+        .into_iter()
+        .map(|country| {
+            country
+                .name
+                .parse()
+                .map_err(|source| QueryError::UnknownCountry {
+                    dataset: dataset.name,
+                    source,
+                })
+        })
+        .collect()
+}
+
+const PARTITIONS: &str = "partitions_of_the_dataset";
+
+#[derive(Debug, serde::Deserialize)]
+struct Named {
+    name: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -101,6 +168,44 @@ impl Query {
         table: &str,
     ) -> Result<bool, QueryError> {
         match self.register(dataset, table).await {
+            Ok(()) => Ok(true),
+            Err(QueryError::NoSuchDataset { .. }) => Ok(false),
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn register_without_geometry<L: LayerKind>(
+        &self,
+        dataset: DatasetSpec<L>,
+        table: &str,
+        key: &str,
+    ) -> Result<bool, QueryError> {
+        let dataset = self.root.dataset(dataset);
+        if !dataset.is_filled() {
+            return Ok(false);
+        }
+
+        let rows = self
+            .ctx
+            .ctx
+            .read_parquet(
+                dataset.dir().display().to_string(),
+                ParquetReadOptions::default()
+                    .table_partition_cols(vec![(key.to_string(), DataType::Utf8)]),
+            )
+            .await?;
+        self.ctx.ctx.register_table(table, rows.into_view())?;
+        Ok(true)
+    }
+
+    pub async fn register_of_country<L: LayerKind>(
+        &self,
+        dataset: DatasetSpec<L>,
+        table: &str,
+        country: Country,
+    ) -> Result<bool, QueryError> {
+        let of_country = self.root.dataset(dataset).partition(COUNTRY, country)?;
+        match self.register_at(&of_country, table).await {
             Ok(()) => Ok(true),
             Err(QueryError::NoSuchDataset { .. }) => Ok(false),
             Err(err) => Err(err),

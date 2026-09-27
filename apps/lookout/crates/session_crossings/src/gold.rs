@@ -32,13 +32,11 @@ pub enum ChooseError {
 
 pub async fn choose(root: &Root, choosing: Choosing) -> Result<Vec<Replay>, ChooseError> {
     let query = Query::new(root.clone());
-    for (dataset, table) in [
-        (medallion_model::SESSION_CROSSING, "session_crossing"),
-        (medallion_model::SESSION_SAMPLE, "session_sample"),
-    ] {
-        if !query.register_if_present(dataset, table).await? {
-            return Err(ChooseError::Missing(table));
-        }
+    if !query
+        .register_if_present(medallion_model::SESSION_CROSSING, "session_crossing")
+        .await?
+    {
+        return Err(ChooseError::Missing("session_crossing"));
     }
 
     let counted: Vec<Counted> = query
@@ -60,15 +58,19 @@ pub async fn choose(root: &Root, choosing: Choosing) -> Result<Vec<Replay>, Choo
         .iter()
         .map(|session| format!("'{}'", session.session_id))
         .collect();
-    let samples: Vec<StoredSample> = query
-        .rows(&format!(
+    let samples: Vec<StoredSample> = medallion::rows_of_every_country(
+        root,
+        medallion_model::SESSION_SAMPLE,
+        "session_sample",
+        &format!(
             "SELECT session_id, t, lat, lon, alt, acc, speed, heading
              FROM session_sample
              WHERE session_id IN ({})
              ORDER BY session_id, seq",
             chosen.join(", "),
-        ))
-        .await?;
+        ),
+    )
+    .await?;
 
     let mut by_session: HashMap<SessionId, Vec<Sample<f64>>> = HashMap::new();
     for sample in samples {

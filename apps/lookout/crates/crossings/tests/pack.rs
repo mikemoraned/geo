@@ -18,8 +18,11 @@ const LAT: f64 = 51.617567;
 
 const EXTRACT: &str = "20260727T193628Z";
 
-async fn store_with_crossings(root: &Root, country: &str, positions: &[(f64, f64)]) {
-    let projector = Projector::for_country(Country::Germany).expect("projector");
+const GB_LON: f64 = -3.188267;
+const GB_LAT: f64 = 55.953251;
+
+async fn store_with_crossings(root: &Root, country: Country, positions: &[(f64, f64)]) {
+    let projector = Projector::for_country(country).expect("projector");
     let rows: Vec<WaterCrossingRow> = positions
         .iter()
         .enumerate()
@@ -56,7 +59,7 @@ async fn store_with_crossings(root: &Root, country: &str, positions: &[(f64, f64
         &[
             (wkb_field(GEOMETRY).expect("field"), points.as_slice()),
             (
-                projected_wkb_field(PROJECTED_GEOMETRY, Country::Germany).expect("field"),
+                projected_wkb_field(PROJECTED_GEOMETRY, country).expect("field"),
                 projected.as_slice(),
             ),
         ],
@@ -75,7 +78,7 @@ async fn store_with_crossings(root: &Root, country: &str, positions: &[(f64, f64
 async fn a_crossing_is_read_with_its_position_and_the_name_the_store_gave_it() {
     let tmp = tempfile::tempdir().unwrap();
     let root = Root::new(tmp.path());
-    store_with_crossings(&root, "DE", &[(LON, LAT)]).await;
+    store_with_crossings(&root, Country::Germany, &[(LON, LAT)]).await;
 
     let crossings = silver::read(&root).await.unwrap();
 
@@ -92,12 +95,42 @@ async fn a_crossing_is_read_with_its_position_and_the_name_the_store_gave_it() {
 async fn every_country_the_store_holds_is_packed() {
     let tmp = tempfile::tempdir().unwrap();
     let root = Root::new(tmp.path());
-    store_with_crossings(&root, "DE", &[(LON, LAT)]).await;
-    store_with_crossings(&root, "FR", &[(LON + 0.01, LAT), (LON + 0.02, LAT)]).await;
+    store_with_crossings(&root, Country::Germany, &[(LON, LAT)]).await;
+    store_with_crossings(
+        &root,
+        Country::UnitedKingdom,
+        &[(GB_LON, GB_LAT), (GB_LON + 0.01, GB_LAT)],
+    )
+    .await;
 
     let crossings = silver::read(&root).await.unwrap();
 
     assert_eq!(crossings.len(), 3);
+}
+
+#[tokio::test]
+async fn a_partition_for_a_country_the_store_has_no_zone_for_is_reported() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = Root::new(tmp.path());
+    store_with_crossings(&root, Country::Germany, &[(LON, LAT)]).await;
+    std::fs::rename(
+        root.dataset(medallion_model::WATER_CROSSING)
+            .partition(COUNTRY, Country::Germany)
+            .expect("partition")
+            .dir(),
+        root.dataset(medallion_model::WATER_CROSSING)
+            .partition(COUNTRY, "FR")
+            .expect("partition")
+            .dir(),
+    )
+    .expect("write a country the store has no zone for");
+
+    let err = silver::read(&root).await.unwrap_err();
+
+    assert!(
+        err.to_string().contains("FR"),
+        "a country the store cannot place is named rather than passed over: {err}"
+    );
 }
 
 #[tokio::test]
@@ -118,7 +151,12 @@ async fn a_store_without_the_dataset_says_which_one_is_missing() {
 async fn what_the_store_holds_survives_being_packed_and_read_back() {
     let tmp = tempfile::tempdir().unwrap();
     let root = Root::new(tmp.path());
-    store_with_crossings(&root, "DE", &[(LON, LAT), (LON + 0.01, LAT + 0.01)]).await;
+    store_with_crossings(
+        &root,
+        Country::Germany,
+        &[(LON, LAT), (LON + 0.01, LAT + 0.01)],
+    )
+    .await;
 
     let crossings = silver::read(&root).await.unwrap();
     let unpacked = pointset::unpack(&packed(&crossings)).unwrap();
@@ -140,7 +178,7 @@ async fn every_packed_id_maps_back_to_exactly_one_crossing_the_store_named() {
     let positions: Vec<(f64, f64)> = (0..50)
         .map(|n| (LON + n as f64 * 0.001, LAT + n as f64 * 0.001))
         .collect();
-    store_with_crossings(&root, "DE", &positions).await;
+    store_with_crossings(&root, Country::Germany, &positions).await;
 
     let crossings = silver::read(&root).await.unwrap();
     let unpacked = pointset::unpack(&packed(&crossings)).unwrap();

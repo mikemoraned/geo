@@ -170,10 +170,10 @@ fn runtime() -> &'static tokio::runtime::Runtime {
 
 fn query_error(err: QueryError) -> PyErr {
     match err {
-        QueryError::NoSuchDataset { .. } | QueryError::DataFusion(_) => {
-            PyValueError::new_err(err.to_string())
-        }
-        QueryError::Rows(_) => PyRuntimeError::new_err(err.to_string()),
+        QueryError::NoSuchDataset { .. }
+        | QueryError::DataFusion(_)
+        | QueryError::UnknownCountry { .. } => PyValueError::new_err(err.to_string()),
+        QueryError::Rows(_) | QueryError::Path(_) => PyRuntimeError::new_err(err.to_string()),
     }
 }
 
