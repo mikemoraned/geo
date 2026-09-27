@@ -11,6 +11,7 @@ prerequisites:
 crs-definitions:
     projinfo -o PROJJSON -q "OGC:CRS84" | jq . > crates/medallion/src/crs84.projjson.json
     projinfo -o PROJJSON -q "EPSG:25832" | jq . > crates/medallion/src/etrs89_utm32n.projjson.json
+    projinfo -o PROJJSON -q "EPSG:25830" | jq . > crates/medallion/src/etrs89_utm30n.projjson.json
 
 # Serve on http://localhost:3000 (override with PORT). No redis, so samples are logged, not queued.
 serve:

@@ -54,7 +54,7 @@ parquet = { version = "57.1", features = ["object_store"] }
 # only once complete. 0.12 is what both parquet and datafusion depend on.
 object_store = "0.12"
 geoparquet = "0.7"
-proj4rs = { version = "0.1", features = ["crs-definitions", "geo-types"] }
+proj4rs = { version = "0.2", features = ["crs-definitions", "geo-types"] }
 geoarrow-schema = "0.7"
 geoarrow-array = "0.7"
 serde_arrow = { version = "0.13", features = ["arrow-57"] }

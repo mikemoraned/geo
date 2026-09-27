@@ -12,6 +12,7 @@ pub trait Countries {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Country {
     Germany,
+    UnitedKingdom,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -40,7 +41,7 @@ impl Display for Country {
 }
 
 impl Country {
-    pub const ALL: [Country; 1] = [Country::Germany];
+    pub const ALL: [Country; 2] = [Country::Germany, Country::UnitedKingdom];
 
     pub fn codes() -> String {
         Country::ALL
@@ -53,18 +54,21 @@ impl Country {
     pub fn code(self) -> &'static str {
         match self {
             Country::Germany => "DE",
+            Country::UnitedKingdom => "GB",
         }
     }
 
     pub fn projected_epsg(self) -> u16 {
         match self {
             Country::Germany => 25832,
+            Country::UnitedKingdom => 25830,
         }
     }
 
     pub fn projected_projjson(self) -> &'static str {
         match self {
             Country::Germany => include_str!("etrs89_utm32n.projjson.json"),
+            Country::UnitedKingdom => include_str!("etrs89_utm30n.projjson.json"),
         }
     }
 }
