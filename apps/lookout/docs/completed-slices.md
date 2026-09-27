@@ -328,3 +328,33 @@ in its own workspace), and `platform/rerun-py` (a pyo3 extension and the python 
 - **The runner replays a named session through the same state machine**, drawing the samples and
   the predictions on four streams. Their names are constants, so the blueprint, the tests, and
   the drawing all name the same thing.
+
+## Embed Predictor on website
+
+Put the crow-flies predictor in the browser and left the site with four pages: `/` as a
+summary, `/record` as the recording page moved off the homepage, `/live` predicting from
+browser geolocation, and `/kiosk` replaying recorded sessions. New crates: `web-core` and
+`web-bridge` under `crates/platform/web`, `m5-core` and `m5plus` under `crates/platform/m5`,
+`domain` and `medallion-model` — the two halves of the old `model` — and `doclinks`.
+
+- **One core, a projection per platform.** `platform-core` holds the prediction state and a
+  `Shell` trait; the device projects padded panel strings, the browser projects positions.
+- **A platform either carries its crossings or asks for them.** The device is built with the
+  set in its flash and never asks; the browser starts with none, so the core raises
+  `GetCrossings` beside `Render` and the page answers it with a fetched JSON asset.
+- **The bridge is crux's, over JSON.** Bincode would have needed a Node toolchain for
+  typegen, so `BridgeWithSerializer` with `serde_json` buys the same bridge; `web-bridge`'s
+  tests assert the exact JSON of an event, a request, and a view, since nothing else checks
+  the boundary.
+- **A custom element owns the wasm and the canvas**; the page owns the source and the clock.
+  `d3-geo` gives the bearing, and `d3-scale`'s symlog how far out, both vendored rather than
+  fetched from a CDN. The clock takes the later of a fix and a tick, so `/live` ticks and
+  `/kiosk`, replaying fixes recorded months ago, does not.
+- **The kiosk replays sessions chosen in gold** by how many crossings they passed, each in a
+  minute whatever it took to record, driven by the paint clock rather than a timer.
+- **Splitting the core by platform exposed the medallion store's rules inside domain types.**
+  Most of `medallion-model` moved to `domain` — crossing, sample, ids, pass, bbox, device
+  type — each entity described once, with the store row as a projection of it.
+- **A no-comments-by-default rule now covers Rust, Python, JavaScript, and Justfiles**, and the
+  sweep applied it to every crate. What the comments said became READMEs and `docs/`, and
+  `doclinks` now checks every link between them with the tests.
