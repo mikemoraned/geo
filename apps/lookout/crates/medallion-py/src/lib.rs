@@ -78,15 +78,17 @@ impl From<Param> for ScalarValue {
 
 /// Query the store, returning an Arrow table: the datasets the query names are its tables.
 ///
-/// `params` binds the query's `$name` placeholders as values. The result exposes the Arrow
-/// PyCapsule interface, so `pyarrow.table(...)` takes it directly. A dataset the store does not
-/// define, or that has never been written, raises a `ValueError` naming it. See
-/// `docs/medallion.md`.
+/// `country` names the country to read, which a dataset holding one zone per country requires
+/// and any other rejects. `params` binds the query's `$name` placeholders as values. The result
+/// exposes the Arrow PyCapsule interface, so `pyarrow.table(...)` takes it directly. A dataset
+/// the store does not define, or that has never been written, raises a `ValueError` naming it.
+/// See `docs/medallion.md`.
 #[pyfunction]
-#[pyo3(signature = (sql, *, params=None, root=None))]
+#[pyo3(signature = (sql, *, country=None, params=None, root=None))]
 fn query_silver(
     py: Python<'_>,
     sql: &str,
+    country: Option<&str>,
     params: Option<HashMap<String, Param>>,
     root: Option<PathBuf>,
 ) -> PyResult<PyTable> {
@@ -95,6 +97,10 @@ fn query_silver(
         .iter()
         .map(|dataset| medallion_model::silver_target(dataset).map_err(target_error))
         .collect::<PyResult<Vec<_>>>()?;
+    let country = country
+        .map(str::parse::<Country>)
+        .transpose()
+        .map_err(|err: UnknownCountry| PyValueError::new_err(err.to_string()))?;
     let root = root_or_default(root)?;
     let params = params
         .unwrap_or_default()
@@ -107,7 +113,7 @@ fn query_silver(
             runtime().block_on(async {
                 let query = Query::new(root);
                 for target in &targets {
-                    query.register_silver(target).await?;
+                    query.register_silver(target, country).await?;
                 }
                 query.sql_with_params(sql, params).await
             })
@@ -167,7 +173,9 @@ fn query_error(err: QueryError) -> PyErr {
     match err {
         QueryError::NoSuchDataset { .. }
         | QueryError::DataFusion(_)
-        | QueryError::UnknownCountry { .. } => PyValueError::new_err(err.to_string()),
+        | QueryError::UnknownCountry { .. }
+        | QueryError::CountryNeeded { .. }
+        | QueryError::NoCountryLevel { .. } => PyValueError::new_err(err.to_string()),
         QueryError::Rows(_) | QueryError::Path(_) => PyRuntimeError::new_err(err.to_string()),
     }
 }

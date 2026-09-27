@@ -15,7 +15,7 @@ use crate::country::{COUNTRY, Country};
 use crate::dataset::DatasetSpec;
 use crate::layer::{LayerKind, layers};
 use crate::path::{Dataset, Root};
-use crate::table::SilverTarget;
+use crate::table::{Layout, SilverTarget};
 
 #[derive(Debug, thiserror::Error)]
 pub enum QueryError {
@@ -36,6 +36,12 @@ pub enum QueryError {
         #[source]
         source: crate::country::UnknownCountry,
     },
+    #[error(
+        "{dataset} is written one zone per country, so a read of it names the country it reads"
+    )]
+    CountryNeeded { dataset: &'static str },
+    #[error("{dataset} holds no country level, so a read of it names no country")]
+    NoCountryLevel { dataset: &'static str },
 }
 
 pub fn table_references(sql: &str) -> Result<Vec<String>, QueryError> {
@@ -131,8 +137,30 @@ impl Query {
         self.register_at(&self.root.dataset(dataset), table).await
     }
 
-    pub async fn register_silver(&self, target: &SilverTarget) -> Result<(), QueryError> {
-        self.register_by_name(target.spec()).await
+    pub async fn register_silver(
+        &self,
+        target: &SilverTarget,
+        country: Option<Country>,
+    ) -> Result<(), QueryError> {
+        let has_country_level = matches!(
+            target.layout(),
+            Ok(Layout::Country | Layout::CountryAndDate(_))
+        );
+
+        match (has_country_level, country) {
+            (true, Some(country)) => {
+                self.register_of_country(target.spec(), target.name(), country)
+                    .await?;
+                Ok(())
+            }
+            (true, None) => Err(QueryError::CountryNeeded {
+                dataset: target.name(),
+            }),
+            (false, Some(_)) => Err(QueryError::NoCountryLevel {
+                dataset: target.name(),
+            }),
+            (false, None) => self.register_by_name(target.spec()).await,
+        }
     }
 
     pub async fn register_by_name<L: LayerKind>(
@@ -286,6 +314,17 @@ mod tests {
     impl crate::rows::Row for PassRow {
         type Layer = layers::Silver;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("pass", "kind");
+    }
+
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    struct PlacedRow {
+        id: i64,
+        name: String,
+    }
+
+    impl crate::rows::Row for PlacedRow {
+        type Layer = layers::Silver;
+        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("placed", COUNTRY);
     }
 
     async fn store_with_rows(dir: &std::path::Path, ids: Vec<i64>, names: Vec<&str>) -> Root {
@@ -446,7 +485,7 @@ mod tests {
         let query = Query::new(root);
 
         query
-            .register_silver(&SilverTarget::of::<PassRow>().unwrap())
+            .register_silver(&SilverTarget::of::<PassRow>().unwrap(), None)
             .await
             .unwrap();
 
@@ -456,6 +495,41 @@ mod tests {
                 .await
                 .unwrap(),
             1
+        );
+    }
+
+    #[tokio::test]
+    async fn a_dataset_written_one_zone_to_a_country_is_read_in_a_country() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = store_dataset(tmp.path(), PlacedRow::DATASET, vec![1], vec!["a"]).await;
+        let query = Query::new(root);
+
+        let err = query
+            .register_silver(&SilverTarget::of::<PlacedRow>().unwrap(), None)
+            .await;
+
+        assert!(
+            matches!(err, Err(QueryError::CountryNeeded { .. })),
+            "{err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_dataset_holding_no_country_level_is_read_without_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = store_dataset(tmp.path(), PassRow::DATASET, vec![1], vec!["a"]).await;
+        let query = Query::new(root);
+
+        let err = query
+            .register_silver(
+                &SilverTarget::of::<PassRow>().unwrap(),
+                Some(Country::Germany),
+            )
+            .await;
+
+        assert!(
+            matches!(err, Err(QueryError::NoCountryLevel { .. })),
+            "{err:?}"
         );
     }
 
