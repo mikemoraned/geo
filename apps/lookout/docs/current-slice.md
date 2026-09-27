@@ -214,9 +214,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - How many crossings GB yields, and so the packed size and the scan cost. The tasks measure
   both, and the Target's fallback to a more compact representation waits on those numbers.
-- Whether the one recorded UK session — 402 fixes from Glasgow to Edinburgh, ingested
-  2026-09-18 — passes five crossings and so reaches the kiosk. If it does not, either
-  `--min-crossings` drops or a country's best is kept whatever it passed.
+- Whether the recorded UK sessions pass five crossings and so reach the kiosk. If they do not,
+  either `--min-crossings` drops or a country's best is kept whatever it passed. The 402 fixes
+  from Glasgow to Edinburgh, ingested 2026-09-18, are 8 sessions of 199 samples rather than the
+  one session this assumed, so the question is which of the 8 qualifies.
 - ~~Whether Overture's GB country area includes Northern Ireland, and so how far west the
   window reaches.~~ Answered 2026-09-27: it does, and the window reaches -14.02 through the
   maritime area. See [Observations](#observations).
@@ -287,27 +288,33 @@ Proven on DE before any further UK work, as the ids are what every later read ke
 
 #### The GB extract
 
-- [ ] Mount the Overture mirror, and take the extract: `just bronze-extract --mirror <path> new
+- [x] Mount the Overture mirror, and take the extract: `just bronze-extract --mirror <path> new
       --release 2026-07-22.0 --country GB`. Record the extract id, the rows per theme, and the
       bytes on disk.
-- [ ] Check `just summarise` reports both extracts and the rows each holds, and that a rebuild
-      of the DE silver datasets is unchanged by GB arriving beside them.
+- [x] Check `just summarise` reports both extracts and the rows each holds, and that a rebuild
+      of the DE silver datasets is unchanged by GB arriving beside them. It reports three: the
+      superseded DE extract has been filled in as well.
 
 #### Silver observations
 
-- [ ] Re-run `just silver-sessionise`, and check `unplaceable` falls to nought and the GB fixes
-      land in `country=GB`. `unplaceable` counts sessions, not fixes, and stands at 8 of 49
+- [x] Re-run `just silver-sessionise`, and check `unplaceable` falls to nought and the GB fixes
+      land in `country=GB`. `unplaceable` counts sessions, not fixes, and stood at 8 of 49
       before the GB extract.
-- [ ] Re-run `just silver-motis-ingest`, and check a country with no legs writes no partition
+- [x] Re-run `just silver-motis-ingest`, and check a country with no legs writes no partition
       and does not fail.
 
 #### The crossings notebook
 
-- [ ] Copy `v9.py` to `v10.py` and point `silver-water-crossings` at it. The cells below change
+- [x] Copy `v9.py` to `v10.py` and point `silver-water-crossings` at it. The cells below change
       `v10.py` alone.
+- [ ] Expose `division_id` through `medallion-py`, beside `projected_crs`, so the notebook keys
+      its region read on the division rather than on the country label. The region union is the
+      geometry every crossing is clipped against, which makes it the third place the GERS rule
+      applies after placing a point and taking a window.
 - [ ] Replace the pinned `EXTRACT_ID` and `COUNTRY` with a country-to-extract map covering DE
       and GB, and drive the region window, rail, water and city cells from it — the two
-      `country = 'DE'` literals included.
+      `country = 'DE'` literals included. The region one becomes a division id; the locality one
+      stays a country code, since it selects every city in the country rather than one entity.
 - [ ] Project each country's geometry with its own `lookout_medallion.projected_crs(country)`,
       and carry `country` per row.
 - [ ] Write the union of both countries in one `write_silver`, so the sweep and the id checks
@@ -386,6 +393,33 @@ Last, so it moves both countries at once over work that is already proven on 202
 
 ### Observations
 
+- **The GB extract is `20260927T172559Z`, taken 2026-09-27 from the mirror at release
+  2026-07-22.0.** Its window is -14.015517, 49.674000 to 2.091912, 61.061001, digit for digit
+  what the mirror answers for the GB division, so reading a window by division id holds against a
+  release as well as against a fixture. It writes 1,373,565 rows in 867 MiB, against DE's
+  3,969,823 in 1.5 GiB:
+
+  | theme and type | GB | DE |
+  | --- | --- | --- |
+  | `base/water` | 1,120,122 | 3,110,307 |
+  | `transportation/connector` | 112,577 | 462,655 |
+  | `divisions/division` | 61,370 | 117,467 |
+  | `transportation/segment` | 55,347 | 239,614 |
+  | `divisions/division_area` | 24,149 | 39,780 |
+
+  Water is 593 MiB of the 867. GB holds a third of DE's rows on a wider window: much of the
+  window is sea, which carries few rows for its area, where Germany's land carries rivers, canals
+  and four times the rail.
+- **Three extracts in the store, and GB is the newest.** The superseded DE extract
+  `20260727T193628Z` has been filled in beside `20260804T152143Z` and the GB one, so the store
+  holds 9,311,586 rows in 3.8 GiB. GB being newest overall is what the first group was for: on
+  the old read every German session would now be unplaceable. They place.
+- **Every recorded session places, and the countries stay apart.** `just silver-sessionise` on
+  2026-09-27 derived 49 sessions and 6,179 samples with `unplaceable` at nought, against 41 and
+  5,980 before. DE keeps its 41 sessions and 5,980 samples at the same 363.4 KiB and 859.7 KiB,
+  untouched by GB arriving beside it; GB lands 8 sessions and 199 samples of its own, projected
+  through 25830. `just silver-motis-ingest` left `train_segment` at `country=DE` alone, 5,178
+  rows, writing no GB partition and reporting no failure.
 - **Reading the areas by division id leaves the DE sessions exactly as they were.** `just
   silver-sessionise` on 2026-09-27 derived the same 41 sessions, 5,980 samples and 13 partitions
   of each, removing none, against an extract taken long before the change. 8 sessions of the 49

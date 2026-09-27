@@ -136,7 +136,7 @@ silver-crossings *args:
 
 # Derive silver `water_crossing` from the crossings notebook. Always writes the repo store.
 silver-water-crossings:
-    uv run --no-project --reinstall-package lookout-medallion notebooks/water_crossings/v9.py
+    uv run --no-project --reinstall-package lookout-medallion notebooks/water_crossings/v10.py
 
 # Derive silver `session_crossing`: the crossings each recorded session passed.
 silver-session-crossings *args:
