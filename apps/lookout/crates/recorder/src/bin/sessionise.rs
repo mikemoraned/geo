@@ -33,7 +33,7 @@ async fn main() {
     let gap = Gap::new(chrono::Duration::minutes(i64::from(args.gap_mins)));
     let lead = Lead::new(chrono::Duration::seconds(i64::from(args.lead_secs)));
 
-    let countries = CountryAreas::newest(&root)
+    let countries = CountryAreas::newest_per_country(&root)
         .await
         .expect("read the country areas of the newest extract");
     let derived = sessions(&root, gap, lead).await.expect("derive sessions");

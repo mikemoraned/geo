@@ -201,23 +201,29 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 The invariant above, in place before the GB extract is taken, and testable on the DE extract
 alone.
 
-- [ ] Take the country areas from the newest extract of each country in
+- [x] Take the country areas from the newest extract of each country in
       `crates/transport/src/countries.rs`, registering each extract's `division_area`. A
       country with no extract contributes no areas rather than failing, since `ALL` names a
-      country before its extract is taken.
-- [ ] Test that a later extract of one country leaves the other's points placeable, and that a
-      country extracted from an older release places its points the same.
-- [ ] Test that a second extract of one country supersedes the first rather than adding its
+      country before its extract is taken. `CountryAreas::newest` becomes
+      `newest_per_country`, so the name says which newest it means.
+- [x] Test that a later extract of one country leaves the other's points placeable, and that a
+      country extracted from an older release places its points the same. The other country is
+      a `GB` manifest row, which the store has no zone for yet — enough to reproduce the bug,
+      since the old read took the newest extract whatever country it named.
+- [x] Test that a second extract of one country supersedes the first rather than adding its
       areas beside them.
-- [ ] Make a bare `extract` backfill every extract the manifest records, each from its own
-      recorded release, rather than the newest alone. `backfill <id>` keeps taking one.
-- [ ] Skip an extract whose rows are already in the store rather than failing on it, so filling
+- [x] Make a bare `extract` backfill every extract the manifest records, each from its own
+      recorded release, rather than the newest alone. `backfill <id>` keeps taking one. It
+      fills them oldest first, in the order they were taken.
+- [x] Skip an extract whose rows are already in the store rather than failing on it, so filling
       in a part-filled store takes one command. `AlreadyPresent` stays the answer to a named
-      id.
-- [ ] Report what a backfill filled in and what it skipped, so a run over several extracts says
+      id, renamed `AlreadyFilled` to match the `is_filled` the skip asks.
+- [x] Report what a backfill filled in and what it skipped, so a run over several extracts says
       which of them the store now holds.
-- [ ] Check `just summarise` shows every extract the store holds, so what the store covers
-      takes one command rather than a manifest query.
+- [x] Check `just summarise` shows every extract the store holds, so what the store covers
+      takes one command rather than a manifest query. It names both ends of the span and the
+      count; `just summarise --partitions` lists each one, which is what to reach for past
+      two.
 
 #### Refactors / extensions: the UK as a country
 
@@ -332,3 +338,13 @@ Last, so it moves both countries at once over work that is already proven on 202
 - [ ] Point `apps/lookout/README.md` at `tools/overture-mirror/` where it says the extract
       comes from a local mirror.
 - [ ] Run `just test-no-docker`.
+
+### Observations
+
+- **This store records two DE extracts and holds one.** `20260727T193628Z` at release
+  2026-06-17.0, superseded by `20260804T152143Z` at 2026-07-22.0, whose rows are the 1.5 GiB
+  `overture_extract` holds. A bare `just bronze-init` now fills the older one in as well, which
+  reads a release that has aged out of the public bucket and so needs it mirrored, and costs
+  another 1.5 GiB for areas nothing places a point with — the union takes each country's newest.
+  Filling each country's newest alone would avoid both. Left as the task states it, since
+  bronze's immutability rests on a recorded extract being present.

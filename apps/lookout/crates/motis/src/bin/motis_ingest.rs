@@ -23,7 +23,7 @@ async fn main() {
     let args = Args::parse();
     let root = args.medallion.root().expect("locate the medallion store");
 
-    let countries = CountryAreas::newest(&root)
+    let countries = CountryAreas::newest_per_country(&root)
         .await
         .expect("read the country areas of the newest extract");
     let outcome = ingest(&root, &countries)

@@ -153,10 +153,10 @@ fn workspace_root() -> Result<PathBuf, StoreNotFound> {
         })
 }
 
-fn holds_files(dir: &Path) -> bool {
+fn any_file_under(dir: &Path) -> bool {
     std::fs::read_dir(dir).is_ok_and(|entries| {
         entries.flatten().any(|entry| {
-            entry.path().is_dir() && holds_files(&entry.path()) || entry.path().is_file()
+            entry.path().is_dir() && any_file_under(&entry.path()) || entry.path().is_file()
         })
     })
 }
@@ -204,8 +204,8 @@ impl<L: LayerKind> Dataset<L> {
         dir
     }
 
-    pub fn holds_files(&self) -> bool {
-        holds_files(&self.dir())
+    pub fn is_filled(&self) -> bool {
+        any_file_under(&self.dir())
     }
 
     pub fn batch_file(&self, at: DateTime<Utc>) -> PathBuf {

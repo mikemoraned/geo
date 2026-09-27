@@ -80,7 +80,7 @@ impl Query {
         dataset: &Dataset<L>,
         table: &str,
     ) -> Result<(), QueryError> {
-        if !dataset.holds_files() {
+        if !dataset.is_filled() {
             return Err(QueryError::NoSuchDataset {
                 layer: dataset.layer(),
                 dataset: dataset.name().to_string(),

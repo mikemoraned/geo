@@ -52,12 +52,11 @@ pub async fn recorded(root: &Root) -> Result<Vec<ExtractManifestRow>, ExtractErr
     Ok(query.rows(RECORDED).await?)
 }
 
-pub async fn newest(root: &Root) -> Result<ExtractManifestRow, ExtractError> {
-    recorded(root)
-        .await?
-        .into_iter()
-        .next()
-        .ok_or(ExtractError::NoExtract)
+pub fn is_filled(root: &Root, id: &ExtractId) -> Result<bool, ExtractError> {
+    Ok(root
+        .dataset(medallion_model::OVERTURE_EXTRACT)
+        .for_id(id)?
+        .is_filled())
 }
 
 pub async fn recorded_as(root: &Root, id: &ExtractId) -> Result<ExtractManifestRow, ExtractError> {
@@ -94,10 +93,10 @@ pub enum ExtractError {
         source: medallion::UnknownCountry,
     },
     #[error(
-        "extract {id} already holds rows in the store; an extract is immutable, so taking \
-         it again would double its rows rather than replace them"
+        "extract {id} is already filled in; an extract is immutable, so filling it again \
+         would double its rows rather than replace them"
     )]
-    AlreadyPresent { id: ExtractId },
+    AlreadyFilled { id: ExtractId },
     #[error(
         "extract {id} was taken from release {recorded}, but this reads {opened}; a \
          re-fetch has to read the release the extract was taken from"
@@ -165,13 +164,8 @@ impl<'a> Extractor<'a> {
                 opened: opened.to_string(),
             });
         }
-        if self
-            .root
-            .dataset(medallion_model::OVERTURE_EXTRACT)
-            .for_id(&id)?
-            .holds_files()
-        {
-            return Err(ExtractError::AlreadyPresent { id });
+        if is_filled(self.root, &id)? {
+            return Err(ExtractError::AlreadyFilled { id });
         }
 
         self.register_themes().await?;
@@ -403,16 +397,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_newest_recorded_extraction_is_the_last_one_taken() {
+    async fn the_recorded_extractions_come_newest_first() {
         let (_tmp, root) = store_recording(&[
             manifest_row("20260727T090000Z", 9, "2026-05-21.0"),
             manifest_row("20260727T193628Z", 19, "2026-06-17.0"),
         ])
         .await;
 
-        let newest = newest(&root).await.expect("the newest extraction");
+        let recorded = recorded(&root).await.expect("the recorded extractions");
 
-        assert_eq!(newest, manifest_row("20260727T193628Z", 19, "2026-06-17.0"));
+        assert_eq!(
+            recorded,
+            vec![
+                manifest_row("20260727T193628Z", 19, "2026-06-17.0"),
+                manifest_row("20260727T090000Z", 9, "2026-05-21.0"),
+            ]
+        );
     }
 
     #[tokio::test]
@@ -444,7 +444,7 @@ mod tests {
     async fn a_store_with_no_manifest_has_no_extraction_to_take_again() {
         let tmp = tempfile::tempdir().expect("tempdir");
 
-        let err = newest(&Root::new(tmp.path())).await;
+        let err = recorded(&Root::new(tmp.path())).await;
 
         assert!(matches!(
             err,
@@ -472,7 +472,7 @@ mod tests {
             .backfill(&recorded, Utc::now())
             .await;
 
-        assert!(matches!(err, Err(ExtractError::AlreadyPresent { .. })));
+        assert!(matches!(err, Err(ExtractError::AlreadyFilled { .. })));
     }
 
     #[tokio::test]
