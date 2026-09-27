@@ -1,6 +1,7 @@
 use geo::Contains;
 use geo_types::{Geometry, Point};
 use medallion::{Countries, Country, GEOMETRY, Query, Root};
+use medallion_model::DIVISION_ID;
 
 const EXTRACTS: &str = "
     SELECT country, extract_id FROM extract_manifest ORDER BY extracted_at DESC
@@ -56,8 +57,8 @@ impl CountryAreas {
                 .sql(&format!(
                     "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY}
                      FROM {table}
-                     WHERE subtype = 'country' AND country = '{}'",
-                    country.code()
+                     WHERE {DIVISION_ID} = '{}'",
+                    medallion_model::division_id(country)
                 ))
                 .await?;
             for batch in &batches {
@@ -121,23 +122,30 @@ mod tests {
             .expect("stream the batch")
     }
 
-    fn division_area(country: &str, area: &Geometry<f64>) -> RecordBatch {
+    const LAND: &str = "land";
+    const MARITIME: &str = "maritime";
+
+    fn division_area(country: Country, areas: &[(&str, Geometry<f64>)]) -> RecordBatch {
+        let geometries: Vec<Geometry<f64>> = areas.iter().map(|(_, area)| area.clone()).collect();
         let (geometry_field, geometry) = medallion::wkb_column(
             medallion::wkb_field(GEOMETRY).expect("a geometry field"),
-            std::slice::from_ref(area),
+            &geometries,
         )
         .expect("a geometry column");
         let schema = Schema::new(vec![
-            Arc::new(Field::new("subtype", DataType::Utf8, false)),
-            Arc::new(Field::new("country", DataType::Utf8, false)),
+            Arc::new(Field::new(DIVISION_ID, DataType::Utf8, false)),
+            Arc::new(Field::new("class", DataType::Utf8, false)),
             geometry_field,
         ]);
+        let division = medallion_model::division_id(country).to_string();
 
         RecordBatch::try_new(
             Arc::new(schema),
             vec![
-                Arc::new(StringArray::from(vec!["country"])),
-                Arc::new(StringArray::from(vec![country])),
+                Arc::new(StringArray::from(vec![division; areas.len()])),
+                Arc::new(StringArray::from(
+                    areas.iter().map(|(class, _)| *class).collect::<Vec<_>>(),
+                )),
                 geometry,
             ],
         )
@@ -147,16 +155,16 @@ mod tests {
     async fn extracted(
         root: &Root,
         id: &str,
-        country: &str,
+        country: Country,
         release: &str,
         taken_at: DateTime<Utc>,
-        area: &Geometry<f64>,
+        areas: &[(&str, Geometry<f64>)],
     ) {
         let row = ExtractManifestRow {
             extract_id: id.to_string(),
             extracted_at: taken_at,
             release: release.to_string(),
-            country: country.to_string(),
+            country: country.code().to_string(),
             min_lon: 0.0,
             min_lat: 0.0,
             max_lon: 0.0,
@@ -174,7 +182,7 @@ mod tests {
             .expect("the divisions theme")
             .partition("type", "division_area")
             .expect("the division_area type")
-            .append_geo_stream(taken_at, stream_of(division_area(country, area)).await)
+            .append_geo_stream(taken_at, stream_of(division_area(country, areas)).await)
             .await
             .expect("write the areas");
     }
@@ -220,19 +228,19 @@ mod tests {
         extracted(
             &root,
             "20260927T090000Z",
-            Country::Germany.code(),
+            Country::Germany,
             "2026-07-22.0",
             at(9),
-            &square(10.0),
+            &[(LAND, square(10.0))],
         )
         .await;
         extracted(
             &root,
             "20260927T190000Z",
-            "GB",
+            Country::UnitedKingdom,
             "2026-07-22.0",
             at(19),
-            &square_from(20.0, 10.0),
+            &[(LAND, square_from(20.0, 10.0))],
         )
         .await;
 
@@ -243,6 +251,10 @@ mod tests {
         assert_eq!(
             areas.containing(Point::new(5.0, 5.0)),
             Some(Country::Germany)
+        );
+        assert_eq!(
+            areas.containing(Point::new(25.0, 25.0)),
+            Some(Country::UnitedKingdom)
         );
     }
 
@@ -253,19 +265,19 @@ mod tests {
         extracted(
             &root,
             "20260927T090000Z",
-            "GB",
+            Country::UnitedKingdom,
             "2026-07-22.0",
             at(9),
-            &square_from(20.0, 10.0),
+            &[(LAND, square_from(20.0, 10.0))],
         )
         .await;
         extracted(
             &root,
             "20260927T190000Z",
-            Country::Germany.code(),
+            Country::Germany,
             "2026-05-21.0",
             at(19),
-            &square(10.0),
+            &[(LAND, square(10.0))],
         )
         .await;
 
@@ -277,6 +289,36 @@ mod tests {
             areas.containing(Point::new(5.0, 5.0)),
             Some(Country::Germany)
         );
+        assert_eq!(
+            areas.containing(Point::new(25.0, 25.0)),
+            Some(Country::UnitedKingdom)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_point_over_the_territorial_waters_is_placed_in_that_country() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        extracted(
+            &root,
+            "20260927T090000Z",
+            Country::Germany,
+            "2026-07-22.0",
+            at(9),
+            &[(LAND, square(10.0)), (MARITIME, square_from(10.0, 5.0))],
+        )
+        .await;
+
+        let areas = CountryAreas::newest_per_country(&root)
+            .await
+            .expect("the country areas");
+
+        assert_eq!(
+            areas.containing(Point::new(12.0, 12.0)),
+            Some(Country::Germany),
+            "a fix over the waters is what a railway crossing an estuary gives, so the areas \
+             a country is read as keep its maritime area beside its land"
+        );
     }
 
     #[tokio::test]
@@ -286,19 +328,19 @@ mod tests {
         extracted(
             &root,
             "20260927T090000Z",
-            Country::Germany.code(),
+            Country::Germany,
             "2026-05-21.0",
             at(9),
-            &square(10.0),
+            &[(LAND, square(10.0))],
         )
         .await;
         extracted(
             &root,
             "20260927T190000Z",
-            Country::Germany.code(),
+            Country::Germany,
             "2026-07-22.0",
             at(19),
-            &square_from(20.0, 10.0),
+            &[(LAND, square_from(20.0, 10.0))],
         )
         .await;
 

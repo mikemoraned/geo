@@ -94,6 +94,33 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   crossings across both countries give roughly a 1 in 60,000 chance of two landing on one
   name. The write refuses a collision, so it surfaces as a failed write rather than a silent
   clash downstream.
+- **A country is named to Overture by its GERS id, not by its code.** Confirmed 2026-09-27,
+  mid-slice. A country appears in the divisions theme as two `division_area` rows, its land and
+  its territorial waters, sharing the `division_id` of the country division — DE
+  `567d1698-7209-4b94-b7b8-0bc71bde0104`, GB `ce3429b1-d5c6-4763-91e7-0107e26d613e`. Reading by
+  that id names the entity; reading by `subtype = 'country' AND country = '<code>'` names
+  whatever rows carry a label, which is the same two rows today and rests on the label holding
+  across releases. GERS exists to make the first kind of reference survive a release, with a
+  registry recording first seen, last seen and last changed, and a changelog per release. The
+  codes stay where they are earned: the `country=` partition, the manifest row, and the ISO code
+  `Country::code` answers. The cost is a literal per country, since a new country's id has to be
+  read from a release before it can be added — the compiler asks for it, as the mapping is
+  exhaustive over `Country`.
+- **A GERS id is a newtype over a UUID, in `medallion-model`.** Every id a release carries is a
+  36-character UUID, so that is what the type validates. It sits beside the Overture schemas
+  rather than in `medallion`, whose `Country` carries standards alone — an ISO code, an EPSG
+  zone — and rather than in `domain`, which builds for Xtensa and wasm and where nothing names
+  an upstream entity. The mapping is therefore a function of `Country` rather than a method on
+  it.
+- **The window keeps the territorial waters.** Confirmed 2026-09-27. Both areas of the division
+  go into the bounding box, as they did when the code selected them by label. For GB that reaches
+  -14.02 rather than the land's -8.65, about 5.4 degrees of longitude of Atlantic, because the
+  waters around Rockall are UK territorial waters while the rock is not UK land. That extra width
+  holds water rows in the open Atlantic that no railway comes near, and a larger extract with
+  them. Both areas stay: the extract exists to find water a railway meets, and a coastal crossing
+  sits in the waters, so a window round the land alone would drop the rows the derivation looks
+  for. A test in `countries.rs` holds it — a division with both areas places a point over the
+  waters — and it fails if the read is narrowed to `class = 'land'`.
 - **Partitioning geo silver by country needs no work.** The country level is applied above a
   dataset's own partition key by the shared silver write path, not declared per dataset, so a
   second country lands in its own partitions and its own CRS as soon as `Country` knows it.
@@ -190,9 +217,9 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - Whether the one recorded UK session — 402 fixes from Glasgow to Edinburgh, ingested
   2026-09-18 — passes five crossings and so reaches the kiosk. If it does not, either
   `--min-crossings` drops or a country's best is kept whatever it passed.
-- Whether Overture's GB country area includes Northern Ireland, and so how far west the
-  window reaches. The boundary decides it; it changes how much water the extract holds, not
-  what is derived.
+- ~~Whether Overture's GB country area includes Northern Ireland, and so how far west the
+  window reaches.~~ Answered 2026-09-27: it does, and the window reaches -14.02 through the
+  maritime area. See [Observations](#observations).
 
 ### Tasks
 
@@ -207,9 +234,7 @@ alone.
       country before its extract is taken. `CountryAreas::newest` becomes
       `newest_per_country`, so the name says which newest it means.
 - [x] Test that a later extract of one country leaves the other's points placeable, and that a
-      country extracted from an older release places its points the same. The other country is
-      a `GB` manifest row, which the store has no zone for yet — enough to reproduce the bug,
-      since the old read took the newest extract whatever country it named.
+      country extracted from an older release places its points the same.
 - [x] Test that a second extract of one country supersedes the first rather than adding its
       areas beside them.
 - [x] Make a bare `extract` backfill every extract the manifest records, each from its own
@@ -227,19 +252,38 @@ alone.
 
 #### Refactors / extensions: the UK as a country
 
-- [ ] Bump `proj4rs` to 0.2 in the workspace `Cargo.toml`, and check the pinned Berlin
-      projection is unchanged. Nothing else in the slice waits on it.
-- [ ] Read `division_area` for the UK from the mirror at release 2026-07-22.0, and record the
+- [x] Bump `proj4rs` to 0.2 in the workspace `Cargo.toml`, and check the pinned Berlin
+      projection is unchanged. Nothing else in the slice waits on it. It resolves
+      `crs-definitions` 0.5.0, as the decision expected, and Berlin still projects to the
+      pinned metre.
+- [x] Read `division_area` for the UK from the mirror at release 2026-07-22.0, and record the
       code it carries and the bbox of the `country` row. Decides the variant's code and the
-      window the extract takes.
-- [ ] Add `Country::UnitedKingdom` to `crates/medallion/src/country.rs`: code `GB`,
+      window the extract takes. The user ran it: `/Volumes` answers `Operation not permitted`
+      to Claude, sandbox disabled included, so the mirror is unreadable from a session.
+- [x] Add `Country::UnitedKingdom` to `crates/medallion/src/country.rs`: code `GB`,
       `projected_epsg` 25830, `projected_projjson` from `etrs89_utm30n.projjson.json`, and the
       variant in `ALL`.
-- [ ] Add the `EPSG:25830` line to the `crs-definitions` recipe, and commit the
+- [x] Add the `EPSG:25830` line to the `crs-definitions` recipe, and commit the
       `crates/medallion/src/etrs89_utm30n.projjson.json` it emits.
-- [ ] Pin a GB point through `Projector::for_country` in `crates/medallion/src/geo.rs`, against
+- [x] Pin a GB point through `Projector::for_country` in `crates/medallion/src/geo.rs`, against
       the easting and northing PROJ gives for EPSG:25830 — the check that proj4rs and the
       notebook's projection agree for this zone.
+
+#### Refactors / extensions: a country is named by its GERS id
+
+Proven on DE before any further UK work, as the ids are what every later read keys on.
+
+- [x] Add a `GersId` newtype over a UUID in `crates/medallion-model/src/gers.rs`, with `new`,
+      `FromStr` delegating to it, and `Display` giving the form the data carries.
+- [x] Map each country to its division's GERS id in `crates/medallion-model/src/overture.rs`,
+      exhaustively over `Country`, and test that every id parses and that no two countries share
+      one.
+- [x] Read the country areas by `division_id` rather than by `subtype` and `country`, in both the
+      places that ask Overture for them: placing a point, and taking an extract's window.
+- [x] Record in `docs/overture.md` what a GERS id is, which themes commit to one, that a country
+      is two areas of one division, and that the window keeps the territorial waters.
+- [x] Re-derive the DE silver datasets and check the sessions place as they did, on a store whose
+      extract predates the change. The read is by id now; the rows are the same rows.
 
 #### The GB extract
 
@@ -252,7 +296,8 @@ alone.
 #### Silver observations
 
 - [ ] Re-run `just silver-sessionise`, and check `unplaceable` falls to nought and the GB fixes
-      land in `country=GB`.
+      land in `country=GB`. `unplaceable` counts sessions, not fixes, and stands at 8 of 49
+      before the GB extract.
 - [ ] Re-run `just silver-motis-ingest`, and check a country with no legs writes no partition
       and does not fail.
 
@@ -341,6 +386,42 @@ Last, so it moves both countries at once over work that is already proven on 202
 
 ### Observations
 
+- **Reading the areas by division id leaves the DE sessions exactly as they were.** `just
+  silver-sessionise` on 2026-09-27 derived the same 41 sessions, 5,980 samples and 13 partitions
+  of each, removing none, against an extract taken long before the change. 8 sessions of the 49
+  recorded are unplaceable, which is the UK trip waiting on a GB extract — `unplaceable` counts
+  sessions, placed by their starting point, rather than fixes.
+- **The bigger CRS definition grows every projected dataset.** The same re-derivation wrote
+  `session` at 363.4 KiB against 318.3 KiB, and `session_sample` at 859.7 KiB against 814.7 KiB,
+  on identical rows: the projected geometry field carries the CRS, and the regenerated definition
+  names 60 datum-ensemble members where the old one named 12. That is about 3.5 KiB per partition
+  file, and it lands on any dataset with a projected column as it is next rewritten.
+- **GB's country area spans -14.0155, 49.6740 to 2.0919, 61.0610**, read from the mirror at
+  release 2026-07-22.0 on 2026-09-27. The code is `GB`, as the decision took it. The window is
+  much wider than the island: west to Rockall, north past Shetland, south to the Scillies, and
+  east into the North Sea. Everything the extract takes by window rather than by country
+  therefore reaches well beyond the UK — all of Ireland, and the coast from Brittany to Jutland
+  — so the rail and water rows include a second country's network, as Germany's window already
+  does for its neighbours.
+- **Northern Ireland is inside the GB country area.** A point-in-polygon test on the mirror,
+  2026-09-27, put Belfast — -5.93, 54.60 — inside both of GB's areas, so the extract covers the
+  province, the Irish Sea, and the railways of the Republic that share the window. Rockall —
+  -13.69, 57.60 — falls inside the maritime area alone, the land reaching no further west than
+  -8.65 at St Kilda, and that is what carries the window out to -14.02.
+- **proj4rs 0.2 and PROJ agree on EPSG:25830 to under a centimetre.** Edinburgh Waverley,
+  -3.188267, 55.953251, projects to 488,244.04, 6,200,892.57 through both, which is what
+  `geo.rs` pins. The decision's 443,797.38, 6,200,880.49 was a different point near Edinburgh,
+  about 44 km west.
+- **Regenerating the CRS definitions rewrites the German one too.** `just crs-definitions`
+  emits 336 more lines into `etrs89_utm32n.projjson.json`, all of them further ETRS89
+  realisations in the datum ensemble that the installed EPSG database knows and the committed
+  file predates. The CRS is the same, so the file is held back from this commit; regenerating
+  it changes the CRS metadata every projected column carries, and is worth its own.
+- **The OSTN15 grid is installed on this machine**, as
+  `/opt/homebrew/share/proj/uk_os_OSTN15_NTv2_OSGBtoETRS.tif`. So the divergence [Rejected /
+  deferred](#rejected--deferred) predicts for EPSG:27700 would be live here: PROJ would apply
+  OSTN15 where proj4rs applies the Helmert. Nothing in the store reads 27700, and 25830 needs
+  no transformation.
 - **This store records two DE extracts and holds one.** `20260727T193628Z` at release
   2026-06-17.0, superseded by `20260804T152143Z` at 2026-07-22.0, whose rows are the 1.5 GiB
   `overture_extract` holds. A bare `just bronze-init` now fills the older one in as well, which

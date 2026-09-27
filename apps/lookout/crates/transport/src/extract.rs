@@ -5,7 +5,7 @@ use arrow::array::{Array, Float64Array};
 use chrono::{DateTime, Utc};
 use geo_types::{Coord, Rect};
 use medallion::{Country, PartitionValue, Query, Root};
-use medallion_model::ExtractManifestRow;
+use medallion_model::{DIVISION_ID, ExtractManifestRow};
 
 use crate::overture::{Overture, OvertureError, OvertureType};
 
@@ -262,8 +262,8 @@ impl<'a> Extractor<'a> {
                 "SELECT MIN(bbox.xmin) AS min_lon, MIN(bbox.ymin) AS min_lat,
                         MAX(bbox.xmax) AS max_lon, MAX(bbox.ymax) AS max_lat
                  FROM division_area
-                 WHERE subtype = 'country' AND country = '{}'",
-                country.code()
+                 WHERE {DIVISION_ID} = '{}'",
+                medallion_model::division_id(country)
             ))
             .await?;
         let missing = || ExtractError::NoCountryBoundary {
