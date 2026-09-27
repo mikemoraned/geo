@@ -8,7 +8,8 @@ source as for any other.
 
 Overture publishes monthly, names each release `YYYY-MM-DD.N`, and serves the recent ones from a
 public bucket. Old releases age out of it, so the pinned default needs bumping as they do; a run
-can name another.
+can name another. A read of a release its location lacks reports the releases that location holds,
+since an aged-out release is readable from a mirror alone.
 
 A release never changes, and that is what makes an extract re-fetchable: read again over the same
 window, it answers with the same rows. So the manifest records the release, and nothing about the

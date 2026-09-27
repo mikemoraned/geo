@@ -7880,6 +7880,7 @@ dependencies = [
  "geo-types",
  "medallion",
  "medallion-model",
+ "object_store",
  "sedona",
  "sedona-geoparquet",
  "serde",
