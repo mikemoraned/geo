@@ -8,9 +8,33 @@ FROM rust:slim-bookworm AS builder
 ARG BUILD_GIT_HASH=unknown
 ENV BUILD_GIT_HASH=$BUILD_GIT_HASH
 
+# wasm-pack, prebuilt: building it from source costs minutes of every deploy. Pinned to what
+# `just prerequisites` installs, so a deploy compiles the core the same way a laptop does.
+ARG WASM_PACK_VERSION=0.15.0
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -sSfL "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-$(uname -m)-unknown-linux-musl.tar.gz" \
+       | tar xz -C /usr/local/bin --strip-components=1 --wildcards "*/wasm-pack" \
+    && rustup target add wasm32-unknown-unknown
+
 WORKDIR /prod
 COPY . .
 RUN cargo build --release -p server
+# Into the static dir, which is then copied from the builder rather than from the context: the
+# wasm is generated, so a checkout does not carry it.
+RUN wasm-pack build crates/platform/web/bridge --target web --out-dir ../../../server/static/wasm --out-name lookout
+# The crossings a browser fetches and the sessions a kiosk replays, beside it. Which versions
+# is `just deploy`'s to say, from the same files the device's build script reads, so a deploy
+# and a board are never carrying different sets.
+ARG CROSSINGS_VERSION
+ARG SESSIONS_VERSION
+RUN test -n "$CROSSINGS_VERSION" || { echo "CROSSINGS_VERSION is required" >&2; exit 1; }; \
+    test -n "$SESSIONS_VERSION" || { echo "SESSIONS_VERSION is required" >&2; exit 1; }; \
+    cp "data/medallion/gold/artifact=crossings/version=$CROSSINGS_VERSION/crossings.json" \
+        crates/server/static/crossings.json; \
+    cp "data/medallion/gold/artifact=sessions/version=$SESSIONS_VERSION/sessions.json" \
+        crates/server/static/sessions.json
 
 FROM debian:bookworm-slim AS runner
 
@@ -20,7 +44,7 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=builder /prod/target/release/server /usr/local/bin/server
-COPY crates/server/static /app/static
+COPY --from=builder /prod/crates/server/static /app/static
 
 ENV LOOKOUT_STATIC_DIR=/app/static
 ENV PORT=8080

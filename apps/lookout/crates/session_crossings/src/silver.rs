@@ -1,38 +1,25 @@
-//! Deriving the silver `session_crossing` dataset: which crossings each session passed.
-//!
-//! Both inputs are read a country at a time, because a distance is only a distance within one
-//! projected zone and the zone is chosen per country. The output carries no geometry — a match
-//! is a session, a crossing and an instant — so it is partitioned by the date it happened and
-//! by nothing else.
-//!
-//! A run derives the whole dataset from the whole of silver, and replaces what it produces, so
-//! a partition it no longer produces rows for goes with it.
-
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
-use geo_types::{Point, Rect};
+use domain::Bbox;
+use domain::CrossingId;
+use domain::{DeviceId, Pass, SessionId};
+use geo_types::Point;
 use medallion::{COUNTRY, Country, Query, Replaced, Root};
-use model::{Bbox, CrossingId, DeviceId, SessionCrossingRow, SessionId};
+use medallion_model::SessionCrossingRow;
 use serde::Deserialize;
 
 use crate::matching::{Crossing, Radius, Sample, Session, passes};
 
-/// What one run derived.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MatchOutcome {
-    /// Sessions read, over every country.
     pub sessions: usize,
-    /// Crossings read.
     pub crossings: usize,
-    /// Sessions that passed at least one crossing.
     pub sessions_matched: usize,
-    /// Rows written: one per session and crossing passed.
     pub passes: usize,
     pub partitions: Replaced,
 }
 
-/// A failure deriving the crossings a session passed.
 #[derive(Debug, thiserror::Error)]
 pub enum CrossingError {
     #[error("reading the silver datasets: {0}")]
@@ -41,9 +28,10 @@ pub enum CrossingError {
     Missing { dataset: &'static str },
     #[error("writing the dataset: {0}")]
     Write(#[from] medallion::TableError),
+    #[error("the store holds a crossing that is not on the globe: {0}")]
+    OffTheGlobe(#[from] domain::CoordinateError),
 }
 
-/// One session as the store holds it: its identity and the envelope of its path.
 #[derive(Debug, Deserialize)]
 struct StoredSession {
     session_id: SessionId,
@@ -51,8 +39,6 @@ struct StoredSession {
     bbox: Bbox,
 }
 
-/// One sample as the store holds it, with its position taken out of the projected geometry
-/// as plain numbers — this needs coordinates in metres, not a geometry to decode.
 #[derive(Debug, Deserialize)]
 struct StoredSample {
     session_id: SessionId,
@@ -62,7 +48,6 @@ struct StoredSample {
     y: f64,
 }
 
-/// One crossing as the store holds it: in metres for the distance, in lat/lon for the prune.
 #[derive(Debug, Deserialize)]
 struct StoredCrossing {
     crossing_id: CrossingId,
@@ -72,16 +57,12 @@ struct StoredCrossing {
     lat: f64,
 }
 
-/// Derive the crossings every session passed, and write them.
-///
-/// A country the store holds no sessions or no crossings for contributes nothing rather than
-/// failing: a store can legitimately hold sessions in a country no extract has covered yet.
 pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, CrossingError> {
     let query = Query::new(root.clone());
     for (dataset, table) in [
-        (model::SESSION, "session"),
-        (model::SESSION_SAMPLE, "session_sample"),
-        (model::WATER_CROSSING, "water_crossing"),
+        (medallion_model::SESSION, "session"),
+        (medallion_model::SESSION_SAMPLE, "session_sample"),
+        (medallion_model::WATER_CROSSING, "water_crossing"),
     ] {
         if !query.register_if_present(dataset, table).await? {
             return Err(CrossingError::Missing {
@@ -104,7 +85,15 @@ pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, Crossin
             .map(|pass| &pass.session_id)
             .collect::<HashSet<_>>()
             .len();
-        passed.extend(country_passes);
+        let devices: HashMap<&SessionId, &DeviceId> = sessions
+            .iter()
+            .map(|session| (&session.session_id, &session.device_id))
+            .collect();
+        passed.extend(
+            country_passes
+                .iter()
+                .map(|pass| row(pass, devices[&pass.session_id], radius)),
+        );
     }
 
     passed.sort_by(|a, b| (a.crossed_at, &a.crossing_id).cmp(&(b.crossed_at, &b.crossing_id)));
@@ -113,7 +102,6 @@ pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, Crossin
     Ok(outcome)
 }
 
-/// Every session of one country, with its samples in metres.
 async fn sessions_in(query: &Query, country: Country) -> Result<Vec<Session>, CrossingError> {
     let stored: Vec<StoredSession> = query
         .rows(&format!(
@@ -138,7 +126,7 @@ async fn sessions_in(query: &Query, country: Country) -> Result<Vec<Session>, Cr
             .or_default()
             .push(Sample {
                 t: sample.t,
-                at: Point::new(sample.x, sample.y),
+                projected: Point::new(sample.x, sample.y),
             });
     }
 
@@ -151,14 +139,13 @@ async fn sessions_in(query: &Query, country: Country) -> Result<Vec<Session>, Cr
             Session {
                 session_id: session.session_id,
                 device_id: session.device_id,
-                envelope: envelope(&session.bbox),
+                envelope: session.bbox.rect(),
                 samples,
             }
         })
         .collect())
 }
 
-/// Every crossing of one country.
 async fn crossings_in(query: &Query, country: Country) -> Result<Vec<Crossing>, CrossingError> {
     let stored: Vec<StoredCrossing> = query
         .rows(&format!(
@@ -170,17 +157,63 @@ async fn crossings_in(query: &Query, country: Country) -> Result<Vec<Crossing>, 
         ))
         .await?;
 
-    Ok(stored
+    stored
         .into_iter()
-        .map(|crossing| Crossing {
-            crossing_id: crossing.crossing_id,
-            at: Point::new(crossing.x, crossing.y),
-            lat_lon: Point::new(crossing.lon, crossing.lat),
+        .map(|crossing| {
+            Ok(Crossing {
+                crossing: domain::Crossing::at(crossing.crossing_id, crossing.lat, crossing.lon)?,
+                projected: Point::new(crossing.x, crossing.y),
+            })
         })
-        .collect())
+        .collect()
 }
 
-/// The stored envelope as a rectangle to prune against.
-fn envelope(bbox: &Bbox) -> Rect<f64> {
-    Rect::new((bbox.xmin, bbox.ymin), (bbox.xmax, bbox.ymax))
+fn row(pass: &Pass, device: &DeviceId, radius: Radius) -> SessionCrossingRow {
+    SessionCrossingRow {
+        session_id: pass.session_id.clone(),
+        crossing_id: pass.crossing_id.clone(),
+        device_id: device.clone(),
+        crossed_at: pass.crossed_at,
+        distance_m: pass.distance_metres,
+        samples_within: pass.samples_within,
+        match_radius_m: radius.as_metres(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeDelta;
+    use domain::CrossingId;
+
+    use super::*;
+
+    fn pass() -> Pass {
+        Pass {
+            session_id: SessionId::new("session-a").expect("an id"),
+            crossing_id: CrossingId::new("water:track:rail@0.5").expect("an id"),
+            crossed_at: DateTime::UNIX_EPOCH + TimeDelta::seconds(1),
+            distance_metres: 20.0,
+            samples_within: 3,
+        }
+    }
+
+    #[test]
+    fn a_row_records_the_radius_it_was_matched_under() {
+        let device = DeviceId::new("device-a").expect("an id");
+
+        let row = row(&pass(), &device, Radius::new(150.0));
+
+        assert_eq!(row.match_radius_m, 150.0);
+        assert_eq!(row.distance_m, 20.0);
+    }
+
+    #[test]
+    fn a_row_names_the_device_the_session_ran_on() {
+        let device = DeviceId::new("device-a").expect("an id");
+
+        let row = row(&pass(), &device, Radius::new(150.0));
+
+        assert_eq!(row.device_id, device);
+        assert_eq!(row.session_id, pass().session_id);
+    }
 }

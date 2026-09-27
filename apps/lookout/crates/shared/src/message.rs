@@ -1,51 +1,21 @@
-//! The versioned telemetry message model shared by the `server` (which receives
-//! messages over a websocket and queues them) and the `recorder` cli (which drains
-//! the queue and interprets them).
-//!
-//! # Wire shape
-//!
-//! Every message carries a protocol version in a top-level `v` field. It is a plain
-//! number; **absent means `0`** (`#[serde(default)]` semantics), so the original
-//! unversioned payloads still in the `raw` archive keep parsing.
-//!
-//! - **Version 0** (`v` absent) has no message-type tag: the variant is inferred
-//!   from which sensor key is present (`gps` vs `accel`). Only [`GpsReading`] and
-//!   [`AccelReading`] exist.
-//!
-//!   ```json
-//!   {"id":"…","t":1700000000000,"gps":{"lat":…,"lon":…,"alt":null,"acc":…}}
-//!   {"id":"…","t":1700000000000,"accel":{"x":…,"y":…,"z":…}}
-//!   ```
-//!
-//! - **Version 1** (`v:1`, recorded explicitly) is self-describing: a `type` tag
-//!   selects the variant, adding [`SessionStart`] alongside the two readings.
-//!
-//!   ```json
-//!   {"v":1,"type":"start_session","id":"…","t":…,"device":{…}}
-//!   {"v":1,"type":"gps","id":"…","t":…,"gps":{…}}
-//!   {"v":1,"type":"acceleration","id":"…","t":…,"accel":{…}}
-//!   ```
-
 use serde::de::Error as _;
 use serde::ser::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::sensor::{Accel, Gps};
-use crate::session::DeviceInfo;
+use domain::Gps;
 
-/// A GPS reading from a device at a point in time.
+use crate::sensor::Accel;
+use domain::DeviceInfo;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GpsReading {
-    /// Stable per-device identity (a `crypto.randomUUID()` persisted in a cookie).
     pub id: Uuid,
-    /// Capture time as epoch milliseconds.
     pub t: i64,
-    pub gps: Gps,
+    pub gps: Gps<f64>,
 }
 
-/// An accelerometer reading from a device at a point in time.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AccelReading {
     pub id: Uuid,
@@ -53,7 +23,6 @@ pub struct AccelReading {
     pub accel: Accel,
 }
 
-/// The start of a recording session: a device announcing its identity and metadata.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionStart {
     pub id: Uuid,
@@ -61,8 +30,6 @@ pub struct SessionStart {
     pub device: DeviceInfo,
 }
 
-/// The version-0 message set. Untagged: the variant is inferred from the sensor key
-/// present, since the historical payloads carry no type tag.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum V0Message {
@@ -70,7 +37,6 @@ pub enum V0Message {
     Acceleration(AccelReading),
 }
 
-/// The version-1 message set. Internally tagged on `type`, adding [`SessionStart`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum V1Message {
@@ -79,8 +45,6 @@ pub enum V1Message {
     Acceleration(AccelReading),
 }
 
-/// A telemetry message, tagged by protocol version. See the [module docs](self) for
-/// the wire shape and how the version is carried.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     Version0(V0Message),
@@ -88,8 +52,7 @@ pub enum Message {
 }
 
 impl Message {
-    /// The device id every message variant carries.
-    pub fn id(&self) -> Uuid {
+    pub fn device_id(&self) -> Uuid {
         match self {
             Message::Version0(V0Message::Gps(r)) | Message::Version1(V1Message::Gps(r)) => r.id,
             Message::Version0(V0Message::Acceleration(r))
@@ -98,8 +61,7 @@ impl Message {
         }
     }
 
-    /// The capture timestamp (epoch millis) every message variant carries.
-    pub fn t(&self) -> i64 {
+    pub fn captured_at_millis(&self) -> i64 {
         match self {
             Message::Version0(V0Message::Gps(r)) | Message::Version1(V1Message::Gps(r)) => r.t,
             Message::Version0(V0Message::Acceleration(r))
@@ -109,22 +71,27 @@ impl Message {
     }
 }
 
-/// The current protocol version emitted by clients. Version 0 is read-only history.
-const CURRENT_VERSION: u64 = 1;
+const VERSION_SENT: u64 = 1;
+const VERSION_WHEN_ABSENT: u64 = 0;
+
+fn tagged_with_version<T: Serialize>(
+    message: &T,
+    version: u64,
+) -> Result<Value, serde_json::Error> {
+    let mut value = serde_json::to_value(message)?;
+    if let Value::Object(map) = &mut value {
+        map.insert("v".to_string(), Value::from(version));
+    }
+    Ok(value)
+}
 
 impl Serialize for Message {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            // Version 0 has no `v` tag on the wire — it's the absent-means-0 default.
             Message::Version0(message) => message.serialize(serializer),
-            // Version 1 is recorded explicitly, so stamp `v` onto the tagged body.
-            Message::Version1(message) => {
-                let mut value = serde_json::to_value(message).map_err(S::Error::custom)?;
-                if let Value::Object(map) = &mut value {
-                    map.insert("v".to_string(), Value::from(CURRENT_VERSION));
-                }
-                value.serialize(serializer)
-            }
+            Message::Version1(message) => tagged_with_version(message, VERSION_SENT)
+                .map_err(S::Error::custom)?
+                .serialize(serializer),
         }
     }
 }
@@ -132,12 +99,15 @@ impl Serialize for Message {
 impl<'de> Deserialize<'de> for Message {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = Value::deserialize(deserializer)?;
-        let version = value.get("v").and_then(Value::as_u64).unwrap_or(0);
+        let version = value
+            .get("v")
+            .and_then(Value::as_u64)
+            .unwrap_or(VERSION_WHEN_ABSENT);
         match version {
-            0 => serde_json::from_value(value)
+            VERSION_WHEN_ABSENT => serde_json::from_value(value)
                 .map(Message::Version0)
                 .map_err(D::Error::custom),
-            1 => serde_json::from_value(value)
+            VERSION_SENT => serde_json::from_value(value)
                 .map(Message::Version1)
                 .map_err(D::Error::custom),
             other => Err(D::Error::custom(format!("unknown message version {other}"))),
@@ -147,21 +117,18 @@ impl<'de> Deserialize<'de> for Message {
 
 #[cfg(test)]
 mod tests {
+    use domain::DeviceType;
+
     use super::*;
-    use crate::session::DeviceType;
 
     fn gps_reading() -> GpsReading {
         GpsReading {
             id: Uuid::from_u128(1),
             t: 1_700_000_000_000,
-            gps: Gps {
-                lat: 55.95,
-                lon: -3.19,
-                alt: None,
-                acc: 8.5,
-                speed: Some(31.4),
-                heading: None,
-            },
+            gps: Gps::at(55.95, -3.19)
+                .expect("on the globe")
+                .with_accuracy_metres(Some(8.5))
+                .with_speed_mps(Some(31.4)),
         }
     }
 
@@ -220,7 +187,6 @@ mod tests {
         }
     }
 
-    /// A payload without a `v` field decodes as Version0.
     #[test]
     fn absent_version_decodes_as_v0() {
         let json = r#"{"id":"00000000-0000-0000-0000-000000000001","t":1700000000000,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5,"speed":31.4,"heading":null}}"#;
@@ -228,7 +194,6 @@ mod tests {
         assert_eq!(message, Message::Version0(V0Message::Gps(gps_reading())));
     }
 
-    /// An explicit `v:1` decodes as Version1.
     #[test]
     fn explicit_version_1_decodes_as_v1() {
         let json = r#"{"v":1,"type":"gps","id":"00000000-0000-0000-0000-000000000001","t":1700000000000,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5,"speed":31.4,"heading":null}}"#;
@@ -236,7 +201,6 @@ mod tests {
         assert_eq!(message, Message::Version1(V1Message::Gps(gps_reading())));
     }
 
-    /// Version 1 serialization stamps `v:1` and the `type` tag onto the wire.
     #[test]
     fn version1_serializes_with_v_and_type() {
         let message = Message::Version1(V1Message::Acceleration(accel_reading()));
@@ -245,7 +209,6 @@ mod tests {
         assert_eq!(value["type"], Value::from("acceleration"));
     }
 
-    /// Version 0 serialization carries no `v` tag (absent-means-0 on the wire).
     #[test]
     fn version0_serializes_without_v() {
         let message = Message::Version0(V0Message::Gps(gps_reading()));
@@ -257,8 +220,6 @@ mod tests {
         );
     }
 
-    /// The exact v0 wire shapes stored in `raw` must still parse — re-interpretation
-    /// from the lossless archive can't break on the version refactor.
     #[test]
     fn historical_raw_v0_shapes_parse() {
         let stored_gps = r#"{"id":"00000000-0000-0000-0000-000000000001","t":1700000000000,"gps":{"lat":55.95,"lon":-3.19,"alt":80.0,"acc":5.0}}"#;
@@ -268,9 +229,8 @@ mod tests {
         let Message::Version0(V0Message::Gps(r)) = gps else {
             panic!("expected v0 gps, got {gps:?}");
         };
-        // The fields v0 never carried default rather than failing to parse.
-        assert_eq!(r.gps.speed, None);
-        assert_eq!(r.gps.heading, None);
+        assert_eq!(r.gps.speed_mps, None);
+        assert_eq!(r.gps.heading_degrees, None);
 
         let accel: Message = serde_json::from_str(stored_accel).expect("parse stored accel");
         let Message::Version0(V0Message::Acceleration(r)) = accel else {

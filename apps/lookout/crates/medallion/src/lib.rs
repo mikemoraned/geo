@@ -1,18 +1,10 @@
-//! Paths and writers for the medallion data store described in `docs/medallion.md`.
-//!
-//! Every CLI that reads or writes the store goes through here rather than joining strings
-//! itself, so the layer names, Hive partition layout and the naming rules partitions must
-//! meet live in one place. [`MedallionArgs`] gives each binary the same `--medallion-root`
-//! flag and default.
-//!
-//! A dataset is passed around as a [`DatasetSpec`], which carries its layer and partition
-//! key, and its columns are the [`Row`] type declared alongside it; the datasets
-//! themselves are defined by whoever owns the data, not here.
-//!
 //! ```no_run
 //! use chrono::Utc;
-//! use medallion::{DatasetSpec, Layer, Root, Row};
+//! use medallion::{DatasetSpec, Row, layers};
 //! use serde::{Deserialize, Serialize};
+//!
+//! const GPS_READING: DatasetSpec<layers::Bronze> =
+//!     DatasetSpec::partitioned("gps_reading", "ingested_date");
 //!
 //! #[derive(Serialize, Deserialize)]
 //! struct GpsReadingRow {
@@ -23,14 +15,14 @@
 //! }
 //!
 //! impl Row for GpsReadingRow {
-//!     const DATASET: DatasetSpec =
-//!         DatasetSpec::partitioned(Layer::Bronze, "gps_reading", "ingested_date");
+//!     type Layer = layers::Bronze;
+//!     const DATASET: DatasetSpec<Self::Layer> = GPS_READING;
 //!     const INSTANTS: &'static [&'static str] = &["t"];
 //! }
 //!
 //! # async fn example(rows: &[GpsReadingRow]) -> Result<(), Box<dyn std::error::Error>> {
 //! let now = Utc::now();
-//! Root::default()
+//! medallion::Root::new(medallion::Root::default_path()?)
 //!     .rows_of::<GpsReadingRow>()
 //!     .on_date(now.date_naive())?
 //!     .append_rows(now, rows)
@@ -64,7 +56,7 @@ pub use geo::{
 };
 pub use layer::{Layer, LayerKind, Replaceable, layers};
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
-pub use path::{AppendError, Dataset, ReplaceError, Replaced, Root, Written};
+pub use path::{AppendError, Dataset, ReplaceError, Replaced, Root, Written, gold_version};
 pub use query::{Query, QueryError, table_references};
 pub use rows::{Dated, Geometry, Row, RowError, batch, fields};
 pub use table::{SilverTarget, TableError, TableWritten, write_table};

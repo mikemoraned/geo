@@ -1,9 +1,3 @@
-//! `pack_crossings`: read the silver water crossings out of the store and write the flat
-//! point buffer the M5 device scans.
-//!
-//! Every country the store holds is packed unless a window is given, since the device does
-//! not know where it will be switched on.
-
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fs;
@@ -11,24 +5,32 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 use clap::Parser;
-use crossings::{Bbox, Point, pointset, silver};
+use crossings::{pointset, silver};
+use domain::Bbox;
 use medallion::MedallionArgs;
 
-/// What the packed buffer is called in gold, and the file each version of it holds.
 const ARTIFACT: &str = "crossings";
-const FILE: &str = "crossings.pointset";
+const PACKED: &str = "crossings.pointset";
+const ARRAY: &str = "crossings.json";
+
+const SIX_PLACES: f64 = 1e6;
 
 #[derive(Parser)]
 #[command(about = "Pack silver water crossings into the M5 device's point buffer")]
 struct Args {
     #[command(flatten)]
     medallion: MedallionArgs,
-    /// Where to write the packed buffer. Defaults to the store's own gold layer.
+    /// Where to write them. Defaults to this run's artefact directory in the store's gold
+    /// layer.
     #[arg(long)]
     output: Option<PathBuf>,
     /// Keep only crossings inside this `west,south,east,north` window. Omit to keep them all.
     #[arg(long)]
     bbox: Option<Bbox>,
+    /// A file to write this run's version into, naming what was just packed. What reads it
+    /// decides what to build against, so packing and adopting are one step.
+    #[arg(long, conflicts_with = "output")]
+    version_file: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -42,9 +44,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let args = Args::parse();
     let root = args.medallion.root()?;
+    let run = Utc::now();
     let output = match args.output {
         Some(path) => path,
-        None => root.gold_artefact(ARTIFACT, Utc::now(), FILE)?,
+        None => root
+            .gold_artefact(ARTIFACT, run, PACKED)?
+            .parent()
+            .expect("an artefact sits in a directory")
+            .to_path_buf(),
     };
 
     tracing::info!(
@@ -58,38 +65,65 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let crossings: Vec<_> = match args.bbox {
         Some(window) => read
             .into_iter()
-            .filter(|crossing| window.contains(crossing.position.x, crossing.position.y))
+            .filter(|crossing| {
+                window.contains(crossing.crossing.longitude(), crossing.crossing.latitude())
+            })
             .collect(),
         None => read,
     };
 
-    let points: Vec<_> = crossings.iter().map(Point::of).collect();
-
+    let points: Vec<_> = crossings
+        .iter()
+        .map(crossings::compacted)
+        .collect::<Result<Vec<_>, _>>()?;
     let packed = pointset::pack(&points)?;
-    if let Some(directory) = output.parent() {
-        fs::create_dir_all(directory)?;
+
+    let array: Vec<domain::CrossingCompact<f64>> = crossings
+        .iter()
+        .map(|crossing| {
+            domain::CrossingCompact::at(
+                crossing.compact_id,
+                round(crossing.crossing.latitude()),
+                round(crossing.crossing.longitude()),
+            )
+        })
+        .collect::<Result<_, _>>()?;
+    let json = serde_json::to_vec(&array)?;
+
+    fs::create_dir_all(&output)?;
+    fs::write(output.join(PACKED), &packed)?;
+    fs::write(output.join(ARRAY), &json)?;
+
+    let version = medallion::gold_version(run);
+    if let Some(file) = &args.version_file {
+        fs::write(file, format!("{version}\n"))?;
     }
-    fs::write(&output, &packed)?;
 
     tracing::info!(
         crossings = crossings.len(),
-        // Which extraction of the reference data the packed crossings came from, so a buffer
-        // on a device can be traced back to a release. The format itself has no room for it.
         extracts = ?crossings
             .iter()
             .map(|crossing| crossing.extract_id.as_str())
             .collect::<BTreeSet<_>>(),
-        bytes = packed.len(),
+        packed_bytes = packed.len(),
+        json_bytes = json.len(),
+        %version,
+        adopted = args.version_file.as_ref().map(|file| file.display().to_string()),
         "packed crossings",
     );
 
     Ok(())
 }
 
+fn round(degrees: f64) -> f64 {
+    (degrees * SIX_PLACES).round() / SIX_PLACES
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
     use clap::CommandFactory;
+    use medallion::Root;
 
     use super::*;
 
@@ -106,9 +140,6 @@ mod tests {
         assert_eq!(args.bbox, None);
     }
 
-    /// The buffer belongs in the store it was derived from, under the run that produced it,
-    /// so pointing a run at another store moves the output with it and a rerun leaves the
-    /// last one where a device that holds it can still be traced to it.
     #[test]
     fn the_default_output_is_a_versioned_gold_artefact_of_whichever_store_is_read() {
         let args = Args::parse_from(["pack_crossings", "--medallion-root", "/somewhere/store"]);
@@ -116,10 +147,46 @@ mod tests {
         let run = Utc.with_ymd_and_hms(2026, 8, 1, 19, 48, 57).unwrap();
 
         assert_eq!(
-            root.gold_artefact(ARTIFACT, run, FILE).unwrap(),
+            root.gold_artefact(ARTIFACT, run, PACKED).unwrap(),
             PathBuf::from(
                 "/somewhere/store/gold/artifact=crossings/version=20260801T194857000Z/crossings.pointset"
             )
+        );
+    }
+
+    #[test]
+    fn a_coordinate_is_kept_to_six_places() {
+        assert_eq!(round(50.772_051_974_934_95), 50.772_052);
+        assert_eq!(round(13.089_276_802_196_796), 13.089_277);
+    }
+
+    #[test]
+    fn a_redirected_run_cannot_also_adopt_a_version() {
+        assert!(
+            Args::try_parse_from([
+                "pack_crossings",
+                "--output",
+                "/tmp/elsewhere",
+                "--version-file",
+                "crossings.version",
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn the_version_adopted_is_the_one_the_path_was_built_from() {
+        let run = Utc.with_ymd_and_hms(2026, 8, 1, 19, 48, 57).unwrap();
+
+        let version = medallion::gold_version(run);
+
+        assert_eq!(version, "20260801T194857000Z");
+        assert!(
+            Root::new("/somewhere/store")
+                .gold_artefact(ARTIFACT, run, PACKED)
+                .unwrap()
+                .to_string_lossy()
+                .contains(&format!("version={version}"))
         );
     }
 

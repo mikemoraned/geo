@@ -14,8 +14,9 @@ geo = { workspace = true }
 geo-types = { workspace = true }
 geo-traits = { workspace = true }
 clap = { workspace = true }
+domain = { workspace = true }
 medallion = { workspace = true }
-model = { workspace = true }
+medallion-model = { workspace = true }
 redis = { workspace = true }
 serde = { workspace = true }
 serde_arrow = { workspace = true }

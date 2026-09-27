@@ -1,13 +1,3 @@
-//! End-to-end test for [`motis::poll::poll_once`] against the **real** local Motis server:
-//! seed a throwaway redis (testcontainers) with GPS near Frankfurt Hbf, then run one poll
-//! tick that queries live Motis and lands segments in a real bronze capture log. Unlike
-//! `poll_docker` (which mocks Motis), this exercises the rail filter and the
-//! train-number/agency `/trip` enrichment against live DELFI data.
-//!
-//! Named `end_to_end`, so only the `end-to-end` nextest profile runs it (via
-//! `just end_to_end_test`). Needs Docker (the redis container) **and** a Motis server up
-//! on `127.0.0.1:8080`.
-
 mod common;
 
 use std::time::Duration;
@@ -27,14 +17,18 @@ async fn poll_once_captures_rail_from_local_motis_end_to_end() {
 
     let now = Utc::now();
     let now_ms = now.timestamp_millis();
-    // Recent GPS around Frankfurt Hbf — a train-rich box in any daytime window.
-    lpush(&mut conn, &gps(1, now_ms - 60_000, 50.107, 8.663)).await;
-    lpush(&mut conn, &gps(2, now_ms - 30_000, 50.110, 8.660)).await;
-    lpush(&mut conn, &gps(3, now_ms, 50.113, 8.669)).await;
+    let near_frankfurt_hbf = [
+        (now_ms - 60_000, 50.107, 8.663),
+        (now_ms - 30_000, 50.110, 8.660),
+        (now_ms, 50.113, 8.669),
+    ];
+    for (id, (t, lat, lon)) in near_frankfurt_hbf.into_iter().enumerate() {
+        lpush(&mut conn, &gps(id as u128, t, lat, lon)).await;
+    }
 
     let store = tempfile::tempdir().expect("temp store");
     let log = SegmentLog::new(Root::new(store.path()));
-    let client = MotisClient::default(); // 127.0.0.1:8080
+    let client = MotisClient::default();
     let mut window = PositionWindow::new(Duration::from_secs(30 * 60));
     let config = PollConfig {
         recent_lookback: Duration::from_secs(5 * 60),
@@ -55,8 +49,6 @@ async fn poll_once_captures_rail_from_local_motis_end_to_end() {
         "expected some rail segments near Frankfurt Hbf"
     );
 
-    // Inspect what landed: every captured segment is rail, and the `/trip` enrichment
-    // populated an agency and at least one train number.
     let rows = captured_segments(&Root::new(store.path())).await;
 
     assert!(

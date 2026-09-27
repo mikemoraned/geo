@@ -4,8 +4,6 @@ import pytest
 
 from lookout_predictor import DEFAULT_RADIUS_METRES, CrowFlies, Prediction
 
-# Three crossings due north of 50.0N, a hundredth of a degree apart, so the nearest is about
-# 1,112m away and the furthest about 3,336m.
 CROSSINGS = [(1, 50.01, 0.0), (2, 50.02, 0.0), (3, 50.03, 0.0)]
 HUNDREDTH_DEGREE_M = 1111.95
 
@@ -26,7 +24,7 @@ def test_a_fix_predicts_every_crossing_inside_the_radius_nearest_first(predictor
 
     predicted = predictor.predictions()
 
-    assert [prediction.crossing for prediction in predicted] == [1, 2, 3]
+    assert [prediction.crossing_compact_id for prediction in predicted] == [1, 2, 3]
     assert predicted[0].metres == pytest.approx(HUNDREDTH_DEGREE_M, abs=10.0)
     assert isinstance(predicted[0], Prediction)
 
@@ -36,7 +34,7 @@ def test_the_radius_is_the_callers_to_choose():
 
     predictor.observe_sample(T0, 50.0, 0.0)
 
-    assert [prediction.crossing for prediction in predictor.predictions()] == [1]
+    assert [prediction.crossing_compact_id for prediction in predictor.predictions()] == [1]
     assert DEFAULT_RADIUS_METRES == 5_000.0
 
 
@@ -51,8 +49,6 @@ def test_an_arrival_crosses_as_an_aware_instant(predictor):
 
 
 def test_a_speed_left_out_is_derived_from_the_fix_before(predictor):
-    """A source reporting no speed still moves, and two fixes say how fast: a hundredth of a
-    degree in a hundred seconds is about 11m/s, so the crossing 1,112m ahead is 100s away."""
     predictor.observe_sample(T0, 49.99, 0.0)
     assert predictor.predictions()[0].at is None, "nothing to derive a speed from yet"
 
@@ -90,6 +86,5 @@ def test_a_coordinate_off_the_globe_is_refused(predictor):
 
 
 def test_a_naive_instant_is_refused(predictor):
-    """The store's samples are tz-aware, and a naive one would be read as some other moment."""
     with pytest.raises(TypeError):
         predictor.observe_sample(T0.replace(tzinfo=None), 50.0, 0.0)

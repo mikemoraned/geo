@@ -1,31 +1,7 @@
-//! The crow-flies predictor, as a python object.
-//!
-//! The runner replaying a session lives in python, because the rerun SDK carries more of the
-//! blueprint API there than in Rust. It binds the predictor rather than reimplementing it, so
-//! what it draws is what every other shell answers.
-//!
-//! Feed a session through it in `t` order:
-//!
-//! ```python
-//! from lookout_predictor import CrowFlies
-//!
-//! predictor = CrowFlies([(crossing_id, lat, lon), ...], radius_metres=5000.0)
-//! for row in samples:
-//!     predictor.observe_sample(row.t, row.lat, row.lon, speed_mps=row.speed)
-//!     for prediction in predictor.predictions():
-//!         ...
-//! ```
-//!
-//! Nothing is serialised across the boundary: python holds the state machine itself, and a
-//! call into it runs the predictor's own code.
-//!
-//! It measures in `f64`, which is what the store holds and what a python float is. Instants
-//! are aware datetimes, in whatever timezone the caller has them in.
-
 use chrono::{DateTime, FixedOffset, Utc};
+use domain::{CrossingCompact, Sample};
 use predictor::{
-    Crossing, CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS_METRES, Event, ObserveError, Predict,
-    Sample,
+    CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS_METRES, Event, ObserveError, Predict,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -34,7 +10,7 @@ use pyo3::prelude::*;
 #[pyclass(frozen, get_all, eq, skip_from_py_object)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Prediction {
-    crossing: u32,
+    crossing_compact_id: u32,
     /// The straight-line distance from the latest fix, in metres.
     metres: f64,
     /// When we reach it at the speed of the latest fix, absent where there is no speed to
@@ -47,8 +23,8 @@ pub struct Prediction {
 impl Prediction {
     fn __repr__(&self) -> String {
         format!(
-            "Prediction(crossing={}, metres={:.1}, at={})",
-            self.crossing,
+            "Prediction(crossing_compact_id={}, metres={:.1}, at={})",
+            self.crossing_compact_id,
             self.metres,
             match self.at {
                 Some(at) => at.to_rfc3339(),
@@ -78,7 +54,7 @@ impl CrowFlies {
         let crossings = crossings
             .into_iter()
             .map(|(id, latitude, longitude)| {
-                Crossing::at(id, latitude, longitude)
+                CrossingCompact::at(id, latitude, longitude)
                     .map_err(|err| PyValueError::new_err(err.to_string()))
             })
             .collect::<PyResult<Vec<_>>>()?;
@@ -97,6 +73,12 @@ impl CrowFlies {
     /// stays unknown rather than being invented: with no speed reported, the step from the
     /// previous fix says how fast we are going, and with no previous fix there is no time to
     /// give.
+    ///
+    /// # Errors
+    ///
+    /// Raises where the coordinates are not on the globe, or where the fix is behind the clock —
+    /// a session replays in `t` order, so an event out of order is the caller's mistake, and it
+    /// changes nothing.
     #[pyo3(signature = (
         t,
         latitude,
@@ -140,7 +122,7 @@ impl CrowFlies {
             .predictions()
             .iter()
             .map(|prediction| Prediction {
-                crossing: prediction.crossing.value(),
+                crossing_compact_id: prediction.crossing_compact_id.get(),
                 metres: prediction.metres,
                 at: prediction.at,
             })
@@ -149,8 +131,6 @@ impl CrowFlies {
 }
 
 impl CrowFlies {
-    /// An event out of order is the caller's mistake — a session replays in `t` order — so it
-    /// raises rather than passing in silence, and changes nothing.
     fn observe(&mut self, event: Event<f64>) -> PyResult<()> {
         self.inner
             .observe(event)

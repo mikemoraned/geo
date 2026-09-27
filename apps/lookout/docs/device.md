@@ -140,6 +140,10 @@ possible without it.
 - **`RMC` carries a trailing mode/navigational-status pair** that plain 0183 examples lack,
   and its course field is empty when stationary. Fixtures written from 0183 documentation
   rather than from a capture get both wrong.
+- **One fix is spread over several sentences.** `RMC` carries the date, the speed in knots — a
+  nautical mile, 1,852 metres, an hour — and the course; `GGA` carries the altitude, the satellite
+  count and the HDOP. The date comes only from `RMC`, so a stream says nothing placeable until its
+  first one lands.
 - **True UTC arrives in `ZDA`/`RMC` before any position fix**, so the wall clock can be set
   from the receiver without waiting for a fix and without the BM8563 RTC.
 - **`$GPTXT,01,01,01,ANTENNA OPEN` repeats continuously even with a good fix.** It is
@@ -367,6 +371,9 @@ position, so they are upper bounds on the scan alone.
   mount at boot, and a way for the device to end up holding a set that disagrees with the
   code reading it. That it is really there can be checked by searching the release binary
   for the format's magic and reading the header after it.
+- **`f32` is what the board can afford.** Its FPU is single precision, so `f64` arithmetic runs
+  in software, and a scan of thousands of crossings against every fix cannot pay for that. At
+  these latitudes `f32` resolves about 0.42 m — finer than the fix it measures.
 - **`f32` coordinates are enough.** Device and notebook agree to 0.27 m over 2.3 km, about 1
   part in 10,000, and count the same crossings within 5 km. The count is the stricter of the
   two checks, since a distance can be slightly out and still rank correctly where a

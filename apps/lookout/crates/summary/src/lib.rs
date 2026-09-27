@@ -1,36 +1,24 @@
-//! Reporting what a store holds, as text meant to be read at a glance.
-//!
-//! The layout is a column per question a reader is asking — is this dataset there, how much
-//! of it is there, and what span does it cover — with one line per dataset and, on request,
-//! one per partition. What each layer is for is not restated here: a summary describes the
-//! store in front of it, not the design.
-
 use medallion::Layer;
 use medallion::summary::{ArtefactSummary, Contents, DatasetSummary, PartitionSummary};
 
-/// The layers reported, in the order data flows through them.
-const LAYERS: [Layer; 4] = [Layer::Landing, Layer::Bronze, Layer::Silver, Layer::Gold];
+const LAYERS_IN_FLOW_ORDER: [Layer; 4] =
+    [Layer::Landing, Layer::Bronze, Layer::Silver, Layer::Gold];
 
-/// What is shown of a dataset holding nothing, in place of its measurements.
 const ABSENT: &str = "absent";
 
-/// How much of each dataset to show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Detail {
-    /// One line per dataset.
     Datasets,
-    /// One line per dataset, and one per partition below it.
     Partitions,
 }
 
-/// The report for one store: every dataset by layer, then the gold artefacts.
 pub fn report(
     datasets: &[DatasetSummary],
     artefacts: &[ArtefactSummary],
     detail: Detail,
 ) -> String {
     let mut rows = Vec::new();
-    for layer in LAYERS {
+    for layer in LAYERS_IN_FLOW_ORDER {
         let of_layer: Vec<&DatasetSummary> = datasets
             .iter()
             .filter(|dataset| dataset.layer == layer)
@@ -58,7 +46,6 @@ pub fn report(
     lay_out(&rows)
 }
 
-/// One dataset's line, and its partitions' lines when they were asked for.
 fn dataset_rows(dataset: &DatasetSummary, detail: Detail) -> Vec<Row> {
     let mut rows = vec![Row::of(
         dataset.name,
@@ -76,8 +63,6 @@ fn dataset_rows(dataset: &DatasetSummary, detail: Detail) -> Vec<Row> {
     rows
 }
 
-/// One artefact's line, and its versions' lines when they were asked for. An artefact is
-/// not parquet, so it has no rows to report — only what it weighs, per run that wrote it.
 fn artefact_rows(artefact: &ArtefactSummary, detail: Detail) -> Vec<Row> {
     let contents = artefact
         .versions
@@ -107,9 +92,6 @@ fn artefact_rows(artefact: &ArtefactSummary, detail: Detail) -> Vec<Row> {
     rows
 }
 
-/// The span a dataset's partitions cover: the one value it holds, or the first and last of
-/// several. Partition values sort in the order they were written — a date, or an id built
-/// from an instant — so the ends of that order are the ends of the span.
 fn spread_over(partitions: &[PartitionSummary]) -> String {
     match partitions {
         [] => String::new(),
@@ -122,10 +104,8 @@ fn indent(value: &str) -> String {
     format!("  {value}")
 }
 
-/// The measured columns of an entry: what it holds, before the span it covers.
 const MEASURES: usize = 3;
 
-/// One line of the report: either a heading, or a name, what it holds and what it covers.
 enum Row {
     Heading(String),
     Entry {
@@ -140,8 +120,6 @@ impl Row {
         Row::Heading(layer.to_string())
     }
 
-    /// An entry for `name`. Holding nothing is said once, rather than as three zeroes that
-    /// read as measurements.
     fn of(name: &str, contents: Contents, spread: &str) -> Self {
         let (measures, spread) = match contents.is_empty() {
             true => (
@@ -165,8 +143,6 @@ impl Row {
     }
 }
 
-/// The rows as text, each column as wide as its widest entry: the name to the left, the
-/// measurements right-aligned so their magnitudes line up.
 fn lay_out(rows: &[Row]) -> String {
     let mut name = 0;
     let mut measures = [0; MEASURES];
@@ -206,7 +182,6 @@ fn lay_out(rows: &[Row]) -> String {
     out
 }
 
-/// A count of `thing`s, in thousands separated for reading and pluralised.
 fn count(things: u64, thing: &str) -> String {
     let digits: Vec<char> = things.to_string().chars().rev().collect();
     let grouped: Vec<String> = digits
@@ -220,7 +195,6 @@ fn count(things: u64, thing: &str) -> String {
     }
 }
 
-/// A size in the largest unit that leaves a number worth reading.
 fn size(bytes: u64) -> String {
     const UNITS: [(&str, u64); 4] = [
         ("GiB", 1 << 30),
@@ -284,8 +258,6 @@ mod tests {
         assert!(lines[3].starts_with("  session"));
     }
 
-    /// A layer nothing defines a dataset in is left out rather than shown as an empty
-    /// heading.
     #[test]
     fn a_layer_with_no_datasets_is_not_reported() {
         let datasets = [dataset(Layer::Bronze, "gps_reading", &[("2026-07-27", 10)])];
@@ -296,8 +268,6 @@ mod tests {
         assert!(!report.contains("gold"));
     }
 
-    /// The span is what a reader wants of a dataset with many partitions; the values
-    /// themselves are there on request.
     #[test]
     fn many_partitions_are_reported_as_the_span_they_cover() {
         let datasets = [dataset(
@@ -334,8 +304,6 @@ mod tests {
         }
     }
 
-    /// A dataset holding nothing says so, rather than reporting zeroes that read as
-    /// measurements.
     #[test]
     fn a_dataset_holding_nothing_is_reported_as_absent() {
         let datasets = [dataset(Layer::Silver, "session", &[])];

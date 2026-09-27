@@ -1,28 +1,10 @@
-//! The packed point buffer the device scans.
-//!
-//! Laid out for a brute-force scan on a 240 MHz microcontroller with no filesystem worth the
-//! name: a short header, then three parallel columns the device casts in place rather than
-//! parsing. See `README.md` for the byte layout and what a reader must check.
-//!
-//! Coordinates are `f32` degrees. Over the German crossings that costs at most 0.21 m of
-//! position, far under what GPS resolves, and it is what the ESP32's single-precision FPU
-//! wants: `f64` there is emulated in software.
-
-use std::fmt::{self, Display};
-
-use geo_types::Coord;
+use domain::{CoordinateError, CrossingCompact, CrossingCompactId};
 
 use crate::silver::Crossing;
 
-/// Names the format in the first bytes of the file, so a reader handed the wrong file says so
-/// instead of reading coordinates out of it.
 pub const MAGIC: [u8; 4] = *b"XING";
-/// Bumped whenever the layout changes in a way an existing reader would misread.
 pub const VERSION: u32 = 1;
-/// Magic, version, count — 12 bytes, which is itself a multiple of 4, so the columns after it
-/// are aligned without padding.
 pub const HEADER_LEN: usize = 12;
-/// One `f32` latitude, one `f32` longitude, one `u32` id.
 pub const BYTES_PER_POINT: usize = 12;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -45,69 +27,18 @@ pub enum FormatError {
 #[error("{0} points is more than a u32 count can name")]
 pub struct TooManyPoints(usize);
 
-/// A crossing's id in the packed buffer: the four bytes the store gives it in
-/// `crossing_short_id`, which is all a device has room for beside a coordinate.
-///
-/// Minted where the crossing is — in the derivation that writes the dataset, which is also
-/// where two crossings landing on one of these is refused — so nothing here derives it, and
-/// there is one answer to what a crossing is called on a device.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct PackedId(u32);
-
-impl PackedId {
-    /// The id `bits` names: as the store holds it, or as a packed buffer gives it back.
-    pub fn from_bits(bits: u32) -> Self {
-        Self(bits)
-    }
-
-    pub fn get(&self) -> u32 {
-        self.0
-    }
+pub fn compacted(crossing: &Crossing) -> Result<CrossingCompact<f32>, CoordinateError> {
+    CrossingCompact::at(
+        crossing.compact_id,
+        crossing.crossing.latitude(),
+        crossing.crossing.longitude(),
+    )
 }
 
-impl Display for PackedId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:08x}", self.0)
-    }
-}
-
-/// One crossing as the device holds it: where it is, and what it is called.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Point {
-    pub id: PackedId,
-    pub latitude: f32,
-    pub longitude: f32,
-}
-
-impl Point {
-    pub fn new(id: PackedId, position: Coord<f64>) -> Self {
-        Self {
-            id,
-            latitude: position.y as f32,
-            longitude: position.x as f32,
-        }
-    }
-
-    /// The crossing as the device holds it, under the name the store gave it.
-    pub fn of(crossing: &Crossing) -> Self {
-        Self::new(crossing.short_id, crossing.position)
-    }
-}
-
-impl Display for Point {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} at {},{}", self.id, self.latitude, self.longitude)
-    }
-}
-
-/// The packed bytes for these points.
-///
-/// Points are written in id order, so the same crossings pack to the same bytes however the
-/// dataset that produced them happened to be ordered.
-pub fn pack(points: &[Point]) -> Result<Vec<u8>, TooManyPoints> {
+pub fn pack(points: &[CrossingCompact<f32>]) -> Result<Vec<u8>, TooManyPoints> {
     let count = u32::try_from(points.len()).map_err(|_| TooManyPoints(points.len()))?;
 
-    let mut ordered: Vec<&Point> = points.iter().collect();
+    let mut ordered: Vec<&CrossingCompact<f32>> = points.iter().collect();
     ordered.sort_by_key(|point| point.id);
 
     let mut packed = Vec::with_capacity(HEADER_LEN + points.len() * BYTES_PER_POINT);
@@ -118,12 +49,12 @@ pub fn pack(points: &[Point]) -> Result<Vec<u8>, TooManyPoints> {
     packed.extend(
         ordered
             .iter()
-            .flat_map(|point| point.latitude.to_le_bytes()),
+            .flat_map(|point| point.latitude().to_le_bytes()),
     );
     packed.extend(
         ordered
             .iter()
-            .flat_map(|point| point.longitude.to_le_bytes()),
+            .flat_map(|point| point.longitude().to_le_bytes()),
     );
     packed.extend(
         ordered
@@ -134,11 +65,7 @@ pub fn pack(points: &[Point]) -> Result<Vec<u8>, TooManyPoints> {
     Ok(packed)
 }
 
-/// The points a packed buffer holds.
-///
-/// The device reads the same bytes by casting them in place; this reads them field by field
-/// so that a round-trip here checks the layout rather than the host's memory representation.
-pub fn unpack(packed: &[u8]) -> Result<Vec<Point>, FormatError> {
+pub fn unpack(packed: &[u8]) -> Result<Vec<CrossingCompact<f32>>, FormatError> {
     let header = packed
         .get(..HEADER_LEN)
         .ok_or(FormatError::NoHeader(packed.len()))?;
@@ -169,34 +96,36 @@ pub fn unpack(packed: &[u8]) -> Result<Vec<Point>, FormatError> {
     };
 
     Ok((0..points)
-        .map(|row| Point {
-            latitude: f32::from_le_bytes(word(latitudes, row)),
-            longitude: f32::from_le_bytes(word(longitudes, row)),
-            id: PackedId::from_bits(u32::from_le_bytes(word(ids, row))),
+        .map(|row| {
+            CrossingCompact::new(
+                CrossingCompactId::new(u32::from_le_bytes(word(ids, row))),
+                geo_types::Point::new(
+                    f32::from_le_bytes(word(longitudes, row)),
+                    f32::from_le_bytes(word(latitudes, row)),
+                ),
+            )
         })
         .collect())
 }
 
 #[cfg(test)]
 mod tests {
-    use geo_types::coord;
-
     use super::*;
 
-    /// A crossing near Ruhland, and one near Dresden.
     const RUHLAND: (f64, f64) = (13.548209, 51.617567);
     const DRESDEN: (f64, f64) = (13.733, 51.05);
 
-    fn point(id: u32, (lon, lat): (f64, f64)) -> Point {
-        Point::new(PackedId::from_bits(id), coord! { x: lon, y: lat })
+    fn packed_point(id: u32, (lon, lat): (f64, f64)) -> CrossingCompact<f32> {
+        CrossingCompact::at(id, lat, lon).expect("on the globe")
     }
 
-    fn points() -> Vec<Point> {
-        vec![point(0x292e_417a, RUHLAND), point(0x2490_bdfe, DRESDEN)]
+    fn points() -> Vec<CrossingCompact<f32>> {
+        vec![
+            packed_point(0x292e_417a, RUHLAND),
+            packed_point(0x2490_bdfe, DRESDEN),
+        ]
     }
 
-    /// The property the device depends on: what the packer wrote is what a reader of the
-    /// documented layout gets back.
     #[test]
     fn points_survive_a_round_trip() {
         let points = points();
@@ -205,12 +134,10 @@ mod tests {
 
         assert_eq!(read.len(), points.len());
         for point in &points {
-            assert!(read.contains(point), "{point} did not come back");
+            assert!(read.contains(point), "{} did not come back", point.id);
         }
     }
 
-    /// f32 degrees are the whole reason the buffer is this small, so the loss they cost is
-    /// worth stating: under a metre, which is under what the receiver resolves.
     #[test]
     fn a_position_survives_to_within_a_metre() {
         const METRES_PER_DEGREE: f64 = 111_320.0;
@@ -222,9 +149,10 @@ mod tests {
             .expect("the crossing that was packed");
 
         let (lon, lat) = RUHLAND;
-        let north = (f64::from(ruhland.latitude) - lat).abs() * METRES_PER_DEGREE;
-        let east =
-            (f64::from(ruhland.longitude) - lon).abs() * METRES_PER_DEGREE * lat.to_radians().cos();
+        let north = (f64::from(ruhland.latitude()) - lat).abs() * METRES_PER_DEGREE;
+        let east = (f64::from(ruhland.longitude()) - lon).abs()
+            * METRES_PER_DEGREE
+            * lat.to_radians().cos();
         assert!(north < 1.0 && east < 1.0, "{north}m north, {east}m east");
     }
 
@@ -244,8 +172,6 @@ mod tests {
         );
     }
 
-    /// The device casts the columns in place, which is only sound if each starts on a 4-byte
-    /// boundary — so the header's length has to stay a multiple of 4.
     #[test]
     fn every_column_starts_four_byte_aligned() {
         let packed = pack(&points()).unwrap();
@@ -254,8 +180,6 @@ mod tests {
         assert_eq!((packed.len() - HEADER_LEN) % 4, 0);
     }
 
-    /// So that the same crossings pack to the same bytes whatever order they arrive in, and a
-    /// rebuild that reorders rows doesn't reflash the device with an identical dataset.
     #[test]
     fn the_bytes_do_not_depend_on_the_order_the_points_arrive_in() {
         let mut reversed = points();
@@ -298,8 +222,6 @@ mod tests {
         assert_eq!(unpack(&MAGIC), Err(FormatError::NoHeader(4)));
     }
 
-    /// A truncated file would otherwise read as points made of whatever bytes followed, or
-    /// panic on the slice that runs off the end.
     #[test]
     fn a_buffer_that_does_not_hold_the_points_it_claims_is_rejected() {
         let packed = pack(&points()).unwrap();
@@ -325,16 +247,20 @@ mod tests {
     #[test]
     fn a_point_carries_its_crossings_position() {
         let crossing = Crossing {
-            crossing_id: "water:rail@0.5".parse().expect("id"),
-            short_id: PackedId::from_bits(0x292e_417a),
-            position: coord! { x: RUHLAND.0, y: RUHLAND.1 },
+            crossing: domain::Crossing::at(
+                "water:rail@0.5".parse().expect("id"),
+                RUHLAND.1,
+                RUHLAND.0,
+            )
+            .expect("on the globe"),
+            compact_id: CrossingCompactId::new(0x292e_417a),
             extract_id: "20260727T193628Z".to_string(),
         };
 
-        let point = Point::of(&crossing);
+        let packed = compacted(&crossing).expect("on the globe");
 
-        assert_eq!(point.id, crossing.short_id);
-        assert_eq!(point.latitude, RUHLAND.1 as f32);
-        assert_eq!(point.longitude, RUHLAND.0 as f32);
+        assert_eq!(packed.id, crossing.compact_id);
+        assert_eq!(packed.latitude(), RUHLAND.1 as f32);
+        assert_eq!(packed.longitude(), RUHLAND.0 as f32);
     }
 }

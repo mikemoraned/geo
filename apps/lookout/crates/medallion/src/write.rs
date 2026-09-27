@@ -1,5 +1,3 @@
-//! Writing a batch of rows into the store as one parquet file.
-
 use std::path::Path;
 
 use arrow::array::RecordBatch;
@@ -8,7 +6,6 @@ use object_store::path::Path as ObjectPath;
 use parquet::arrow::AsyncArrowWriter;
 use parquet::arrow::async_writer::ParquetObjectWriter;
 
-/// Failure writing a parquet file into the store.
 #[derive(Debug, thiserror::Error)]
 pub enum WriteError {
     #[error("{path} is not an absolute path into the store")]
@@ -27,11 +24,6 @@ pub enum WriteError {
     Exists { path: String },
 }
 
-/// Write `batches` to `path` as a single parquet file, taking the schema from the first.
-///
-/// The file appears at `path` only once fully written: the write goes through
-/// [`LocalFileSystem`], which stages to a temporary sibling and renames on completion, so
-/// an interrupted write leaves nothing a reader can list or open.
 pub(crate) async fn write_batches(path: &Path, batches: &[RecordBatch]) -> Result<(), WriteError> {
     let Some(first) = batches.first() else {
         return Err(WriteError::Empty);
@@ -45,9 +37,6 @@ pub(crate) async fn write_batches(path: &Path, batches: &[RecordBatch]) -> Resul
     Ok(())
 }
 
-/// A parquet writer onto `path`, through the store's write path: [`LocalFileSystem`]
-/// stages to a temporary sibling and renames on completion, so an interrupted write leaves
-/// nothing a reader can list or open.
 pub(crate) fn writer_at(
     path: &Path,
     schema: arrow::datatypes::SchemaRef,
@@ -156,7 +145,6 @@ mod tests {
         let path = Root::new(tmp.path())
             .dataset(SENSOR_READING)
             .partition_file();
-        // Batches with differing schemas: the first is accepted, the second fails mid-write.
         let mismatched = RecordBatch::try_new(
             Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)])),
             vec![Arc::new(Int64Array::from(vec![9]))],
@@ -175,9 +163,6 @@ mod tests {
         );
     }
 
-    /// These layers are immutable, so a second append at the same instant must fail rather
-    /// than replace what the first wrote. Two writes close together — a drain writing its
-    /// batches, a backfill replaying an archive — is the case this catches.
     #[tokio::test]
     async fn appending_where_a_capture_already_sits_is_refused() {
         let tmp = tempfile::tempdir().unwrap();

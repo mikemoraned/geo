@@ -1,36 +1,17 @@
-//! NMEA sentences in, [`Sample`]s out.
-//!
-//! Only the device needs this. The runner reads samples the store already holds, so it never
-//! builds one from a sentence.
-
 use nmea::Nmea;
 
-use crate::measure::Measure;
-use crate::sample::Sample;
 use crate::sentence::Sentence;
+use domain::{Precision, Sample};
 
-/// One knot in metres per second, by definition — a nautical mile an hour, and a nautical
-/// mile is 1,852 metres.
 const METRES_PER_SECOND_PER_KNOT: f64 = 1_852.0 / 3_600.0;
 
-/// Accumulates sentences into samples.
-///
-/// One fix is spread over several sentences: RMC carries the date, the speed and the course,
-/// GGA the altitude, the satellite count and the HDOP. So the parser keeps state across them
-/// and reports a sample from everything it knows, each time a sentence adds to it.
 #[derive(Debug, Clone)]
-pub struct Parser<T: Measure> {
-    /// The `nmea` crate's own accumulator, which merges each sentence into the picture so
-    /// far. A sentence carrying no position clears the position, so a sample is built from
-    /// what the accumulator holds rather than from the sentence last parsed.
+pub struct Parser<P: Precision> {
     sentences: Nmea,
-    /// The last sample reported, so that a sentence adding nothing reports nothing.
-    last: Option<Sample<T>>,
+    last: Option<Sample<P>>,
 }
 
-/// Hand-written, because deriving it would demand a `Default` measure that a parser with no
-/// sample yet has no use for.
-impl<T: Measure> Default for Parser<T> {
+impl<P: Precision> Default for Parser<P> {
     fn default() -> Self {
         Self {
             sentences: Nmea::default(),
@@ -39,19 +20,12 @@ impl<T: Measure> Default for Parser<T> {
     }
 }
 
-impl<T: Measure> Parser<T> {
+impl<P: Precision> Parser<P> {
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Takes one sentence and reports the sample it completes.
-    ///
-    /// Nothing is reported until the receiver has a position and a date to place it on. GGA
-    /// carries no date, so a stream reports its first sample when its first RMC lands.
-    /// Three kinds of sentence report nothing and leave what is known intact: one whose
-    /// checksum does not match its body, one the receiver emits before it has a fix, and one
-    /// that repeats what is already known.
-    pub fn absorb(&mut self, sentence: &Sentence) -> Option<Sample<T>> {
+    pub fn absorb(&mut self, sentence: &Sentence) -> Option<Sample<P>> {
         self.sentences.parse(sentence.as_str()).ok()?;
 
         let sample = self.sample()?;
@@ -62,8 +36,7 @@ impl<T: Measure> Parser<T> {
         Some(sample)
     }
 
-    /// Everything accumulated so far as a sample, once it amounts to one.
-    fn sample(&self) -> Option<Sample<T>> {
+    fn sample(&self) -> Option<Sample<P>> {
         let at = self.sentences.fix_date?.and_time(self.sentences.fix_time?);
 
         Some(
@@ -95,33 +68,27 @@ mod tests {
         Fix, GGA_NO_FIX, GSA_NO_FIX, RMC_VOID, SPLICED, captured, with_bad_checksum,
     };
 
-    /// The fix the captured sentences carry, at 50.5N 8.5E and moving.
     fn fix() -> Fix {
         Fix::at(20, 43, 29, 50.5, 8.5)
             .with_speed_knots(4.13)
             .with_course_degrees(79.94)
     }
 
-    /// A second later and a little north-east of it.
     fn later() -> Fix {
         Fix::at(20, 43, 30, 50.5001, 8.50015)
             .with_speed_knots(4.13)
             .with_course_degrees(79.94)
     }
 
-    /// The `nmea` crate holds everything but the coordinates as `f32`, so a field widened to
-    /// `f64` lands near the decimal the sentence spells rather than on it.
     fn assert_near(got: Option<f64>, want: f64) {
         let got = got.expect("a value");
         assert!((got - want).abs() < 1e-5, "{got} is not near {want}");
     }
 
-    /// The measure a test parser holds: `f64`, since nothing here is measuring distances.
     fn parser() -> Parser<f64> {
         Parser::new()
     }
 
-    /// A parser that has seen the RMC every fix needs, since only RMC carries the date.
     fn fixed() -> Parser<f64> {
         let mut parser = parser();
         parser.absorb(&fix().rmc()).expect("a first sample");
@@ -137,32 +104,26 @@ mod tests {
         assert_eq!(sample.t, fix().t());
     }
 
-    /// Speed is the one field a receiver reports in a unit a sample does not use: 4.13 knots
-    /// is 2.125 metres per second, and a predictor dividing a distance by knots would be
-    /// wrong by a factor of two.
     #[test]
     fn a_speed_in_knots_becomes_metres_per_second() {
         let sample = parser().absorb(&fix().rmc()).expect("a sample");
 
-        assert_near(sample.speed_mps, 4.13 * 1_852.0 / 3_600.0);
-        assert_near(sample.heading_degrees, 79.94);
+        assert_near(sample.gps.speed_mps, 4.13 * 1_852.0 / 3_600.0);
+        assert_near(sample.gps.heading_degrees, 79.94);
     }
 
-    /// GGA carries no date, so nothing it says can be placed on a timeline on its own.
     #[test]
     fn a_gga_sentence_alone_makes_no_sample() {
         assert_eq!(parser().absorb(&fix().gga()), None);
     }
 
-    /// Once an RMC has supplied the date, the accumulator keeps it, and a GGA fills in what
-    /// RMC does not carry.
     #[test]
     fn a_gga_after_an_rmc_makes_a_sample_reporting_the_fix_quality() {
         let sample = fixed().absorb(&fix().gga()).expect("a sample");
 
-        assert_eq!(sample.satellites, Some(6));
-        assert_near(sample.hdop, 4.4);
-        assert_near(sample.altitude_metres, 262.46);
+        assert_eq!(sample.gps.satellites, Some(6));
+        assert_near(sample.gps.hdop, 4.4);
+        assert_near(sample.gps.altitude_metres, 262.46);
     }
 
     #[test]
@@ -183,11 +144,9 @@ mod tests {
         let sample = parser().absorb(&stationary.rmc()).expect("a sample");
 
         assert_eq!(sample.latitude(), 50.5);
-        assert_eq!(sample.heading_degrees, None);
+        assert_eq!(sample.gps.heading_degrees, None);
     }
 
-    /// The receiver reports its own doubt by dropping the position, and a sample without a
-    /// position is not a sample. What the state machine still holds is its own business.
     #[test]
     fn a_void_sentence_makes_no_sample() {
         assert_eq!(fixed().absorb(&captured(RMC_VOID)), None);
@@ -207,15 +166,11 @@ mod tests {
         assert_eq!(fixed().absorb(&captured(SPLICED)), None);
     }
 
-    /// A sentence whose checksum does not match its contents, so the move to 50.5001 must not
-    /// be believed.
     #[test]
     fn a_corrupt_sentence_makes_no_sample() {
         assert_eq!(fixed().absorb(&with_bad_checksum(&later().gga())), None);
     }
 
-    /// A dozen sentences a second arrive saying what the last one said. Reporting each as a
-    /// fresh sample would have the predictor re-deciding what it has already decided.
     #[test]
     fn a_sentence_adding_nothing_makes_no_sample() {
         let mut parser = fixed();

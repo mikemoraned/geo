@@ -1,30 +1,9 @@
-//! The bronze telemetry datasets, written one file per ingestion.
-//!
-//! An ingestion writes four datasets, each partitioned by the UTC date it was ingested on
-//! and named for the instant of the write:
-//!
-//!   - `raw_sample` — every payload verbatim, keyed on its md5. This is the lossless
-//!     record everything else is derived from, so a payload that fails to parse still
-//!     lands here.
-//!   - `gps_reading` / `accel_reading` — one row per reading, interpreted from the
-//!     payloads. Both protocol versions produce the same rows.
-//!   - `device_session` — the metadata a device announces when it starts a session.
-//!
-//! Readings are split by sensor into their own datasets rather than sharing one under a
-//! `sensor=` partition, because the two carry different columns and a dataset is one
-//! schema.
-
 use chrono::{DateTime, Utc};
 use medallion::{Dataset, DatasetSpec, Root, Row};
-use model::{AccelReadingRow, DeviceSessionRow, GpsReadingRow, RawSampleRow};
+use medallion_model::{AccelReadingRow, DeviceSessionRow, GpsReadingRow, RawSampleRow};
 use shared::{AccelReading, GpsReading, Message, SessionStart, V0Message, V1Message};
 use telemetry::RawSample;
 
-/// One payload to archive: the json exactly as it arrived, and the epoch millis the server
-/// stamped when it received it.
-///
-/// `received_at` is optional because a payload restored from an older archive may predate
-/// receipt times being recorded at all; a payload off the queue always carries one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Payload<'a> {
     pub received_at: Option<i64>,
@@ -40,7 +19,6 @@ impl<'a> From<&'a RawSample> for Payload<'a> {
     }
 }
 
-/// Failure writing an ingestion.
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
     #[error("partitioning the dataset: {0}")]
@@ -49,14 +27,12 @@ pub enum ArchiveError {
     Write(#[from] medallion::AppendError),
 }
 
-/// What one ingestion wrote. Sums, so a run made of several ingestions reports its total.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Written {
     pub raw: usize,
     pub gps: usize,
     pub accel: usize,
     pub devices: usize,
-    /// Payloads archived verbatim that no version of the protocol could interpret.
     pub unparseable: usize,
 }
 
@@ -74,7 +50,6 @@ impl std::ops::Add for Written {
     }
 }
 
-/// The rows one ingestion interpreted, before they are written.
 #[derive(Debug, Default)]
 struct Rows {
     raw: Vec<RawSampleRow>,
@@ -84,7 +59,6 @@ struct Rows {
     unparseable: usize,
 }
 
-/// A handle on the bronze telemetry datasets within a medallion store.
 #[derive(Debug, Clone)]
 pub struct Archive {
     root: Root,
@@ -95,7 +69,6 @@ impl Archive {
         Self { root }
     }
 
-    /// The partition an ingestion at `ingested_at` writes `dataset` into.
     fn partition<L: medallion::LayerKind>(
         &self,
         dataset: DatasetSpec<L>,
@@ -107,9 +80,6 @@ impl Archive {
             .on_date(ingested_at.date_naive())?)
     }
 
-    /// The file an ingestion at `ingested_at` writes `dataset` to. Readers query the
-    /// dataset rather than opening its files, so this is only the layout the tests assert
-    /// on.
     #[cfg(test)]
     fn ingestion_file<L: medallion::LayerKind>(
         &self,
@@ -121,8 +91,6 @@ impl Archive {
             .batch_file(ingested_at))
     }
 
-    /// Interpret `payloads` and write them, returning what landed. Each dataset with no
-    /// rows is skipped, so an ingestion of only GPS leaves no empty accel file.
     pub async fn write(
         &self,
         ingested_at: DateTime<Utc>,
@@ -157,15 +125,13 @@ impl Archive {
 }
 
 impl Rows {
-    /// Split `payloads` into the rows each dataset holds. Every payload lands in `raw`,
-    /// whether or not it can be interpreted.
     fn interpret(payloads: &[Payload<'_>]) -> Self {
         let mut rows = Self::default();
         for payload in payloads {
             rows.raw.push(raw_row(payload));
             match serde_json::from_str::<Message>(payload.json) {
                 Ok(Message::Version0(V0Message::Gps(r)) | Message::Version1(V1Message::Gps(r))) => {
-                    rows.gps.push(gps_row(&r))
+                    rows.gps.extend(gps_row(&r))
                 }
                 Ok(
                     Message::Version0(V0Message::Acceleration(r))
@@ -181,7 +147,6 @@ impl Rows {
     }
 }
 
-/// The archived form of a payload: its json verbatim, keyed on the md5 of that json.
 fn raw_row(payload: &Payload<'_>) -> RawSampleRow {
     RawSampleRow {
         md5: format!("{:x}", md5::compute(payload.json)),
@@ -190,17 +155,17 @@ fn raw_row(payload: &Payload<'_>) -> RawSampleRow {
     }
 }
 
-fn gps_row(reading: &GpsReading) -> GpsReadingRow {
-    GpsReadingRow {
+fn gps_row(reading: &GpsReading) -> Option<GpsReadingRow> {
+    Some(GpsReadingRow {
         device_id: reading.id.into(),
         t: reading.t,
-        lat: reading.gps.lat,
-        lon: reading.gps.lon,
-        alt: reading.gps.alt,
-        acc: reading.gps.acc,
-        speed: reading.gps.speed,
-        heading: reading.gps.heading,
-    }
+        lat: reading.gps.latitude(),
+        lon: reading.gps.longitude(),
+        alt: reading.gps.altitude_metres,
+        acc: reading.gps.accuracy_metres?,
+        speed: reading.gps.speed_mps,
+        heading: reading.gps.heading_degrees,
+    })
 }
 
 fn accel_row(reading: &AccelReading) -> AccelReadingRow {
@@ -220,7 +185,7 @@ fn device_session_row(start: &SessionStart) -> DeviceSessionRow {
     DeviceSessionRow {
         device_id: start.id.into(),
         t: start.t,
-        device_type: start.device.device_type.as_str().to_string(),
+        device_type: start.device.device_type,
         platform: start.device.platform.clone(),
         user_agent: start.device.user_agent.clone(),
         os: start.device.os.clone(),
@@ -231,18 +196,18 @@ fn device_session_row(start: &SessionStart) -> DeviceSessionRow {
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
+    use domain::Gps;
+    use domain::{DeviceInfo, DeviceType};
     use medallion::Query;
-    use shared::{Accel, AccelReading, DeviceInfo, DeviceType, Gps, GpsReading, SessionStart};
+    use shared::{Accel, AccelReading, GpsReading, SessionStart};
     use uuid::Uuid;
 
     use super::*;
 
-    /// The instant every test ingests at, so the file it writes is predictable.
     fn ingested_at() -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap()
     }
 
-    /// The payloads `samples` archive as, exercising the conversion the drain does.
     fn archived(samples: &[RawSample]) -> Vec<Payload<'_>> {
         samples.iter().map(Payload::from).collect()
     }
@@ -258,14 +223,12 @@ mod tests {
         Message::Version1(V1Message::Gps(GpsReading {
             id: Uuid::from_u128(1),
             t,
-            gps: Gps {
-                lat,
-                lon: -3.19,
-                alt: Some(80.0),
-                acc: 5.0,
-                speed: Some(31.4),
-                heading: Some(275.0),
-            },
+            gps: Gps::at(lat, -3.19)
+                .expect("on the globe")
+                .with_altitude_metres(Some(80.0))
+                .with_accuracy_metres(Some(5.0))
+                .with_speed_mps(Some(31.4))
+                .with_heading_degrees(Some(275.0)),
         }))
     }
 
@@ -298,7 +261,6 @@ mod tests {
         }))
     }
 
-    /// How many rows a written dataset holds, read back through SQL.
     async fn rows_in<L: medallion::LayerKind>(root: &Root, dataset: DatasetSpec<L>) -> i64 {
         let query = Query::new(root.clone());
         query
@@ -337,10 +299,10 @@ mod tests {
                 unparseable: 0
             }
         );
-        assert_eq!(rows_in(&root, model::RAW_SAMPLE).await, 4);
-        assert_eq!(rows_in(&root, model::GPS_READING).await, 2);
-        assert_eq!(rows_in(&root, model::ACCEL_READING).await, 1);
-        assert_eq!(rows_in(&root, model::DEVICE_SESSION).await, 1);
+        assert_eq!(rows_in(&root, medallion_model::RAW_SAMPLE).await, 4);
+        assert_eq!(rows_in(&root, medallion_model::GPS_READING).await, 2);
+        assert_eq!(rows_in(&root, medallion_model::ACCEL_READING).await, 1);
+        assert_eq!(rows_in(&root, medallion_model::DEVICE_SESSION).await, 1);
     }
 
     #[tokio::test]
@@ -357,7 +319,7 @@ mod tests {
             .expect("write");
 
         let path = archive
-            .ingestion_file(model::GPS_READING, ingested_at())
+            .ingestion_file(medallion_model::GPS_READING, ingested_at())
             .expect("path");
         assert!(
             path.ends_with(
@@ -369,8 +331,6 @@ mod tests {
         assert!(path.exists());
     }
 
-    /// A payload no protocol version can interpret is still archived verbatim, since raw
-    /// is what everything else is rederived from.
     #[tokio::test]
     async fn an_uninterpretable_payload_is_still_archived() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -387,11 +347,9 @@ mod tests {
 
         assert_eq!(written.raw, 1);
         assert_eq!(written.unparseable, 1);
-        assert_eq!(rows_in(&root, model::RAW_SAMPLE).await, 1);
+        assert_eq!(rows_in(&root, medallion_model::RAW_SAMPLE).await, 1);
     }
 
-    /// A payload whose receipt was never timed is archived with that unknown, rather than
-    /// with a stand-in instant that would read as a real one.
     #[tokio::test]
     async fn a_payload_with_no_receipt_time_is_archived_without_one() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -411,7 +369,7 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(model::RAW_SAMPLE, "d")
+            .register(medallion_model::RAW_SAMPLE, "d")
             .await
             .expect("register");
         assert_eq!(
@@ -423,8 +381,6 @@ mod tests {
         );
     }
 
-    /// A dataset with no rows is skipped, so an ingestion of only GPS leaves no empty
-    /// accel file for a reader to trip over.
     #[tokio::test]
     async fn datasets_with_no_rows_are_not_written() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -440,14 +396,12 @@ mod tests {
 
         assert!(
             !archive
-                .ingestion_file(model::ACCEL_READING, ingested_at())
+                .ingestion_file(medallion_model::ACCEL_READING, ingested_at())
                 .expect("path")
                 .exists()
         );
     }
 
-    /// A drain writes a batch at a time, so consecutive ingestions fall milliseconds apart:
-    /// each must keep its own rows rather than the later one displacing the earlier.
     #[tokio::test]
     async fn ingestions_milliseconds_apart_both_keep_their_readings() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -469,10 +423,9 @@ mod tests {
             .await
             .expect("second batch");
 
-        assert_eq!(rows_in(&root, model::GPS_READING).await, 2);
+        assert_eq!(rows_in(&root, medallion_model::GPS_READING).await, 2);
     }
 
-    /// Several ingestions sum, so a run made of batches reports its total.
     #[tokio::test]
     async fn what_each_ingestion_wrote_adds_up() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -514,7 +467,7 @@ mod tests {
         assert_eq!(written, Written::default());
         assert!(
             !archive
-                .ingestion_file(model::RAW_SAMPLE, ingested_at())
+                .ingestion_file(medallion_model::RAW_SAMPLE, ingested_at())
                 .expect("path")
                 .exists()
         );

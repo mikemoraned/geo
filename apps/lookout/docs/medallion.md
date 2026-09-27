@@ -137,7 +137,7 @@ and scalable lookup. Metadata that makes queries faster, such as bounding boxes,
   each writer and each consumer. The check spans the dataset rather than a partition of it.
   Which partition a row lands in is a fact about how it is stored, not about what it is
   called. A dataset may carry more than one such name, each identifying a row on its own. That
-  second name exists for a shorter form of an id, meant for a consumer with no room for the
+  second name exists for a compact form of an id, meant for a consumer with no room for the
   first — exactly the case where a collision would otherwise surface downstream.
 
 #### Writing silver
@@ -189,6 +189,19 @@ Format: determined by the consumer. Specialised formats are expected at this lay
 permitted again. Where no specialised format fits, use
 [GeoArrow 0.2](https://geoarrow.org) for fast export/import, **uncompressed**, since
 compressed GeoArrow is not universally supported by consuming viewers.
+
+Laid out by what was produced and which run produced it, rather than by a partition key:
+
+```
+<root>/gold/artifact=<name>/version=<run>/<file>
+```
+
+**Gold is derived, and so is not versioned in git — with one exception.** An artefact a build
+reads is an input to something outside the store, and cannot be re-derived by whoever builds
+it: a checkout has no silver to pack from. The crossings are the case today, embedded in the
+device's firmware and served to the browser, so every version packed is committed and
+`apps/lookout/crossings.version` names the one being built against.
+`data/medallion/.gitignore` states which datasets this covers.
 
 ## No table format
 
@@ -260,8 +273,10 @@ returns the same rows, in both directions. Declaring the types buys nothing but 
 place for the layout to be written down, and one that drifts silently when a key is renamed.
 
 This holds because dates are formatted `YYYY-MM-DD`, whose lexical and chronological order
-agree — a date key compared as a string is still ordered correctly. A partition key in a
-format without that property cannot be relied on this way.
+agree — a date key compared as a string is still ordered correctly. An id minted from an
+instant, `YYYYMMDDTHHMMSSZ`, agrees the same way, so partition values sort in the order they
+were written whichever of the two a dataset is keyed on. A partition key in a format without
+that property cannot be relied on this way.
 
 ### Bronze
 
@@ -346,6 +361,10 @@ Gold partitions on **which run or version produced the output**, and nothing is 
 
 A run's configuration and input dataset versions are written as columns alongside its
 results, so a run is interpretable without reference to the code that produced it.
+
+**A coordinate written out for a consumer keeps six decimal places**, about 11 cm. Silver holds a
+position as `f64`, which takes seventeen significant digits to write in full: nanometres, against a
+fix accurate to metres at best. The digits past the sixth cost bytes in every row of every export.
 
 An export in a specialised format is a **file**, not a dataset: nothing queries it, and the
 format has no room for columns. It is laid out the same way and holds its file inside:

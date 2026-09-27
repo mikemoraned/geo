@@ -1,31 +1,3 @@
-//! Writing a silver dataset from rows of a Rust type.
-//!
-//! This is the door a derivation written in Rust goes through, as [`crate::write_table`] is
-//! the door for one written elsewhere. Both apply the same policy — the dataset's layout, the
-//! sweep of what a rebuild no longer produces, and the uniqueness its definition declares —
-//! so which language derived a dataset does not change what is stored.
-//!
-//! The caller supplies rows and, for a dataset that carries geometry, the lat/lon geometry
-//! and the country each row belongs to; everything else follows from the definition:
-//!
-//! * **The date** a row is stored under is read from the row itself, through [`Dated`], so
-//!   the pairing of a partition key with the column feeding it is stated where the dataset is
-//!   defined.
-//! * **The projected geometry** is derived here rather than supplied, from the row's country:
-//!   the zone a country's metres are in is the store's choice, and projecting into one while
-//!   declaring another is the mistake this removes the opportunity for.
-//! * **Partitions** are replaced, and the ones the rows no longer cover — dates within a
-//!   country, and the countries themselves — are deleted.
-//!
-//! A run therefore has to derive the whole dataset, which is the rule silver rebuilds already
-//! follow.
-//!
-//! **Silver only**, though the layer below permits a gold dataset to be replaced too. What is
-//! written here is the silver format — WKB geometry with its metric twin, the CRS declared per
-//! country — and what is deleted follows silver's rule that a partition a rebuild no longer
-//! produces is a claim withdrawn. Gold states neither: its format is the consumer's, and its
-//! outputs are versioned per run rather than replaced, precisely so an earlier one survives.
-
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
@@ -43,13 +15,6 @@ use crate::table::{
     Layout, SilverTarget, TableError, TableWritten, check_unique, group, replace_dates,
 };
 
-/// One row of a dataset that carries geometry: the row, the geometry its columns hold in
-/// lat/lon, and the country whose zone the metric column is written in.
-///
-/// The country is stated rather than looked up from the geometry, because which point places
-/// a row is a question about the entity: a session's samples belong to the country the
-/// session started in, whatever ground the session later covered, so that they and the
-/// session they make up are measured in the same metres.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GeoRow<R, G> {
     pub row: R,
@@ -57,10 +22,6 @@ pub struct GeoRow<R, G> {
     pub country: Country,
 }
 
-/// Write `rows` as the whole of the dataset they belong to, replacing what is there.
-///
-/// Each partition holds the rows given for it in the order they were given, and a partition
-/// the rows no longer cover is deleted.
 pub async fn write_geo_rows<R, G>(
     root: &Root,
     rows: &[GeoRow<R, G>],
@@ -77,18 +38,14 @@ where
     };
     check_named(&target, rows.iter().map(|placed| &placed.row))?;
 
-    // One batch per country and date, since that pair names a partition. Grouped rather than
-    // chunked, so the rows need not arrive in any particular order to land in one file each.
-    let keys: Vec<(Country, NaiveDate)> = rows
+    let partition_of_each_row: Vec<(Country, NaiveDate)> = rows
         .iter()
         .map(|placed| (placed.country, placed.row.partition_date()))
         .collect();
     let mut projectors: HashMap<Country, Projector> = HashMap::new();
     let mut by_country: Vec<(Country, Vec<(NaiveDate, RecordBatch)>)> = Vec::new();
 
-    for ((country, date), indices) in group(&keys) {
-        // One projector per country, built once: constructing it is the expensive part, and
-        // a country's zone is the same in every partition below it.
+    for ((country, date), indices) in group(&partition_of_each_row) {
         let projector = match projectors.entry(country) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => entry.insert(Projector::for_country(country)?),
@@ -108,13 +65,11 @@ where
         partitions += replace_dates(&dataset, &target, days).await?;
     }
 
-    // The dated partitions of a country are swept as that country is written, which is the
-    // level `replace_dates` is given; the countries themselves can only be swept here, where
-    // every one the rows cover is known.
-    let derived: Vec<Country> = by_country.iter().map(|(country, _)| *country).collect();
+    let every_country_the_rows_cover: Vec<Country> =
+        by_country.iter().map(|(country, _)| *country).collect();
     partitions.removed += root
         .dataset(target.spec())
-        .retain_partitions(COUNTRY, &derived)
+        .retain_partitions(COUNTRY, &every_country_the_rows_cover)
         .await?;
 
     Ok(TableWritten {
@@ -123,9 +78,6 @@ where
     })
 }
 
-/// Write `rows` as the whole of the dataset they belong to, for a dataset carrying no
-/// geometry — dated partitions and nothing above them. Replaces and sweeps as
-/// [`write_geo_rows`] does.
 pub async fn write_rows<R>(root: &Root, rows: &[R]) -> Result<TableWritten, TableError>
 where
     R: Dated<Layer = layers::Silver> + Clone,
@@ -157,7 +109,6 @@ where
     })
 }
 
-/// One partition's batch: the rows, then their geometry in lat/lon and in `country`'s metres.
 fn geo_day<R, G>(
     day: &[&GeoRow<R, G>],
     projector: &Projector,
@@ -186,10 +137,6 @@ where
     )?)
 }
 
-/// Refuse rows two of which share a name the dataset declares unique.
-///
-/// The check reads the columns as the store holds them, which means building them, so it is
-/// only paid for by a dataset that declares a name.
 fn check_named<'a, R: Row + Clone + 'a>(
     target: &SilverTarget,
     rows: impl Iterator<Item = &'a R>,
@@ -212,7 +159,6 @@ mod tests {
     use crate::query::Query;
     use crate::rows::Geometry;
 
-    /// Dated geometry: a country partition above the date, since the file states one CRS.
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
     struct TrackRow {
         track_id: String,
@@ -234,7 +180,6 @@ mod tests {
         }
     }
 
-    /// Dated rows carrying no geometry: one partition per date, nothing above it.
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
     struct PassRow {
         track_id: String,
@@ -263,8 +208,6 @@ mod tests {
         Point::new(13.404954, 52.520008)
     }
 
-    /// A line through one point, so a track has a geometry without the coordinates being the
-    /// subject of the test.
     fn track(id: &str, day: u32, country: Country) -> GeoRow<TrackRow, LineString<f64>> {
         GeoRow {
             row: TrackRow {
@@ -307,9 +250,6 @@ mod tests {
         );
     }
 
-    /// A partition is decided by what a row holds, not by where it sits among the others, so
-    /// rows of one partition arriving apart still land in one file rather than in two writes
-    /// of which the second wins.
     #[tokio::test]
     async fn rows_of_one_partition_need_not_arrive_together() {
         let tmp = tempfile::tempdir().unwrap();
@@ -338,8 +278,6 @@ mod tests {
         );
     }
 
-    /// The metric column is projected here rather than supplied, so it is in the zone the
-    /// file declares for the country the row states.
     #[tokio::test]
     async fn the_projected_column_holds_the_countrys_metres() {
         let tmp = tempfile::tempdir().unwrap();
@@ -368,9 +306,6 @@ mod tests {
         );
     }
 
-    /// The check a dataset's definition asks for is applied to a Rust writer as much as to a
-    /// table handed in from elsewhere: a name identifies a row across the dataset, so two
-    /// rows sharing one are refused even when they would land in different partitions.
     #[tokio::test]
     async fn rows_sharing_a_name_are_refused_across_partitions() {
         let tmp = tempfile::tempdir().unwrap();
@@ -428,8 +363,6 @@ mod tests {
         );
     }
 
-    /// A dataset carrying geometry cannot be written without it: doing so would put its rows
-    /// under a layout that states no CRS and no country.
     #[tokio::test]
     async fn a_dataset_carrying_geometry_refuses_rows_alone() {
         let tmp = tempfile::tempdir().unwrap();
@@ -468,8 +401,6 @@ mod tests {
         );
     }
 
-    /// Writing nothing is a derivation that produced nothing, which sweeps the dataset away
-    /// rather than leaving the last run's partitions standing.
     #[tokio::test]
     async fn no_rows_sweep_what_is_there() {
         let tmp = tempfile::tempdir().unwrap();

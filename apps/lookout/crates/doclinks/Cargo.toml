@@ -1,0 +1,12 @@
+[package]
+name = "doclinks"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+
+[dev-dependencies]
+pulldown-cmark = { version = "0.13", default-features = false }
+walkdir = "2"
+
+[lints]
+workspace = true

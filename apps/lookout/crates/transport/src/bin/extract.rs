@@ -1,23 +1,9 @@
-//! `extract`: take a point-in-time Overture extract into bronze — the country's rail,
-//! water, and administrative divisions from one release, under one extract id, with a
-//! manifest row recording what was taken.
-//!
-//! Two modes, because filling in an extract already recorded and taking a new one are
-//! different things: `backfill` re-fetches what a manifest row describes, under that
-//! extract's own id, and `new` takes a fresh extract under a new one. Backfilling is the
-//! default, since a store whose extracts are absent is the common case — they are 1.5 GB
-//! and re-derivable, so they are not kept in version control while the manifest is.
-//!
-//! The release can be read from the public bucket or from a local mirror of it. That is a
-//! choice of route, not of data: the same release read either way produces the same
-//! extract, and the manifest records the release rather than the route.
-
 use std::path::PathBuf;
 
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use medallion::{Country, MedallionArgs, Root};
-use model::ExtractManifestRow;
+use medallion_model::ExtractManifestRow;
 use transport::{
     extract::{self, ExtractId, Extraction, Extractor},
     overture::{DEFAULT_RELEASE, Overture, Release},
@@ -30,8 +16,9 @@ struct Args {
     command: Option<Command>,
     #[command(flatten)]
     medallion: MedallionArgs,
-    /// Read the release from a local mirror rooted here, rather than from S3. The path
-    /// holds the release's own `theme=…` directories.
+    /// Read the release from a local mirror of the bucket's `release/` prefix rooted
+    /// here, rather than from S3. The path holds a directory per release, named by its
+    /// id.
     #[arg(long, global = true)]
     mirror: Option<PathBuf>,
 }
@@ -127,7 +114,6 @@ async fn backfill(
         .await?)
 }
 
-/// The release read from wherever it was asked for: a local mirror, or the public bucket.
 fn release_at(release: &str, mirror: &Option<PathBuf>) -> Release {
     match mirror {
         Some(path) => Release::mirrored(release, path.clone()),
@@ -139,8 +125,6 @@ fn release_at(release: &str, mirror: &Option<PathBuf>) -> Release {
 mod tests {
     use super::*;
 
-    /// Named nothing, this fills in what the store is missing rather than taking a new
-    /// extract: the store's extracts are absent far more often than they are out of date.
     #[test]
     fn taking_the_newest_recorded_extract_again_is_the_default() {
         let args = Args::parse_from(["extract"]);

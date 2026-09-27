@@ -1,15 +1,14 @@
 # Motis and the German timetable
 
-What the Motis server and the feed behind it can and cannot answer. The client that asks is
-`crates/motis`, whose own doc comments carry the implementation; this records the properties
-of the external system that shaped it. Running the server is
+What the Motis server and the feed behind it can and cannot answer: the properties of the
+external system, rather than of whatever asks it. Running the server is
 [`tools/motis-server`](../../../tools/motis-server/Justfile).
 
 ## There is no vehicle position, from any German open feed
 
 `GET /api/v1/map/trips` returns stop-to-stop legs (`TripSegment[]`) carrying mode, colour,
-from/to places, scheduled and realtime times, and a Google-encoded polyline. A train's
-position at an instant is **interpolated** — walk the leg whose departure/arrival spans that
+from/to places, scheduled and realtime times, and a Google-encoded polyline at precision 5. A
+train's position at an instant is **interpolated** — walk the leg whose departure/arrival spans that
 instant along its decoded polyline — and never a reported GPS position.
 
 This is a property of the data, not of Motis. Both gtfs.de and DELFI publish GTFS-RT with
@@ -48,6 +47,13 @@ static timetable makes around 99.9% of trip updates fail to resolve, because the
 stop ids differ. DELFI static with DELFI RT resolves 99.96%, and around 80% of segments in a
 city-sized box come back realtime-corrected.
 
+## Zoom selects modes, not detail
+
+`map/trips` takes a zoom, and raising it widens what comes back rather than refining it: urban
+transit — subway, tram, bus — appears on top of the long-distance and regional rail a low zoom
+answers with. A query therefore asks for the modes it wants by the zoom it sends, and filters the
+rest out of the answer.
+
 ## Train number and agency need a second call
 
 `map/trips` carries neither. Its `TripInfo` exposes `routeShortName` — the bare line, `"55"`
@@ -65,10 +71,10 @@ Timetables are minute-resolution, and two legs of one trip can depart *different
 within the same minute. Keying on `(trip_id, departure)` therefore drops legs silently, with
 nothing to indicate it.
 
-## Two server quirks the client absorbs
+## Two server quirks a caller has to absorb
 
 Both are Motis behaviours rather than ours, and both look like an empty or nonsensical
 result rather than an error: Motis binds IPv4 only, so `localhost` resolving to `::1` never
 connects; and `map/trips` mis-parses time bounds carrying fractional seconds, swinging
-between empty and wildly oversized responses. `crates/motis/src/client.rs` handles each and
-explains it at the point of the fix.
+between empty and wildly oversized responses. A request is built around each: an explicit
+IPv4 host, and time bounds truncated to the second.

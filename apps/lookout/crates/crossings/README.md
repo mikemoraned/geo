@@ -1,6 +1,7 @@
 # crossings
 
-Turns the silver water-crossings dataset into the flat point buffer the M5 device scans.
+Turns the silver water-crossings dataset into the forms a shell predicts against: the point set
+the M5 device scans, and the array a browser fetches.
 
 ```sh
 just gold-pack-crossings                                   # defaults, run from apps/lookout
@@ -8,16 +9,18 @@ just gold-pack-crossings --medallion-root <store> --output <file>
 just gold-pack-crossings --bbox 13.0,50.9,14.5,51.9        # west,south,east,north
 ```
 
-The device holds every crossing in flash and brute-force scans the lot against each GPS fix,
-so what it needs is not a queryable dataset but a packed array of coordinates. At the measured
-size — 5,749 crossings for Germany — that is **69,000 bytes**, small enough to `include_bytes!`
-into the firmware, and small enough that an index would waste the effort.
+Because [the device scans the whole set against every
+fix](../../docs/device.md#scanning-the-crossings), it needs a packed array of coordinates rather
+than a queryable dataset. At the measured size — 5,760 crossings for Germany — that is **69,132
+bytes**, small enough to `include_bytes!` into the firmware, and small enough that an index would
+not pay. The same crossings as JSON are 184,342 bytes, which is what the browser pays to read them
+with no parser of its own.
 
 ## The `.pointset` layout
 
 Little-endian throughout. Both the ESP32 (Xtensa) and the machine that builds the file are
-little-endian, and the device casts these bytes in place rather than decoding them, so the
-file's byte order *is* the device's.
+little-endian, and the device casts these bytes in place rather than decoding them, so the file's
+byte order *is* the device's.
 
 ```
 offset  bytes  field
@@ -29,17 +32,18 @@ offset  bytes  field
  12+ 8n     4n  id,        [u32; n]
 ```
 
-Total is `12 + 12n` bytes. The header is 12 bytes — a multiple of 4 — so every column starts
-on a 4-byte boundary and can be cast in place without a shuffle.
+Total is `12 + 12n` bytes. The header is 12 bytes — a multiple of 4 — so every column starts on a
+4-byte boundary and can be cast in place without a shuffle.
 
-Three parallel columns rather than an array of structs: a scan reads latitude and longitude
-and touches the ids only for the handful of points it ends up reporting, so the ids stay out
-of the way of the pass that has to be fast.
+Three parallel columns rather than an array of structs: a scan reads latitude and longitude and
+touches the ids only for the handful of points it ends up reporting, so the ids stay out of the
+way of the pass that has to be fast.
 
 ### What a reader must check
 
-`pointset::unpack` in this crate is one implementation; the device core is the other, and they
-have to agree. A reader has to reject:
+`pointset::unpack` here is one implementation and the device core is the other, so they have to
+agree. It reads the columns field by field where the device casts them in place, so a round-trip
+through it checks the layout rather than the host's memory representation. A reader has to reject:
 
 - fewer than 12 bytes — there is no header to read
 - a magic that is not `XING` — some other file entirely
@@ -49,8 +53,8 @@ have to agree. A reader has to reject:
 
 ### Alignment, on the device
 
-`include_bytes!` yields a `&[u8; N]` with **alignment 1**, so casting it straight to `&[f32]`
-is unsound and will fault on Xtensa. Put the bytes behind a type that forces the alignment:
+`include_bytes!` yields a `&[u8; N]` with **alignment 1**, so casting it straight to `&[f32]` is
+unsound and will fault on Xtensa. Put the bytes behind a type that forces the alignment:
 
 ```rust
 #[repr(C, align(4))]
@@ -61,47 +65,60 @@ static POINTS: &Aligned<[u8]> = &Aligned(*include_bytes!("crossings.pointset"));
 
 ## Coordinates are `f32`
 
-`f32` degrees resolve to **≤0.21 m** over the German crossings (mean 0.11 m) — far under what
-the receiver resolves, and under the metre-scale wander a stationary fix shows even in good
-conditions. It also suits the ESP32's single-precision FPU, where `f64` is emulated in
-software. `i32` at 1e-7° would resolve to ~1 cm, and that extra precision buys nothing
-against a GPS error budget measured in metres.
+`f32` degrees resolve to **≤0.21 m** over the German crossings (mean 0.11 m) — far under what the
+receiver resolves, and under the metre-scale wander a stationary fix shows in good conditions. It
+is also [what the board can afford](../../docs/device.md#the-gnss-receiver). `i32` at 1e-7° would
+resolve to ~1 cm, which buys nothing against an error budget measured in metres.
 
 ## Ids name a crossing, not a row
 
-`id` is the silver `crossing_short_id` column, read rather than derived. The dataset mints it —
-the low 4 bytes of the md5 of the crossing's `crossing_id`, in the water-crossings notebook —
-and the store refuses a write in which two crossings share one, so the packer takes the column
-as given.
+`id` is the silver `crossing_compact_id` column, read rather than derived: the dataset mints it as
+the low four bytes of the md5 of the crossing's `crossing_id`, in the water-crossings notebook,
+and the store refuses a write where two crossings share one. Four bytes is few enough that two can
+collide by chance — ~0.4% over 5,760 points — which is why that check exists at all. The real
+dataset is clean: 5,760 crossings, 5,760 distinct ids.
 
-That is what lets a prediction made on the device be matched to a ground truth derived on the
-laptop: both names of a crossing come from the same row, so nothing can come to disagree about
-what one crossing is. It also means an id survives a rebuild of the dataset, a `--bbox` that
-keeps only part of it, and any reordering, since none of those change the row.
-
-Four bytes is few enough that two distinct crossings can collide by chance (~0.4% over 5,749
-points), which is why the uniqueness check exists at all. The real dataset is clean: 5,749
-crossings, 5,749 distinct ids.
+Both names of a crossing come from the same row, so a prediction made on the device and a crossing
+derived on the laptop name the same thing. An id survives a rebuild of the dataset, a `--bbox`
+that keeps part of it, and any reordering, since none of those change the row.
 
 ## Points are written in id order
 
-The same crossings therefore pack to the same bytes whatever order the source happened to
-store them in, so a rebuild that only reorders rows produces an identical file and needs no
-reflash.
+The same crossings therefore pack to the same bytes whatever order the source stored them in, so a
+rebuild that only reorders rows produces an identical file and needs no reflash.
 
-## Input
+## What it reads
 
 The silver `water_crossing` dataset, read through `medallion` like every other reader of the
-store. Position comes from the `geometry` column, which is where that dataset keeps it.
+store, taking each position from the `geometry` column that dataset keeps it in.
 
 **Every country the store holds is packed**, rather than one named by a flag: the buffer holds
 lat/lon and the device's scan takes a great-circle distance, so the per-country projected zone
-the dataset is partitioned by never reaches the device — which in any case does not know which
-country it will be switched on in. `--bbox` is the way to restrict, and is the honest control:
-what a device can hold is a window, not a border.
+never reaches the device — which in any case does not know which country it will be switched on
+in. `--bbox` is how to restrict it, and is the control that matches the device: what it can hold
+is a window, not a border.
 
-## Output
+## What it writes
 
-`<store>/gold/crossings.pointset` — inside the store, in the layer that exists to produce
-formats for something outside it. Gold is derivable, so it is not versioned; `--output` names
-somewhere else.
+`<store>/gold/artifact=crossings/version=<run>/`, holding both forms of the same crossings:
+
+- `crossings.pointset` — the point set a device scans in flash, `f32`
+- `crossings.json` — `[[id, latitude, longitude], …]`, which a browser fetches, in degrees
+  kept to six places
+
+One read produces both, so a board and a page cannot disagree about which places exist. They
+differ only in precision, and in neither case by more than a fix is accurate to; six places is
+[what an export keeps](../../docs/medallion.md#gold).
+
+A run logs which extractions its crossings came from, since neither format has room for it, and
+that is how a buffer on a device traces back to a release.
+
+Gold is derivable and mostly unversioned, but this artefact is [read by a build rather than by a
+query](../../docs/architecture.md#derivation): `m5-core` embeds the buffer and the server serves
+the array. So the versions packed are committed, and `apps/lookout/crossings.version` names the
+one both build against — the device's build script reads it to resolve what to embed, and `just
+deploy` passes it to the image build. Moving to a newly packed version is that one line, and
+`--output` names a directory somewhere else.
+
+The run writes the version file after the artefacts, so one that failed to write them leaves
+nothing pointing at a version that is not there.

@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 # Some entries are written out rather than inherited from the workspace: see docs/device.md.
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+domain = { workspace = true }
 geo-types = { workspace = true, features = ["serde"] }
 geo = { version = "0.31", default-features = false }
 nmea = "0.7"

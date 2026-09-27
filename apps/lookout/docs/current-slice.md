@@ -1,3 +1,4 @@
 # Current Slice
 
-None. Pick the next one with `/choose-slice`.
+None active. Run `/choose-slice` to promote the next one from
+[next-slices.md](next-slices.md).

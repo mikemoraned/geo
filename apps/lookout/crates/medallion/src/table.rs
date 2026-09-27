@@ -1,26 +1,3 @@
-//! Writing a silver dataset from a table built elsewhere.
-//!
-//! The writers in this workspace hand the store rows of a Rust type. A derivation written in
-//! another language cannot, so this is the way in for one: it takes an arrow table, checks it
-//! against the dataset's own definition, and writes it through the same replacing primitives
-//! a Rust rebuild uses. There is one implementation of the silver format, not one per
-//! language.
-//!
-//! The caller names a dataset and passes rows; everything else follows from the definition:
-//!
-//! * **Columns** must be exactly the dataset's own, plus its geometry columns, plus the
-//!   columns it partitions by. Each is cast to the type the definition states, so which
-//!   engine built the table does not change what is stored.
-//! * **Geometry** arrives as GeoArrow, in whichever encoding the caller's engine produces,
-//!   and is stored as WKB carrying the store's CRS — lat/lon for [`GEOMETRY`], the country's
-//!   projected zone for [`PROJECTED_GEOMETRY`].
-//! * **Partitions** are read from the columns named by the layout, and are not written into
-//!   the file: a partition's value lives in its path.
-//!
-//! The write replaces the whole dataset, so the table must hold every row of it — the rule
-//! silver rebuilds already follow, and the reason a partition the table has no rows for is
-//! swept.
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -40,11 +17,6 @@ use crate::layer::layers;
 use crate::path::{ReplaceError, Replaced, Root};
 use crate::rows::{Geometry, Row, RowError, fields};
 
-/// A silver dataset as something a table can be written to: where it lives, the columns it
-/// holds, and whether it carries geometry.
-///
-/// Built from the dataset's own [`Row`] type, so the columns a table is checked against are
-/// the ones the definition states rather than a second listing that could drift from it.
 #[derive(Debug, Clone)]
 pub struct SilverTarget {
     spec: DatasetSpec<layers::Silver>,
@@ -53,26 +25,15 @@ pub struct SilverTarget {
     unique: &'static [&'static str],
 }
 
-/// How a dataset's partition directories are laid out, and so which columns a table must
-/// carry to be split across them.
-///
-/// This follows from the definition rather than being declared: a dataset carrying projected
-/// geometry is partitioned by country, because a file states one CRS for that column and the
-/// zone is chosen per country.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Layout {
-    /// `country=<iso>` — reference-derived geo data, one file per country.
     Country,
-    /// `<key>=<date>` — dated rows carrying no geometry.
     Date(&'static str),
-    /// `country=<iso>/<key>=<date>` — dated geometry.
     CountryAndDate(&'static str),
 }
 
-/// The suffix a date-valued partition key ends with, as `docs/medallion.md` requires.
 const DATE_KEY_SUFFIX: &str = "_date";
 
-/// A failure writing a table into a dataset.
 #[derive(Debug, thiserror::Error)]
 pub enum TableError {
     #[error("{dataset} has no column named `{column}`")]
@@ -142,7 +103,6 @@ pub enum TableError {
     Row(#[from] RowError),
 }
 
-/// What writing a table left in the store.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TableWritten {
     pub rows: usize,
@@ -150,7 +110,6 @@ pub struct TableWritten {
 }
 
 impl SilverTarget {
-    /// The dataset `R`'s rows make up, as somewhere a table can be written.
     pub fn of<R: Row<Layer = layers::Silver>>() -> Result<Self, RowError> {
         Ok(Self {
             spec: R::DATASET,
@@ -168,8 +127,6 @@ impl SilverTarget {
         self.spec.name
     }
 
-    /// The columns a table must carry: the dataset's own, its geometry, and the ones its
-    /// partitions are read from.
     pub fn expected_columns(&self) -> Result<Vec<String>, TableError> {
         let own = self.columns.iter().map(|field| field.name().clone());
         Ok(own
@@ -186,7 +143,6 @@ impl SilverTarget {
         .copied()
     }
 
-    /// The columns the partition values are read from, outermost first.
     fn partition_columns(&self) -> Result<Vec<&'static str>, TableError> {
         Ok(match self.layout()? {
             Layout::Country => vec![COUNTRY],
@@ -215,14 +171,6 @@ impl SilverTarget {
     }
 }
 
-/// Write `table` as the whole of `target`'s dataset, replacing what is there.
-///
-/// The batches are read as one table, so a caller streaming a large result still gets one
-/// file per partition rather than one per batch — a silver partition is one file.
-///
-/// A table of no rows is a derivation that produced nothing, and sweeps the dataset away. A
-/// call with no batches at all carries no schema to check and is a no-op: emptying a dataset
-/// has to be said with a table, not with silence.
 pub async fn write_table(
     root: &Root,
     target: &SilverTarget,
@@ -253,8 +201,6 @@ pub async fn write_table(
     })
 }
 
-/// One country's rows, written as a partition of their own or as dates below it, with the
-/// countries the run did not produce swept away.
 async fn write_by_country(
     root: &Root,
     target: &SilverTarget,
@@ -299,7 +245,6 @@ async fn write_by_country(
     Ok(written)
 }
 
-/// One partition per date, written with the encoder the dataset's geometry calls for.
 pub(crate) async fn replace_dates(
     dataset: &crate::path::Dataset<layers::Silver>,
     target: &SilverTarget,
@@ -311,8 +256,6 @@ pub(crate) async fn replace_dates(
     })
 }
 
-/// One batch per date the rows fall on, in the order the dates first appear. `dates` names
-/// the date of each row of `columns`, in the same order.
 fn days(
     target: &SilverTarget,
     dates: &[NaiveDate],
@@ -325,7 +268,6 @@ fn days(
         .collect()
 }
 
-/// The rows holding each distinct value, in the order the values first appear.
 pub(crate) fn group<T: Copy + Eq + std::hash::Hash>(values: &[T]) -> Vec<(T, Vec<u32>)> {
     let mut order: Vec<T> = Vec::new();
     let mut rows: HashMap<T, Vec<u32>> = HashMap::new();
@@ -346,11 +288,6 @@ pub(crate) fn group<T: Copy + Eq + std::hash::Hash>(values: &[T]) -> Vec<(T, Vec
         .collect()
 }
 
-/// The columns as the store holds them: the dataset's own, cast to their defined types, and
-/// its geometry as WKB.
-///
-/// Built once for the whole table and then taken from per partition, since casting and
-/// re-encoding are the expensive part and neither depends on how the rows are split up.
 struct Columns {
     own: Vec<ArrayRef>,
     geometry: Option<ArrayRef>,
@@ -358,7 +295,6 @@ struct Columns {
 }
 
 impl Columns {
-    /// These columns, restricted to `rows`.
     fn take(&self, rows: &[u32]) -> Result<Self, TableError> {
         let indices = UInt32Array::from(rows.to_vec());
         let taken = |array: &ArrayRef| arrow::compute::take(array, &indices, None);
@@ -373,11 +309,6 @@ impl Columns {
         })
     }
 
-    /// One partition's batch: the dataset's columns, then its geometry with the CRS the
-    /// store states for it.
-    ///
-    /// `country` fixes the projected column's zone, and is present whenever the dataset
-    /// carries one — that is what its partitioning is for.
     fn batch(
         &self,
         target: &SilverTarget,
@@ -399,8 +330,6 @@ impl Columns {
     }
 }
 
-/// The table's columns as the store holds them, failing where one cannot be read as its
-/// defined type.
 fn translate(target: &SilverTarget, table: &RecordBatch) -> Result<Columns, TableError> {
     let own = target
         .columns
@@ -423,14 +352,6 @@ fn translate(target: &SilverTarget, table: &RecordBatch) -> Result<Columns, Tabl
     })
 }
 
-/// One geometry column as WKB, whatever GeoArrow encoding it arrived in.
-///
-/// A binary column declaring no encoding is taken to be WKB already, which is what an engine
-/// that has no geometry type of its own produces. Anything else is read as the GeoArrow
-/// extension type it declares and re-encoded.
-///
-/// The CRS the column claims is not read: silver states the CRS of each of its geometry
-/// columns, so the coordinates are taken to be in it and the field is stamped accordingly.
 fn wkb(target: &SilverTarget, table: &RecordBatch, column: &str) -> Result<ArrayRef, TableError> {
     let (index, field) = column_of(target, table, column)?;
     let array = table.column(index);
@@ -449,7 +370,6 @@ fn wkb(target: &SilverTarget, table: &RecordBatch, column: &str) -> Result<Array
     Ok(wkb.to_array_ref())
 }
 
-/// One column read as `expected`.
 fn cast(
     target: &SilverTarget,
     table: &RecordBatch,
@@ -472,7 +392,6 @@ fn cast(
     Ok(arrow::compute::cast(array, expected)?)
 }
 
-/// One named column of the table, or a failure naming the dataset it is missing from.
 fn column_of<'a>(
     target: &SilverTarget,
     table: &'a RecordBatch,
@@ -488,7 +407,6 @@ fn column_of<'a>(
     Ok((index, table.schema_ref().field(index)))
 }
 
-/// The country each row belongs to, read from the column the layout names.
 fn countries_of(target: &SilverTarget, table: &RecordBatch) -> Result<Vec<Country>, TableError> {
     let codes = cast(target, table, COUNTRY, &DataType::Utf8)?;
     let codes = codes
@@ -513,7 +431,6 @@ fn countries_of(target: &SilverTarget, table: &RecordBatch) -> Result<Vec<Countr
         .collect()
 }
 
-/// The date each row belongs to, read from the column the layout names.
 fn dates_of(
     target: &SilverTarget,
     table: &RecordBatch,
@@ -537,11 +454,6 @@ fn dates_of(
         .collect()
 }
 
-/// Refuse a table two of whose rows share a value in a column the dataset declares unique.
-///
-/// Checked over the whole table rather than per partition, because a name that identifies a
-/// row has to do so across the dataset — the partition a row lands in is a fact about how it
-/// is stored, not about what it is called.
 pub(crate) fn check_unique(target: &SilverTarget, table: &RecordBatch) -> Result<(), TableError> {
     for column in target.unique {
         let array = table
@@ -571,11 +483,6 @@ pub(crate) fn check_unique(target: &SilverTarget, table: &RecordBatch) -> Result
     Ok(())
 }
 
-/// Fail unless the table's columns are exactly the dataset's.
-///
-/// A missing column is named on its own, since that is what a caller has to add; extra
-/// columns are reported together, since a table built by a query usually carries several
-/// working columns the dataset does not hold.
 fn check_columns(target: &SilverTarget, table: &RecordBatch) -> Result<(), TableError> {
     let expected = target.expected_columns()?;
     for column in &expected {
@@ -616,7 +523,6 @@ mod tests {
     use crate::path::Root;
     use crate::query::Query;
 
-    /// Reference-derived geometry: one partition per country.
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct CrossingRow {
         crossing_id: String,
@@ -630,7 +536,6 @@ mod tests {
         const UNIQUE: &'static [&'static str] = &["crossing_id"];
     }
 
-    /// Dated observations carrying no geometry: one partition per date.
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct PassRow {
         crossing_id: String,
@@ -643,7 +548,6 @@ mod tests {
         const INSTANTS: &'static [&'static str] = &["crossed_at"];
     }
 
-    /// Dated geometry: a country partition above the date, since the file states one CRS.
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct TrackRow {
         track_id: String,
@@ -659,7 +563,6 @@ mod tests {
         SilverTarget::of::<CrossingRow>().unwrap()
     }
 
-    /// A table shaped like `crossing`: the row columns, both geometries, and the country.
     fn crossing_table(ids: &[&str], points: &[Point<f64>], countries: &[&str]) -> RecordBatch {
         let projector = Projector::for_country(Country::Germany).unwrap();
         let projected: Vec<Point<f64>> = points
@@ -700,7 +603,6 @@ mod tests {
         .unwrap()
     }
 
-    /// A date as the Date32 an engine hands one over as.
     fn epoch_day(date: &str) -> i32 {
         let date: NaiveDate = date.parse().unwrap();
         (date - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days() as i32
@@ -731,8 +633,6 @@ mod tests {
         );
     }
 
-    /// The value of a partition lives in its path, so the column it was read from is not
-    /// also written into the file — a reader gets it back from the path either way.
     #[tokio::test]
     async fn the_partition_column_is_not_stored_in_the_file() {
         let tmp = tempfile::tempdir().unwrap();
@@ -753,8 +653,6 @@ mod tests {
             .iter()
             .map(|field| field.name().as_str())
             .collect();
-        // `country` comes back, but as the discovered partition key rather than as a
-        // column of the file: it is the last one, after everything the file holds.
         assert_eq!(
             columns,
             vec![
@@ -767,8 +665,6 @@ mod tests {
         );
     }
 
-    /// What a notebook actually reads back: the coordinates it handed over, not something
-    /// the WKB round trip moved.
     #[tokio::test]
     async fn the_geometry_reads_back_as_it_was_handed_over() {
         let tmp = tempfile::tempdir().unwrap();
@@ -797,8 +693,6 @@ mod tests {
         assert!((metres.x() - 798_809.63).abs() < 0.01, "{metres:?}");
     }
 
-    /// A geometry column that declares no encoding is taken as WKB, which is what an engine
-    /// with no geometry type of its own hands over.
     #[tokio::test]
     async fn a_plain_binary_geometry_column_is_read_as_wkb() {
         let tmp = tempfile::tempdir().unwrap();
@@ -833,8 +727,6 @@ mod tests {
         );
     }
 
-    /// The types a query engine happens to produce are not the types the store holds, so a
-    /// column that can be read as its defined type is.
     #[tokio::test]
     async fn a_column_of_another_type_is_read_as_the_one_the_dataset_defines() {
         let tmp = tempfile::tempdir().unwrap();
@@ -888,8 +780,6 @@ mod tests {
         );
     }
 
-    /// A table built by a query usually carries working columns, and storing them would put
-    /// columns in the dataset that its definition does not have.
     #[tokio::test]
     async fn columns_the_dataset_does_not_hold_are_refused() {
         let tmp = tempfile::tempdir().unwrap();
@@ -930,8 +820,6 @@ mod tests {
         assert!(matches!(err, TableError::Country { .. }), "{err}");
     }
 
-    /// A rebuild replaces the whole dataset, so a partition it no longer produces rows for
-    /// goes — the rule silver already follows for a rebuild written in Rust.
     #[tokio::test]
     async fn a_partition_the_table_no_longer_covers_is_swept() {
         let tmp = tempfile::tempdir().unwrap();
@@ -956,7 +844,6 @@ mod tests {
         );
     }
 
-    /// A table shaped like `pass`: no geometry, dated by a column of its own.
     fn pass_table(ids: &[&str], dates: &[&str]) -> RecordBatch {
         let days: Vec<i32> = dates.iter().copied().map(epoch_day).collect();
         RecordBatch::try_from_iter(vec![
@@ -996,8 +883,6 @@ mod tests {
         assert_eq!(target.partition_columns().unwrap(), vec!["crossed_date"]);
     }
 
-    /// The columns a caller has to supply are the dataset's own plus what the layout needs,
-    /// which is what the error messages hold them to.
     #[test]
     fn the_expected_columns_are_the_definitions_plus_geometry_and_partitions() {
         assert_eq!(
@@ -1053,8 +938,6 @@ mod tests {
         );
     }
 
-    /// The instant columns of a dataset stay instants: a table handing them over as
-    /// microseconds is read as the milliseconds the store holds.
     #[tokio::test]
     async fn an_instant_column_keeps_its_defined_unit() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1084,8 +967,6 @@ mod tests {
         );
     }
 
-    /// Nothing about the store's own writers changes here: a geometry column arrives as
-    /// binary WKB either way, and this is the check that the two agree.
     #[test]
     fn the_wkb_a_table_carries_is_the_wkb_the_store_writes() {
         let (_, from_geometry) = wkb_column(wkb_field(GEOMETRY).unwrap(), &[berlin()]).unwrap();
@@ -1108,8 +989,6 @@ mod tests {
         assert_eq!(actual.value(0), expected.value(0));
     }
 
-    /// An id that named two rows would let a reader take one row for another, and would let a
-    /// device holding it point at either — so the write is refused rather than stored.
     #[tokio::test]
     async fn a_table_naming_two_rows_the_same_is_refused() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1131,8 +1010,6 @@ mod tests {
         );
     }
 
-    /// The rule is over the dataset, not over a partition of it: two rows of one name are two
-    /// rows of one name however they are laid out.
     #[tokio::test]
     async fn a_repeated_id_is_refused_even_across_partitions() {
         let tmp = tempfile::tempdir().unwrap();

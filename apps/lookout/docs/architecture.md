@@ -5,10 +5,11 @@ formats and rules are in [medallion.md](medallion.md); this is what fills it.
 
 ## Capture
 
-A phone runs the page the `server` crate serves from fly.io, samples GPS and accelerometer,
-and sends timestamped JSON over a websocket. The server `LPUSH`es each sample onto an
-Upstash redis list. Redis is optional: unset, the server logs samples rather than queueing
-them, which is how it runs locally.
+A phone runs the recording page the `server` crate serves from fly.io, samples GPS and
+accelerometer, and sends timestamped JSON over a websocket; the format is [the telemetry
+wire](telemetry.md). The server `LPUSH`es each sample onto an Upstash redis list. Redis is
+optional: unset, the server logs samples rather than queueing them, which is how it runs
+locally.
 
 The queue is a landing format, not an archive. `recorder` drains it into the bronze
 telemetry datasets — the verbatim payload alongside the readings interpreted from it — and
@@ -16,8 +17,10 @@ draining is destructive, so what has not been drained is the only copy.
 
 The other two bronze writers pull rather than receive. `motis_poll` queries a local Motis
 server for trains near recently logged positions and appends each poll to a capture log; see
-[motis.md](motis.md). `extract` takes point-in-time Overture extracts of a country's rail,
-water, and administrative divisions.
+[motis.md](motis.md). Polls overlap, so the same scheduled leg is captured many times over — a
+capture is what one poll saw, and collapsing those into one row per leg is silver's work.
+`extract` takes point-in-time Overture extracts of a country's rail, water, and administrative
+divisions; see [overture.md](overture.md).
 
 ## Derivation
 
@@ -25,11 +28,13 @@ Silver is derived from bronze, and gold from silver. Each derivation replaces wh
 produces, so any of them can be re-run over unchanged input to the same result.
 
 ```
-bronze telemetry    ──sessionise──────▶ session, session_sample
-bronze motis log    ──motis_ingest────▶ train_segment
-bronze overture     ──notebook────────▶ water_crossing
-session + crossings ──match_crossings─▶ session_crossing
-water_crossing      ──pack_crossings──▶ gold crossings.pointset
+bronze telemetry     ──sessionise──────▶ session, session_sample
+bronze motis log     ──motis_ingest────▶ train_segment
+bronze overture      ──notebook────────▶ water_crossing
+session + crossings  ──match_crossings─▶ session_crossing
+water_crossing       ──pack_crossings──▶ gold crossings.pointset, crossings.json
+session_crossing +
+  session_sample     ──pack_sessions───▶ gold sessions.json
 ```
 
 Two properties of that graph matter more than the order:
@@ -41,6 +46,11 @@ Two properties of that graph matter more than the order:
 - **The crossings half is the slow half.** Intersecting a country's rail against its water is
   the longest step in a rebuild, and its result changes only when the extract or the collapse
   tuning does. Re-deriving sessions after a drain does not require re-deriving it.
+
+Gold is read by a build rather than by a query: the crossings are compiled into the device's
+firmware and fetched by a browser, and the sessions are fetched by a browser. A checkout
+cannot re-derive either, so the versions in use are committed — see
+[medallion.md](medallion.md).
 
 ## Languages
 
@@ -58,7 +68,9 @@ the `lookout_medallion` extension module rather than through a python parquet wr
 The rerun runner replays a session's samples through the predictor, and draws where the
 session went against the crossings the predictor expected it to reach; see
 [`crates/platform/rerun-py`](../crates/platform/rerun-py/README.md). The M5 device holds the
-gold point buffer in flash and scans it against each GPS fix; see [device.md](device.md).
+gold point set in flash and scans it against each GPS fix; see [device.md](device.md). A
+browser runs the same core compiled to WebAssembly, fetching the crossings and the sessions
+it replays rather than carrying them; see [web.md](web.md).
 
 ## Secrets
 

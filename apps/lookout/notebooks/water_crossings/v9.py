@@ -559,7 +559,7 @@ def _(
     # The same crossing in four bytes, for a device with no room for the id above. Minted here
     # beside the id it hashes, so nothing downstream has to know how the two relate; the store
     # refuses the write if two crossings land on one of them.
-    reps_v5_gdf["crossing_short_id"] = crossing_ids.short_ids(
+    reps_v5_gdf["crossing_compact_id"] = crossing_ids.compact_ids(
         reps_v5_gdf["crossing_id"]
     )
 
@@ -749,8 +749,8 @@ def _(
     crossings_table = _pa.table(
         {
             "crossing_id": _pa.array(_reps["crossing_id"], _pa.string()),
-            "crossing_short_id": _pa.array(
-                _reps["crossing_short_id"], _pa.uint32()
+            "crossing_compact_id": _pa.array(
+                _reps["crossing_compact_id"], _pa.uint32()
             ),
             "water_id": _pa.array(_reps["water_id"], _pa.string()),
             "water_subtype": _pa.array(_reps["water_subtype"], _pa.string()),

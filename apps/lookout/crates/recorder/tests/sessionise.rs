@@ -1,24 +1,15 @@
-//! Deriving sessions twice: what the store holds after a rerun.
-//!
-//! Sessionisation re-derives every session from all of bronze on every run, and the newest
-//! session is always still open — the next drain adds to it. The two things that has to
-//! mean are checked here end to end, through the same archive the drain writes with: a
-//! rerun over unchanged bronze leaves the store as it was, and a rerun over bronze that has
-//! grown adds the new samples to the session they belong to rather than starting another.
-
 use chrono::{DateTime, Duration, TimeZone, Utc};
+use domain::Gps;
+use domain::{DeviceId, SessionId};
 use geo_types::Point;
 use medallion::{Countries, Country, Query, Root};
-use model::{DeviceId, SessionId};
 use recorder::bronze::{Archive, Payload};
 use recorder::sessions::{Gap, Lead, sessions};
 use recorder::silver;
 use serde::Deserialize;
-use shared::{Gps, GpsReading, Message, V1Message};
+use shared::{GpsReading, Message, V1Message};
 use uuid::Uuid;
 
-/// These samples are all in Germany, which the containment lookup would say of the real
-/// country areas; the tests here are about what a rerun leaves behind, not about placing.
 struct Germany;
 
 impl Countries for Germany {
@@ -27,7 +18,6 @@ impl Countries for Germany {
     }
 }
 
-/// One session as the store holds it.
 #[derive(Debug, Deserialize, PartialEq)]
 struct Session {
     session_id: SessionId,
@@ -47,18 +37,15 @@ fn gps(id: Uuid, t: DateTime<Utc>, lat: f64) -> Message {
     Message::Version1(V1Message::Gps(GpsReading {
         id,
         t: t.timestamp_millis(),
-        gps: Gps {
-            lat,
-            lon: 13.4,
-            alt: Some(38.0),
-            acc: 5.0,
-            speed: Some(27.0),
-            heading: Some(91.0),
-        },
+        gps: Gps::at(lat, 13.4)
+            .expect("on the globe")
+            .with_altitude_metres(Some(38.0))
+            .with_accuracy_metres(Some(5.0))
+            .with_speed_mps(Some(27.0))
+            .with_heading_degrees(Some(91.0)),
     }))
 }
 
-/// Drain `messages` into bronze as one batch, the way the recorder does.
 async fn drain(root: &Root, at: DateTime<Utc>, messages: &[Message]) {
     let json: Vec<String> = messages
         .iter()
@@ -77,7 +64,6 @@ async fn drain(root: &Root, at: DateTime<Utc>, messages: &[Message]) {
         .expect("archive");
 }
 
-/// Derive every session in the store and write both silver datasets.
 async fn sessionise(root: &Root) -> silver::WriteOutcome {
     let derived = sessions(root, Gap::default(), Lead::default())
         .await
@@ -90,7 +76,7 @@ async fn sessionise(root: &Root) -> silver::WriteOutcome {
 async fn stored_sessions(root: &Root) -> Vec<Session> {
     let query = Query::new(root.clone());
     query
-        .register(model::SESSION, "sessions")
+        .register(medallion_model::SESSION, "sessions")
         .await
         .expect("register");
     query
@@ -102,7 +88,6 @@ async fn stored_sessions(root: &Root) -> Vec<Session> {
         .expect("query sessions")
 }
 
-/// Every file under the store's silver layer, by path and size.
 fn partitions(root: &Root) -> Vec<(String, u64)> {
     fn walk(dir: &std::path::Path, into: &mut Vec<std::path::PathBuf>) {
         let Ok(entries) = std::fs::read_dir(dir) else {
@@ -135,20 +120,14 @@ fn partitions(root: &Root) -> Vec<(String, u64)> {
         .collect()
 }
 
-/// Every row of both silver datasets, rendered as text — the whole of what a reader gets
-/// back, geometry included.
-///
-/// The files are compared through a reader rather than byte for byte because GeoParquet's
-/// file metadata lists a dataset's geometry columns as a map, which serialises in a
-/// different order from one write to the next. Nothing about the data varies with it.
 async fn contents(root: &Root) -> String {
     let query = Query::new(root.clone());
     query
-        .register(model::SESSION, "sessions")
+        .register(medallion_model::SESSION, "sessions")
         .await
         .expect("register sessions");
     query
-        .register(model::SESSION_SAMPLE, "samples")
+        .register(medallion_model::SESSION_SAMPLE, "samples")
         .await
         .expect("register samples");
 
@@ -167,8 +146,6 @@ async fn contents(root: &Root) -> String {
     rendered
 }
 
-/// A rerun over bronze nothing has been added to leaves the same partitions holding the
-/// same rows: the derivation depends on what bronze holds and on nothing else about the run.
 #[tokio::test]
 async fn a_rerun_over_unchanged_bronze_produces_identical_partitions() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -197,8 +174,6 @@ async fn a_rerun_over_unchanged_bronze_produces_identical_partitions() {
     );
 }
 
-/// The newest session is open: samples that arrive later and follow it within the
-/// threshold belong to it, and it keeps the id already written against it.
 #[tokio::test]
 async fn a_rerun_over_grown_bronze_extends_the_open_session() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -233,8 +208,6 @@ async fn a_rerun_over_grown_bronze_extends_the_open_session() {
     assert_eq!(after[0].sample_count, 3);
 }
 
-/// A drain that repeats a sample bronze already holds — the queue re-sends an un-acked
-/// tail — must not lengthen the session it belongs to.
 #[tokio::test]
 async fn a_rerun_over_bronze_that_repeats_a_sample_changes_nothing() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -256,8 +229,6 @@ async fn a_rerun_over_bronze_that_repeats_a_sample_changes_nothing() {
     assert_eq!(stored_sessions(&root).await, before);
 }
 
-/// Samples arriving after a silence longer than the threshold are a second session, not a
-/// continuation — the same evidence a single run would have split on.
 #[tokio::test]
 async fn a_rerun_after_a_long_silence_starts_a_second_session() {
     let tmp = tempfile::tempdir().expect("tempdir");

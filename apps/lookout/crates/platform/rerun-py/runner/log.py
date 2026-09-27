@@ -1,5 +1,3 @@
-"""Drawing a replay into a rerun recording."""
-
 from collections.abc import Iterable
 
 import rerun as rr
@@ -50,9 +48,9 @@ def draw(
             recording.log(ACCURACY, rr.Scalars(sample.accuracy_metres))
 
         near = [
-            where[prediction.crossing]
+            where[prediction.crossing_compact_id]
             for prediction in step.predictions
-            if prediction.crossing in where and prediction.metres < NEAR_METRES
+            if prediction.crossing_compact_id in where and prediction.metres < NEAR_METRES
         ]
         if near:
             recording.log(

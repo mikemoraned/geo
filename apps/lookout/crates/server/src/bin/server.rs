@@ -20,8 +20,6 @@ async fn main() {
 
     tracing::info!(git_hash = server::GIT_HASH, "server starting");
 
-    // rustls needs a process-global crypto provider installed once before any
-    // `rediss://` (TLS) connection is made.
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("install rustls crypto provider");
@@ -33,10 +31,6 @@ async fn main() {
                 Some(Arc::new(sink) as Arc<dyn server::queue::SampleSink>)
             }
             Err(err) => {
-                // A configured-but-unreachable redis would silently drop all
-                // telemetry. Fail hard so the deploy is visibly broken instead of
-                // quietly running log-only. eprintln (stderr) is used because it
-                // ships reliably even when the tracing boot-burst is dropped.
                 eprintln!("FATAL: LOOKOUT_REDIS_URL is set but redis connect failed: {err}");
                 std::process::exit(1);
             }
@@ -55,6 +49,6 @@ async fn main() {
         .unwrap_or(3000);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    tracing::info!("listening on http://{addr}");
+    tracing::info!(bound = %addr, "listening on http://localhost:{port}");
     axum::serve(listener, app).await.unwrap();
 }

@@ -1,14 +1,3 @@
-//! What a store currently holds, read from the files themselves.
-//!
-//! A summary answers "is this dataset there, and how much of it" without reading any rows:
-//! row counts come from each parquet file's own footer, so the cost is a seek per file
-//! rather than a scan. Nothing here interprets a dataset's columns, which is what lets one
-//! summary cover every dataset — including the ones whose partitions hold different schemas
-//! and so cannot be read as a single table.
-//!
-//! Absence is a result, not an error: a dataset nothing has written yet is summarised as
-//! holding nothing, so a reader sees the gaps as well as the contents.
-
 use std::path::Path;
 
 use parquet::errors::ParquetError;
@@ -18,11 +7,8 @@ use crate::dataset::DatasetInfo;
 use crate::layer::Layer;
 use crate::path::Root;
 
-/// The extension of the files whose rows can be counted; anything else contributes its
-/// bytes but no rows.
 const PARQUET: &str = "parquet";
 
-/// A failure reading what the store holds.
 #[derive(Debug, thiserror::Error)]
 pub enum SummaryError {
     #[error("reading {path}: {source}")]
@@ -39,55 +25,42 @@ pub enum SummaryError {
     },
 }
 
-/// How much data some part of the store holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Contents {
     pub files: usize,
-    /// Rows across the parquet files; files of any other format count none.
     pub rows: u64,
     pub bytes: u64,
 }
 
 impl Contents {
-    /// Count `other` into this, for a total over parts summarised separately.
     pub fn add(&mut self, other: Contents) {
         self.files += other.files;
         self.rows += other.rows;
         self.bytes += other.bytes;
     }
 
-    /// Whether anything has been written here at all.
     pub fn is_empty(self) -> bool {
         self.files == 0
     }
 }
 
-/// What one dataset holds, and how it is spread over its partitions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DatasetSummary {
     pub layer: Layer,
     pub name: &'static str,
-    /// One entry per value of the dataset's own partition key, in the order the key sorts,
-    /// and empty for an unpartitioned dataset or one holding nothing.
     pub partitions: Vec<PartitionSummary>,
     pub contents: Contents,
 }
 
-/// What one partition of a dataset holds. A dataset partitioned more deeply than its own
-/// key — an extract keeping an upstream's layout below it — is still summarised per value
-/// of its own key, with everything below that value counted into it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PartitionSummary {
     pub value: String,
     pub contents: Contents,
 }
 
-/// What one gold artefact holds: a file in a format of its own, kept per run that produced
-/// it, so every version stands beside the last rather than replacing it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtefactSummary {
     pub artifact: String,
-    /// One entry per run, oldest first — the versions sort chronologically.
     pub versions: Vec<VersionSummary>,
 }
 
@@ -97,7 +70,6 @@ pub struct VersionSummary {
     pub contents: Contents,
 }
 
-/// What `dataset` holds in `root`.
 pub fn dataset(root: &Root, dataset: DatasetInfo) -> Result<DatasetSummary, SummaryError> {
     let dir = root.path().join(dataset.layer.as_str()).join(dataset.name);
     let mut summary = DatasetSummary {
@@ -125,8 +97,6 @@ pub fn dataset(root: &Root, dataset: DatasetInfo) -> Result<DatasetSummary, Summ
     Ok(summary)
 }
 
-/// What gold artefacts `root` holds, by artefact and then by the run that produced each
-/// version.
 pub fn artefacts(root: &Root) -> Result<Vec<ArtefactSummary>, SummaryError> {
     let mut artefacts = Vec::new();
     for artifact in sorted_dirs(&root.path().join(Layer::Gold.as_str()))? {
@@ -148,8 +118,6 @@ pub fn artefacts(root: &Root) -> Result<Vec<ArtefactSummary>, SummaryError> {
     Ok(artefacts)
 }
 
-/// The value half of a `key=value` directory name, or the whole name if it is not one —
-/// a summary reports what is on disk rather than refusing to describe it.
 fn partition_value(dir_name: &str) -> String {
     dir_name
         .split_once('=')
@@ -157,8 +125,6 @@ fn partition_value(dir_name: &str) -> String {
         .to_string()
 }
 
-/// The directories directly below `dir`, in name order; none at all if `dir` does not
-/// exist, which is how an absent dataset summarises as holding nothing.
 fn sorted_dirs(dir: &Path) -> Result<Vec<std::fs::DirEntry>, SummaryError> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Ok(Vec::new());
@@ -177,7 +143,6 @@ fn sorted_dirs(dir: &Path) -> Result<Vec<std::fs::DirEntry>, SummaryError> {
     Ok(dirs)
 }
 
-/// Everything below `dir`, at any depth.
 fn contents_of(dir: &Path) -> Result<Contents, SummaryError> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Ok(Contents::default());
@@ -199,7 +164,6 @@ fn contents_of(dir: &Path) -> Result<Contents, SummaryError> {
     Ok(contents)
 }
 
-/// One file's size, and its rows if it is one the store counts rows in.
 fn file_contents(path: &Path) -> Result<Contents, SummaryError> {
     let file = std::fs::File::open(path).map_err(|source| SummaryError::Io {
         path: path.display().to_string(),
@@ -223,7 +187,6 @@ fn file_contents(path: &Path) -> Result<Contents, SummaryError> {
     })
 }
 
-/// The rows a parquet file declares in its own footer, so counting them reads no data.
 fn rows_in(file: std::fs::File, path: &Path) -> Result<u64, SummaryError> {
     let reader = SerializedFileReader::new(file).map_err(|source| SummaryError::Parquet {
         path: path.display().to_string(),
@@ -247,8 +210,6 @@ mod tests {
     const THING: DatasetSpec<layers::Bronze> = DatasetSpec::partitioned("thing", "kind");
     const WHOLE: DatasetSpec<layers::Bronze> = DatasetSpec::unpartitioned("whole");
 
-    /// Append a file of `rows` rows to `dataset`, named for an instant of its own so two
-    /// writes to one partition are two files.
     async fn write(dataset: crate::path::Dataset<layers::Bronze>, rows: i64) {
         let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
         let batch = RecordBatch::try_new(
@@ -289,8 +250,6 @@ mod tests {
         assert_eq!(partitions, vec![("a", 6, 2), ("b", 3, 1)]);
     }
 
-    /// An unpartitioned dataset is one thing, so it is summarised as one and not broken
-    /// down.
     #[tokio::test]
     async fn an_unpartitioned_dataset_has_no_partitions_to_report() {
         let tmp = tempfile::tempdir().unwrap();
@@ -303,8 +262,6 @@ mod tests {
         assert_eq!(summary.contents.rows, 5);
     }
 
-    /// A dataset nothing has written is reported as holding nothing rather than as a
-    /// failure: what a store is missing is the point of asking.
     #[test]
     fn a_dataset_that_was_never_written_holds_nothing() {
         let tmp = tempfile::tempdir().unwrap();
@@ -316,8 +273,6 @@ mod tests {
         assert!(summary.partitions.is_empty());
     }
 
-    /// A rebuild that produces nothing sweeps a partition and leaves its directory
-    /// standing; an empty directory is not a partition the store holds.
     #[test]
     fn a_partition_swept_empty_is_not_reported() {
         let tmp = tempfile::tempdir().unwrap();
@@ -330,8 +285,6 @@ mod tests {
         assert!(summary.contents.is_empty());
     }
 
-    /// Gold artefacts are not parquet, so they are summarised by what they weigh and which
-    /// runs produced them, with no rows to count.
     #[test]
     fn gold_artefacts_are_summarised_by_artefact_and_run() {
         let tmp = tempfile::tempdir().unwrap();

@@ -8,12 +8,26 @@ paths:
 
 These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/checklist.html) and the [Microsoft Pragmatic Rust Guidelines](https://microsoft.github.io/rust-guidelines/) — the canonical baselines for naming (`C-CASE`, the `as_`/`to_`/`into_` conversions), trait derivation, and API design. What follows is our **additions, emphases, and deliberate deviations**, not a full restatement; where a rule mirrors a named guideline it cites the `C-*` code.
 
-- Follow [Rust doc guidelines](https://doc.rust-lang.org/stable/rustdoc/write-documentation/what-to-include.html) if comments are needed
-- **Comments describe long-lived properties of the code, not the workflow that produced it.** Apply this test to every candidate comment: *would it still read correctly to a stranger if every caller, every input value, every motivating task, and every surrounding circumstance changed?* Only the function's own contract and invariants survive that test — everything else is leakage and will rot the moment work moves on. The principle is the test, not a list. Things that typically fail it: slice/phase/PR/task references, "previously did X, now does Y" framing, the calling site that motivated the change, and current snapshots of inputs (specific counts, specific file paths a caller happens to use today, the current default of a flag, the current name of a model). Describe the contract in terms of the parameters, not the values they hold this week. If the only honest justification is "the current task needs this," it belongs in the task/slice doc, not the code.
+- **Comments start at none.** [`does-it-bring-joy.md`](does-it-bring-joy.md) is the rule: write
+  no comment by default, and keep one only where you can justify that one. The bullets below
+  describe the survivor; they are no licence to add one.
 
-- **A doc comment states what the caller can observe, not what the code does inside.** Name the
-  effect, never the collaborator: "Applies one event, answering whether anything the panel
-  shows has moved", not "Tells the predictor". A caller cannot see that a `parser` field
+- **A surviving comment describes long-lived properties of the code, not the workflow that
+  produced it.** Apply this test: *would it still read correctly to a stranger if every caller,
+  every input value, every motivating task, and every surrounding circumstance changed?* Only
+  the function's own contract and invariants survive that test — everything else is leakage and
+  will rot the moment work moves on. The principle is the test, not a list. Things that
+  typically fail it: slice/phase/PR/task references, "previously did X, now does Y" framing, the
+  calling site that motivated the change, and current snapshots of inputs (specific counts,
+  specific file paths a caller happens to use today, the current default of a flag, the current
+  name of a model). Describe the contract in terms of the parameters, not the values they hold
+  this week. If the only honest justification is "the current task needs this," it belongs in
+  the task/slice doc, not the code.
+
+- **A surviving doc comment states what the caller can observe, not what the code does
+  inside**, and follows the [Rust doc guidelines](https://doc.rust-lang.org/stable/rustdoc/write-documentation/what-to-include.html).
+  Name the effect, never the collaborator: "Applies one event, answering whether anything the
+  panel shows has moved", not "Tells the predictor". A caller cannot see that a `parser` field
   exists, and naming it in the docs both leaks the design and rots the moment it changes. What
   belongs there is the return value, every argument the call mutates, and any state it changes
   that the signature does not show — and state in that last group is better made explicit than
@@ -21,7 +35,7 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
   that must be the contract.
 
 - **A crate's `Cargo.toml` carries no commentary by default.** What a library is for is
-  answered by the code importing it, and a crate's purpose by its `lib.rs` module doc.
+  answered by the code importing it, and a crate's purpose by its README.
   Comment an entry only where it *deviates* from the workspace in a way a reader would
   otherwise undo: a `default-features = false` that drops something, a version that is not the
   latest, the same crate appearing twice. Say what would break, not what the library does.

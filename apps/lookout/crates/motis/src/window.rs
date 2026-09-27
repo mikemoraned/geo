@@ -1,19 +1,12 @@
-//! A rolling window of recent GPS positions and the bounding box they span. The poll
-//! loop feeds it fixes as they arrive, prunes ones older than `max_age` relative to a
-//! supplied `now`, and queries Motis for trips within a buffered box around what remains.
-
 use std::time::Duration;
 
 use geo::{BoundingRect, Scale};
 use geo_types::{MultiPoint, Point, Rect};
 
-/// Age beyond which positions are pruned from the window, unless overridden.
 pub const DEFAULT_MAX_AGE: Duration = Duration::from_secs(30 * 60);
 
-/// Factor the tight box is scaled by to give Motis some margin around the GPS trace.
 const BUFFER_FACTOR: f64 = 2.0;
 
-/// A timestamped GPS position. `t` is epoch milliseconds, matching the wire model.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Position {
     pub t: i64,
@@ -21,7 +14,6 @@ pub struct Position {
     pub lon: f64,
 }
 
-/// A rolling set of recent positions, pruned by age relative to a supplied `now`.
 #[derive(Debug, Clone)]
 pub struct PositionWindow {
     max_age: Duration,
@@ -35,7 +27,6 @@ impl Default for PositionWindow {
 }
 
 impl PositionWindow {
-    /// A window that retains positions younger than `max_age`.
     pub fn new(max_age: Duration) -> Self {
         Self {
             max_age,
@@ -43,30 +34,24 @@ impl PositionWindow {
         }
     }
 
-    /// Add a position to the window.
     pub fn ingest(&mut self, position: Position) {
         self.positions.push(position);
     }
 
-    /// Drop positions older than `max_age` relative to `now` (epoch milliseconds).
     pub fn prune(&mut self, now: i64) {
         let age_ms = i64::try_from(self.max_age.as_millis()).unwrap_or(i64::MAX);
         let cutoff = now.saturating_sub(age_ms);
         self.positions.retain(|p| p.t >= cutoff);
     }
 
-    /// Number of positions currently held.
     pub fn len(&self) -> usize {
         self.positions.len()
     }
 
-    /// Whether the window holds no positions.
     pub fn is_empty(&self) -> bool {
         self.positions.is_empty()
     }
 
-    /// The tight bounding box of the held positions (a lat/lon [`Rect`], `x` = lon,
-    /// `y` = lat), or `None` when empty.
     pub fn bbox(&self) -> Option<Rect<f64>> {
         let points: MultiPoint<f64> = self
             .positions
@@ -76,8 +61,6 @@ impl PositionWindow {
         points.bounding_rect()
     }
 
-    /// The tight box with each dimension scaled about its centre by [`BUFFER_FACTOR`],
-    /// or `None` when empty.
     pub fn buffered_bbox(&self) -> Option<Rect<f64>> {
         Some(self.bbox()?.scale(BUFFER_FACTOR))
     }
@@ -93,7 +76,6 @@ mod tests {
         Position { t, lat, lon }
     }
 
-    /// A lat/lon [`Rect`] from the extent, keeping tests in `(lat, lon)` reading order.
     fn rect(min_lat: f64, max_lat: f64, min_lon: f64, max_lon: f64) -> Rect<f64> {
         Rect::new(
             Coord {
@@ -136,18 +118,27 @@ mod tests {
         let mut w = PositionWindow::new(Duration::from_secs(1800));
         w.ingest(pos(0, 50.0, 8.0));
         w.ingest(pos(1, 52.0, 12.0));
-        // tight: lat 50..52 (span 2, centre 51), lon 8..12 (span 4, centre 10).
-        // doubled about centre: lat 49..53, lon 6..14.
-        assert_eq!(w.buffered_bbox(), Some(rect(49.0, 53.0, 6.0, 14.0)));
+        let tight = rect(50.0, 52.0, 8.0, 12.0);
+        let doubled_about_centre = rect(49.0, 53.0, 6.0, 14.0);
+
+        assert_eq!(w.bbox(), Some(tight));
+        assert_eq!(w.buffered_bbox(), Some(doubled_about_centre));
     }
 
     #[test]
     fn prune_drops_positions_older_than_max_age() {
-        let mut w = PositionWindow::new(Duration::from_secs(60));
-        w.ingest(pos(0, 50.0, 8.0)); // 60s before now → boundary, kept
-        w.ingest(pos(30_000, 51.0, 9.0)); // 30s before now → kept
-        w.ingest(pos(-30_000, 40.0, 1.0)); // 90s before now → dropped
-        w.prune(60_000);
+        let max_age = Duration::from_secs(60);
+        let now = 60_000;
+        let mut w = PositionWindow::new(max_age);
+        let at_the_cutoff = pos(now - 60_000, 50.0, 8.0);
+        let within_the_window = pos(now - 30_000, 51.0, 9.0);
+        let older_than_the_cutoff = pos(now - 90_000, 40.0, 1.0);
+
+        for position in [at_the_cutoff, within_the_window, older_than_the_cutoff] {
+            w.ingest(position);
+        }
+        w.prune(now);
+
         assert_eq!(w.len(), 2);
         assert_eq!(w.bbox(), Some(rect(50.0, 51.0, 8.0, 9.0)));
     }
@@ -189,7 +180,6 @@ mod tests {
             let after_first = w.len();
             w.prune(now);
             let after_second = w.len();
-            // pruning never grows the window, and re-pruning at the same `now` is stable.
             prop_assert!(after_first <= before);
             prop_assert_eq!(after_first, after_second);
         }

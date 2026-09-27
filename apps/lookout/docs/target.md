@@ -26,21 +26,29 @@ This largely breaks down into doing this live:
 2. Find the next point of interest on that line
 3. Predict the time of arrival there, and alert when it is less than a minute away
 
+That remains the goal. What is built stops short of its first step: it reads position, finds
+the crossings within a radius of it, and works out when each is reached at the speed it is
+going. Nothing identifies a line or clamps to one yet, so a crossing on a line we are not on
+counts the same as one ahead of us.
+
 This means that ahead of time we have to build a dataset that supports the lookup:
 1. Get the train network for an area from [OvertureMaps](https://docs.overturemaps.org/guides/transportation/)
 2. Distil it down into a series of segments, or whatever supports the lookup
 
-Accelerometers from coupled devices — my laptop, my phone, and my iPad — can improve accuracy further, which is what a local device comms library is for: it shares their readings across them. An [M5](https://m5stack.com) device can serve as a dumb accelerometer, providing sensor data without running the whole stack.
+Accelerometers from coupled devices — my laptop, my phone, and my iPad — can improve accuracy further, which is what a local device comms library is for: it shares their readings across them.
+
+An [M5](https://m5stack.com) device runs the whole stack: the same core a browser runs, reading its own receiver and drawing its own screen. See [device.md](device.md).
 
 # Constraints, Trade-offs, and Technology Choices
 
 - Use the [crux](https://redbadger.github.io/crux/) library for ports and adapters
-- Use the [iroh](https://docs.iroh.computer/quickstart) library for multi-device comms
 - data is persisted in the layered store described in [medallion.md](medallion.md): parquet
-  from bronze onwards, with sqlite only as a landing/external format for live capture
+  from bronze onwards, with a queue and a capture log as landing formats for live capture
 - sensor data is visualised in https://rerun.io
 - keep all code inside the centre of the architecture in Rust i.e. all business logic is in Rust
-- on the web front-end, follow a single-page-app pattern and use typescript + https://www.solidjs.com
+- one core serves every shell, compiled for the target it runs on: to Xtensa for the device,
+  to WebAssembly for a browser
+- the site is hand-written pages with no framework and no build step; see [web.md](web.md)
 
 # Learnings
 

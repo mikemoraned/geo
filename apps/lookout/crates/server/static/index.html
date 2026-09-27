@@ -5,30 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Lookout</title>
     <style>
-      body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.5; }
-      #status { font-weight: bold; }
-      dt { font-weight: bold; margin-top: 0.5rem; }
-      dd { font-family: ui-monospace, monospace; white-space: pre; margin: 0; }
-      button { font-size: 1.1rem; padding: 0.6rem 1.2rem; }
+      body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 34rem; line-height: 1.5; }
+      dt { font-weight: bold; margin-top: 1rem; }
+      dd { margin: 0; }
       footer { margin-top: 2rem; color: #888; font-size: 0.85rem; }
       #version { font-family: ui-monospace, monospace; }
     </style>
   </head>
   <body>
     <h1>Lookout</h1>
-    <p>Gathering GPS and accelerometer (<code>DeviceMotionEvent</code>) data on this device.</p>
-    <button id="start">Start gathering</button>
-    <p>status: <span id="status">idle</span></p>
-    <p>wake lock: <span id="wakelock">—</span></p>
+    <p>Things worth seeing from a train go past before you notice them coming — most often
+      water. Lookout watches where you are and shows what you are about to cross.</p>
+    <p>The crossings are the places a railway meets water, from
+      <a href="https://overturemaps.org/">Overture</a>'s data. How it is built and what it has
+      learned so far are on
+      <a href="https://github.com/mikemoraned/geo/tree/main/apps/lookout">GitHub</a>.</p>
     <dl>
-      <dt>device id</dt>
-      <dd id="id">—</dd>
-      <dt>accel (<span id="accel-count">0</span> samples)</dt>
-      <dd id="accel">—</dd>
-      <dt>gps (<span id="gps-count">0</span> samples)</dt>
-      <dd id="gps">—</dd>
+      <dt><a href="/live/">Live</a></dt>
+      <dd>Reading this device's own position, predicting from it as you move.</dd>
+
+      <dt><a href="/kiosk/">Kiosk</a></dt>
+      <dd>Recorded journeys replayed in turn, for watching it work without going anywhere.</dd>
+
+      <dt><a href="/record/">Record</a></dt>
+      <dd>Gathering position and motion from this device, which is where the journeys the
+        kiosk replays came from.</dd>
     </dl>
     <footer>version: <span id="version">…</span></footer>
-    <script src="/app.js"></script>
+    <script type="module" src="/version.js"></script>
   </body>
 </html>
