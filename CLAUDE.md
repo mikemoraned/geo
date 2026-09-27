@@ -60,6 +60,8 @@ they operate on the `docs/` relative to your current directory:
 
 - `/choose-slice` — pick the next slice from `docs/next-slices.md` and promote it to
   `docs/current-slice.md`
+- `/decompose-slice` — break the current slice into decisions and tasks, before building any
+  of it
 - `/complete-slice` — archive the finished current slice into `docs/completed-slices.md`
 
 Each app's slice docs:
@@ -68,8 +70,8 @@ Each app's slice docs:
 - `docs/next-slices.md` — upcoming slices
 - `docs/completed-slices.md` — append-only history of completed slices
 
-The `/choose-slice` and `/complete-slice` skills and the `.claude/rules/slices.md` rule
-are shared at the repo root and reused across apps.
+The three slice skills and the `.claude/rules/slices.md` rule are shared at the repo root
+and reused across apps.
 
 ### Test-Driven Development
 
