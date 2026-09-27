@@ -121,10 +121,14 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   sits in the waters, so a window round the land alone would drop the rows the derivation looks
   for. A test in `countries.rs` holds it — a division with both areas places a point over the
   waters — and it fails if the read is narrowed to `class = 'land'`.
-- **Partitioning geo silver by country needs no work.** The country level is applied above a
+- **Partitioning geo silver by country needs no work.** ~~The country level is applied above a
   dataset's own partition key by the shared silver write path, not declared per dataset, so a
   second country lands in its own partitions and its own CRS as soon as `Country` knows it.
-  `match_crossings` already sweeps `Country::ALL`, and so follows too.
+  `match_crossings` already sweeps `Country::ALL`, and so follows too.~~ **Refuted 2026-09-27.**
+  The write needs no work; the *read* does. A second country gives the projected column two CRSs
+  across the dataset's files, and SedonaDB refuses to plan a scan spanning them, so every read of
+  such a dataset had to be scoped to a country. See the group below and
+  [Observations](#observations).
 
 #### Consequences elsewhere
 
@@ -214,10 +218,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - How many crossings GB yields, and so the packed size and the scan cost. The tasks measure
   both, and the Target's fallback to a more compact representation waits on those numbers.
-- Whether the recorded UK sessions pass five crossings and so reach the kiosk. If they do not,
-  either `--min-crossings` drops or a country's best is kept whatever it passed. The 402 fixes
-  from Glasgow to Edinburgh, ingested 2026-09-18, are 8 sessions of 199 samples rather than the
-  one session this assumed, so the question is which of the 8 qualifies.
+- ~~Whether the recorded UK sessions pass five crossings and so reach the kiosk.~~ Answered
+  2026-09-27: one of the 8 does, with 6 passes, which clears `--min-crossings 5` with one to
+  spare. The other 7 matched nothing. So GB contributes a single session to the kiosk however
+  `--max-sessions` is counted, and the per-country change below decides nothing for GB until a
+  second UK session qualifies.
 - ~~Whether Overture's GB country area includes Northern Ireland, and so how far west the
   window reaches.~~ Answered 2026-09-27: it does, and the window reaches -14.02 through the
   maritime area. See [Observations](#observations).
@@ -295,6 +300,27 @@ Proven on DE before any further UK work, as the ids are what every later read ke
       of the DE silver datasets is unchanged by GB arriving beside them. It reports three: the
       superseded DE extract has been filled in as well.
 
+#### Reads of a country-partitioned dataset
+
+Found by reading the store back after the two-country write, and blocking everything downstream
+of it.
+
+- [x] Pin the constraint and the shape that works in `crates/medallion/tests/two_countries.rs`:
+      a dataset written for two countries is not read in one scan, and each country is read from
+      its own partition.
+- [x] Add `register_of_country` and `rows_of_every_country` to `crates/medallion/src/query.rs`,
+      the first for a read within one country and the second for a read that wants them all.
+- [x] Take the union from the partitions the dataset holds rather than from `Country::ALL`, so a
+      partition under a code this build does not know is still read — which is what
+      `every_country_the_store_holds_is_packed` asserts with an `FR` partition. The partition
+      values come from a query, with the engine projecting them from the layout, so nothing reads
+      a directory name and a store on object storage answers the same way.
+- [x] Scope the reads in `session_crossings::silver::derive` to one country, and take the union in
+      `crossings::silver::read` and `session_crossings::gold::choose`, which need every country
+      and read no projected column.
+- [x] State in `docs/medallion.md` that a geometry column carries one CRS wherever it appears, and
+      what that means for reading a dataset partitioned by country.
+
 #### Silver observations
 
 - [x] Re-run `just silver-sessionise`, and check `unplaceable` falls to nought and the GB fixes
@@ -307,25 +333,29 @@ Proven on DE before any further UK work, as the ids are what every later read ke
 
 - [x] Copy `v9.py` to `v10.py` and point `silver-water-crossings` at it. The cells below change
       `v10.py` alone.
-- [ ] Expose `division_id` through `medallion-py`, beside `projected_crs`, so the notebook keys
+- [x] Expose `division_id` through `medallion-py`, beside `projected_crs`, so the notebook keys
       its region read on the division rather than on the country label. The region union is the
       geometry every crossing is clipped against, which makes it the third place the GERS rule
       applies after placing a point and taking a window.
-- [ ] Replace the pinned `EXTRACT_ID` and `COUNTRY` with a country-to-extract map covering DE
+- [x] Replace the pinned `EXTRACT_ID` and `COUNTRY` with a country-to-extract map covering DE
       and GB, and drive the region window, rail, water and city cells from it — the two
       `country = 'DE'` literals included. The region one becomes a division id; the locality one
       stays a country code, since it selects every city in the country rather than one entity.
-- [ ] Project each country's geometry with its own `lookout_medallion.projected_crs(country)`,
+- [x] Project each country's geometry with its own `lookout_medallion.projected_crs(country)`,
       and carry `country` per row.
-- [ ] Write the union of both countries in one `write_silver`, so the sweep and the id checks
+- [x] Write the union of both countries in one `write_silver`, so the sweep and the id checks
       cover both.
-- [ ] Add a GB bbox case to `test_cases.geojson` with a hand-counted crossing, and run
-      `crossing_checks` over both countries.
-- [ ] Run `just silver-water-crossings`, and record the crossings each country yields.
+- [x] Add a GB bbox case to `test_cases.geojson` with a hand-counted crossing, and run
+      `crossing_checks` over both countries. The three DE cases ran and passed on the
+      two-country write; the Forth Bridge case was added after that run, so it is checked on the
+      next one.
+- [x] Run `just silver-water-crossings`, and record the crossings each country yields. The
+      user's to run: duckdb installs its `spatial` extension under `~/.duckdb`, which the
+      sandbox refuses, so the notebook cannot run from a session.
 
 #### Gold and the kiosk
 
-- [ ] Re-run `just silver-session-crossings`, and record what the GB session matched.
+- [x] Re-run `just silver-session-crossings`, and record what the GB session matched.
 - [ ] Take the best `max_sessions` per country in `crates/session_crossings/src/gold.rs`,
       joining `session` for the country, and say per-country in the `--max-sessions` help.
 - [ ] Test that a country with fewer than `max_sessions` qualifying sessions contributes what
@@ -347,6 +377,27 @@ The release group below confirms it on the final set.
       flash the device.
 - [ ] Decide whether the invariant holds on those two numbers. Raise a slice for a more compact
       representation only if it does not.
+
+#### Refactors / fixes: bronze fills in a country silver cannot place
+
+Silver and gold hold only countries the store defines a zone for, and that is now enforced. Bronze
+is the record of what was observed, so it has no such rule — but `Extractor::backfill` parses the
+manifest row's country into `Country` and fails on a code this build has no variant for, which
+makes a recorded extract unfillable for the country it was taken for.
+
+- [ ] Fill in a recorded extract from the country code its manifest row carries, rather than from
+      a `Country`. The predicates that restrict a theme want the code, and the window comes from
+      the row, so nothing in a backfill needs the store to have a zone for it.
+- [ ] Test that an extract recorded for a country the store has no zone for fills in, and that its
+      rows land under the id the manifest gave it.
+- [ ] Drop `ExtractError::UnknownCountry` if nothing raises it once the backfill reads a code.
+- [ ] Record in `docs/overture.md` that an extract is taken for a country the store can place and
+      filled in by the code the manifest carries, since taking one reads that country's division
+      id while filling one in reads only the manifest.
+
+Taking a *new* extract still needs a supported country: the window comes from the country
+division's GERS id, which the store holds per `Country`. Reading that id from the release by code
+would lift the restriction, and is a slice of its own rather than part of this fix.
 
 #### Up to date on the latest Overture release
 
@@ -393,6 +444,33 @@ Last, so it moves both countries at once over work that is already proven on 202
 
 ### Observations
 
+- **A second country made every silver dataset with a projected column unreadable.** Reading
+  `water_crossing` back through the store's own reader answered `Error during planning: Different
+  GeoParquet CRS for column geometry_projected`, and `just silver-session-crossings` panicked with
+  the same. `session` and `session_sample` were unreadable too, `train_segment` and
+  `session_crossing` were not: one holds a single country, the other no projected column. DuckDB
+  read all of them without complaint, so the two engines disagree about what a mixed-CRS scan
+  means. Reads are now scoped per country, and the derivation runs.
+- **The GB session matched 6 crossings, and DE matched exactly what it did before.** `just
+  silver-session-crossings` on 2026-09-27 derived 259 passes over 8 partitions: DE 253 passes
+  across 21 sessions and 190 crossings, unchanged, and GB 6 passes from 1 session of the 8
+  recorded.
+- **GB yields 4,508 crossings and DE still yields 5,760, for 10,268 in one write.** Run
+  2026-09-27 on `v10.py`, two partitions written and none removed. DE's count is unchanged from
+  the one-country runs, and the three DE test cases pass, which together say the two-country
+  rewrite left the German path alone. Every `crossing_id` and every `crossing_compact_id` is
+  distinct across both countries — 10,268 of each — so four bytes still name a crossing
+  uniquely at this size, as the decision expected.
+- **Each partition declares its own zone, and the numbers match it.** `country=DE` declares
+  EPSG:25832 for `geometry_projected` and `country=GB` declares 25830, both with CRS84 for the
+  geographic column. A GB crossing near Cardiff, -3.171783, 51.477110, is stored at
+  488,070.1162, 5,702,897.5190 and `cs2cs` gives the same to four decimal places, so what the
+  notebook projected and what the file declares agree.
+- **The Forth Bridge is the GB test case.** Two crossings at -3.3897, 56.0027, one per track
+  over one `ocean` body, each about 1,537 m of overlap, on two standard-gauge segments spanning
+  55.93 to 56.04. The expected count comes from the bridge carrying two tracks, as Mannheim's
+  comes from four; the bbox -3.3920, 56.0000 to -3.3860, 56.0060 holds exactly those two and
+  excludes the river pair 4.4 km north at Inverkeithing.
 - **The GB extract is `20260927T172559Z`, taken 2026-09-27 from the mirror at release
   2026-07-22.0.** Its window is -14.015517, 49.674000 to 2.091912, 61.061001, digit for digit
   what the mirror answers for the GB division, so reading a window by division id holds against a

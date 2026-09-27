@@ -37,26 +37,24 @@ def _():
 
 @app.cell
 def _(lookout_medallion):
-    # The bronze Overture extract this notebook reads, pinned. A rerun is meant to see exactly
-    # what the last run saw, so moving to a newer extract is a deliberate edit here rather than
-    # something that happens on its own. `just bronze-extract` writes them; the release each covers and
-    # the window it was restricted to are in the manifest, read below.
-    EXTRACT_ID = "20260804T152143Z"
+    # The bronze Overture extract this notebook reads for each country, pinned. A rerun is meant
+    # to see exactly what the last run saw, so moving to a newer extract is a deliberate edit here
+    # rather than something that happens on its own. `just bronze-extract` writes them; the release
+    # each covers and the window it was restricted to are in the manifest, read below. One run
+    # covers every country here and writes them in one go, which is what keeps the crossing ids
+    # unique across the dataset.
+    EXTRACTS = {
+        "DE": "20260804T152143Z",
+        "GB": "20260927T172559Z",
+    }
 
     # The medallion store in the repo. Asked of the store's own writer rather than worked out
     # here, so what this notebook reads with duckdb is the store its writes land in.
     MEDALLION_ROOT = lookout_medallion.default_root()
 
-    # The country this run covers: the window the extract was taken over, and the partition the
-    # crossings are written under.
-    COUNTRY = "DE"
-
     EXCLUDED_RAIL_CLASSES = ("tram",)
 
     # --- V2 tuning knobs -------------------------------------------------------
-    # The metric CRS: one zone per country, chosen by the store rather than here, so what this
-    # projects into is what the file it lands in declares.
-    PROJECTED_CRS = lookout_medallion.projected_crs(COUNTRY)
     MIN_CROSSING_M = (
         5.0  # drop areal-water crossings we'd pass too fast to see
     )
@@ -77,24 +75,28 @@ def _(lookout_medallion):
         "is_under_construction",
     )
 
-    def extract_glob(theme: str, type_: str) -> str:
-        """Glob for one theme/type partition of the pinned extract."""
-        return (
-            f"{MEDALLION_ROOT}/bronze/overture_extract/extract_id={EXTRACT_ID}"
+    def extract_globs(theme: str, type_: str) -> str:
+        """SQL list of that theme and type across every country's extract.
+
+        A read of it carries the `extract_id` the extract wrote into every row, which the
+        `extracts` table below turns into the country whose extract it came out of.
+        """
+        paths = [
+            f"{MEDALLION_ROOT}/bronze/overture_extract/extract_id={extract_id}"
             f"/theme={theme}/type={type_}/*.parquet"
-        )
+            for extract_id in EXTRACTS.values()
+        ]
+        return "[" + ", ".join(f"'{path}'" for path in paths) + "]"
 
     return (
         CITY_MIN_POPULATION,
-        COUNTRY,
         EXCLUDED_RAIL_CLASSES,
         EXCLUDE_RAIL_FLAGS,
-        EXTRACT_ID,
+        EXTRACTS,
         MEDALLION_ROOT,
         MIN_CROSSING_M,
-        PROJECTED_CRS,
         SUBSTANTIAL_WATER_CLASSES,
-        extract_glob,
+        extract_globs,
     )
 
 
@@ -107,108 +109,157 @@ def _(duckdb):
 
 
 @app.cell
-def _(EXTRACT_ID, MEDALLION_ROOT, con):
-    # What the pinned extract actually is: the Overture release it was taken from, when it was
-    # taken, and the window it was restricted to. Read here so the notebook states its inputs
+def _(EXTRACTS, con, lookout_medallion):
+    # Which country's extract a row came out of, and what names that country upstream. A row's
+    # own `country` column says where the feature is, which for rail inside a coastal window is
+    # sometimes a neighbour; this says whose extract holds it. The division id is what the
+    # country's own areas carry, and it is read rather than written here so the notebook and the
+    # store cannot disagree about which entity a country is.
+    _values = ", ".join(
+        f"('{country}', '{extract_id}', '{lookout_medallion.division_id(country)}')"
+        for country, extract_id in EXTRACTS.items()
+    )
+    con.execute(f"""
+        CREATE OR REPLACE TABLE extracts AS
+        SELECT * FROM (VALUES {_values}) AS t(country, extract_id, division_id)
+    """)
+    extracts = con.execute("SELECT * FROM extracts ORDER BY country").fetchdf()
+    extracts
+    return (extracts,)
+
+
+@app.cell
+def _(EXTRACTS, MEDALLION_ROOT, con):
+    # What the pinned extracts actually are: the Overture release each was taken from, when it
+    # was taken, and the window it was restricted to. Read here so the notebook states its inputs
     # rather than leaving them implicit in a path, and so a missing extract fails loudly at the
-    # top instead of as an empty table further down.
+    # top instead of as an empty table further down. The countries need not share a release; what
+    # has to hold is that each extract was taken for the country it is pinned under.
+    _ids = ", ".join(f"'{extract_id}'" for extract_id in EXTRACTS.values())
     extract_manifest = con.execute(f"""
         SELECT extract_id, extracted_at, release, country,
                min_lon, min_lat, max_lon, max_lat
         FROM read_parquet('{MEDALLION_ROOT}/bronze/extract_manifest/*.parquet')
-        WHERE extract_id = '{EXTRACT_ID}'
+        WHERE extract_id IN ({_ids})
+        ORDER BY country
     """).fetchdf()
-    assert len(extract_manifest) == 1, (
-        f"no manifest row for extract {EXTRACT_ID}"
+    assert len(extract_manifest) == len(EXTRACTS), (
+        f"expected one manifest row per pinned extract {sorted(EXTRACTS.values())}, "
+        f"found {len(extract_manifest)}"
+    )
+    assert dict(
+        zip(extract_manifest["extract_id"], extract_manifest["country"])
+    ) == {extract_id: country for country, extract_id in EXTRACTS.items()}, (
+        "a pinned extract was taken for a different country than it is pinned under"
     )
     extract_manifest
     return
 
 
 @app.cell
-def _(con, extract_glob):
-    # Step 2 (V6): the query window is Germany — the country division's national boundary.
-    # `region_union` is the single clip geometry; `region_bbox` is the pruning rectangle (also
-    # the dataflow handle later cells depend on). The extract restricts to Germany by bbox; the
-    # union clips precisely, so rows from over the border are dropped here rather than upstream.
+def _(con, extract_globs, extracts):
+    # Step 2 (V6): the query window is each country's own areas — the land and the territorial
+    # waters its division carries. `region_union` is the clip geometry per country;
+    # `region_bbox` is the pruning rectangle per country, and `region_areas` the dataflow handle
+    # later cells depend on. An extract restricts to its country by bbox, which reaches over the
+    # border and out to sea; the union clips precisely, so a neighbour's rivers and rail are
+    # dropped here rather than upstream.
+    _ = extracts  # dataflow: the country of each extract is read below
     con.execute(f"""
         CREATE OR REPLACE TABLE regions AS
-        SELECT names.primary AS name, id, geometry
-        FROM read_parquet('{extract_glob("divisions", "division_area")}')
-        WHERE subtype = 'country' AND country = 'DE'
+        SELECT e.country, d.names.primary AS name, d.id, d.class, d.geometry
+        FROM read_parquet({extract_globs("divisions", "division_area")}) d
+        JOIN extracts e
+          ON e.extract_id = d.extract_id AND e.division_id = d.division_id
     """)
-    con.execute(
-        "CREATE OR REPLACE TABLE region_union AS SELECT ST_Union_Agg(geometry) AS geom FROM regions"
-    )
+    con.execute("""
+        CREATE OR REPLACE TABLE region_union AS
+        SELECT country, ST_Union_Agg(geometry) AS geom FROM regions GROUP BY country
+    """)
+    con.execute("""
+        CREATE OR REPLACE TABLE region_bbox AS
+        SELECT country,
+               MIN(ST_XMin(geometry)) AS xmin, MIN(ST_YMin(geometry)) AS ymin,
+               MAX(ST_XMax(geometry)) AS xmax, MAX(ST_YMax(geometry)) AS ymax
+        FROM regions GROUP BY country
+    """)
 
-    region_names = [
-        r[0]
-        for r in con.execute(
-            "SELECT name FROM regions ORDER BY name"
-        ).fetchall()
-    ]
-    _b = con.execute("""
-        SELECT MIN(ST_XMin(geometry)), MIN(ST_YMin(geometry)),
-               MAX(ST_XMax(geometry)), MAX(ST_YMax(geometry))
-        FROM regions
-    """).fetchone()
-    region_bbox = {"xmin": _b[0], "ymin": _b[1], "xmax": _b[2], "ymax": _b[3]}
-    region_names, region_bbox
-    return (region_bbox,)
+    region_areas = con.execute(
+        "SELECT country, name, class, xmin, ymin, xmax, ymax FROM regions"
+        " JOIN region_bbox USING (country) ORDER BY country, class"
+    ).fetchdf()
+    assert len(region_areas) == 2 * con.execute(
+        "SELECT count(*) FROM extracts"
+    ).fetchone()[0], (
+        "each country's division carries two areas, its land and its territorial waters"
+    )
+    region_areas
+    return (region_areas,)
 
 
 @app.cell
-def _(EXCLUDED_RAIL_CLASSES, con, extract_glob, region_bbox):
-    # Step 3: rail extract - non-tram rail segments intersecting the region window.
-    # bbox struct prefilter prunes row-groups; ST_Intersects against region_union clips precisely.
-    # Envelope columns (min/max lon/lat) are kept for the bbox range-join in the crossings step.
-    # The extract already holds only non-tram rail; the filters stay so this cell states what it
-    # needs rather than depending on how the extract was taken.
-    _bb = region_bbox  # dataflow dependency on the regions cell
+def _(EXCLUDED_RAIL_CLASSES, con, extract_globs, region_areas):
+    # Step 3: rail extract - non-tram rail segments intersecting their own country's areas.
+    # bbox struct prefilter prunes row-groups; ST_Intersects against that country's region_union
+    # clips precisely. Envelope columns (min/max lon/lat) are kept for the bbox range-join in the
+    # crossings step. The extract already holds only non-tram rail; the filters stay so this cell
+    # states what it needs rather than depending on how the extract was taken.
+    _ = region_areas  # dataflow dependency on the regions cell
     _excl = ", ".join(f"'{c}'" for c in EXCLUDED_RAIL_CLASSES)
     con.execute(f"""
         CREATE OR REPLACE TABLE rail AS
-        SELECT s.id, s.class, s.connectors, s.rail_flags, s.geometry,
+        SELECT e.country, s.id, s.class, s.connectors, s.rail_flags, s.geometry,
                s.bbox.xmin AS min_lon, s.bbox.xmax AS max_lon,
                s.bbox.ymin AS min_lat, s.bbox.ymax AS max_lat
-        FROM read_parquet('{extract_glob("transportation", "segment")}') s
+        FROM read_parquet({extract_globs("transportation", "segment")}) s
+        JOIN extracts e ON e.extract_id = s.extract_id
+        JOIN region_bbox b ON b.country = e.country
+        JOIN region_union u ON u.country = e.country
         WHERE s.subtype = 'rail'
           AND (s.class IS NULL OR s.class NOT IN ({_excl}))
-          AND s.bbox.xmin <= {_bb["xmax"]} AND s.bbox.xmax >= {_bb["xmin"]}
-          AND s.bbox.ymin <= {_bb["ymax"]} AND s.bbox.ymax >= {_bb["ymin"]}
-          AND ST_Intersects(s.geometry, (SELECT geom FROM region_union))
+          AND s.bbox.xmin <= b.xmax AND s.bbox.xmax >= b.xmin
+          AND s.bbox.ymin <= b.ymax AND s.bbox.ymax >= b.ymin
+          AND ST_Intersects(s.geometry, u.geom)
     """)
-    rail_count = con.execute("SELECT count(*) FROM rail").fetchone()[0]
+    rail_count = con.execute(
+        "SELECT country, count(*) AS rail FROM rail GROUP BY country ORDER BY country"
+    ).fetchdf()
     rail_count
     return (rail_count,)
 
 
 @app.cell
-def _(con, extract_glob, rail_count, region_bbox):
-    # Step 4: water extract - Overture base/water whose bbox overlaps a rail segment's bbox.
-    # The extract keeps any water whose envelope overlaps the country window, which reaches well
-    # past it for a single large body like the North Sea; the region-bbox prefilter and then the
-    # range-join to rail envelopes cut that down to water near a rail corridor. Envelope columns
-    # are retained so the crossings step can range-join rail<->water cheaply.
-    _ = (rail_count, region_bbox)  # dataflow: run after rail + regions
-    _bb = region_bbox
+def _(con, extract_globs, rail_count, region_areas):
+    # Step 4: water extract - Overture base/water whose bbox overlaps a rail segment's bbox in the
+    # same country. The extract keeps any water whose envelope overlaps the country window, which
+    # reaches well past it for a single large body like the North Sea; the region-bbox prefilter
+    # and then the range-join to rail envelopes cut that down to water near a rail corridor.
+    # Envelope columns are retained so the crossings step can range-join rail<->water cheaply. A
+    # water body is kept once per country, since two countries can each meet the same river.
+    _ = (rail_count, region_areas)  # dataflow: run after rail + regions
     con.execute(f"""
         CREATE OR REPLACE TABLE water AS
         WITH cand AS (
-            SELECT w.id, w.subtype, w.class, w.geometry,
+            SELECT e.country, w.id, w.subtype, w.class, w.geometry,
                    w.bbox.xmin AS min_lon, w.bbox.xmax AS max_lon,
                    w.bbox.ymin AS min_lat, w.bbox.ymax AS max_lat
-            FROM read_parquet('{extract_glob("base", "water")}') w
-            WHERE w.bbox.xmin <= {_bb["xmax"]} AND w.bbox.xmax >= {_bb["xmin"]}
-              AND w.bbox.ymin <= {_bb["ymax"]} AND w.bbox.ymax >= {_bb["ymin"]}
+            FROM read_parquet({extract_globs("base", "water")}) w
+            JOIN extracts e ON e.extract_id = w.extract_id
+            JOIN region_bbox b ON b.country = e.country
+            WHERE w.bbox.xmin <= b.xmax AND w.bbox.xmax >= b.xmin
+              AND w.bbox.ymin <= b.ymax AND w.bbox.ymax >= b.ymin
         )
-        SELECT DISTINCT ON (c.id) c.id, c.subtype, c.class, c.geometry,
+        SELECT DISTINCT ON (c.country, c.id)
+               c.country, c.id, c.subtype, c.class, c.geometry,
                c.min_lon, c.max_lon, c.min_lat, c.max_lat
         FROM cand c JOIN rail r
-          ON r.min_lon <= c.max_lon AND r.max_lon >= c.min_lon
+          ON r.country = c.country
+         AND r.min_lon <= c.max_lon AND r.max_lon >= c.min_lon
          AND r.min_lat <= c.max_lat AND r.max_lat >= c.min_lat
     """)
-    water_count = con.execute("SELECT count(*) FROM water").fetchone()[0]
+    water_count = con.execute(
+        "SELECT country, count(*) AS water FROM water GROUP BY country ORDER BY country"
+    ).fetchdf()
     water_count
     return (water_count,)
 
@@ -218,17 +269,19 @@ def _(con, water_count):
     _ = (water_count,)  # dataflow: run after water
     con.execute("""
         CREATE OR REPLACE TABLE crossings AS
-        SELECT r.id AS rail_id, r.class AS rail_class,
+        SELECT r.country, r.id AS rail_id, r.class AS rail_class,
                w.id AS water_id, w.subtype AS water_subtype, w.class AS water_class,
                ST_Intersection(r.geometry, w.geometry) AS geom
         FROM rail r JOIN water w
-          ON r.min_lon <= w.max_lon AND r.max_lon >= w.min_lon
+          ON r.country = w.country
+         AND r.min_lon <= w.max_lon AND r.max_lon >= w.min_lon
          AND r.min_lat <= w.max_lat AND r.max_lat >= w.min_lat
          AND ST_Intersects(r.geometry, w.geometry)
     """)
-    crossings_count = con.execute("SELECT count(*) FROM crossings").fetchone()[
-        0
-    ]
+    crossings_count = con.execute(
+        "SELECT country, count(*) AS crossings FROM crossings"
+        " GROUP BY country ORDER BY country"
+    ).fetchdf()
     crossings_count
     return (crossings_count,)
 
@@ -236,31 +289,40 @@ def _(con, water_count):
 @app.cell
 def _(
     EXCLUDE_RAIL_FLAGS,
+    EXTRACTS,
     MIN_CROSSING_M,
-    PROJECTED_CRS,
     SUBSTANTIAL_WATER_CLASSES,
     con,
     crossings_count,
+    lookout_medallion,
 ):
     _ = (crossings_count,)  # dataflow: run after crossings
     _subst = ", ".join(f"'{c}'" for c in SUBSTANTIAL_WATER_CLASSES)
     _excl_flags = ", ".join(f"'{f}'" for f in EXCLUDE_RAIL_FLAGS)
+    # An overlap is a length in metres, so it is measured in the country's own zone: one branch
+    # per country, each naming the zone the store projects that country into. A single zone would
+    # measure one of them off a distant central meridian.
+    _sized = " UNION ALL ".join(
+        f"""
+            SELECT *,
+                   CAST(ST_GeometryType(part) AS VARCHAR) AS part_type,
+                   ST_Length(ST_Transform(part, 'EPSG:4326',
+                       '{lookout_medallion.projected_crs(country)}')) AS overlap_m,
+                   ST_Centroid(part) AS cpt
+            FROM parts
+            WHERE NOT ST_IsEmpty(part) AND country = '{country}'
+        """
+        for country in EXTRACTS
+    )
     con.execute(f"""
         CREATE OR REPLACE TABLE crossing_points AS
         WITH parts AS (
-            SELECT rail_id, rail_class, water_id, water_subtype, water_class,
+            SELECT country, rail_id, rail_class, water_id, water_subtype, water_class,
                    (UNNEST(ST_Dump(geom))).geom AS part
             FROM crossings
             WHERE NOT ST_IsEmpty(geom)
         ),
-        sized AS (
-            SELECT *,
-                   CAST(ST_GeometryType(part) AS VARCHAR) AS part_type,
-                   ST_Length(ST_Transform(part, 'EPSG:4326', '{PROJECTED_CRS}')) AS overlap_m,
-                   ST_Centroid(part) AS cpt
-            FROM parts
-            WHERE NOT ST_IsEmpty(part)
-        ),
+        sized AS ({_sized}),
         kept AS (
             SELECT row_number() OVER () AS rid, *
             FROM sized
@@ -269,13 +331,14 @@ def _(
         ),
         located AS (  -- V7: %-distance of the crossing along its rail segment + that segment's flags
             SELECT k.*, ST_LineLocatePoint(r.geometry, k.cpt) AS frac, r.rail_flags AS rail_flags
-            FROM kept k JOIN rail r ON r.id = k.rail_id
+            FROM kept k JOIN rail r ON r.id = k.rail_id AND r.country = k.country
         ),
         redundant AS (  -- V4: point crossings whose location lies inside an areal water polygon
             SELECT DISTINCT l.rid
             FROM located l
             JOIN water wp
-              ON l.part_type LIKE '%POINT%'
+              ON wp.country = l.country
+             AND l.part_type LIKE '%POINT%'
              AND CAST(ST_GeometryType(wp.geometry) AS VARCHAR) IN ('POLYGON', 'MULTIPOLYGON')
              AND wp.min_lon <= ST_X(l.cpt) AND wp.max_lon >= ST_X(l.cpt)
              AND wp.min_lat <= ST_Y(l.cpt) AND wp.max_lat >= ST_Y(l.cpt)
@@ -287,7 +350,7 @@ def _(
             WHERE flag IN ({_excl_flags})
               AND (f.between IS NULL OR l.frac BETWEEN f.between[1] AND f.between[2])
         )
-        SELECT rail_id, rail_class, water_id, water_subtype, water_class,
+        SELECT country, rail_id, rail_class, water_id, water_subtype, water_class,
                overlap_m,
                CASE WHEN part_type LIKE '%LINESTRING%' THEN 'line' ELSE 'point' END AS overlap_kind,
                frac,
@@ -299,8 +362,9 @@ def _(
           AND rid NOT IN (SELECT rid FROM blocked)
     """)
     crossing_points_count = con.execute(
-        "SELECT count(*) FROM crossing_points"
-    ).fetchone()[0]
+        "SELECT country, count(*) AS crossing_points FROM crossing_points"
+        " GROUP BY country ORDER BY country"
+    ).fetchdf()
     crossing_points_count
     return (crossing_points_count,)
 
@@ -310,25 +374,29 @@ def _(
     CITY_MIN_POPULATION,
     con,
     crossing_points_count,
-    extract_glob,
-    region_bbox,
+    extract_globs,
+    region_areas,
 ):
     # City points for orientation on the map: Overture localities within the region above a
     # population cutoff. bbox prefilter prunes the partition; region_union clips precisely.
-    _ = crossing_points_count  # dataflow: keep near the pipeline tail
-    _bb = region_bbox
+    _ = (crossing_points_count, region_areas)  # dataflow: keep near the pipeline tail
     con.execute(f"""
         CREATE OR REPLACE TABLE cities AS
-        SELECT names.primary AS name, population,
-               ST_X(geometry) AS lon, ST_Y(geometry) AS lat, geometry AS geom
-        FROM read_parquet('{extract_glob("divisions", "division")}')
-        WHERE country = 'DE' AND subtype = 'locality'
-          AND population >= {CITY_MIN_POPULATION}
-          AND bbox.xmin <= {_bb["xmax"]} AND bbox.xmax >= {_bb["xmin"]}
-          AND bbox.ymin <= {_bb["ymax"]} AND bbox.ymax >= {_bb["ymin"]}
-          AND ST_Intersects(geometry, (SELECT geom FROM region_union))
+        SELECT e.country, d.names.primary AS name, d.population,
+               ST_X(d.geometry) AS lon, ST_Y(d.geometry) AS lat, d.geometry AS geom
+        FROM read_parquet({extract_globs("divisions", "division")}) d
+        JOIN extracts e ON e.extract_id = d.extract_id
+        JOIN region_bbox b ON b.country = e.country
+        JOIN region_union u ON u.country = e.country
+        WHERE d.country = e.country AND d.subtype = 'locality'
+          AND d.population >= {CITY_MIN_POPULATION}
+          AND d.bbox.xmin <= b.xmax AND d.bbox.xmax >= b.xmin
+          AND d.bbox.ymin <= b.ymax AND d.bbox.ymax >= b.ymin
+          AND ST_Intersects(d.geometry, u.geom)
     """)
-    cities_count = con.execute("SELECT count(*) FROM cities").fetchone()[0]
+    cities_count = con.execute(
+        "SELECT country, count(*) AS cities FROM cities GROUP BY country ORDER BY country"
+    ).fetchdf()
     cities_count
     return (cities_count,)
 
@@ -351,14 +419,16 @@ def _(con, gpd):
 @app.cell
 def _(cities_count, crossing_points_count, to_gdf):
     _ = (crossing_points_count, cities_count)  # dataflow: after the pipeline
-    rail_gdf = to_gdf("SELECT id, class, geometry AS geom FROM rail")
+    rail_gdf = to_gdf("SELECT country, id, class, geometry AS geom FROM rail")
     points_gdf = to_gdf(
-        "SELECT rail_id, rail_class, water_id, water_subtype, water_class, overlap_m, overlap_kind, frac, lon, lat, geom FROM crossing_points"
+        "SELECT country, rail_id, rail_class, water_id, water_subtype, water_class, overlap_m, overlap_kind, frac, lon, lat, geom FROM crossing_points"
     )
-    cities_gdf = to_gdf("SELECT name, population, lon, lat, geom FROM cities")
+    cities_gdf = to_gdf(
+        "SELECT country, name, population, lon, lat, geom FROM cities"
+    )
     _water_crossed = """
-        SELECT id, subtype, geometry AS geom FROM water
-        WHERE id IN (SELECT DISTINCT water_id FROM crossing_points)
+        SELECT country, id, subtype, geometry AS geom FROM water
+        WHERE (country, id) IN (SELECT DISTINCT country, water_id FROM crossing_points)
     """
     water_lines_gdf = to_gdf(
         _water_crossed
@@ -446,6 +516,8 @@ def _(con, crossing_points_count, lonboard, rail_gdf, to_gdf):
     # A track is a connected run of rail segments, named by the smallest segment id in it —
     # see `crossing_ids`. The name follows from the members, so it is the same across runs and
     # survives a re-extraction that leaves those segments alone.
+    # Segments in two countries share no connector, so the runs this finds never span a border and
+    # one pass over both countries names the same tracks two passes would.
     track = crossing_ids.track_ids(
         con.execute(
             "SELECT id, connectors FROM rail WHERE id IN (SELECT DISTINCT rail_id FROM crossing_points)"
@@ -475,15 +547,23 @@ def _(con, crossing_points_count, lonboard, rail_gdf, to_gdf):
 
 
 @app.cell
-def _(PROJECTED_CRS, lonboard, points_gdf, rail_gdf, track, track_colors):
+def _(lonboard, lookout_medallion, points_gdf, rail_gdf, track, track_colors):
     import numpy as _np
 
     parts_gdf = points_gdf.reset_index(drop=True).copy()
     parts_gdf["track_id"] = parts_gdf["rail_id"].map(track)
-    _proj = parts_gdf.to_crs(PROJECTED_CRS)
-    parts_xy = _np.column_stack(
-        [_proj.geometry.x.to_numpy(), _proj.geometry.y.to_numpy()]
-    )
+    # Metres, each country in its own zone: the clustering below measures distances in these
+    # coordinates, and a zone chosen for one country measures the other off a distant meridian.
+    # Two zones put unrelated points at the same coordinates, which is why the cluster key names
+    # the country.
+    parts_xy = _np.zeros((len(parts_gdf), 2))
+    for _country, _labels in parts_gdf.groupby("country").groups.items():
+        _at = parts_gdf.index.get_indexer(_labels)
+        _proj = parts_gdf.loc[_labels].to_crs(
+            lookout_medallion.projected_crs(_country)
+        )
+        parts_xy[_at, 0] = _proj.geometry.x.to_numpy()
+        parts_xy[_at, 1] = _proj.geometry.y.to_numpy()
 
     _colors = track_colors(parts_gdf["track_id"])
     lonboard.Map(
@@ -521,7 +601,9 @@ def _(
 
     _D = float(merge_dist.value)
     _key = (
-        parts_gdf["track_id"].astype(str)
+        parts_gdf["country"].astype(str)
+        + "|"
+        + parts_gdf["track_id"].astype(str)
         + "|"
         + parts_gdf["water_id"].astype(str)
     ).to_numpy()
@@ -724,11 +806,9 @@ def _(mo, reps_v5_gdf):
 
 @app.cell
 def _(
-    COUNTRY,
-    EXTRACT_ID,
+    EXTRACTS,
     MEDALLION_ROOT,
     MIN_CROSSING_M,
-    PROJECTED_CRS,
     lookout_medallion,
     merge_dist,
     mo,
@@ -746,6 +826,16 @@ def _(
     # that is not it, so there is nothing here about where the files go.
     _reps = reps_v5_gdf
     _rows = len(_reps)
+    # Each country's geometry in its own zone, in the row order the table is built from: the store
+    # stamps a partition's projected column with that country's CRS, so a row projected into
+    # another country's zone would declare one thing and hold another.
+    _projected = _reps.geometry.to_wkb().copy()
+    for _country, _at in _reps.groupby("country").groups.items():
+        _projected.loc[_at] = (
+            _reps.loc[_at]
+            .to_crs(lookout_medallion.projected_crs(_country))
+            .geometry.to_wkb()
+        )
     crossings_table = _pa.table(
         {
             "crossing_id": _pa.array(_reps["crossing_id"], _pa.string()),
@@ -767,7 +857,9 @@ def _(
             "frac": _pa.array(_reps["frac"], _pa.float64()),
             # Provenance and tuning: which extract these came out of, and what this run
             # collapsed them with, so a row stays interpretable after either changes.
-            "extract_id": _pa.array([EXTRACT_ID] * _rows, _pa.string()),
+            "extract_id": _pa.array(
+                _reps["country"].map(EXTRACTS), _pa.string()
+            ),
             "merge_distance_m": _pa.array(
                 [float(merge_dist.value)] * _rows, _pa.float64()
             ),
@@ -775,10 +867,8 @@ def _(
                 [float(MIN_CROSSING_M)] * _rows, _pa.float64()
             ),
             "geometry": _pa.array(_reps.geometry.to_wkb(), _pa.binary()),
-            "geometry_projected": _pa.array(
-                _reps.to_crs(PROJECTED_CRS).geometry.to_wkb(), _pa.binary()
-            ),
-            "country": _pa.array([COUNTRY] * _rows, _pa.string()),
+            "geometry_projected": _pa.array(_projected, _pa.binary()),
+            "country": _pa.array(_reps["country"], _pa.string()),
         }
     )
 

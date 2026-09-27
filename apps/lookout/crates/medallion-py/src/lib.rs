@@ -144,6 +144,16 @@ fn projected_crs(country: &str) -> PyResult<String> {
     Ok(format!("EPSG:{}", country.projected_epsg()))
 }
 
+/// The GERS id of the division a country's areas belong to, for matching against the
+/// `division_id` column. See `docs/overture.md`.
+#[pyfunction]
+fn division_id(country: &str) -> PyResult<String> {
+    let country: Country = country
+        .parse()
+        .map_err(|err: UnknownCountry| PyValueError::new_err(err.to_string()))?;
+    Ok(medallion_model::division_id(country).to_string())
+}
+
 /// The store in the repo the caller is working in, as a path.
 ///
 /// This is what [`write_silver`] writes into when it is not given a root, so a caller reading
@@ -203,6 +213,7 @@ fn lookout_medallion(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(write_silver, module)?)?;
     module.add_function(wrap_pyfunction!(query_silver, module)?)?;
     module.add_function(wrap_pyfunction!(projected_crs, module)?)?;
+    module.add_function(wrap_pyfunction!(division_id, module)?)?;
     module.add_function(wrap_pyfunction!(default_root, module)?)?;
     module.add_class::<Written>()?;
     Ok(())

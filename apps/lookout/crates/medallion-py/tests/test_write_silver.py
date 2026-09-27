@@ -205,6 +205,19 @@ class TestTheProjectedCrs:
             lookout_medallion.projected_crs("ZZ")
 
 
+class TestTheDivisionId:
+    def test_a_country_names_the_division_its_areas_belong_to(self):
+        assert lookout_medallion.division_id("DE") == "567d1698-7209-4b94-b7b8-0bc71bde0104"
+        assert lookout_medallion.division_id("GB") == "ce3429b1-d5c6-4763-91e7-0107e26d613e"
+
+    def test_the_code_is_read_in_either_case(self):
+        assert lookout_medallion.division_id("de") == lookout_medallion.division_id("DE")
+
+    def test_a_country_the_store_does_not_know(self):
+        with pytest.raises(ValueError, match="ZZ"):
+            lookout_medallion.division_id("ZZ")
+
+
 class TestTheDefaultRoot:
     def test_it_is_the_store_in_the_workspace_the_caller_is_in(self, tmp_path, monkeypatch):
         workspace = tmp_path / "app"
