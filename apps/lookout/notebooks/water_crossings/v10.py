@@ -4,7 +4,7 @@
 #     "geopandas==1.1.4",
 #     "lonboard==0.16.0",
 #     "lookout-medallion",
-#     "marimo",
+#     "marimo==0.23.15",
 #     "matplotlib==3.11.1",
 #     "numpy==2.5.1",
 #     "pyarrow==25.0.0",

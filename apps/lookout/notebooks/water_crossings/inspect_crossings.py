@@ -3,8 +3,10 @@
 #     "duckdb==1.5.5",
 #     "geopandas==1.1.4",
 #     "lonboard==0.16.0",
-#     "lookout-medallion",
-#     "marimo",
+#     "lookout-medallion==0.1.0",
+#     "marimo==0.23.15",
+#     "numpy==2.5.3",
+#     "pandas==3.0.6",
 #     "pyarrow==25.0.0",
 # ]
 # requires-python = ">=3.13"
