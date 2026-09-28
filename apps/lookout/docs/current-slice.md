@@ -378,6 +378,24 @@ The release group below confirms it on the final set.
 - [ ] Decide whether the invariant holds on those two numbers. Raise a slice for a more compact
       representation only if it does not.
 
+#### Refactors / fixes: python reads bronze through the store
+
+`query_silver` names silver datasets alone, so a notebook wanting the rail and water an extract
+holds reaches for duckdb — which is a second reader of the store's own files. `inspect.py` does
+that today.
+
+- [ ] Expose every bronze dataset the model defines as a table a query can name, so
+      `extract_manifest` and the telemetry datasets register by their own names.
+- [ ] Take `overture_extract` by theme and type, since one table cannot span themes whose columns
+      differ, and register it across every extract at once: `read_parquet` takes a list of paths,
+      and the rows carry the `extract_id` the extraction wrote into them, so the manifest joins to
+      an extract in plain SQL. A glob in place of the extract id matches nothing — DataFusion
+      globs the last path segment only.
+- [ ] Read no country: bronze has no zone per country, so nothing there needs scoping.
+- [ ] Move `inspect.py`'s rail and water reads onto it, and drop duckdb from that notebook.
+- [ ] Record in `docs/medallion.md` what a python read of bronze names, beside what a read of
+      silver names.
+
 #### Refactors / fixes: bronze fills in a country silver cannot place
 
 Silver and gold hold only countries the store defines a zone for, and that is now enforced. Bronze
@@ -443,6 +461,14 @@ Last, so it moves both countries at once over work that is already proven on 202
 - [ ] Run `just test-no-docker`.
 
 ### Observations
+
+- **`inspect.py` draws the store back, a country at a time.** Seven cells: the silver crossings
+  read through `query_silver` per country, a map of each country's crossings coloured by overlap
+  kind, and the four bbox test cases through `crossing_checks` and `test_viz`, with the country of
+  a case taken from the extract window that holds the middle of its bbox — so the Hamburg case,
+  which has no crossings to infer from, still resolves. All four cases pass through it: Mannheim
+  4 of 4, the horseshoe 2 of 2, Hamburg 0 of 0, and the Forth Bridge 2 of 2 on its first real
+  run. Bronze is read with duckdb until the group above lands.
 
 - **A second country made every silver dataset with a projected column unreadable.** Reading
   `water_crossing` back through the store's own reader answered `Error during planning: Different
