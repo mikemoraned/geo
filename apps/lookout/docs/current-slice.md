@@ -381,7 +381,7 @@ The release group below confirms it on the final set.
 #### Refactors / fixes: python reads bronze through the store
 
 `query_silver` names silver datasets alone, so a notebook wanting the rail and water an extract
-holds reaches for duckdb — which is a second reader of the store's own files. `inspect.py` does
+holds reaches for duckdb — which is a second reader of the store's own files. `inspect_crossings.py` does
 that today.
 
 - [ ] Expose every bronze dataset the model defines as a table a query can name, so
@@ -392,7 +392,7 @@ that today.
       an extract in plain SQL. A glob in place of the extract id matches nothing — DataFusion
       globs the last path segment only.
 - [ ] Read no country: bronze has no zone per country, so nothing there needs scoping.
-- [ ] Move `inspect.py`'s rail and water reads onto it, and drop duckdb from that notebook.
+- [ ] Move `inspect_crossings.py`'s rail and water reads onto it, and drop duckdb from that notebook.
 - [ ] Record in `docs/medallion.md` what a python read of bronze names, beside what a read of
       silver names.
 
@@ -462,7 +462,7 @@ Last, so it moves both countries at once over work that is already proven on 202
 
 ### Observations
 
-- **`inspect.py` draws the store back, a country at a time.** Seven cells: the silver crossings
+- **`inspect_crossings.py` draws the store back, a country at a time.** Seven cells: the silver crossings
   read through `query_silver` per country, a map of each country's crossings coloured by overlap
   kind, and the four bbox test cases through `crossing_checks` and `test_viz`, with the country of
   a case taken from the extract window that holds the middle of its bbox — so the Hamburg case,
