@@ -4,7 +4,7 @@
 #     "geopandas==1.1.4",
 #     "lonboard==0.16.0",
 #     "lookout-medallion==0.1.0",
-#     "marimo==0.23.15",
+#     "marimo==0.25.0",
 #     "numpy==2.5.3",
 #     "pandas==3.0.6",
 #     "pyarrow==25.0.0",
@@ -19,7 +19,7 @@
 
 import marimo
 
-__generated_with = "0.23.15"
+__generated_with = "0.25.0"
 app = marimo.App(width="medium")
 
 
@@ -58,13 +58,14 @@ def _():
 def _(COUNTRIES, MEDALLION_ROOT, gpd, lookout_medallion, pa, pd):
     def silver(sql: str, country: str) -> gpd.GeoDataFrame:
         rows = pa.table(
-            lookout_medallion.query_silver(sql, country=country, root=str(MEDALLION_ROOT))
+            lookout_medallion.query_silver(
+                sql, country=country, root=str(MEDALLION_ROOT)
+            )
         ).to_pandas()
         return gpd.GeoDataFrame(
             rows.drop(columns=["wkb"]).assign(country=country),
             geometry=gpd.GeoSeries.from_wkb(rows["wkb"], crs="EPSG:4326"),
         )
-
 
     CROSSINGS = """
         SELECT crossing_id, water_id, water_class, water_subtype, track_id, rail_id,
@@ -74,7 +75,8 @@ def _(COUNTRIES, MEDALLION_ROOT, gpd, lookout_medallion, pa, pd):
     """
 
     crossings = pd.concat(
-        [silver(CROSSINGS, country) for country in COUNTRIES], ignore_index=True
+        [silver(CROSSINGS, country) for country in COUNTRIES],
+        ignore_index=True,
     )
     crossings.groupby(["country", "overlap_kind"]).size().unstack(fill_value=0)
     return (crossings,)
@@ -84,8 +86,13 @@ def _(COUNTRIES, MEDALLION_ROOT, gpd, lookout_medallion, pa, pd):
 def _(crossings, lonboard, mo, np):
     KIND_COLOUR = {"line": [11, 132, 165], "point": [246, 153, 30]}
 
-    HOVER = ["water_class", "water_subtype", "overlap_kind", "overlap_m", "merged_parts"]
-
+    HOVER = [
+        "water_class",
+        "water_subtype",
+        "overlap_kind",
+        "overlap_m",
+        "merged_parts",
+    ]
 
     def country_map(country: str, radius: int = 3):
         of_country = crossings[crossings["country"] == country]
@@ -94,29 +101,34 @@ def _(crossings, lonboard, mo, np):
             if shown[column].dtype == object:
                 shown[column] = shown[column].astype("string")
         colours = np.asarray(
-            [KIND_COLOUR[kind] for kind in of_country["overlap_kind"]], dtype="uint8"
+            [KIND_COLOUR[kind] for kind in of_country["overlap_kind"]],
+            dtype="uint8",
         )
 
-        return mo.vstack([
-            mo.md(
-                f"**{country}** — {len(of_country):,} crossings: "
-                + ", ".join(
-                    f"{count:,} {kind}"
-                    for kind, count in of_country["overlap_kind"].value_counts().items()
-                )
-            ),
-            lonboard.Map(
-                lonboard.ScatterplotLayer.from_geopandas(
-                    shown,
-                    get_fill_color=colours,
-                    radius_units="pixels",
-                    get_radius=radius,
-                    radius_min_pixels=radius,
-                    radius_max_pixels=radius,
+        return mo.vstack(
+            [
+                mo.md(
+                    f"**{country}** — {len(of_country):,} crossings: "
+                    + ", ".join(
+                        f"{count:,} {kind}"
+                        for kind, count in of_country["overlap_kind"]
+                        .value_counts()
+                        .items()
+                    )
                 ),
-                height=560,
-            ),
-        ])
+                lonboard.Map(
+                    lonboard.ScatterplotLayer.from_geopandas(
+                        shown,
+                        get_fill_color=colours,
+                        radius_units="pixels",
+                        get_radius=radius,
+                        radius_min_pixels=radius,
+                        radius_max_pixels=radius,
+                    ),
+                    height=560,
+                ),
+            ]
+        )
 
     return (country_map,)
 
@@ -141,12 +153,16 @@ def _(MEDALLION_ROOT):
     con.execute("INSTALL spatial; LOAD spatial;")
 
     # The newest extract taken for each country, which is the one the crossings were derived from.
-    extracts = con.execute(f"""
+    extracts = (
+        con.execute(f"""
         SELECT country, extract_id, min_lon, min_lat, max_lon, max_lat
         FROM read_parquet('{MEDALLION_ROOT}/bronze/extract_manifest/*.parquet')
         QUALIFY row_number() OVER (PARTITION BY country ORDER BY extracted_at DESC) = 1
         ORDER BY country
-    """).fetchdf().set_index("country")
+    """)
+        .fetchdf()
+        .set_index("country")
+    )
     extracts
     return con, extracts
 
@@ -188,9 +204,10 @@ def _(
         ).fetchdf()
         return gpd.GeoDataFrame(
             rows.drop(columns=["wkb"]),
-            geometry=gpd.GeoSeries.from_wkb(rows["wkb"].map(bytes), crs="EPSG:4326"),
+            geometry=gpd.GeoSeries.from_wkb(
+                rows["wkb"].map(bytes), crs="EPSG:4326"
+            ),
         )
-
 
     def extract_glob(country: str, theme: str, type_: str) -> str:
         extract_id = extracts.loc[country, "extract_id"]
@@ -198,7 +215,6 @@ def _(
             f"{MEDALLION_ROOT}/bronze/overture_extract/extract_id={extract_id}"
             f"/theme={theme}/type={type_}/*.parquet"
         )
-
 
     def country_of(bounds) -> str:
         """The country whose extract window holds the middle of `bounds`."""
@@ -211,8 +227,9 @@ def _(
         ]
         return holding.index[0]
 
-
-    def around(country: str, theme: str, type_: str, bounds, margin: float = 0.01):
+    def around(
+        country: str, theme: str, type_: str, bounds, margin: float = 0.01
+    ):
         min_lon, min_lat, max_lon, max_lat = bounds
         return f"""
             SELECT id, geometry AS geom
@@ -221,21 +238,28 @@ def _(
               AND bbox.ymin <= {max_lat + margin} AND bbox.ymax >= {min_lat - margin}
         """
 
-
     case = cases[cases["name"] == case_pick.value].iloc[0]
     case_country = country_of(case.geometry.bounds)
     case_rail = bronze_gdf(
         around(case_country, "transportation", "segment", case.geometry.bounds)
     )
-    case_water = bronze_gdf(around(case_country, "base", "water", case.geometry.bounds))
+    case_water = bronze_gdf(
+        around(case_country, "base", "water", case.geometry.bounds)
+    )
     case_reps = crossings[crossings["country"] == case_country]
 
     test_viz.case_view(
         case,
         case_rail,
         case_reps,
-        water_polys_gdf=case_water[case_water.geometry.geom_type.isin(["Polygon", "MultiPolygon"])],
-        water_lines_gdf=case_water[case_water.geometry.geom_type.isin(["LineString", "MultiLineString"])],
+        water_polys_gdf=case_water[
+            case_water.geometry.geom_type.isin(["Polygon", "MultiPolygon"])
+        ],
+        water_lines_gdf=case_water[
+            case_water.geometry.geom_type.isin(
+                ["LineString", "MultiLineString"]
+            )
+        ],
     )
     return
 

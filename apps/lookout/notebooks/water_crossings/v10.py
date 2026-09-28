@@ -4,7 +4,7 @@
 #     "geopandas==1.1.4",
 #     "lonboard==0.16.0",
 #     "lookout-medallion",
-#     "marimo==0.23.15",
+#     "marimo==0.25.0",
 #     "matplotlib==3.11.1",
 #     "numpy==2.5.1",
 #     "pyarrow==25.0.0",
@@ -20,7 +20,7 @@
 
 import marimo
 
-__generated_with = "0.23.15"
+__generated_with = "0.25.0"
 app = marimo.App(width="medium")
 
 
