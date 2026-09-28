@@ -62,6 +62,10 @@ test-rust: test-doc
 test-no-docker: test-python test-doc
     cargo nextest run --workspace --profile no-docker
 
+# The geo tests: the crossings the store holds, against the bbox test cases. Needs a filled store.
+test-geo:
+    cargo nextest run --profile geo
+
 # The doctests alone. nextest cannot run them, so cargo does.
 test-doc:
     cargo test --doc --workspace

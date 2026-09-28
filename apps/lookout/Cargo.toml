@@ -36,6 +36,8 @@ redis = { version = "0.27", features = ["tokio-rustls-comp", "tls-rustls", "tls-
 rustls = { version = "0.23", features = ["ring"] }
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
+libtest-mimic = "0.8"
+geojson = "1.0"
 # SedonaDB: a Rust-native, DataFusion/GeoArrow spatial engine used in-process to read
 # Overture GeoParquet, and to read the store back. Not published to
 # crates.io, so pinned to a release tag. We select `aws` (S3 object store) + the

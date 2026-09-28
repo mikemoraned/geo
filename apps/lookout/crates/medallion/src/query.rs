@@ -202,13 +202,30 @@ impl Query {
         }
     }
 
+    pub async fn register_at_without_geometry<L: LayerKind>(
+        &self,
+        dataset: &Dataset<L>,
+        table: &str,
+    ) -> Result<bool, QueryError> {
+        self.register_as_parquet(dataset, table, &[]).await
+    }
+
     async fn register_without_geometry<L: LayerKind>(
         &self,
         dataset: DatasetSpec<L>,
         table: &str,
         key: &str,
     ) -> Result<bool, QueryError> {
-        let dataset = self.root.dataset(dataset);
+        self.register_as_parquet(&self.root.dataset(dataset), table, &[key])
+            .await
+    }
+
+    async fn register_as_parquet<L: LayerKind>(
+        &self,
+        dataset: &Dataset<L>,
+        table: &str,
+        partition_keys: &[&str],
+    ) -> Result<bool, QueryError> {
         if !dataset.is_filled() {
             return Ok(false);
         }
@@ -218,8 +235,12 @@ impl Query {
             .ctx
             .read_parquet(
                 dataset.dir().display().to_string(),
-                ParquetReadOptions::default()
-                    .table_partition_cols(vec![(key.to_string(), DataType::Utf8)]),
+                ParquetReadOptions::default().table_partition_cols(
+                    partition_keys
+                        .iter()
+                        .map(|key| ((*key).to_string(), DataType::Utf8))
+                        .collect(),
+                ),
             )
             .await?;
         self.ctx.ctx.register_table(table, rows.into_view())?;
