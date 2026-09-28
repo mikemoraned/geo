@@ -395,6 +395,11 @@ that today.
 - [ ] Move `inspect_crossings.py`'s rail and water reads onto it, and drop duckdb from that notebook.
 - [ ] Record in `docs/medallion.md` what a python read of bronze names, beside what a read of
       silver names.
+- [ ] Read the silver row through its own definition where a query shapes a struct by hand:
+      `crossings::silver` and `session_crossings::silver` each declare a private
+      `StoredCrossing`, differently, and `crates/crossings/tests/geo.rs` shows the alternative —
+      flatten `WaterCrossingRow` and add only what the row has no column for, the position.
+      Three types of one name, each restating part of a schema the store already declares.
 
 #### Refactors / fixes: bronze fills in a country silver cannot place
 

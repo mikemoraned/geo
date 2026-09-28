@@ -112,3 +112,46 @@ Assuming we have an iOS App, and it is running whilst people are taking pictures
 An onboard model could perhaps be used to do rough interpretation of kind of POI e.g. is it a building or a river or what.
 
 We probably don't want to go down the lines of storing the image, but perhaps there is some on-device or privacy-preserving way to identify exactly what the POI is based on the image.
+
+
+## Slice: upgrades
+
+### Target
+
+Pinned versions are how this repo stays reproducible, and the cost is that they age quietly
+until something forces a move. The move is then taken mid-slice, under pressure, with no way to
+tell an upgrade's breakage from the day's work: marimo went 0.23.15 to 0.25.0 that way, in the
+middle of the UK slice, because a sandbox stopped resolving. This slice is the scheduled version
+of that — find what is behind, move it deliberately, and record what each move cost.
+
+One upgrade is already owed, and it is holding work back.
+
+**SedonaDB 0.4.0 panics scanning a wide bronze partition.** `index out of bounds: the len is 7
+but the index is 18`, in `rust/sedona-expr/src/spatial_filter.rs:558`, where geometry statistics
+are indexed by a column's position in the *file* schema against statistics gathered for the
+*projected* one. It bites when the geometry column sits past the projected column count:
+`transportation/segment` carries geometry at index 18 and dies, `divisions/division_area` carries
+it at index 1 and reads. Apache SedonaDB issue
+[#389](https://github.com/apache/sedona-db/issues/389), "Parquet pruning expressions should be
+evaluated against the projected schema and not the file schema", is the same mistake and is
+closed by PR #385, and 0.4.1 is released. Until that lands here, bronze geometry is read as plain
+parquet and decoded from WKB, which is what `Query::register_at_without_geometry` is for.
+
+### Tasks
+
+- [ ] Report what is behind, in one command: the rust dependencies, the python ones each notebook
+      pins, and the toolchain. What the report costs to run decides how often an upgrade is
+      considered at all.
+- [ ] Take SedonaDB to 0.4.1 or later, and scan `transportation/segment` through the geo reader
+      to see whether the panic is gone. Where the plain-parquet read was only a way round it,
+      drop it; where it is the honest read — a partition value, a column with no CRS to declare —
+      keep it.
+- [ ] Move arrow, parquet and datafusion with SedonaDB. The workspace comment pins them to the
+      generation SedonaDB builds against, so they are one decision rather than four.
+- [ ] Pin the ESP toolchain, which `rust-toolchain.toml` leaves as `channel = "esp"`. A device
+      build therefore moves under us, and
+      [2026-09-21-m5-reboots.md](2026-09-21-m5-reboots.md) already recommends pinning it whatever
+      the cause of that fault turns out to be.
+- [ ] Say in each upgrade's commit what it cost: what broke, what was rewritten, and what a
+      reader would otherwise mistake for the feature it travelled with.
+
