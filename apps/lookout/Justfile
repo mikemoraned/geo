@@ -138,6 +138,11 @@ silver-crossings *args:
 silver-water-crossings:
     uv run --no-project --reinstall-package lookout-medallion notebooks/water_crossings/v10.py
 
+# Check the water crossings the store holds against the bbox test cases. Reads; derives nothing.
+crossing-checks:
+    uv run --no-project --reinstall-package lookout-medallion \
+        notebooks/water_crossings/check_cases.py
+
 # Derive silver `session_crossing`: the crossings each recorded session passed.
 silver-session-crossings *args:
     cargo run --release -p session_crossings --bin match_crossings -- {{args}}
