@@ -356,25 +356,30 @@ of it.
 #### Gold and the kiosk
 
 - [x] Re-run `just silver-session-crossings`, and record what the GB session matched.
-- [ ] Take the best `max_sessions` per country in `crates/session_crossings/src/gold.rs`,
-      joining `session` for the country, and say per-country in the `--max-sessions` help.
-- [ ] Test that a country with fewer than `max_sessions` qualifying sessions contributes what
+- [x] Take the best `max_sessions` per country in `crates/session_crossings/src/gold.rs`,
+      joining `session` for the country, and say per-country in the `--max-sessions` help. The
+      samples come from the same per-country read, so the union read it used is gone.
+- [x] Test that a country with fewer than `max_sessions` qualifying sessions contributes what
       it has, and crowds out no other country.
-- [ ] Run `just gold-pack-sessions` and `just kiosk-sessions`. Record the sessions kept per
+- [x] Run `just gold-pack-sessions` and `just kiosk-sessions`. Record the sessions kept per
       country and the bytes. Only after the crossings notebook has run.
-- [ ] Run `just gold-pack-crossings` and `just crossings`. Record `crossings`, `packed_bytes`
+- [x] Run `just gold-pack-crossings` and `just crossings`. Record `crossings`, `packed_bytes`
       and `json_bytes`.
+- [x] Check the carried crossings against every country the store supports rather than against
+      Germany's box, which the GB points fail. `Country::bounds` says where a country is,
+      coarsely, and `m5-core` takes the store as a dev-dependency to read it — host-only, as its
+      `predictor` fixtures already are.
 
 #### The invariant on the device
 
 An early read on the DE and GB set, before the release bump makes finding out expensive.
 The release group below confirms it on the final set.
 
-- [ ] Build `just m5plus-build-release`, and measure the release ELF's total size and the
+- [x] Build `just m5plus-build-release`, and measure the release ELF's total size and the
       rodata carrying the point set, against the recorded 764,694 and 212,256 bytes.
 - [ ] Flash the release build and record the per-scan microseconds at the new count, against
       the recorded 4,353 to 5,025 µs for 5,749 crossings. The user's to run: Claude cannot
-      flash the device.
+      flash the device. The scan is linear in the count, so expect 7,800 to 9,000 µs.
 - [ ] Decide whether the invariant holds on those two numbers. Raise a slice for a more compact
       representation only if it does not.
 
@@ -467,6 +472,24 @@ Last, so it moves both countries at once over work that is already proven on 202
 
 ### Observations
 
+- **The firmware grows by a tenth, and the set by four fifths.** Measured on the release ELF
+  built 2026-09-29: 837,490 bytes of loaded sections against the recorded 764,694, of which
+  `.flash.rodata` is 269,616 against 212,256, and 7,922 bytes of static RAM against 7,882. The
+  rodata's extra 57,360 bytes is the packed set going from about 69,000 bytes to 123,228, against
+  8 MB of flash. The debug build flashed and booted carrying 10,268 crossings, so the Xtensa build
+  minds neither the second country nor the store arriving as a dev-dependency of `m5-core`.
+- **Gold keeps three German sessions and the one British one.** `just gold-pack-sessions` on
+  2026-09-28 chose 4 at `--min-crossings 5 --max-sessions 3`: DE at 41, 39 and 27 crossings, GB at
+  6, over 1,692 samples and 204,620 bytes. A global cap would have taken 41, 39 and 27 and left GB
+  out; the per-country cap is what keeps it.
+- **The device set is 10,268 points in 123,228 bytes packed, 330,512 as JSON.** Up from 5,749
+  points and about 184 KB, from the two extracts `20260804T152143Z` and `20260927T172559Z`. Of the
+  carried points 5,760 fall in Germany's window and 4,508 in the UK's, none outside either.
+- **A silver write sweeps the countries its rows do not cover.** The gold fixture wrote DE and
+  then GB in two calls to `write_geo_rows`, and the second deleted the first: a write replaces
+  the dataset, so every country it is to hold goes in one call. The crossings notebook already
+  follows that rule by writing both countries in one `write_silver`; here a test failed until the
+  fixture did the same.
 - **`inspect_crossings.py` draws the store back, a country at a time.** Seven cells: the silver crossings
   read through `query_silver` per country, a map of each country's crossings coloured by overlap
   kind, and the four bbox test cases through `crossing_checks` and `test_viz`, with the country of
