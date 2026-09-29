@@ -1,7 +1,7 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
-use geo_types::Point;
+use geo_types::{Point, Rect, coord};
 
 pub const COUNTRY: &str = "country";
 
@@ -65,6 +65,14 @@ impl Country {
         }
     }
 
+    pub fn bounds(self) -> Rect<f64> {
+        let (min, max) = match self {
+            Country::Germany => ((5.8, 47.2), (15.1, 55.2)),
+            Country::UnitedKingdom => ((-14.1, 49.6), (2.2, 61.1)),
+        };
+        Rect::new(coord! { x: min.0, y: min.1 }, coord! { x: max.0, y: max.1 })
+    }
+
     pub fn projected_projjson(self) -> &'static str {
         match self {
             Country::Germany => include_str!("etrs89_utm32n.projjson.json"),
@@ -75,7 +83,35 @@ impl Country {
 
 #[cfg(test)]
 mod tests {
+    use geo::Contains;
+
     use super::*;
+
+    #[test]
+    fn a_country_holds_a_place_known_to_be_in_it() {
+        for (country, place) in [
+            (Country::Germany, Point::new(13.404954, 52.520008)),
+            (Country::UnitedKingdom, Point::new(-3.188267, 55.953251)),
+        ] {
+            assert!(country.bounds().contains(&place), "{country}: {place:?}");
+        }
+    }
+
+    #[test]
+    fn no_country_holds_a_place_in_another() {
+        assert!(
+            !Country::Germany
+                .bounds()
+                .contains(&Point::new(-3.188267, 55.953251)),
+            "Edinburgh is not in Germany's window"
+        );
+        assert!(
+            !Country::UnitedKingdom
+                .bounds()
+                .contains(&Point::new(13.404954, 52.520008)),
+            "Berlin is not in the UK's window"
+        );
+    }
 
     #[test]
     fn each_country_bundles_the_projjson_of_the_epsg_it_names() {

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use domain::SessionId;
 use domain::{Gps, Sample};
-use medallion::{Query, Root};
+use medallion::{Country, Query, Root};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,20 +31,45 @@ pub enum ChooseError {
 }
 
 pub async fn choose(root: &Root, choosing: Choosing) -> Result<Vec<Replay>, ChooseError> {
-    let query = Query::new(root.clone());
-    if !query
+    if !Query::new(root.clone())
         .register_if_present(medallion_model::SESSION_CROSSING, "session_crossing")
         .await?
     {
         return Err(ChooseError::Missing("session_crossing"));
     }
 
+    let mut replays = Vec::new();
+    for country in medallion::countries_of(root, medallion_model::SESSION).await? {
+        replays.extend(chosen_in(root, country, choosing).await?);
+    }
+    Ok(replays)
+}
+
+async fn chosen_in(
+    root: &Root,
+    country: Country,
+    choosing: Choosing,
+) -> Result<Vec<Replay>, ChooseError> {
+    let query = Query::new(root.clone());
+    query
+        .register_if_present(medallion_model::SESSION_CROSSING, "session_crossing")
+        .await?;
+    for (dataset, table) in [
+        (medallion_model::SESSION, "session"),
+        (medallion_model::SESSION_SAMPLE, "session_sample"),
+    ] {
+        if !query.register_of_country(dataset, table, country).await? {
+            return Ok(Vec::new());
+        }
+    }
+
     let counted: Vec<Counted> = query
         .rows(&format!(
-            "SELECT session_id, COUNT(*) AS crossings FROM session_crossing
-             GROUP BY session_id
+            "SELECT c.session_id, COUNT(*) AS crossings
+             FROM session_crossing c JOIN session s USING (session_id)
+             GROUP BY c.session_id
              HAVING COUNT(*) >= {min}
-             ORDER BY crossings DESC, session_id
+             ORDER BY crossings DESC, c.session_id
              LIMIT {max}",
             min = choosing.min_crossings,
             max = choosing.max_sessions,
@@ -58,19 +83,15 @@ pub async fn choose(root: &Root, choosing: Choosing) -> Result<Vec<Replay>, Choo
         .iter()
         .map(|session| format!("'{}'", session.session_id))
         .collect();
-    let samples: Vec<StoredSample> = medallion::rows_of_every_country(
-        root,
-        medallion_model::SESSION_SAMPLE,
-        "session_sample",
-        &format!(
+    let samples: Vec<StoredSample> = query
+        .rows(&format!(
             "SELECT session_id, t, lat, lon, alt, acc, speed, heading
              FROM session_sample
              WHERE session_id IN ({})
              ORDER BY session_id, seq",
             chosen.join(", "),
-        ),
-    )
-    .await?;
+        ))
+        .await?;
 
     let mut by_session: HashMap<SessionId, Vec<Sample<f64>>> = HashMap::new();
     for sample in samples {

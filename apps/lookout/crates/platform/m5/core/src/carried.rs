@@ -15,6 +15,9 @@ pub fn crossings() -> PointSet<'static> {
 mod tests {
     use chrono::{DateTime, Utc};
     use domain::Sample;
+    use geo::Contains;
+    use geo_types::Point;
+    use medallion::Country;
     use predictor::{CrowFlies, DEFAULT_RADIUS_METRES, Event, Predict};
 
     use super::*;
@@ -30,13 +33,17 @@ mod tests {
     }
 
     #[test]
-    fn every_carried_crossing_is_somewhere_in_germany() {
+    fn every_carried_crossing_is_somewhere_in_a_supported_country() {
         let crossings = crossings();
 
         for point in crossings.iter() {
+            let at = Point::new(point.longitude as f64, point.latitude as f64);
             assert!(
-                (47.0..=55.0).contains(&point.latitude) && (6.0..=15.1).contains(&point.longitude),
-                "{point:?} is not in Germany",
+                Country::ALL
+                    .into_iter()
+                    .any(|country| country.bounds().contains(&at)),
+                "{point:?} is in none of {}",
+                Country::codes(),
             );
         }
     }

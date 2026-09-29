@@ -4551,6 +4551,9 @@ dependencies = [
  "chrono",
  "crux_core",
  "domain",
+ "geo",
+ "geo-types",
+ "medallion",
  "platform-core",
  "predictor",
 ]

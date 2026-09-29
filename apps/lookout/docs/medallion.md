@@ -236,6 +236,10 @@ an Arrow record batch.** A column holding two CRSs describes none of its values,
 which of the two it is in, and a reader that averages, measures or indexes that column computes on
 mixed units.
 
+A country also knows the rectangle it spans, rounded outward: where it is, not where it ends. It
+answers a sanity check — whether a point set holds only points from countries the store supports —
+while placing a point uses the areas themselves, and an extract's window comes from the release.
+
 Silver and gold hold only countries the store can place: a country level names one of the
 countries the store defines a zone for, and a partition under any other code is a fault to report
 rather than rows to read. Bronze is free of that — it records what was observed, including an
