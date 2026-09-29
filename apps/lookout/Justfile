@@ -175,9 +175,9 @@ m5plus-flash: m5plus-build
 m5plus-flash-release: m5plus-build-release
     cd {{m5plus_dir}} && espflash flash --monitor target/xtensa-esp32-espidf/release/m5plus
 
-# Tail the console of whatever is already flashed.
-m5plus-monitor:
-    cd {{m5plus_dir}} && espflash monitor
+# Tail the console of what is already flashed, leaving it running. Leave with ctrl-A then K.
+m5plus-monitor port=`ls /dev/cu.usbserial-* 2>/dev/null | head -1`:
+    screen {{port}} 115200
 
 # The sessions the store holds, as `just replay` names them.
 sessions *args:

@@ -377,11 +377,13 @@ The release group below confirms it on the final set.
 
 - [x] Build `just m5plus-build-release`, and measure the release ELF's total size and the
       rodata carrying the point set, against the recorded 764,694 and 212,256 bytes.
-- [ ] Flash the release build and record the per-scan microseconds at the new count, against
+- [x] Flash the release build and record the per-scan microseconds at the new count, against
       the recorded 4,353 to 5,025 µs for 5,749 crossings. The user's to run: Claude cannot
-      flash the device. The scan is linear in the count, so expect 7,800 to 9,000 µs.
-- [ ] Decide whether the invariant holds on those two numbers. Raise a slice for a more compact
-      representation only if it does not.
+      flash the device. The firmware now reports the slowest sentence of each minute, which is
+      the one that scanned, so a monitor session answers it.
+- [x] Decide whether the invariant holds on those two numbers. Raise a slice for a more compact
+      representation only if it does not. It holds: a tenth of flash and a hundredth of the gap
+      between fixes, so no slice is raised.
 
 #### Refactors / fixes: python reads bronze through the store
 
@@ -472,6 +474,12 @@ Last, so it moves both countries at once over work that is already proven on 202
 
 ### Observations
 
+- **A scan of both countries costs 8,949 µs, and the device carries them.** Twenty reports from
+  the release build on 2026-09-29 ran 8,894 to 9,004 µs, against 4,353 to 5,025 µs for the 5,749
+  crossings before — 0.872 µs per crossing against about 0.82, so the scan is linear in the count
+  with a little to spare for the longer walk through flash. That is 0.89% of the one second
+  between fixes, where the recorded figure was 0.5%. Stack unused fell from 9,996 bytes to 9,980,
+  and free heap stands at 2.28 MB. Nothing here needs a more compact representation.
 - **The firmware grows by a tenth, and the set by four fifths.** Measured on the release ELF
   built 2026-09-29: 837,490 bytes of loaded sections against the recorded 764,694, of which
   `.flash.rodata` is 269,616 against 212,256, and 7,922 bytes of static RAM against 7,882. The
