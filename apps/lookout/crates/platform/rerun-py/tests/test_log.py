@@ -11,6 +11,6 @@ def test_a_replay_draws_to_every_stream(store, recording):
     reader = Store(store)
     crossings = reader.crossings(country=COUNTRY)
 
-    draw(recording, replay(CrowFlies(crossings), reader.samples(SESSION)), crossings)
+    draw(recording, replay(CrowFlies(crossings), reader.samples(SESSION, COUNTRY)), crossings)
 
     assert {LOG, POSITION, POSITIONS, PREDICTIONS} <= streams(recording)

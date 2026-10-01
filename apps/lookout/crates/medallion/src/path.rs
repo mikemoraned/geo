@@ -153,7 +153,7 @@ fn workspace_root() -> Result<PathBuf, StoreNotFound> {
         })
 }
 
-fn any_file_under(dir: &Path) -> bool {
+pub(crate) fn any_file_under(dir: &Path) -> bool {
     std::fs::read_dir(dir).is_ok_and(|entries| {
         entries.flatten().any(|entry| {
             entry.path().is_dir() && any_file_under(&entry.path()) || entry.path().is_file()

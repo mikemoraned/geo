@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use medallion::{Country, Query, QueryError, Root, ScalarValue, TableError, UnknownCountry};
+use medallion::{
+    Country, DatasetSpec, Query, QueryError, Root, ScalarValue, TableError, UnknownCountry, layers,
+};
 use medallion_model::TargetError;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -129,6 +131,121 @@ fn query_silver(
     PyTable::try_new(batches, schema).map_err(|err| PyRuntimeError::new_err(err.to_string()))
 }
 
+enum BronzeTable {
+    Dataset(DatasetSpec<layers::Bronze>),
+    Overture { theme: String, of_type: String },
+}
+
+fn within(named: &HashMap<String, String>, key: &str, table: &str) -> PyResult<String> {
+    named.get(key).cloned().ok_or_else(|| {
+        PyValueError::new_err(format!(
+            "the table {table} names no {key} of the extracts to read"
+        ))
+    })
+}
+
+fn bronze_table(
+    name: &str,
+    tables: &HashMap<String, HashMap<String, String>>,
+) -> PyResult<BronzeTable> {
+    if let Some(named) = tables.get(name) {
+        return Ok(BronzeTable::Overture {
+            theme: within(named, "theme", name)?,
+            of_type: within(named, "type", name)?,
+        });
+    }
+
+    let dataset = medallion_model::bronze_dataset(name)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    match dataset.name == medallion_model::OVERTURE_EXTRACT.name {
+        true => Err(PyValueError::new_err(format!(
+            "{name} spans themes whose columns differ, so a read of it names the theme and type \
+             it reads: tables={{\"{name}\": {{\"theme\": ..., \"type\": ...}}}}"
+        ))),
+        false => Ok(BronzeTable::Dataset(dataset)),
+    }
+}
+
+/// Query bronze, returning an Arrow table: the datasets the query names are its tables.
+///
+/// `tables` names the theme and type of `overture_extract` a table reads, which covers every
+/// extract taken, the rows carrying the `extract_id` they came from. `params` binds the query's
+/// `$name` placeholders as values. Geometry comes back as the WKB the extract holds. See
+/// `docs/medallion.md`.
+#[pyfunction]
+#[pyo3(signature = (sql, *, tables=None, params=None, root=None))]
+fn query_bronze(
+    py: Python<'_>,
+    sql: &str,
+    tables: Option<HashMap<String, HashMap<String, String>>>,
+    params: Option<HashMap<String, Param>>,
+    root: Option<PathBuf>,
+) -> PyResult<PyTable> {
+    let tables = tables.unwrap_or_default();
+    let named = medallion::table_references(sql)
+        .map_err(query_error)?
+        .into_iter()
+        .map(|name| Ok((bronze_table(&name, &tables)?, name)))
+        .collect::<PyResult<Vec<_>>>()?;
+    let root = root_or_default(root)?;
+    let params = params
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(name, param)| (name, ScalarValue::from(param)))
+        .collect();
+
+    let batches = py
+        .detach(|| {
+            runtime().block_on(async {
+                let query = Query::new(root);
+                for (table, name) in &named {
+                    match table {
+                        BronzeTable::Dataset(dataset) => {
+                            query.register_bronze(*dataset, name).await?;
+                        }
+                        BronzeTable::Overture { theme, of_type } => {
+                            query
+                                .register_within_every_partition(
+                                    medallion_model::OVERTURE_EXTRACT,
+                                    name,
+                                    &[("theme", theme), ("type", of_type)],
+                                )
+                                .await?;
+                        }
+                    }
+                }
+                query.sql_with_params(sql, params).await
+            })
+        })
+        .map_err(query_error)?;
+
+    let schema = batches
+        .first()
+        .map(|batch| batch.schema())
+        .expect("a query answers with at least one batch");
+
+    PyTable::try_new(batches, schema).map_err(|err| PyRuntimeError::new_err(err.to_string()))
+}
+
+/// The countries a silver dataset holds a partition for, as the codes a read of it names.
+///
+/// A dataset holding no country level answers with none. See `docs/medallion.md`.
+#[pyfunction]
+#[pyo3(signature = (dataset, *, root=None))]
+fn countries_of(py: Python<'_>, dataset: &str, root: Option<PathBuf>) -> PyResult<Vec<String>> {
+    let target = medallion_model::silver_target(dataset).map_err(target_error)?;
+    let root = root_or_default(root)?;
+
+    let countries = py
+        .detach(|| runtime().block_on(medallion::countries_of(&root, target.spec())))
+        .map_err(query_error)?;
+
+    Ok(countries
+        .into_iter()
+        .map(|country| country.code().to_string())
+        .collect())
+}
+
 /// The CRS a country's projected geometry is stored in, as an authority string a python
 /// geometry library takes (`"EPSG:25832"`). See `docs/medallion.md`.
 #[pyfunction]
@@ -176,7 +293,9 @@ fn query_error(err: QueryError) -> PyErr {
         | QueryError::UnknownCountry { .. }
         | QueryError::CountryNeeded { .. }
         | QueryError::NoCountryLevel { .. } => PyValueError::new_err(err.to_string()),
-        QueryError::Rows(_) | QueryError::Path(_) => PyRuntimeError::new_err(err.to_string()),
+        QueryError::Rows(_) | QueryError::Path(_) | QueryError::List { .. } => {
+            PyRuntimeError::new_err(err.to_string())
+        }
     }
 }
 
@@ -205,6 +324,8 @@ fn table_error(err: TableError) -> PyErr {
 fn lookout_medallion(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(write_silver, module)?)?;
     module.add_function(wrap_pyfunction!(query_silver, module)?)?;
+    module.add_function(wrap_pyfunction!(query_bronze, module)?)?;
+    module.add_function(wrap_pyfunction!(countries_of, module)?)?;
     module.add_function(wrap_pyfunction!(projected_crs, module)?)?;
     module.add_function(wrap_pyfunction!(division_id, module)?)?;
     module.add_function(wrap_pyfunction!(default_root, module)?)?;

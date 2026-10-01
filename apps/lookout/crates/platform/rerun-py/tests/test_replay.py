@@ -10,7 +10,7 @@ def test_every_sample_is_a_step_carrying_what_was_predicted_from_it(store):
     reader = Store(store)
 
     steps = list(
-        replay(CrowFlies(reader.crossings(country=COUNTRY)), reader.samples(SESSION))
+        replay(CrowFlies(reader.crossings(country=COUNTRY)), reader.samples(SESSION, COUNTRY))
     )
 
     assert len(steps) == 4
@@ -23,7 +23,7 @@ def test_a_crossing_ahead_draws_nearer_as_the_session_runs(store):
     reader = Store(store)
 
     steps = list(
-        replay(CrowFlies(reader.crossings(country=COUNTRY)), reader.samples(SESSION))
+        replay(CrowFlies(reader.crossings(country=COUNTRY)), reader.samples(SESSION, COUNTRY))
     )
 
     metres = [step.predictions[0].metres for step in steps]
@@ -35,7 +35,7 @@ def test_the_first_fix_predicts_no_time_and_the_rest_do(store):
     reader = Store(store)
 
     steps = list(
-        replay(CrowFlies(reader.crossings(country=COUNTRY)), reader.samples(SESSION))
+        replay(CrowFlies(reader.crossings(country=COUNTRY)), reader.samples(SESSION, COUNTRY))
     )
 
     assert steps[0].predictions[0].at is None
@@ -48,7 +48,7 @@ def test_the_radius_bounds_what_a_step_carries(store):
     steps = list(
         replay(
             CrowFlies(reader.crossings(country=COUNTRY), radius_metres=3_000.0),
-            reader.samples(SESSION),
+            reader.samples(SESSION, COUNTRY),
         )
     )
 
@@ -57,4 +57,4 @@ def test_the_radius_bounds_what_a_step_carries(store):
 
 
 def test_a_session_with_no_samples_replays_as_nothing(store):
-    assert list(replay(CrowFlies(Store(store).crossings()), [])) == []
+    assert list(replay(CrowFlies(Store(store).crossings(COUNTRY)), [])) == []

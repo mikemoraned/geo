@@ -153,3 +153,11 @@ class TestWhatIsRefused:
                 "SELECT trip_id FROM train_segment WHERE trip_id = $trip",
                 params={"trip": {"not": "a value"}},
             )
+
+
+def test_the_countries_a_dataset_holds_come_back_as_codes(written):
+    assert lookout_medallion.countries_of("water_crossing", root=str(written)) == ["DE"]
+
+
+def test_a_dataset_that_was_never_written_holds_no_countries(store):
+    assert lookout_medallion.countries_of("water_crossing", root=str(store)) == []

@@ -14,7 +14,8 @@ use sedona_geoparquet::provider::GeoParquetReadOptions;
 use crate::country::{COUNTRY, Country};
 use crate::dataset::DatasetSpec;
 use crate::layer::{LayerKind, layers};
-use crate::path::{Dataset, Root};
+use crate::partition::Partition;
+use crate::path::{Dataset, Root, any_file_under};
 use crate::table::{Layout, SilverTarget};
 
 #[derive(Debug, thiserror::Error)]
@@ -30,6 +31,12 @@ pub enum QueryError {
     Rows(#[from] serde_arrow::Error),
     #[error("naming a country's partition: {0}")]
     Path(#[from] crate::partition::PathError),
+    #[error("listing the partitions of {path}: {source}")]
+    List {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
     #[error("{dataset} holds a partition for {source}")]
     UnknownCountry {
         dataset: &'static str,
@@ -161,6 +168,79 @@ impl Query {
             }),
             (false, None) => self.register_by_name(target.spec()).await,
         }
+    }
+
+    pub async fn register_bronze(
+        &self,
+        dataset: DatasetSpec<layers::Bronze>,
+        table: &str,
+    ) -> Result<(), QueryError> {
+        let keys: Vec<&str> = dataset.partition_key.into_iter().collect();
+        match self
+            .register_as_parquet(&self.root.dataset(dataset), table, &keys)
+            .await?
+        {
+            true => Ok(()),
+            false => Err(QueryError::NoSuchDataset {
+                layer: dataset.layer().as_str(),
+                dataset: dataset.name.to_string(),
+            }),
+        }
+    }
+
+    pub async fn register_within_every_partition<L: LayerKind>(
+        &self,
+        dataset: DatasetSpec<L>,
+        table: &str,
+        within: &[(&str, &str)],
+    ) -> Result<(), QueryError> {
+        let deeper = within
+            .iter()
+            .map(|(key, value)| Ok(Partition::new(key, value)?.to_string()))
+            .collect::<Result<Vec<_>, crate::partition::PathError>>()?;
+
+        let top = self.root.dataset(dataset);
+        if !top.is_filled() {
+            return Err(QueryError::NoSuchDataset {
+                layer: dataset.layer().as_str(),
+                dataset: dataset.name.to_string(),
+            });
+        }
+
+        let top = top.dir();
+        let listed = std::fs::read_dir(&top).map_err(|source| QueryError::List {
+            path: top.display().to_string(),
+            source,
+        })?;
+        let dirs: Vec<String> = listed
+            .flatten()
+            .map(|entry| {
+                let mut dir = entry.path();
+                dir.extend(deeper.iter());
+                dir
+            })
+            .filter(|dir| any_file_under(dir))
+            .map(|dir| format!("{}/", dir.display()))
+            .collect();
+
+        if dirs.is_empty() {
+            return Err(QueryError::NoSuchDataset {
+                layer: dataset.layer().as_str(),
+                dataset: [dataset.name.to_string()]
+                    .into_iter()
+                    .chain(deeper)
+                    .collect::<Vec<_>>()
+                    .join("/"),
+            });
+        }
+
+        let rows = self
+            .ctx
+            .ctx
+            .read_parquet(dirs, ParquetReadOptions::default())
+            .await?;
+        self.ctx.ctx.register_table(table, rows.into_view())?;
+        Ok(())
     }
 
     pub async fn register_by_name<L: LayerKind>(
@@ -550,6 +630,105 @@ mod tests {
 
         assert!(
             matches!(err, Err(QueryError::NoCountryLevel { .. })),
+            "{err:?}"
+        );
+    }
+
+    async fn store_deeper<L: LayerKind>(
+        root: &Root,
+        spec: DatasetSpec<L>,
+        kind: &str,
+        theme: &str,
+        id: i64,
+    ) {
+        let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
+        root.dataset(spec)
+            .partition("kind", kind)
+            .unwrap()
+            .partition("theme", theme)
+            .unwrap()
+            .append(
+                Utc.with_ymd_and_hms(2026, 7, 26, 9, 0, 0).unwrap(),
+                &[
+                    RecordBatch::try_new(schema, vec![Arc::new(Int64Array::from(vec![id]))])
+                        .unwrap(),
+                ],
+            )
+            .await
+            .unwrap();
+    }
+
+    #[derive(Debug, serde::Deserialize, PartialEq)]
+    struct KindOf {
+        id: i64,
+        kind: String,
+    }
+
+    #[tokio::test]
+    async fn a_bronze_dataset_reads_its_own_partition_key_as_a_column() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = store_with_rows(tmp.path(), vec![1], vec!["a"]).await;
+        let query = Query::new(root);
+        query.register_bronze(THING, "thing").await.unwrap();
+
+        let rows: Vec<KindOf> = query.rows("SELECT id, kind FROM thing").await.unwrap();
+
+        assert_eq!(
+            rows,
+            vec![KindOf {
+                id: 1,
+                kind: "a".into()
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_bronze_dataset_that_was_never_written_is_reported_as_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let query = Query::new(Root::new(tmp.path()));
+
+        assert!(matches!(
+            query.register_bronze(THING, "thing").await,
+            Err(QueryError::NoSuchDataset { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn one_level_of_every_partition_reads_as_a_single_table() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = Root::new(tmp.path());
+        store_deeper(&root, THING, "a", "base", 1).await;
+        store_deeper(&root, THING, "b", "base", 2).await;
+        store_deeper(&root, THING, "b", "other", 3).await;
+
+        let query = Query::new(root);
+        query
+            .register_within_every_partition(THING, "thing", &[("theme", "base")])
+            .await
+            .unwrap();
+
+        let rows: Vec<Row> = query
+            .rows("SELECT id, 'x' AS name FROM thing ORDER BY id")
+            .await
+            .unwrap();
+
+        assert_eq!(rows.iter().map(|row| row.id).collect::<Vec<_>>(), [1, 2]);
+    }
+
+    #[tokio::test]
+    async fn a_level_no_partition_holds_is_reported_as_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = Root::new(tmp.path());
+        store_deeper(&root, THING, "a", "base", 1).await;
+        let query = Query::new(root);
+
+        let err = query
+            .register_within_every_partition(THING, "thing", &[("theme", "missing")])
+            .await;
+
+        assert!(
+            matches!(err, Err(QueryError::NoSuchDataset { ref dataset, .. })
+                if dataset == "thing/theme=missing"),
             "{err:?}"
         );
     }

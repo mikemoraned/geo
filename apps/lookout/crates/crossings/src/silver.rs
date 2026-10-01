@@ -1,5 +1,6 @@
-use domain::{CoordinateError, CrossingCompactId, CrossingId};
+use domain::{CoordinateError, CrossingCompactId};
 use medallion::Root;
+use medallion_model::WaterCrossingRow;
 use serde::Deserialize;
 
 #[derive(Debug, thiserror::Error)]
@@ -20,22 +21,19 @@ pub struct Crossing {
 }
 
 #[derive(Debug, Deserialize)]
-struct StoredCrossing {
-    crossing_id: CrossingId,
-    crossing_compact_id: CrossingCompactId,
-    extract_id: String,
+struct PlacedCrossing {
+    #[serde(flatten)]
+    row: WaterCrossingRow,
     lon: f64,
     lat: f64,
 }
 
 pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
-    let stored: Vec<StoredCrossing> = medallion::rows_of_every_country(
+    let stored: Vec<PlacedCrossing> = medallion::rows_of_every_country(
         root,
         medallion_model::WATER_CROSSING,
         "water_crossing",
-        "SELECT crossing_id, crossing_compact_id, extract_id,
-                ST_X(geometry) AS lon, ST_Y(geometry) AS lat
-         FROM water_crossing",
+        "SELECT *, ST_X(geometry) AS lon, ST_Y(geometry) AS lat FROM water_crossing",
     )
     .await?;
     if stored.is_empty() {
@@ -48,9 +46,13 @@ pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
         .into_iter()
         .map(|crossing| {
             Ok(Crossing {
-                crossing: domain::Crossing::at(crossing.crossing_id, crossing.lat, crossing.lon)?,
-                compact_id: crossing.crossing_compact_id,
-                extract_id: crossing.extract_id,
+                crossing: domain::Crossing::at(
+                    crossing.row.crossing_id,
+                    crossing.lat,
+                    crossing.lon,
+                )?,
+                compact_id: crossing.row.crossing_compact_id,
+                extract_id: crossing.row.extract_id,
             })
         })
         .collect()

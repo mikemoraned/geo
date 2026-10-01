@@ -203,6 +203,26 @@ device's firmware and served to the browser, so every version packed is committe
 `apps/lookout/crossings.version` names the one being built against.
 `data/medallion/.gitignore` states which datasets this covers.
 
+## Reading from another language
+
+A read from outside the store's own language goes through the same binding as a write, and names
+datasets rather than paths. The table names in a query are the datasets it reads, each registered
+under the name the query used, so a derivation says in SQL what it wants and the store finds the
+files. A name the layer holds no dataset for is refused, with the names it could have been.
+
+A read of a derived dataset names the dataset, and names the country too where that dataset holds
+one zone per country. Reading such a dataset without one is refused rather than answered from an
+arbitrary partition, and geometry comes back in the store's own encoding. A caller asks the store
+which countries a dataset holds, so reading every country appends one read per country instead of
+keeping a list of them in step.
+
+A read of an observation layer names no country, since nothing there is projected per country. A
+dataset's own partition value comes back as a column, so a query reads the layout rather than
+parsing it out of a path. A read of an upstream extract names a theme and type rather than an
+extract: one table cannot span themes whose columns differ, and a theme and type covers every
+extract taken, each row carrying the id of the extract it came from, so the provenance table joins
+to the rows in plain SQL. Geometry comes back as the upstream file holds it.
+
 ## No table format
 
 The layout above *is* the metadata: partitioning is directory names, schema is the files',

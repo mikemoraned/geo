@@ -1,3 +1,4 @@
+mod bronze;
 mod crossing;
 mod gers;
 mod motis;
@@ -8,6 +9,7 @@ mod telemetry;
 
 use medallion::DatasetInfo;
 
+pub use bronze::{NoSuchBronzeDataset, bronze_dataset};
 pub use crossing::{
     OverlapKind, SESSION_CROSSING, SessionCrossingRow, WATER_CROSSING, WaterCrossingRow,
 };

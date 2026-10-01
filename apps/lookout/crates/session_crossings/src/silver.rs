@@ -2,11 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use domain::Bbox;
-use domain::CrossingId;
 use domain::{DeviceId, Pass, SessionId};
 use geo_types::Point;
 use medallion::{Country, DatasetSpec, Query, Replaced, Root, layers};
-use medallion_model::SessionCrossingRow;
+use medallion_model::{SessionCrossingRow, WaterCrossingRow};
 use serde::Deserialize;
 
 use crate::matching::{Crossing, Radius, Sample, Session, passes};
@@ -49,8 +48,9 @@ struct StoredSample {
 }
 
 #[derive(Debug, Deserialize)]
-struct StoredCrossing {
-    crossing_id: CrossingId,
+struct PlacedCrossing {
+    #[serde(flatten)]
+    row: WaterCrossingRow,
     x: f64,
     y: f64,
     lon: f64,
@@ -166,9 +166,9 @@ async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
 }
 
 async fn crossings_in(query: &Query) -> Result<Vec<Crossing>, CrossingError> {
-    let stored: Vec<StoredCrossing> = query
+    let stored: Vec<PlacedCrossing> = query
         .rows(
-            "SELECT crossing_id,
+            "SELECT *,
                     ST_X(geometry_projected) AS x, ST_Y(geometry_projected) AS y,
                     ST_X(geometry) AS lon, ST_Y(geometry) AS lat
              FROM water_crossing",
@@ -179,7 +179,11 @@ async fn crossings_in(query: &Query) -> Result<Vec<Crossing>, CrossingError> {
         .into_iter()
         .map(|crossing| {
             Ok(Crossing {
-                crossing: domain::Crossing::at(crossing.crossing_id, crossing.lat, crossing.lon)?,
+                crossing: domain::Crossing::at(
+                    crossing.row.crossing_id,
+                    crossing.lat,
+                    crossing.lon,
+                )?,
                 projected: Point::new(crossing.x, crossing.y),
             })
         })

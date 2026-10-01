@@ -119,7 +119,7 @@ impl SilverTarget {
         })
     }
 
-    pub(crate) fn spec(&self) -> DatasetSpec<layers::Silver> {
+    pub fn spec(&self) -> DatasetSpec<layers::Silver> {
         self.spec
     }
 

@@ -12,18 +12,25 @@ SESSION = "1e1b4a2c-0000-4000-8000-000000000001"
 DEVICE = "d0000000-0000-4000-8000-000000000001"
 COUNTRY = "DE"
 
+ELSEWHERE_SESSION = "1e1b4a2c-0000-4000-8000-000000000002"
+ELSEWHERE_DEVICE = "d0000000-0000-4000-8000-000000000002"
+ELSEWHERE = "GB"
+
 JUST_BEFORE_MIDNIGHT = datetime.datetime(2026, 7, 25, 23, 58, tzinfo=datetime.UTC)
+AN_HOUR_EARLIER = JUST_BEFORE_MIDNIGHT - datetime.timedelta(hours=1)
 LON = 8.6
 START_LAT = 50.0
+ELSEWHERE_LON = -3.19
+ELSEWHERE_START_LAT = 55.95
 A_HUNDREDTH_OF_A_DEGREE_A_MINUTE = 1 / 100.0
 
 NEAR, FAR = 0x292E417A, 0x51B0C33D
 COMES_INSIDE_THE_RADIUS, STAYS_OUTSIDE_IT = 50.035, 50.06
 
 
-def _projected(points):
+def _projected(points, country):
     transformer = pyproj.Transformer.from_crs(
-        "EPSG:4326", lookout_medallion.projected_crs(COUNTRY), always_xy=True
+        "EPSG:4326", lookout_medallion.projected_crs(country), always_xy=True
     )
     return [shapely.Point(transformer.transform(lon, lat)) for lon, lat in points]
 
@@ -32,13 +39,11 @@ def _wkb(points):
     return pa.array([shapely.to_wkb(shapely.Point(point)) for point in points], pa.binary())
 
 
-def _sample_table():
+def _sample_table(session_id, device_id, country, lon, start_lat, first):
     minutes = range(4)
-    instants = [
-        JUST_BEFORE_MIDNIGHT + datetime.timedelta(minutes=minute) for minute in minutes
-    ]
+    instants = [first + datetime.timedelta(minutes=minute) for minute in minutes]
     points = [
-        (LON, START_LAT + minute * A_HUNDREDTH_OF_A_DEGREE_A_MINUTE) for minute in minutes
+        (lon, start_lat + minute * A_HUNDREDTH_OF_A_DEGREE_A_MINUTE) for minute in minutes
     ]
     speed_absent_until_a_fix_can_derive_it = [
         None if minute == 0 else 18.5 for minute in minutes
@@ -46,8 +51,8 @@ def _sample_table():
 
     return pa.table(
         {
-            "session_id": pa.array([SESSION] * len(instants), pa.string()),
-            "device_id": pa.array([DEVICE] * len(instants), pa.string()),
+            "session_id": pa.array([session_id] * len(instants), pa.string()),
+            "device_id": pa.array([device_id] * len(instants), pa.string()),
             "t": pa.array(instants, pa.timestamp("ms", tz="UTC")),
             "seq": pa.array(list(minutes), pa.uint32()),
             "lat": pa.array([lat for _, lat in points], pa.float64()),
@@ -61,9 +66,10 @@ def _sample_table():
             "implied_speed_mps": pa.array([None] * len(instants), pa.float64()),
             "geometry": _wkb(points),
             "geometry_projected": pa.array(
-                [shapely.to_wkb(point) for point in _projected(points)], pa.binary()
+                [shapely.to_wkb(point) for point in _projected(points, country)],
+                pa.binary(),
             ),
-            "country": pa.array([COUNTRY] * len(instants), pa.string()),
+            "country": pa.array([country] * len(instants), pa.string()),
             "sample_date": pa.array(
                 [instant.date() for instant in instants], pa.date32()
             ),
@@ -94,7 +100,7 @@ def _crossing_table():
             "min_crossing_m": pa.array([5.0] * rows, pa.float64()),
             "geometry": _wkb(points),
             "geometry_projected": pa.array(
-                [shapely.to_wkb(point) for point in _projected(points)], pa.binary()
+                [shapely.to_wkb(point) for point in _projected(points, COUNTRY)], pa.binary()
             ),
             "country": pa.array([COUNTRY] * rows, pa.string()),
         }
@@ -106,9 +112,29 @@ def empty_store(tmp_path):
     return tmp_path
 
 
+def _samples_of_every_country():
+    return pa.concat_tables(
+        [
+            _sample_table(
+                SESSION, DEVICE, COUNTRY, LON, START_LAT, JUST_BEFORE_MIDNIGHT
+            ),
+            _sample_table(
+                ELSEWHERE_SESSION,
+                ELSEWHERE_DEVICE,
+                ELSEWHERE,
+                ELSEWHERE_LON,
+                ELSEWHERE_START_LAT,
+                AN_HOUR_EARLIER,
+            ),
+        ]
+    )
+
+
 @pytest.fixture
 def store(tmp_path):
-    lookout_medallion.write_silver("session_sample", _sample_table(), root=str(tmp_path))
+    lookout_medallion.write_silver(
+        "session_sample", _samples_of_every_country(), root=str(tmp_path)
+    )
     lookout_medallion.write_silver("water_crossing", _crossing_table(), root=str(tmp_path))
     return tmp_path
 

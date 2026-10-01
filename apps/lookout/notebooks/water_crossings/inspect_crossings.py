@@ -1,6 +1,5 @@
 # /// script
 # dependencies = [
-#     "duckdb==1.5.5",
 #     "geopandas==1.1.4",
 #     "lonboard==0.16.0",
 #     "lookout-medallion==0.1.0",
@@ -11,8 +10,8 @@
 # ]
 # requires-python = ">=3.13"
 #
-# # The store's own reader, so this notebook reads silver through the implementation that wrote
-# # it. Built from the workspace by uv; see the crate's README.
+# # The store's own reader, so this notebook reads the store through the implementation that
+# # wrote it. Built from the workspace by uv; see the crate's README.
 # [tool.uv.sources]
 # lookout-medallion = { path = "../../crates/medallion-py" }
 # ///
@@ -38,9 +37,11 @@ def _():
 
     # A projected column is written in each country's own zone, so silver is read a country at a
     # time. See docs/medallion.md.
-    COUNTRIES = ("DE", "GB")
+    COUNTRIES = lookout_medallion.countries_of(
+        "water_crossing", root=str(MEDALLION_ROOT)
+    )
 
-    MEDALLION_ROOT
+    COUNTRIES
     return (
         COUNTRIES,
         MEDALLION_ROOT,
@@ -55,18 +56,36 @@ def _():
 
 
 @app.cell
-def _(COUNTRIES, MEDALLION_ROOT, gpd, lookout_medallion, pa, pd):
+def _(MEDALLION_ROOT, gpd, lookout_medallion, pa, pd):
+    def with_geometry(rows: pd.DataFrame, wkb_column: str) -> gpd.GeoDataFrame:
+        return gpd.GeoDataFrame(
+            rows.drop(columns=[wkb_column]),
+            geometry=gpd.GeoSeries.from_wkb(rows[wkb_column], crs="EPSG:4326"),
+        )
+
     def silver(sql: str, country: str) -> gpd.GeoDataFrame:
         rows = pa.table(
             lookout_medallion.query_silver(
                 sql, country=country, root=str(MEDALLION_ROOT)
             )
         ).to_pandas()
-        return gpd.GeoDataFrame(
-            rows.drop(columns=["wkb"]).assign(country=country),
-            geometry=gpd.GeoSeries.from_wkb(rows["wkb"], crs="EPSG:4326"),
-        )
+        return with_geometry(rows.assign(country=country), "wkb")
 
+    def bronze(sql: str, **named) -> pd.DataFrame:
+        return pa.table(
+            lookout_medallion.query_bronze(
+                sql, root=str(MEDALLION_ROOT), **named
+            )
+        ).to_pandas()
+
+    def bronze_gdf(sql: str, **named) -> gpd.GeoDataFrame:
+        return with_geometry(bronze(sql, **named), "geometry")
+
+    return bronze, bronze_gdf, silver
+
+
+@app.cell
+def _(COUNTRIES, pd, silver):
     CROSSINGS = """
         SELECT crossing_id, water_id, water_class, water_subtype, track_id, rail_id,
                overlap_kind, overlap_m, total_overlap_m, merged_parts, frac,
@@ -146,25 +165,21 @@ def _(country_map):
 
 
 @app.cell
-def _(MEDALLION_ROOT):
-    import duckdb
-
-    con = duckdb.connect()
-    con.execute("INSTALL spatial; LOAD spatial;")
-
-    # The newest extract taken for each country, which is the one the crossings were derived from.
-    extracts = (
-        con.execute(f"""
+def _(bronze):
+    NEWEST_EXTRACTS = """
+        WITH ranked AS (
+            SELECT country, extract_id, min_lon, min_lat, max_lon, max_lat,
+                   row_number() OVER (PARTITION BY country ORDER BY extracted_at DESC)
+                       AS newest
+            FROM extract_manifest
+        )
         SELECT country, extract_id, min_lon, min_lat, max_lon, max_lat
-        FROM read_parquet('{MEDALLION_ROOT}/bronze/extract_manifest/*.parquet')
-        QUALIFY row_number() OVER (PARTITION BY country ORDER BY extracted_at DESC) = 1
-        ORDER BY country
-    """)
-        .fetchdf()
-        .set_index("country")
-    )
+        FROM ranked WHERE newest = 1 ORDER BY country
+    """
+
+    extracts = bronze(NEWEST_EXTRACTS).set_index("country")
     extracts
-    return con, extracts
+    return (extracts,)
 
 
 @app.cell
@@ -188,64 +203,44 @@ def _(mo):
 
 
 @app.cell
-def _(
-    MEDALLION_ROOT,
-    case_pick,
-    cases,
-    con,
-    crossings,
-    extracts,
-    gpd,
-    test_viz,
-):
-    def bronze_gdf(sql: str) -> gpd.GeoDataFrame:
-        rows = con.execute(
-            f"SELECT * EXCLUDE (geom), ST_AsWKB(geom) AS wkb FROM ({sql})"
-        ).fetchdf()
-        return gpd.GeoDataFrame(
-            rows.drop(columns=["wkb"]),
-            geometry=gpd.GeoSeries.from_wkb(
-                rows["wkb"].map(bytes), crs="EPSG:4326"
-            ),
-        )
-
-    def extract_glob(country: str, theme: str, type_: str) -> str:
-        extract_id = extracts.loc[country, "extract_id"]
-        return (
-            f"{MEDALLION_ROOT}/bronze/overture_extract/extract_id={extract_id}"
-            f"/theme={theme}/type={type_}/*.parquet"
-        )
-
-    def country_of(bounds) -> str:
-        """The country whose extract window holds the middle of `bounds`."""
+def _(bronze_gdf, case_pick, cases, crossings, extracts, test_viz):
+    def country_whose_extract_covers(bounds) -> str:
         lon, lat = (bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2
-        holding = extracts[
+        covering = extracts[
             (extracts["min_lon"] <= lon)
             & (extracts["max_lon"] >= lon)
             & (extracts["min_lat"] <= lat)
             & (extracts["max_lat"] >= lat)
         ]
-        return holding.index[0]
+        return covering.index[0]
 
     def around(
         country: str, theme: str, type_: str, bounds, margin: float = 0.01
     ):
         min_lon, min_lat, max_lon, max_lat = bounds
-        return f"""
-            SELECT id, geometry AS geom
-            FROM read_parquet('{extract_glob(country, theme, type_)}')
-            WHERE bbox.xmin <= {max_lon + margin} AND bbox.xmax >= {min_lon - margin}
-              AND bbox.ymin <= {max_lat + margin} AND bbox.ymax >= {min_lat - margin}
-        """
+        return bronze_gdf(
+            """
+            SELECT id, geometry FROM feature
+            WHERE extract_id = $extract_id
+              AND bbox['xmin'] <= $max_lon AND bbox['xmax'] >= $min_lon
+              AND bbox['ymin'] <= $max_lat AND bbox['ymax'] >= $min_lat
+            """,
+            tables={"feature": {"theme": theme, "type": type_}},
+            params={
+                "extract_id": extracts.loc[country, "extract_id"],
+                "min_lon": min_lon - margin,
+                "max_lon": max_lon + margin,
+                "min_lat": min_lat - margin,
+                "max_lat": max_lat + margin,
+            },
+        )
 
     case = cases[cases["name"] == case_pick.value].iloc[0]
-    case_country = country_of(case.geometry.bounds)
-    case_rail = bronze_gdf(
-        around(case_country, "transportation", "segment", case.geometry.bounds)
+    case_country = country_whose_extract_covers(case.geometry.bounds)
+    case_rail = around(
+        case_country, "transportation", "segment", case.geometry.bounds
     )
-    case_water = bronze_gdf(
-        around(case_country, "base", "water", case.geometry.bounds)
-    )
+    case_water = around(case_country, "base", "water", case.geometry.bounds)
     case_reps = crossings[crossings["country"] == case_country]
 
     test_viz.case_view(

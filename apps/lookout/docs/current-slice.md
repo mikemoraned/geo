@@ -391,22 +391,27 @@ The release group below confirms it on the final set.
 holds reaches for duckdb — which is a second reader of the store's own files. `inspect_crossings.py` does
 that today.
 
-- [ ] Expose every bronze dataset the model defines as a table a query can name, so
+- [x] Expose every bronze dataset the model defines as a table a query can name, so
       `extract_manifest` and the telemetry datasets register by their own names.
-- [ ] Take `overture_extract` by theme and type, since one table cannot span themes whose columns
+- [x] Take `overture_extract` by theme and type, since one table cannot span themes whose columns
       differ, and register it across every extract at once: `read_parquet` takes a list of paths,
       and the rows carry the `extract_id` the extraction wrote into them, so the manifest joins to
       an extract in plain SQL. A glob in place of the extract id matches nothing — DataFusion
       globs the last path segment only.
-- [ ] Read no country: bronze has no zone per country, so nothing there needs scoping.
-- [ ] Move `inspect_crossings.py`'s rail and water reads onto it, and drop duckdb from that notebook.
-- [ ] Record in `docs/medallion.md` what a python read of bronze names, beside what a read of
+- [x] Read no country: bronze has no zone per country, so nothing there needs scoping.
+- [x] Move `inspect_crossings.py`'s rail and water reads onto it, and drop duckdb from that notebook.
+- [x] Record in `docs/medallion.md` what a python read of bronze names, beside what a read of
       silver names.
-- [ ] Read the silver row through its own definition where a query shapes a struct by hand:
+- [x] Read the silver row through its own definition where a query shapes a struct by hand:
       `crossings::silver` and `session_crossings::silver` each declare a private
       `StoredCrossing`, differently, and `crates/crossings/tests/geo.rs` shows the alternative —
       flatten `WaterCrossingRow` and add only what the row has no column for, the position.
       Three types of one name, each restating part of a schema the store already declares.
+- [x] Find the country in the replay runner rather than assume one. Per-country silver left the
+      runner's reads behind — `water_crossing` and `session_sample` both refuse a read that names
+      no country — and its tests failed. The runner now names no country of its own: it asks the
+      store which countries hold a dataset, lists every country's sessions with the country beside
+      each, and looks up the country a session was recorded in before replaying it.
 
 #### Refactors / fixes: bronze fills in a country silver cannot place
 
