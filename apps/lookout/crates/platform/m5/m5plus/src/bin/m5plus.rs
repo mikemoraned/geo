@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crux_core::Core;
 use esp_idf_svc::hal::{
@@ -109,12 +109,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut battery_read = Instant::now();
     let mut reported = Instant::now();
+    let mut longest_sentence = Duration::ZERO;
 
     loop {
         let mut effects = Vec::new();
 
         for sentence in gnss.sentences() {
+            let started = Instant::now();
             effects.extend(core.process_event(Event::Sentence(sentence)));
+            longest_sentence = longest_sentence.max(started.elapsed());
         }
 
         if battery_read.elapsed().as_secs() >= BATTERY_INTERVAL_S {
@@ -126,10 +129,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         reported = Instant::now();
                         log::info!(
                             "battery {millivolts}mV ({at_pin}mV at the pin); \
-                             {} bytes of main task stack never used, {} bytes of free heap",
+                             {} bytes of main task stack never used, {} bytes of free heap; \
+                             {} µs for the slowest sentence, which is the one that scanned",
                             stack_unused(),
                             free_heap(),
+                            longest_sentence.as_micros(),
                         );
+                        longest_sentence = Duration::ZERO;
                     }
                     effects.extend(core.process_event(Event::Battery(millivolts)));
                 }

@@ -105,6 +105,41 @@
           ]
         ]
       }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Forth Bridge: 2 tracks over the firth (kept distinct)",
+        "expected_crossings": 2,
+        "notes": "The Forth Bridge carries two tracks over the Firth of Forth, so one crossing per track over one ocean body, as Mannheim has one per track over one river. The water here is class ocean rather than river, and the overlap is about 1,537 m."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -3.392,
+              56.0
+            ],
+            [
+              -3.386,
+              56.0
+            ],
+            [
+              -3.386,
+              56.006
+            ],
+            [
+              -3.392,
+              56.006
+            ],
+            [
+              -3.392,
+              56.0
+            ]
+          ]
+        ]
+      }
     }
   ]
 }

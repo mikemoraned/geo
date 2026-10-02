@@ -2,6 +2,7 @@ git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git di
 
 # Install the tools every other recipe needs. See README.md for what each is for.
 prerequisites:
+    cd {{ justfile_directory() }}/../.. && just prerequisites
     cargo install rerun-cli --locked
     cargo install wasm-pack --locked
     rustup target add wasm32-unknown-unknown
@@ -11,6 +12,7 @@ prerequisites:
 crs-definitions:
     projinfo -o PROJJSON -q "OGC:CRS84" | jq . > crates/medallion/src/crs84.projjson.json
     projinfo -o PROJJSON -q "EPSG:25832" | jq . > crates/medallion/src/etrs89_utm32n.projjson.json
+    projinfo -o PROJJSON -q "EPSG:25830" | jq . > crates/medallion/src/etrs89_utm30n.projjson.json
 
 # Serve on http://localhost:3000 (override with PORT). No redis, so samples are logged, not queued.
 serve:
@@ -61,6 +63,10 @@ test-rust: test-doc
 test-no-docker: test-python test-doc
     cargo nextest run --workspace --profile no-docker
 
+# The geo tests: the crossings the store holds, against the bbox test cases. Needs a filled store.
+test-geo:
+    cargo nextest run --profile geo
+
 # The doctests alone. nextest cannot run them, so cargo does.
 test-doc:
     cargo test --doc --workspace
@@ -86,7 +92,7 @@ init: bronze-init silver-init
 
 overture_mirror := "/Volumes/PRO-G40/OvertureMaps/data/release"
 
-# Fill in the bronze a checkout leaves out: the Overture extract, mirrored where one is mounted.
+# Fill in the bronze a checkout leaves out: every recorded Overture extract, from a mirror if mounted.
 bronze-init *args:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -110,7 +116,7 @@ bronze-record *args:
 bronze-poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 
-# Take an Overture extract into bronze. No args backfills the recorded one; `new` takes a fresh one.
+# Take an Overture extract into bronze. No args fills in every recorded one; `new` takes a fresh one.
 bronze-extract *args:
     cargo run --release -p transport --bin extract -- {{args}}
 
@@ -135,7 +141,12 @@ silver-crossings *args:
 
 # Derive silver `water_crossing` from the crossings notebook. Always writes the repo store.
 silver-water-crossings:
-    uv run --no-project --reinstall-package lookout-medallion notebooks/water_crossings/v9.py
+    uv run --no-project --reinstall-package lookout-medallion notebooks/water_crossings/v10.py
+
+# Check the water crossings the store holds against the bbox test cases. Reads; derives nothing.
+crossing-checks:
+    uv run --no-project --reinstall-package lookout-medallion \
+        notebooks/water_crossings/check_cases.py
 
 # Derive silver `session_crossing`: the crossings each recorded session passed.
 silver-session-crossings *args:
@@ -165,9 +176,9 @@ m5plus-flash: m5plus-build
 m5plus-flash-release: m5plus-build-release
     cd {{m5plus_dir}} && espflash flash --monitor target/xtensa-esp32-espidf/release/m5plus
 
-# Tail the console of whatever is already flashed.
-m5plus-monitor:
-    cd {{m5plus_dir}} && espflash monitor
+# Tail the console of what is already flashed, leaving it running. Leave with ctrl-A then K.
+m5plus-monitor port=`ls /dev/cu.usbserial-* 2>/dev/null | head -1`:
+    screen {{port}} 115200
 
 # The sessions the store holds, as `just replay` names them.
 sessions *args:

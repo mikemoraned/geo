@@ -18,7 +18,7 @@ struct Args {
     /// How many crossings a session must pass to be worth replaying.
     #[arg(long, default_value_t = 5)]
     min_crossings: usize,
-    /// How many of the best to keep.
+    /// How many of the best to keep, per country.
     #[arg(long, default_value_t = 3)]
     max_sessions: usize,
     /// Where to write them. Defaults to this run's artefact directory in the store's gold

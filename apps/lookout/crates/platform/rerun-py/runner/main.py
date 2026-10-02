@@ -47,11 +47,6 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     session = argparse.ArgumentParser(add_help=False)
     session.add_argument("session", help="the session to replay")
     session.add_argument(
-        "--country",
-        default="DE",
-        help="restrict the crossings scanned against to one country's",
-    )
-    session.add_argument(
         "--radius-metres",
         type=float,
         default=DEFAULT_RADIUS_METRES,
@@ -70,8 +65,11 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def sessions(store: Store) -> None:
-    for session, first, last, samples in store.sessions():
-        print(f"{session}  {first:%Y-%m-%d %H:%M}..{last:%H:%M}  {samples} samples")
+    for listed in store.sessions():
+        print(
+            f"{listed.session_id}  {listed.country}  "
+            f"{listed.first:%Y-%m-%d %H:%M}..{listed.last:%H:%M}  {listed.samples} samples"
+        )
 
 
 def replayed(store: Store, args: argparse.Namespace) -> rr.RecordingStream:
@@ -85,9 +83,10 @@ def replayed(store: Store, args: argparse.Namespace) -> rr.RecordingStream:
         )
     recording.connect_grpc(args.url, default_blueprint=blueprint())
 
-    crossings = store.crossings(country=args.country)
+    country = store.country_of(args.session)
+    crossings = store.crossings(country)
     predictor = CrowFlies(crossings, radius_metres=args.radius_metres)
-    steps = replay(predictor, store.samples(args.session))
+    steps = replay(predictor, store.samples(args.session, country))
 
     draw(recording, steps, crossings)
     return recording

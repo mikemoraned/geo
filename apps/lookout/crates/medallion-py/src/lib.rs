@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use medallion::{Country, Query, QueryError, Root, ScalarValue, TableError, UnknownCountry};
+use medallion::{
+    Country, DatasetSpec, Query, QueryError, Root, ScalarValue, TableError, UnknownCountry, layers,
+};
 use medallion_model::TargetError;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -32,10 +34,8 @@ impl Written {
 
 /// Write `table` as the whole of the silver dataset `dataset`, replacing what is there.
 ///
-/// `root` names the store, defaulting to the one in the repo the caller is working in.
-///
-/// The table must hold every row of the dataset, since a partition it does not cover is
-/// taken to be one the derivation no longer produces, and is deleted.
+/// The table must hold every row: a partition it does not cover is deleted. `root` defaults to
+/// the store in the repo the caller is working in. See `docs/medallion.md`.
 #[pyfunction]
 #[pyo3(signature = (dataset, table, *, root=None))]
 fn write_silver(
@@ -78,22 +78,19 @@ impl From<Param> for ScalarValue {
     }
 }
 
-/// Query the store, returning an Arrow table.
+/// Query the store, returning an Arrow table: the datasets the query names are its tables.
 ///
-/// The datasets the query reads are the tables it names, each registered under that name with
-/// its partitions walked and its geometry columns read back with their CRS.
-///
-/// `params` binds the query's `$name` placeholders as values, so an id carrying a quote
-/// reads as an id that does not exist rather than as more query.
-///
-/// The result exposes the Arrow PyCapsule interface, so `pyarrow.table(...)` takes it
-/// without copying the rows through python objects. A dataset the store does not define, or
-/// that has never been written, raises a `ValueError` naming it.
+/// `country` names the country to read, which a dataset holding one zone per country requires
+/// and any other rejects. `params` binds the query's `$name` placeholders as values. The result
+/// exposes the Arrow PyCapsule interface, so `pyarrow.table(...)` takes it directly. A dataset
+/// the store does not define, or that has never been written, raises a `ValueError` naming it.
+/// See `docs/medallion.md`.
 #[pyfunction]
-#[pyo3(signature = (sql, *, params=None, root=None))]
+#[pyo3(signature = (sql, *, country=None, params=None, root=None))]
 fn query_silver(
     py: Python<'_>,
     sql: &str,
+    country: Option<&str>,
     params: Option<HashMap<String, Param>>,
     root: Option<PathBuf>,
 ) -> PyResult<PyTable> {
@@ -102,6 +99,7 @@ fn query_silver(
         .iter()
         .map(|dataset| medallion_model::silver_target(dataset).map_err(target_error))
         .collect::<PyResult<Vec<_>>>()?;
+    let country = country.map(country_of).transpose()?;
     let root = root_or_default(root)?;
     let params = params
         .unwrap_or_default()
@@ -114,7 +112,7 @@ fn query_silver(
             runtime().block_on(async {
                 let query = Query::new(root);
                 for target in &targets {
-                    query.register_silver(target).await?;
+                    query.register_silver(target, country).await?;
                 }
                 query.sql_with_params(sql, params).await
             })
@@ -130,25 +128,141 @@ fn query_silver(
     PyTable::try_new(batches, schema).map_err(|err| PyRuntimeError::new_err(err.to_string()))
 }
 
-/// The CRS a country's projected geometry is stored in, as an authority string a python
-/// geometry library takes (`"EPSG:25832"`).
-///
-/// One zone per country, chosen by the store: a caller preparing the projected column asks
-/// rather than naming a zone of its own, so what it projects into and what the file declares
-/// cannot disagree.
-#[pyfunction]
-fn projected_crs(country: &str) -> PyResult<String> {
-    let country: Country = country
-        .parse()
-        .map_err(|err: UnknownCountry| PyValueError::new_err(err.to_string()))?;
-    Ok(format!("EPSG:{}", country.projected_epsg()))
+enum BronzeTable {
+    Dataset(DatasetSpec<layers::Bronze>),
+    Overture { theme: String, of_type: String },
 }
 
-/// The store in the repo the caller is working in, as a path.
+fn within(named: &HashMap<String, String>, key: &str, table: &str) -> PyResult<String> {
+    named.get(key).cloned().ok_or_else(|| {
+        PyValueError::new_err(format!(
+            "the table {table} names no {key} of the extracts to read"
+        ))
+    })
+}
+
+fn bronze_table(
+    name: &str,
+    tables: &HashMap<String, HashMap<String, String>>,
+) -> PyResult<BronzeTable> {
+    if let Some(named) = tables.get(name) {
+        return Ok(BronzeTable::Overture {
+            theme: within(named, "theme", name)?,
+            of_type: within(named, "type", name)?,
+        });
+    }
+
+    let dataset = medallion_model::bronze_dataset(name)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    match dataset.name == medallion_model::OVERTURE_EXTRACT.name {
+        true => Err(PyValueError::new_err(format!(
+            "{name} spans themes whose columns differ, so a read of it names the theme and type \
+             it reads: tables={{\"{name}\": {{\"theme\": ..., \"type\": ...}}}}"
+        ))),
+        false => Ok(BronzeTable::Dataset(dataset)),
+    }
+}
+
+/// Query bronze, returning an Arrow table: the datasets the query names are its tables.
 ///
-/// This is what [`write_silver`] writes into when it is not given a root, so a caller reading
-/// the store directly — with duckdb, say — asks for the path rather than working it out, and
-/// cannot end up reading one store and writing another.
+/// `tables` names the theme and type of `overture_extract` a table reads, which covers every
+/// extract taken, the rows carrying the `extract_id` they came from. `params` binds the query's
+/// `$name` placeholders as values. Geometry comes back as the WKB the extract holds. See
+/// `docs/medallion.md`.
+#[pyfunction]
+#[pyo3(signature = (sql, *, tables=None, params=None, root=None))]
+fn query_bronze(
+    py: Python<'_>,
+    sql: &str,
+    tables: Option<HashMap<String, HashMap<String, String>>>,
+    params: Option<HashMap<String, Param>>,
+    root: Option<PathBuf>,
+) -> PyResult<PyTable> {
+    let tables = tables.unwrap_or_default();
+    let named = medallion::table_references(sql)
+        .map_err(query_error)?
+        .into_iter()
+        .map(|name| Ok((bronze_table(&name, &tables)?, name)))
+        .collect::<PyResult<Vec<_>>>()?;
+    let root = root_or_default(root)?;
+    let params = params
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(name, param)| (name, ScalarValue::from(param)))
+        .collect();
+
+    let batches = py
+        .detach(|| {
+            runtime().block_on(async {
+                let query = Query::new(root);
+                for (table, name) in &named {
+                    match table {
+                        BronzeTable::Dataset(dataset) => {
+                            query.register_bronze(*dataset, name).await?;
+                        }
+                        BronzeTable::Overture { theme, of_type } => {
+                            query
+                                .register_within_every_partition(
+                                    medallion_model::OVERTURE_EXTRACT,
+                                    name,
+                                    &[("theme", theme), ("type", of_type)],
+                                )
+                                .await?;
+                        }
+                    }
+                }
+                query.sql_with_params(sql, params).await
+            })
+        })
+        .map_err(query_error)?;
+
+    let schema = batches
+        .first()
+        .map(|batch| batch.schema())
+        .expect("a query answers with at least one batch");
+
+    PyTable::try_new(batches, schema).map_err(|err| PyRuntimeError::new_err(err.to_string()))
+}
+
+/// The countries a silver dataset holds a partition for, as the codes a read of it names.
+///
+/// A dataset holding no country level answers with none. See `docs/medallion.md`.
+#[pyfunction]
+#[pyo3(signature = (dataset, *, root=None))]
+fn countries_of(py: Python<'_>, dataset: &str, root: Option<PathBuf>) -> PyResult<Vec<String>> {
+    let target = medallion_model::silver_target(dataset).map_err(target_error)?;
+    let root = root_or_default(root)?;
+
+    let countries = py
+        .detach(|| runtime().block_on(medallion::countries_of(&root, target.spec())))
+        .map_err(query_error)?;
+
+    Ok(countries
+        .into_iter()
+        .map(|country| country.code().to_string())
+        .collect())
+}
+
+fn country_of(code: &str) -> PyResult<Country> {
+    code.parse()
+        .map_err(|err: UnknownCountry| PyValueError::new_err(err.to_string()))
+}
+
+/// The CRS a country's projected geometry is stored in, as an authority string a python
+/// geometry library takes (`"EPSG:25832"`). See `docs/medallion.md`.
+#[pyfunction]
+fn projected_crs(country: &str) -> PyResult<String> {
+    Ok(format!("EPSG:{}", country_of(country)?.projected_epsg()))
+}
+
+/// The GERS id of the division a country's areas belong to, for matching against the
+/// `division_id` column. See `docs/overture.md`.
+#[pyfunction]
+fn division_id(country: &str) -> PyResult<String> {
+    Ok(medallion_model::division_id(country_of(country)?).to_string())
+}
+
+/// The store in the repo the caller is working in, as a path: what the writes here default to.
 #[pyfunction]
 fn default_root() -> PyResult<PathBuf> {
     Root::default_path().map_err(|err| PyRuntimeError::new_err(err.to_string()))
@@ -170,10 +284,14 @@ fn runtime() -> &'static tokio::runtime::Runtime {
 
 fn query_error(err: QueryError) -> PyErr {
     match err {
-        QueryError::NoSuchDataset { .. } | QueryError::DataFusion(_) => {
-            PyValueError::new_err(err.to_string())
+        QueryError::NoSuchDataset { .. }
+        | QueryError::DataFusion(_)
+        | QueryError::UnknownCountry { .. }
+        | QueryError::CountryNeeded { .. }
+        | QueryError::NoCountryLevel { .. } => PyValueError::new_err(err.to_string()),
+        QueryError::Rows(_) | QueryError::Path(_) | QueryError::List { .. } => {
+            PyRuntimeError::new_err(err.to_string())
         }
-        QueryError::Rows(_) => PyRuntimeError::new_err(err.to_string()),
     }
 }
 
@@ -202,7 +320,10 @@ fn table_error(err: TableError) -> PyErr {
 fn lookout_medallion(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(write_silver, module)?)?;
     module.add_function(wrap_pyfunction!(query_silver, module)?)?;
+    module.add_function(wrap_pyfunction!(query_bronze, module)?)?;
+    module.add_function(wrap_pyfunction!(countries_of, module)?)?;
     module.add_function(wrap_pyfunction!(projected_crs, module)?)?;
+    module.add_function(wrap_pyfunction!(division_id, module)?)?;
     module.add_function(wrap_pyfunction!(default_root, module)?)?;
     module.add_class::<Written>()?;
     Ok(())

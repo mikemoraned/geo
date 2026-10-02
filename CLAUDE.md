@@ -52,6 +52,29 @@ shared `.claude/` skills and rules at the repo root).
 rather than several gigabytes under every worktree. Only the first install writes there, and that
 one is run outside the sandbox.
 
+## Prose: invoke the two writing skills before drafting
+
+Any turn that will write or edit prose a human reads — `docs/`, READMEs, slice docs, commit
+messages, comments, error messages — starts by invoking both skills with the Skill tool:
+
+- `softaworks-agent-toolkit-writing-clearly-and-concisely`
+- `technical-writing:technical-writing`
+
+Invoke them before the first draft, not after. Drafting from memory of the rules and then
+reviewing against them fails: the sentences are already written, and the review reads as
+proofreading rather than rewriting, so the reader ends up copyediting word by word. Applying the
+rules without invoking the skills does not count — if neither appears in the turn, the prose task
+is unstarted, however finished the text looks.
+
+A Stop hook enforces this. When a session changed prose without invoking both skills, the hook
+blocks the stop and names the missing one. [`tools/prose-gate`](tools/prose-gate/README.md) is the
+gate, `.claude/settings.json` wires it, and `just prerequisites` builds the binary it names — once
+per checkout. It reads the transcript for the invocation rather than for the skill's name, so
+quoting a rule satisfies nothing.
+
+[Conventions / Style](#conventions--style) states what each skill covers and the three
+departures this repo takes from them.
+
 ## Methodology
 
 Slices are tracked **per app**, in that app's own `docs/` dir (e.g.
@@ -60,6 +83,8 @@ they operate on the `docs/` relative to your current directory:
 
 - `/choose-slice` — pick the next slice from `docs/next-slices.md` and promote it to
   `docs/current-slice.md`
+- `/decompose-slice` — break the current slice into decisions and tasks, before building any
+  of it
 - `/complete-slice` — archive the finished current slice into `docs/completed-slices.md`
 
 Each app's slice docs:
@@ -68,8 +93,8 @@ Each app's slice docs:
 - `docs/next-slices.md` — upcoming slices
 - `docs/completed-slices.md` — append-only history of completed slices
 
-The `/choose-slice` and `/complete-slice` skills and the `.claude/rules/slices.md` rule
-are shared at the repo root and reused across apps.
+The three slice skills and the `.claude/rules/slices.md` rule are shared at the repo root
+and reused across apps.
 
 ### Test-Driven Development
 
@@ -88,15 +113,16 @@ When doing TDD, always keep the code compiling at every step:
 
 ## Conventions / Style
 
-- **Write all prose through the `writing-clearly-and-concisely` and
-  `technical-writing@technical-writing` skills.** Both are always on, need no prompting, and
-  apply to edits of existing prose as much as to new prose: documentation, READMEs, commit
-  messages, error messages, comments, and anything else a human reads.
-  - `writing-clearly-and-concisely` carries the general principles — active voice, positive
-    form, concrete language, no needless words, and none of the puffery it lists.
-  - `technical-writing` carries what technical text additionally needs — one term per
-    concept, sentence-length caps, condition before command, procedural and descriptive
-    passages kept apart, and no hedging (`should`, `may`, `simply`, `just`).
+- **Write all prose through the two writing skills**, invoked as
+  [Prose](#prose-invoke-the-two-writing-skills-before-drafting) requires. They apply to edits of
+  existing prose as much as to new prose: documentation, READMEs, commit messages, error
+  messages, comments, and anything else a human reads.
+  - `softaworks-agent-toolkit-writing-clearly-and-concisely` carries the general principles —
+    active voice, positive form, concrete language, no needless words, and none of the puffery
+    it lists.
+  - `technical-writing:technical-writing` carries what technical text additionally needs — one
+    term per concept, sentence-length caps, condition before command, procedural and
+    descriptive passages kept apart, and no hedging (`should`, `may`, `simply`, `just`).
   - Reference docs additionally follow
     [`.claude/memory/docs-style.md`](.claude/memory/docs-style.md).
   - Three deliberate departures. **British spelling** throughout (`visualise`, `colour`,

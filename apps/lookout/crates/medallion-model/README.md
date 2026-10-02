@@ -35,10 +35,10 @@ normalised form of it.
 rows have no row type here: they keep whatever columns the release gives them, plus the
 `extract_id` joining them to `extract_manifest`.
 
-The manifest is one row per extraction, and its window is four bounds — `xmin`, `ymin`, `xmax`,
+The manifest is one row per extraction, and its bbox is four bounds — `xmin`, `ymin`, `xmax`,
 `ymax` — rather than a geometry column in a Simple Features encoding. It is provenance, answering
 "what was this restricted to", which comparing numbers settles. It is also the upstream's own
-shape: [an extracted row](../../docs/overture.md#every-row-carries-its-own-envelope) carries a
+shape: [an extracted row](../../docs/overture.md#every-row-carries-its-own-bbox) carries a
 bbox of the same four bounds beside its geometry, so both are read the same way.
 
 ## Sessions keep every sample and flag the doubtful ones

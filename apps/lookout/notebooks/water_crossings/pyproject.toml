@@ -5,7 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "anthropic>=1.8.0",
     "marimo>=0.23.15",
+    "pydantic-ai-slim>=2.51.0",
 ]
 
 # The notebooks declare their own dependencies inline and run `--sandbox`, so this group is

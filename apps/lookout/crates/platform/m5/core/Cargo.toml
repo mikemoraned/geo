@@ -15,6 +15,11 @@ predictor = { workspace = true }
 # The same crate again, for the captured sentences its tests share with this crate's. A
 # dev-dependency, so the feature is off in anything built for the device.
 predictor = { workspace = true, features = ["fixtures"] }
+# The countries the carried crossings are checked against; a dev-dependency, so nothing built
+# for the device carries the store.
+geo = { workspace = true }
+geo-types = { workspace = true }
+medallion = { workspace = true }
 
 [lints]
 workspace = true

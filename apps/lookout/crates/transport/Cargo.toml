@@ -12,6 +12,7 @@ geo = { workspace = true }
 geo-types = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }
+object_store = { workspace = true, features = ["aws"] }
 serde = { workspace = true }
 sedona = { workspace = true }
 sedona-geoparquet = { workspace = true }

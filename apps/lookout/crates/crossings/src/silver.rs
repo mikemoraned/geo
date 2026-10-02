@@ -1,5 +1,6 @@
-use domain::{CoordinateError, CrossingCompactId, CrossingId};
-use medallion::{Query, Root};
+use domain::{CoordinateError, CrossingCompactId};
+use medallion::Root;
+use medallion_model::WaterCrossingRow;
 use serde::Deserialize;
 
 #[derive(Debug, thiserror::Error)]
@@ -20,40 +21,41 @@ pub struct Crossing {
 }
 
 #[derive(Debug, Deserialize)]
-struct StoredCrossing {
-    crossing_id: CrossingId,
-    crossing_compact_id: CrossingCompactId,
-    extract_id: String,
-    lon: f64,
-    lat: f64,
+pub struct PlacedCrossing {
+    #[serde(flatten)]
+    pub row: WaterCrossingRow,
+    pub lon: f64,
+    pub lat: f64,
 }
 
+pub const PLACED: &str = "SELECT *, ST_X(geometry) AS lon, ST_Y(geometry) AS lat
+                          FROM water_crossing";
+
 pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
-    let query = Query::new(root.clone());
-    if !query
-        .register_if_present(medallion_model::WATER_CROSSING, "water_crossing")
-        .await?
-    {
+    let stored: Vec<PlacedCrossing> = medallion::rows_of_every_country(
+        root,
+        medallion_model::WATER_CROSSING,
+        "water_crossing",
+        PLACED,
+    )
+    .await?;
+    if stored.is_empty() {
         return Err(ReadError::Missing {
             dataset: medallion_model::WATER_CROSSING.name,
         });
     }
 
-    let stored: Vec<StoredCrossing> = query
-        .rows(
-            "SELECT crossing_id, crossing_compact_id, extract_id,
-                    ST_X(geometry) AS lon, ST_Y(geometry) AS lat
-             FROM water_crossing",
-        )
-        .await?;
-
     stored
         .into_iter()
         .map(|crossing| {
             Ok(Crossing {
-                crossing: domain::Crossing::at(crossing.crossing_id, crossing.lat, crossing.lon)?,
-                compact_id: crossing.crossing_compact_id,
-                extract_id: crossing.extract_id,
+                crossing: domain::Crossing::at(
+                    crossing.row.crossing_id,
+                    crossing.lat,
+                    crossing.lon,
+                )?,
+                compact_id: crossing.row.crossing_compact_id,
+                extract_id: crossing.row.extract_id,
             })
         })
         .collect()

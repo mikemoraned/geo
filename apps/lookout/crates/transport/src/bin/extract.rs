@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use chrono::Utc;
 use clap::{Parser, Subcommand};
@@ -25,8 +26,9 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Take a recorded extract again, from the release and window its manifest row
-    /// records, under the id it was taken under. Defaults to the newest extract recorded.
+    /// Take a recorded extract again, from the release and bbox its manifest row
+    /// records, under the id it was taken under. With no id, takes every extract the
+    /// manifest records, skipping the ones already filled in.
     Backfill {
         /// The extract to take again, e.g. `20260727T193628Z`.
         extract_id: Option<ExtractId>,
@@ -43,7 +45,7 @@ enum Command {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -51,20 +53,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            tracing::error!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let root = args.medallion.root()?;
     let at = Utc::now();
 
-    let extraction = match args
+    match args
         .command
         .unwrap_or(Command::Backfill { extract_id: None })
     {
-        Command::Backfill { extract_id } => {
-            let recorded = match &extract_id {
-                Some(id) => extract::recorded_as(&root, id).await?,
-                None => extract::newest(&root).await?,
-            };
-            backfill(&root, &args.mirror, recorded, at).await?
+        Command::Backfill { extract_id: None } => {
+            let backfilled = backfill_recorded(&root, &args.mirror, at).await?;
+            tracing::info!(
+                filled = %named(&backfilled.filled),
+                skipped = %named(&backfilled.skipped),
+                "backfilled",
+            );
+        }
+        Command::Backfill {
+            extract_id: Some(id),
+        } => {
+            let recorded = extract::recorded_as(&root, &id).await?;
+            report(&backfill(&root, &args.mirror, recorded, at).await?);
         }
         Command::New { release, country } => {
             let id = ExtractId::at(at);
@@ -76,22 +95,78 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 root = %root.path().display(),
                 "extracting",
             );
-            Extractor::new(&overture, &root)
-                .extract(id, country, at)
-                .await?
+            report(
+                &Extractor::new(&overture, &root)
+                    .extract(id, country, at)
+                    .await?,
+            );
         }
-    };
+    }
 
+    Ok(())
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Backfilled {
+    filled: Vec<ExtractId>,
+    skipped: Vec<ExtractId>,
+}
+
+async fn backfill_recorded(
+    root: &Root,
+    mirror: &Option<PathBuf>,
+    at: chrono::DateTime<Utc>,
+) -> Result<Backfilled, Box<dyn std::error::Error>> {
+    let recorded = extract::recorded(root).await?;
+    if recorded.is_empty() {
+        return Err(extract::ExtractError::NoExtract.into());
+    }
+    let in_the_order_taken: Vec<ExtractManifestRow> = recorded.into_iter().rev().collect();
+
+    let mut skipped = Vec::new();
+    let mut missing = Vec::new();
+    for row in in_the_order_taken {
+        let id = ExtractId::new(row.extract_id.clone())?;
+        match extract::is_filled(root, &id)? {
+            true => {
+                tracing::info!(%id, country = %row.country, "already in the store");
+                skipped.push(id);
+            }
+            false => missing.push(row),
+        }
+    }
+
+    let mut filled = Vec::new();
+    for row in missing {
+        let extraction = backfill(root, mirror, row, at).await?;
+        report(&extraction);
+        filled.push(extraction.id);
+    }
+
+    Ok(Backfilled { filled, skipped })
+}
+
+fn named(ids: &[ExtractId]) -> String {
+    match ids.is_empty() {
+        true => "none".to_string(),
+        false => ids
+            .iter()
+            .map(ExtractId::to_string)
+            .collect::<Vec<_>>()
+            .join(", "),
+    }
+}
+
+fn report(extraction: &Extraction) {
     tracing::info!(
         id = %extraction.id,
-        min_lon = extraction.window.min().x,
-        min_lat = extraction.window.min().y,
-        max_lon = extraction.window.max().x,
-        max_lat = extraction.window.max().y,
+        min_lon = extraction.bbox.min().x,
+        min_lat = extraction.bbox.min().y,
+        max_lon = extraction.bbox.max().x,
+        max_lat = extraction.bbox.max().y,
         rows = extraction.rows.iter().map(|(_, rows)| rows).sum::<usize>(),
         "extracted",
     );
-    Ok(())
 }
 
 async fn backfill(
@@ -123,10 +198,79 @@ fn release_at(release: &str, mirror: &Option<PathBuf>) -> Release {
 
 #[cfg(test)]
 mod tests {
+    use chrono::TimeZone;
+    use medallion::Country;
+
     use super::*;
 
+    fn recorded_row(id: &str, hour: u32) -> ExtractManifestRow {
+        ExtractManifestRow {
+            extract_id: id.to_string(),
+            extracted_at: Utc.with_ymd_and_hms(2026, 9, 27, hour, 0, 0).unwrap(),
+            release: "2026-07-22.0".to_string(),
+            country: Country::Germany.code().to_string(),
+            min_lon: 5.8,
+            min_lat: 47.2,
+            max_lon: 15.1,
+            max_lat: 55.1,
+        }
+    }
+
+    async fn store_filled_with(rows: &[ExtractManifestRow]) -> (tempfile::TempDir, Root) {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        for row in rows {
+            root.rows_of::<ExtractManifestRow>()
+                .append_rows(row.extracted_at, std::slice::from_ref(row))
+                .await
+                .expect("record the extract");
+            let extract = root
+                .dataset(medallion_model::OVERTURE_EXTRACT)
+                .for_id(&row.extract_id)
+                .expect("an extract id")
+                .partition("theme", "divisions")
+                .expect("the divisions theme");
+            std::fs::create_dir_all(extract.dir()).expect("the extract dir");
+            std::fs::write(extract.dir().join("already.parquet"), b"rows").expect("rows");
+        }
+        (tmp, root)
+    }
+
+    #[tokio::test]
+    async fn every_extract_already_filled_in_is_skipped_and_reported() {
+        let rows = [
+            recorded_row("20260927T090000Z", 9),
+            recorded_row("20260927T190000Z", 19),
+        ];
+        let (_tmp, root) = store_filled_with(&rows).await;
+
+        let backfilled = backfill_recorded(&root, &None, Utc::now())
+            .await
+            .expect("a backfill over the recorded extracts");
+
+        assert_eq!(
+            backfilled,
+            Backfilled {
+                filled: vec![],
+                skipped: vec![
+                    ExtractId::new("20260927T090000Z").unwrap(),
+                    ExtractId::new("20260927T190000Z").unwrap(),
+                ],
+            }
+        );
+    }
+
     #[test]
-    fn taking_the_newest_recorded_extract_again_is_the_default() {
+    fn a_run_that_filled_or_skipped_nothing_says_so() {
+        assert_eq!(named(&[]), "none");
+        assert_eq!(
+            named(&[ExtractId::new("20260927T090000Z").unwrap()]),
+            "20260927T090000Z"
+        );
+    }
+
+    #[test]
+    fn taking_every_recorded_extract_again_is_the_default() {
         let args = Args::parse_from(["extract"]);
 
         assert!(matches!(

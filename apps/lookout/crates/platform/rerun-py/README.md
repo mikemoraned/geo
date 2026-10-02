@@ -24,8 +24,9 @@ from runner.replay import replay
 from runner.store import Store
 
 store = Store()
-predictor = CrowFlies(store.crossings(country="DE"))
-for step in replay(predictor, store.samples(session_id)):
+country = store.country_of(session_id)
+predictor = CrowFlies(store.crossings(country))
+for step in replay(predictor, store.samples(session_id, country)):
     print(step.sample.t, step.predictions)
 ```
 

@@ -26,7 +26,7 @@ impl Default for Radius {
 pub struct Session {
     pub session_id: SessionId,
     pub device_id: DeviceId,
-    pub envelope: Rect<f64>,
+    pub bbox: Rect<f64>,
     pub samples: Vec<Sample>,
 }
 
@@ -52,7 +52,7 @@ pub fn passes(sessions: &[Session], crossings: &[Crossing], radius: Radius) -> V
 }
 
 fn passes_of(session: &Session, crossings: &[Crossing], radius: Radius) -> Vec<Pass> {
-    let reachable = grown(session.envelope, radius);
+    let reachable = grown(session.bbox, radius);
     crossings
         .iter()
         .filter(|crossing| contains(&reachable, crossing.crossing.position))
@@ -87,21 +87,21 @@ fn passed(session: &Session, crossing: &Crossing, radius: Radius) -> Option<Pass
     })
 }
 
-fn grown(envelope: Rect<f64>, radius: Radius) -> Rect<f64> {
+fn grown(bbox: Rect<f64>, radius: Radius) -> Rect<f64> {
     use geo::{Destination, Haversine};
 
     let metres = radius.as_metres();
-    let south_west = Haversine.destination(envelope.min().into(), 180.0, metres);
+    let south_west = Haversine.destination(bbox.min().into(), 180.0, metres);
     let south_west = Haversine.destination(south_west, 270.0, metres);
-    let north_east = Haversine.destination(envelope.max().into(), 0.0, metres);
+    let north_east = Haversine.destination(bbox.max().into(), 0.0, metres);
     let north_east = Haversine.destination(north_east, 90.0, metres);
 
     Rect::new(south_west.0, north_east.0)
 }
 
-fn contains(envelope: &Rect<f64>, point: Point<f64>) -> bool {
-    (envelope.min().x..=envelope.max().x).contains(&point.x())
-        && (envelope.min().y..=envelope.max().y).contains(&point.y())
+fn contains(bbox: &Rect<f64>, point: Point<f64>) -> bool {
+    (bbox.min().x..=bbox.max().x).contains(&point.x())
+        && (bbox.min().y..=bbox.max().y).contains(&point.y())
 }
 
 #[cfg(test)]
@@ -118,16 +118,16 @@ mod tests {
     }
 
     fn session(samples: Vec<Sample>) -> Session {
-        let envelope = envelope_of(&samples);
+        let bbox = bbox_of(&samples);
         Session {
             session_id: SessionId::new("session-a").unwrap(),
             device_id: DeviceId::new("device-a").unwrap(),
-            envelope,
+            bbox,
             samples,
         }
     }
 
-    fn envelope_of(samples: &[Sample]) -> Rect<f64> {
+    fn bbox_of(samples: &[Sample]) -> Rect<f64> {
         let degrees = |metres: f64| metres / 111_320.0 / f64::cos(BERLIN.1.to_radians());
         let east = |sample: &Sample| BERLIN.0 + degrees(sample.projected.x() - BERLIN_METRES.0);
         let min = samples.iter().map(east).fold(f64::MAX, f64::min);

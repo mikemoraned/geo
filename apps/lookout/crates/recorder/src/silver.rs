@@ -91,7 +91,7 @@ fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::
         started_by: session.started_by,
         gap_seconds: session.gap.as_seconds(),
         lead_seconds: session.lead.as_seconds(),
-        bbox: envelope(&path),
+        bbox: bbox_of(&path),
     };
 
     Ok(Placed { row, path, samples })
@@ -105,7 +105,7 @@ fn path_through(points: impl Iterator<Item = Point<f64>>) -> LineString<f64> {
     }
 }
 
-fn envelope(path: &LineString<f64>) -> Bbox {
+fn bbox_of(path: &LineString<f64>) -> Bbox {
     Bbox::of(
         path.bounding_rect()
             .expect("a path holds at least one coordinate"),
@@ -474,8 +474,8 @@ mod tests {
         assert_eq!(session.gap_seconds, 600);
         assert_eq!(
             session.bbox,
-            Bbox::new(13.3, 52.4, 13.5, 52.6).expect("a window"),
-            "the envelope covers every sample, in lat/lon"
+            Bbox::new(13.3, 52.4, 13.5, 52.6).expect("a bbox"),
+            "the bbox covers every sample, in lat/lon"
         );
     }
 

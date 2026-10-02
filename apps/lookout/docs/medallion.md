@@ -103,7 +103,7 @@ Format: parquet, shaped for **quick, safe appends**.
   formats instead.
 - Extracts of an upstream dataset are stored **largely in that dataset's native shape**,
   plus provenance: which upstream release was used, when the extract was taken, and the
-  bounding box it was restricted to. Provenance lives in a separate `extract` table we own,
+  bbox it was restricted to. Provenance lives in a separate `extract` table we own,
   holding extract id, date, release, and bbox. The upstream rows themselves only gain an
   `extract_id` column.
 
@@ -114,7 +114,7 @@ normalised into standard geometries, and upstream reference data enriched, exten
 restricted to what is required.
 
 Format: **[GeoParquet 1.1.0](https://geoparquet.org/releases/v1.1.0/)**, optimised for fast
-and scalable lookup. Metadata that makes queries faster, such as bounding boxes, is embedded.
+and scalable lookup. Metadata that makes queries faster, such as bboxes, is embedded.
 
 - Geometry is [WKB](https://libgeos.org/specifications/wkb/)-encoded
   [simple features](https://www.ogc.org/standards/sfa).
@@ -123,9 +123,23 @@ and scalable lookup. Metadata that makes queries faster, such as bounding boxes,
   knowing which dataset it is.
 - A column in the projected CRS most appropriate to the entity may additionally be
   pre-computed, since metric distance calculations must not be performed in degrees. It is
-  likewise named the same across every dataset. Use
-  **one projected zone per country**: several UTM zones can cover a country, but a single
-  zone keeps every geometry within that country directly comparable.
+  likewise named the same across every dataset. Use **one projected zone per country**: a
+  country's *zone* is the single projected CRS its metric geometry is written in, chosen for the
+  country rather than for the strip of longitude a point happens to fall in. Several UTM strips
+  can cross a country, and one zone keeps every geometry within it directly comparable; a zone
+  not centred on the country costs some scale error at the far edges, which a comparison made
+  within one country carries.
+- **A zone is chosen to need no datum transformation.** Every engine writing the projected column
+  has to reach the same numbers, and a transformation one applies where another skips it is how
+  they diverge: a projection on a local datum leaves the result depending on which transformation
+  grids a machine has installed, which is a property of the machine rather than of the store. A
+  CRS is a projection plus a datum, and it is the datum half that differs — Ordnance Survey's [A
+  Guide to Coordinate Systems in Great
+  Britain](https://www.ordnancesurvey.co.uk/documents/resources/guide-coordinate-systems-great-britain.pdf)
+  sets out the eight parameters a datum carries (§3.2) and why any two ellipsoids differ in size,
+  shape, position and orientation (§5.2.1), and PROJ's [Geodetic
+  transformation](https://proj.org/en/stable/usage/transformation.html) counts the steps the
+  journey takes. A zone on the same datum as the lat/lon column skips all of it.
 - CRS is recorded in the GeoParquet metadata as PROJJSON.
 - **Follow the upstream schema** when extending or subsetting a reference dataset, and also
   when creating a dataset from scratch, as a mature upstream schema generally already fits
@@ -203,6 +217,26 @@ device's firmware and served to the browser, so every version packed is committe
 `apps/lookout/crossings.version` names the one being built against.
 `data/medallion/.gitignore` states which datasets this covers.
 
+## Reading from another language
+
+A read from outside the store's own language goes through the same binding as a write, and names
+datasets rather than paths. The table names in a query are the datasets it reads, each registered
+under the name the query used, so a derivation says in SQL what it wants and the store finds the
+files. A name the layer holds no dataset for is refused, with the names it could have been.
+
+A read of a derived dataset names the dataset, and names the country too where that dataset holds
+one zone per country. Reading such a dataset without one is refused rather than answered from an
+arbitrary partition, and geometry comes back in the store's own encoding. A caller asks the store
+which countries a dataset holds, so reading every country appends one read per country instead of
+keeping a list of them in step.
+
+A read of an observation layer names no country, since nothing there is projected per country. A
+dataset's own partition value comes back as a column, so a query reads the layout rather than
+parsing it out of a path. A read of an upstream extract names a theme and type rather than an
+extract: one table cannot span themes whose columns differ, and a theme and type covers every
+extract taken, each row carrying the id of the extract it came from, so the provenance table joins
+to the rows in plain SQL. Geometry comes back as the upstream file holds it.
+
 ## No table format
 
 The layout above *is* the metadata: partitioning is directory names, schema is the files',
@@ -228,6 +262,41 @@ handling.** Per-engine variants and per-engine read caveats are not permitted. T
 therefore independent of any single engine. Which engine a given job uses is a local
 decision, not a division in the data, and an engine can be added or dropped without
 migrating silver.
+
+## One CRS to a geometry column
+
+**A geometry column carries one CRS wherever it appears: in a file, a result set, a dataframe or
+an Arrow record batch.** A column holding two CRSs describes none of its values, since no row says
+which of the two it is in, and a reader that averages, measures or indexes that column computes on
+mixed units.
+
+A country also knows the bbox it spans, rounded outward: where it is, not where it ends. It
+answers a sanity check — whether a point set holds only points from countries the store supports —
+while placing a point uses the areas themselves, and an extract's bbox comes from the release.
+
+Silver and gold hold only countries the store can place: a country level names one of the
+countries the store defines a zone for, and a partition under any other code is a fault to report
+rather than rows to read. Bronze is free of that — it records what was observed, including an
+observation from a country the store cannot yet place, which is how the data arrives before the
+support for it does.
+
+A zone is chosen per country, so the projected column of a dataset partitioned by country differs
+from partition to partition. Two consequences follow:
+
+- **A read of such a dataset takes one country at a time.** A scan of the whole dataset would put
+  two zones in one column, and an engine that checks refuses rather than guesses: SedonaDB will
+  not plan it. A comparison in metres holds within one country anyway, so the read scopes to the
+  partition the comparison needs.
+- **A read across countries carries no projected column.** Every country shares the lat/lon
+  column, in CRS84, so a union reads that column — as coordinates, or as a geometry whose values
+  are all in one CRS — and appends the countries one after another. Which countries those are is
+  asked of the store, as the partition values the dataset holds rather than as the countries a
+  caller expects. That question is a query like any other — the engine projects the value out of
+  the layout — and it reads the files as ordinary parquet, so the column that differs declares
+  nothing and every partition answers together.
+
+The engines disagree: DuckDB reads a mixed-CRS scan without complaint, SedonaDB rejects it. The
+rule holds either way, since the data either describes itself or it does not.
 
 ## Column conventions
 
@@ -298,7 +367,7 @@ it does not own. An extract is identified by an id rather than a date because it
 unit of immutability: a re-extraction is a new id, not a replacement.
 
 Fetching an extract's rows a second time is not a re-extraction, though, and keeps the id it
-was first taken under. The manifest records the release and the window the extraction was
+was first taken under. The manifest records the release and the bbox the extraction was
 restricted to, and an upstream release does not change, so the same request answers with the
 same rows. That is what makes the extracts re-derivable rather than versioned. It holds only
 while an extract's rows are absent. This layer has no replace, so fetching over rows already

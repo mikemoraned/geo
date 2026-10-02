@@ -18,7 +18,15 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
+geo = { workspace = true }
+geojson = { workspace = true }
+libtest-mimic = { workspace = true }
 tempfile = { workspace = true }
+
+# No harness: this target builds a trial per test case at run time, so a failure names the case.
+[[test]]
+name = "geo"
+harness = false
 
 [lints]
 workspace = true

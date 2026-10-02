@@ -31,11 +31,8 @@ def test_naming_no_command_is_an_error():
         arguments([])
 
 
-def test_a_replay_scans_germany_within_five_kilometres_unless_told_otherwise():
-    args = arguments(["replay", "abc"])
-
-    assert args.country == "DE"
-    assert args.radius_metres == 5_000.0
+def test_a_replay_scans_within_five_kilometres_unless_told_otherwise():
+    assert arguments(["replay", "abc"]).radius_metres == 5_000.0
 
 
 def test_the_store_to_read_is_the_callers_to_choose_on_either_command(tmp_path):

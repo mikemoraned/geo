@@ -358,3 +358,39 @@ browser geolocation, and `/kiosk` replaying recorded sessions. New crates: `web-
 - **A no-comments-by-default rule now covers Rust, Python, JavaScript, and Justfiles**, and the
   sweep applied it to every crate. What the comments said became READMEs and `docs/`, and
   `doclinks` now checks every link between them with the tests.
+
+## extend to UK
+
+Added the UK as a second country throughout the store, from an Overture extract to the point
+set carried on the device. No new crates; `proj4rs` moved to 0.2, which resolves CRS
+definitions that name their datum.
+
+- **The UK is `GB`, projected through EPSG:25830.** ETRS89 / UTM zone 30N needs no datum
+  transformation, so every engine writing the projected column reaches the same numbers.
+  British National Grid is the more accurate projection over GB, and was rejected anyway. Its
+  OSGB36 datum leaves PROJ and proj4rs free to pick different transformations, and where the
+  definition names no datum a point lands up to 125 m out.
+- **A country is added on its own, and adding one leaves the others standing.** What places a
+  point is now the union of each country's newest extract, rather than the store's newest
+  extract alone. Filling in bronze takes every extract the manifest records, skipping the ones
+  whose rows are already there.
+- **A country is named to Overture by its GERS id, not by its code.** A new `GersId` newtype in
+  `medallion-model` maps each country to its division. Three reads key on it: placing a point,
+  taking a bbox, and clipping the crossings region. The bbox keeps the territorial waters,
+  which carries GB west to Rockall at -14.02.
+- **A geometry column carries one CRS, so a two-country dataset is not read in one scan.**
+  Partitioning by country gives the projected column a zone per partition, and SedonaDB
+  refuses a scan spanning them: coordinates on two grids are not comparable. Reads are now
+  scoped to a country, and a dataset with no projected column takes a union read instead. The
+  countries come from the partitions the store holds rather than from the variants a build
+  knows.
+- **The crossings derivation covers both countries in one run and one write**, as a new
+  notebook version. A silver write replaces the dataset and sweeps the countries it does not
+  cover, so both have to go in together. GB yields 4,508 crossings, and DE still yields 5,760.
+- **The kiosk keeps the best sessions per country**, which is what keeps the single qualifying
+  British session beside the three German ones.
+- **The device invariant holds.** 10,268 points pack into 123,228 bytes, and a scan costs
+  8,949 µs — 0.89% of the second between fixes — so no more compact representation is needed.
+- **Python reads bronze through the store.** Every bronze dataset registers as a nameable
+  table, `overture_extract` by theme and type across every extract, which took duckdb out of
+  the inspection notebook.

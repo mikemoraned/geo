@@ -8,6 +8,15 @@ import pyarrow as pa
 
 
 @dataclass(frozen=True)
+class Session:
+    session_id: str
+    country: str
+    first: datetime
+    last: datetime
+    samples: int
+
+
+@dataclass(frozen=True)
 class Sample:
     t: datetime
     lat: float
@@ -22,12 +31,33 @@ class Store:
     def __init__(self, root: Path | None = None) -> None:
         self.root = None if root is None else str(root)
 
-    def _query(self, sql: str, **params) -> pa.Table:
+    def _query(self, sql: str, country: str | None = None, **params) -> pa.Table:
         return pa.table(
-            lookout_medallion.query_silver(sql, params=params, root=self.root)
+            lookout_medallion.query_silver(
+                sql, country=country, params=params, root=self.root
+            )
         )
 
-    def samples(self, session_id: str) -> Iterator[Sample]:
+    def countries(self, dataset: str) -> list[str]:
+        return lookout_medallion.countries_of(dataset, root=self.root)
+
+    def country_of(self, session_id: str) -> str:
+        for country in self.countries("session_sample"):
+            held = self._query(
+                """
+                SELECT session_id
+                FROM session_sample
+                WHERE session_id = $session_id
+                LIMIT 1
+                """,
+                country=country,
+                session_id=session_id,
+            )
+            if held.num_rows > 0:
+                return country
+        raise ValueError(f"no session {session_id} in the store")
+
+    def samples(self, session_id: str, country: str) -> Iterator[Sample]:
         table = self._query(
             """
             SELECT t, lat, lon, alt, acc, speed, heading
@@ -35,6 +65,7 @@ class Store:
             WHERE session_id = $session_id
             ORDER BY t, seq
             """,
+            country=country,
             session_id=session_id,
         )
         for row in table.to_pylist():
@@ -48,28 +79,33 @@ class Store:
                 heading_degrees=row["heading"],
             )
 
-    def crossings(self, country: str | None = None) -> list[tuple[int, float, float]]:
-        where = "WHERE country = $country" if country else ""
+    def crossings(self, country: str) -> list[tuple[int, float, float]]:
         table = self._query(
-            f"""
+            """
             SELECT crossing_compact_id AS id, ST_Y(geometry) AS lat, ST_X(geometry) AS lon
             FROM water_crossing
-            {where}
             """,
-            **({"country": country} if country else {}),
+            country=country,
         )
         return [(row["id"], row["lat"], row["lon"]) for row in table.to_pylist()]
 
-    def sessions(self) -> list[tuple[str, datetime, datetime, int]]:
-        table = self._query(
-            """
-            SELECT session_id, min(t) AS first, max(t) AS last, count(*) AS samples
-            FROM session_sample
-            GROUP BY session_id
-            ORDER BY first DESC
-            """
-        )
-        return [
-            (row["session_id"], row["first"], row["last"], row["samples"])
-            for row in table.to_pylist()
+    def sessions(self) -> list[Session]:
+        listed = [
+            Session(
+                session_id=row["session_id"],
+                country=country,
+                first=row["first"],
+                last=row["last"],
+                samples=row["samples"],
+            )
+            for country in self.countries("session_sample")
+            for row in self._query(
+                """
+                SELECT session_id, min(t) AS first, max(t) AS last, count(*) AS samples
+                FROM session_sample
+                GROUP BY session_id
+                """,
+                country=country,
+            ).to_pylist()
         ]
+        return sorted(listed, key=lambda session: session.first, reverse=True)

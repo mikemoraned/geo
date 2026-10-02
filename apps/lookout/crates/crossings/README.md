@@ -96,7 +96,7 @@ store, taking each position from the `geometry` column that dataset keeps it in.
 lat/lon and the device's scan takes a great-circle distance, so the per-country projected zone
 never reaches the device — which in any case does not know which country it will be switched on
 in. `--bbox` is how to restrict it, and is the control that matches the device: what it can hold
-is a window, not a border.
+is a bbox, not a border.
 
 ## What it writes
 

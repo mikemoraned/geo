@@ -20,7 +20,10 @@ server for trains near recently logged positions and appends each poll to a capt
 [motis.md](motis.md). Polls overlap, so the same scheduled leg is captured many times over — a
 capture is what one poll saw, and collapsing those into one row per leg is silver's work.
 `extract` takes point-in-time Overture extracts of a country's rail, water, and administrative
-divisions; see [overture.md](overture.md).
+divisions; see [overture.md](overture.md). A store commonly holds the manifest rather than the
+rows, so filling bronze in takes every extract the manifest records, each from the release its own
+row names, and skips the ones whose rows are already there. One extract covers one country, so
+filling in the newest alone would leave every other country without areas.
 
 ## Derivation
 
@@ -41,8 +44,9 @@ Two properties of that graph matter more than the order:
 
 - **An Overture extract is a prerequisite for the observation derivations, not only for the
   crossings.** A session and a train leg are each placed in a country, and the country
-  decides the projected CRS their geometry is written in. The country areas come from the
-  newest extract, so a store without one cannot derive silver at all.
+  decides the projected CRS their geometry is written in. The areas come from each country's
+  newest extract, so an observation in a country with no extract is reported as unplaceable
+  rather than derived, and a store with no extract at all derives no silver.
 - **The crossings half is the slow half.** Intersecting a country's rail against its water is
   the longest step in a rebuild, and its result changes only when the extract or the collapse
   tuning does. Re-deriving sessions after a drain does not require re-deriving it.

@@ -343,30 +343,35 @@ The device holds every crossing in flash and brute-force scans the lot against e
 The packed format is described in
 [`crates/crossings/README.md`](../crates/crossings/README.md).
 
-**A scan of 5,749 crossings costs ~4.7 ms**, against a budget of the one-second gap between
-fixes — 0.5% of it. Both figures below include parsing the sentence that carried the new
-position, so they are upper bounds on the scan alone.
+**A scan of 10,268 crossings costs ~8.9 ms**, against a budget of the one-second gap between
+fixes — 0.89% of it. Every figure below includes parsing the sentence that carried the new
+position, so each is an upper bound on the scan alone.
 
-| profile | `opt-level` | `debug-assertions` | per scan | per crossing |
-|---|---|---|---|---|
-| dev | `z` | on | 7,835–8,377 µs | ~1.39 µs |
-| release | `s` | off | 4,353–5,025 µs | ~0.82 µs |
+| profile | crossings | `opt-level` | `debug-assertions` | per scan | per crossing |
+|---|---|---|---|---|---|
+| dev | 5,749 | `z` | on | 7,835–8,377 µs | ~1.39 µs |
+| release | 5,749 | `s` | off | 4,353–5,025 µs | ~0.82 µs |
+| release | 10,268 | `s` | off | 8,894–9,004 µs | ~0.872 µs |
 
 - **Measure on release.** It is 1.7× faster than dev, and most of that is the
   `debug-assertions` and `overflow-checks` the dev profile turns on, which put a branch on
   every arithmetic operation inside the haversine. Both opt-levels are size-oriented.
-- **Brute force stays settled well past this size**: around 120,000 points before a scan
-  reaches a tenth of the fix interval, 1.2M before it fills it. The set would have to grow
-  20× before an index is worth discussing.
+- **The scan is linear in the count.** A set that nearly doubled cost 0.872 µs per crossing
+  against 0.82, the difference being the longer walk through flash. A count therefore predicts
+  a scan.
+- **Brute force stays settled well past this size**: around 115,000 points before a scan
+  reaches a tenth of the fix interval, 1.1M before it fills it. The set would have to grow
+  11× before an index is worth discussing.
 - **Budget most of a microsecond per point on this board, not tens of nanoseconds.** At tens
   of nanoseconds 50k points would scan in single-digit milliseconds. At the measured rate
-  they take ~41 ms.
+  they take ~44 ms.
 - **The set costs flash, not RAM.** Nothing copies the columns out of flash: the reader
   borrows them where they lie. A scan therefore allocates only for what it reports, a few
   hundred bytes, and a bigger set would cost flash alone. Measured on the release ELF, the
-  whole firmware is 764,694 bytes against 8 MB, of which 212,256 is the rodata carrying the
-  69,000-byte set, with 7,882 bytes of static RAM.
-- **Build the set into the binary rather than reading it from a filesystem.** At 69 KB
+  whole firmware is 837,490 bytes against 8 MB, of which 269,616 is the rodata carrying the
+  123,228-byte set, with 7,922 bytes of static RAM. Nearly doubling the set cost 57,360 bytes of
+  rodata and 40 bytes of static RAM.
+- **Build the set into the binary rather than reading it from a filesystem.** At 123 KB
   against 8 MB the saving would be nothing. A filesystem would cost a partition table, a
   mount at boot, and a way for the device to end up holding a set that disagrees with the
   code reading it. That it is really there can be checked by searching the release binary

@@ -111,7 +111,7 @@ mod tests {
     }
 
     #[test]
-    fn the_envelope_is_a_struct_of_its_four_bounds() {
+    fn the_bbox_is_a_struct_of_its_four_bounds() {
         let DataType::Struct(bounds) = column::<SessionRow>("bbox") else {
             panic!("bbox should be a struct");
         };

@@ -22,8 +22,12 @@ def written(store):
     return store
 
 
-def query(written, sql, **kwargs):
-    return pa.table(lookout_medallion.query_silver(sql, root=str(written), **kwargs))
+def query(written, sql, country="DE", **kwargs):
+    return pa.table(
+        lookout_medallion.query_silver(
+            sql, country=country, root=str(written), **kwargs
+        )
+    )
 
 
 def test_a_dataset_is_read_by_name_across_every_partition_it_holds(written):
@@ -38,13 +42,13 @@ def test_a_dataset_is_read_by_name_across_every_partition_it_holds(written):
     )
 
 
-def test_a_partition_value_comes_back_as_a_column(written):
+def test_a_partition_value_below_the_country_comes_back_as_a_column(written):
     table = query(
         written,
-        "SELECT DISTINCT country FROM train_segment",
+        "SELECT DISTINCT departure_date FROM train_segment ORDER BY departure_date",
     )
 
-    assert table.column("country").to_pylist() == ["DE"]
+    assert table.column("departure_date").to_pylist() == ["2026-07-21", "2026-07-22"]
 
 
 def test_a_parameter_binds_as_a_value(written):
@@ -106,7 +110,30 @@ def test_a_query_matching_nothing_still_names_its_columns(written):
     assert table.column_names == ["trip_id"]
 
 
+def test_a_read_answers_with_the_named_country_and_no_other(store):
+    lookout_medallion.write_silver(
+        "train_segment",
+        train_segment_table(["de", "gb"], ["2026-07-21", "2026-07-21"], ["DE", "GB"]),
+        root=str(store),
+    )
+
+    assert query(store, "SELECT trip_id FROM train_segment").column(
+        "trip_id"
+    ).to_pylist() == ["de"]
+    assert query(
+        store, "SELECT trip_id FROM train_segment", country="GB"
+    ).column("trip_id").to_pylist() == ["gb"]
+
+
 class TestWhatIsRefused:
+    def test_a_dataset_written_one_zone_to_a_country_without_naming_one(self, written):
+        with pytest.raises(ValueError, match="water_crossing"):
+            query(written, "SELECT * FROM water_crossing", country=None)
+
+    def test_a_country_the_store_has_no_zone_for(self, written):
+        with pytest.raises(ValueError, match="ZZ"):
+            query(written, "SELECT * FROM water_crossing", country="ZZ")
+
     def test_a_dataset_the_store_does_not_define(self, written):
         with pytest.raises(ValueError, match="crossing_candidates"):
             query(written, "SELECT * FROM crossing_candidates")
@@ -126,3 +153,11 @@ class TestWhatIsRefused:
                 "SELECT trip_id FROM train_segment WHERE trip_id = $trip",
                 params={"trip": {"not": "a value"}},
             )
+
+
+def test_the_countries_a_dataset_holds_come_back_as_codes(written):
+    assert lookout_medallion.countries_of("water_crossing", root=str(written)) == ["DE"]
+
+
+def test_a_dataset_that_was_never_written_holds_no_countries(store):
+    assert lookout_medallion.countries_of("water_crossing", root=str(store)) == []

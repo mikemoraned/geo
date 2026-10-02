@@ -1,5 +1,19 @@
 {
   "enabledPlugins": {
     "technical-writing@technical-writing": true
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}/tools/prose-gate/target/release/prose-gate\" --require softaworks-agent-toolkit-writing-clearly-and-concisely --require technical-writing:technical-writing",
+            "timeout": 10,
+            "statusMessage": "Checking prose went through the writing skills"
+          }
+        ]
+      }
+    ]
   }
 }

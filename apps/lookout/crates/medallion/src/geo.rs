@@ -221,6 +221,21 @@ mod tests {
     }
 
     #[test]
+    fn projecting_lat_lon_yields_metres_in_the_british_zone() {
+        let projector = Projector::for_country(Country::UnitedKingdom).unwrap();
+
+        let projected = projector
+            .project(&geo_types::Point::new(-3.188267, 55.953251))
+            .unwrap();
+
+        assert!(
+            (projected.x() - 488_244.04).abs() < 0.01
+                && (projected.y() - 6_200_892.57).abs() < 0.01,
+            "unexpected projection: {projected:?}"
+        );
+    }
+
+    #[test]
     fn projecting_a_line_string_projects_every_coordinate() {
         let projector = Projector::for_country(Country::Germany).unwrap();
         let line = geo_types::LineString::from(vec![(13.404954, 52.520008), (8.682127, 50.110924)]);

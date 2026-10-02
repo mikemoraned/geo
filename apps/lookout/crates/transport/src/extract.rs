@@ -5,7 +5,7 @@ use arrow::array::{Array, Float64Array};
 use chrono::{DateTime, Utc};
 use geo_types::{Coord, Rect};
 use medallion::{Country, PartitionValue, Query, Root};
-use medallion_model::ExtractManifestRow;
+use medallion_model::{DIVISION_ID, ExtractManifestRow};
 
 use crate::overture::{Overture, OvertureError, OvertureType};
 
@@ -13,7 +13,7 @@ const EXCLUDED_CLASSES: &[&str] = &["tram"];
 
 const COMPACT_UTC: &str = "%Y%m%dT%H%M%SZ";
 
-const RECORDED: &str = "SELECT * FROM extract_manifest ORDER BY extracted_at DESC";
+pub(crate) const RECORDED: &str = "SELECT * FROM extract_manifest ORDER BY extracted_at DESC";
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtractId(String);
@@ -52,12 +52,11 @@ pub async fn recorded(root: &Root) -> Result<Vec<ExtractManifestRow>, ExtractErr
     Ok(query.rows(RECORDED).await?)
 }
 
-pub async fn newest(root: &Root) -> Result<ExtractManifestRow, ExtractError> {
-    recorded(root)
-        .await?
-        .into_iter()
-        .next()
-        .ok_or(ExtractError::NoExtract)
+pub fn is_filled(root: &Root, id: &ExtractId) -> Result<bool, ExtractError> {
+    Ok(root
+        .dataset(medallion_model::OVERTURE_EXTRACT)
+        .for_id(id)?
+        .is_filled())
 }
 
 pub async fn recorded_as(root: &Root, id: &ExtractId) -> Result<ExtractManifestRow, ExtractError> {
@@ -80,24 +79,17 @@ pub enum ExtractError {
     Geo(#[from] medallion::GeoError),
     #[error("writing the manifest: {0}")]
     Append(#[from] medallion::AppendError),
-    #[error("{country} has no boundary in release {release}, so its window is unknown")]
+    #[error("{country} has no boundary in release {release}, so its bbox is unknown")]
     NoCountryBoundary { country: Country, release: String },
     #[error("no extract has been recorded, so there is none to take again")]
     NoExtract,
     #[error("no extract {id} in the manifest")]
     NoSuchExtract { id: ExtractId },
-    #[error("extract {id} recorded country {country}, which the store has no zone for")]
-    UnknownCountry {
-        id: ExtractId,
-        country: String,
-        #[source]
-        source: medallion::UnknownCountry,
-    },
     #[error(
-        "extract {id} already holds rows in the store; an extract is immutable, so taking \
-         it again would double its rows rather than replace them"
+        "extract {id} is already filled in; an extract is immutable, so filling it again \
+         would double its rows rather than replace them"
     )]
-    AlreadyPresent { id: ExtractId },
+    AlreadyFilled { id: ExtractId },
     #[error(
         "extract {id} was taken from release {recorded}, but this reads {opened}; a \
          re-fetch has to read the release the extract was taken from"
@@ -112,7 +104,7 @@ pub enum ExtractError {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Extraction {
     pub id: ExtractId,
-    pub window: Rect<f64>,
+    pub bbox: Rect<f64>,
     pub rows: Vec<(OvertureType, usize)>,
 }
 
@@ -133,12 +125,12 @@ impl<'a> Extractor<'a> {
         at: DateTime<Utc>,
     ) -> Result<Extraction, ExtractError> {
         self.register_themes().await?;
-        let window = self.country_window(country).await?;
-        let rows = self.write_types(&id, country, &window, at).await?;
-        self.record_extract_as_complete(&id, country, at, &window)
+        let bbox = self.country_bbox(country).await?;
+        let rows = self.write_types(&id, country.code(), &bbox, at).await?;
+        self.record_extract_as_complete(&id, country, at, &bbox)
             .await?;
 
-        Ok(Extraction { id, window, rows })
+        Ok(Extraction { id, bbox, rows })
     }
 
     pub async fn backfill(
@@ -147,15 +139,7 @@ impl<'a> Extractor<'a> {
         at: DateTime<Utc>,
     ) -> Result<Extraction, ExtractError> {
         let id = ExtractId::new(recorded.extract_id.clone())?;
-        let country = recorded
-            .country
-            .parse()
-            .map_err(|source| ExtractError::UnknownCountry {
-                id: id.clone(),
-                country: recorded.country.clone(),
-                source,
-            })?;
-        let window = window_of(recorded);
+        let bbox = bbox_of(recorded);
 
         let opened = self.overture.release().id();
         if opened != recorded.release {
@@ -165,19 +149,14 @@ impl<'a> Extractor<'a> {
                 opened: opened.to_string(),
             });
         }
-        if self
-            .root
-            .dataset(medallion_model::OVERTURE_EXTRACT)
-            .for_id(&id)?
-            .holds_files()
-        {
-            return Err(ExtractError::AlreadyPresent { id });
+        if is_filled(self.root, &id)? {
+            return Err(ExtractError::AlreadyFilled { id });
         }
 
         self.register_themes().await?;
-        let rows = self.write_types(&id, country, &window, at).await?;
+        let rows = self.write_types(&id, &recorded.country, &bbox, at).await?;
 
-        Ok(Extraction { id, window, rows })
+        Ok(Extraction { id, bbox, rows })
     }
 
     async fn register_themes(&self) -> Result<(), ExtractError> {
@@ -196,14 +175,14 @@ impl<'a> Extractor<'a> {
     async fn write_types(
         &self,
         id: &ExtractId,
-        country: Country,
-        window: &Rect<f64>,
+        code: &str,
+        bbox: &Rect<f64>,
         at: DateTime<Utc>,
     ) -> Result<Vec<(OvertureType, usize)>, ExtractError> {
-        let in_window = bbox_overlaps(window);
-        let of_country = format!("country = '{}'", country.code());
+        let in_bbox = bbox_overlaps(bbox);
+        let of_country = of_country(code);
         let rail = format!(
-            "subtype = 'rail' AND {class} AND {in_window}",
+            "subtype = 'rail' AND {class} AND {in_bbox}",
             class = excluding_classes(),
         );
 
@@ -216,11 +195,11 @@ impl<'a> Extractor<'a> {
             ),
             (OvertureType::DIVISION, "division", of_country),
             (OvertureType::SEGMENT, "segments", rail.clone()),
-            (OvertureType::WATER, "water", in_window.clone()),
+            (OvertureType::WATER, "water", in_bbox.clone()),
             (
                 OvertureType::CONNECTOR,
                 "connectors",
-                referenced_connectors(&in_window, &rail),
+                referenced_connectors(&in_bbox, &rail),
             ),
         ] {
             let written = self.write(id, at, overture_type, table, &predicate).await?;
@@ -261,15 +240,15 @@ impl<'a> Extractor<'a> {
             .rows)
     }
 
-    async fn country_window(&self, country: Country) -> Result<Rect<f64>, ExtractError> {
+    async fn country_bbox(&self, country: Country) -> Result<Rect<f64>, ExtractError> {
         let batches = self
             .overture
             .sql(&format!(
                 "SELECT MIN(bbox.xmin) AS min_lon, MIN(bbox.ymin) AS min_lat,
                         MAX(bbox.xmax) AS max_lon, MAX(bbox.ymax) AS max_lat
                  FROM division_area
-                 WHERE subtype = 'country' AND country = '{}'",
-                country.code()
+                 WHERE {DIVISION_ID} = '{}'",
+                medallion_model::division_id(country)
             ))
             .await?;
         let missing = || ExtractError::NoCountryBoundary {
@@ -301,17 +280,17 @@ impl<'a> Extractor<'a> {
         id: &ExtractId,
         country: Country,
         at: DateTime<Utc>,
-        window: &Rect<f64>,
+        bbox: &Rect<f64>,
     ) -> Result<(), ExtractError> {
         let row = ExtractManifestRow {
             extract_id: id.to_string(),
             extracted_at: at,
             release: self.overture.release().id().to_string(),
             country: country.code().to_string(),
-            min_lon: window.min().x,
-            min_lat: window.min().y,
-            max_lon: window.max().x,
-            max_lat: window.max().y,
+            min_lon: bbox.min().x,
+            min_lat: bbox.min().y,
+            max_lon: bbox.max().x,
+            max_lat: bbox.max().y,
         };
         self.root
             .rows_of::<ExtractManifestRow>()
@@ -321,7 +300,7 @@ impl<'a> Extractor<'a> {
     }
 }
 
-fn window_of(recorded: &ExtractManifestRow) -> Rect<f64> {
+fn bbox_of(recorded: &ExtractManifestRow) -> Rect<f64> {
     Rect::new(
         Coord {
             x: recorded.min_lon,
@@ -334,20 +313,24 @@ fn window_of(recorded: &ExtractManifestRow) -> Rect<f64> {
     )
 }
 
-fn bbox_overlaps(window: &Rect<f64>) -> String {
+fn of_country(code: &str) -> String {
+    format!("country = '{code}'")
+}
+
+fn bbox_overlaps(extract_bbox: &Rect<f64>) -> String {
     format!(
         "bbox.xmin <= {max_lon} AND bbox.xmax >= {min_lon}
          AND bbox.ymin <= {max_lat} AND bbox.ymax >= {min_lat}",
-        min_lon = window.min().x,
-        min_lat = window.min().y,
-        max_lon = window.max().x,
-        max_lat = window.max().y,
+        min_lon = extract_bbox.min().x,
+        min_lat = extract_bbox.min().y,
+        max_lon = extract_bbox.max().x,
+        max_lat = extract_bbox.max().y,
     )
 }
 
-fn referenced_connectors(in_window: &str, rail: &str) -> String {
+fn referenced_connectors(in_bbox: &str, rail: &str) -> String {
     format!(
-        "{in_window}
+        "{in_bbox}
          AND id IN (
            SELECT DISTINCT elem['connector_id']
            FROM (SELECT UNNEST(s.connectors) AS elem FROM segments AS s WHERE {rail}) AS refs
@@ -369,11 +352,17 @@ fn excluding_classes() -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use chrono::TimeZone;
+    use sedona::context::SedonaContext;
+
     use super::*;
     use crate::overture::Release;
-    use chrono::TimeZone;
 
-    fn window() -> Rect<f64> {
+    const UNPLACEABLE: &str = "ZZ";
+
+    fn bbox() -> Rect<f64> {
         Rect::new(Coord { x: 5.8, y: 47.2 }, Coord { x: 15.1, y: 55.1 })
     }
 
@@ -383,10 +372,10 @@ mod tests {
             extracted_at: Utc.with_ymd_and_hms(2026, 7, 27, hour, 0, 0).unwrap(),
             release: release.to_string(),
             country: Country::Germany.code().to_string(),
-            min_lon: window().min().x,
-            min_lat: window().min().y,
-            max_lon: window().max().x,
-            max_lat: window().max().y,
+            min_lon: bbox().min().x,
+            min_lat: bbox().min().y,
+            max_lon: bbox().max().x,
+            max_lat: bbox().max().y,
         }
     }
 
@@ -403,16 +392,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_newest_recorded_extraction_is_the_last_one_taken() {
+    async fn the_recorded_extractions_come_newest_first() {
         let (_tmp, root) = store_recording(&[
             manifest_row("20260727T090000Z", 9, "2026-05-21.0"),
             manifest_row("20260727T193628Z", 19, "2026-06-17.0"),
         ])
         .await;
 
-        let newest = newest(&root).await.expect("the newest extraction");
+        let recorded = recorded(&root).await.expect("the recorded extractions");
 
-        assert_eq!(newest, manifest_row("20260727T193628Z", 19, "2026-06-17.0"));
+        assert_eq!(
+            recorded,
+            vec![
+                manifest_row("20260727T193628Z", 19, "2026-06-17.0"),
+                manifest_row("20260727T090000Z", 9, "2026-05-21.0"),
+            ]
+        );
     }
 
     #[tokio::test]
@@ -444,7 +439,7 @@ mod tests {
     async fn a_store_with_no_manifest_has_no_extraction_to_take_again() {
         let tmp = tempfile::tempdir().expect("tempdir");
 
-        let err = newest(&Root::new(tmp.path())).await;
+        let err = recorded(&Root::new(tmp.path())).await;
 
         assert!(matches!(
             err,
@@ -472,7 +467,87 @@ mod tests {
             .backfill(&recorded, Utc::now())
             .await;
 
-        assert!(matches!(err, Err(ExtractError::AlreadyPresent { .. })));
+        assert!(matches!(err, Err(ExtractError::AlreadyFilled { .. })));
+    }
+
+    async fn mirror_holding_one_row_of_each_type(dir: &Path, release: &str) {
+        let ctx = SedonaContext::new();
+        let row_bbox = "{xmin: 13.0, xmax: 13.1, ymin: 52.0, ymax: 52.1}";
+        // Geometry comes first in every select: a later position makes the scan panic in
+        // sedona's spatial filter, https://github.com/apache/sedona-db/issues/389.
+        let geometry = "ST_GeomFromText('POINT (13.05 52.05)') AS geometry";
+        let of_type = [
+            (
+                OvertureType::DIVISION_AREA,
+                format!("SELECT {geometry}, 'area-1' AS id, '{UNPLACEABLE}' AS country"),
+            ),
+            (
+                OvertureType::DIVISION,
+                format!("SELECT {geometry}, 'division-1' AS id, '{UNPLACEABLE}' AS country"),
+            ),
+            (
+                OvertureType::SEGMENT,
+                format!(
+                    "SELECT {geometry}, 'segment-1' AS id, 'rail' AS subtype, \
+                     CAST(NULL AS VARCHAR) AS class, \
+                     [{{connector_id: 'connector-1'}}] AS connectors, {row_bbox} AS bbox"
+                ),
+            ),
+            (
+                OvertureType::WATER,
+                format!("SELECT {geometry}, 'water-1' AS id, {row_bbox} AS bbox"),
+            ),
+            (
+                OvertureType::CONNECTOR,
+                format!("SELECT {geometry}, 'connector-1' AS id, {row_bbox} AS bbox"),
+            ),
+        ];
+
+        for (overture_type, select) in of_type {
+            let at = dir
+                .join(release)
+                .join(format!("theme={}", overture_type.theme))
+                .join(format!("type={}", overture_type.name));
+            std::fs::create_dir_all(&at).expect("a mirrored type");
+            ctx.sql(&format!(
+                "COPY ({select}) TO '{}' STORED AS PARQUET",
+                at.join("part-0.parquet").display()
+            ))
+            .await
+            .expect("write the mirrored rows")
+            .collect()
+            .await
+            .expect("finish the write");
+        }
+    }
+
+    #[tokio::test]
+    async fn an_extract_recorded_for_a_country_the_store_cannot_place_is_filled_in() {
+        let mirror = tempfile::tempdir().expect("tempdir");
+        let mut recorded = manifest_row("20260727T193628Z", 19, "2026-06-17.0");
+        recorded.country = UNPLACEABLE.to_string();
+        mirror_holding_one_row_of_each_type(mirror.path(), &recorded.release).await;
+        let (_tmp, root) = store_recording(std::slice::from_ref(&recorded)).await;
+        let overture = Overture::open(Release::mirrored(&recorded.release, mirror.path()));
+
+        let extraction = Extractor::new(&overture, &root)
+            .backfill(&recorded, Utc::now())
+            .await
+            .expect("fill the extract in");
+
+        assert_eq!(extraction.id.to_string(), recorded.extract_id);
+        for (overture_type, rows) in &extraction.rows {
+            assert_eq!(*rows, 1, "{}/{}", overture_type.theme, overture_type.name);
+        }
+        let segments = root
+            .dataset(medallion_model::OVERTURE_EXTRACT)
+            .for_id(&extraction.id)
+            .expect("the id the manifest gave it")
+            .partition("theme", OvertureType::SEGMENT.theme)
+            .expect("the theme")
+            .partition("type", OvertureType::SEGMENT.name)
+            .expect("the type");
+        assert!(segments.is_filled(), "{}", segments.dir().display());
     }
 
     #[tokio::test]
@@ -514,8 +589,8 @@ mod tests {
     }
 
     #[test]
-    fn the_window_predicate_keeps_rows_whose_envelope_overlaps_it() {
-        let predicate = bbox_overlaps(&window());
+    fn the_bbox_predicate_keeps_rows_that_overlap_it() {
+        let predicate = bbox_overlaps(&bbox());
 
         assert!(predicate.contains("bbox.xmin <= 15.1"));
         assert!(predicate.contains("bbox.xmax >= 5.8"));
@@ -525,7 +600,7 @@ mod tests {
 
     #[test]
     fn connectors_are_restricted_to_those_rail_segments_refer_to() {
-        let predicate = referenced_connectors(&bbox_overlaps(&window()), "subtype = 'rail'");
+        let predicate = referenced_connectors(&bbox_overlaps(&bbox()), "subtype = 'rail'");
 
         assert!(predicate.contains("UNNEST(s.connectors)"));
         assert!(predicate.contains("subtype = 'rail'"));

@@ -62,11 +62,11 @@ and those are separate crossings. The compact name is minted alongside, where a 
 two crossings can still be refused; downstream, a packer, a scan and a page read the name they
 were given.
 
-## A window includes its edges
+## A bbox includes its edges
 
-A window selects points rather than partitioning space, so a point exactly on a boundary someone
+A bbox selects points rather than partitioning space, so a point exactly on a boundary someone
 drew is one they meant. Underneath it is georust's `Rect`, which orders its own corners, so a
-window built either way round is never inside out.
+bbox built either way round is never inside out.
 
 ## What was found, and how hard something looked, are different things
 
