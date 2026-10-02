@@ -10,7 +10,7 @@ This means, for example:
 * injest the sessions that I've recorded in Bronze for the UK into Silver, as we should now be able to represent them
 * derive a water crossings dataset for the UK
 * update the Kiosk dataset to include a mix of session data across all countries, where possible i.e. find the top N entries in each country.
-* end up fully up to date on the latest Overture release: mirror it locally, bump the pinned release, re-extract DE and GB at it, and re-derive silver and gold from those.
+* ~~end up fully up to date on the latest Overture release~~ — moved to its own slice in [next-slices.md](next-slices.md), since the work here is proven on the releases already extracted and the mirror sync is hours of transfer.
 
 It's ok if we don't have motis data for the UK i.e. it's ok if we don't have live train data for the UK as part of this slice.
 
@@ -76,17 +76,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   the DE crossings already sit and the mirror already answers, and the bump then moves both
   countries together and re-derives everything once. Bumping first would have the UK work and
   the release move fail together.
-- **The mirror takes a whole release, not the themes an extract reads.** It serves work
-  outside this repo as well, and a theme nobody anticipated is the kind of thing a mirror
-  exists to make discoverable. Syncing `base/water`, `transportation` and `divisions` alone
-  would be a fraction of the hundreds of GB, and would have to be re-run from the bucket each
-  time a question reached past them — by which point the release may have aged out of it.
-- **The mirroring recipes live at `tools/overture-mirror/`.** The mirror serves anything in
-  the repo that reads Overture, not lookout alone, so it sits beside `tools/motis-server` and
-  follows it: a Justfile carrying the fetch, with the reasoning in its comments. The mirror
-  itself stays outside the repo, on an external drive — what the repo records is how it is
-  made, not what it holds. The alternative, a recipe in `apps/lookout/Justfile`, ties a shared
-  prerequisite to one app.
 - **The kiosk keeps the best three sessions per country.** `--max-sessions` becomes a
   per-country count. `session_crossing` holds no geometry and so has no country level; the
   country comes from joining `session`, which is partitioned by it.
@@ -138,12 +127,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   whose rows are already there and reporting what it filled in; `backfill <id>` still takes
   one. That beats an `--all` flag: what a checkout needs is all of them, so it is the default
   rather than something to remember. The first group below builds it.
-- **Where the mirror is gets stated once, in `tools/overture-mirror/mirror.just`**, imported
-  by that dir's Justfile and by `apps/lookout/Justfile` in place of its `overture_mirror`
-  literal. A variable-only file adds no recipes to whatever imports it, and an importing
-  Justfile's recipes still run from its own directory, so `just bronze-init` is unchanged —
-  checked against just 1.46. The path moves with the drive, and a drive that moved would
-  otherwise leave one of the two Justfiles pointing at nothing.
 - Adding a country leaves bronze alone but re-derives silver whole. The crossings notebook
   writes every country in one go, so a third country means running all three — idempotent,
   and the cost of not building the country-scoped write below.
@@ -434,47 +417,19 @@ Taking a *new* extract still needs a supported country: the bbox comes from the 
 division's GERS id, which the store holds per `Country`. Reading that id from the release by code
 would lift the restriction, and is a slice of its own rather than part of this fix.
 
-#### Up to date on the latest Overture release
-
-Last, so it moves both countries at once over work that is already proven on 2026-07-22.0.
-
-- [ ] Hold the mirror's path once, in `tools/overture-mirror/mirror.just`, and import it from
-      that dir's Justfile and from `apps/lookout/Justfile` in place of its `overture_mirror`
-      literal.
-- [ ] Capture the mirroring in `tools/overture-mirror/Justfile`: one recipe listing the
-      releases `s3://overturemaps-us-west-2/release/` holds, one syncing a named release whole
-      to the mirror with `--no-sign-request`. Reasoning in comments, as
-      `tools/motis-server/Justfile` has it.
-- [ ] List the bucket's releases, and name the latest. It becomes the new pin.
-- [ ] Sync that release whole to the mirror, every theme. The user's to run: it needs the drive
-      mounted and hours of transfer. Everything below waits on it.
-- [ ] Bump `DEFAULT_RELEASE` in `crates/transport/src/overture.rs` to that release.
-- [ ] Take a DE and a GB extract at it, from the mirror. Each becomes its country's newest, so
-      what places a point follows with no further change.
-- [ ] Point the notebook's country-to-extract map at the two new ids, and re-run `just
-      silver-init`.
-- [ ] Re-run `crossing_checks` over both countries, and record any test case whose count moved
-      between the two releases.
-- [ ] Re-run `just gold-pack-crossings`, `just crossings`, `just gold-pack-sessions` and `just
-      kiosk-sessions`, and commit the packed artefacts with the versions adopted.
-- [ ] Re-measure the firmware size and the scan cost on this final set, and confirm the
-      invariant on those numbers.
-
 #### Wrap-up
 
 - [x] State in `docs/medallion.md`, beside the rule on one projected zone per country, what a
-      zone is, and that a zone is chosen to need no datum transformation — every engine writing the column has to
-      reach the same numbers, and a transformation one applies and another skips is the way
-      they diverge. Carry the Ordnance Survey and PROJ references from [Rejected /
-      deferred](#rejected--deferred).
+      zone is, and that a zone is chosen to need no datum transformation — every engine writing
+      the column has to reach the same numbers, and a transformation one applies and another
+      skips is the way they diverge. Carry the Ordnance Survey and PROJ references from
+      [Rejected / deferred](#rejected--deferred).
 - [ ] Record in `docs/overture.md` that a country is extracted on its own, that the areas
       placing a point are the union of each country's newest extract, and that countries need
       not share a release.
 - [ ] Fold the measured firmware size and scan cost into the scanning section of
       `docs/device.md`.
 - [ ] Record in `docs/architecture.md` that filling in bronze takes every recorded extract.
-- [ ] Point `apps/lookout/README.md` at `tools/overture-mirror/` where it says the extract
-      comes from a local mirror.
 - [ ] Run `just test-no-docker`.
 
 ### Observations
