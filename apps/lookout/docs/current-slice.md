@@ -427,7 +427,7 @@ would lift the restriction, and is a slice of its own rather than part of this f
 - [x] Record in `docs/overture.md` that a country is extracted on its own, that the areas
       placing a point are the union of each country's newest extract, and that countries need
       not share a release.
-- [ ] Fold the measured firmware size and scan cost into the scanning section of
+- [x] Fold the measured firmware size and scan cost into the scanning section of
       `docs/device.md`.
 - [ ] Record in `docs/architecture.md` that filling in bronze takes every recorded extract.
 - [ ] Run `just test-no-docker`.
