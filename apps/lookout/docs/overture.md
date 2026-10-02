@@ -78,6 +78,30 @@ else is derived against, and a fix over the territorial waters places as readily
 land — which is what a railway crossing an estuary needs. A test covers it: a division with both
 areas places a point over the waters.
 
+## A country is extracted on its own, and the others stand
+
+An extract holds one country at one release. Extracting a country writes a new extract beside the
+ones already recorded, with a manifest row naming that country and that release. Nothing already in
+the store changes, which is what immutability rests on: an addition never reopens a recorded id.
+
+The areas that place a point are therefore the union across countries, each country's own newest
+extract, rather than the store's newest extract alone. That newest extract covers one country, so
+placing against it would leave every fix recorded elsewhere unplaceable. A country with no extract
+contributes no areas rather than failing, since the store names a country before its extract is
+taken.
+
+Extracting a country twice shadows rather than doubles. The union takes each country's newest
+extract, so a second extraction supersedes the first and no area is counted twice.
+
+Countries need not share a release. Each manifest row records the release its extract was read
+from, and a country extracted from a year-old snapshot sits beside one extracted from a current
+release. Sharing a release makes a figure derived for one country comparable with the same figure
+for another. Coverage changes between releases, so two counts read from different releases differ
+partly because the upstream map moved. On one release, the difference is in the countries. Needing
+that comparison is a choice per derivation rather than a rule. A country can be added long after
+the rest: an addition asks only that its release is still readable somewhere, and a mirror holds
+every release.
+
 ## Taking an extract reads the country division; filling one in reads the manifest
 
 Taking a new extract reads the country's division id to find its bbox, and the store holds that
