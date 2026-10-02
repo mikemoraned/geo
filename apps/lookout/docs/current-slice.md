@@ -429,8 +429,8 @@ would lift the restriction, and is a slice of its own rather than part of this f
       not share a release.
 - [x] Fold the measured firmware size and scan cost into the scanning section of
       `docs/device.md`.
-- [ ] Record in `docs/architecture.md` that filling in bronze takes every recorded extract.
-- [ ] Run `just test-no-docker`.
+- [x] Record in `docs/architecture.md` that filling in bronze takes every recorded extract.
+- [x] Run `just test-no-docker`.
 
 ### Observations
 
