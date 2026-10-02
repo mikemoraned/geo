@@ -66,6 +66,12 @@ proofreading rather than rewriting, so the reader ends up copyediting word by wo
 rules without invoking the skills does not count — if neither appears in the turn, the prose task
 is unstarted, however finished the text looks.
 
+A Stop hook enforces this. When a session changed prose without invoking both skills, the hook
+blocks the stop and names the missing one. [`tools/prose-gate`](tools/prose-gate/README.md) is the
+gate, `.claude/settings.json` wires it, and `just prerequisites` builds the binary it names — once
+per checkout. It reads the transcript for the invocation rather than for the skill's name, so
+quoting a rule satisfies nothing.
+
 [Conventions / Style](#conventions--style) states what each skill covers and the three
 departures this repo takes from them.
 

@@ -2,6 +2,7 @@ git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git di
 
 # Install the tools every other recipe needs. See README.md for what each is for.
 prerequisites:
+    cd {{ justfile_directory() }}/../.. && just prerequisites
     cargo install rerun-cli --locked
     cargo install wasm-pack --locked
     rustup target add wasm32-unknown-unknown
