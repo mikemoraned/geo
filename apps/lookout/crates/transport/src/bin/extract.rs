@@ -26,7 +26,7 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Take a recorded extract again, from the release and window its manifest row
+    /// Take a recorded extract again, from the release and bbox its manifest row
     /// records, under the id it was taken under. With no id, takes every extract the
     /// manifest records, skipping the ones already filled in.
     Backfill {
@@ -160,10 +160,10 @@ fn named(ids: &[ExtractId]) -> String {
 fn report(extraction: &Extraction) {
     tracing::info!(
         id = %extraction.id,
-        min_lon = extraction.window.min().x,
-        min_lat = extraction.window.min().y,
-        max_lon = extraction.window.max().x,
-        max_lat = extraction.window.max().y,
+        min_lon = extraction.bbox.min().x,
+        min_lat = extraction.bbox.min().y,
+        max_lon = extraction.bbox.max().x,
+        max_lat = extraction.bbox.max().y,
         rows = extraction.rows.iter().map(|(_, rows)| rows).sum::<usize>(),
         "extracted",
     );

@@ -65,7 +65,7 @@ impl Country {
         }
     }
 
-    pub fn bounds(self) -> Rect<f64> {
+    pub fn bbox(self) -> Rect<f64> {
         let (min, max) = match self {
             Country::Germany => ((5.8, 47.2), (15.1, 55.2)),
             Country::UnitedKingdom => ((-14.1, 49.6), (2.2, 61.1)),
@@ -93,7 +93,7 @@ mod tests {
             (Country::Germany, Point::new(13.404954, 52.520008)),
             (Country::UnitedKingdom, Point::new(-3.188267, 55.953251)),
         ] {
-            assert!(country.bounds().contains(&place), "{country}: {place:?}");
+            assert!(country.bbox().contains(&place), "{country}: {place:?}");
         }
     }
 
@@ -101,15 +101,15 @@ mod tests {
     fn no_country_holds_a_place_in_another() {
         assert!(
             !Country::Germany
-                .bounds()
+                .bbox()
                 .contains(&Point::new(-3.188267, 55.953251)),
-            "Edinburgh is not in Germany's window"
+            "Edinburgh is not in Germany's bbox"
         );
         assert!(
             !Country::UnitedKingdom
-                .bounds()
+                .bbox()
                 .contains(&Point::new(13.404954, 52.520008)),
-            "Berlin is not in the UK's window"
+            "Berlin is not in the UK's bbox"
         );
     }
 

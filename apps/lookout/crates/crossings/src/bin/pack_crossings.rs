@@ -24,7 +24,7 @@ struct Args {
     /// layer.
     #[arg(long)]
     output: Option<PathBuf>,
-    /// Keep only crossings inside this `west,south,east,north` window. Omit to keep them all.
+    /// Keep only crossings inside this `west,south,east,north` bbox. Omit to keep them all.
     #[arg(long)]
     bbox: Option<Bbox>,
     /// A file to write this run's version into, naming what was just packed. What reads it
@@ -63,10 +63,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let read = silver::read(&root).await?;
     let crossings: Vec<_> = match args.bbox {
-        Some(window) => read
+        Some(bbox) => read
             .into_iter()
             .filter(|crossing| {
-                window.contains(crossing.crossing.longitude(), crossing.crossing.latitude())
+                bbox.contains(crossing.crossing.longitude(), crossing.crossing.latitude())
             })
             .collect(),
         None => read,
@@ -191,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn a_window_is_parsed_and_validated_by_clap() {
+    fn a_bbox_is_parsed_and_validated_by_clap() {
         let args = Args::parse_from(["pack_crossings", "--bbox", "6.08,47.42,15.04,54.93"]);
 
         assert_eq!(

@@ -29,8 +29,8 @@ the value is in the slice record.
 
 A distance is only a distance inside one projected zone, and the store chooses a zone per country,
 so both inputs are read a country at a time and subtracted in that country's metres. A session is
-matched only against the crossings inside its own envelope grown by the radius, so the distance is
-computed for the pairs that could be within it rather than for every pair. The envelope is grown
+matched only against the crossings inside its own bbox grown by the radius, so the distance is
+computed for the pairs that could be within it rather than for every pair. The bbox is grown
 on the sphere rather than by treating a degree as a fixed distance, since a degree of longitude is
 a different length at every latitude. Its edges count as inside: a crossing on the grown edge is
 one at exactly the radius, which the distance test counts.

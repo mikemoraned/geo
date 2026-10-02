@@ -18,9 +18,9 @@ Eight stages, 1,047 lines in `v10.py` and 246 in the two modules beside it.
 
 | Stage | Work | Rows it starts from, DE and GB |
 | --- | --- | --- |
-| Region | Union of a country's two division areas, and its envelope | 2 and 2 |
-| Rail | Scan, envelope prefilter, then clip to the region | 239,614 and 55,347 |
-| Water | Scan, envelope prefilter, then range-join to rail envelopes | 3,110,307 and 1,120,122 |
+| Region | Union of a country's two division areas, and its bbox | 2 and 2 |
+| Rail | Scan, bbox prefilter, then clip to the region | 239,614 and 55,347 |
+| Water | Scan, bbox prefilter, then range-join to rail bboxes | 3,110,307 and 1,120,122 |
 | Crossings | Intersect each rail geometry with each water geometry it meets | — |
 | Parts | Split to parts, measure each in metres, locate along the segment, drop the blocked and the redundant | — |
 | Cluster | Pairs within a merge distance, connected components, one representative each | — |
@@ -70,8 +70,8 @@ SQL and into Rust code. What is unavailable is the *formulation*, not the capabi
 
 ## The join is to be designed, not translated
 
-The water stage is a four-inequality range join — each water envelope against each rail
-envelope — and DuckDB executes that with a range join. DataFusion 52.5 offers a hash join and
+The water stage is a four-inequality range join — each water bbox against each rail
+bbox — and DuckDB executes that with a range join. DataFusion 52.5 offers a hash join and
 a sort-merge join, both needing an equality key; a nested loop join for an arbitrary
 predicate; and a piecewise merge join whose own documentation says it "is currently
 experimental" and "only evaluates single range filter", chosen "when there is only one
@@ -79,10 +79,10 @@ comparison filter". Four comparisons do not qualify, so the plan is a nested loo
 
 The cross products that would then be evaluated, taking the extract counts as the upper bound:
 7.45 × 10¹¹ pairs for DE and 6.20 × 10¹⁰ for GB. The notebook's own prefilter to the region
-envelope cuts both before the join, and by how much is unmeasured, but no constant factor
+bbox cuts both before the join, and by how much is unmeasured, but no constant factor
 rescues the shape.
 
-The port is therefore not a transliteration. An R-tree over the water envelopes, queried once
+The port is therefore not a transliteration. An R-tree over the water bboxes, queried once
 per rail segment, is what the SQL emulates with inequalities — and it is what SedonaDB's own
 spatial join does, building an index with `geo-index` and refining with GEOS. Refinement here
 would be `geo` instead.
@@ -130,7 +130,7 @@ Ranked by information per unit of effort.
 1. **Time the notebook's stages**, on the run that produces the two-country counts. Which stage
    dominates decides whether a port is about the join or about the geometry, and nothing else
    here is worth doing first.
-2. **Count candidate pairs from an R-tree over one country's water envelopes**, in Rust, with
+2. **Count candidate pairs from an R-tree over one country's water bboxes**, in Rust, with
    no geometry work behind it. It answers the join question directly, and `rstar` is already
    resolved.
 3. **Reproduce one test case with `geo`**: clip a handful of rail segments against the water in

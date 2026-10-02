@@ -158,7 +158,7 @@ async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
             Session {
                 session_id: session.session_id,
                 device_id: session.device_id,
-                envelope: session.bbox.rect(),
+                bbox: session.bbox.rect(),
                 samples,
             }
         })

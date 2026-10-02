@@ -6,7 +6,7 @@
 
 Implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session table) and from motis (bronze/motis_segment). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
 
-Since I likely won't be in Germany for a while, we can if needed get new motis data by polling motis live in a particular bounding box and watching when trains arrive.
+Since I likely won't be in Germany for a while, we can if needed get new motis data by polling motis live in a particular bbox and watching when trains arrive.
 
 #### Tasks 
 
@@ -135,7 +135,9 @@ it at index 1 and reads. Apache SedonaDB issue
 [#389](https://github.com/apache/sedona-db/issues/389), "Parquet pruning expressions should be
 evaluated against the projected schema and not the file schema", is the same mistake and is
 closed by PR #385, and 0.4.1 is released. Until that lands here, bronze geometry is read as plain
-parquet and decoded from WKB, which is what `Query::register_at_without_geometry` is for.
+parquet and decoded from WKB, which is what `Query::register_at_without_geometry` is for. The same
+panic reaches a test that writes its own GeoParquet: a fixture mirroring a release selects geometry
+as its first column so the scan survives.
 
 ### Tasks
 
@@ -146,6 +148,8 @@ parquet and decoded from WKB, which is what `Query::register_at_without_geometry
       to see whether the panic is gone. Where the plain-parquet read was only a way round it,
       drop it; where it is the honest read — a partition value, a column with no CRS to declare —
       keep it.
+- [ ] Put the column order back wherever the panic dictated it, including the release mirror a
+      transport test writes, so a fixture reads like the data it stands in for.
 - [ ] Move arrow, parquet and datafusion with SedonaDB. The workspace comment pins them to the
       generation SedonaDB builds against, so they are one decision rather than four.
 - [ ] Pin the ESP toolchain, which `rust-toolchain.toml` leaves as `channel = "esp"`. A device

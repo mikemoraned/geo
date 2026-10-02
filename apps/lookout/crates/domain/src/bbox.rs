@@ -113,8 +113,8 @@ impl From<Bbox> for Corners {
 impl FromStr for Bbox {
     type Err = BboxError;
 
-    fn from_str(window: &str) -> Result<Self, Self::Err> {
-        let corners = window
+    fn from_str(bbox: &str) -> Result<Self, Self::Err> {
+        let corners = bbox
             .split(',')
             .map(|corner| corner.trim().parse::<f64>())
             .collect::<Result<Vec<_>, _>>()?;
@@ -141,7 +141,7 @@ mod tests {
     const GERMANY: &str = "6.08,47.42,15.04,54.93";
 
     #[test]
-    fn a_window_parses_from_the_command_line_form() {
+    fn a_bbox_parses_from_the_command_line_form() {
         let bbox: Bbox = GERMANY.parse().unwrap();
 
         assert_eq!(bbox.min(), coord! { x: 6.08, y: 47.42 });
@@ -157,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn a_window_round_trips_through_its_display_form() {
+    fn a_bbox_round_trips_through_its_display_form() {
         let bbox: Bbox = GERMANY.parse().unwrap();
 
         assert_eq!(bbox.to_string().parse(), Ok(bbox));
@@ -196,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn an_inverted_window_is_rejected() {
+    fn an_inverted_bbox_is_rejected() {
         assert_eq!(
             Bbox::new(15.0, 47.0, 6.0, 54.0),
             Err(BboxError::WestOfEast {
@@ -214,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn a_window_holds_the_points_inside_it_and_on_its_edges() {
+    fn a_bbox_holds_the_points_inside_it_and_on_its_edges() {
         let bbox: Bbox = GERMANY.parse().unwrap();
 
         assert!(bbox.contains(13.54, 51.61));
@@ -225,7 +225,7 @@ mod tests {
     }
 
     #[test]
-    fn a_degenerate_window_holds_only_its_own_point() {
+    fn a_degenerate_bbox_holds_only_its_own_point() {
         let point = Bbox::new(13.54, 51.61, 13.54, 51.61).unwrap();
 
         assert!(point.contains(13.54, 51.61));

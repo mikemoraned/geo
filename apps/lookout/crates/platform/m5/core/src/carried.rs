@@ -41,7 +41,7 @@ mod tests {
             assert!(
                 Country::ALL
                     .into_iter()
-                    .any(|country| country.bounds().contains(&at)),
+                    .any(|country| country.bbox().contains(&at)),
                 "{point:?} is in none of {}",
                 Country::codes(),
             );

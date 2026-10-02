@@ -160,7 +160,7 @@ def _(EXTRACTS, MEDALLION_ROOT, con):
 def _(con, extract_globs, extracts):
     # Step 2 (V6): the query window is each country's own areas — the land and the territorial
     # waters its division carries. `region_union` is the clip geometry per country;
-    # `region_bbox` is the pruning rectangle per country, and `region_areas` the dataflow handle
+    # `region_bbox` is the pruning bbox per country, and `region_areas` the dataflow handle
     # later cells depend on. An extract restricts to its country by bbox, which reaches over the
     # border and out to sea; the union clips precisely, so a neighbour's rivers and rail are
     # dropped here rather than upstream.

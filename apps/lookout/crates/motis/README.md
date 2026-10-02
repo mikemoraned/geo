@@ -9,8 +9,8 @@ keep every answer, and derive one row per scheduled leg from them.
 ## The three stages
 
 A **poll** reads the newest queued telemetry samples, keeps the GPS fixes younger than its
-lookback, and holds them in a rolling window pruned by age. The box it queries is the window's own
-bounding box scaled about its centre, so a train just off the trace still comes back. Nothing is
+lookback, and holds them in a rolling window pruned by age. The bbox it queries is the window's own
+bbox scaled about its centre, so a train just off the trace still comes back. Nothing is
 queried while the window is empty.
 
 The **capture log** takes what a poll saw, one file per poll, verbatim: the times as instants and

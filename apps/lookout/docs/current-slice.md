@@ -112,13 +112,13 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   zone — and rather than in `domain`, which builds for Xtensa and wasm and where nothing names
   an upstream entity. The mapping is therefore a function of `Country` rather than a method on
   it.
-- **The window keeps the territorial waters.** Confirmed 2026-09-27. Both areas of the division
-  go into the bounding box, as they did when the code selected them by label. For GB that reaches
+- **The bbox keeps the territorial waters.** Confirmed 2026-09-27. Both areas of the division
+  go into the bbox, as they did when the code selected them by label. For GB that reaches
   -14.02 rather than the land's -8.65, about 5.4 degrees of longitude of Atlantic, because the
   waters around Rockall are UK territorial waters while the rock is not UK land. That extra width
   holds water rows in the open Atlantic that no railway comes near, and a larger extract with
   them. Both areas stay: the extract exists to find water a railway meets, and a coastal crossing
-  sits in the waters, so a window round the land alone would drop the rows the derivation looks
+  sits in the waters, so a bbox round the land alone would drop the rows the derivation looks
   for. A test in `countries.rs` holds it — a division with both areas places a point over the
   waters — and it fails if the read is narrowed to `class = 'land'`.
 - **Partitioning geo silver by country needs no work.** ~~The country level is applied above a
@@ -224,7 +224,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   `--max-sessions` is counted, and the per-country change below decides nothing for GB until a
   second UK session qualifies.
 - ~~Whether Overture's GB country area includes Northern Ireland, and so how far west the
-  window reaches.~~ Answered 2026-09-27: it does, and the window reaches -14.02 through the
+  bbox reaches.~~ Answered 2026-09-27: it does, and the bbox reaches -14.02 through the
   maritime area. See [Observations](#observations).
 
 ### Tasks
@@ -264,7 +264,7 @@ alone.
       pinned metre.
 - [x] Read `division_area` for the UK from the mirror at release 2026-07-22.0, and record the
       code it carries and the bbox of the `country` row. Decides the variant's code and the
-      window the extract takes. The user ran it: `/Volumes` answers `Operation not permitted`
+      bbox the extract takes. The user ran it: `/Volumes` answers `Operation not permitted`
       to Claude, sandbox disabled included, so the mirror is unreadable from a session.
 - [x] Add `Country::UnitedKingdom` to `crates/medallion/src/country.rs`: code `GB`,
       `projected_epsg` 25830, `projected_projjson` from `etrs89_utm30n.projjson.json`, and the
@@ -285,9 +285,9 @@ Proven on DE before any further UK work, as the ids are what every later read ke
       exhaustively over `Country`, and test that every id parses and that no two countries share
       one.
 - [x] Read the country areas by `division_id` rather than by `subtype` and `country`, in both the
-      places that ask Overture for them: placing a point, and taking an extract's window.
+      places that ask Overture for them: placing a point, and taking an extract's bbox.
 - [x] Record in `docs/overture.md` what a GERS id is, which themes commit to one, that a country
-      is two areas of one division, and that the window keeps the territorial waters.
+      is two areas of one division, and that the bbox keeps the territorial waters.
 - [x] Re-derive the DE silver datasets and check the sessions place as they did, on a store whose
       extract predates the change. The read is by id now; the rows are the same rows.
 
@@ -336,9 +336,9 @@ of it.
 - [x] Expose `division_id` through `medallion-py`, beside `projected_crs`, so the notebook keys
       its region read on the division rather than on the country label. The region union is the
       geometry every crossing is clipped against, which makes it the third place the GERS rule
-      applies after placing a point and taking a window.
+      applies after placing a point and taking a bbox.
 - [x] Replace the pinned `EXTRACT_ID` and `COUNTRY` with a country-to-extract map covering DE
-      and GB, and drive the region window, rail, water and city cells from it — the two
+      and GB, and drive the region bbox, rail, water and city cells from it — the two
       `country = 'DE'` literals included. The region one becomes a division id; the locality one
       stays a country code, since it selects every city in the country rather than one entity.
 - [x] Project each country's geometry with its own `lookout_medallion.projected_crs(country)`,
@@ -366,7 +366,7 @@ of it.
 - [x] Run `just gold-pack-crossings` and `just crossings`. Record `crossings`, `packed_bytes`
       and `json_bytes`.
 - [x] Check the carried crossings against every country the store supports rather than against
-      Germany's box, which the GB points fail. `Country::bounds` says where a country is,
+      Germany's bbox, which the GB points fail. `Country::bbox` says where a country is,
       coarsely, and `m5-core` takes the store as a dev-dependency to read it — host-only, as its
       `predictor` fixtures already are.
 
@@ -420,17 +420,17 @@ is the record of what was observed, so it has no such rule — but `Extractor::b
 manifest row's country into `Country` and fails on a code this build has no variant for, which
 makes a recorded extract unfillable for the country it was taken for.
 
-- [ ] Fill in a recorded extract from the country code its manifest row carries, rather than from
-      a `Country`. The predicates that restrict a theme want the code, and the window comes from
+- [x] Fill in a recorded extract from the country code its manifest row carries, rather than from
+      a `Country`. The predicates that restrict a theme want the code, and the bbox comes from
       the row, so nothing in a backfill needs the store to have a zone for it.
-- [ ] Test that an extract recorded for a country the store has no zone for fills in, and that its
+- [x] Test that an extract recorded for a country the store has no zone for fills in, and that its
       rows land under the id the manifest gave it.
-- [ ] Drop `ExtractError::UnknownCountry` if nothing raises it once the backfill reads a code.
-- [ ] Record in `docs/overture.md` that an extract is taken for a country the store can place and
+- [x] Drop `ExtractError::UnknownCountry` if nothing raises it once the backfill reads a code.
+- [x] Record in `docs/overture.md` that an extract is taken for a country the store can place and
       filled in by the code the manifest carries, since taking one reads that country's division
       id while filling one in reads only the manifest.
 
-Taking a *new* extract still needs a supported country: the window comes from the country
+Taking a *new* extract still needs a supported country: the bbox comes from the country
 division's GERS id, which the store holds per `Country`. Reading that id from the release by code
 would lift the restriction, and is a slice of its own rather than part of this fix.
 
@@ -462,8 +462,8 @@ Last, so it moves both countries at once over work that is already proven on 202
 
 #### Wrap-up
 
-- [ ] State in `docs/medallion.md`, beside the rule on one projected zone per country, that a
-      zone is chosen to need no datum transformation — every engine writing the column has to
+- [x] State in `docs/medallion.md`, beside the rule on one projected zone per country, what a
+      zone is, and that a zone is chosen to need no datum transformation — every engine writing the column has to
       reach the same numbers, and a transformation one applies and another skips is the way
       they diverge. Carry the Ordnance Survey and PROJ references from [Rejected /
       deferred](#rejected--deferred).
@@ -497,7 +497,7 @@ Last, so it moves both countries at once over work that is already proven on 202
   out; the per-country cap is what keeps it.
 - **The device set is 10,268 points in 123,228 bytes packed, 330,512 as JSON.** Up from 5,749
   points and about 184 KB, from the two extracts `20260804T152143Z` and `20260927T172559Z`. Of the
-  carried points 5,760 fall in Germany's window and 4,508 in the UK's, none outside either.
+  carried points 5,760 fall in Germany's bbox and 4,508 in the UK's, none outside either.
 - **A silver write sweeps the countries its rows do not cover.** The gold fixture wrote DE and
   then GB in two calls to `write_geo_rows`, and the second deleted the first: a write replaces
   the dataset, so every country it is to hold goes in one call. The crossings notebook already
@@ -506,7 +506,7 @@ Last, so it moves both countries at once over work that is already proven on 202
 - **`inspect_crossings.py` draws the store back, a country at a time.** Seven cells: the silver crossings
   read through `query_silver` per country, a map of each country's crossings coloured by overlap
   kind, and the four bbox test cases through `crossing_checks` and `test_viz`, with the country of
-  a case taken from the extract window that holds the middle of its bbox — so the Hamburg case,
+  a case taken from the extract whose bbox holds its middle — so the Hamburg case,
   which has no crossings to infer from, still resolves. All four cases pass through it: Mannheim
   4 of 4, the horseshoe 2 of 2, Hamburg 0 of 0, and the Forth Bridge 2 of 2 on its first real
   run. Bronze is read with duckdb until the group above lands.
@@ -539,8 +539,8 @@ Last, so it moves both countries at once over work that is already proven on 202
   comes from four; the bbox -3.3920, 56.0000 to -3.3860, 56.0060 holds exactly those two and
   excludes the river pair 4.4 km north at Inverkeithing.
 - **The GB extract is `20260927T172559Z`, taken 2026-09-27 from the mirror at release
-  2026-07-22.0.** Its window is -14.015517, 49.674000 to 2.091912, 61.061001, digit for digit
-  what the mirror answers for the GB division, so reading a window by division id holds against a
+  2026-07-22.0.** Its bbox is -14.015517, 49.674000 to 2.091912, 61.061001, digit for digit
+  what the mirror answers for the GB division, so reading a bbox by division id holds against a
   release as well as against a fixture. It writes 1,373,565 rows in 867 MiB, against DE's
   3,969,823 in 1.5 GiB:
 
@@ -552,8 +552,8 @@ Last, so it moves both countries at once over work that is already proven on 202
   | `transportation/segment` | 55,347 | 239,614 |
   | `divisions/division_area` | 24,149 | 39,780 |
 
-  Water is 593 MiB of the 867. GB holds a third of DE's rows on a wider window: much of the
-  window is sea, which carries few rows for its area, where Germany's land carries rivers, canals
+  Water is 593 MiB of the 867. GB holds a third of DE's rows on a wider bbox: much of the
+  bbox is sea, which carries few rows for its area, where Germany's land carries rivers, canals
   and four times the rail.
 - **Three extracts in the store, and GB is the newest.** The superseded DE extract
   `20260727T193628Z` has been filled in beside `20260804T152143Z` and the GB one, so the store
@@ -576,17 +576,17 @@ Last, so it moves both countries at once over work that is already proven on 202
   names 60 datum-ensemble members where the old one named 12. That is about 3.5 KiB per partition
   file, and it lands on any dataset with a projected column as it is next rewritten.
 - **GB's country area spans -14.0155, 49.6740 to 2.0919, 61.0610**, read from the mirror at
-  release 2026-07-22.0 on 2026-09-27. The code is `GB`, as the decision took it. The window is
+  release 2026-07-22.0 on 2026-09-27. The code is `GB`, as the decision took it. The bbox is
   much wider than the island: west to Rockall, north past Shetland, south to the Scillies, and
-  east into the North Sea. Everything the extract takes by window rather than by country
+  east into the North Sea. Everything the extract takes by bbox rather than by country
   therefore reaches well beyond the UK — all of Ireland, and the coast from Brittany to Jutland
-  — so the rail and water rows include a second country's network, as Germany's window already
+  — so the rail and water rows include a second country's network, as Germany's bbox already
   does for its neighbours.
 - **Northern Ireland is inside the GB country area.** A point-in-polygon test on the mirror,
   2026-09-27, put Belfast — -5.93, 54.60 — inside both of GB's areas, so the extract covers the
-  province, the Irish Sea, and the railways of the Republic that share the window. Rockall —
+  province, the Irish Sea, and the railways of the Republic that share the bbox. Rockall —
   -13.69, 57.60 — falls inside the maritime area alone, the land reaching no further west than
-  -8.65 at St Kilda, and that is what carries the window out to -14.02.
+  -8.65 at St Kilda, and that is what carries the bbox out to -14.02.
 - **proj4rs 0.2 and PROJ agree on EPSG:25830 to under a centimetre.** Edinburgh Waverley,
   -3.188267, 55.953251, projects to 488,244.04, 6,200,892.57 through both, which is what
   `geo.rs` pins. The decision's 443,797.38, 6,200,880.49 was a different point near Edinburgh,
