@@ -20,11 +20,10 @@ server for trains near recently logged positions and appends each poll to a capt
 [motis.md](motis.md). Polls overlap, so the same scheduled leg is captured many times over — a
 capture is what one poll saw, and collapsing those into one row per leg is silver's work.
 `extract` takes point-in-time Overture extracts of a country's rail, water, and administrative
-divisions; see [overture.md](overture.md). Those rows are large and re-fetchable, so a store
-commonly holds the manifest and none of them. Filling bronze in therefore takes every extract the
-manifest records, each from the release its own row names, and skips the ones whose rows are
-already there. One extract covers one country, so filling in the newest alone would leave every
-other country without areas.
+divisions; see [overture.md](overture.md). A store commonly holds the manifest rather than the
+rows, so filling bronze in takes every extract the manifest records, each from the release its own
+row names, and skips the ones whose rows are already there. One extract covers one country, so
+filling in the newest alone would leave every other country without areas.
 
 ## Derivation
 

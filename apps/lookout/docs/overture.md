@@ -88,19 +88,18 @@ The areas that place a point are therefore the union across countries, each coun
 extract, rather than the store's newest extract alone. That newest extract covers one country, so
 placing against it would leave every fix recorded elsewhere unplaceable. A country with no extract
 contributes no areas rather than failing, since the store names a country before its extract is
-taken.
-
-Extracting a country twice shadows rather than doubles. The union takes each country's newest
-extract, so a second extraction supersedes the first and no area is counted twice.
+taken. Extracting a country twice shadows rather than doubles: the second extraction
+supersedes the first, and no area is counted twice.
 
 Countries need not share a release. Each manifest row records the release its extract was read
-from, and a country extracted from a year-old snapshot sits beside one extracted from a current
-release. Sharing a release makes a figure derived for one country comparable with the same figure
-for another. Coverage changes between releases, so two counts read from different releases differ
+from, so a country extracted from a year-old snapshot sits beside one extracted from a current
+release, and a country can be added long after the rest. An addition asks only that its release is
+still readable somewhere, and a mirror holds every release.
+
+Sharing a release makes a figure derived for one country comparable with the same figure for
+another. Coverage changes between releases, so two counts read from different releases differ
 partly because the upstream map moved. On one release, the difference is in the countries. Needing
-that comparison is a choice per derivation rather than a rule. A country can be added long after
-the rest: an addition asks only that its release is still readable somewhere, and a mirror holds
-every release.
+that comparison is a choice per derivation rather than a rule.
 
 ## Taking an extract reads the country division; filling one in reads the manifest
 
