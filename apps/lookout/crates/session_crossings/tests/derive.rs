@@ -23,6 +23,19 @@ impl Countries for Germany {
     }
 }
 
+const FAR_EAST_M: f64 = 500_000.0;
+
+struct EastIsElsewhere;
+
+impl Countries for EastIsElsewhere {
+    fn containing(&self, point: Point<f64>) -> Option<Country> {
+        match point.x() < east_of_berlin(FAR_EAST_M) {
+            true => Some(Country::Germany),
+            false => Some(Country::UnitedKingdom),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, PartialEq)]
 struct Pass {
     crossing_id: String,
@@ -302,4 +315,59 @@ async fn the_samples_within_the_radius_are_counted() {
 
     assert_eq!(outcome.passes, 1);
     assert_eq!(passes_in(&root).await[0].samples_within, 2);
+}
+
+async fn store_with_a_session_in_each_of_two_countries(root: &Root) {
+    let payloads: Vec<String> = [0.0, FAR_EAST_M]
+        .into_iter()
+        .flat_map(|from| {
+            let device = Uuid::new_v4();
+            (0..3).map(move |step| {
+                gps(
+                    device,
+                    at(step),
+                    east_of_berlin(from + step as f64 * SAMPLE_SPACING_M),
+                )
+            })
+        })
+        .map(|message| serde_json::to_string(&message).expect("serialize"))
+        .collect();
+
+    Archive::new(root.clone())
+        .write(
+            at(0),
+            &payloads
+                .iter()
+                .map(|json| Payload {
+                    received_at: Some(at(0).timestamp_millis()),
+                    json,
+                })
+                .collect::<Vec<_>>(),
+        )
+        .await
+        .expect("archive the samples");
+    let derived = sessions(root, Gap::default(), Lead::default())
+        .await
+        .expect("derive the sessions");
+    silver::write(root, &derived, &EastIsElsewhere)
+        .await
+        .expect("write the sessions");
+}
+
+#[tokio::test]
+async fn a_country_holding_only_some_of_the_datasets_is_left_out_rather_than_failing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = Root::new(tmp.path());
+    store_with_a_session_in_each_of_two_countries(&root).await;
+    store_with_crossings(&root, &[SAMPLE_SPACING_M + 60.0]).await;
+
+    let outcome = session_crossings::silver::derive(&root, Radius::default())
+        .await
+        .expect("derive");
+
+    assert_eq!(
+        outcome.sessions, 1,
+        "only the country holding every dataset is matched"
+    );
+    assert_eq!(outcome.passes, 1);
 }

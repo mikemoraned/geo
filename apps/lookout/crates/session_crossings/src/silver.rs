@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use domain::Bbox;
 use domain::{DeviceId, Pass, SessionId};
 use geo_types::Point;
-use medallion::{Country, DatasetSpec, Query, Replaced, Root, layers};
+use medallion::{COUNTRY, Country, DatasetSpec, Query, Replaced, Root, layers};
 use medallion_model::{SessionCrossingRow, WaterCrossingRow};
 use serde::Deserialize;
 
@@ -29,6 +29,8 @@ pub enum CrossingError {
     Write(#[from] medallion::TableError),
     #[error("the store holds a crossing that is not on the globe: {0}")]
     OffTheGlobe(#[from] domain::CoordinateError),
+    #[error("partitioning by country: {0}")]
+    Path(#[from] medallion::PathError),
 }
 
 #[derive(Debug, Deserialize)]
@@ -36,11 +38,11 @@ struct StoredSession {
     session_id: SessionId,
     device_id: DeviceId,
     bbox: Bbox,
+    samples: Option<Vec<StoredSample>>,
 }
 
 #[derive(Debug, Deserialize)]
 struct StoredSample {
-    session_id: SessionId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     t: DateTime<Utc>,
     x: f64,
@@ -60,43 +62,13 @@ struct PlacedCrossing {
 pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, CrossingError> {
     let mut outcome = MatchOutcome::default();
     let mut passed: Vec<SessionCrossingRow> = Vec::new();
-    let mut derived_somewhere: HashSet<&'static str> = HashSet::new();
 
-    for country in Country::ALL {
-        let (query, held) = registered_for(root, country).await?;
-        derived_somewhere.extend(held.iter());
-
-        if held.len() == READ.len() {
-            let sessions = sessions_in(&query).await?;
-            let crossings = crossings_in(&query).await?;
-            outcome.sessions += sessions.len();
-            outcome.crossings += crossings.len();
-
-            let country_passes = passes(&sessions, &crossings, radius);
-            outcome.sessions_matched += country_passes
-                .iter()
-                .map(|pass| &pass.session_id)
-                .collect::<HashSet<_>>()
-                .len();
-            let devices: HashMap<&SessionId, &DeviceId> = sessions
-                .iter()
-                .map(|session| (&session.session_id, &session.device_id))
-                .collect();
-            passed.extend(
-                country_passes
-                    .iter()
-                    .map(|pass| row(pass, devices[&pass.session_id], radius)),
-            );
-        }
-    }
-
-    if let Some((dataset, _)) = READ
-        .iter()
-        .find(|(dataset, _)| !derived_somewhere.contains(dataset.name))
-    {
-        return Err(CrossingError::Missing {
-            dataset: dataset.name,
-        });
+    for country in countries_to_match(root)? {
+        let (matched, rows) = matched_in(root, country, radius).await?;
+        outcome.sessions += matched.sessions;
+        outcome.crossings += matched.crossings;
+        outcome.sessions_matched += matched.sessions_matched;
+        passed.extend(rows);
     }
 
     passed.sort_by(|a, b| (a.crossed_at, &a.crossing_id).cmp(&(b.crossed_at, &b.crossing_id)));
@@ -105,62 +77,138 @@ pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, Crossin
     Ok(outcome)
 }
 
+fn datasets_held_in(root: &Root, country: Country) -> Result<Vec<&'static str>, CrossingError> {
+    let mut held = Vec::new();
+    for (dataset, _) in READ {
+        if root
+            .dataset(dataset)
+            .partition(COUNTRY, country)?
+            .is_filled()
+        {
+            held.push(dataset.name);
+        }
+    }
+    Ok(held)
+}
+
+fn countries_to_match(root: &Root) -> Result<Vec<Country>, CrossingError> {
+    let mut to_match = Vec::new();
+    let mut held_by_some_country: HashSet<&'static str> = HashSet::new();
+
+    for country in Country::ALL {
+        let held = datasets_held_in(root, country)?;
+        held_by_some_country.extend(&held);
+
+        if held.len() == READ.len() {
+            to_match.push(country);
+        } else if !held.is_empty() {
+            let missing = READ
+                .iter()
+                .map(|(dataset, _)| dataset.name)
+                .filter(|name| !held.contains(name))
+                .collect::<Vec<_>>()
+                .join(", ");
+            tracing::warn!(
+                country = %country.code(),
+                %missing,
+                "a country holds only some of the datasets to match, so no passes are derived \
+                 for it"
+            );
+        }
+    }
+
+    if let Some((dataset, _)) = READ
+        .iter()
+        .find(|(dataset, _)| !held_by_some_country.contains(dataset.name))
+    {
+        return Err(CrossingError::Missing {
+            dataset: dataset.name,
+        });
+    }
+
+    Ok(to_match)
+}
+
+async fn matched_in(
+    root: &Root,
+    country: Country,
+    radius: Radius,
+) -> Result<(MatchOutcome, Vec<SessionCrossingRow>), CrossingError> {
+    let query = Query::new(root.clone());
+    for (dataset, table) in READ {
+        query.register_of_country(dataset, table, country).await?;
+    }
+
+    let sessions = sessions_in(&query).await?;
+    let crossings = crossings_in(&query).await?;
+    let matched = passes(&sessions, &crossings, radius);
+
+    let devices: HashMap<&SessionId, &DeviceId> = sessions
+        .iter()
+        .map(|session| (&session.session_id, &session.device_id))
+        .collect();
+    let rows = matched
+        .iter()
+        .map(|pass| row(pass, devices[&pass.session_id], radius))
+        .collect();
+
+    Ok((
+        MatchOutcome {
+            sessions: sessions.len(),
+            crossings: crossings.len(),
+            sessions_matched: matched
+                .iter()
+                .map(|pass| &pass.session_id)
+                .collect::<HashSet<_>>()
+                .len(),
+            ..MatchOutcome::default()
+        },
+        rows,
+    ))
+}
+
 const READ: [(DatasetSpec<layers::Silver>, &str); 3] = [
     (medallion_model::SESSION, "session"),
     (medallion_model::SESSION_SAMPLE, "session_sample"),
     (medallion_model::WATER_CROSSING, "water_crossing"),
 ];
 
-async fn registered_for(
-    root: &Root,
-    country: Country,
-) -> Result<(Query, HashSet<&'static str>), CrossingError> {
-    let query = Query::new(root.clone());
-    let mut held = HashSet::new();
-    for (dataset, table) in READ {
-        if query.register_of_country(dataset, table, country).await? {
-            held.insert(dataset.name);
-        }
-    }
-    Ok((query, held))
-}
-
 async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
     let stored: Vec<StoredSession> = query
-        .rows("SELECT session_id, device_id, bbox FROM session")
-        .await?;
-    let samples: Vec<StoredSample> = query
         .rows(
-            "SELECT session_id, t,
-                    ST_X(geometry_projected) AS x, ST_Y(geometry_projected) AS y
-             FROM session_sample
-             ORDER BY t",
+            "SELECT s.session_id, s.device_id, s.bbox, p.samples
+             FROM session s
+             LEFT JOIN (
+                 SELECT session_id,
+                        array_agg(
+                            named_struct(
+                                't', t,
+                                'x', ST_X(geometry_projected),
+                                'y', ST_Y(geometry_projected)
+                            )
+                            ORDER BY t
+                        ) AS samples
+                 FROM session_sample
+                 GROUP BY session_id
+             ) p ON s.session_id = p.session_id",
         )
         .await?;
 
-    let mut by_session: HashMap<String, Vec<Sample>> = HashMap::new();
-    for sample in samples {
-        by_session
-            .entry(sample.session_id.to_string())
-            .or_default()
-            .push(Sample {
-                t: sample.t,
-                projected: Point::new(sample.x, sample.y),
-            });
-    }
-
     Ok(stored
         .into_iter()
-        .map(|session| {
-            let samples = by_session
-                .remove(&session.session_id.to_string())
-                .unwrap_or_default();
-            Session {
-                session_id: session.session_id,
-                device_id: session.device_id,
-                bbox: session.bbox.rect(),
-                samples,
-            }
+        .map(|session| Session {
+            session_id: session.session_id,
+            device_id: session.device_id,
+            bbox: session.bbox.rect(),
+            samples: session
+                .samples
+                .unwrap_or_default()
+                .into_iter()
+                .map(|sample| Sample {
+                    t: sample.t,
+                    projected: Point::new(sample.x, sample.y),
+                })
+                .collect(),
         })
         .collect())
 }
