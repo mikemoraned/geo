@@ -1,11 +1,7 @@
 use geo::Contains;
 use geo_types::{Geometry, Point};
 use medallion::{Countries, Country, GEOMETRY, Query, Root};
-use medallion_model::DIVISION_ID;
-
-const EXTRACTS: &str = "
-    SELECT country, extract_id FROM extract_manifest ORDER BY extracted_at DESC
-";
+use medallion_model::{DIVISION_ID, ExtractManifestRow};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CountryError {
@@ -22,19 +18,13 @@ pub struct CountryAreas {
     areas: Vec<(Country, Geometry<f64>)>,
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct Extracted {
-    country: String,
-    extract_id: String,
-}
-
 impl CountryAreas {
     pub async fn newest_per_country(root: &Root) -> Result<Self, CountryError> {
         let query = Query::new(root.clone());
         query
             .register_by_name(medallion_model::EXTRACT_MANIFEST)
             .await?;
-        let extracts: Vec<Extracted> = query.rows(EXTRACTS).await?;
+        let extracts: Vec<ExtractManifestRow> = query.rows(crate::extract::RECORDED).await?;
 
         let newest_of_each_country = Country::ALL.into_iter().filter_map(|country| {
             extracts

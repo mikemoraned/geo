@@ -21,19 +21,22 @@ pub struct Crossing {
 }
 
 #[derive(Debug, Deserialize)]
-struct PlacedCrossing {
+pub struct PlacedCrossing {
     #[serde(flatten)]
-    row: WaterCrossingRow,
-    lon: f64,
-    lat: f64,
+    pub row: WaterCrossingRow,
+    pub lon: f64,
+    pub lat: f64,
 }
+
+pub const PLACED: &str = "SELECT *, ST_X(geometry) AS lon, ST_Y(geometry) AS lat
+                          FROM water_crossing";
 
 pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
     let stored: Vec<PlacedCrossing> = medallion::rows_of_every_country(
         root,
         medallion_model::WATER_CROSSING,
         "water_crossing",
-        "SELECT *, ST_X(geometry) AS lon, ST_Y(geometry) AS lat FROM water_crossing",
+        PLACED,
     )
     .await?;
     if stored.is_empty() {

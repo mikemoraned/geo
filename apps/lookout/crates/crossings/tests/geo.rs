@@ -2,25 +2,14 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
 
+use crossings::PlacedCrossing;
 use geo::{Contains, Intersects};
 use geo_types::{Geometry, Point};
 use geojson::{FeatureCollection, GeoJson};
 use libtest_mimic::{Arguments, Failed, Trial};
 use medallion::{Query, Root};
-use serde::Deserialize;
 
 const CASES: &str = "../../notebooks/water_crossings/test_cases.geojson";
-
-const CROSSINGS: &str = "SELECT *, ST_X(geometry) AS lon, ST_Y(geometry) AS lat
-                         FROM water_crossing";
-
-#[derive(Debug, Deserialize)]
-struct PlacedCrossing {
-    #[serde(flatten)]
-    row: medallion_model::WaterCrossingRow,
-    lon: f64,
-    lat: f64,
-}
 
 async fn rail_of(
     root: &Root,
@@ -83,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         &root,
         medallion_model::WATER_CROSSING,
         "water_crossing",
-        CROSSINGS,
+        crossings::silver::PLACED,
     ))?;
 
     let mut trials = Vec::new();

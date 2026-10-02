@@ -13,7 +13,7 @@ const EXCLUDED_CLASSES: &[&str] = &["tram"];
 
 const COMPACT_UTC: &str = "%Y%m%dT%H%M%SZ";
 
-const RECORDED: &str = "SELECT * FROM extract_manifest ORDER BY extracted_at DESC";
+pub(crate) const RECORDED: &str = "SELECT * FROM extract_manifest ORDER BY extracted_at DESC";
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtractId(String);

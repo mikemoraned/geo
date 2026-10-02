@@ -99,10 +99,7 @@ fn query_silver(
         .iter()
         .map(|dataset| medallion_model::silver_target(dataset).map_err(target_error))
         .collect::<PyResult<Vec<_>>>()?;
-    let country = country
-        .map(str::parse::<Country>)
-        .transpose()
-        .map_err(|err: UnknownCountry| PyValueError::new_err(err.to_string()))?;
+    let country = country.map(country_of).transpose()?;
     let root = root_or_default(root)?;
     let params = params
         .unwrap_or_default()
@@ -246,24 +243,23 @@ fn countries_of(py: Python<'_>, dataset: &str, root: Option<PathBuf>) -> PyResul
         .collect())
 }
 
+fn country_of(code: &str) -> PyResult<Country> {
+    code.parse()
+        .map_err(|err: UnknownCountry| PyValueError::new_err(err.to_string()))
+}
+
 /// The CRS a country's projected geometry is stored in, as an authority string a python
 /// geometry library takes (`"EPSG:25832"`). See `docs/medallion.md`.
 #[pyfunction]
 fn projected_crs(country: &str) -> PyResult<String> {
-    let country: Country = country
-        .parse()
-        .map_err(|err: UnknownCountry| PyValueError::new_err(err.to_string()))?;
-    Ok(format!("EPSG:{}", country.projected_epsg()))
+    Ok(format!("EPSG:{}", country_of(country)?.projected_epsg()))
 }
 
 /// The GERS id of the division a country's areas belong to, for matching against the
 /// `division_id` column. See `docs/overture.md`.
 #[pyfunction]
 fn division_id(country: &str) -> PyResult<String> {
-    let country: Country = country
-        .parse()
-        .map_err(|err: UnknownCountry| PyValueError::new_err(err.to_string()))?;
-    Ok(medallion_model::division_id(country).to_string())
+    Ok(medallion_model::division_id(country_of(country)?).to_string())
 }
 
 /// The store in the repo the caller is working in, as a path: what the writes here default to.

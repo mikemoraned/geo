@@ -45,14 +45,15 @@ class Store:
         for country in self.countries("session_sample"):
             held = self._query(
                 """
-                SELECT count(*) AS samples
+                SELECT session_id
                 FROM session_sample
                 WHERE session_id = $session_id
+                LIMIT 1
                 """,
                 country=country,
                 session_id=session_id,
             )
-            if held.column("samples")[0].as_py() > 0:
+            if held.num_rows > 0:
                 return country
         raise ValueError(f"no session {session_id} in the store")
 

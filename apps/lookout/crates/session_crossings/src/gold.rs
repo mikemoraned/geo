@@ -31,10 +31,7 @@ pub enum ChooseError {
 }
 
 pub async fn choose(root: &Root, choosing: Choosing) -> Result<Vec<Replay>, ChooseError> {
-    if !Query::new(root.clone())
-        .register_if_present(medallion_model::SESSION_CROSSING, "session_crossing")
-        .await?
-    {
+    if !root.dataset(medallion_model::SESSION_CROSSING).is_filled() {
         return Err(ChooseError::Missing("session_crossing"));
     }
 
