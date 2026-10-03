@@ -91,12 +91,16 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### The report
 
-- [ ] Add a `just outdated` recipe: `cargo upgrade --dry-run` for the workspace and for
+- [x] Add a `just outdated` recipe: `cargo upgrade --dry-run` for the workspace and for
       `crates/platform/m5/m5plus`, `uv tree --outdated` in each uv project, the newest
       SedonaDB tag against the pin in `Cargo.toml`, and the newest esp-rs/rust-build release
       against the m5plus `rust-toolchain.toml`.
-- [ ] Time a run of `just outdated`, and decide from it how often an upgrade is considered.
+      `cargo upgrade` needs `--incompatible --pinned` as well. Without them it lists only
+      semver-compatible moves, and hides arrow 60, datafusion 55, and every `=` pin.
+- [x] Time a run of `just outdated`, and decide from it how often an upgrade is considered.
       Record the cadence in `README.md`.
+      The cadence is an instruction to Claude rather than a fact about lookout, so it is the rule
+      `.claude/rules/lookout-upgrades.md`, scoped to `apps/lookout`.
 
 #### SedonaDB 0.4.1
 
