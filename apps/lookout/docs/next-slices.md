@@ -48,7 +48,9 @@ I suspect on Web we could benefit from the cleverness of the GPS baked into the 
 
 We should implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session table) and from motis (bronze/motis_segment). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
 
-We should get new motis data by polling motis live in a particular bbox and watching when trains arrive. If we use transitious.org then we can benefit from more accurate paths (see pfaedle slice), but we should be good citizens and not spam it constantly. The idea is that we need to get enough data that we can put together a reasonable size test dataset, and *also* that we gather enough data to do more ambitious stuff with it later, where we use the motis data as effectively input data for a model or a dataset.
+We should get new motis data by polling motis live in a particular bbox and watching when trains arrive. The idea is that we need to get enough data that we can put together a reasonable size test dataset, and *also* that we gather enough data to do more ambitious stuff with it later, where we use the motis data as effectively input data for a model or a dataset.
+
+If we use transitious.org then we can benefit from more accurate paths (see pfaedle slice), but we should be good citizens and not spam it constantly. We also *probably* don't need this level of route accuracy for a first-cut of a prediction framework. However, it means we should be sure to explicitly model the source of our motis data with metadata about e.g. as a small table in bronze which records which motis version/setup was used and which the actual motis samples in bronze can have a foreign key to. This allows us to ignore sources as needed when building the canonical datasets in Silver.
 
 #### Tasks 
 
