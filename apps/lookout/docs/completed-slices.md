@@ -394,3 +394,42 @@ definitions that name their datum.
 - **Python reads bronze through the store.** Every bronze dataset registers as a nameable
   table, `overture_extract` by theme and type across every extract, which took duckdb out of
   the inspection notebook.
+
+## Slice: upgrades
+
+Moved the pinned versions that had fallen behind, one commit per move, and added a report that
+finds them. No new crates.
+
+### The report
+
+- **`just outdated` reports each pinned version that has a newer release.** It covers the crates
+  of both cargo workspaces, each uv project, the SedonaDB tag, and the ESP toolchain, in about
+  20 seconds. A rule scoped to lookout runs it whenever a slice is chosen.
+
+### SedonaDB
+
+- **SedonaDB moved to 0.4.1, and the scan panic it was meant to fix remains.** The panic comes
+  from nested columns, not from the projection bug it had been credited to. The native geometry
+  statistics skip struct and list columns, and the lookup counts by arrow field position.
+  0.5.0-rc0 has the same code.
+- **A dated doc holds the cause and the smallest reproduction**, and the store crate's README
+  describes the workaround, which stays.
+- **The panic goes unreported.** Chasing it upstream is beyond this work's capacity, and an
+  unchased report adds noise for the maintainers. The next SedonaDB upgrade re-examines it.
+- **The move past 0.4.1 is deferred to its own slice**, aimed at the latest stable release when
+  picked up. A trial build on 0.5.0-rc0 needed no source change. It did need newer serde_arrow,
+  and newer geo in the two crates the device shares.
+
+### The ESP toolchain
+
+- **The ESP toolchain is pinned by name, at 1.98.1.0, the newest release that builds
+  unchanged.** 1.99.0.0 does not compile `std` for ESP-IDF, and the slice dropped it without
+  investigation. The device soaked 33 minutes without a reboot.
+- **espup moved to 0.18.0**, built without its lockfile to avoid a yanked dependency.
+
+### The writing skills
+
+- **One session's missing writing skill stays unexplained.** The plugin is installed and
+  enabled, and the slice records what to capture on a recurrence.
+- **The prose gate checks only that the writing skills were invoked**, which let unchecked prose
+  through. A slice that applies the rules at each edit is queued.
