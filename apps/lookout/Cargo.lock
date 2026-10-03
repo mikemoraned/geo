@@ -2887,16 +2887,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dispatch2"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38"
-dependencies = [
- "bitflags",
- "objc2",
-]
-
-[[package]]
 name = "displaydoc"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3978,9 +3968,9 @@ dependencies = [
 
 [[package]]
 name = "i_float"
-version = "3.0.0"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "519b2780a1187eeed09145e5d168863c87f0d704abe84084206ebd897f99c6dc"
+checksum = "c614c2cfc06cfe8809ccc48cd445864502478e673721ca2a05931fc057ec33a0"
 dependencies = [
  "libm",
 ]
@@ -3993,9 +3983,9 @@ checksum = "9190f86706ca38ac8add223b2aed8b1330002b5cdbbce28fb58b10914d38fc27"
 
 [[package]]
 name = "i_key_sort"
-version = "0.10.3"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d73d122b937fca067feb0ad74f62388920272b27c356d4df2d0cfdd59e044cf0"
+checksum = "7c6c58d0c60705e66264ce0f788a69a2f21472aeb8188559e7c8c619dbdc10fa"
 
 [[package]]
 name = "i_overlay"
@@ -4012,13 +4002,13 @@ dependencies = [
 
 [[package]]
 name = "i_overlay"
-version = "7.0.2"
+version = "8.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf284de04038af713dad8b4a88d2bc97f1c8c0a87fc1f43e28e3b965d0136d9e"
+checksum = "997dfc291f5192f34b4f3ddc67e60086a27ee9f3b880154933582490c6e218d3"
 dependencies = [
- "i_float 3.0.0",
- "i_key_sort 0.10.3",
- "i_shape 3.0.0",
+ "i_float 4.1.0",
+ "i_key_sort 0.11.0",
+ "i_shape 4.0.0",
  "i_tree 0.19.0",
 ]
 
@@ -4033,11 +4023,11 @@ dependencies = [
 
 [[package]]
 name = "i_shape"
-version = "3.0.0"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90b2ee7bae072887c579a2f2fd2a7fa1c29cceecfae1998ef940061c5570afff"
+checksum = "67ec1fc3ad980a24e4761b763bf5bfbf58c1d88be1bffb14654d369d7f420258"
 dependencies = [
- "i_float 3.0.0",
+ "i_float 4.1.0",
 ]
 
 [[package]]
@@ -4836,15 +4826,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ntapi"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3b335231dfd352ffb0f8017f3b6027a4917f7df785ea2143d8af2adc66980ae"
-dependencies = [
- "winapi",
-]
-
-[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4979,63 +4960,6 @@ dependencies = [
  "pyo3",
  "pyo3-build-config",
  "rustc-hash",
-]
-
-[[package]]
-name = "objc2"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a12a8ed07aefc768292f076dc3ac8c48f3781c8f2d5851dd3d98950e8c5a89f"
-dependencies = [
- "objc2-encode",
-]
-
-[[package]]
-name = "objc2-core-foundation"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
-dependencies = [
- "bitflags",
- "dispatch2",
- "objc2",
-]
-
-[[package]]
-name = "objc2-encode"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef25abbcd74fb2609453eb695bd2f860d389e457f67dc17cafc8b8cbc89d0c33"
-
-[[package]]
-name = "objc2-foundation"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
-dependencies = [
- "bitflags",
- "objc2",
-]
-
-[[package]]
-name = "objc2-io-kit"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
-dependencies = [
- "libc",
- "objc2-core-foundation",
-]
-
-[[package]]
-name = "objc2-open-directory"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb82bed227edf5201dfedf072bba4015a33d3d4a98519837295a90f0a23f676d"
-dependencies = [
- "objc2",
- "objc2-core-foundation",
- "objc2-foundation",
 ]
 
 [[package]]
@@ -6481,8 +6405,8 @@ dependencies = [
 
 [[package]]
 name = "sedona"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-buffer 57.3.1",
@@ -6492,10 +6416,12 @@ dependencies = [
  "aws-credential-types",
  "comfy-table",
  "datafusion",
+ "datafusion-catalog",
  "datafusion-common",
  "datafusion-expr",
  "datafusion-ffi",
  "datafusion-optimizer",
+ "datafusion-session",
  "dirs",
  "futures",
  "geo-traits",
@@ -6520,25 +6446,24 @@ dependencies = [
  "sedona-testing",
  "serde",
  "serde_json",
- "sysinfo",
  "tokio",
  "url",
 ]
 
 [[package]]
 name = "sedona-common"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
- "datafusion",
  "datafusion-common",
  "regex",
+ "sedona-geometry",
 ]
 
 [[package]]
 name = "sedona-datasource"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-schema 57.3.1",
@@ -6560,13 +6485,14 @@ dependencies = [
 
 [[package]]
 name = "sedona-expr"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-buffer 57.3.1",
  "arrow-schema 57.3.1",
  "datafusion-common",
+ "datafusion-execution",
  "datafusion-expr",
  "datafusion-physical-expr",
  "geo-traits",
@@ -6579,8 +6505,8 @@ dependencies = [
 
 [[package]]
 name = "sedona-functions"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-buffer 57.3.1",
@@ -6601,17 +6527,18 @@ dependencies = [
 
 [[package]]
 name = "sedona-gdal"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "libloading 0.9.0",
+ "sedona-raster",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "sedona-geo"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-schema 57.3.1",
@@ -6633,13 +6560,13 @@ dependencies = [
 
 [[package]]
 name = "sedona-geo-generic-alg"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "float_next_after 2.0.0",
  "geo-traits",
  "geo-types",
- "i_overlay 7.0.2",
+ "i_overlay 8.1.2",
  "log",
  "num-traits",
  "robust",
@@ -6649,8 +6576,8 @@ dependencies = [
 
 [[package]]
 name = "sedona-geo-traits-ext"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "byteorder",
  "geo-traits",
@@ -6661,8 +6588,8 @@ dependencies = [
 
 [[package]]
 name = "sedona-geometry"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "geo-traits",
  "lru",
@@ -6674,8 +6601,8 @@ dependencies = [
 
 [[package]]
 name = "sedona-geoparquet"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-schema 57.3.1",
@@ -6709,29 +6636,20 @@ dependencies = [
 
 [[package]]
 name = "sedona-proj"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
- "arrow-array 57.3.1",
- "arrow-schema 57.3.1",
- "datafusion-common",
- "datafusion-expr",
  "geo-traits",
  "libloading 0.9.0",
- "sedona-common",
- "sedona-expr",
- "sedona-functions",
  "sedona-geometry",
- "sedona-schema",
  "serde_json",
  "thiserror 2.0.18",
- "wkb",
 ]
 
 [[package]]
 name = "sedona-query-planner"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-schema 57.3.1",
  "async-trait",
@@ -6749,8 +6667,8 @@ dependencies = [
 
 [[package]]
 name = "sedona-raster"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-buffer 57.3.1",
@@ -6763,8 +6681,8 @@ dependencies = [
 
 [[package]]
 name = "sedona-raster-functions"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-buffer 57.3.1",
@@ -6772,10 +6690,10 @@ dependencies = [
  "async-trait",
  "datafusion-common",
  "datafusion-expr",
+ "geo-traits",
  "sedona-common",
  "sedona-expr",
  "sedona-geometry",
- "sedona-proj",
  "sedona-raster",
  "sedona-schema",
  "sedona-tg",
@@ -6785,8 +6703,8 @@ dependencies = [
 
 [[package]]
 name = "sedona-raster-gdal"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-buffer 57.3.1",
@@ -6799,6 +6717,7 @@ dependencies = [
  "sedona-expr",
  "sedona-functions",
  "sedona-gdal",
+ "sedona-proj",
  "sedona-raster",
  "sedona-raster-functions",
  "sedona-schema",
@@ -6807,21 +6726,22 @@ dependencies = [
 
 [[package]]
 name = "sedona-schema"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-schema 57.3.1",
  "datafusion-common",
  "lru",
  "sedona-common",
+ "sedona-geometry",
  "serde_json",
 ]
 
 [[package]]
 name = "sedona-testing"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-cast 57.3.1",
@@ -6845,8 +6765,8 @@ dependencies = [
 
 [[package]]
 name = "sedona-tg"
-version = "0.4.0"
-source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.0#b6f66a887eb77ab638b49eddd1aaaa6aebf353cd"
+version = "0.4.1"
+source = "git+https://github.com/apache/sedona-db?tag=apache-sedona-db-0.4.1#c9e41f8478856edcb3a995ecd3b2a8a91aa8f81e"
 dependencies = [
  "arrow-array 57.3.1",
  "arrow-schema 57.3.1",
@@ -7387,21 +7307,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "sysinfo"
-version = "0.39.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2071df9448915b71c4fe6d25deaf1c22f12bd234f01540b77312bb8e41361e6"
-dependencies = [
- "libc",
- "memchr",
- "ntapi",
- "objc2-core-foundation",
- "objc2-io-kit",
- "objc2-open-directory",
- "windows",
 ]
 
 [[package]]
@@ -8360,27 +8265,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
-name = "windows"
-version = "0.62.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "527fadee13e0c05939a6a05d5bd6eec6cd2e3dbd648b9f8e447c6518133d8580"
-dependencies = [
- "windows-collections",
- "windows-core",
- "windows-future",
- "windows-numerics",
-]
-
-[[package]]
-name = "windows-collections"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23b2d95af1a8a14a3c7367e1ed4fc9c20e0a26e79551b1454d72583c97cc6610"
-dependencies = [
- "windows-core",
-]
-
-[[package]]
 name = "windows-core"
 version = "0.62.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8391,17 +8275,6 @@ dependencies = [
  "windows-link",
  "windows-result",
  "windows-strings",
-]
-
-[[package]]
-name = "windows-future"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1d6f90251fe18a279739e78025bd6ddc52a7e22f921070ccdc67dde84c605cb"
-dependencies = [
- "windows-core",
- "windows-link",
- "windows-threading",
 ]
 
 [[package]]
@@ -8431,16 +8304,6 @@ name = "windows-link"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
-
-[[package]]
-name = "windows-numerics"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e2e40844ac143cdb44aead537bbf727de9b044e107a0f1220392177d15b0f26"
-dependencies = [
- "windows-core",
- "windows-link",
-]
 
 [[package]]
 name = "windows-registry"
@@ -8512,15 +8375,6 @@ dependencies = [
  "windows_x86_64_gnu",
  "windows_x86_64_gnullvm",
  "windows_x86_64_msvc",
-]
-
-[[package]]
-name = "windows-threading"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3949bd5b99cafdf1c7ca86b43ca564028dfe27d66958f2470940f73d86d75b37"
-dependencies = [
- "windows-link",
 ]
 
 [[package]]

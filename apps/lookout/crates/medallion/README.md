@@ -86,6 +86,22 @@ including those whose partitions hold different schemas, and so cannot be read a
 dataset nothing has written is summarised as holding nothing, so the gaps show alongside the
 contents.
 
+## Geometry a scan cannot read
+
+A filtered SedonaDB scan panics on a file that stores native parquet geometry with a struct or list
+column ahead of it. [The panic](../../docs/2026-10-03-sedona-nested-column-panic.md) is in every
+SedonaDB release so far. Bronze Overture `segment` files have that shape, and so does any fixture
+copying a release's column order.
+
+There are two ways round it:
+
+- **Read the dataset as plain parquet.** `Query::register_at_without_geometry` registers it without
+  SedonaDB's geometry handling, so the geometry column arrives as WKB bytes. `medallion::geometries`
+  decodes them.
+- **Write the geometry first.** A file whose geometry precedes every nested column reads normally.
+  A fixture can take this route. Bronze cannot, since it keeps the column order of the release it
+  records.
+
 ## Where the store is
 
 The default is [the store in the repo the caller is working in](../../docs/medallion.md#root),

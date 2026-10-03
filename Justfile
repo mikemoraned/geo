@@ -1,13 +1,6 @@
-# Launch Claude Code for an app under the safehouse sandbox (e.g. `just claude lookout`).
-claude app:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ ! -d "apps/{{app}}" ]; then
-        echo "no such app: apps/{{app}}" >&2
-        exit 1
-    fi
-    cd "apps/{{app}}"
-    exec safehouse --add-dirs-ro "{{justfile_directory()}}:$HOME/.espressif" claude --permission-mode auto
+# Launch Claude Code under the safehouse sandbox, with read-only access to the shared ESP-IDF install.
+claude:
+    safehouse --add-dirs-ro "$HOME/.espressif" claude --permission-mode auto
 
 # Build the repo-wide tools an app relies on; a fresh checkout needs it once.
 prerequisites:
