@@ -69,5 +69,5 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Wrap-up
 
-- [ ] Run `/choose-slice` against the new `docs/next-slices.md`, and stop before it promotes a
+- [x] Run `/choose-slice` against the new `docs/next-slices.md`, and stop before it promotes a
       slice. Its list groups the slices by milestone.
