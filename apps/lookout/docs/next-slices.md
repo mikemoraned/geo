@@ -1,5 +1,18 @@
 # Next Slices
 
+# Milestone: V1 MVP
+
+## Target
+
+This has a working but minimal prediction framework that has measurable predictability based on
+observed data from motis. It runs on Web and on the M5Plus. It can give notifications visually on
+Web/M5Plus (in a way suitable to platform capabilities).
+
+It is ok if the predictor is a simple variation on a Crow Flies predictor that takes into account
+your speed and distance from crossings.
+
+It need only support UK and Germany.
+
 ## Slice: Evaluation framework based on sampled sessions from myself and motis
 
 ### Target
@@ -18,101 +31,6 @@ Since I likely won't be in Germany for a while, we can if needed get new motis d
       that implement the measures, or in a durable doc alongside `medallion.md`; the rest —
       the rejected alternatives, the reasoning about metrics from other domains — goes
       stale once a first run has actually produced numbers.
-
-
-## Slice: make the store operable at size
-
-### Target
-
-The store's layout is settled; what it lacks is the ability to be *worked* — to re-derive
-part of history rather than all of it, and to stop accumulating files without bound. Both
-become urgent at a size we are not at yet, and both are cheaper to build before then.
-
-### Refactors / extensions
-
-- **Give the derivation CLIs a date-range argument**, so a run can ask for less than
-  everything. They currently read every partition and filter on data columns, which means
-  the partition pruning the layout provides is never exercised: re-deriving one day's output
-  costs a full scan. This is also the prerequisite for handing the work to an orchestrator
-  later, since a range is what a backfill is expressed in.
-- **Write down a compaction plan for the append-shaped layers**, before the small-file
-  problem is real rather than after. One file per ingestion is deliberate and correct at the
-  point of writing, but a dataset polled on an interval accumulates a file per poll
-  indefinitely (the sqlite backfill alone produced 1,307 in one dataset). The standard answer
-  is periodic compaction into fewer, larger files per partition; the thing to decide is what
-  triggers it and how it preserves immutability, since rewriting files is what that layer
-  forbids.
-- **Leave the engine catalog traits alone** until registering datasets by hand is genuinely
-  annoying, then add a schema provider *over* the dataset definitions rather than replacing
-  them. The definitions are plain data every engine can read; a catalog is one engine's view
-  of it, and those traits move between that engine's releases.
-
-
-## Slice: rail track geometry from pfaedle (parked)
-
-### Target
-
-Give rail legs real curved geometry instead of the straight stop-to-stop lines DELFI's
-`shapes.txt` yields for rail — see [motis.md](motis.md). pfaedle map-matches GTFS trips onto
-OSM to synthesise `shapes.txt`, and produced correct curved rail: `-D -m rail` recomputes
-rail shapes only, leaving bus and coach shapes alone, and rail polylines come out hundreds
-of points where they were four.
-
-**Parked, and the tooling was reverted out of the tree** (`tools/pfaedle`, commit
-`dfd8655`), because importing the result breaks realtime.
-
-### Why it is parked
-
-Import the raw DELFI feed and around 99.97% of RT entities resolve. Import any feed carrying
-pfaedle's `shapes.txt` and trip resolution fails for ~99.6% of them, with **no segment coming
-back realtime-corrected**. The static schedule itself imports fine: the trips are there and
-the rail is genuinely curved.
-
-It is the `shapes.txt` and not the trips. Three attempts broke realtime identically,
-including one that kept `trips.txt` byte-identical to the raw feed apart from the rail
-`shape_id` fields — and there the failing trips were *bus* trips whose `shape_id` was never
-touched. The only remaining difference is the swapped-in `shapes.txt`, which grows from
-308 MB to 2.3 GB. It is not feed currency either: a same-day RT fetch still overlapped the
-static feed's trip ids 99.6%.
-
-Leading hypothesis, untested: the 2.3 GB of rail geometry makes `motis import` hit some
-limit and produce a timetable whose RT trip index is incomplete, while scheduled queries
-still work.
-
-### To resume
-
-1. Confirm the trigger — build the raw feed with only `shapes.txt` swapped, import, and check
-   the RT statistic. Expect it to break.
-2. Chase the cause: read `motis import` for shape, memory or limit warnings; try shrinking
-   `shapes.txt`, by simplifying the rail polylines or dropping the unused bus shapes, and
-   re-test.
-3. If Motis genuinely cannot take large rail shapes, file an issue upstream, or accept
-   straight-line rail — which is what transitous does — and drop this.
-
-Two facts about pfaedle worth keeping if it resumes: it has no homebrew formula and has to
-be built from source against `cmake` and `libzip`, and it must run from its build directory
-with an explicit config path, since it only finds its default MOT-to-OSM matching config
-when installed. Its GTFS parser is also stricter than Motis's — it aborts on the dangling
-references in DELFI's `transfers.txt` and `pathways.txt`, which Motis tolerates.
-
-Each realtime A/B needs the Motis server run by hand: the sandbox denies the LMDB tile mmap.
-
-## Slice: Enrich and use relative direction of POI
-
-### Target
-
-Enrich the water crossings dataset with an angle relative to the train line and travel direction. That allows a recommendation about which direction to look from the train seat.
-
-## Slice: Adding POIs from images taken
-
-### Idea
-
-Assuming we have an iOS App, and it is running whilst people are taking pictures, we can support adding POIs by correlating what the position of the person was and on what line when they took the picture. We can also access the compass sensor to get the direction of the phone at the time. This allows us to establish an angle to the POI relative to the train and so remember what direction you'd need to be facing to be able to see it again.
-
-An onboard model could perhaps be used to do rough interpretation of kind of POI e.g. is it a building or a river or what.
-
-We probably don't want to go down the lines of storing the image, but perhaps there is some on-device or privacy-preserving way to identify exactly what the POI is based on the image.
-
 
 ## Slice: up to date on the latest Overture release
 
@@ -181,6 +99,110 @@ release. The mirroring becomes recipes rather than a path typed into one Justfil
 - Whether the latest release still carries the columns the predicates name — `subtype`,
   `class`, `connectors`, `bbox`, `country`, `division_id`. The first extract at the new pin
   answers it; a column that moved turns the bump into schema work.
+
+# Milestone: V2
+
+## Target
+
+- Runs on Web/M5Plus + also: Android/iOS App + also: CoreS3 M5 device with GNSS base.
+- Has a predictor that takes into account reachability of a crossing and not just distance,
+  either through observational data, or through route connectivity.
+
+## Slice: rail track geometry from pfaedle (parked)
+
+### Target
+
+Give rail legs real curved geometry instead of the straight stop-to-stop lines DELFI's
+`shapes.txt` yields for rail — see [motis.md](motis.md). pfaedle map-matches GTFS trips onto
+OSM to synthesise `shapes.txt`, and produced correct curved rail: `-D -m rail` recomputes
+rail shapes only, leaving bus and coach shapes alone, and rail polylines come out hundreds
+of points where they were four.
+
+**Parked, and the tooling was reverted out of the tree** (`tools/pfaedle`, commit
+`dfd8655`), because importing the result breaks realtime.
+
+### Why it is parked
+
+Import the raw DELFI feed and around 99.97% of RT entities resolve. Import any feed carrying
+pfaedle's `shapes.txt` and trip resolution fails for ~99.6% of them, with **no segment coming
+back realtime-corrected**. The static schedule itself imports fine: the trips are there and
+the rail is genuinely curved.
+
+It is the `shapes.txt` and not the trips. Three attempts broke realtime identically,
+including one that kept `trips.txt` byte-identical to the raw feed apart from the rail
+`shape_id` fields — and there the failing trips were *bus* trips whose `shape_id` was never
+touched. The only remaining difference is the swapped-in `shapes.txt`, which grows from
+308 MB to 2.3 GB. It is not feed currency either: a same-day RT fetch still overlapped the
+static feed's trip ids 99.6%.
+
+Leading hypothesis, untested: the 2.3 GB of rail geometry makes `motis import` hit some
+limit and produce a timetable whose RT trip index is incomplete, while scheduled queries
+still work.
+
+### To resume
+
+1. Confirm the trigger — build the raw feed with only `shapes.txt` swapped, import, and check
+   the RT statistic. Expect it to break.
+2. Chase the cause: read `motis import` for shape, memory or limit warnings; try shrinking
+   `shapes.txt`, by simplifying the rail polylines or dropping the unused bus shapes, and
+   re-test.
+3. If Motis genuinely cannot take large rail shapes, file an issue upstream, or accept
+   straight-line rail — which is what transitous does — and drop this.
+
+Two facts about pfaedle worth keeping if it resumes: it has no homebrew formula and has to
+be built from source against `cmake` and `libzip`, and it must run from its build directory
+with an explicit config path, since it only finds its default MOT-to-OSM matching config
+when installed. Its GTFS parser is also stricter than Motis's — it aborts on the dangling
+references in DELFI's `transfers.txt` and `pathways.txt`, which Motis tolerates.
+
+Each realtime A/B needs the Motis server run by hand: the sandbox denies the LMDB tile mmap.
+
+# Unassigned
+
+Anything that doesn't clearly fit in V1 or V2.
+
+## Slice: make the store operable at size
+
+### Target
+
+The store's layout is settled; what it lacks is the ability to be *worked* — to re-derive
+part of history rather than all of it, and to stop accumulating files without bound. Both
+become urgent at a size we are not at yet, and both are cheaper to build before then.
+
+### Refactors / extensions
+
+- **Give the derivation CLIs a date-range argument**, so a run can ask for less than
+  everything. They currently read every partition and filter on data columns, which means
+  the partition pruning the layout provides is never exercised: re-deriving one day's output
+  costs a full scan. This is also the prerequisite for handing the work to an orchestrator
+  later, since a range is what a backfill is expressed in.
+- **Write down a compaction plan for the append-shaped layers**, before the small-file
+  problem is real rather than after. One file per ingestion is deliberate and correct at the
+  point of writing, but a dataset polled on an interval accumulates a file per poll
+  indefinitely (the sqlite backfill alone produced 1,307 in one dataset). The standard answer
+  is periodic compaction into fewer, larger files per partition; the thing to decide is what
+  triggers it and how it preserves immutability, since rewriting files is what that layer
+  forbids.
+- **Leave the engine catalog traits alone** until registering datasets by hand is genuinely
+  annoying, then add a schema provider *over* the dataset definitions rather than replacing
+  them. The definitions are plain data every engine can read; a catalog is one engine's view
+  of it, and those traits move between that engine's releases.
+
+## Slice: Enrich and use relative direction of POI
+
+### Target
+
+Enrich the water crossings dataset with an angle relative to the train line and travel direction. That allows a recommendation about which direction to look from the train seat.
+
+## Slice: Adding POIs from images taken
+
+### Idea
+
+Assuming we have an iOS App, and it is running whilst people are taking pictures, we can support adding POIs by correlating what the position of the person was and on what line when they took the picture. We can also access the compass sensor to get the direction of the phone at the time. This allows us to establish an angle to the POI relative to the train and so remember what direction you'd need to be facing to be able to see it again.
+
+An onboard model could perhaps be used to do rough interpretation of kind of POI e.g. is it a building or a river or what.
+
+We probably don't want to go down the lines of storing the image, but perhaps there is some on-device or privacy-preserving way to identify exactly what the POI is based on the image.
 
 ## Slice: SedonaDB 0.5.0 and the arrow generation
 

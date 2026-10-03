@@ -7,6 +7,12 @@ paths:
 # Slice Documentation Rules
 
 - **completed-slices.md is append-only history**: never edit existing slice entries. Only add new entries when archiving a completed slice.
+- **Milestones group the slices in next-slices.md**: a milestone is a `# Milestone: <name>`
+  heading, then a `## Target` stating what its slices achieve together, then its `## Slice:`
+  blocks. Slices with no milestone sit under `# Unassigned`, the last heading in the doc. To
+  move a slice into a milestone, out of one, or between two, move its whole block and change
+  nothing inside it. Only `next-slices.md` names milestones. `current-slice.md` and
+  `completed-slices.md` carry no milestone line.
 - **Checking off a task in current-slice.md**: just flip `[ ]` to `[x]`, leaving the task text as written. Don't append a summary of what you changed or where — the diff and commit history already record that. Add a note only when it conflicts with the task as written (e.g. you did it differently than described) or meaningfully enriches it (a decision or caveat a future reader needs).
 - **Sections the work adds**: a slice starts with the sections
   [`decompose-slice`](../skills/decompose-slice/SKILL.md) gives it. Three more appear as the

@@ -433,3 +433,21 @@ finds them. No new crates.
   enabled, and the slice records what to capture on a recurrence.
 - **The prose gate checks only that the writing skills were invoked**, which let unchecked prose
   through. A slice that applies the rules at each edit is queued.
+
+## Slice: milestones above slices
+
+Grouped the upcoming slices under milestones, each with a Target stating what its slices achieve
+together. No new crates.
+
+- **A milestone is a level-one heading with its own Target, above its slices.** Slices keep their
+  heading levels, so moving one into, out of, or between milestones moves its block and changes
+  nothing inside it. Slices with no milestone sit under an Unassigned heading, last in the doc.
+- **Only the list of upcoming slices names milestones.** The current slice and the archive carry
+  no milestone, so a slice returned to the list is placed by hand.
+- **Choosing a slice lists the slices by milestone, and leaves an emptied milestone in place.**
+  Completing a slice asks about each milestone with no slices left, and archives a finished one
+  here with its Target.
+- **Two milestones exist.** V1 MVP is a crow-flies predictor measured against motis data,
+  notifying on the web and the device, for the UK and Germany. V2 adds the phone apps, a second
+  device, and a predictor that uses reachability. Five slices stay unassigned.
+- **No slice covers V1's visual notifications yet.**
