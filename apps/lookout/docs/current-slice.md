@@ -115,13 +115,22 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### ESP toolchain
 
-- [ ] Install the latest esp-rs/rust-build release with espup under the name
+- [x] Upgrade espup to its latest release. The user runs this, outside the sandbox.
+      espup 0.18.0, installed without `--locked`: its lockfile pins `yoke-derive` 0.8.3, which is
+      yanked, and a fresh resolve takes 0.8.4.
+- [x] Install the latest esp-rs/rust-build release with espup under the name
       `esp-<version>`. The user runs this, outside the sandbox.
-- [ ] Name that channel in `crates/platform/m5/m5plus/rust-toolchain.toml`, and in the
+      1.98.1.0, not the latest. 1.99.0.0 installs, but its `std` does not compile for ESP-IDF.
+      The slice takes the newest release that builds unchanged, and drops 1.99.0.0 without
+      investigating it. `docs/device.md` records the failure.
+- [x] Name that channel in `crates/platform/m5/m5plus/rust-toolchain.toml`, and in the
       `LIBCLANG_PATH` glob in the `Justfile`.
-- [ ] Build with `just m5plus-build-release`.
+- [x] Build with `just m5plus-build-release`.
+      It builds with one warning that 1.90.0.0 does not raise: the `linker_messages` lint
+      reports what `ldproxy` prints to stderr.
 - [ ] Flash and soak the device on the new toolchain. The user runs this.
-- [ ] Give the pinned name and the espup command under Toolchain in `docs/device.md`.
+      Flashed on 2026-10-03: it boots and gets a fix. The soak is still to run.
+- [x] Give the pinned name and the espup command under Toolchain in `docs/device.md`.
 
 #### Wrap-up
 

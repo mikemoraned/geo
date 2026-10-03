@@ -180,7 +180,7 @@ silver-session-crossings *args:
 gold-pack-crossings *args:
     cargo run -p crossings --bin pack_crossings -- --version-file crossings.version {{args}}
 
-export LIBCLANG_PATH := `ls -d "$HOME"/.rustup/toolchains/esp/xtensa-esp32-elf-clang/*/esp-clang/lib 2>/dev/null | tail -1`
+export LIBCLANG_PATH := `ls -d "$HOME"/.rustup/toolchains/esp-1.98.1.0/xtensa-esp32-elf-clang/*/esp-clang/lib 2>/dev/null | tail -1`
 
 m5plus_dir := "crates/platform/m5/m5plus"
 

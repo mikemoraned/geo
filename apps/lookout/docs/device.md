@@ -28,14 +28,23 @@ not apply, and there is no PMIC to ask for a battery voltage.
 
 ## Toolchain
 
-espup's `esp` rustup channel (a nightly-based fork) with `esp-idf-template` targeting
+An espup toolchain release (a nightly-based fork of `rustc`) with `esp-idf-template` targeting
 `xtensa-esp32-espidf`. Edition 2024 works. `esp-idf-template`'s `[patch.crates-io]` git-HEAD
 pins are unnecessary — the released `esp-idf-svc` builds fine, and a released version is
 reproducible where a git HEAD is not.
 
+The toolchain is pinned by name. espup installs a release under a name of its own:
+
+    espup install --toolchain-version <version> --name esp-<version> --targets esp32
+
+The channel in the device crate's `rust-toolchain.toml` names that toolchain, and so does the
+`LIBCLANG_PATH` glob in the recipe that builds.
+
+- **Release 1.99.0.0 does not compile `std`.** Its `std` calls `libc::AT_FDCWD` on ESP-IDF, and
+  the `libc` 0.2.189 it builds against has no such constant for that target. 1.98.1.0 builds.
 - **`LIBCLANG_PATH` is required, and its absence is reported late.** `esp-idf-sys`'s bindgen
   step needs the Xtensa clang under
-  `~/.rustup/toolchains/esp/xtensa-esp32-elf-clang/*/esp-clang/lib`. Without it the build
+  `~/.rustup/toolchains/<toolchain>/xtensa-esp32-elf-clang/*/esp-clang/lib`. Without it the build
   fails with `unknown target triple 'xtensa'` *after* a full ESP-IDF build of around ten
   minutes, so the cause sits far above the error in the log. Glob the path in the recipe that
   builds rather than relying on a sourced shell profile.
