@@ -42,15 +42,10 @@ timetable feed), `overture.md` (the reference source and what an extract takes).
 
 ## Running Claude
 
-Launch Claude for an app under the safehouse sandbox with `just claude <app>`
-(e.g. `just claude lookout`). This starts Claude with its working directory set to
-`apps/<app>` — so the per-app slice skills resolve correctly — with read/write inside
-that app and read-only across the rest of the repo (needed so Claude can discover the
-shared `.claude/` skills and rules at the repo root).
-
-`~/.espressif` is granted read-only too, so a device build uses the one shared ESP-IDF install
-rather than several gigabytes under every worktree. Only the first install writes there, and that
-one is run outside the sandbox.
+Launch Claude from the repo root with `just claude`, which runs it under the safehouse sandbox.
+The sandbox grants read/write inside the repo. `~/.espressif` is granted read-only, so a device
+build uses the one shared ESP-IDF install rather than several gigabytes under every worktree. Only
+the first install writes there, and that one runs outside the sandbox.
 
 ## Prose: invoke the two writing skills before drafting
 

@@ -76,12 +76,18 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### The missing writing skill
 
-- [ ] Find where `technical-writing:technical-writing` came from: the plugin that provided it,
+- [x] Find where `technical-writing:technical-writing` came from: the plugin that provided it,
       and whether `.claude/settings.json` ever enabled it.
+      It is the `technical-writing` plugin from the `rnorth/technical-writing` marketplace, which
+      the user settings register. `.claude/settings.json` has enabled it since e44e8989.
 - [ ] If that plugin still exists, install it and enable it in `.claude/settings.json`.
       Otherwise remove every mention of the skill from `CLAUDE.md`, `tools/prose-gate`, and the
       memory notes. Either way the change lands at the repo root, which the sandbox leaves
       read-only.
+      The plugin exists, is installed, and is enabled. The session that decomposed this slice
+      started at the repo root and never listed the skill. The next session, started the same
+      way, lists it. `~/.claude/settings.json` changed six seconds before the skill was refused,
+      and no person edited it. The cause is not yet known.
 
 #### The report
 
