@@ -62,6 +62,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   [2026-09-21-m5-reboots.md](2026-09-21-m5-reboots.md) depends on. A reboot after the move no
   longer separates the toolchain from the core's second effect. Does the soak on the new
   toolchain wait for that fault to be found?
+  Moot for this slice: the soak on 1.98.1.0 ran 33 minutes with no reboot, so there was no
+  reboot to attribute.
 
 ### Tasks
 
@@ -128,8 +130,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Build with `just m5plus-build-release`.
       It builds with one warning that 1.90.0.0 does not raise: the `linker_messages` lint
       reports what `ldproxy` prints to stderr.
-- [ ] Flash and soak the device on the new toolchain. The user runs this.
-      Flashed on 2026-10-03: it boots and gets a fix. The soak is still to run.
+- [x] Flash and soak the device on the new toolchain. The user runs this.
+      Soaked on 2026-10-03 for 33 minutes, with no reboot. The reboot loop strikes within two
+      minutes of boot, and the clean soaks on record ran 30 minutes. Over the last 19 minutes,
+      unused stack held at 10,020 bytes and free heap at 2,276,640 bytes. The slowest sentence,
+      the one that scanned, took 8,330–8,664 µs.
 - [x] Give the pinned name and the espup command under Toolchain in `docs/device.md`.
 
 #### Wrap-up
