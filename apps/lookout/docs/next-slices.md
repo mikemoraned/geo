@@ -13,13 +13,42 @@ your speed and distance from crossings.
 
 It need only support UK and Germany.
 
-## Slice: Evaluation framework based on sampled sessions from myself and motis
+## Slice: Evaluation framework with associated Crow Flies predictor improvement
 
 ### Target
 
-Implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session table) and from motis (bronze/motis_segment). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
+I have some larger ideas for how to come up with a good predictor, but for now I want to prove I can improve things + measure that improvement in some way.
 
-Since I likely won't be in Germany for a while, we can if needed get new motis data by polling motis live in a particular bbox and watching when trains arrive.
+So, I'd like to go from a very simple Crow Flies predictor I have now, which effectively just shows distance to nearby crossings, to one that takes into account current speed and average direction, and predicts when a crossing will be passed in next N minutes.
+
+### Straw Man
+
+This approach means we have to become a lot crisper in what a prediction means. Right now the display just shows a radar style view which isn't really making a prediction and is instead just a map of nearby crossings. My thinking here is that, for each crossing, we need to have a little state-machine, something like:
+
+States:
+* OutOfReach: this is maybe an implicit state that any crossing sits in, if it is just in the pointset data, and isn't reachable at all
+* CandidatePass: this is when it becomes nearby enough to be considered as a possible crossing
+* PredictedPass: this is when we expect we will actually pass by this crossing in the next N minutes
+* ActualPass: we just actually passed the crossing
+
+Transitions:
+* OutOfReach <-> CandidatePass: a crossing can oscillate in and out of being a candidate
+* OutOfReach -> PredictedPass or CandidatePass -> PredictedPass: this is us making a prediction, and this transition should lead to a notification of some kind to the user
+* PredictedPass -> CandidatePass or PredictedPass -> OutOfReach: this counts as a failed prediction
+* PredictedPass -> ActualPass: a successful prediction. Note that a crossing stays in the ActualPass state until we've gotten some distance away from it to avoid re-notifying repeatedly. In general, the state transitions should probably have some sort of debouncing to avoid frequent flips in and out of states.
+* ActualPass -> PredictedPass: it's always possible we can pass somewhere multiple times, so this is a new prediction
+* ActualPass -> CandidatePass: still within reach but not currently predicted
+* ActualPass -> OutOfReach: it's now distance from us and we don't even think it is a candidate
+
+In this framework, depending on how clever the predictor is, we may be able to display a crossing but still label it as OutOfReach. This could be, for example, if we decide it is technically close by but we are not going to reach it because it's not on our current track.
+
+However, the cleverness of the predictor we do in this slice should be limited to using a current-speed/direction + light-cone approach i.e. predict what we will reach based on where we will pass by based on current vector. This can start with a low-level of cleverness about current speed/direction (i.e. just literal current speed) and then start building up an overall speed/direction based on an average over last few fixes and/or on speed reported by the GPS device. 
+
+I suspect on Web we could benefit from the cleverness of the GPS baked into the phone, as it's probably doing something clever, but I'd prefer not to use that and instead do it ourselves, as then we have consistent performance across platforms. I am thinking here of some sort of Kalman-filter or similar.
+
+We should implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session table) and from motis (bronze/motis_segment). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
+
+We should get new motis data by polling motis live in a particular bbox and watching when trains arrive. If we use transitious.org then we can benefit from more accurate paths (see pfaedle slice), but we should be good citizens and not spam it constantly. The idea is that we need to get enough data that we can put together a reasonable size test dataset, and *also* that we gather enough data to do more ambitious stuff with it later, where we use the motis data as effectively input data for a model or a dataset.
 
 #### Tasks 
 
