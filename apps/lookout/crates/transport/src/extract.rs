@@ -473,8 +473,7 @@ mod tests {
     async fn mirror_holding_one_row_of_each_type(dir: &Path, release: &str) {
         let ctx = SedonaContext::new();
         let row_bbox = "{xmin: 13.0, xmax: 13.1, ymin: 52.0, ymax: 52.1}";
-        // Geometry comes first in every select: a later position makes the scan panic in
-        // sedona's spatial filter, https://github.com/apache/sedona-db/issues/389.
+        // Geometry comes first in every select, which the medallion README says a scan needs.
         let geometry = "ST_GeomFromText('POINT (13.05 52.05)') AS geometry";
         let of_type = [
             (

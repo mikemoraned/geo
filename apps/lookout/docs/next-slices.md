@@ -181,3 +181,123 @@ release. The mirroring becomes recipes rather than a path typed into one Justfil
 - Whether the latest release still carries the columns the predicates name — `subtype`,
   `class`, `connectors`, `bbox`, `country`, `division_id`. The first extract at the new pin
   answers it; a column that moved turns the bump into schema work.
+
+## Slice: SedonaDB 0.5.0 and the arrow generation
+
+### Target
+
+SedonaDB 0.5.0 moves arrow and parquet to 58.3, datafusion to 54.1, and object_store to 0.13.
+Every crate the store shares a `RecordBatch` with moves with them. The move fixes nothing known:
+0.5.0-rc0 still has the panic in
+[2026-10-03-sedona-nested-column-panic.md](2026-10-03-sedona-nested-column-panic.md). It keeps the
+pins current, and gets the arrow generation off 57 before more code depends on it.
+
+### Decisions
+
+- **The move waits for a release.** 0.5.0-rc0 was tagged on 2026-10-02. A pin to a release
+  candidate gives up the reproducibility the pin exists for.
+- **arrow 58 moves the geo crates with it.** geoparquet, geoarrow-schema, and geoarrow-array go
+  to 0.8, pyo3-arrow to 0.17, and serde_arrow to 0.14 with its `arrow-58` feature. None of them
+  builds against arrow 58 alone, so they share one commit. serde_arrow 0.13 has no `arrow-58`
+  feature. The workspace comment in `Cargo.toml` is wrong that geoparquet 0.8 moved to arrow 59:
+  0.8 builds on 58.
+- **geo moves to 0.33, the version `sedona-geo` resolves at 0.5.0-rc0.** `crates/domain` and
+  `crates/predictor` pin `geo` themselves, at 0.31. Until they move too, the lock fails. The
+  device build depends on both, so the move needs a device build.
+
+### Tasks
+
+- [ ] Move `sedona` and `sedona-geoparquet` to the 0.5.0 tag, `arrow` and `parquet` to 58.3,
+      `datafusion` to 54.1, and `object_store` to 0.13.
+- [ ] In the same commit, move `geoparquet`, `geoarrow-schema`, and `geoarrow-array` to 0.8,
+      `pyo3-arrow` to 0.17, and `serde_arrow` to 0.14 with its `arrow-58` feature.
+- [ ] Move `geo` to 0.33 in the workspace, in `crates/domain`, and in `crates/predictor`.
+- [ ] Rewrite the arrow comment in `Cargo.toml` for arrow 58, dropping its claim about
+      geoparquet 0.8.
+- [ ] Build with `just m5plus-build-release`, since the device shares `domain` and `predictor`.
+- [ ] Run `just test-no-docker` and `just test-geo`.
+
+### Observations
+
+- 2026-10-03: a scratch copy of the app built against 0.5.0-rc0 and the versions above with no
+  source change. 490 non-Docker tests and the geo tests passed. The device build was not tried.
+
+## Slice: the writing rules applied at the edit, not at the stop
+
+### Target
+
+The writing skills hold the rules, and the prose gate enforces only that the skills were invoked.
+On 2026-10-03 a session invoked both before drafting, skipped the technical-writing self-check,
+and reported the prose done. The self-check, run on request afterwards, found four sentences over
+the cap and four conditions after their clause. It also found a colloquial term and a claim nobody
+had verified.
+The gate passed that session at every stop, for five reasons:
+
+- **It enforces the invocation, not the work.** A `Skill` call naming each skill satisfies it, and
+  nothing in it reads the prose.
+- **It counts invocations across the whole session.** One invocation early in a session
+  satisfies every later stop. A second invocation returns "already loaded" and shows no rules.
+- **It fires once, after the reply.** The Stop hook runs after the reply already reports the work
+  done, and `stop_hook_active` limits it to one block per turn.
+- **It misses edits made through Bash.** Most of that session's prose went in through `python3`
+  and `sed`.
+- **It reads `*.md` alone.** Comments in `*.rs` files and `Justfile` recipe help escape it.
+
+At the end the rules reach Claude at the edit that needs them. Until both skills are invoked in
+the current turn, an edit to a prose file is refused. Every change to a prose file, through any
+tool, puts the self-check in front of Claude before its next step.
+
+### Decisions
+
+- **No prose linter.** The skills already state the rules, and a linter states them a second time.
+  The failure is in applying the rules, so the hooks enforce the application.
+- **A PreToolUse hook on `Edit|Write` refuses an edit to a prose file.** If the transcript holds no
+  `Skill` call for each writing skill since the last user message, the hook returns
+  `permissionDecision: "deny"`. Its reason names the missing skills, and the edit does not run.
+- **A PostToolUse hook on `Edit|Write` returns the self-check.** Its reason names the file changed
+  and carries the technical-writing self-check. It asks Claude to apply the self-check to the lines
+  written and report the result before the next step.
+- **A PostToolUse hook on `Bash` covers changes made through scripts.** It compares
+  `git status -- '*.md'` with the state it last recorded for the session. If a prose file
+  changed, it returns the same self-check.
+- **The Stop gate stays as the backstop**, and counts only the invocations since the last user
+  message.
+- **The hooks are modes of `tools/prose-gate`**, which already parses the transcript. Each mode is
+  a subcommand, and `.claude/settings.json` wires each to its event.
+
+### Open questions
+
+- Which fields a PostToolUse hook returns for Claude to read. The PreToolUse `permissionDecision`
+  field is known. The PostToolUse output is not yet compared with the hook documentation.
+- Where the self-check text comes from. A copy in `tools/prose-gate` drifts from the skill. A
+  read of the skill's `SKILL.md` at run time depends on the plugin cache path.
+- Whether comments in `*.rs` files and `Justfile` recipe help count as prose for all three
+  hooks, or for the Stop gate alone.
+- Whether this slice belongs to lookout. The gate serves the whole repo, and the slice lives
+  here only because lookout is where the failure happened.
+
+### Tasks
+
+#### The turn, not the session
+
+- [ ] Find the last user message in a transcript, and count only the `Skill` calls after it.
+      A tool result arrives as a user message too, so the search skips those.
+- [ ] Apply that count in the Stop gate. Test it on a session whose only invocations sit in an
+      earlier turn.
+
+#### At the edit
+
+- [ ] Add a `pre-edit` subcommand that reads the PreToolUse payload. When a writing skill has no
+      invocation in the current turn, deny an edit to a prose file.
+- [ ] Add a `post-edit` subcommand: return the self-check for the file the payload names.
+- [ ] Add a `post-bash` subcommand that compares the prose files' git state with the state last
+      recorded for the session. When a prose file changed, return the self-check.
+- [ ] Wire the three subcommands in `.claude/settings.json`.
+- [ ] Describe the three hooks in `tools/prose-gate/README.md`, and the turn-scoped count.
+
+#### Proof
+
+- [ ] Start a session, edit a `.md` file without invoking the skills, and confirm the edit is
+      refused.
+- [ ] Invoke both skills, edit the file, and confirm the self-check arrives before the next step.
+- [ ] Change the file through Bash, and confirm the self-check arrives there as well.

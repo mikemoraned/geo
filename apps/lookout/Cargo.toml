@@ -43,9 +43,9 @@ geojson = "1.0"
 # crates.io, so pinned to a release tag. We select `aws` (S3 object store) + the
 # pure-Rust `geo` geometry backend with default-features off, which drops the `geos`
 # backend — it links a *system* GEOS library (enable it later once GEOS is installed).
-sedona = { git = "https://github.com/apache/sedona-db", tag = "apache-sedona-db-0.4.0", default-features = false, features = ["aws", "geo"] }
+sedona = { git = "https://github.com/apache/sedona-db", tag = "apache-sedona-db-0.4.1", default-features = false, features = ["aws", "geo"] }
 # Same repo/tag as `sedona`, so the versions line up.
-sedona-geoparquet = { git = "https://github.com/apache/sedona-db", tag = "apache-sedona-db-0.4.0" }
+sedona-geoparquet = { git = "https://github.com/apache/sedona-db", tag = "apache-sedona-db-0.4.1" }
 # Everything below is pinned to the arrow generation SedonaDB builds against, so that a
 # `RecordBatch` from a query is the same type as one we build. geoparquet 0.7 is the last
 # release on arrow 57 (0.8 moved to 59); serde_arrow gates its arrow support per version.

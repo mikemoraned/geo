@@ -282,6 +282,9 @@ impl Query {
         }
     }
 
+    /// Registers the dataset at `dataset` as `table`, with each geometry column as WKB bytes.
+    ///
+    /// This reads a file SedonaDB's geometry scan panics on, as the crate README describes.
     pub async fn register_at_without_geometry<L: LayerKind>(
         &self,
         dataset: &Dataset<L>,
