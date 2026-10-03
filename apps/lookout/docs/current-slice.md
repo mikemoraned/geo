@@ -61,10 +61,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### The milestones
 
-- [ ] Restructure `docs/next-slices.md` into the new format, with every slice under
+- [x] Restructure `docs/next-slices.md` into the new format, with every slice under
       `# Unassigned`.
-- [ ] With the user, name each milestone and write its Target.
-- [ ] With the user, place each slice in `docs/next-slices.md` under a milestone, or leave it
+- [x] With the user, name each milestone and write its Target.
+- [x] With the user, place each slice in `docs/next-slices.md` under a milestone, or leave it
       unassigned.
 
 #### Wrap-up
