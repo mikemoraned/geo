@@ -27,4 +27,11 @@ app dir that has a `docs/` with the three slice files.
 
 3. **Clear `docs/current-slice.md`** (leave the file existing): replace its entire contents with a placeholder indicating no active slice, e.g. a `# Current Slice` heading plus a line noting there is none.
 
-4. **Report** what you did: which slice was archived and any other special steps taken not mentioned above
+4. **Archive finished milestones:** In `docs/next-slices.md`, find each `# Milestone:` heading
+   with no `## Slice:` under it, and ask the user whether that milestone is done. For each one
+   that is:
+   - Append it to the end of `docs/completed-slices.md` as `## Milestone: <name>`, followed by
+     its Target.
+   - Remove its heading and Target from `docs/next-slices.md`.
+
+5. **Report** what you did: which slice was archived, which milestones were archived, and any other special steps taken not mentioned above

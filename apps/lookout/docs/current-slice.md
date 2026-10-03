@@ -47,16 +47,16 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### The rule and the skills
 
-- [ ] Describe milestones in `.claude/rules/slices.md`: the `# Milestone:` and `## Target`
+- [x] Describe milestones in `.claude/rules/slices.md`: the `# Milestone:` and `## Target`
       headings, `# Unassigned` last, and moving a slice by moving its block.
-- [ ] In `.claude/skills/choose-slice/SKILL.md`, list the slices grouped by milestone, with the
+- [x] In `.claude/skills/choose-slice/SKILL.md`, list the slices grouped by milestone, with the
       unassigned ones last. End a slice's block at the next `## Slice:` or level-one heading.
-- [ ] In the same skill, rewrite step 4: a doc with no slices keeps `# Unassigned` and its
+- [x] In the same skill, rewrite step 4: a doc with no slices keeps `# Unassigned` and its
       milestones.
-- [ ] In `.claude/skills/complete-slice/SKILL.md`, add a step after the archive: for each
+- [x] In `.claude/skills/complete-slice/SKILL.md`, add a step after the archive: for each
       milestone with no slices left, ask whether it is done. Archive each done one as a
       `## Milestone:` entry and remove it from `docs/next-slices.md`.
-- [ ] Describe `next-slices.md` in the Methodology section of `CLAUDE.md` as upcoming slices,
+- [x] Describe `next-slices.md` in the Methodology section of `CLAUDE.md` as upcoming slices,
       grouped by milestone.
 
 #### The milestones

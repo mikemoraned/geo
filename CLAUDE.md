@@ -85,7 +85,7 @@ they operate on the `docs/` relative to your current directory:
 Each app's slice docs:
 
 - `docs/current-slice.md` — currently active slice and remaining tasks
-- `docs/next-slices.md` — upcoming slices
+- `docs/next-slices.md` — upcoming slices, grouped by milestone
 - `docs/completed-slices.md` — append-only history of completed slices
 
 The three slice skills and the `.claude/rules/slices.md` rule are shared at the repo root
