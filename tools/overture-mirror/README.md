@@ -66,9 +66,13 @@ fails or stalls is retried for up to 30 minutes, and an interrupted download res
 byte it reached. The first wait is 1 second, and each wait doubles, up to 60 seconds. A failure
 that outlasts the retries stops the sync, and the next run resumes from what it copied.
 
-Each run appends to `overture-mirror.log`, or to the file `--log` names. It records each retry
-and resumed download, and each copied file with its size, time, and rate. To see why a sync has
-slowed, follow it in a second terminal with `tail -f overture-mirror.log`.
+Each run writes a log of its own, named for the time it started, such as
+`overture-mirror-20261004T181950.633Z.log`, so runs side by side never share one. `--log` names a
+different file. The log records the action taken for every file. `sync` logs each file it skips
+as complete, and each download as it starts, with the reason for it. It also logs each retry and
+resumed download, and each copied file with its size, time, and rate. `verify` logs each file it
+checks, with its status. To see why a sync has slowed, follow its log in a second terminal with
+`tail -f`.
 
 A file is written under a `.part` suffix and renamed once complete. An interrupted copy
 therefore leaves a `.part` file, never a truncated file under the real name.

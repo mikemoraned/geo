@@ -228,12 +228,25 @@ impl Source {
     ) -> Result<LocalStatus, MirrorError> {
         let local = self.local_path(mirror, &object.location);
         let state = self.compare_signatures(object, &local).await?.status;
-        match state {
-            LocalStatus::Complete => progress.skip(object.size),
-            LocalStatus::Missing | LocalStatus::Differs => {
-                self.copy(object, &local, progress).await?
+        let reason = match state {
+            LocalStatus::Complete => {
+                tracing::info!(
+                    "skipping {} ({:.1} MiB): complete in the mirror",
+                    object.location,
+                    object.size as f64 / MIB,
+                );
+                progress.skip(object.size);
+                return Ok(state);
             }
-        }
+            LocalStatus::Missing => "missing from the mirror",
+            LocalStatus::Differs => "differs from the source",
+        };
+        tracing::info!(
+            "copying {} ({:.1} MiB): {reason}",
+            object.location,
+            object.size as f64 / MIB,
+        );
+        self.copy(object, &local, progress).await?;
         Ok(state)
     }
 
@@ -296,6 +309,7 @@ pub async fn verify(
     let remote = futures::stream::iter(objects)
         .map(|(object, local)| async move {
             let comparison = source.compare_signatures(&object, &local).await?;
+            tracing::info!("checked {}: {:?}", object.location, comparison.status);
             progress.advance(comparison.source_bytes_read);
             progress.skip(Signature::read_size(object.size) - comparison.source_bytes_read);
             Ok::<_, MirrorError>((source.within_prefix(&object.location), comparison.status))

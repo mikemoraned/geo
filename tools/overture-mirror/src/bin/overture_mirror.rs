@@ -23,9 +23,10 @@ use overture_mirror::sync::{Refused, check_syncable, check_verifiable};
 struct Cli {
     #[command(subcommand)]
     command: Commands,
-    /// The file each retry, resumed download, and copied file is logged to.
-    #[arg(long, global = true, default_value = "overture-mirror.log")]
-    log: PathBuf,
+    /// The file each download, retry, and copied file is logged to. Defaults to a new file named
+    /// for the run's start time.
+    #[arg(long, global = true)]
+    log: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -95,10 +96,15 @@ impl Incomplete {
     }
 }
 
+fn log_named_for_now() -> PathBuf {
+    let started = chrono::Utc::now().format("%Y%m%dT%H%M%S%.3fZ");
+    PathBuf::from(format!("overture-mirror-{started}.log"))
+}
+
 fn log_to(path: &Path) -> Result<(), Box<dyn Error>> {
     let file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
+        .create_new(true)
+        .write(true)
         .open(path)
         .map_err(|err| format!("opening the log {}: {err}", path.display()))?;
     let targets = Targets::new()
@@ -118,7 +124,8 @@ fn log_to(path: &Path) -> Result<(), Box<dyn Error>> {
 #[tokio::main]
 async fn main() -> ExitCode {
     let cli = Cli::parse();
-    if let Err(err) = log_to(&cli.log) {
+    let log = cli.log.clone().unwrap_or_else(log_named_for_now);
+    if let Err(err) = log_to(&log) {
         eprintln!("{err}");
         return ExitCode::FAILURE;
     }
