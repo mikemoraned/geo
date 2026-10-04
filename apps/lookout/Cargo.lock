@@ -1859,7 +1859,7 @@ dependencies = [
  "chrono",
  "clap",
  "domain",
- "geo",
+ "geo 0.32.0",
  "geo-types",
  "geojson",
  "libtest-mimic",
@@ -2930,7 +2930,7 @@ name = "domain"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "geo",
+ "geo 0.32.0",
  "geo-types",
  "num-traits",
  "serde",
@@ -3369,6 +3369,26 @@ dependencies = [
  "num-traits",
  "robust",
  "rstar 0.12.2",
+ "spade",
+]
+
+[[package]]
+name = "geo"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f3901269ec6d4f6068d3f09e5f02f995bd076398dcd1dfec407cd230b02d11b"
+dependencies = [
+ "earcutr",
+ "float_next_after 1.0.0",
+ "geo-types",
+ "geographiclib-rs",
+ "i_overlay 4.0.7",
+ "log",
+ "num-traits",
+ "rand 0.8.7",
+ "robust",
+ "rstar 0.12.2",
+ "sif-itree",
  "spade",
 ]
 
@@ -4541,7 +4561,7 @@ dependencies = [
  "chrono",
  "crux_core",
  "domain",
- "geo",
+ "geo 0.32.0",
  "geo-types",
  "medallion",
  "platform-core",
@@ -4615,7 +4635,7 @@ dependencies = [
  "dirs",
  "duckdb",
  "futures",
- "geo",
+ "geo 0.32.0",
  "geo-traits",
  "geo-types",
  "geoarrow-array",
@@ -4734,7 +4754,7 @@ dependencies = [
  "chrono",
  "clap",
  "domain",
- "geo",
+ "geo 0.32.0",
  "geo-traits",
  "geo-types",
  "medallion",
@@ -5355,7 +5375,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "domain",
- "geo",
+ "geo 0.32.0",
  "geo-types",
  "nmea",
  "num-traits",
@@ -5853,7 +5873,7 @@ dependencies = [
  "chrono",
  "clap",
  "domain",
- "geo",
+ "geo 0.32.0",
  "geo-traits",
  "geo-types",
  "md5",
@@ -6544,7 +6564,7 @@ dependencies = [
  "arrow-schema 57.3.1",
  "datafusion-common",
  "datafusion-expr",
- "geo",
+ "geo 0.31.0",
  "geo-traits",
  "geo-types",
  "geojson",
@@ -6970,7 +6990,7 @@ dependencies = [
  "chrono",
  "clap",
  "domain",
- "geo",
+ "geo 0.32.0",
  "geo-types",
  "medallion",
  "medallion-model",
@@ -7055,6 +7075,12 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+
+[[package]]
+name = "sif-itree"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7f45b8998ced5134fb1d75732c77842a3e888f19c1ff98481822e8fbfbf930b"
 
 [[package]]
 name = "signal-hook-registry"
@@ -7815,7 +7841,7 @@ dependencies = [
  "chrono",
  "clap",
  "datafusion",
- "geo",
+ "geo 0.32.0",
  "geo-types",
  "medallion",
  "medallion-model",
