@@ -60,6 +60,10 @@ signature matches the bucket's copy counts as complete, and `sync` copies every 
 The bucket's half of a signature takes two ranged reads, made only where a local file of the
 right size exists.
 
+A request to the bucket that fails is retried for up to 30 minutes. The first wait is 1 second,
+and each wait doubles, up to 60 seconds. A failure that outlasts the retries stops the sync, and
+the next run resumes from what it copied.
+
 A file is written under a `.part` suffix and renamed once complete. An interrupted copy
 therefore leaves a `.part` file, never a truncated file under the real name.
 

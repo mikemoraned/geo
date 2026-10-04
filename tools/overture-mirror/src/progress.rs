@@ -40,8 +40,12 @@ impl Progress {
         self.bar.dec_length(bytes);
     }
 
-    pub fn finish(&self) {
-        self.bar.finish();
+    pub fn close<T, E>(&self, outcome: Result<T, E>) -> Result<T, E> {
+        match outcome {
+            Ok(_) => self.bar.finish(),
+            Err(_) => self.bar.abandon(),
+        }
+        outcome
     }
 }
 
@@ -72,5 +76,27 @@ mod tests {
         progress.skip(30);
 
         assert_eq!(done_and_total(&progress), (0, 150));
+    }
+
+    #[test]
+    fn closing_on_success_completes_the_bar() {
+        let progress = Progress::new(180, Display::Hidden);
+        progress.advance(40);
+
+        let outcome: Result<(), ()> = progress.close(Ok(()));
+
+        assert_eq!(outcome, Ok(()));
+        assert_eq!(done_and_total(&progress), (180, 180));
+    }
+
+    #[test]
+    fn closing_on_failure_leaves_the_bar_where_it_stopped() {
+        let progress = Progress::new(180, Display::Hidden);
+        progress.advance(40);
+
+        let outcome: Result<(), ()> = progress.close(Err(()));
+
+        assert_eq!(outcome, Err(()));
+        assert_eq!(done_and_total(&progress), (40, 180));
     }
 }

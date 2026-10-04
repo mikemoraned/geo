@@ -1,12 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures::{StreamExt, TryStreamExt};
 use object_store::aws::AmazonS3Builder;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
-use object_store::{ObjectMeta, ObjectStore, ObjectStoreExt};
+use object_store::{BackoffConfig, ObjectMeta, ObjectStore, ObjectStoreExt, RetryConfig};
 use tokio::io::{AsyncWriteExt, BufWriter};
 
 use crate::location::Location;
@@ -67,6 +68,18 @@ impl MirrorError {
     }
 }
 
+fn patient_retries() -> RetryConfig {
+    RetryConfig {
+        backoff: BackoffConfig {
+            init_backoff: Duration::from_secs(1),
+            max_backoff: Duration::from_secs(60),
+            base: 2.,
+        },
+        max_retries: 30,
+        retry_timeout: Duration::from_secs(30 * 60),
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Source {
     store: Arc<dyn ObjectStore>,
@@ -85,6 +98,7 @@ impl Source {
                     .with_bucket_name(bucket)
                     .with_region(REGION)
                     .with_skip_signature(true)
+                    .with_retry(patient_retries())
                     .build()?;
                 Ok(Self::new(Arc::new(store), prefix.clone()))
             }
@@ -235,8 +249,7 @@ pub async fn sync(
         .buffer_unordered(CONCURRENT_COPIES)
         .try_collect()
         .await;
-    progress.finish();
-    found
+    progress.close(found)
 }
 
 pub async fn verify(
@@ -271,8 +284,7 @@ pub async fn verify(
         .buffer_unordered(CONCURRENT_COPIES)
         .try_collect()
         .await;
-    progress.finish();
-    let remote = remote?;
+    let remote = progress.close(remote)?;
     let local_only = local_files(&mirror.join(release.to_string()))?
         .into_iter()
         .filter(|path| !expected.contains(path))
