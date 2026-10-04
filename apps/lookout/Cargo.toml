@@ -74,8 +74,9 @@ motis-openapi-progenitor = "0.4"
 polyline = "0.11"
 wkb = "0.9"
 geo-types = "0.7"
-# Pinned to 0.31, the version sedona-geo already resolves in the tree.
-geo = "0.31"
+# 0.32, not 0.33: sedona-geo 0.4.1 resolves geo 0.31, which caps i_overlay below the 4.5 that
+# 0.33 needs. The lock carries 0.31 and 0.32 until SedonaDB 0.5.0.
+geo = "0.32"
 geo-traits = "0.3"
 wkt = "0.14"
 chrono = { version = "0.4", features = ["serde"] }

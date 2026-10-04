@@ -60,12 +60,16 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - **geo, then crux, before the slice's own work, each in its own commit.** The slice changes
   both.
-- **geo 0.33.1, ahead of SedonaDB.** The host tree also carries geo 0.31, for sedona-geo, until
-  the SedonaDB 0.5.0 slice. The device tree carries 0.33.1 alone.
+- **geo 0.32, ahead of SedonaDB.** The host tree also carries geo 0.31, for sedona-geo, until
+  the SedonaDB 0.5.0 slice. The device tree carries 0.32 alone. Narrowed on 2026-10-03 from
+  0.33.1: geo 0.31 caps `i_overlay` below 4.1, geo 0.33 needs 4.5.1 or later, and one build holds
+  one 4.x.
 - **crux_core 0.20.0.** The reboots of 2026-09-21 struck on 0.16.2 too. The 0.20 fault in
   `docs/device.md` was on the 1.90.0 toolchain, and 0.20 has not run on esp-1.98.1.0.
-- **A 30-minute soak either side of the crux move**, both after the geo move and under the same
-  conditions. Each records reboots, unused stack, free heap, and the slowest sentence.
+- **A 30-minute soak after the crux move, against the soak of 2026-10-03.** Both record reboots,
+  unused stack, free heap, and the slowest sentence, under the same conditions. The two differ by
+  geo as well as crux. Narrowed on 2026-10-04 from a fresh baseline after the geo move: the geo
+  move is not expected to affect stability, and a build and the Rust tests cover it.
 
 #### Prediction
 
@@ -117,8 +121,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - `docs/device.md` and the pin comment in `crates/platform/web/core/Cargo.toml` say crux after
   0.16.2 reboots the device.
-- The workspace `Cargo.toml` comment ties geo to sedona-geo's version. The SedonaDB 0.5.0 slice's
-  geo task becomes moot.
+- The workspace `Cargo.toml` comment ties geo to sedona-geo's version. The SedonaDB 0.5.0 slice
+  moves geo from 0.32 rather than 0.31.
 - `App` in `crates/platform-core/src/app.rs` loses `type Capabilities` and the `_caps` argument.
 - `Prediction` gains a reachability field.
 - `silver/session_crossing` can hold several rows per (session, crossing), so the packed sessions
@@ -143,16 +147,18 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Upgrades
 
-- [ ] Move `geo` to 0.33.1 in the workspace, `crates/domain`, and `crates/predictor`, and rewrite
+- [x] Move `geo` to 0.33.1 in the workspace, `crates/domain`, and `crates/predictor`, and rewrite
       its pin comment.
-- [ ] Run `just test-no-docker`, `just test-geo`, and `just m5plus-build-release`.
-- [ ] Soak the release build for 30 minutes, as the baseline. The user runs this.
+      Moved to 0.32 instead. 0.33 does not resolve alongside SedonaDB 0.4.1.
+- [x] Run `just test-no-docker`, `just test-geo`, and `just m5plus-build-release`.
+- [-] Soak the release build for 30 minutes, as the baseline. The user runs this.
+      Moot: the soak of 2026-10-03 serves as the baseline.
 - [ ] Move `crux_core` to `=0.20.0` in every crate pinning it, and drop `Capabilities` and `_caps`
       from `App`.
 - [ ] Run `just test-no-docker`, `just wasm`, and `just m5plus-build-release`.
-- [ ] Soak for 30 minutes under the baseline's conditions. The user runs this.
+- [ ] Soak for 30 minutes under the conditions of the soak of 2026-10-03. The user runs this.
 - [ ] Rewrite the crux section of `docs/device.md` and the `web/core` pin comment from the soaks.
-- [ ] Mark the geo task moot in the SedonaDB 0.5.0 slice in `docs/next-slices.md`.
+- [ ] Note in the SedonaDB 0.5.0 slice in `docs/next-slices.md` that geo moves from 0.32.
 
 #### Motis capture
 
