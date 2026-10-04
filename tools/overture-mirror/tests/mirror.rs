@@ -7,6 +7,7 @@ use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStoreExt, PutPayload};
 use overture_mirror::location::Location;
 use overture_mirror::mirror::{Local, Source, Verification, sync, verify};
+use overture_mirror::progress::Display;
 use overture_mirror::release::Release;
 
 const WATER: &str = "release/2026-09-23.1/theme=base/type=water/part-0.parquet";
@@ -72,7 +73,7 @@ async fn a_first_sync_copies_every_object_of_the_release() {
     let bucket = bucket().await;
     let mirror = tempfile::tempdir().expect("tempdir");
 
-    let found = sync(&bucket, &release(), mirror.path())
+    let found = sync(&bucket, &release(), mirror.path(), Display::Hidden)
         .await
         .expect("sync");
 
@@ -87,11 +88,11 @@ async fn a_first_sync_copies_every_object_of_the_release() {
 async fn a_second_sync_finds_every_object_complete() {
     let bucket = bucket().await;
     let mirror = tempfile::tempdir().expect("tempdir");
-    sync(&bucket, &release(), mirror.path())
+    sync(&bucket, &release(), mirror.path(), Display::Hidden)
         .await
         .expect("sync");
 
-    let found = sync(&bucket, &release(), mirror.path())
+    let found = sync(&bucket, &release(), mirror.path(), Display::Hidden)
         .await
         .expect("sync");
 
@@ -102,7 +103,7 @@ async fn a_second_sync_finds_every_object_complete() {
 async fn a_resumed_sync_recopies_only_the_damaged_and_missing_objects() {
     let bucket = bucket().await;
     let mirror = tempfile::tempdir().expect("tempdir");
-    sync(&bucket, &release(), mirror.path())
+    sync(&bucket, &release(), mirror.path(), Display::Hidden)
         .await
         .expect("sync");
     let mut damaged = contents(3);
@@ -111,7 +112,7 @@ async fn a_resumed_sync_recopies_only_the_damaged_and_missing_objects() {
     std::fs::write(local(mirror.path(), SEGMENT), &contents(5)[..100]).expect("truncate one");
     std::fs::remove_file(local(mirror.path(), DIVISION)).expect("remove one");
 
-    let found = sync(&bucket, &release(), mirror.path())
+    let found = sync(&bucket, &release(), mirror.path(), Display::Hidden)
         .await
         .expect("sync");
 
@@ -135,11 +136,11 @@ async fn a_resumed_sync_recopies_only_the_damaged_and_missing_objects() {
 async fn a_synced_release_verifies_complete() {
     let bucket = bucket().await;
     let mirror = tempfile::tempdir().expect("tempdir");
-    sync(&bucket, &release(), mirror.path())
+    sync(&bucket, &release(), mirror.path(), Display::Hidden)
         .await
         .expect("sync");
 
-    let verification = verify(&bucket, &release(), mirror.path())
+    let verification = verify(&bucket, &release(), mirror.path(), Display::Hidden)
         .await
         .expect("verify");
 
@@ -156,7 +157,7 @@ async fn a_synced_release_verifies_complete() {
 async fn verify_reports_damaged_missing_and_local_only_files_and_copies_nothing() {
     let bucket = bucket().await;
     let mirror = tempfile::tempdir().expect("tempdir");
-    sync(&bucket, &release(), mirror.path())
+    sync(&bucket, &release(), mirror.path(), Display::Hidden)
         .await
         .expect("sync");
     let damaged = vec![0u8; 5000];
@@ -165,7 +166,7 @@ async fn verify_reports_damaged_missing_and_local_only_files_and_copies_nothing(
     let leftover = local(mirror.path(), &format!("{SEGMENT}.part"));
     std::fs::write(&leftover, b"partial").expect("leave a partial copy");
 
-    let verification = verify(&bucket, &release(), mirror.path())
+    let verification = verify(&bucket, &release(), mirror.path(), Display::Hidden)
         .await
         .expect("verify");
 
@@ -194,16 +195,31 @@ fn mirror_source(mirror: &Path) -> Source {
 async fn a_mirror_synced_from_another_verifies_against_it() {
     let portable = tempfile::tempdir().expect("tempdir");
     let nas = tempfile::tempdir().expect("tempdir");
-    sync(&bucket().await, &release(), portable.path())
-        .await
-        .expect("sync");
+    sync(
+        &bucket().await,
+        &release(),
+        portable.path(),
+        Display::Hidden,
+    )
+    .await
+    .expect("sync");
 
-    sync(&mirror_source(portable.path()), &release(), nas.path())
-        .await
-        .expect("sync");
-    let verification = verify(&mirror_source(portable.path()), &release(), nas.path())
-        .await
-        .expect("verify");
+    sync(
+        &mirror_source(portable.path()),
+        &release(),
+        nas.path(),
+        Display::Hidden,
+    )
+    .await
+    .expect("sync");
+    let verification = verify(
+        &mirror_source(portable.path()),
+        &release(),
+        nas.path(),
+        Display::Hidden,
+    )
+    .await
+    .expect("verify");
 
     assert_eq!(
         verification
@@ -223,9 +239,14 @@ async fn a_mirror_synced_from_another_verifies_against_it() {
 #[tokio::test]
 async fn a_mirror_lists_its_releases_and_skips_other_directories() {
     let portable = tempfile::tempdir().expect("tempdir");
-    sync(&bucket().await, &release(), portable.path())
-        .await
-        .expect("sync");
+    sync(
+        &bucket().await,
+        &release(),
+        portable.path(),
+        Display::Hidden,
+    )
+    .await
+    .expect("sync");
     std::fs::create_dir(portable.path().join("@eaDir")).expect("a directory the NAS adds");
 
     let releases = mirror_source(portable.path())
@@ -240,18 +261,28 @@ async fn a_mirror_lists_its_releases_and_skips_other_directories() {
 async fn a_partial_copy_in_the_source_is_not_synced() {
     let portable = tempfile::tempdir().expect("tempdir");
     let nas = tempfile::tempdir().expect("tempdir");
-    sync(&bucket().await, &release(), portable.path())
-        .await
-        .expect("sync");
+    sync(
+        &bucket().await,
+        &release(),
+        portable.path(),
+        Display::Hidden,
+    )
+    .await
+    .expect("sync");
     std::fs::write(
         local(portable.path(), &format!("{SEGMENT}.part")),
         b"partial",
     )
     .expect("leave a partial copy");
 
-    let found = sync(&mirror_source(portable.path()), &release(), nas.path())
-        .await
-        .expect("sync");
+    let found = sync(
+        &mirror_source(portable.path()),
+        &release(),
+        nas.path(),
+        Display::Hidden,
+    )
+    .await
+    .expect("sync");
 
     assert_eq!(found, all(Local::Missing));
     assert!(!local(nas.path(), &format!("{SEGMENT}.part")).exists());

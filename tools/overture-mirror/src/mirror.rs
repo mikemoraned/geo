@@ -10,6 +10,7 @@ use object_store::{ObjectMeta, ObjectStore, ObjectStoreExt};
 use tokio::io::AsyncWriteExt;
 
 use crate::location::Location;
+use crate::progress::{Display, Progress, Theme};
 use crate::release::Release;
 use crate::signature::Signature;
 
@@ -127,7 +128,13 @@ impl Source {
         Ok(Local::Complete)
     }
 
-    async fn copy(&self, object: &ObjectMeta, local: &Path) -> Result<(), MirrorError> {
+    async fn copy(
+        &self,
+        object: &ObjectMeta,
+        local: &Path,
+        progress: &Progress,
+    ) -> Result<(), MirrorError> {
+        let theme = self.theme_of(object);
         let parent = local.parent().unwrap_or(local);
         tokio::fs::create_dir_all(parent)
             .await
@@ -143,6 +150,7 @@ impl Source {
             file.write_all(&chunk)
                 .await
                 .map_err(MirrorError::local_io(&partial))?;
+            progress.advance(&theme, chunk.len() as u64);
         }
         file.flush()
             .await
@@ -152,14 +160,31 @@ impl Source {
             .map_err(MirrorError::local_io(local))
     }
 
-    async fn ensure(&self, object: &ObjectMeta, mirror: &Path) -> Result<Local, MirrorError> {
+    async fn ensure(
+        &self,
+        object: &ObjectMeta,
+        mirror: &Path,
+        progress: &Progress,
+    ) -> Result<Local, MirrorError> {
         let local = self.local_path(mirror, &object.location);
         let state = self.compare_signatures(object, &local).await?;
-        if state != Local::Complete {
-            tracing::info!(?state, size = object.size, "copying {}", object.location);
-            self.copy(object, &local).await?;
+        match state {
+            Local::Complete => progress.skip(&self.theme_of(object), object.size),
+            Local::Missing | Local::Differs => self.copy(object, &local, progress).await?,
         }
         Ok(state)
+    }
+
+    fn theme_of(&self, object: &ObjectMeta) -> Theme {
+        Theme::of(&self.within_prefix(&object.location))
+    }
+
+    fn progress_over(&self, objects: &[ObjectMeta], display: Display) -> Progress {
+        let files: Vec<(Theme, u64)> = objects
+            .iter()
+            .map(|object| (self.theme_of(object), object.size))
+            .collect();
+        Progress::new(&files, display)
     }
 
     fn within_prefix(&self, location: &ObjectPath) -> ObjectPath {
@@ -181,25 +206,30 @@ pub async fn sync(
     source: &Source,
     release: &Release,
     mirror: &Path,
+    display: Display,
 ) -> Result<BTreeMap<ObjectPath, Local>, MirrorError> {
     let objects = source.objects(release).await?;
-    tracing::info!("{release} holds {} objects", objects.len());
-    futures::stream::iter(objects)
+    let progress = &source.progress_over(&objects, display);
+    let found = futures::stream::iter(objects)
         .map(|object| async move {
-            let state = source.ensure(&object, mirror).await?;
+            let state = source.ensure(&object, mirror, progress).await?;
             Ok((source.within_prefix(&object.location), state))
         })
         .buffer_unordered(CONCURRENT_COPIES)
         .try_collect()
-        .await
+        .await;
+    progress.finish();
+    found
 }
 
 pub async fn verify(
     source: &Source,
     release: &Release,
     mirror: &Path,
+    display: Display,
 ) -> Result<Verification, MirrorError> {
     let objects = source.objects(release).await?;
+    let progress = &source.progress_over(&objects, display);
     let expected: BTreeSet<PathBuf> = objects
         .iter()
         .map(|object| source.local_path(mirror, &object.location))
@@ -208,11 +238,14 @@ pub async fn verify(
         .map(|object| async move {
             let local = source.local_path(mirror, &object.location);
             let state = source.compare_signatures(&object, &local).await?;
+            progress.advance(&source.theme_of(&object), object.size);
             Ok::<_, MirrorError>((source.within_prefix(&object.location), state))
         })
         .buffer_unordered(CONCURRENT_COPIES)
         .try_collect()
-        .await?;
+        .await;
+    progress.finish();
+    let remote = remote?;
     let local_only = local_files(&mirror.join(release.to_string()))?
         .into_iter()
         .filter(|path| !expected.contains(path))

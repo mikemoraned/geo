@@ -36,6 +36,14 @@ directory. `sync` also refuses a superseded release.
 exists to keep a release readable after it ages out of the bucket. Once the release ages out, a
 theme left out is unreachable. A whole release runs to hundreds of GB: 2026-09-23.1 is 619 GB.
 
+## Progress is shown by theme
+
+`sync` and `verify` draw a progress bar for each theme of the release, and one for the release
+as a whole. Each bar counts bytes, and shows its rate and the time it predicts is left. A
+spinner on each bar keeps turning while files are in flight. In `sync`, a file already complete
+leaves its bar's total, so the time left reflects only the copying still to do. `verify` reads at most
+2 KiB of each file, so its bars count the bytes checked, and its rate runs far above a copy's.
+
 ## A sync resumes from what the mirror holds
 
 A copy of a whole release takes hours, and a sync that stops part-way resumes on the next run.

@@ -5,6 +5,7 @@ use std::process::ExitCode;
 use clap::{Args, Parser, Subcommand};
 use overture_mirror::location::{Location, OVERTURE};
 use overture_mirror::mirror::{self, Local, Source};
+use overture_mirror::progress::Display;
 use overture_mirror::release::{Release, find_superseded};
 use overture_mirror::sync::{check_syncable, check_verifiable};
 
@@ -59,7 +60,6 @@ struct Incomplete {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    tracing_subscriber::fmt().with_target(false).init();
     match run(Cli::parse().command).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
@@ -88,7 +88,7 @@ async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
         }) => {
             let source = Source::open(&source.source)?;
             check_syncable(&release, &source.releases().await?, &mirror)?;
-            let found = mirror::sync(&source, &release, &mirror).await?;
+            let found = mirror::sync(&source, &release, &mirror, Display::Bars).await?;
             let count = |status| found.values().filter(|found| **found == status).count();
             println!(
                 "{release}: {} already complete, {} copied, {} recopied",
@@ -104,7 +104,7 @@ async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
         }) => {
             let source = Source::open(&source.source)?;
             check_verifiable(&release, &source.releases().await?, &mirror)?;
-            let verification = mirror::verify(&source, &release, &mirror).await?;
+            let verification = mirror::verify(&source, &release, &mirror, Display::Bars).await?;
             for (location, state) in &verification.remote {
                 if *state != Local::Complete {
                     println!("{state:?}  {location}");

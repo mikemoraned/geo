@@ -63,6 +63,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **A source's directories that are not releases, and its `.part` files, are skipped.** A NAS or
   an operating system can add directories of its own beside the releases. A `.part` file is an
   unfinished copy, and a destination never takes one.
+- **Progress and time remaining count bytes, not files.** A release's files vary widely in
+  size, so a count of files predicts a copy's end poorly. Each bar's total is the bytes of the
+  files it covers, and a file adds its size once it is done. Confirmed 2026-10-04.
+- **`indicatif` draws the spinner and the bars.** It offers spinners, several bars at once, and
+  a time remaining for each bar, so nothing of it is hand-rolled. Confirmed 2026-10-04.
 - **The crossing-check baseline is taken before silver is re-derived.** `just crossing-checks`
   reads the silver the store holds, and `just silver-init` overwrites it. Without the baseline
   there are no old counts to compare against.
@@ -111,6 +116,13 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Give each recipe a `source` argument defaulting to the bucket, and `sync` a `mirror`
       argument defaulting to `overture_mirror`.
 - [x] Describe verifying and backing up a second mirror in `tools/overture-mirror/README.md`.
+
+#### Progress for long runs
+
+- [x] Show `sync` and `verify` as still active, with a spinner that ticks while files are in
+      flight.
+- [x] Show a progress bar of completed bytes for each theme, and one for the release overall.
+- [x] Show the predicted time remaining for the release, and for each theme.
 
 #### The release pin
 
