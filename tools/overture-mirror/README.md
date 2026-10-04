@@ -11,28 +11,46 @@ import it. If the drive moves, edit that one line.
 
 ## Recipes
 
-- `just prerequisites` installs the AWS CLI.
 - `just releases` lists the releases the bucket serves, and marks each one that a later
   release supersedes.
-- `just sync <release>` copies one release into the mirror.
+- `just sync <release>` copies one release into the mirror, and resumes from the files already
+  there.
+- `just verify <release> [mirror]` checks a mirrored release against the bucket, and copies
+  nothing. The mirror defaults to the path in `mirror.just`.
 - `just test` runs the tests.
 
-The recipes run a Rust binary that drives the AWS CLI. It reads the bucket's listing as JSON, and
-leaves the copy to `aws s3 sync`.
+The recipes run a Rust binary that reads the bucket anonymously through `object_store`, so the
+machine needs no AWS CLI and no credentials.
 
-`sync` refuses a release the bucket does not serve, a superseded release, and a mirror path that
-is not a directory. The safehouse sandbox hides the external drive, so run `sync` outside it.
+`sync` and `verify` refuse a release the bucket does not serve, and a mirror path that is not a
+directory. `sync` also refuses a superseded release.
 
 ## A mirror holds whole releases
 
-`sync` copies every theme of a release, not only the themes a current extract reads. The mirror
+`sync` copies every theme of a release, not only the themes a project reads today. The mirror
 exists to keep a release readable after it ages out of the bucket. Once the release ages out, a
-theme left out is unreachable. 2026-09-23.1 is 619 GB whole, and the three themes lookout reads
-come to 131 GB of it.
+theme left out is unreachable. A whole release runs to hundreds of GB: 2026-09-23.1 is 619 GB.
+
+## A sync resumes from what the mirror holds
+
+A copy of a whole release takes hours, and a sync that stops part-way resumes on the next run.
+Each file has a signature: its size, its first 1 KiB, and its last 1 KiB. A local file whose
+signature matches the bucket's copy counts as complete, and `sync` copies every other file again.
+The bucket's half of a signature takes two ranged reads, made only where a local file of the
+right size exists.
+
+A file is written under a `.part` suffix and renamed once complete. An interrupted copy
+therefore leaves a `.part` file, never a truncated file under the real name.
+
+## `verify` applies the same check without copying
+
+`verify` compares each file of a release with the bucket's copy by signature. It lists each file
+missing locally, differing from the bucket, or present locally alone, such as a leftover `.part`
+file. If it lists any file, it exits with a failure.
 
 ## A superseded release is never mirrored
 
 Overture names a release `YYYY-MM-DD.N`. A later `.N` of the same date replaces the earlier
 release, because Overture found a fault in it. The mirror holds only the latest `.N` of each
-date. An extract already taken from a superseded release stays valid, since its manifest names
-the release it came from.
+date. Data already read from a superseded release stays usable, provided it records the release
+it came from.

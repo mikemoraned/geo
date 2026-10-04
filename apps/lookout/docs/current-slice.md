@@ -44,6 +44,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   file's is complete, and every other file is copied again. A copy of a whole release takes
   hours, and a copy that stops part-way restarts from what is already on the drive. Reading the
   remote halves takes two ranged reads per object, about 2,600 for 2026-09-23.1's 1,278.
+- **The tool reads the bucket through `object_store`, not the AWS CLI.** The CLI starts a
+  process for each ranged read, about 2,600 per release. `object_store` makes one client for the
+  run, retries a failed request, and offers an in-memory store the tests run against. lookout
+  already depends on it. Confirmed 2026-10-04.
 - **`verify` applies the same signature check to a mirrored release**, with no copy. It reports
   each file missing locally, differing from the remote, or present locally alone. It confirms an
   existing mirror is complete without a second download.
@@ -76,19 +80,18 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       of the same date replaces the earlier release.
 - [x] Point `apps/lookout/README.md` at `tools/overture-mirror/` where it says the extract
       comes from a local mirror.
-- [ ] Compute a file's signature in `tools/overture-mirror`, locally and from the bucket by
+- [x] Compute a file's signature in `tools/overture-mirror`, locally and from the bucket by
       ranged reads.
-- [ ] Make `sync` resumable: compare signatures, and copy only the files missing or differing
+- [x] Make `sync` resumable: compare signatures, and copy only the files missing or differing
       locally.
-- [ ] Add a `verify` subcommand and recipe, reporting each file missing, differing, or present
+- [x] Add a `verify` subcommand and recipe, reporting each file missing, differing, or present
       locally alone.
-- [ ] Update `tools/overture-mirror/README.md` for resuming and for `verify`.
+- [x] Update `tools/overture-mirror/README.md` for resuming and for `verify`.
 
 #### The release pin
 
 - [x] List the bucket's releases, and name the latest. It becomes the new pin.
-- [ ] Confirm the mirror drive has 619 GB free. The user's to check: the sandbox cannot read
-      the drive.
+- [ ] Confirm the mirror drive has 619 GB free. The user's to check, with the drive mounted.
 - [ ] Sync 2026-09-23.1 whole to the mirror with the new recipe. The user's to run: it needs
       the drive mounted and hours of transfer. Every task after this one waits on it.
 - [ ] Bump `DEFAULT_RELEASE` in `crates/transport/src/overture.rs` to 2026-09-23.1.
@@ -115,10 +118,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [ ] Run `just test-no-docker` and `just test-geo`.
 
 #### Open questions
-
-- Whether the ranged reads and the copy stay with the AWS CLI or move to an S3 client crate. The
-  CLI starts a process for each ranged read, about 2,600 per release. A crate makes one client
-  for the run, and the Rust rule prefers a dependency to hand-rolled request handling.
 
 - Whether the nested columns kept their shape. 2026-09-23.1 carries every column the
   predicates name, at the top level. A changed struct inside `connectors` or `bbox` shows up

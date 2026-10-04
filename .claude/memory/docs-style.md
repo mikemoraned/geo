@@ -28,5 +28,11 @@ How docs under `docs/` (as opposed to slice docs) are written in this repo.
   comparisons with an alternative in the present tense, since past tense turns a live
   rationale into an anecdote. The history itself belongs in the slice record.
 
+- **Write for a human reader, and leave Claude's environment out.** READMEs, `docs/` and slice
+  docs are read by the people working here. The sandbox Claude runs in, and what it can or cannot
+  reach, belongs in `.claude/memory/testing-limits.md`. A doc states what a step needs, such as
+  "with the drive mounted", rather than why Claude cannot do it.
+
 This applies to long-lived reference docs. Slice docs (`current-slice.md`,
-`next-slices.md`, `completed-slices.md`) are a record of specific work and stay concrete.
+`next-slices.md`, `completed-slices.md`) are a record of specific work and stay concrete. The
+human-reader rule holds for slice docs and READMEs as well.
