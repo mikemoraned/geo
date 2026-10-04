@@ -2,6 +2,12 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Mutex;
+
+use tracing::Level;
+use tracing_subscriber::filter::Targets;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 use clap::{Args, Parser, Subcommand};
 use object_store::path::Path as ObjectPath;
@@ -17,6 +23,9 @@ use overture_mirror::sync::{Refused, check_syncable, check_verifiable};
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+    /// The file each retry, resumed download, and copied file is logged to.
+    #[arg(long, global = true, default_value = "overture-mirror.log")]
+    log: PathBuf,
 }
 
 #[derive(Subcommand)]
@@ -86,9 +95,34 @@ impl Incomplete {
     }
 }
 
+fn log_to(path: &Path) -> Result<(), Box<dyn Error>> {
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|err| format!("opening the log {}: {err}", path.display()))?;
+    let targets = Targets::new()
+        .with_target("object_store", Level::INFO)
+        .with_target("overture_mirror", Level::INFO);
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(Mutex::new(file)),
+        )
+        .with(targets)
+        .init();
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
-    match run(Cli::parse().command).await {
+    let cli = Cli::parse();
+    if let Err(err) = log_to(&cli.log) {
+        eprintln!("{err}");
+        return ExitCode::FAILURE;
+    }
+    match run(cli.command).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("{err}");

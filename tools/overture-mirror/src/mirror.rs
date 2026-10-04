@@ -7,7 +7,9 @@ use futures::{StreamExt, TryStreamExt};
 use object_store::aws::AmazonS3Builder;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
-use object_store::{BackoffConfig, ObjectMeta, ObjectStore, ObjectStoreExt, RetryConfig};
+use object_store::{
+    BackoffConfig, ClientOptions, ObjectMeta, ObjectStore, ObjectStoreExt, RetryConfig,
+};
 use tokio::io::{AsyncWriteExt, BufWriter};
 
 use crate::location::Location;
@@ -20,6 +22,10 @@ const REGION: &str = "us-west-2";
 const CONCURRENT_COPIES: usize = 8;
 
 const WRITE_BUFFER: usize = 8 << 20;
+
+const STALL_TIMEOUT: Duration = Duration::from_secs(60);
+
+const MIB: f64 = (1 << 20) as f64;
 
 const PARTIAL: &str = ".part";
 
@@ -99,6 +105,11 @@ impl Source {
                     .with_region(REGION)
                     .with_skip_signature(true)
                     .with_retry(patient_retries())
+                    .with_client_options(
+                        ClientOptions::new()
+                            .with_timeout_disabled()
+                            .with_read_timeout(STALL_TIMEOUT),
+                    )
                     .build()?;
                 Ok(Self::new(Arc::new(store), prefix.clone()))
             }
@@ -186,6 +197,7 @@ impl Source {
             .await
             .map_err(MirrorError::local_io(&partial))?;
         let mut file = BufWriter::with_capacity(WRITE_BUFFER, file);
+        let started = std::time::Instant::now();
         let mut chunks = self.store.get(&object.location).await?.into_stream();
         while let Some(chunk) = chunks.try_next().await? {
             file.write_all(&chunk)
@@ -196,6 +208,13 @@ impl Source {
         file.flush()
             .await
             .map_err(MirrorError::local_io(&partial))?;
+        let seconds = started.elapsed().as_secs_f64();
+        tracing::info!(
+            "copied {} ({:.1} MiB) in {seconds:.1}s, {:.1} MiB/s",
+            object.location,
+            object.size as f64 / MIB,
+            object.size as f64 / MIB / seconds.max(f64::EPSILON),
+        );
         tokio::fs::rename(&partial, local)
             .await
             .map_err(MirrorError::local_io(local))

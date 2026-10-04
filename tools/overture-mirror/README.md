@@ -60,9 +60,15 @@ signature matches the bucket's copy counts as complete, and `sync` copies every 
 The bucket's half of a signature takes two ranged reads, made only where a local file of the
 right size exists.
 
-A request to the bucket that fails is retried for up to 30 minutes. The first wait is 1 second,
-and each wait doubles, up to 60 seconds. A failure that outlasts the retries stops the sync, and
-the next run resumes from what it copied.
+A download has no overall deadline, since a large file on a slow connection takes minutes. A
+download that receives no bytes for 60 seconds counts as stalled. A request to the bucket that
+fails or stalls is retried for up to 30 minutes, and an interrupted download resumes from the
+byte it reached. The first wait is 1 second, and each wait doubles, up to 60 seconds. A failure
+that outlasts the retries stops the sync, and the next run resumes from what it copied.
+
+Each run appends to `overture-mirror.log`, or to the file `--log` names. It records each retry
+and resumed download, and each copied file with its size, time, and rate. To see why a sync has
+slowed, follow it in a second terminal with `tail -f overture-mirror.log`.
 
 A file is written under a `.part` suffix and renamed once complete. An interrupted copy
 therefore leaves a `.part` file, never a truncated file under the real name.
