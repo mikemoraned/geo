@@ -1,0 +1,17 @@
+import 'mirror.just'
+
+# Install the AWS CLI the other recipes read the bucket with.
+prerequisites:
+    brew install awscli
+
+# List the releases the bucket serves, marking each that a later release of the same date supersedes.
+releases:
+    cargo run -q --release -- releases
+
+# Copy one release whole into the mirror. Refuses a superseded release. Takes hours and hundreds of GB.
+sync release:
+    cargo run -q --release -- sync {{release}} --mirror "{{overture_mirror}}"
+
+# Run the tests.
+test:
+    cargo nextest run

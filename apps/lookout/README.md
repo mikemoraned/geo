@@ -23,7 +23,8 @@ PROJ and jq for `crs-definitions`, and the wasm target.
 A fresh worktree carries bronze and derives the rest: `just init` fills in the Overture extract
 and re-derives every silver dataset. The extract comes from a local mirror of the Overture bucket
 when its drive is mounted, and from the public bucket otherwise; no live source is touched either
-way.
+way. [`tools/overture-mirror`](../../tools/overture-mirror/README.md) makes the mirror and states
+where it is.
 
 Gold is packed when it is needed rather than by `init`, and each packing adopts what it wrote:
 `crossings.version` and `sessions.version` name the versions in play. The device's build script

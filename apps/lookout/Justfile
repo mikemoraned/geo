@@ -1,3 +1,5 @@
+import '../../tools/overture-mirror/mirror.just'
+
 git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git diff --quiet 2>/dev/null || echo -dirty)"`
 
 # Install the tools every other recipe needs. See README.md for what each is for.
@@ -113,8 +115,6 @@ deploy:
 
 # Set up a fresh worktree's store from what the checkout carries. Gold waits until needed.
 init: bronze-init silver-init
-
-overture_mirror := "/Volumes/PRO-G40/OvertureMaps/data/release"
 
 # Fill in the bronze a checkout leaves out: every recorded Overture extract, from a mirror if mounted.
 bronze-init *args:

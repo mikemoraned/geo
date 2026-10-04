@@ -39,6 +39,14 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   slice how far ground truth recorded at one release carries to the next. The two gold
   versions hold the old and new ids, so the count needs no snapshot of silver. Skipping it
   leaves the question to the first slice that needs ids to persist.
+- **A signature decides which files a resumed sync still needs.** A file's signature is its
+  size, its first 1 KiB, and its last 1 KiB. A local file whose signature matches the remote
+  file's is complete, and every other file is copied again. A copy of a whole release takes
+  hours, and a copy that stops part-way restarts from what is already on the drive. Reading the
+  remote halves takes two ranged reads per object, about 2,600 for 2026-09-23.1's 1,278.
+- **`verify` applies the same signature check to a mirrored release**, with no copy. It reports
+  each file missing locally, differing from the remote, or present locally alone. It confirms an
+  existing mirror is complete without a second download.
 - **The crossing-check baseline is taken before silver is re-derived.** `just crossing-checks`
   reads the silver the store holds, and `just silver-init` overwrites it. Without the baseline
   there are no old counts to compare against.
@@ -53,19 +61,28 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### The mirror, held in one place
 
-- [ ] Hold the mirror's path once, in `tools/overture-mirror/mirror.just`, and import it from
+- [x] Hold the mirror's path once, in `tools/overture-mirror/mirror.just`, and import it from
       that dir's Justfile and from `apps/lookout/Justfile` in place of its `overture_mirror`
       literal.
-- [ ] Capture the mirroring in `tools/overture-mirror/Justfile`: one recipe listing the
+- [x] Capture the mirroring in `tools/overture-mirror/Justfile`: one recipe listing the
       releases `s3://overturemaps-us-west-2/release/` holds, one syncing a named release whole
       to the mirror with `--no-sign-request`. Reasoning in comments, as
       `tools/motis-server/Justfile` has it.
-- [ ] Make the listing recipe mark each release a later `.N` of the same date supersedes, and
+      The reasoning went in `tools/overture-mirror/README.md` instead, since the comment rule
+      limits a recipe comment to its one-line help.
+- [x] Make the listing recipe mark each release a later `.N` of the same date supersedes, and
       make the sync recipe refuse one.
-- [ ] State in the "A release is immutable" section of `docs/overture.md` that a later `.N`
+- [x] State in the "A release is immutable" section of `docs/overture.md` that a later `.N`
       of the same date replaces the earlier release.
-- [ ] Point `apps/lookout/README.md` at `tools/overture-mirror/` where it says the extract
+- [x] Point `apps/lookout/README.md` at `tools/overture-mirror/` where it says the extract
       comes from a local mirror.
+- [ ] Compute a file's signature in `tools/overture-mirror`, locally and from the bucket by
+      ranged reads.
+- [ ] Make `sync` resumable: compare signatures, and copy only the files missing or differing
+      locally.
+- [ ] Add a `verify` subcommand and recipe, reporting each file missing, differing, or present
+      locally alone.
+- [ ] Update `tools/overture-mirror/README.md` for resuming and for `verify`.
 
 #### The release pin
 
@@ -98,6 +115,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [ ] Run `just test-no-docker` and `just test-geo`.
 
 #### Open questions
+
+- Whether the ranged reads and the copy stay with the AWS CLI or move to an S3 client crate. The
+  CLI starts a process for each ranged read, about 2,600 per release. A crate makes one client
+  for the run, and the Rust rule prefers a dependency to hand-rolled request handling.
 
 - Whether the nested columns kept their shape. 2026-09-23.1 carries every column the
   predicates name, at the top level. A changed struct inside `connectors` or `bbox` shows up

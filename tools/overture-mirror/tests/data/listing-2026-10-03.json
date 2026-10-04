@@ -1,0 +1,15 @@
+{
+    "CommonPrefixes": [
+        {
+            "Prefix": "release/2026-08-19.0/"
+        },
+        {
+            "Prefix": "release/2026-09-23.0/"
+        },
+        {
+            "Prefix": "release/2026-09-23.1/"
+        }
+    ],
+    "RequestCharged": null,
+    "Prefix": "release/"
+}

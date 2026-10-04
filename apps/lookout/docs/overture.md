@@ -11,6 +11,10 @@ public bucket. Old releases age out of it, so the pinned default needs bumping; 
 another. Asking a location for a release it lacks reports the releases it holds, since only a
 mirror answers for an aged-out release.
 
+A later `.N` of the same date replaces the earlier release, which Overture found a fault in. The
+pin names the latest `.N` of its date. An extract already taken from a superseded release stays
+valid, since the manifest records which release it came from.
+
 A release never changes, so an extract is re-fetchable: read again over the same bbox, it answers
 with the same rows. The manifest therefore records the release, and nothing about how it was
 read.
