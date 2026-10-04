@@ -27,8 +27,13 @@ mirror to the path in `mirror.just`.
 The recipes run a Rust binary that reads the bucket anonymously through `object_store`, so the
 machine needs no AWS CLI and no credentials.
 
-`sync` and `verify` refuse a release the source does not hold, and a mirror path that is not a
-directory. `sync` also refuses a superseded release.
+`sync` and `verify` refuse a release the source does not hold, a mirror path that is not a
+directory, and a mirror that is the source's own directory. `sync` also refuses a superseded
+release.
+
+`sync` and `verify` ignore files named in a denylist, wherever they sit. It holds `.DS_Store`,
+which macOS writes into directories opened in Finder. Such a file is never copied, and never
+reported as present locally alone.
 
 ## A mirror holds whole releases
 
@@ -36,13 +41,16 @@ directory. `sync` also refuses a superseded release.
 exists to keep a release readable after it ages out of the bucket. Once the release ages out, a
 theme left out is unreachable. A whole release runs to hundreds of GB: 2026-09-23.1 is 619 GB.
 
-## Progress is shown by theme
+## Progress counts the bytes each command moves
 
-`sync` and `verify` draw a progress bar for each theme of the release, and one for the release
-as a whole. Each bar counts bytes, and shows its rate and the time it predicts is left. A
-spinner on each bar keeps turning while files are in flight. In `sync`, a file already complete
-leaves its bar's total, so the time left reflects only the copying still to do. `verify` reads at most
-2 KiB of each file, so its bars count the bytes checked, and its rate runs far above a copy's.
+`sync` and `verify` draw one progress bar, with a spinner, the bytes done out of the total, the
+rate, and the time left. The total counts the bytes the command reads from the source:
+
+- `sync` counts the size of each file it copies. A file already complete leaves the total, so
+  the time left covers only the copying still to do.
+- `verify` counts the bytes it reads from the source to build each signature, at most 2 KiB a
+  file. A file it reads nothing for, because it is missing locally or its size differs, leaves
+  the total.
 
 ## A sync resumes from what the mirror holds
 

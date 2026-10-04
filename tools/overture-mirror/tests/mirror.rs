@@ -287,3 +287,55 @@ async fn a_partial_copy_in_the_source_is_not_synced() {
     assert_eq!(found, all(Local::Missing));
     assert!(!local(nas.path(), &format!("{SEGMENT}.part")).exists());
 }
+
+#[tokio::test]
+async fn a_denied_file_in_the_source_is_not_synced() {
+    let portable = tempfile::tempdir().expect("tempdir");
+    let nas = tempfile::tempdir().expect("tempdir");
+    sync(
+        &bucket().await,
+        &release(),
+        portable.path(),
+        Display::Hidden,
+    )
+    .await
+    .expect("sync");
+    let finder = portable.path().join("2026-09-23.1/theme=base/.DS_Store");
+    std::fs::write(&finder, b"finder state").expect("leave a .DS_Store");
+
+    let found = sync(
+        &mirror_source(portable.path()),
+        &release(),
+        nas.path(),
+        Display::Hidden,
+    )
+    .await
+    .expect("sync");
+
+    assert_eq!(found, all(Local::Missing));
+    assert!(
+        !nas.path()
+            .join("2026-09-23.1/theme=base/.DS_Store")
+            .exists()
+    );
+}
+
+#[tokio::test]
+async fn a_denied_file_in_the_mirror_is_not_reported_as_local_only() {
+    let bucket = bucket().await;
+    let mirror = tempfile::tempdir().expect("tempdir");
+    sync(&bucket, &release(), mirror.path(), Display::Hidden)
+        .await
+        .expect("sync");
+    std::fs::write(
+        mirror.path().join("2026-09-23.1/theme=base/.DS_Store"),
+        b"finder state",
+    )
+    .expect("leave a .DS_Store");
+
+    let verification = verify(&bucket, &release(), mirror.path(), Display::Hidden)
+        .await
+        .expect("verify");
+
+    assert!(verification.local_only.is_empty());
+}

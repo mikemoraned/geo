@@ -10,7 +10,7 @@ use object_store::{ObjectMeta, ObjectStore, ObjectStoreExt};
 use tokio::io::AsyncWriteExt;
 
 use crate::location::Location;
-use crate::progress::{Display, Progress, Theme};
+use crate::progress::{Display, Progress};
 use crate::release::Release;
 use crate::signature::Signature;
 
@@ -20,11 +20,19 @@ const CONCURRENT_COPIES: usize = 8;
 
 const PARTIAL: &str = ".part";
 
+const DENIED_NAMES: &[&str] = &[".DS_Store"];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Local {
     Complete,
     Missing,
     Differs,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Comparison {
+    local: Local,
+    source_bytes_read: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -100,7 +108,8 @@ impl Source {
             .store
             .list(Some(&prefix))
             .try_filter(|object| {
-                futures::future::ready(!object.location.as_ref().ends_with(PARTIAL))
+                let denied = object.location.filename().is_some_and(is_denied);
+                futures::future::ready(!denied && !object.location.as_ref().ends_with(PARTIAL))
             })
             .try_collect()
             .await?)
@@ -117,15 +126,27 @@ impl Source {
         &self,
         object: &ObjectMeta,
         local: &Path,
-    ) -> Result<Local, MirrorError> {
+    ) -> Result<Comparison, MirrorError> {
+        let unread = |local| Comparison {
+            local,
+            source_bytes_read: 0,
+        };
         let Some(signature) = Signature::of_file(local).map_err(MirrorError::local_io(local))?
         else {
-            return Ok(Local::Missing);
+            return Ok(unread(Local::Missing));
         };
-        if signature.size() != object.size || signature != self.remote_signature(object).await? {
-            return Ok(Local::Differs);
+        if signature.size() != object.size {
+            return Ok(unread(Local::Differs));
         }
-        Ok(Local::Complete)
+        let local = if signature == self.remote_signature(object).await? {
+            Local::Complete
+        } else {
+            Local::Differs
+        };
+        Ok(Comparison {
+            local,
+            source_bytes_read: Signature::read_size(object.size),
+        })
     }
 
     async fn copy(
@@ -134,7 +155,6 @@ impl Source {
         local: &Path,
         progress: &Progress,
     ) -> Result<(), MirrorError> {
-        let theme = self.theme_of(object);
         let parent = local.parent().unwrap_or(local);
         tokio::fs::create_dir_all(parent)
             .await
@@ -150,7 +170,7 @@ impl Source {
             file.write_all(&chunk)
                 .await
                 .map_err(MirrorError::local_io(&partial))?;
-            progress.advance(&theme, chunk.len() as u64);
+            progress.advance(chunk.len() as u64);
         }
         file.flush()
             .await
@@ -167,24 +187,12 @@ impl Source {
         progress: &Progress,
     ) -> Result<Local, MirrorError> {
         let local = self.local_path(mirror, &object.location);
-        let state = self.compare_signatures(object, &local).await?;
+        let state = self.compare_signatures(object, &local).await?.local;
         match state {
-            Local::Complete => progress.skip(&self.theme_of(object), object.size),
+            Local::Complete => progress.skip(object.size),
             Local::Missing | Local::Differs => self.copy(object, &local, progress).await?,
         }
         Ok(state)
-    }
-
-    fn theme_of(&self, object: &ObjectMeta) -> Theme {
-        Theme::of(&self.within_prefix(&object.location))
-    }
-
-    fn progress_over(&self, objects: &[ObjectMeta], display: Display) -> Progress {
-        let files: Vec<(Theme, u64)> = objects
-            .iter()
-            .map(|object| (self.theme_of(object), object.size))
-            .collect();
-        Progress::new(&files, display)
     }
 
     fn within_prefix(&self, location: &ObjectPath) -> ObjectPath {
@@ -209,7 +217,7 @@ pub async fn sync(
     display: Display,
 ) -> Result<BTreeMap<ObjectPath, Local>, MirrorError> {
     let objects = source.objects(release).await?;
-    let progress = &source.progress_over(&objects, display);
+    let progress = &Progress::new(objects.iter().map(|object| object.size).sum(), display);
     let found = futures::stream::iter(objects)
         .map(|object| async move {
             let state = source.ensure(&object, mirror, progress).await?;
@@ -229,7 +237,13 @@ pub async fn verify(
     display: Display,
 ) -> Result<Verification, MirrorError> {
     let objects = source.objects(release).await?;
-    let progress = &source.progress_over(&objects, display);
+    let progress = &Progress::new(
+        objects
+            .iter()
+            .map(|object| Signature::read_size(object.size))
+            .sum(),
+        display,
+    );
     let expected: BTreeSet<PathBuf> = objects
         .iter()
         .map(|object| source.local_path(mirror, &object.location))
@@ -237,9 +251,10 @@ pub async fn verify(
     let remote = futures::stream::iter(objects)
         .map(|object| async move {
             let local = source.local_path(mirror, &object.location);
-            let state = source.compare_signatures(&object, &local).await?;
-            progress.advance(&source.theme_of(&object), object.size);
-            Ok::<_, MirrorError>((source.within_prefix(&object.location), state))
+            let comparison = source.compare_signatures(&object, &local).await?;
+            progress.advance(comparison.source_bytes_read);
+            progress.skip(Signature::read_size(object.size) - comparison.source_bytes_read);
+            Ok::<_, MirrorError>((source.within_prefix(&object.location), comparison.local))
         })
         .buffer_unordered(CONCURRENT_COPIES)
         .try_collect()
@@ -253,6 +268,10 @@ pub async fn verify(
     Ok(Verification { remote, local_only })
 }
 
+fn is_denied(name: &str) -> bool {
+    DENIED_NAMES.contains(&name)
+}
+
 fn local_files(release_dir: &Path) -> Result<Vec<PathBuf>, MirrorError> {
     if !release_dir.is_dir() {
         return Ok(Vec::new());
@@ -260,9 +279,77 @@ fn local_files(release_dir: &Path) -> Result<Vec<PathBuf>, MirrorError> {
     let mut files = Vec::new();
     for entry in walkdir::WalkDir::new(release_dir) {
         let entry = entry?;
-        if entry.file_type().is_file() {
+        if entry.file_type().is_file() && !entry.file_name().to_str().is_some_and(is_denied) {
             files.push(entry.into_path());
         }
     }
     Ok(files)
+}
+
+#[cfg(test)]
+mod tests {
+    use object_store::PutPayload;
+    use object_store::memory::InMemory;
+
+    use super::*;
+
+    const NAME: &str = "2026-09-23.1/theme=base/type=water/part-0.parquet";
+
+    async fn source_holding(bytes: &[u8]) -> (Source, ObjectMeta) {
+        let store = InMemory::new();
+        let location = ObjectPath::from(NAME);
+        store
+            .put(&location, PutPayload::from(bytes.to_vec()))
+            .await
+            .expect("put an object");
+        let object = store.head(&location).await.expect("the object's metadata");
+        (Source::new(Arc::new(store), ObjectPath::default()), object)
+    }
+
+    async fn compared_with(local: Option<&[u8]>) -> Comparison {
+        let (source, object) = source_holding(&[7; 5000]).await;
+        let mirror = tempfile::tempdir().expect("tempdir");
+        let path = source.local_path(mirror.path(), &object.location);
+        if let Some(bytes) = local {
+            std::fs::create_dir_all(path.parent().expect("a parent")).expect("dirs");
+            std::fs::write(&path, bytes).expect("write the local file");
+        }
+        source
+            .compare_signatures(&object, &path)
+            .await
+            .expect("compare")
+    }
+
+    #[tokio::test]
+    async fn a_missing_file_reads_nothing_from_the_source() {
+        assert_eq!(
+            compared_with(None).await,
+            Comparison {
+                local: Local::Missing,
+                source_bytes_read: 0,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_of_another_size_reads_nothing_from_the_source() {
+        assert_eq!(
+            compared_with(Some(&[7; 10])).await,
+            Comparison {
+                local: Local::Differs,
+                source_bytes_read: 0,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn a_file_of_the_same_size_reads_its_signature_from_the_source() {
+        assert_eq!(
+            compared_with(Some(&[7; 5000])).await,
+            Comparison {
+                local: Local::Complete,
+                source_bytes_read: 2048,
+            }
+        );
+    }
 }

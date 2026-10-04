@@ -86,8 +86,9 @@ async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             source,
             mirror,
         }) => {
-            let source = Source::open(&source.source)?;
-            check_syncable(&release, &source.releases().await?, &mirror)?;
+            let location = source.source;
+            let source = Source::open(&location)?;
+            check_syncable(&release, &source.releases().await?, &location, &mirror)?;
             let found = mirror::sync(&source, &release, &mirror, Display::Bars).await?;
             let count = |status| found.values().filter(|found| **found == status).count();
             println!(
@@ -102,8 +103,9 @@ async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             source,
             mirror,
         }) => {
-            let source = Source::open(&source.source)?;
-            check_verifiable(&release, &source.releases().await?, &mirror)?;
+            let location = source.source;
+            let source = Source::open(&location)?;
+            check_verifiable(&release, &source.releases().await?, &location, &mirror)?;
             let verification = mirror::verify(&source, &release, &mirror, Display::Bars).await?;
             for (location, state) in &verification.remote {
                 if *state != Local::Complete {

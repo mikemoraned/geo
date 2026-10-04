@@ -5,7 +5,8 @@
 Both DE and GB are extracted at 2026-07-22.0, while `DEFAULT_RELEASE` says 2026-06-17.0. At
 the end one release — the latest the bucket serves — holds both extracts, and silver, gold, the
 packed device set and the kiosk sessions all derive from them. Both move at once, so a crossing
-count differing between countries differs by geography rather than by release. The mirroring becomes recipes rather than a path typed into one Justfile.
+count differing between countries differs by geography rather than by release. The mirroring
+becomes recipes rather than a path typed into one Justfile.
 
 
 ### Decisions
@@ -63,9 +64,13 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **A source's directories that are not releases, and its `.part` files, are skipped.** A NAS or
   an operating system can add directories of its own beside the releases. A `.part` file is an
   unfinished copy, and a destination never takes one.
-- **Progress and time remaining count bytes, not files.** A release's files vary widely in
-  size, so a count of files predicts a copy's end poorly. Each bar's total is the bytes of the
-  files it covers, and a file adds its size once it is done. Confirmed 2026-10-04.
+- **Progress and time remaining count the bytes a command reads from the source.** A release's
+  files vary widely in size, so a count of files predicts a copy's end poorly. `sync` counts each
+  copied file's size. `verify` counts the signature bytes it reads, at most 2 KiB a file. A file
+  a command reads nothing for leaves the total. Confirmed 2026-10-04.
+- **Files named in a denylist are ignored by `sync` and `verify`.** It holds `.DS_Store`, which
+  Finder writes into a mirror's directories. Copying one, or reporting one as present locally
+  alone, made a mirror fail `verify`. Confirmed 2026-10-04.
 - **`indicatif` draws the spinner and the bars.** It offers spinners, several bars at once, and
   a time remaining for each bar, so nothing of it is hand-rolled. Confirmed 2026-10-04.
 - **The crossing-check baseline is taken before silver is re-derived.** `just crossing-checks`
@@ -122,7 +127,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Show `sync` and `verify` as still active, with a spinner that ticks while files are in
       flight.
 - [x] Show a progress bar of completed bytes for each theme, and one for the release overall.
+      One bar covers the release. A bar per theme overflowed a terminal with fewer rows than the
+      release has themes and types.
 - [x] Show the predicted time remaining for the release, and for each theme.
+      The time is shown for the release alone, as the bar is.
 
 #### The release pin
 

@@ -30,6 +30,13 @@ impl Signature {
         [0..size.min(SIDE), size.saturating_sub(SIDE)..size]
     }
 
+    pub fn read_size(size: u64) -> u64 {
+        Self::ranges(size)
+            .iter()
+            .map(|range| range.end - range.start)
+            .sum()
+    }
+
     pub fn of_file(path: &Path) -> io::Result<Option<Self>> {
         let file = match File::open(path) {
             Ok(file) => file,
@@ -72,6 +79,16 @@ mod tests {
     #[test]
     fn the_ranges_of_a_short_file_each_cover_all_of_it() {
         assert_eq!(Signature::ranges(10), [0..10, 0..10]);
+    }
+
+    #[test]
+    fn a_long_file_reads_a_side_from_each_end() {
+        assert_eq!(Signature::read_size(5000), 2048);
+    }
+
+    #[test]
+    fn a_short_file_reads_all_of_itself_from_each_end() {
+        assert_eq!(Signature::read_size(10), 20);
     }
 
     #[test]
