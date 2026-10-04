@@ -41,16 +41,18 @@ reported as present locally alone.
 exists to keep a release readable after it ages out of the bucket. Once the release ages out, a
 theme left out is unreachable. A whole release runs to hundreds of GiB: 2026-09-23.1 is 577 GiB.
 
-## Progress counts the bytes each command moves
+## Progress is shown in stages
 
-`sync` and `verify` draw one progress bar, with a spinner, the bytes done out of the total, the
-rate, and the time left. The total counts the bytes the command reads from the source:
+Both commands start by checking each file of the release against the source, with a bar labelled
+`checking`. It counts the bytes read from the source to build each signature, at most 2 KiB a
+file. A file read nothing for, because it is missing locally or its size differs, leaves the
+total. `verify` ends there.
 
-- `sync` counts the size of each file it copies. A file already complete leaves the total, so
-  the time left covers only the copying still to do.
-- `verify` counts the bytes it reads from the source to build each signature, at most 2 KiB a
-  file. A file it reads nothing for, because it is missing locally or its size differs, leaves
-  the total.
+`sync` then copies the files the check found missing or differing, with a second bar labelled
+`copying`. Its total is the size of those files, fixed before the first download starts, so it
+counts only what is still to come. Where every file is complete, `sync` skips the copying stage.
+
+Each bar shows a spinner, the bytes done out of the total, the rate, and the time left.
 
 ## A sync resumes from what the mirror holds
 

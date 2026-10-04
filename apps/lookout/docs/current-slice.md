@@ -131,6 +131,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       release has themes and types.
 - [x] Show the predicted time remaining for the release, and for each theme.
       The time is shown for the release alone, as the bar is.
+- [x] Split `sync` into a checking stage and a copying stage, each with its own bar, sharing
+      `verify`'s check.
 
 #### The release pin
 

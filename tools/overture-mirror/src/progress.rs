@@ -2,8 +2,7 @@ use std::time::Duration;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
-const TEMPLATE: &str =
-    "{spinner} [{bar:40}] {bytes:>10} / {total_bytes:<10} {binary_bytes_per_sec:>12}  {eta} left";
+const TEMPLATE: &str = "{spinner} {prefix:<8} [{bar:40}] {bytes:>10} / {total_bytes:<10} {binary_bytes_per_sec:>12}  {eta} left";
 
 const TICK: Duration = Duration::from_millis(120);
 
@@ -19,7 +18,7 @@ pub struct Progress {
 }
 
 impl Progress {
-    pub fn new(total: u64, display: Display) -> Self {
+    pub fn new(stage: &'static str, total: u64, display: Display) -> Self {
         let target = match display {
             Display::Bars => ProgressDrawTarget::stderr(),
             Display::Hidden => ProgressDrawTarget::hidden(),
@@ -27,7 +26,9 @@ impl Progress {
         let style = ProgressStyle::with_template(TEMPLATE)
             .expect("TEMPLATE is a constant indicatif accepts")
             .progress_chars("=> ");
-        let bar = ProgressBar::with_draw_target(Some(total), target).with_style(style);
+        let bar = ProgressBar::with_draw_target(Some(total), target)
+            .with_style(style)
+            .with_prefix(stage);
         bar.enable_steady_tick(TICK);
         Self { bar }
     }
@@ -62,7 +63,7 @@ mod tests {
 
     #[test]
     fn advancing_counts_bytes_as_done() {
-        let progress = Progress::new(180, Display::Hidden);
+        let progress = Progress::new("testing", 180, Display::Hidden);
 
         progress.advance(40);
 
@@ -71,7 +72,7 @@ mod tests {
 
     #[test]
     fn skipped_bytes_leave_the_work_rather_than_counting_as_done() {
-        let progress = Progress::new(180, Display::Hidden);
+        let progress = Progress::new("testing", 180, Display::Hidden);
 
         progress.skip(30);
 
@@ -80,7 +81,7 @@ mod tests {
 
     #[test]
     fn closing_on_success_completes_the_bar() {
-        let progress = Progress::new(180, Display::Hidden);
+        let progress = Progress::new("testing", 180, Display::Hidden);
         progress.advance(40);
 
         let outcome: Result<(), ()> = progress.close(Ok(()));
@@ -91,7 +92,7 @@ mod tests {
 
     #[test]
     fn closing_on_failure_leaves_the_bar_where_it_stopped() {
-        let progress = Progress::new(180, Display::Hidden);
+        let progress = Progress::new("testing", 180, Display::Hidden);
         progress.advance(40);
 
         let outcome: Result<(), ()> = progress.close(Err(()));

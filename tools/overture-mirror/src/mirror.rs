@@ -44,6 +44,13 @@ struct Comparison {
     source_bytes_read: u64,
 }
 
+#[derive(Debug, Clone)]
+struct Checked {
+    object: ObjectMeta,
+    local: PathBuf,
+    status: LocalStatus,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verification {
     pub remote: BTreeMap<ObjectPath, LocalStatus>,
@@ -220,36 +227,6 @@ impl Source {
             .map_err(MirrorError::local_io(local))
     }
 
-    async fn ensure(
-        &self,
-        object: &ObjectMeta,
-        mirror: &Path,
-        progress: &Progress,
-    ) -> Result<LocalStatus, MirrorError> {
-        let local = self.local_path(mirror, &object.location);
-        let state = self.compare_signatures(object, &local).await?.status;
-        let reason = match state {
-            LocalStatus::Complete => {
-                tracing::info!(
-                    "skipping {} ({:.1} MiB): complete in the mirror",
-                    object.location,
-                    object.size as f64 / MIB,
-                );
-                progress.skip(object.size);
-                return Ok(state);
-            }
-            LocalStatus::Missing => "missing from the mirror",
-            LocalStatus::Differs => "differs from the source",
-        };
-        tracing::info!(
-            "copying {} ({:.1} MiB): {reason}",
-            object.location,
-            object.size as f64 / MIB,
-        );
-        self.copy(object, &local, progress).await?;
-        Ok(state)
-    }
-
     fn within_prefix(&self, location: &ObjectPath) -> ObjectPath {
         location
             .prefix_match(&self.prefix)
@@ -265,23 +242,88 @@ impl Source {
     }
 }
 
+async fn check(
+    source: &Source,
+    release: &Release,
+    mirror: &Path,
+    display: Display,
+) -> Result<BTreeMap<ObjectPath, Checked>, MirrorError> {
+    let objects = source.objects(release).await?;
+    let to_read = objects
+        .iter()
+        .map(|object| Signature::read_size(object.size))
+        .sum();
+    let progress = &Progress::new("checking", to_read, display);
+    let checked = futures::stream::iter(objects)
+        .map(|object| async move {
+            let local = source.local_path(mirror, &object.location);
+            let comparison = source.compare_signatures(&object, &local).await?;
+            tracing::info!("checked {}: {:?}", object.location, comparison.status);
+            progress.advance(comparison.source_bytes_read);
+            progress.skip(Signature::read_size(object.size) - comparison.source_bytes_read);
+            let checked = Checked {
+                object,
+                local,
+                status: comparison.status,
+            };
+            Ok((source.within_prefix(&checked.object.location), checked))
+        })
+        .buffer_unordered(CONCURRENT_COPIES)
+        .try_collect()
+        .await;
+    progress.close(checked)
+}
+
+fn statuses(checked: &BTreeMap<ObjectPath, Checked>) -> BTreeMap<ObjectPath, LocalStatus> {
+    checked
+        .iter()
+        .map(|(location, checked)| (location.clone(), checked.status))
+        .collect()
+}
+
 pub async fn sync(
     source: &Source,
     release: &Release,
     mirror: &Path,
     display: Display,
 ) -> Result<BTreeMap<ObjectPath, LocalStatus>, MirrorError> {
-    let objects = source.objects(release).await?;
-    let progress = &Progress::new(objects.iter().map(|object| object.size).sum(), display);
-    let found = futures::stream::iter(objects)
-        .map(|object| async move {
-            let state = source.ensure(&object, mirror, progress).await?;
-            Ok((source.within_prefix(&object.location), state))
+    let checked = check(source, release, mirror, display).await?;
+    let to_copy: Vec<(&Checked, &str)> = checked
+        .values()
+        .filter_map(|checked| {
+            let size = checked.object.size as f64 / MIB;
+            let reason = match checked.status {
+                LocalStatus::Complete => {
+                    tracing::info!(
+                        "skipping {} ({size:.1} MiB): complete in the mirror",
+                        checked.object.location
+                    );
+                    return None;
+                }
+                LocalStatus::Missing => "missing from the mirror",
+                LocalStatus::Differs => "differs from the source",
+            };
+            Some((checked, reason))
         })
-        .buffer_unordered(CONCURRENT_COPIES)
-        .try_collect()
+        .collect();
+    if to_copy.is_empty() {
+        return Ok(statuses(&checked));
+    }
+    let to_download = to_copy.iter().map(|(checked, _)| checked.object.size).sum();
+    let progress = &Progress::new("copying", to_download, display);
+    let copied = futures::stream::iter(to_copy)
+        .map(Ok)
+        .try_for_each_concurrent(CONCURRENT_COPIES, |(checked, reason)| async move {
+            tracing::info!(
+                "copying {} ({:.1} MiB): {reason}",
+                checked.object.location,
+                checked.object.size as f64 / MIB,
+            );
+            source.copy(&checked.object, &checked.local, progress).await
+        })
         .await;
-    progress.close(found)
+    progress.close(copied)?;
+    Ok(statuses(&checked))
 }
 
 pub async fn verify(
@@ -290,39 +332,16 @@ pub async fn verify(
     mirror: &Path,
     display: Display,
 ) -> Result<Verification, MirrorError> {
-    let objects = source.objects(release).await?;
-    let progress = &Progress::new(
-        objects
-            .iter()
-            .map(|object| Signature::read_size(object.size))
-            .sum(),
-        display,
-    );
-    let objects: Vec<(ObjectMeta, PathBuf)> = objects
-        .into_iter()
-        .map(|object| {
-            let local = source.local_path(mirror, &object.location);
-            (object, local)
-        })
-        .collect();
-    let expected: BTreeSet<PathBuf> = objects.iter().map(|(_, local)| local.clone()).collect();
-    let remote = futures::stream::iter(objects)
-        .map(|(object, local)| async move {
-            let comparison = source.compare_signatures(&object, &local).await?;
-            tracing::info!("checked {}: {:?}", object.location, comparison.status);
-            progress.advance(comparison.source_bytes_read);
-            progress.skip(Signature::read_size(object.size) - comparison.source_bytes_read);
-            Ok::<_, MirrorError>((source.within_prefix(&object.location), comparison.status))
-        })
-        .buffer_unordered(CONCURRENT_COPIES)
-        .try_collect()
-        .await;
-    let remote = progress.close(remote)?;
+    let checked = check(source, release, mirror, display).await?;
+    let expected: BTreeSet<&PathBuf> = checked.values().map(|checked| &checked.local).collect();
     let local_only = local_files(&mirror.join(release.to_string()))?
         .into_iter()
         .filter(|path| !expected.contains(path))
         .collect();
-    Ok(Verification { remote, local_only })
+    Ok(Verification {
+        remote: statuses(&checked),
+        local_only,
+    })
 }
 
 fn is_denied(name: &str) -> bool {
