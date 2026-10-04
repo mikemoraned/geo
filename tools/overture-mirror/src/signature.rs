@@ -4,21 +4,19 @@ use std::ops::Range;
 use std::os::unix::fs::FileExt;
 use std::path::Path;
 
-pub const SIDE: u64 = 1024;
+const SIDE: u64 = 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Signature {
     size: u64,
-    head: Vec<u8>,
-    tail: Vec<u8>,
+    ends: Vec<u8>,
 }
 
 impl Signature {
-    pub fn new(size: u64, head: impl Into<Vec<u8>>, tail: impl Into<Vec<u8>>) -> Self {
+    pub fn new(size: u64, ends: impl Into<Vec<u8>>) -> Self {
         Self {
             size,
-            head: head.into(),
-            tail: tail.into(),
+            ends: ends.into(),
         }
     }
 
@@ -50,7 +48,7 @@ impl Signature {
             Ok(bytes)
         };
         let [head, tail] = Self::ranges(size);
-        Ok(Some(Self::new(size, read(head)?, read(tail)?)))
+        Ok(Some(Self::new(size, [read(head)?, read(tail)?].concat())))
     }
 }
 
@@ -68,7 +66,7 @@ mod tests {
     fn of_bytes(bytes: &[u8]) -> Signature {
         let [head, tail] = Signature::ranges(bytes.len() as u64);
         let slice = |range: Range<u64>| &bytes[range.start as usize..range.end as usize];
-        Signature::new(bytes.len() as u64, slice(head), slice(tail))
+        Signature::new(bytes.len() as u64, [slice(head), slice(tail)].concat())
     }
 
     #[test]

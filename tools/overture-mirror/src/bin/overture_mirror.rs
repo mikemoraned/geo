@@ -1,13 +1,15 @@
+use std::collections::BTreeMap;
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
+use object_store::path::Path as ObjectPath;
 use overture_mirror::location::{Location, OVERTURE};
-use overture_mirror::mirror::{self, Local, Source};
+use overture_mirror::mirror::{self, LocalStatus, Source};
 use overture_mirror::progress::Display;
 use overture_mirror::release::{Release, find_superseded};
-use overture_mirror::sync::{check_syncable, check_verifiable};
+use overture_mirror::sync::{Refused, check_syncable, check_verifiable};
 
 /// Mirror Overture Maps releases from the public bucket, or from one mirror to another.
 #[derive(Parser)]
@@ -47,6 +49,26 @@ struct Transfer {
     mirror: PathBuf,
 }
 
+type Check = fn(&Release, &[Release], &Location, &Path) -> Result<(), Refused>;
+
+impl Transfer {
+    async fn open(&self, check: Check) -> Result<Source, Box<dyn Error>> {
+        let location = &self.source.source;
+        let source = Source::open(location)?;
+        check(
+            &self.release,
+            &source.releases().await?,
+            location,
+            &self.mirror,
+        )?;
+        Ok(source)
+    }
+}
+
+fn files_with_status(found: &BTreeMap<ObjectPath, LocalStatus>, status: LocalStatus) -> usize {
+    found.values().filter(|each| **each == status).count()
+}
+
 #[derive(Debug, thiserror::Error)]
 #[error(
     "{release} in the mirror is incomplete: {missing} missing, {differing} differing, {local_only} present locally alone"
@@ -56,6 +78,12 @@ struct Incomplete {
     missing: usize,
     differing: usize,
     local_only: usize,
+}
+
+impl Incomplete {
+    fn is_empty(&self) -> bool {
+        self.missing + self.differing + self.local_only == 0
+    }
 }
 
 #[tokio::main]
@@ -81,54 +109,40 @@ async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
                 }
             }
         }
-        Commands::Sync(Transfer {
-            release,
-            source,
-            mirror,
-        }) => {
-            let location = source.source;
-            let source = Source::open(&location)?;
-            check_syncable(&release, &source.releases().await?, &location, &mirror)?;
+        Commands::Sync(transfer) => {
+            let source = transfer.open(check_syncable).await?;
+            let Transfer {
+                release, mirror, ..
+            } = transfer;
             let found = mirror::sync(&source, &release, &mirror, Display::Bars).await?;
-            let count = |status| found.values().filter(|found| **found == status).count();
             println!(
                 "{release}: {} already complete, {} copied, {} recopied",
-                count(Local::Complete),
-                count(Local::Missing),
-                count(Local::Differs)
+                files_with_status(&found, LocalStatus::Complete),
+                files_with_status(&found, LocalStatus::Missing),
+                files_with_status(&found, LocalStatus::Differs)
             );
         }
-        Commands::Verify(Transfer {
-            release,
-            source,
-            mirror,
-        }) => {
-            let location = source.source;
-            let source = Source::open(&location)?;
-            check_verifiable(&release, &source.releases().await?, &location, &mirror)?;
+        Commands::Verify(transfer) => {
+            let source = transfer.open(check_verifiable).await?;
+            let Transfer {
+                release, mirror, ..
+            } = transfer;
             let verification = mirror::verify(&source, &release, &mirror, Display::Bars).await?;
             for (location, state) in &verification.remote {
-                if *state != Local::Complete {
+                if *state != LocalStatus::Complete {
                     println!("{state:?}  {location}");
                 }
             }
             for path in &verification.local_only {
                 println!("LocalOnly  {}", path.display());
             }
-            let count = |status| {
-                verification
-                    .remote
-                    .values()
-                    .filter(|found| **found == status)
-                    .count()
-            };
             let incomplete = Incomplete {
                 release: release.clone(),
-                missing: count(Local::Missing),
-                differing: count(Local::Differs),
+                missing: files_with_status(&verification.remote, LocalStatus::Missing),
+                differing: files_with_status(&verification.remote, LocalStatus::Differs),
                 local_only: verification.local_only.len(),
             };
-            if incomplete.missing + incomplete.differing + incomplete.local_only > 0 {
+            if !incomplete.is_empty() {
                 return Err(incomplete.into());
             }
             println!(

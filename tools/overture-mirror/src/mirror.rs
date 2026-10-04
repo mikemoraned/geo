@@ -7,23 +7,25 @@ use object_store::aws::AmazonS3Builder;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectMeta, ObjectStore, ObjectStoreExt};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWriteExt, BufWriter};
 
 use crate::location::Location;
 use crate::progress::{Display, Progress};
 use crate::release::Release;
 use crate::signature::Signature;
 
-pub const REGION: &str = "us-west-2";
+const REGION: &str = "us-west-2";
 
 const CONCURRENT_COPIES: usize = 8;
+
+const WRITE_BUFFER: usize = 8 << 20;
 
 const PARTIAL: &str = ".part";
 
 const DENIED_NAMES: &[&str] = &[".DS_Store"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Local {
+pub enum LocalStatus {
     Complete,
     Missing,
     Differs,
@@ -31,13 +33,13 @@ pub enum Local {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Comparison {
-    local: Local,
+    status: LocalStatus,
     source_bytes_read: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verification {
-    pub remote: BTreeMap<ObjectPath, Local>,
+    pub remote: BTreeMap<ObjectPath, LocalStatus>,
     pub local_only: BTreeSet<PathBuf>,
 }
 
@@ -45,6 +47,8 @@ pub struct Verification {
 pub enum MirrorError {
     #[error("reading the source: {0}")]
     Store(#[from] object_store::Error),
+    #[error("reading the mirror: {0}")]
+    Task(#[from] tokio::task::JoinError),
     #[error("walking the mirror: {0}")]
     Walk(#[from] walkdir::Error),
     #[error("{}: {source}", path.display())]
@@ -108,18 +112,17 @@ impl Source {
             .store
             .list(Some(&prefix))
             .try_filter(|object| {
-                let denied = object.location.filename().is_some_and(is_denied);
-                futures::future::ready(!denied && !object.location.as_ref().ends_with(PARTIAL))
+                let name = object.location.filename().unwrap_or_default();
+                futures::future::ready(!is_denied(name) && !is_partial(name))
             })
             .try_collect()
             .await?)
     }
 
     async fn remote_signature(&self, object: &ObjectMeta) -> Result<Signature, MirrorError> {
-        let [head, tail] = Signature::ranges(object.size);
-        let head = self.store.get_range(&object.location, head).await?;
-        let tail = self.store.get_range(&object.location, tail).await?;
-        Ok(Signature::new(object.size, head, tail))
+        let ranges = Signature::ranges(object.size);
+        let ends = self.store.get_ranges(&object.location, &ranges).await?;
+        Ok(Signature::new(object.size, ends.concat()))
     }
 
     async fn compare_signatures(
@@ -127,24 +130,27 @@ impl Source {
         object: &ObjectMeta,
         local: &Path,
     ) -> Result<Comparison, MirrorError> {
-        let unread = |local| Comparison {
-            local,
+        let unread = |status| Comparison {
+            status,
             source_bytes_read: 0,
         };
-        let Some(signature) = Signature::of_file(local).map_err(MirrorError::local_io(local))?
+        let path = local.to_path_buf();
+        let Some(signature) = tokio::task::spawn_blocking(move || Signature::of_file(&path))
+            .await?
+            .map_err(MirrorError::local_io(local))?
         else {
-            return Ok(unread(Local::Missing));
+            return Ok(unread(LocalStatus::Missing));
         };
         if signature.size() != object.size {
-            return Ok(unread(Local::Differs));
+            return Ok(unread(LocalStatus::Differs));
         }
-        let local = if signature == self.remote_signature(object).await? {
-            Local::Complete
+        let status = if signature == self.remote_signature(object).await? {
+            LocalStatus::Complete
         } else {
-            Local::Differs
+            LocalStatus::Differs
         };
         Ok(Comparison {
-            local,
+            status,
             source_bytes_read: Signature::read_size(object.size),
         })
     }
@@ -162,9 +168,10 @@ impl Source {
         let mut partial = local.as_os_str().to_owned();
         partial.push(PARTIAL);
         let partial = PathBuf::from(partial);
-        let mut file = tokio::fs::File::create(&partial)
+        let file = tokio::fs::File::create(&partial)
             .await
             .map_err(MirrorError::local_io(&partial))?;
+        let mut file = BufWriter::with_capacity(WRITE_BUFFER, file);
         let mut chunks = self.store.get(&object.location).await?.into_stream();
         while let Some(chunk) = chunks.try_next().await? {
             file.write_all(&chunk)
@@ -185,12 +192,14 @@ impl Source {
         object: &ObjectMeta,
         mirror: &Path,
         progress: &Progress,
-    ) -> Result<Local, MirrorError> {
+    ) -> Result<LocalStatus, MirrorError> {
         let local = self.local_path(mirror, &object.location);
-        let state = self.compare_signatures(object, &local).await?.local;
+        let state = self.compare_signatures(object, &local).await?.status;
         match state {
-            Local::Complete => progress.skip(object.size),
-            Local::Missing | Local::Differs => self.copy(object, &local, progress).await?,
+            LocalStatus::Complete => progress.skip(object.size),
+            LocalStatus::Missing | LocalStatus::Differs => {
+                self.copy(object, &local, progress).await?
+            }
         }
         Ok(state)
     }
@@ -215,7 +224,7 @@ pub async fn sync(
     release: &Release,
     mirror: &Path,
     display: Display,
-) -> Result<BTreeMap<ObjectPath, Local>, MirrorError> {
+) -> Result<BTreeMap<ObjectPath, LocalStatus>, MirrorError> {
     let objects = source.objects(release).await?;
     let progress = &Progress::new(objects.iter().map(|object| object.size).sum(), display);
     let found = futures::stream::iter(objects)
@@ -244,17 +253,20 @@ pub async fn verify(
             .sum(),
         display,
     );
-    let expected: BTreeSet<PathBuf> = objects
-        .iter()
-        .map(|object| source.local_path(mirror, &object.location))
-        .collect();
-    let remote = futures::stream::iter(objects)
-        .map(|object| async move {
+    let objects: Vec<(ObjectMeta, PathBuf)> = objects
+        .into_iter()
+        .map(|object| {
             let local = source.local_path(mirror, &object.location);
+            (object, local)
+        })
+        .collect();
+    let expected: BTreeSet<PathBuf> = objects.iter().map(|(_, local)| local.clone()).collect();
+    let remote = futures::stream::iter(objects)
+        .map(|(object, local)| async move {
             let comparison = source.compare_signatures(&object, &local).await?;
             progress.advance(comparison.source_bytes_read);
             progress.skip(Signature::read_size(object.size) - comparison.source_bytes_read);
-            Ok::<_, MirrorError>((source.within_prefix(&object.location), comparison.local))
+            Ok::<_, MirrorError>((source.within_prefix(&object.location), comparison.status))
         })
         .buffer_unordered(CONCURRENT_COPIES)
         .try_collect()
@@ -270,6 +282,10 @@ pub async fn verify(
 
 fn is_denied(name: &str) -> bool {
     DENIED_NAMES.contains(&name)
+}
+
+fn is_partial(name: &str) -> bool {
+    name.ends_with(PARTIAL)
 }
 
 fn local_files(release_dir: &Path) -> Result<Vec<PathBuf>, MirrorError> {
@@ -325,7 +341,7 @@ mod tests {
         assert_eq!(
             compared_with(None).await,
             Comparison {
-                local: Local::Missing,
+                status: LocalStatus::Missing,
                 source_bytes_read: 0,
             }
         );
@@ -336,7 +352,7 @@ mod tests {
         assert_eq!(
             compared_with(Some(&[7; 10])).await,
             Comparison {
-                local: Local::Differs,
+                status: LocalStatus::Differs,
                 source_bytes_read: 0,
             }
         );
@@ -347,7 +363,7 @@ mod tests {
         assert_eq!(
             compared_with(Some(&[7; 5000])).await,
             Comparison {
-                local: Local::Complete,
+                status: LocalStatus::Complete,
                 source_bytes_read: 2048,
             }
         );
