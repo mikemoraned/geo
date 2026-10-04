@@ -5,7 +5,8 @@ use std::sync::Arc;
 use object_store::memory::InMemory;
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStoreExt, PutPayload};
-use overture_mirror::mirror::{Bucket, Local, Verification, sync, verify};
+use overture_mirror::location::Location;
+use overture_mirror::mirror::{Local, Source, Verification, sync, verify};
 use overture_mirror::release::Release;
 
 const WATER: &str = "release/2026-09-23.1/theme=base/type=water/part-0.parquet";
@@ -16,7 +17,7 @@ fn contents(seed: u8) -> Vec<u8> {
     (0..5000u32).map(|i| (i as u8).wrapping_mul(seed)).collect()
 }
 
-async fn bucket() -> Bucket {
+async fn bucket() -> Source {
     let store = InMemory::new();
     for (seed, name) in [(3, WATER), (5, SEGMENT), (7, DIVISION)] {
         store
@@ -31,7 +32,7 @@ async fn bucket() -> Bucket {
         )
         .await
         .expect("put an object");
-    Bucket::new(Arc::new(store))
+    Source::new(Arc::new(store), ObjectPath::from("release"))
 }
 
 fn release() -> Release {
@@ -42,10 +43,14 @@ fn local(mirror: &Path, name: &str) -> std::path::PathBuf {
     mirror.join(name.trim_start_matches("release/"))
 }
 
+fn within_release_prefix(name: &str) -> ObjectPath {
+    ObjectPath::from(name.trim_start_matches("release/"))
+}
+
 fn all(status: Local) -> BTreeMap<ObjectPath, Local> {
     [WATER, SEGMENT, DIVISION]
         .into_iter()
-        .map(|name| (ObjectPath::from(name), status))
+        .map(|name| (within_release_prefix(name), status))
         .collect()
 }
 
@@ -113,9 +118,9 @@ async fn a_resumed_sync_recopies_only_the_damaged_and_missing_objects() {
     assert_eq!(
         found,
         BTreeMap::from([
-            (ObjectPath::from(WATER), Local::Differs),
-            (ObjectPath::from(SEGMENT), Local::Differs),
-            (ObjectPath::from(DIVISION), Local::Missing),
+            (within_release_prefix(WATER), Local::Differs),
+            (within_release_prefix(SEGMENT), Local::Differs),
+            (within_release_prefix(DIVISION), Local::Missing),
         ])
     );
     for (seed, name) in [(3, WATER), (5, SEGMENT), (7, DIVISION)] {
@@ -168,9 +173,9 @@ async fn verify_reports_damaged_missing_and_local_only_files_and_copies_nothing(
         verification,
         Verification {
             remote: BTreeMap::from([
-                (ObjectPath::from(WATER), Local::Differs),
-                (ObjectPath::from(SEGMENT), Local::Complete),
-                (ObjectPath::from(DIVISION), Local::Missing),
+                (within_release_prefix(WATER), Local::Differs),
+                (within_release_prefix(SEGMENT), Local::Complete),
+                (within_release_prefix(DIVISION), Local::Missing),
             ]),
             local_only: BTreeSet::from([leftover]),
         }
@@ -179,4 +184,75 @@ async fn verify_reports_damaged_missing_and_local_only_files_and_copies_nothing(
         std::fs::read(local(mirror.path(), WATER)).expect("read"),
         damaged
     );
+}
+
+fn mirror_source(mirror: &Path) -> Source {
+    Source::open(&Location::Mirror(mirror.to_path_buf())).expect("a mirror source")
+}
+
+#[tokio::test]
+async fn a_mirror_synced_from_another_verifies_against_it() {
+    let portable = tempfile::tempdir().expect("tempdir");
+    let nas = tempfile::tempdir().expect("tempdir");
+    sync(&bucket().await, &release(), portable.path())
+        .await
+        .expect("sync");
+
+    sync(&mirror_source(portable.path()), &release(), nas.path())
+        .await
+        .expect("sync");
+    let verification = verify(&mirror_source(portable.path()), &release(), nas.path())
+        .await
+        .expect("verify");
+
+    assert_eq!(
+        verification
+            .remote
+            .values()
+            .filter(|state| **state == Local::Complete)
+            .count(),
+        3
+    );
+    assert!(verification.local_only.is_empty());
+    assert_eq!(
+        std::fs::read(local(nas.path(), WATER)).expect("read"),
+        contents(3)
+    );
+}
+
+#[tokio::test]
+async fn a_mirror_lists_its_releases_and_skips_other_directories() {
+    let portable = tempfile::tempdir().expect("tempdir");
+    sync(&bucket().await, &release(), portable.path())
+        .await
+        .expect("sync");
+    std::fs::create_dir(portable.path().join("@eaDir")).expect("a directory the NAS adds");
+
+    let releases = mirror_source(portable.path())
+        .releases()
+        .await
+        .expect("the releases");
+
+    assert_eq!(releases, vec![release()]);
+}
+
+#[tokio::test]
+async fn a_partial_copy_in_the_source_is_not_synced() {
+    let portable = tempfile::tempdir().expect("tempdir");
+    let nas = tempfile::tempdir().expect("tempdir");
+    sync(&bucket().await, &release(), portable.path())
+        .await
+        .expect("sync");
+    std::fs::write(
+        local(portable.path(), &format!("{SEGMENT}.part")),
+        b"partial",
+    )
+    .expect("leave a partial copy");
+
+    let found = sync(&mirror_source(portable.path()), &release(), nas.path())
+        .await
+        .expect("sync");
+
+    assert_eq!(found, all(Local::Missing));
+    assert!(!local(nas.path(), &format!("{SEGMENT}.part")).exists());
 }

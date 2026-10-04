@@ -1,6 +1,7 @@
 # overture-mirror
 
-Recipes that copy Overture Maps releases from the public bucket into a local mirror. Any project
+Recipes that copy Overture Maps releases from the public bucket into a local mirror, or from one
+mirror to another. Any project
 in this repo that reads Overture reads the mirror when its drive is mounted. The mirror itself
 lives on an external drive, so the repo records how the mirror is made and not what it holds.
 
@@ -11,18 +12,22 @@ import it. If the drive moves, edit that one line.
 
 ## Recipes
 
-- `just releases` lists the releases the bucket serves, and marks each one that a later
+- `just releases [source]` lists the releases a source holds, and marks each one that a later
   release supersedes.
-- `just sync <release>` copies one release into the mirror, and resumes from the files already
-  there.
-- `just verify <release> [mirror]` checks a mirrored release against the bucket, and copies
-  nothing. The mirror defaults to the path in `mirror.just`.
+- `just sync <release> [source] [mirror]` copies one release from a source into a mirror, and
+  resumes from the files already there.
+- `just verify <release> [source] [mirror]` checks a mirrored release against a source, and
+  copies nothing.
 - `just test` runs the tests.
+
+A source is either a bucket, written `s3://<bucket>/<prefix>`, or a mirror's directory. A
+destination is always a mirror's directory. The source defaults to the Overture bucket, and the
+mirror to the path in `mirror.just`.
 
 The recipes run a Rust binary that reads the bucket anonymously through `object_store`, so the
 machine needs no AWS CLI and no credentials.
 
-`sync` and `verify` refuse a release the bucket does not serve, and a mirror path that is not a
+`sync` and `verify` refuse a release the source does not hold, and a mirror path that is not a
 directory. `sync` also refuses a superseded release.
 
 ## A mirror holds whole releases
@@ -47,6 +52,19 @@ therefore leaves a `.part` file, never a truncated file under the real name.
 `verify` compares each file of a release with the bucket's copy by signature. It lists each file
 missing locally, differing from the bucket, or present locally alone, such as a leftover `.part`
 file. If it lists any file, it exits with a failure.
+
+## One mirror backs up another
+
+A second mirror, such as one on a NAS, takes its releases from the first rather than from the
+bucket. Each command names the first mirror as its source:
+
+```
+just sync 2026-09-23.1 /Volumes/portable/release /Volumes/nas/release
+just verify 2026-09-23.1 /Volumes/portable/release /Volumes/nas/release
+```
+
+A source mirror's directories that are not releases are skipped, since a NAS or an operating
+system can add its own. A `.part` file in a source is an unfinished copy, and is skipped too.
 
 ## A superseded release is never mirrored
 

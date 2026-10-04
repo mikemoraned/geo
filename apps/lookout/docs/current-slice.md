@@ -51,6 +51,18 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **`verify` applies the same signature check to a mirrored release**, with no copy. It reports
   each file missing locally, differing from the remote, or present locally alone. It confirms an
   existing mirror is complete without a second download.
+- **A source is the bucket or a mirror, and a destination is always a mirror.** `releases`,
+  `sync` and `verify` take a source as `s3://<bucket>/<prefix>` or a local path. The user keeps
+  a mirror on a portable disk and backs it up to a second mirror on a NAS. `sync` from the
+  portable mirror makes the backup, and `verify` confirms the two match. A local source reads
+  through `object_store`'s local file store, so signatures and copying work unchanged. The
+  recipes default the source to the Overture bucket and the destination to `overture_mirror`.
+  Confirmed 2026-10-04.
+- **The recipes take the release, then the source, then the destination.** The order reads from
+  source to destination. It moves `verify`'s second argument from the mirror to the source.
+- **A source's directories that are not releases, and its `.part` files, are skipped.** A NAS or
+  an operating system can add directories of its own beside the releases. A `.part` file is an
+  unfinished copy, and a destination never takes one.
 - **The crossing-check baseline is taken before silver is re-derived.** `just crossing-checks`
   reads the silver the store holds, and `just silver-init` overwrites it. Without the baseline
   there are no old counts to compare against.
@@ -87,6 +99,18 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Add a `verify` subcommand and recipe, reporting each file missing, differing, or present
       locally alone.
 - [x] Update `tools/overture-mirror/README.md` for resuming and for `verify`.
+
+#### A mirror as a source
+
+- [x] Generalise `Bucket` into `Source` in `tools/overture-mirror/src/mirror.rs`: an object store,
+      and the prefix its releases sit under.
+- [x] Parse a source from `s3://<bucket>/<prefix>` or a local path.
+- [x] Skip a source's non-release directories in `releases`, and its `.part` files in `sync` and
+      `verify`.
+- [x] Add `--source` to `releases`, `sync` and `verify`, defaulting to the Overture bucket.
+- [x] Give each recipe a `source` argument defaulting to the bucket, and `sync` a `mirror`
+      argument defaulting to `overture_mirror`.
+- [x] Describe verifying and backing up a second mirror in `tools/overture-mirror/README.md`.
 
 #### The release pin
 
