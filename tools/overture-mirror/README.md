@@ -39,7 +39,7 @@ reported as present locally alone.
 
 `sync` copies every theme of a release, not only the themes a project reads today. The mirror
 exists to keep a release readable after it ages out of the bucket. Once the release ages out, a
-theme left out is unreachable. A whole release runs to hundreds of GB: 2026-09-23.1 is 619 GB.
+theme left out is unreachable. A whole release runs to hundreds of GiB: 2026-09-23.1 is 577 GiB.
 
 ## Progress counts the bytes each command moves
 

@@ -15,8 +15,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - **The mirror takes a whole release, not the themes an extract reads.** It serves work
   outside this repo as well, and an unanticipated theme is what a mirror exists to make
-  reachable. 2026-09-23.1 is 619 GB whole. `base/water`, `transportation` and `divisions`
-  together are 131 GB. A question reaching past those three would send the sync back to the
+  reachable. 2026-09-23.1 is 577 GiB whole. `base/water`, `transportation` and `divisions`
+  together are 122 GiB. A question reaching past those three would send the sync back to the
   bucket, by which point the release can have aged out.
 - **The mirroring recipes live at `tools/overture-mirror/`.** Anything in the repo that reads
   Overture uses the mirror, not lookout alone, so it sits beside `tools/motis-server` and
@@ -135,7 +135,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 #### The release pin
 
 - [x] List the bucket's releases, and name the latest. It becomes the new pin.
-- [ ] Confirm the mirror drive has 619 GB free. The user's to check, with the drive mounted.
+- [ ] Confirm the mirror drive has 577 GiB free. The user's to check, with the drive mounted.
 - [ ] Sync 2026-09-23.1 whole to the mirror with the new recipe. The user's to run: it needs
       the drive mounted and hours of transfer. Every task after this one waits on it.
 - [ ] Bump `DEFAULT_RELEASE` in `crates/transport/src/overture.rs` to 2026-09-23.1.
@@ -173,7 +173,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   `20260804T152143Z` was taken on 2026-08-04, and GB `20260927T172559Z` on 2026-09-27. The
   countries already share a release, so this slice moves both from one shared release to the
   next.
-- 2026-10-03: 2026-09-23.1 is 619 GB in 1,278 objects. `base/water` is 29 GB,
-  `transportation` 97 GB and `divisions` 6 GB.
+- 2026-10-03: 2026-09-23.1 is 577 GiB in 1,278 objects. `base/water` is 26.6 GiB,
+  `transportation` 90.3 GiB and `divisions` 5.2 GiB.
 - 2026-10-03: the parquet schemas of 2026-09-23.1 carry `subtype`, `class` and `bbox` on water.
   Segment carries `connectors`, and division_area carries `country` and `division_id`.
