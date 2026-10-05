@@ -263,6 +263,7 @@ channels, an `Arc`, and a slab entry.
 | 0.16.2 | 1.90.0 | no BLE, a real fix, scanning at 1 Hz | 21 minutes over two runs, no reboot |
 | 0.16.2 | 1.90.0 | — | reboots within seconds to two minutes of boot |
 | 0.16.2 | 1.98.1.0 | a real fix | 33 minutes, no reboot |
+| 0.16.2, geo 0.32 | 1.98.1.0 | a real fix, on a windowsill | one double exception in 52 minutes, at 9 minutes |
 | 0.19 | 1.90.0 | `esp32-nimble` running | reboots every 4 seconds to 7 minutes |
 | 0.19 | 1.90.0 | no BLE | ran indefinitely |
 | 0.20 | 1.90.0 | no BLE, no radio of any kind | double exception on the first event |
@@ -274,15 +275,23 @@ board.
 The cause has never been found. Whether the faults of different versions share one cause is not
 established, only that they land in the same machinery.
 
-**On 0.20, the sentence that scans takes about 262 ms**, against 8.3–8.7 ms on 0.16.2. The
-cause is not established. geo also moved, from 0.31 to 0.32, between the two runs, though its
-haversine is unchanged. The timer covers the core's handling of the sentence and nothing else, so
-drawing is not part of it.
+**The sentence that scans slows with each upgrade, on the device alone.** The timer covers the
+core's handling of the sentence and nothing else, so drawing is not part of it.
+
+| crux | geo | slowest sentence, with a fix |
+|---|---|---|
+| 0.16.2 | 0.31 | 8.3–8.7 ms |
+| 0.16.2 | 0.32 | 119.3–119.7 ms |
+| 0.20 | 0.32 | 262.2–262.8 ms |
+
+On the host, all three take 120–200 µs, and geo's haversine source is identical in 0.31 and 0.32.
+The cause therefore lies in how the device build compiles or runs that code, and is not yet
+found.
 
 Three signatures, all reproducible. The double exception on 0.20 and 1.98.1.0 matches the third, with `memcpy` in the loop registers, though no `drop_in_place` frame was symbolised.
 
-**On 0.20 and 1.98.1.0, every double exception stops at the same instruction.** The PC is
-`0x400912e6`, inside `_xt_context_save`, and the stack pointer is `0x3ffbb8f0` each time. An
+**On 1.98.1.0, every double exception stops at the same instruction, on 0.16.2 and 0.20 alike.** The PC is
+`0x400912e6`, inside `_xt_context_save`, and the stack pointer is `0x3ffbb8f0` or `0x3ffbb8b0`. An
 interrupt arrives while `memcpy` is in its loop, and saving the interrupted context spills a
 register window whose stack pointer is zero. The spill writes 32 bytes below it, at `0xffffffe0`.
 A zero stack pointer in a saved window is a corrupted frame, not an exhausted stack. espflash

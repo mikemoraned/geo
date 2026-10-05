@@ -205,8 +205,8 @@ pins current, and gets the arrow generation off 57 before more code depends on i
   feature. The workspace comment in `Cargo.toml` is wrong that geoparquet 0.8 moved to arrow 59:
   0.8 builds on 58.
 - **geo moves to 0.33, the version `sedona-geo` resolves at 0.5.0-rc0.** `crates/domain` and
-  `crates/predictor` pin `geo` themselves, at 0.31. Until they move too, the lock fails. The
-  device build depends on both, so the move needs a device build.
+  `crates/predictor` pin `geo` themselves, at 0.32, the newest beside SedonaDB 0.4.1. Until they
+  move too, the lock fails. The device build depends on both, so the move needs a device build.
 
 ### Tasks
 
