@@ -1,12 +1,15 @@
 use std::sync::LazyLock;
 
-use crux_core::{Core, bridge::BridgeWithSerializer};
+use crux_core::{
+    Core,
+    bridge::{Bridge, JsonFfiFormat},
+};
 use platform_core::Lookout;
 use wasm_bindgen::prelude::*;
 use web_core::Browser;
 
-static BRIDGE: LazyLock<BridgeWithSerializer<Lookout<Browser>>> =
-    LazyLock::new(|| BridgeWithSerializer::new(Core::new()));
+static BRIDGE: LazyLock<Bridge<Lookout<Browser>, JsonFfiFormat>> =
+    LazyLock::new(|| Bridge::new(Core::new()));
 
 #[wasm_bindgen]
 pub fn process_event(event: &str) -> Result<String, JsError> {
@@ -20,21 +23,16 @@ pub fn view() -> Result<String, JsError> {
 
 fn dispatch(event: &str) -> Result<String, String> {
     let mut requests = Vec::new();
-    let mut deserializer = serde_json::Deserializer::from_str(event);
-    let mut serializer = serde_json::Serializer::new(&mut requests);
     BRIDGE
-        .process_event(&mut deserializer, &mut serializer)
+        .update(event.as_bytes(), &mut requests)
         .map_err(|err| err.to_string())?;
-    Ok(String::from_utf8(requests).expect("serde_json writes utf-8"))
+    Ok(String::from_utf8(requests).expect("JSON is utf-8"))
 }
 
 fn projection() -> Result<String, String> {
     let mut view = Vec::new();
-    let mut serializer = serde_json::Serializer::new(&mut view);
-    BRIDGE
-        .view(&mut serializer)
-        .map_err(|err| err.to_string())?;
-    Ok(String::from_utf8(view).expect("serde_json writes utf-8"))
+    BRIDGE.view(&mut view).map_err(|err| err.to_string())?;
+    Ok(String::from_utf8(view).expect("JSON is utf-8"))
 }
 
 #[cfg(test)]

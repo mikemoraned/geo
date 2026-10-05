@@ -29,7 +29,7 @@ esp-idf-svc = { version = "0.52.1", features = ["critical-section"] }
 mipidsi = "0.10"
 embedded-graphics = "0.8"
 # Must match the core's pin — see `../../../platform-core/Cargo.toml`.
-crux_core = "=0.16.2"
+crux_core = "=0.20.0"
 # All imported directly, not over FFI: a Rust shell needs no typegen or bridge. They inherit
 # `edition` and `[lints]` from the lookout workspace, which they still belong to.
 m5-core = { path = "../core" }
