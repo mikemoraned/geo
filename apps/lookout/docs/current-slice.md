@@ -133,10 +133,9 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Open questions
 
-- Whether crux 0.20 or geo 0.32 makes the sentence that scans take 262 ms on the device rather
-  than 8.5 ms. On the host, both take about 130 µs, so the cause is specific to the device. A
-  flash of crux 0.16.2 with geo 0.32 answers it. The light cone adds work to that sentence, so
-  the answer matters before it lands.
+- Why the sentence that scans takes 262 ms on the device rather than 8.5 ms. geo 0.32 takes it
+  to 119 ms, and crux 0.20 to 262 ms. On the host, neither changes it, so the cause lies in the
+  device build. The light cone adds work to that sentence, so the answer matters before it lands.
 - Whether a whole-country poll fits one `map/trips` request. If not, the area mode tiles it.
 
 #### Rejected / deferred
@@ -167,8 +166,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       Four double exceptions in 48 minutes, each matching a known 0.20 signature at the same
       instruction. The sentence that scans took about 262 ms throughout, against 8.3–8.7 ms on
       0.16.2. On the host, neither crux 0.20 nor geo 0.32 changes that sentence's time.
+      A further soak on crux 0.16.2 with geo 0.32 gave one double exception, at the same
+      instruction, in 52 minutes, and 119 ms for that sentence.
 - [x] Rewrite the crux section of `docs/device.md` and the `web/core` pin comment from the soaks.
-- [ ] Note in the SedonaDB 0.5.0 slice in `docs/next-slices.md` that geo moves from 0.32.
+- [x] Note in the SedonaDB 0.5.0 slice in `docs/next-slices.md` that geo moves from 0.32.
 
 #### Motis capture
 
