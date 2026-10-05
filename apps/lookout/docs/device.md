@@ -247,37 +247,46 @@ this:
 - It appears to crash while idle, because the host retries connections in the background and
   fires the callbacks with nobody touching anything.
 
-## `crux_core` after 0.16.2 reboots the device
+## `crux_core` and the double exceptions
 
-**Pin `crux_core` to `=0.16.2`.** Two later versions have been tried on this board and both
-reboot it, so treat a newer one as a change to make deliberately and soak, not a default.
+**The device runs `crux_core` 0.20, and every version tried double-exceptions eventually.**
+0.16.2 crashes as well, so no version is pinned for stability. A newer version is still a change
+to make deliberately and soak.
 
-The reboots are always inside crux's per-effect `Command`/crossbeam machinery, and reach it
-constantly: `App::update` returns a `Command` for every event, each allocating channels, an
-`Arc`, and a slab entry.
+The faults always land inside crux's per-effect `Command`/crossbeam machinery, and the core
+reaches it constantly: `App::update` returns a `Command` for every event, each allocating
+channels, an `Arc`, and a slab entry.
 
-| version | conditions | result |
-|---|---|---|
-| 0.16.2 | BLE running, a client connected, a real fix | 30 minutes, no reboot |
-| 0.16.2 | no BLE, a real fix, scanning at 1 Hz | 21 minutes over two runs, no reboot |
-| 0.19 | `esp32-nimble` running | reboots every 4 seconds to 7 minutes |
-| 0.19 | no BLE | ran indefinitely |
-| 0.20 | no BLE, no radio of any kind | double exception on the first event |
+| version | toolchain | conditions | result |
+|---|---|---|---|
+| 0.16.2 | 1.90.0 | BLE running, a client connected, a real fix | 30 minutes, no reboot |
+| 0.16.2 | 1.90.0 | no BLE, a real fix, scanning at 1 Hz | 21 minutes over two runs, no reboot |
+| 0.16.2 | 1.90.0 | — | reboots within seconds to two minutes of boot |
+| 0.16.2 | 1.98.1.0 | a real fix | 33 minutes, no reboot |
+| 0.19 | 1.90.0 | `esp32-nimble` running | reboots every 4 seconds to 7 minutes |
+| 0.19 | 1.90.0 | no BLE | ran indefinitely |
+| 0.20 | 1.90.0 | no BLE, no radio of any kind | double exception on the first event |
+| 0.20 | 1.98.1.0 | indoors, by a window | four double exceptions in 48 minutes, after 3, 12, 6, and 2 minutes, then 20 minutes clean |
 
-**BLE is not a precondition.** It looked like one while 0.19 was the only broken version
-tried; 0.20 faults with nothing but a UART, a display and an ADC on the board, within a
-second of the first sentence reaching the core.
+**BLE is not a precondition.** 0.20 faults with nothing but a UART, a display and an ADC on the
+board.
 
-The cause has never been found, only avoided, and no release from 0.17 onwards has been seen
-working. Whether 0.20's fault and 0.19's are the same one is not established — only that both
-land in the same machinery.
+The cause has never been found. Whether the faults of different versions share one cause is not
+established, only that they land in the same machinery.
 
-Holding this version costs one associated type, `type Capabilities = ()`, and a `caps`
-argument to `update`, both of which later versions removed. The `#[effect]` API is otherwise
-identical. So the cost is small while a shared core stays close to that API, and stops being
-small once it does not — which is what would make trying a newer release worth another soak.
+**On 0.20, the sentence that scans takes about 262 ms**, against 8.3–8.7 ms on 0.16.2. The
+cause is not established. geo also moved, from 0.31 to 0.32, between the two runs, though its
+haversine is unchanged. The timer covers the core's handling of the sentence and nothing else, so
+drawing is not part of it.
 
-Three signatures, all reproducible:
+Three signatures, all reproducible. The double exception on 0.20 and 1.98.1.0 matches the third, with `memcpy` in the loop registers, though no `drop_in_place` frame was symbolised.
+
+**On 0.20 and 1.98.1.0, every double exception stops at the same instruction.** The PC is
+`0x400912e6`, inside `_xt_context_save`, and the stack pointer is `0x3ffbb8f0` each time. An
+interrupt arrives while `memcpy` is in its loop, and saving the interrupted context spills a
+register window whose stack pointer is zero. The spill writes 32 bytes below it, at `0xffffffe0`.
+A zero stack pointer in a saved window is a corrupted frame, not an exhausted stack. espflash
+labels both addresses `rwip_heap_env`, but `0x3ffbb8f0` lies in the heap, above `_heap_start`.
 
 ```
 crux_core::command::Command::new → Box::new_uninit → CommandContext::spawn
@@ -296,7 +305,7 @@ frame, with drop_in_place<crux_core::core::resolve::RequestHandle<()>> and memcp
 the registers
 ```
 
-The first is a null pointer dereference in a context crux has just constructed. The second is
+The first is a null pointer dereference in a context crux has only now constructed. The second is
 runaway recursion through the allocator. The third reads as a pointer 32 bytes below null,
 dereferenced while a request handle is dropped.
 
@@ -317,8 +326,7 @@ dereference, not an exhausted stack.
 | Allocation churn | Cutting events ~15× (only `RMC`/`GGA` reaching the core) did not stop it |
 | Model on the fragmented heap | Same crash with the core un-boxed, back on the main task's stack |
 
-Three options remain untried: bisecting 0.17 and 0.18 to find the change (one flash and a
-15-minute soak each), porting to pre-`Command` crux 0.10, or dropping crux from the device
+Two options remain untried: porting to pre-`Command` crux 0.10, or dropping crux from the device
 shell. The last forfeits the shared-core argument that put it there.
 
 ## Battery

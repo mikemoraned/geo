@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 # Must match the core's pin — see `../../../platform-core/Cargo.toml`.
-crux_core = "=0.16.2"
+crux_core = "=0.20.0"
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
 domain = { workspace = true }
 platform-core = { workspace = true }

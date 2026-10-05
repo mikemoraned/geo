@@ -65,7 +65,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   0.33.1: geo 0.31 caps `i_overlay` below 4.1, geo 0.33 needs 4.5.1 or later, and one build holds
   one 4.x.
 - **crux_core 0.20.0.** The reboots of 2026-09-21 struck on 0.16.2 too. The 0.20 fault in
-  `docs/device.md` was on the 1.90.0 toolchain, and 0.20 has not run on esp-1.98.1.0.
+  `docs/device.md` was on the 1.90.0 toolchain, and 0.20 has not run on esp-1.98.1.0. Kept on
+  2026-10-05 despite a double exception in the soak, since 0.16.2 crashes as well.
 - **A 30-minute soak after the crux move, against the soak of 2026-10-03.** Both record reboots,
   unused stack, free heap, and the slowest sentence, under the same conditions. The two differ by
   geo as well as crux. Narrowed on 2026-10-04 from a fresh baseline after the geo move: the geo
@@ -132,8 +133,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Open questions
 
-- Whether crux 0.20 changes more than `Capabilities` and `caps`. The first build answers it.
-- What follows if 0.20 reboots the device: a revert to 0.16.2, or bisecting 0.17 to 0.19.
+- Whether crux 0.20 or geo 0.32 makes the sentence that scans take 262 ms on the device rather
+  than 8.5 ms. On the host, both take about 130 µs, so the cause is specific to the device. A
+  flash of crux 0.16.2 with geo 0.32 answers it. The light cone adds work to that sentence, so
+  the answer matters before it lands.
 - Whether a whole-country poll fits one `map/trips` request. If not, the area mode tiles it.
 
 #### Rejected / deferred
@@ -153,11 +156,18 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Run `just test-no-docker`, `just test-geo`, and `just m5plus-build-release`.
 - [-] Soak the release build for 30 minutes, as the baseline. The user runs this.
       Moot: the soak of 2026-10-03 serves as the baseline.
-- [ ] Move `crux_core` to `=0.20.0` in every crate pinning it, and drop `Capabilities` and `_caps`
+- [x] Move `crux_core` to `=0.20.0` in every crate pinning it, and drop `Capabilities` and `_caps`
       from `App`.
-- [ ] Run `just test-no-docker`, `just wasm`, and `just m5plus-build-release`.
-- [ ] Soak for 30 minutes under the conditions of the soak of 2026-10-03. The user runs this.
-- [ ] Rewrite the crux section of `docs/device.md` and the `web/core` pin comment from the soaks.
+      `BridgeWithSerializer` is gone as well. The web bridge and a core test use `Bridge` with
+      `JsonFfiFormat`, and the JSON a shell sees is unchanged.
+- [x] Run `just test-no-docker`, `just wasm`, and `just m5plus-build-release`.
+      `just wasm` exposed a break from the geo move: geo 0.32 depends on `rand`, whose `getrandom`
+      builds for the browser only with its `js` feature. `web-bridge` now enables it.
+- [x] Soak for 30 minutes under the conditions of the soak of 2026-10-03. The user runs this.
+      Four double exceptions in 48 minutes, each matching a known 0.20 signature at the same
+      instruction. The sentence that scans took about 262 ms throughout, against 8.3–8.7 ms on
+      0.16.2. On the host, neither crux 0.20 nor geo 0.32 changes that sentence's time.
+- [x] Rewrite the crux section of `docs/device.md` and the `web/core` pin comment from the soaks.
 - [ ] Note in the SedonaDB 0.5.0 slice in `docs/next-slices.md` that geo moves from 0.32.
 
 #### Motis capture

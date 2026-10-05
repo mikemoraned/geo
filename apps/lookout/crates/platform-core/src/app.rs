@@ -152,9 +152,8 @@ impl<S: Shell> App for Lookout<S> {
     type Model = Model<S>;
     type ViewModel = S::ViewModel;
     type Effect = Effect;
-    type Capabilities = ();
 
-    fn update(&self, event: Event, model: &mut Model<S>, _caps: &()) -> Command<Effect, Event> {
+    fn update(&self, event: Event, model: &mut Model<S>) -> Command<Effect, Event> {
         let change = match event {
             Event::Reset => {
                 *model = Model::default();
@@ -205,7 +204,7 @@ impl<S: Shell> App for Lookout<S> {
 mod tests {
     use chrono::TimeDelta;
     use crux_core::Core;
-    use crux_core::bridge::BridgeWithSerializer;
+    use crux_core::bridge::{Bridge, JsonFfiFormat};
     use domain::Gps;
     use geo_types::Point;
     use predictor::fixtures::{Fix, captured};
@@ -555,14 +554,11 @@ mod tests {
 
     #[test]
     fn the_request_for_crossings_reaches_a_shell_as_json() {
-        let bridge: BridgeWithSerializer<Lookout<Late>> = BridgeWithSerializer::new(Core::new());
+        let bridge: Bridge<Lookout<Late>, JsonFfiFormat> = Bridge::new(Core::new());
         let mut requests = Vec::new();
 
         bridge
-            .process_event(
-                &mut serde_json::Deserializer::from_str(r#""Reset""#),
-                &mut serde_json::Serializer::new(&mut requests),
-            )
+            .update(br#""Reset""#, &mut requests)
             .expect("an event this core knows");
 
         assert_eq!(
