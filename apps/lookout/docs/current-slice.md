@@ -97,8 +97,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   alarm, with the outcome, the lead time, and the run's parameters. An alert with no pass following
   within the horizon is a false alarm.
 - **A Motis train is a synthetic session, built inside the run.** It holds a position every 10 s,
-  the recorded sessions' median, along its legs in `train_segment`. The legs are straight chords, so
-  the score measures straight-line motion, and Motis results are reported apart.
+  the recorded sessions' median, along its legs in `train_segment`. Motis results are reported
+  apart from recorded sessions.
 
 #### Motis capture
 
@@ -106,13 +106,22 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   captured row carries its source's id.
 - **New captures go to `motis_segment_v2`, and `motis_segment` stays as written.** A reader of
   Motis captures reads both, and treats `motis_segment` rows as from the local DELFI server.
-- **The local DELFI server is the only source.** It covers DE, with no usage policy.
+- **Transitous is the sampling source, until a local Motis matches its shapes.** Its rail legs
+  follow the track. The local DELFI server's are straight chords between stops, too coarse for
+  ground truth. Changed on 2026-10-06 from the local server alone.
+- **Polls to Transitous are polite.** One poll every 10 minutes, over Thuringia alone. Each request
+  carries a `User-Agent` naming lookout, its version, and `https://github.com/mikemoraned/geo`, as
+  the usage policy requires. A train's details are fetched once per run, not once per poll. The
+  user posts the plan on Transitous's Matrix channel before the day-long run. Confirmed 2026-10-06.
+- **Anything showing Transitous data links to https://transitous.org/sources/**, as the usage
+  policy requires.
 - **S-Bahn stays out of the capture.** The poller keeps mainline and regional rail, and drops
   `SUBURBAN`, almost half of a country-wide response. Confirmed 2026-10-06.
 - **`motis_poll` gains an area mode**: a country and an optional region, such as DE and
   Thuringia. It queries the area's bounding box, from Overture's `division_area`, and keeps the
   legs touching the area.
-- **A first capture runs an hour, then a day**, and a week once the day's is checked.
+- **A first capture runs an hour, then a day, over Thuringia**, and a week once the day's is
+  checked.
 - **A source's id is a UUID v5 of its fields**, as a session's is. Registering a source twice
   writes one row, and a Motis upgrade makes a new source. Confirmed 2026-10-05.
 - **The poller asks the server for its Motis version**, from `serverConfig.motisVersion` in
@@ -153,7 +162,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - **A Kalman filter**, until the evaluation shows averaging limits the result. It then comes from
   a crate that builds for the device.
-- **Transitous**, until a capture needs GB or curved rail. It becomes a new source row.
+- **A local Motis as the sampling source**, until its rail shapes match Transitous's, for example
+  through the pfaedle slice. It becomes a new source row.
 - **Snapping Motis legs to rail**, to the parked pfaedle slice.
 
 ### Tasks
@@ -196,11 +206,16 @@ Next, so data accumulates while the rest is built.
 - [x] Add a recipe fetching `openapi.yaml` for the version `tools/motis-server/Justfile` pins.
 - [ ] Add `MotisSourceRow` and the bronze dataset `motis_segment_v2` to `crates/medallion-model`.
 - [ ] Register the source in `motis_poll` at startup, writing it only when absent.
+- [ ] Send the `User-Agent` on every request the client makes.
+- [ ] Cache each trip's details in `motis_poll` for the run, so a train costs one `/trip` request.
 - [ ] Read both datasets in `motis_ingest`, and carry `source_id` into `TrainSegmentRow`.
 - [ ] Add the area mode to `motis_poll`, and a recipe for it beside `bronze-poll-motis`.
-- [ ] Capture DE and Thuringia for an hour, then for a day. The user runs it.
-- [ ] Describe the source and `motis_segment_v2` in `docs/medallion.md`, and the area mode in
-      `docs/motis.md`.
+- [ ] Post the plan on Transitous's Matrix channel: area, interval, request count, and
+      `User-Agent`. The user does this.
+- [ ] Capture Thuringia from Transitous every 10 minutes, for an hour, then for a day. The user
+      runs it, the day-long run only after the Matrix post.
+- [ ] Describe the source and `motis_segment_v2` in `docs/medallion.md`, and the area mode,
+      Transitous, and its usage policy in `docs/motis.md`.
 
 #### Ground truth
 
