@@ -6,7 +6,7 @@ external system, rather than of whatever asks it. Running the server is
 
 ## There is no vehicle position, from any German open feed
 
-`GET /api/v1/map/trips` returns stop-to-stop legs (`TripSegment[]`) carrying mode, colour,
+`GET /api/v6/map/trips` returns stop-to-stop legs (`TripSegment[]`) carrying mode, colour,
 from/to places, scheduled and realtime times, and a Google-encoded polyline at precision 5. A
 train's position at an instant is **interpolated** — walk the leg whose departure/arrival spans that
 instant along its decoded polyline — and never a reported GPS position.
@@ -60,7 +60,7 @@ rest out of the answer.
 — and a `displayName` that is null on raw DELFI, since the formatted `IC 2569` is a
 downstream Lua fixup rather than feed content.
 
-`GET /api/v4/trip` answers both, as an itinerary of legs carrying agency and
+`GET /api/v6/trip` answers both, as an itinerary of legs carrying agency and
 `trip_short_name`. Query it with interlined legs unjoined: a stay-seated trip otherwise
 collapses into one leg spanning multiple agencies, and the answer becomes whichever agency
 came first.

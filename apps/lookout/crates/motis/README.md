@@ -32,6 +32,12 @@ A poll resolves the details a segment does not carry — the operating agency an
 once per distinct trip, and caches nothing between polls: the server is local and a poll is
 coarse. A trip whose lookup fails costs its row those two fields and nothing else.
 
+## The client
+
+The client is generated at build time from `openapi.json`, the API spec of the Motis version
+[`tools/motis-server`](../../../../tools/motis-server/Justfile) pins. After a Motis upgrade,
+`just motis-openapi` fetches the matching spec, and the next build regenerates the client from it.
+
 ## Testing against a server
 
 One test drives a poll against a live Motis server at the default base URL, and one against a

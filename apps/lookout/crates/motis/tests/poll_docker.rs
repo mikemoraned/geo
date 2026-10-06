@@ -35,7 +35,7 @@ fn accel(id: u128, t: i64) -> Message {
 async fn mock_motis(segments_json: &str) -> MockServer {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/api/v4/map/trips"))
+        .and(path("/api/v6/map/trips"))
         .respond_with(
             ResponseTemplate::new(200).set_body_raw(segments_json.as_bytes(), "application/json"),
         )
@@ -43,7 +43,7 @@ async fn mock_motis(segments_json: &str) -> MockServer {
         .mount(&server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/api/v4/trip"))
+        .and(path("/api/v6/trip"))
         .respond_with(
             ResponseTemplate::new(200).set_body_raw(TRIP_FIXTURE.as_bytes(), "application/json"),
         )

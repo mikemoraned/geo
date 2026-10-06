@@ -111,6 +111,16 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   Thuringia. It queries the area's bounding box, from Overture's `division_area`, and keeps the
   legs touching the area.
 - **A first capture runs an hour, then a day**, and a week once the day's is checked.
+- **A source's id is a UUID v5 of its fields**, as a session's is. Registering a source twice
+  writes one row, and a Motis upgrade makes a new source. Confirmed 2026-10-05.
+- **The poller asks the server for its Motis version**, from `serverConfig.motisVersion` in
+  `map/initial`. No endpoint names the feed, so `--feed` does. Confirmed 2026-10-05.
+- **A region is recorded as its Overture division id and its name.** The id joins to the extract,
+  and the name is for a reader. Confirmed 2026-10-05.
+- **The Motis client is generated here, from the `openapi.yaml` of the pinned Motis version.**
+  `motis-openapi-progenitor` 0.4.0, the latest, targets API v4 and has no `serverConfig`.
+  `progenitor` reads OpenAPI 3.0 alone, so the build declares the 3.1 spec as 3.0.3, which
+  generates for v2.11.3. Confirmed 2026-10-05.
 
 #### Notifications
 
@@ -176,6 +186,12 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 Next, so data accumulates while the rest is built.
 
 - [ ] Measure one `map/trips` poll over DE at zoom 8: its size, its legs, and its duration.
+- [x] Vendor v2.11.3's `openapi.yaml` in `crates/motis`, and generate the client from it in
+      `build.rs` with `progenitor`.
+      Vendored as `openapi.json`, converted with `yq`, so the build reads it without a YAML crate.
+- [x] Move `crates/motis` to the generated client and the v6 endpoints, and drop
+      `motis-openapi-progenitor`.
+- [x] Add a recipe fetching `openapi.yaml` for the version `tools/motis-server/Justfile` pins.
 - [ ] Add `MotisSourceRow` and the bronze dataset `motis_segment_v2` to `crates/medallion-model`.
 - [ ] Register the source in `motis_poll` at startup, writing it only when absent.
 - [ ] Read both datasets in `motis_ingest`, and carry `source_id` into `TrainSegmentRow`.

@@ -12,8 +12,9 @@ geo = { workspace = true }
 geo-types = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }
-motis-openapi-progenitor = { workspace = true }
 polyline = { workspace = true }
+progenitor-client = "0.11"
+reqwest = { version = "0.12", features = ["json"] }
 redis = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
@@ -28,6 +29,12 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 wkb = { workspace = true }
 
+[build-dependencies]
+openapiv3 = "2"
+prettyplease = "0.2"
+progenitor = "0.11"
+serde_json = { workspace = true }
+syn = "2"
 
 [dev-dependencies]
 geo-traits = { workspace = true }

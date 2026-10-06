@@ -69,8 +69,6 @@ futures = "0.3"
 md5 = "0.7"
 tempfile = "3"
 proptest = "1"
-# Motis `map/trips` client, progenitor-generated from the OpenAPI spec.
-motis-openapi-progenitor = "0.4"
 polyline = "0.11"
 wkb = "0.9"
 geo-types = "0.7"
