@@ -107,6 +107,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **New captures go to `motis_segment_v2`, and `motis_segment` stays as written.** A reader of
   Motis captures reads both, and treats `motis_segment` rows as from the local DELFI server.
 - **The local DELFI server is the only source.** It covers DE, with no usage policy.
+- **S-Bahn stays out of the capture.** The poller keeps mainline and regional rail, and drops
+  `SUBURBAN`, almost half of a country-wide response. Confirmed 2026-10-06.
 - **`motis_poll` gains an area mode**: a country and an optional region, such as DE and
   Thuringia. It queries the area's bounding box, from Overture's `division_area`, and keeps the
   legs touching the area.
@@ -146,7 +148,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - Why the sentence that scans takes 262 ms on the device rather than 8.5 ms. geo 0.32 takes it
   to 119 ms, and crux 0.20 to 262 ms. On the host, neither changes it, so the cause lies in the
   device build. The light cone adds work to that sentence, so the answer matters before it lands.
-- Whether a whole-country poll fits one `map/trips` request. If not, the area mode tiles it.
 
 #### Rejected / deferred
 
@@ -185,7 +186,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 Next, so data accumulates while the rest is built.
 
-- [ ] Measure one `map/trips` poll over DE at zoom 8: its size, its legs, and its duration.
+- [x] Measure one `map/trips` poll over DE at zoom 8: its size, its legs, and its duration.
+      7.1 MB, 7,146 legs, and 0.23 s, at 09:00 on a weekday. One request covers DE.
 - [x] Vendor v2.11.3's `openapi.yaml` in `crates/motis`, and generate the client from it in
       `build.rs` with `progenitor`.
       Vendored as `openapi.json`, converted with `yq`, so the build reads it without a YAML crate.
