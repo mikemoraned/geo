@@ -54,6 +54,12 @@ transit — subway, tram, bus — appears on top of the long-distance and region
 answers with. A query therefore asks for the modes it wants by the zoom it sends, and filters the
 rest out of the answer.
 
+## A whole country fits one request
+
+One `map/trips` request over Germany's bounding box, at zoom 8 and a ten-minute window, returns
+7.1 MB in 0.23 s from a local server. Measured once, at 09:00 on a weekday: 7,146 legs from 2,939
+trips, 3,594 of the legs rail. A poll covering the country therefore needs no tiling.
+
 ## Train number and agency need a second call
 
 `map/trips` carries neither. Its `TripInfo` exposes `routeShortName` — the bare line, `"55"`
