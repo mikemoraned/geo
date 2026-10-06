@@ -1,17 +1,17 @@
-use chrono::{DateTime, Duration, Timelike, Utc};
-use domain::TrainNumber;
-use geo_types::Rect;
-use motis_openapi_progenitor::{
+use crate::api::{
     Client,
     types::{Itinerary, TripSegment},
 };
+use chrono::{DateTime, Duration, Timelike, Utc};
+use domain::TrainNumber;
+use geo_types::Rect;
 
 pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8080";
 
 #[derive(Debug, thiserror::Error)]
 pub enum MotisError {
     #[error("motis trips request failed: {0}")]
-    Request(#[from] motis_openapi_progenitor::Error<()>),
+    Request(#[from] crate::api::Error<crate::api::types::Error>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

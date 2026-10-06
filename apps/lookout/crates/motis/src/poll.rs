@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use crate::api::types::{Mode, TripSegment};
 use chrono::{DateTime, Utc};
-use motis_openapi_progenitor::types::{Mode, TripSegment};
 use redis::aio::MultiplexedConnection;
 use shared::{Message, V0Message, V1Message};
 use telemetry::RawSample;

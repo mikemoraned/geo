@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
+use crate::api::types::TripSegment;
 use chrono::{DateTime, Utc};
 use medallion::Root;
 use medallion_model::MotisSegmentRow;
-use motis_openapi_progenitor::types::TripSegment;
 
 use crate::client::TripDetails;
 

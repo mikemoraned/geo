@@ -138,10 +138,10 @@ mod tests {
 
     use crate::bronze::SegmentLog;
 
+    use crate::api::types::TripSegment;
     use arrow::array::RecordBatch;
     use chrono::TimeZone;
     use medallion::{Country, GEOMETRY, PROJECTED_GEOMETRY};
-    use motis_openapi_progenitor::types::TripSegment;
 
     use super::*;
 

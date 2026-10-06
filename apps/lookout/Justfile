@@ -140,6 +140,10 @@ bronze-record *args:
 bronze-poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 
+# Fetch the API spec of the Motis version tools/motis-server pins; the motis client is generated from it.
+motis-openapi:
+    version=$(just --justfile ../../tools/motis-server/Justfile --evaluate VERSION) && curl -fsSL "https://raw.githubusercontent.com/motis-project/motis/$version/openapi.yaml" | yq -o=json '.' > crates/motis/openapi.json
+
 # Take an Overture extract into bronze. No args fills in every recorded one; `new` takes a fresh one.
 bronze-extract *args:
     cargo run --release -p transport --bin extract -- {{args}}
