@@ -7,6 +7,7 @@ use telemetry::{QUEUE_KEY, RawSample};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
 use testcontainers_modules::redis::{REDIS_PORT, Redis};
+use url::Url;
 use uuid::Uuid;
 
 pub const RAIL_MODES: [&str; 6] = [
@@ -84,11 +85,20 @@ pub struct CapturedSegment {
 pub async fn captured_segments(root: &medallion::Root) -> Vec<CapturedSegment> {
     let query = medallion::Query::new(root.clone());
     query
-        .register(medallion_model::MOTIS_SEGMENT, "captured")
+        .register(medallion_model::MOTIS_SEGMENT_V2, "captured")
         .await
         .expect("register capture log");
     query
         .rows("SELECT mode, agency_name, train_number FROM captured")
         .await
         .expect("read capture log")
+}
+
+pub fn local_source() -> medallion_model::MotisSource {
+    medallion_model::MotisSource {
+        base_url: Url::parse(motis::client::DEFAULT_BASE_URL).expect("a URL"),
+        motis_version: "v2.11.3".parse().expect("a version"),
+        feed: medallion_model::Feed::Local,
+        area: None,
+    }
 }

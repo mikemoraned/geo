@@ -5,13 +5,16 @@ use crate::api::{
 use chrono::{DateTime, Duration, Timelike, Utc};
 use domain::TrainNumber;
 use geo_types::Rect;
+use medallion_model::{MotisVersion, NotAMotisVersion};
 
 pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8080";
 
 #[derive(Debug, thiserror::Error)]
 pub enum MotisError {
-    #[error("motis trips request failed: {0}")]
+    #[error("motis request failed: {0}")]
     Request(#[from] crate::api::Error<crate::api::types::Error>),
+    #[error("motis reports a version this store cannot record: {0}")]
+    Version(#[from] NotAMotisVersion),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -57,6 +60,11 @@ impl MotisClient {
         Self {
             inner: Client::new(base_url),
         }
+    }
+
+    pub async fn motis_version(&self) -> Result<MotisVersion, MotisError> {
+        let initial = self.inner.initial().send().await?.into_inner();
+        Ok(initial.server_config.motis_version.parse()?)
     }
 
     pub async fn trips_in_bbox(
@@ -210,5 +218,15 @@ mod tests {
             details.agency.name.is_some() || details.agency.id.is_some(),
             "expected an agency name or id"
         );
+    }
+
+    #[tokio::test]
+    async fn the_local_server_reports_its_version_end_to_end() {
+        let version = MotisClient::default()
+            .motis_version()
+            .await
+            .expect("ask the local Motis server for its version");
+
+        assert!(version.to_string().starts_with('v'), "{version}");
     }
 }

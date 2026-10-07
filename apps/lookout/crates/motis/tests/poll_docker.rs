@@ -80,7 +80,7 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
     let motis = mock_motis(TRIPS_FIXTURE).await;
 
     let store = tempfile::tempdir().expect("temp store");
-    let log = SegmentLog::new(Root::new(store.path()));
+    let log = SegmentLog::new(Root::new(store.path()), common::local_source().id());
     let client = MotisClient::new(&motis.uri());
     let mut window = PositionWindow::new(Duration::from_secs(30 * 60));
     let config = PollConfig {

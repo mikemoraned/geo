@@ -17,11 +17,11 @@ pub use crossing::{
 pub use gers::{GersId, NotAGersId};
 pub use motis::{
     MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisCaptureRow, MotisSegmentRow, TRAIN_SEGMENT,
-    TrainSegmentRow,
+    TRAIN_SEGMENT_V2, TrainSegmentRowV1, TrainSegmentRowV2,
 };
 pub use motis_source::{
     Area, Feed, MOTIS_SOURCE, MotisSource, MotisSourceId, MotisSourceRow, MotisVersion,
-    NotAMotisSource, NotAMotisVersion, Region,
+    NotAMotisSource, NotAMotisVersion, Region, UnknownFeed,
 };
 pub use overture::{
     DIVISION_ID, EXTRACT_MANIFEST, ExtractManifestRow, OVERTURE_EXTRACT, division_id,
@@ -33,7 +33,7 @@ pub use telemetry::{
     RAW_SAMPLE, RawSampleRow,
 };
 
-pub const ALL: [DatasetInfo; 14] = [
+pub const ALL: [DatasetInfo; 15] = [
     RAW_SAMPLE.info(),
     GPS_READING.info(),
     ACCEL_READING.info(),
@@ -42,6 +42,7 @@ pub const ALL: [DatasetInfo; 14] = [
     MOTIS_SEGMENT_V2.info(),
     MOTIS_SOURCE.info(),
     TRAIN_SEGMENT.info(),
+    TRAIN_SEGMENT_V2.info(),
     SESSION.info(),
     SESSION_SAMPLE.info(),
     WATER_CROSSING.info(),
@@ -88,6 +89,7 @@ mod tests {
                 "session_crossing",
                 "session_sample",
                 "train_segment",
+                "train_segment_v2",
                 "water_crossing"
             ]
         );
@@ -164,7 +166,8 @@ mod tests {
         check_rows_of::<MotisSegmentRow>();
         check_rows_of::<MotisCaptureRow>();
         check_rows_of::<MotisSourceRow>();
-        check_rows_of::<TrainSegmentRow>();
+        check_rows_of::<TrainSegmentRowV1>();
+        check_rows_of::<TrainSegmentRowV2>();
         check_rows_of::<SessionRow>();
         check_rows_of::<SessionSampleRow>();
         check_rows_of::<WaterCrossingRow>();

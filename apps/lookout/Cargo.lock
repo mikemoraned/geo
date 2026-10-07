@@ -4789,6 +4789,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "transport",
+ "url",
  "uuid",
  "wiremock",
  "wkb",

@@ -27,7 +27,7 @@ async fn poll_once_captures_rail_from_local_motis_end_to_end() {
     }
 
     let store = tempfile::tempdir().expect("temp store");
-    let log = SegmentLog::new(Root::new(store.path()));
+    let log = SegmentLog::new(Root::new(store.path()), common::local_source().id());
     let client = MotisClient::default();
     let mut window = PositionWindow::new(Duration::from_secs(30 * 60));
     let config = PollConfig {

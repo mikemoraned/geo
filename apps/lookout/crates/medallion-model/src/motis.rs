@@ -14,6 +14,9 @@ pub const MOTIS_SEGMENT_V2: DatasetSpec<layers::Bronze> =
 pub const TRAIN_SEGMENT: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("train_segment", "departure_date");
 
+pub const TRAIN_SEGMENT_V2: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("train_segment_v2", "departure_date");
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MotisSegmentRow {
     #[serde(with = "chrono::serde::ts_milliseconds")]
@@ -120,7 +123,7 @@ impl Row for MotisCaptureRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TrainSegmentRow {
+pub struct TrainSegmentRowV1 {
     pub trip_id: String,
     pub route_name: Option<String>,
     pub train_number: Option<TrainNumber>,
@@ -136,14 +139,45 @@ pub struct TrainSegmentRow {
     pub arrival: DateTime<Utc>,
 }
 
-impl Row for TrainSegmentRow {
+impl Row for TrainSegmentRowV1 {
     type Layer = layers::Silver;
     const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
 }
 
-impl Dated for TrainSegmentRow {
+impl Dated for TrainSegmentRowV1 {
+    fn partition_date(&self) -> NaiveDate {
+        self.departure.date_naive()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrainSegmentRowV2 {
+    pub source_id: MotisSourceId,
+    pub trip_id: String,
+    pub route_name: Option<String>,
+    pub train_number: Option<TrainNumber>,
+    pub agency_id: Option<String>,
+    pub agency_name: Option<String>,
+    pub mode: String,
+    pub route_color: Option<String>,
+    pub realtime: bool,
+    pub from_stop_id: Option<String>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub departure: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub arrival: DateTime<Utc>,
+}
+
+impl Row for TrainSegmentRowV2 {
+    type Layer = layers::Silver;
+    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT_V2;
+    const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
+    const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
+}
+
+impl Dated for TrainSegmentRowV2 {
     fn partition_date(&self) -> NaiveDate {
         self.departure.date_naive()
     }
@@ -185,7 +219,7 @@ mod tests {
                 .expect("a train_number column")
                 .data_type()
                 .clone(),
-            medallion::fields::<TrainSegmentRow>()
+            medallion::fields::<TrainSegmentRowV1>()
                 .expect("describe the rows")
                 .iter()
                 .find(|field| field.name() == "train_number")
