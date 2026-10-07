@@ -3,11 +3,14 @@ use std::time::Duration;
 use chrono::Utc;
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
+use url::Url;
 
 use medallion::MedallionArgs;
+use medallion_model::{Feed, MotisSource};
 use motis::bronze::SegmentLog;
 use motis::client::{DEFAULT_BASE_URL, MotisClient};
 use motis::poll::{PollConfig, PollOutcome, poll_once};
+use motis::source::register;
 use motis::window::PositionWindow;
 
 const DEFAULT_POLL_INTERVAL_SECS: u64 = 30;
@@ -36,7 +39,10 @@ struct Args {
     zoom: f64,
     /// Base URL of the Motis server.
     #[arg(long, default_value = DEFAULT_BASE_URL)]
-    motis_url: String,
+    motis_url: Url,
+    /// Which feed the Motis server answers from.
+    #[arg(long)]
+    feed: Feed,
     #[command(flatten)]
     medallion: MedallionArgs,
 }
@@ -56,8 +62,22 @@ async fn main() {
         .install_default()
         .expect("install rustls crypto provider");
 
-    let log = SegmentLog::new(root.clone());
-    let client = MotisClient::new(&args.motis_url);
+    let client = MotisClient::new(args.motis_url.as_str().trim_end_matches('/'));
+    let motis_version = client
+        .motis_version()
+        .await
+        .expect("ask the Motis server for its version");
+    let source = MotisSource {
+        base_url: args.motis_url.clone(),
+        motis_version,
+        feed: args.feed,
+        area: None,
+    };
+    let registration = register(&root, &source, Utc::now())
+        .await
+        .expect("record the Motis source");
+    tracing::info!(source_id = %source.id(), ?registration, "recorded the Motis source");
+    let log = SegmentLog::new(root.clone(), source.id());
     let mut window = PositionWindow::new(Duration::from_secs(args.window_age_mins * 60));
     let config = PollConfig {
         recent_lookback: Duration::from_secs(args.recent_lookback_mins * 60),

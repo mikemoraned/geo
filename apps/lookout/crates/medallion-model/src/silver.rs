@@ -2,7 +2,8 @@ use medallion::{RowError, SilverTarget};
 
 use crate::{
     SESSION, SESSION_CROSSING, SESSION_SAMPLE, SessionCrossingRow, SessionRow, SessionSampleRow,
-    TRAIN_SEGMENT, TrainSegmentRow, WATER_CROSSING, WaterCrossingRow,
+    TRAIN_SEGMENT, TRAIN_SEGMENT_V2, TrainSegmentRowV1, TrainSegmentRowV2, WATER_CROSSING,
+    WaterCrossingRow,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -15,10 +16,11 @@ pub enum TargetError {
 
 type Definition = fn() -> Result<SilverTarget, RowError>;
 
-const TARGETS: [(&str, Definition); 5] = [
+const TARGETS: [(&str, Definition); 6] = [
     (SESSION.name, SilverTarget::of::<SessionRow>),
     (SESSION_SAMPLE.name, SilverTarget::of::<SessionSampleRow>),
-    (TRAIN_SEGMENT.name, SilverTarget::of::<TrainSegmentRow>),
+    (TRAIN_SEGMENT.name, SilverTarget::of::<TrainSegmentRowV1>),
+    (TRAIN_SEGMENT_V2.name, SilverTarget::of::<TrainSegmentRowV2>),
     (WATER_CROSSING.name, SilverTarget::of::<WaterCrossingRow>),
     (
         SESSION_CROSSING.name,

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::api::types::TripSegment;
 use chrono::{DateTime, Utc};
 use medallion::Root;
-use medallion_model::MotisSegmentRow;
+use medallion_model::{MotisCaptureRow, MotisSegmentRow, MotisSourceId};
 
 use crate::client::TripDetails;
 
@@ -15,7 +15,7 @@ pub enum BronzeError {
     Write(#[from] medallion::AppendError),
 }
 
-fn segment_row(
+pub(crate) fn segment_row(
     captured_at: DateTime<Utc>,
     segment: &TripSegment,
     details: &HashMap<String, TripDetails>,
@@ -56,11 +56,12 @@ fn segment_row(
 #[derive(Debug, Clone)]
 pub struct SegmentLog {
     root: Root,
+    source_id: MotisSourceId,
 }
 
 impl SegmentLog {
-    pub fn new(root: Root) -> Self {
-        Self { root }
+    pub fn new(root: Root, source_id: MotisSourceId) -> Self {
+        Self { root, source_id }
     }
 
     fn partition(
@@ -69,7 +70,7 @@ impl SegmentLog {
     ) -> Result<medallion::Dataset<medallion::layers::Bronze>, BronzeError> {
         Ok(self
             .root
-            .rows_of::<MotisSegmentRow>()
+            .rows_of::<MotisCaptureRow>()
             .on_date(captured_at.date_naive())?)
     }
 
@@ -83,9 +84,14 @@ impl SegmentLog {
         segments: &[TripSegment],
         details: &HashMap<String, TripDetails>,
     ) -> Result<usize, BronzeError> {
-        let rows: Vec<MotisSegmentRow> = segments
+        let rows: Vec<MotisCaptureRow> = segments
             .iter()
-            .map(|segment| segment_row(captured_at, segment, details))
+            .map(|segment| {
+                MotisCaptureRow::of(
+                    self.source_id.clone(),
+                    segment_row(captured_at, segment, details),
+                )
+            })
             .collect();
 
         self.append_rows(captured_at, &rows).await
@@ -94,7 +100,7 @@ impl SegmentLog {
     pub async fn append_rows(
         &self,
         captured_at: DateTime<Utc>,
-        rows: &[MotisSegmentRow],
+        rows: &[MotisCaptureRow],
     ) -> Result<usize, BronzeError> {
         Ok(self
             .partition(captured_at)?
@@ -108,7 +114,23 @@ mod tests {
     use chrono::TimeZone;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
+    use medallion_model::{Feed, MotisSource};
+    use url::Url;
+
     use super::*;
+
+    fn source() -> MotisSource {
+        MotisSource {
+            base_url: Url::parse("http://127.0.0.1:8080").expect("a URL"),
+            motis_version: "v2.11.3".parse().expect("a version"),
+            feed: Feed::Local,
+            area: None,
+        }
+    }
+
+    fn log_under(path: &std::path::Path) -> SegmentLog {
+        SegmentLog::new(Root::new(path), source().id())
+    }
 
     fn fixture_segments() -> Vec<TripSegment> {
         serde_json::from_str(include_str!("../tests/fixtures/trips.json"))
@@ -127,7 +149,7 @@ mod tests {
     #[tokio::test]
     async fn a_poll_lands_one_file_named_for_its_instant_under_its_polled_date() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        let log = SegmentLog::new(Root::new(tmp.path()));
+        let log = log_under(tmp.path());
         let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
 
         let written = log
@@ -137,18 +159,16 @@ mod tests {
 
         assert_eq!(written, fixture_segments().len());
         let path = log.poll_file(captured_at).expect("path");
-        assert!(
-            path.ends_with(
-                "bronze/motis_segment/polled_date=2026-07-26/20260726T140530000Z.parquet"
-            )
-        );
+        assert!(path.ends_with(
+            "bronze/motis_segment_v2/polled_date=2026-07-26/20260726T140530000Z.parquet"
+        ));
         assert_eq!(read_back(&path).num_rows(), fixture_segments().len());
     }
 
     #[tokio::test]
     async fn the_polyline_is_stored_verbatim() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        let log = SegmentLog::new(Root::new(tmp.path()));
+        let log = log_under(tmp.path());
         let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
         let segments = fixture_segments();
 
@@ -157,7 +177,7 @@ mod tests {
             .expect("append");
 
         let batch = read_back(&log.poll_file(captured_at).expect("path"));
-        let rows: Vec<MotisSegmentRow> = serde_arrow::from_record_batch(&batch).expect("read rows");
+        let rows: Vec<MotisCaptureRow> = serde_arrow::from_record_batch(&batch).expect("read rows");
         assert_eq!(
             rows.iter().map(|r| &r.polyline).collect::<Vec<_>>(),
             segments.iter().map(|s| &s.polyline).collect::<Vec<_>>(),
@@ -170,9 +190,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn every_row_names_the_source_that_captured_it() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let log = log_under(tmp.path());
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
+
+        log.append(captured_at, &fixture_segments(), &HashMap::new())
+            .await
+            .expect("append");
+
+        let batch = read_back(&log.poll_file(captured_at).expect("path"));
+        let rows: Vec<MotisCaptureRow> = serde_arrow::from_record_batch(&batch).expect("read rows");
+        assert!(rows.iter().all(|row| row.source_id == source().id()));
+    }
+
+    #[tokio::test]
     async fn separate_polls_write_separate_files() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        let log = SegmentLog::new(Root::new(tmp.path()));
+        let log = log_under(tmp.path());
         let first = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
         let second = Utc.with_ymd_and_hms(2026, 7, 26, 14, 6, 0).unwrap();
 
@@ -193,7 +228,7 @@ mod tests {
     #[tokio::test]
     async fn an_empty_poll_writes_nothing() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        let log = SegmentLog::new(Root::new(tmp.path()));
+        let log = log_under(tmp.path());
         let captured_at = Utc::now();
 
         let written = log

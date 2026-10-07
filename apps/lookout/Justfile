@@ -138,7 +138,7 @@ bronze-record *args:
 
 # Poll Motis for trips near recent GPS into bronze, redis URL from 1Password. Runs until stopped.
 bronze-poll-motis *args:
-    op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
+    op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- --feed local {{args}}
 
 # Fetch the API spec of the Motis version tools/motis-server pins; the motis client is generated from it.
 motis-openapi:

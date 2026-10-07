@@ -79,12 +79,41 @@ pub enum Feed {
     Local,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("unknown feed `{text}`; known: {known}", known = Feed::names())]
+pub struct UnknownFeed {
+    text: String,
+}
+
 impl Feed {
+    pub const ALL: [Feed; 2] = [Feed::Transitous, Feed::Local];
+
+    pub fn names() -> String {
+        Feed::ALL
+            .iter()
+            .map(|feed| feed.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Feed::Transitous => "transitous",
             Feed::Local => "local",
         }
+    }
+}
+
+impl FromStr for Feed {
+    type Err = UnknownFeed;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Feed::ALL
+            .into_iter()
+            .find(|feed| feed.as_str() == text)
+            .ok_or_else(|| UnknownFeed {
+                text: text.to_string(),
+            })
     }
 }
 
@@ -273,6 +302,27 @@ mod tests {
         let err = MotisVersion::new("2.11.3").expect_err("no Motis version");
 
         assert!(err.to_string().contains("2.11.3"), "{err}");
+    }
+
+    #[test]
+    fn a_feed_parses_from_the_name_it_is_written_as() {
+        for feed in Feed::ALL {
+            assert_eq!(feed.as_str().parse(), Ok(feed));
+            assert_eq!(
+                serde_json::to_string(&feed).expect("a feed serialises"),
+                format!("\"{}\"", feed.as_str())
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_feed_is_refused_with_the_known_ones() {
+        let err = "delfi".parse::<Feed>().expect_err("no such feed");
+
+        assert!(err.to_string().contains("delfi"), "{err}");
+        for feed in Feed::ALL {
+            assert!(err.to_string().contains(feed.as_str()), "{err}");
+        }
     }
 
     #[test]

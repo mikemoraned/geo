@@ -104,8 +104,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - **A bronze source table** records the server, its feed, its Motis version, and its area. Each
   captured row carries its source's id.
-- **New captures go to `motis_segment_v2`, and `motis_segment` stays as written.** A reader of
-  Motis captures reads both, and treats `motis_segment` rows as from the local DELFI server.
+- **Each capture version derives its own silver version.** New captures go to `motis_segment_v2`,
+  and `train_segment_v2` derives from it, every row naming its source. `motis_segment` stays as
+  written, and `train_segment` derives from it with no source. A reader wanting every train reads
+  both. Changed on 2026-10-07 from one silver dataset with an optional source id.
 - **Transitous is the sampling source, until a local Motis matches its shapes.** Its rail legs
   follow the track. The local DELFI server's are straight chords between stops, too coarse for
   ground truth. Changed on 2026-10-06 from the local server alone.
@@ -205,10 +207,13 @@ Next, so data accumulates while the rest is built.
       `motis-openapi-progenitor`.
 - [x] Add a recipe fetching `openapi.yaml` for the version `tools/motis-server/Justfile` pins.
 - [x] Add `MotisSourceRow` and the bronze dataset `motis_segment_v2` to `crates/medallion-model`.
-- [ ] Register the source in `motis_poll` at startup, writing it only when absent.
+- [x] Register the source in `motis_poll` at startup, writing it only when absent.
+      The capture log writes `motis_segment_v2` from here on, so ingest moved with it.
 - [ ] Send the `User-Agent` on every request the client makes.
 - [ ] Cache each trip's details in `motis_poll` for the run, so a train costs one `/trip` request.
-- [ ] Read both datasets in `motis_ingest`, and carry `source_id` into `TrainSegmentRow`.
+- [x] Read both datasets in `motis_ingest`, and carry `source_id` into `TrainSegmentRow`.
+      Each derives its own silver version: `TrainSegmentRowV1` from `motis_segment`, and
+      `TrainSegmentRowV2`, with a required `source_id`, from `motis_segment_v2`.
 - [ ] Add the area mode to `motis_poll`, and a recipe for it beside `bronze-poll-motis`.
 - [ ] Post the plan on Transitous's Matrix channel: area, interval, request count, and
       `User-Agent`. The user does this.
@@ -216,6 +221,16 @@ Next, so data accumulates while the rest is built.
       runs it, the day-long run only after the Matrix post.
 - [ ] Describe the source and `motis_segment_v2` in `docs/medallion.md`, and the area mode,
       Transitous, and its usage policy in `docs/motis.md`.
+
+#### One train_segment version
+
+Next after Motis capture. Bronze stays as written: `motis_segment` keeps its rows, and ingest
+maps them into `train_segment_v2`.
+
+- [ ] Record a source for the `motis_segment` captures: the local server, feed `local`, Motis
+      v2.10.2, the version `tools/motis-server/Justfile` pinned from 19 July. Derive their legs
+      into `train_segment_v2` under it.
+- [ ] Remove `train_segment` and `TrainSegmentRowV1` once nothing reads them.
 
 #### Ground truth
 
