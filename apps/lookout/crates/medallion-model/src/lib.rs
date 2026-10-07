@@ -2,6 +2,7 @@ mod bronze;
 mod crossing;
 mod gers;
 mod motis;
+mod motis_source;
 mod overture;
 mod session;
 mod silver;
@@ -14,7 +15,14 @@ pub use crossing::{
     OverlapKind, SESSION_CROSSING, SessionCrossingRow, WATER_CROSSING, WaterCrossingRow,
 };
 pub use gers::{GersId, NotAGersId};
-pub use motis::{MOTIS_SEGMENT, MotisSegmentRow, TRAIN_SEGMENT, TrainSegmentRow};
+pub use motis::{
+    MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisCaptureRow, MotisSegmentRow, TRAIN_SEGMENT,
+    TrainSegmentRow,
+};
+pub use motis_source::{
+    Area, Feed, MOTIS_SOURCE, MotisSource, MotisSourceId, MotisSourceRow, MotisVersion,
+    NotAMotisSource, NotAMotisVersion, Region,
+};
 pub use overture::{
     DIVISION_ID, EXTRACT_MANIFEST, ExtractManifestRow, OVERTURE_EXTRACT, division_id,
 };
@@ -25,12 +33,14 @@ pub use telemetry::{
     RAW_SAMPLE, RawSampleRow,
 };
 
-pub const ALL: [DatasetInfo; 12] = [
+pub const ALL: [DatasetInfo; 14] = [
     RAW_SAMPLE.info(),
     GPS_READING.info(),
     ACCEL_READING.info(),
     DEVICE_SESSION.info(),
     MOTIS_SEGMENT.info(),
+    MOTIS_SEGMENT_V2.info(),
+    MOTIS_SOURCE.info(),
     TRAIN_SEGMENT.info(),
     SESSION.info(),
     SESSION_SAMPLE.info(),
@@ -152,6 +162,8 @@ mod tests {
         check_rows_of::<AccelReadingRow>();
         check_rows_of::<DeviceSessionRow>();
         check_rows_of::<MotisSegmentRow>();
+        check_rows_of::<MotisCaptureRow>();
+        check_rows_of::<MotisSourceRow>();
         check_rows_of::<TrainSegmentRow>();
         check_rows_of::<SessionRow>();
         check_rows_of::<SessionSampleRow>();

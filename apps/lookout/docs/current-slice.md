@@ -204,7 +204,7 @@ Next, so data accumulates while the rest is built.
 - [x] Move `crates/motis` to the generated client and the v6 endpoints, and drop
       `motis-openapi-progenitor`.
 - [x] Add a recipe fetching `openapi.yaml` for the version `tools/motis-server/Justfile` pins.
-- [ ] Add `MotisSourceRow` and the bronze dataset `motis_segment_v2` to `crates/medallion-model`.
+- [x] Add `MotisSourceRow` and the bronze dataset `motis_segment_v2` to `crates/medallion-model`.
 - [ ] Register the source in `motis_poll` at startup, writing it only when absent.
 - [ ] Send the `User-Agent` on every request the client makes.
 - [ ] Cache each trip's details in `motis_poll` for the run, so a train costs one `/trip` request.
