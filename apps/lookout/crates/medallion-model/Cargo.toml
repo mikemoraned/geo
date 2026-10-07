@@ -8,8 +8,10 @@ chrono = { workspace = true }
 domain = { workspace = true }
 geo-types = { workspace = true }
 medallion = { workspace = true }
+semver = "1"
 serde = { workspace = true }
 thiserror = { workspace = true }
+url = "2"
 uuid = { workspace = true }
 
 [dev-dependencies]
