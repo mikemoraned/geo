@@ -6,6 +6,12 @@ const DECLARED_VERSION: &str = "3.0.3";
 
 fn main() {
     println!("cargo:rerun-if-changed={SPEC}");
+    let hash = env::var("BUILD_GIT_HASH")
+        .ok()
+        .filter(|hash| !hash.is_empty())
+        .unwrap_or_else(|| "unknown".to_string());
+    println!("cargo:rustc-env=BUILD_GIT_HASH={hash}");
+    println!("cargo:rerun-if-env-changed=BUILD_GIT_HASH");
 
     let text = fs::read_to_string(SPEC).unwrap_or_else(|err| panic!("read {SPEC}: {err}"));
     let mut document: serde_json::Value =
