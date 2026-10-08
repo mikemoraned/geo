@@ -1,12 +1,16 @@
+use std::backtrace::{Backtrace, BacktraceStatus};
 use std::collections::BTreeMap;
 use std::error::Error;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Mutex;
 
+use tokio::signal::unix::{SignalKind, signal};
 use tracing::Level;
 use tracing_subscriber::filter::Targets;
-use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::fmt::writer::MakeWriterExt;
+use tracing_subscriber::layer::{Layer, SubscriberExt};
 use tracing_subscriber::util::SubscriberInitExt;
 
 use clap::{Args, Parser, Subcommand};
@@ -101,54 +105,143 @@ fn log_named_for_now() -> PathBuf {
     PathBuf::from(format!("overture-mirror-{started}.log"))
 }
 
-fn log_to(path: &Path) -> Result<(), Box<dyn Error>> {
-    let file = std::fs::OpenOptions::new()
+const SCREEN: &str = "screen";
+
+fn open_log(path: &Path) -> Result<File, String> {
+    std::fs::OpenOptions::new()
         .create_new(true)
         .write(true)
         .open(path)
-        .map_err(|err| format!("opening the log {}: {err}", path.display()))?;
-    let targets = Targets::new()
-        .with_target("object_store", Level::INFO)
-        .with_target("overture_mirror", Level::INFO);
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_ansi(false)
-                .with_writer(Mutex::new(file)),
+        .map_err(|err| format!("opening the log {}: {err}", path.display()))
+}
+
+fn start_logging(log: Option<File>) {
+    let screen = tracing_subscriber::fmt::layer()
+        .without_time()
+        .with_level(false)
+        .with_target(false)
+        .with_ansi(false)
+        .log_internal_errors(false)
+        .with_writer(
+            std::io::stderr
+                .with_max_level(Level::WARN)
+                .or_else(std::io::stdout),
         )
-        .with(targets)
+        .with_filter(Targets::new().with_target(SCREEN, Level::INFO));
+    let file = log.map(|log| {
+        tracing_subscriber::fmt::layer()
+            .with_ansi(false)
+            .log_internal_errors(false)
+            .with_writer(Mutex::new(log))
+            .with_filter(
+                Targets::new()
+                    .with_target("object_store", Level::INFO)
+                    .with_target("overture_mirror", Level::INFO)
+                    .with_target(SCREEN, Level::INFO),
+            )
+    });
+    tracing_subscriber::registry()
+        .with(screen)
+        .with(file)
         .init();
-    Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Signal {
+    name: &'static str,
+    number: u8,
+}
+
+#[derive(Debug)]
+enum Stopped {
+    Failed(Box<dyn Error>),
+    Signalled(Signal),
+}
+
+async fn signal_received() -> Result<Signal, Box<dyn Error>> {
+    let watched = [
+        ("SIGHUP", SignalKind::hangup(), 1),
+        ("SIGINT", SignalKind::interrupt(), 2),
+        ("SIGQUIT", SignalKind::quit(), 3),
+        ("SIGTERM", SignalKind::terminate(), 15),
+    ];
+    let mut waits = Vec::new();
+    for (name, kind, number) in watched {
+        let mut stream = signal(kind)?;
+        waits.push(Box::pin(async move {
+            stream.recv().await;
+            Signal { name, number }
+        }));
+    }
+    Ok(futures::future::select_all(waits).await.0)
+}
+
+fn log_panics() {
+    std::panic::set_hook(Box::new(|panic| {
+        let backtrace = Backtrace::capture();
+        match backtrace.status() {
+            BacktraceStatus::Captured => {
+                tracing::error!(target: SCREEN, "panicked: {panic}\n{backtrace}")
+            }
+            _ => tracing::error!(target: SCREEN, "panicked: {panic}"),
+        }
+    }));
 }
 
 #[tokio::main]
 async fn main() -> ExitCode {
     let cli = Cli::parse();
-    let log = cli.log.clone().unwrap_or_else(log_named_for_now);
-    if let Err(err) = log_to(&log) {
-        eprintln!("{err}");
+    let log = open_log(&cli.log.clone().unwrap_or_else(log_named_for_now));
+    let unopened = log.as_ref().err().cloned();
+    start_logging(log.ok());
+    if let Some(err) = unopened {
+        tracing::error!(target: SCREEN, "failed: {err}");
         return ExitCode::FAILURE;
     }
-    match run(cli.command).await {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(err) => {
-            eprintln!("{err}");
+    log_panics();
+    let arguments: Vec<String> = std::env::args().collect();
+    tracing::info!(
+        "started, as process {}: {}",
+        std::process::id(),
+        arguments.join(" ")
+    );
+    let stopped = tokio::select! {
+        outcome = run(cli.command) => outcome.map_err(Stopped::Failed),
+        signal = signal_received() => Err(match signal {
+            Ok(signal) => Stopped::Signalled(signal),
+            Err(err) => Stopped::Failed(err),
+        }),
+    };
+    match stopped {
+        Ok(summary) => {
+            tracing::info!(target: SCREEN, "finished: {summary}");
+            ExitCode::SUCCESS
+        }
+        Err(Stopped::Failed(err)) => {
+            tracing::error!(target: SCREEN, "failed: {err}");
             ExitCode::FAILURE
+        }
+        Err(Stopped::Signalled(Signal { name, number })) => {
+            tracing::error!(target: SCREEN, "stopped by {name}");
+            ExitCode::from(128 + number)
         }
     }
 }
 
-async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
+async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
     match command {
         Commands::Releases { source } => {
             let served = Source::open(&source.source)?.releases().await?;
             let superseded = find_superseded(&served);
             for release in &served {
                 match superseded.get(release) {
-                    Some(latest) => println!("{release}  superseded by {latest}"),
-                    None => println!("{release}"),
+                    Some(latest) => {
+                        tracing::info!(target: SCREEN, "{release}  superseded by {latest}")
+                    }
+                    None => tracing::info!(target: SCREEN, "{release}"),
                 }
             }
+            Ok(format!("listed {} releases", served.len()))
         }
         Commands::Sync(transfer) => {
             let source = transfer.open(check_syncable).await?;
@@ -156,12 +249,12 @@ async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
                 release, mirror, ..
             } = transfer;
             let found = mirror::sync(&source, &release, &mirror, Display::Bars).await?;
-            println!(
+            Ok(format!(
                 "{release}: {} already complete, {} copied, {} recopied",
                 files_with_status(&found, LocalStatus::Complete),
                 files_with_status(&found, LocalStatus::Missing),
                 files_with_status(&found, LocalStatus::Differs)
-            );
+            ))
         }
         Commands::Verify(transfer) => {
             let source = transfer.open(check_verifiable).await?;
@@ -171,11 +264,11 @@ async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             let verification = mirror::verify(&source, &release, &mirror, Display::Bars).await?;
             for (location, state) in &verification.remote {
                 if *state != LocalStatus::Complete {
-                    println!("{state:?}  {location}");
+                    tracing::info!(target: SCREEN, "{state:?}  {location}");
                 }
             }
             for path in &verification.local_only {
-                println!("LocalOnly  {}", path.display());
+                tracing::info!(target: SCREEN, "LocalOnly  {}", path.display());
             }
             let incomplete = Incomplete {
                 release: release.clone(),
@@ -186,11 +279,10 @@ async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             if !incomplete.is_empty() {
                 return Err(incomplete.into());
             }
-            println!(
+            Ok(format!(
                 "{release}: all {} files complete",
                 verification.remote.len()
-            );
+            ))
         }
     }
-    Ok(())
 }

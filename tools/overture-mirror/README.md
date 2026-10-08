@@ -76,6 +76,28 @@ resumed download, and each copied file with its size, time, and rate. `verify` l
 checks, with its status. To see why a sync has slowed, follow its log in a second terminal with
 `tail -f`.
 
+The terminal shows a few of the logged lines, without their time or level: the releases
+`releases` lists, the files `verify` flags, and the outcome line. Failures and signals go to
+stderr, the rest to stdout. In the log these lines carry the target `screen`. The progress bars
+draw on stderr and are not logged.
+
+A log opens with a `started` line naming the command and its process id. It closes with exactly
+one outcome line:
+
+- `finished`, with the command's summary.
+- `failed`, with the error.
+- `stopped by` a named signal, for `SIGHUP`, `SIGINT`, `SIGQUIT`, or `SIGTERM`. A closed terminal
+  sends `SIGHUP`.
+- `panicked`, with the message and where it arose.
+
+A log that ends with no outcome line means the process received `SIGKILL`, which no process can
+catch, or the system stopped it. Each line reaches the file as it is logged, so a stop loses
+nothing logged before it. A run whose output can no longer reach the terminal drops that output
+and carries on.
+
+A sync stops when its terminal closes. To keep one running after closing its window, start it
+inside `tmux` or `screen`, which keep the terminal alive.
+
 A file is written under a `.part` suffix and renamed once complete. An interrupted copy
 therefore leaves a `.part` file, never a truncated file under the real name.
 
