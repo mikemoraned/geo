@@ -9,6 +9,16 @@ use medallion_model::{MotisVersion, NotAMotisVersion};
 
 pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8080";
 
+pub const USER_AGENT: &str = concat!(
+    "lookout/",
+    env!("CARGO_PKG_VERSION"),
+    "+",
+    env!("BUILD_GIT_HASH"),
+    " (+https://github.com/mikemoraned/geo)"
+);
+
+const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
 #[derive(Debug, thiserror::Error)]
 pub enum MotisError {
     #[error("motis request failed: {0}")]
@@ -57,8 +67,14 @@ impl Default for MotisClient {
 
 impl MotisClient {
     pub fn new(base_url: &str) -> Self {
+        let http = reqwest::ClientBuilder::new()
+            .user_agent(USER_AGENT)
+            .connect_timeout(TIMEOUT)
+            .timeout(TIMEOUT)
+            .build()
+            .expect("a client with only a user agent and timeouts set builds");
         Self {
-            inner: Client::new(base_url),
+            inner: Client::new_with_client(base_url, http),
         }
     }
 
@@ -217,6 +233,48 @@ mod tests {
         assert!(
             details.agency.name.is_some() || details.agency.id.is_some(),
             "expected an agency name or id"
+        );
+    }
+
+    #[tokio::test]
+    async fn every_request_names_lookout_in_its_user_agent() {
+        let server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::path("/api/v1/map/initial"))
+            .and(wiremock::matchers::header("user-agent", USER_AGENT))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "lat": 50.7, "lon": 9.9, "zoom": 7.0,
+                    "serverConfig": {
+                        "motisVersion": "v2.11.3", "hasElevation": false,
+                        "hasRoutedTransfers": false, "hasStreetRouting": true,
+                        "maxOneToManySize": 128.0, "maxOneToAllTravelTimeLimit": 90.0,
+                        "maxPrePostTransitTimeLimit": 3600.0, "maxDirectTimeLimit": 21600.0,
+                        "shapesDebugEnabled": false
+                    }
+                })),
+            )
+            .mount(&server)
+            .await;
+
+        let version = MotisClient::new(&server.uri())
+            .motis_version()
+            .await
+            .expect("the mock answers a request carrying the user agent");
+
+        assert_eq!(version.to_string(), "v2.11.3");
+    }
+
+    #[test]
+    fn the_user_agent_names_the_project_its_versions_and_where_to_reach_it() {
+        assert!(USER_AGENT.starts_with("lookout/"), "{USER_AGENT}");
+        assert!(
+            USER_AGENT.contains(env!("CARGO_PKG_VERSION")),
+            "{USER_AGENT}"
+        );
+        assert!(USER_AGENT.contains(env!("BUILD_GIT_HASH")), "{USER_AGENT}");
+        assert!(
+            USER_AGENT.contains("https://github.com/mikemoraned/geo"),
+            "{USER_AGENT}"
         );
     }
 

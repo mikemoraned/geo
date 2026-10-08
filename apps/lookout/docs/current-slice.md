@@ -209,7 +209,9 @@ Next, so data accumulates while the rest is built.
 - [x] Add `MotisSourceRow` and the bronze dataset `motis_segment_v2` to `crates/medallion-model`.
 - [x] Register the source in `motis_poll` at startup, writing it only when absent.
       The capture log writes `motis_segment_v2` from here on, so ingest moved with it.
-- [ ] Send the `User-Agent` on every request the client makes.
+- [x] Send the `User-Agent` on every request the client makes.
+      `lookout/<crate version>+<git commit> (+https://github.com/mikemoraned/geo)`. The commit
+      comes from `BUILD_GIT_HASH`, as the server crate's does.
 - [ ] Cache each trip's details in `motis_poll` for the run, so a train costs one `/trip` request.
 - [x] Read both datasets in `motis_ingest`, and carry `source_id` into `TrainSegmentRow`.
       Each derives its own silver version: `TrainSegmentRowV1` from `motis_segment`, and
