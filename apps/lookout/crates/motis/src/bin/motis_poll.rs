@@ -8,20 +8,19 @@ use url::Url;
 use medallion::MedallionArgs;
 use medallion_model::{Feed, MotisSource};
 use motis::bronze::SegmentLog;
+use motis::capture::{Capture, Captured, Unresolved};
 use motis::client::{DEFAULT_BASE_URL, MotisClient};
-use motis::details::TripDetailsCache;
-use motis::poll::{PollConfig, PollOutcome, Unresolved, poll_once};
+use motis::near_gps::{NearGps, Seen};
 use motis::source::register;
-use motis::window::PositionWindow;
 
 const DEFAULT_POLL_INTERVAL_SECS: u64 = 30;
-const DEFAULT_WINDOW_AGE_MINS: u64 = 30;
-const DEFAULT_RECENT_LOOKBACK_MINS: u64 = 5;
+const DEFAULT_WINDOW_AGE_MINS: u32 = 30;
+const DEFAULT_RECENT_LOOKBACK_MINS: u32 = 5;
 const DEFAULT_ZOOM: f64 = 8.0;
 
 const SAMPLE_LIMIT: usize = 1000;
 
-const QUERY_WINDOW_HALF_MINS: u64 = 5;
+const QUERY_WINDOW_HALF_MINS: u32 = 5;
 
 #[derive(Parser)]
 #[command(about = "Poll Motis for train trips near recently logged GPS and log them")]
@@ -31,10 +30,10 @@ struct Args {
     poll_interval_secs: u64,
     /// Minutes a GPS position stays in the rolling window before it is pruned.
     #[arg(long, default_value_t = DEFAULT_WINDOW_AGE_MINS)]
-    window_age_mins: u64,
+    window_age_mins: u32,
     /// Only ingest GPS samples captured within the past this many minutes.
     #[arg(long, default_value_t = DEFAULT_RECENT_LOOKBACK_MINS)]
-    recent_lookback_mins: u64,
+    recent_lookback_mins: u32,
     /// Motis zoom level (higher adds subway/tram/bus on top of long-distance rail).
     #[arg(long, default_value_t = DEFAULT_ZOOM)]
     zoom: f64,
@@ -78,15 +77,17 @@ async fn main() {
         .await
         .expect("record the Motis source");
     tracing::info!(source_id = %source.id(), ?registration, "recorded the Motis source");
-    let log = SegmentLog::new(root.clone(), source.id());
-    let mut details = TripDetailsCache::default();
-    let mut window = PositionWindow::new(Duration::from_secs(args.window_age_mins * 60));
-    let config = PollConfig {
-        recent_lookback: Duration::from_secs(args.recent_lookback_mins * 60),
-        query_window_half: Duration::from_secs(QUERY_WINDOW_HALF_MINS * 60),
-        zoom: args.zoom,
-        sample_limit: SAMPLE_LIMIT,
-    };
+    let mut near_gps = NearGps::new(
+        chrono::Duration::minutes(i64::from(args.window_age_mins)),
+        chrono::Duration::minutes(i64::from(args.recent_lookback_mins)),
+        SAMPLE_LIMIT,
+    );
+    let mut capture = Capture::new(
+        client,
+        SegmentLog::new(root.clone(), source.id()),
+        args.zoom,
+        chrono::Duration::minutes(i64::from(QUERY_WINDOW_HALF_MINS)),
+    );
 
     let url = std::env::var("LOOKOUT_REDIS_URL")
         .expect("LOOKOUT_REDIS_URL must be set — run via `just bronze-poll-motis`");
@@ -112,26 +113,52 @@ async fn main() {
                 break;
             }
             _ = ticker.tick() => {
-                match poll_once(Utc::now(), &mut conn, &client, &log, &mut window, &mut details, &config).await {
-                    Ok(PollOutcome::NoRecentGps { ingested }) => {
-                        tracing::info!(ingested, "no recent gps positions; skipping motis query");
+                poll(Utc::now(), &mut conn, &mut near_gps, &mut capture).await;
+            }
+        }
+    }
+}
+
+async fn poll(
+    now: chrono::DateTime<Utc>,
+    conn: &mut redis::aio::MultiplexedConnection,
+    near_gps: &mut NearGps,
+    capture: &mut Capture,
+) {
+    let Seen {
+        ingested,
+        positions,
+        area,
+    } = match near_gps.look(now, conn).await {
+        Ok(seen) => seen,
+        Err(err) => return tracing::error!(%err, "reading recent GPS failed"),
+    };
+    let Some(area) = area else {
+        return tracing::info!(ingested, "no recent gps positions; skipping motis query");
+    };
+    match capture.capture(now, &area).await {
+        Ok(Captured {
+            segments,
+            unresolved,
+        }) => {
+            tracing::info!(
+                ingested,
+                positions,
+                segments,
+                unresolved = unresolved.len(),
+                "polled motis"
+            );
+            for failure in &unresolved {
+                match failure {
+                    Unresolved::Segment { reason } => {
+                        tracing::error!(%reason, "a segment was not captured");
                     }
-                    Ok(PollOutcome::Queried { ingested, positions, segments, unresolved }) => {
-                        tracing::info!(ingested, positions, segments, unresolved = unresolved.len(), "polled motis");
-                        for failure in &unresolved {
-                            match failure {
-                                Unresolved::Segment { reason } => {
-                                    tracing::error!(%reason, "a segment was not captured");
-                                }
-                                Unresolved::Details { trip_id, reason } => {
-                                    tracing::error!(%trip_id, %reason, "a trip was captured without its details");
-                                }
-                            }
-                        }
+                    Unresolved::Details { trip_id, reason } => {
+                        tracing::error!(%trip_id, %reason, "a trip was captured without its details");
                     }
-                    Err(err) => tracing::error!(%err, "poll tick failed"),
                 }
             }
         }
+        Err(err) => tracing::error!(%err, "capturing from motis failed"),
     }
 }

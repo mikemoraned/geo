@@ -1,17 +1,15 @@
-use std::time::Duration;
-
+use chrono::{DateTime, Duration, Utc};
 use geo::{BoundingRect, Scale};
 use geo_types::{MultiPoint, Point, Rect};
 
-pub const DEFAULT_MAX_AGE: Duration = Duration::from_secs(30 * 60);
+pub const DEFAULT_MAX_AGE: Duration = Duration::minutes(30);
 
 const BUFFER_FACTOR: f64 = 2.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Position {
-    pub t: i64,
-    pub lat: f64,
-    pub lon: f64,
+    pub at: DateTime<Utc>,
+    pub point: Point<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -38,10 +36,9 @@ impl PositionWindow {
         self.positions.push(position);
     }
 
-    pub fn prune(&mut self, now: i64) {
-        let age_ms = i64::try_from(self.max_age.as_millis()).unwrap_or(i64::MAX);
-        let cutoff = now.saturating_sub(age_ms);
-        self.positions.retain(|p| p.t >= cutoff);
+    pub fn prune(&mut self, now: DateTime<Utc>) {
+        let cutoff = now - self.max_age;
+        self.positions.retain(|p| p.at >= cutoff);
     }
 
     pub fn len(&self) -> usize {
@@ -53,11 +50,7 @@ impl PositionWindow {
     }
 
     pub fn bbox(&self) -> Option<Rect<f64>> {
-        let points: MultiPoint<f64> = self
-            .positions
-            .iter()
-            .map(|p| Point::new(p.lon, p.lat))
-            .collect();
+        let points: MultiPoint<f64> = self.positions.iter().map(|p| p.point).collect();
         points.bounding_rect()
     }
 
@@ -73,7 +66,14 @@ mod tests {
     use proptest::prelude::*;
 
     fn pos(t: i64, lat: f64, lon: f64) -> Position {
-        Position { t, lat, lon }
+        Position {
+            at: DateTime::from_timestamp_millis(t).expect("an instant"),
+            point: Point::new(lon, lat),
+        }
+    }
+
+    fn at(t: i64) -> DateTime<Utc> {
+        DateTime::from_timestamp_millis(t).expect("an instant")
     }
 
     fn rect(min_lat: f64, max_lat: f64, min_lon: f64, max_lon: f64) -> Rect<f64> {
@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn empty_window_has_no_bbox() {
-        let w = PositionWindow::new(Duration::from_secs(1800));
+        let w = PositionWindow::new(Duration::minutes(30));
         assert!(w.is_empty());
         assert_eq!(w.bbox(), None);
         assert_eq!(w.buffered_bbox(), None);
@@ -99,7 +99,7 @@ mod tests {
 
     #[test]
     fn bbox_spans_all_held_positions() {
-        let mut w = PositionWindow::new(Duration::from_secs(1800));
+        let mut w = PositionWindow::new(Duration::minutes(30));
         w.ingest(pos(0, 50.0, 8.0));
         w.ingest(pos(1, 51.0, 9.0));
         w.ingest(pos(2, 49.5, 8.5));
@@ -108,14 +108,14 @@ mod tests {
 
     #[test]
     fn single_position_is_a_point_box() {
-        let mut w = PositionWindow::new(Duration::from_secs(1800));
+        let mut w = PositionWindow::new(Duration::minutes(30));
         w.ingest(pos(0, 50.0, 8.0));
         assert_eq!(w.bbox(), Some(rect(50.0, 50.0, 8.0, 8.0)));
     }
 
     #[test]
     fn buffered_box_doubles_each_dimension_about_centre() {
-        let mut w = PositionWindow::new(Duration::from_secs(1800));
+        let mut w = PositionWindow::new(Duration::minutes(30));
         w.ingest(pos(0, 50.0, 8.0));
         w.ingest(pos(1, 52.0, 12.0));
         let tight = rect(50.0, 52.0, 8.0, 12.0);
@@ -127,7 +127,7 @@ mod tests {
 
     #[test]
     fn prune_drops_positions_older_than_max_age() {
-        let max_age = Duration::from_secs(60);
+        let max_age = Duration::seconds(60);
         let now = 60_000;
         let mut w = PositionWindow::new(max_age);
         let at_the_cutoff = pos(now - 60_000, 50.0, 8.0);
@@ -137,7 +137,7 @@ mod tests {
         for position in [at_the_cutoff, within_the_window, older_than_the_cutoff] {
             w.ingest(position);
         }
-        w.prune(now);
+        w.prune(at(now));
 
         assert_eq!(w.len(), 2);
         assert_eq!(w.bbox(), Some(rect(50.0, 51.0, 8.0, 9.0)));
@@ -146,7 +146,7 @@ mod tests {
     prop_compose! {
         fn positions()(
             v in prop::collection::vec(
-                (any::<i64>(), -90.0f64..=90.0, -180.0f64..=180.0),
+                (0i64..4_102_444_800_000, -90.0f64..=90.0, -180.0f64..=180.0),
                 1..20,
             )
         ) -> Vec<Position> {
@@ -157,7 +157,7 @@ mod tests {
     proptest! {
         #[test]
         fn buffered_box_contains_the_tight_box(ps in positions()) {
-            let mut w = PositionWindow::new(Duration::from_secs(1800));
+            let mut w = PositionWindow::new(Duration::minutes(30));
             for p in ps {
                 w.ingest(p);
             }
@@ -170,15 +170,15 @@ mod tests {
         }
 
         #[test]
-        fn pruning_is_monotonic(ps in positions(), now in any::<i64>()) {
-            let mut w = PositionWindow::new(Duration::from_secs(1800));
+        fn pruning_is_monotonic(ps in positions(), now in 0i64..4_102_444_800_000) {
+            let mut w = PositionWindow::new(Duration::minutes(30));
             for p in ps {
                 w.ingest(p);
             }
             let before = w.len();
-            w.prune(now);
+            w.prune(at(now));
             let after_first = w.len();
-            w.prune(now);
+            w.prune(at(now));
             let after_second = w.len();
             prop_assert!(after_first <= before);
             prop_assert_eq!(after_first, after_second);

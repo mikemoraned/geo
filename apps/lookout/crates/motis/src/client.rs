@@ -2,7 +2,9 @@ use crate::api::{
     Client,
     types::{Itinerary, TripSegment},
 };
-use chrono::{DateTime, Duration, Timelike, Utc};
+use std::ops::Range;
+
+use chrono::{DateTime, Timelike, Utc};
 use domain::TrainNumber;
 use geo_types::Rect;
 use medallion_model::{MotisVersion, NotAMotisVersion, TripId};
@@ -39,21 +41,6 @@ pub struct TripDetails {
     pub train_number: Option<TrainNumber>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TimeWindow {
-    pub start: DateTime<Utc>,
-    pub end: DateTime<Utc>,
-}
-
-impl TimeWindow {
-    pub fn around(now: DateTime<Utc>, half_width: Duration) -> Self {
-        Self {
-            start: now - half_width,
-            end: now + half_width,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct MotisClient {
     inner: Client,
@@ -86,7 +73,7 @@ impl MotisClient {
     pub async fn trips_in_bbox(
         &self,
         bbox: &Rect<f64>,
-        window: &TimeWindow,
+        window: &Range<DateTime<Utc>>,
         zoom: f64,
     ) -> Result<Vec<TripSegment>, MotisError> {
         let (min, max) = bbox_corners(bbox);
@@ -175,15 +162,6 @@ mod tests {
     }
 
     #[test]
-    fn window_around_now_is_symmetric() {
-        let now = DateTime::from_timestamp(1_700_000_000, 0).unwrap();
-        let window = TimeWindow::around(now, Duration::minutes(5));
-        assert_eq!(window.start, now - Duration::minutes(5));
-        assert_eq!(window.end, now + Duration::minutes(5));
-        assert_eq!(window.end - window.start, Duration::minutes(10));
-    }
-
-    #[test]
     fn details_taken_from_legs() {
         let itinerary: Itinerary =
             serde_json::from_str(include_str!("../tests/fixtures/trip.json"))
@@ -218,7 +196,8 @@ mod tests {
     async fn trips_in_bbox_hits_local_server_end_to_end() {
         let client = MotisClient::default();
         let over_frankfurt = Rect::new(Coord { x: 8.4, y: 49.9 }, Coord { x: 9.0, y: 50.3 });
-        let window = TimeWindow::around(Utc::now(), Duration::minutes(5));
+        let now = Utc::now();
+        let window = now - chrono::Duration::minutes(5)..now + chrono::Duration::minutes(5);
         let segments = client
             .trips_in_bbox(&over_frankfurt, &window, 8.0)
             .await
