@@ -223,9 +223,9 @@ Next, so data accumulates while the rest is built.
       Each derives its own silver version: `TrainSegmentRowV1` from `motis_segment`, and
       `TrainSegmentRowV2`, with a required `source_id`, from `motis_segment_v2`.
 - [ ] Add the area mode to `motis_poll`, and a recipe for it beside `bronze-poll-motis`.
-- [ ] Look across the lookout crates for types a library or `std` already provides, as
-      `TimeWindow` was a `Range<DateTime<Utc>>`, and for raw numbers standing in for a type.
-      Replace each where the code reads better.
+- [ ] Refactor `crates/motis` again once the area mode lands: a function taking too many
+      arguments or doing too much, a hand-rolled type a library or `std` provides, a raw number
+      standing in for a type.
 - [ ] Post the plan on Transitous's Matrix channel: area, interval, request count, and
       `User-Agent`. The user does this.
 - [ ] Capture Thuringia from Transitous every 10 minutes, for an hour, then for a day. The user
@@ -289,6 +289,14 @@ maps them into `train_segment_v2`.
 - [ ] Draw each crossing's state in the web picture and on the M5 panel.
 - [ ] Describe the notification and the states in `docs/web.md` and `docs/device.md`.
 - [ ] Build both shells, and flash the device. The user rides with it.
+
+#### Refactoring
+
+At the end of the slice, once its features are in.
+
+- [ ] Look across the lookout crates for types a library or `std` already provides, as
+      `TimeWindow` was a `Range<DateTime<Utc>>`, and for raw numbers standing in for a type.
+      Replace each where the code reads better.
 
 #### Wrap-up
 
