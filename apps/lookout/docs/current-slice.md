@@ -214,13 +214,18 @@ Next, so data accumulates while the rest is built.
       comes from `BUILD_GIT_HASH`, as the server crate's does.
 - [x] Cache each trip's details in `motis_poll` for the run, so a train costs one `/trip` request.
       A failed lookup is reported in the poll's outcome and asked again at the next poll.
-- [ ] Refactor `crates/motis` where a function takes too many arguments or does too much.
+- [x] Refactor `crates/motis` where a function takes too many arguments or does too much.
       `poll_once` takes seven, and groups none of them into a type that means something.
       Look for the same in the rest of the crate.
+      `NearGps` decides where to look and `Capture` records what Motis shows there. `poll_once`
+      and `PollConfig` are gone. A position holds an instant and a point, not raw numbers.
 - [x] Read both datasets in `motis_ingest`, and carry `source_id` into `TrainSegmentRow`.
       Each derives its own silver version: `TrainSegmentRowV1` from `motis_segment`, and
       `TrainSegmentRowV2`, with a required `source_id`, from `motis_segment_v2`.
 - [ ] Add the area mode to `motis_poll`, and a recipe for it beside `bronze-poll-motis`.
+- [ ] Look across the lookout crates for types a library or `std` already provides, as
+      `TimeWindow` was a `Range<DateTime<Utc>>`, and for raw numbers standing in for a type.
+      Replace each where the code reads better.
 - [ ] Post the plan on Transitous's Matrix channel: area, interval, request count, and
       `User-Agent`. The user does this.
 - [ ] Capture Thuringia from Transitous every 10 minutes, for an hour, then for a day. The user

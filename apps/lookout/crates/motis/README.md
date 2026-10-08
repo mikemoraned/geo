@@ -8,10 +8,12 @@ keep every answer, and derive one row per scheduled leg from them.
 
 ## The three stages
 
-A **poll** reads the newest queued telemetry samples, keeps the GPS fixes younger than its
-lookback, and holds them in a rolling window pruned by age. The bbox it queries is the window's own
-bbox scaled about its centre, so a train just off the trace still comes back. Nothing is
-queried while the window is empty.
+A **poll** has two parts: one decides where to look, and the other captures what Motis shows
+there. Near recent GPS, the first reads the newest queued telemetry samples, keeps the GPS fixes
+younger than its lookback, and holds them in a rolling window pruned by age. The area it names is
+the window's own bbox scaled about its centre, so a train just off the trace still comes back.
+While the window is empty it names no area, and nothing is captured. The capture queries Motis
+over the area it is given, whatever decided it.
 
 The **capture log** takes what a poll saw, one file per poll, verbatim: the times as instants and
 the polyline as the encoded string the server sent. Nothing is rewritten, so overlapping polls

@@ -1,15 +1,12 @@
 mod common;
 
-use std::time::Duration;
-
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready};
 use medallion::Root;
 use motis::bronze::SegmentLog;
+use motis::capture::{Capture, Captured};
 use motis::client::MotisClient;
-use motis::details::TripDetailsCache;
-use motis::poll::{PollConfig, PollOutcome, poll_once};
-use motis::window::PositionWindow;
+use motis::near_gps::NearGps;
 use shared::{Accel, AccelReading, Message, V1Message};
 use uuid::Uuid;
 use wiremock::matchers::{method, path};
@@ -64,7 +61,7 @@ fn rail_fixture_len() -> usize {
 }
 
 #[tokio::test]
-async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
+async fn recent_gps_names_the_area_whose_motis_segments_are_logged_docker() {
     let (_container, url) = start_redis().await;
     let mut conn = wait_ready(&url).await;
 
@@ -81,34 +78,22 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
     let motis = mock_motis(TRIPS_FIXTURE).await;
 
     let store = tempfile::tempdir().expect("temp store");
-    let log = SegmentLog::new(Root::new(store.path()), common::local_source().id());
-    let client = MotisClient::new(&motis.uri());
-    let mut details = TripDetailsCache::default();
-    let mut window = PositionWindow::new(Duration::from_secs(30 * 60));
-    let config = PollConfig {
-        recent_lookback: Duration::from_secs(5 * 60),
-        query_window_half: Duration::from_secs(5 * 60),
-        zoom: 8.0,
-        sample_limit: 1000,
-    };
+    let mut near_gps = NearGps::new(Duration::minutes(30), Duration::minutes(5), 1000);
+    let mut capture = Capture::new(
+        MotisClient::new(&motis.uri()),
+        SegmentLog::new(Root::new(store.path()), common::local_source().id()),
+        8.0,
+        Duration::minutes(5),
+    );
 
-    let outcome = poll_once(
-        now,
-        &mut conn,
-        &client,
-        &log,
-        &mut window,
-        &mut details,
-        &config,
-    )
-    .await
-    .expect("poll once");
+    let seen = near_gps.look(now, &mut conn).await.expect("look");
+    assert_eq!((seen.ingested, seen.positions), (3, 3));
+    let area = seen.area.expect("an area around recent GPS");
+    let captured = capture.capture(now, &area).await.expect("capture");
 
     assert_eq!(
-        outcome,
-        PollOutcome::Queried {
-            ingested: 3,
-            positions: 3,
+        captured,
+        Captured {
             segments: rail_fixture_len(),
             unresolved: Vec::new(),
         }
