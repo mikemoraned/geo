@@ -212,7 +212,11 @@ Next, so data accumulates while the rest is built.
 - [x] Send the `User-Agent` on every request the client makes.
       `lookout/<crate version>+<git commit> (+https://github.com/mikemoraned/geo)`. The commit
       comes from `BUILD_GIT_HASH`, as the server crate's does.
-- [ ] Cache each trip's details in `motis_poll` for the run, so a train costs one `/trip` request.
+- [x] Cache each trip's details in `motis_poll` for the run, so a train costs one `/trip` request.
+      A failed lookup is reported in the poll's outcome and asked again at the next poll.
+- [ ] Refactor `crates/motis` where a function takes too many arguments or does too much.
+      `poll_once` takes seven, and groups none of them into a type that means something.
+      Look for the same in the rest of the crate.
 - [x] Read both datasets in `motis_ingest`, and carry `source_id` into `TrainSegmentRow`.
       Each derives its own silver version: `TrainSegmentRowV1` from `motis_segment`, and
       `TrainSegmentRowV2`, with a required `source_id`, from `motis_segment_v2`.

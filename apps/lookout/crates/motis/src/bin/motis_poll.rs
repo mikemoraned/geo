@@ -9,7 +9,8 @@ use medallion::MedallionArgs;
 use medallion_model::{Feed, MotisSource};
 use motis::bronze::SegmentLog;
 use motis::client::{DEFAULT_BASE_URL, MotisClient};
-use motis::poll::{PollConfig, PollOutcome, poll_once};
+use motis::details::TripDetailsCache;
+use motis::poll::{PollConfig, PollOutcome, Unresolved, poll_once};
 use motis::source::register;
 use motis::window::PositionWindow;
 
@@ -78,6 +79,7 @@ async fn main() {
         .expect("record the Motis source");
     tracing::info!(source_id = %source.id(), ?registration, "recorded the Motis source");
     let log = SegmentLog::new(root.clone(), source.id());
+    let mut details = TripDetailsCache::default();
     let mut window = PositionWindow::new(Duration::from_secs(args.window_age_mins * 60));
     let config = PollConfig {
         recent_lookback: Duration::from_secs(args.recent_lookback_mins * 60),
@@ -110,12 +112,22 @@ async fn main() {
                 break;
             }
             _ = ticker.tick() => {
-                match poll_once(Utc::now(), &mut conn, &client, &log, &mut window, &config).await {
+                match poll_once(Utc::now(), &mut conn, &client, &log, &mut window, &mut details, &config).await {
                     Ok(PollOutcome::NoRecentGps { ingested }) => {
                         tracing::info!(ingested, "no recent gps positions; skipping motis query");
                     }
-                    Ok(PollOutcome::Queried { ingested, positions, segments }) => {
-                        tracing::info!(ingested, positions, segments, "polled motis");
+                    Ok(PollOutcome::Queried { ingested, positions, segments, unresolved }) => {
+                        tracing::info!(ingested, positions, segments, unresolved = unresolved.len(), "polled motis");
+                        for failure in &unresolved {
+                            match failure {
+                                Unresolved::Segment { reason } => {
+                                    tracing::error!(%reason, "a segment was not captured");
+                                }
+                                Unresolved::Details { trip_id, reason } => {
+                                    tracing::error!(%trip_id, %reason, "a trip was captured without its details");
+                                }
+                            }
+                        }
                     }
                     Err(err) => tracing::error!(%err, "poll tick failed"),
                 }

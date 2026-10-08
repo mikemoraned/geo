@@ -71,6 +71,13 @@ downstream Lua fixup rather than feed content.
 collapses into one leg spanning multiple agencies, and the answer becomes whichever agency
 came first.
 
+## A segment carries one trip
+
+A `map/trips` segment lists its trips as an array, and the spec does not describe it. The server
+fills that array with exactly one trip: v2.11.3 builds each segment in `src/railviz.cc` with a
+single `TripInfo`. Of 2,432 rail segments in one country-wide response, every one carried one
+trip. A segment carrying none, or several, is therefore an error rather than a choice.
+
 ## A leg's identity is `(trip_id, from_stop_id, departure)`
 
 Timetables are minute-resolution, and two legs of one trip can depart *different* stops

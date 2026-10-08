@@ -16,8 +16,8 @@ pub use crossing::{
 };
 pub use gers::{GersId, NotAGersId};
 pub use motis::{
-    MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisCaptureRow, MotisSegmentRow, TRAIN_SEGMENT,
-    TRAIN_SEGMENT_V2, TrainSegmentRowV1, TrainSegmentRowV2,
+    EmptyTripId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisCaptureRow, MotisSegmentRow, TRAIN_SEGMENT,
+    TRAIN_SEGMENT_V2, TrainSegmentRowV1, TrainSegmentRowV2, TripId,
 };
 pub use motis_source::{
     Area, Feed, MOTIS_SOURCE, MotisSource, MotisSourceId, MotisSourceRow, MotisVersion,
