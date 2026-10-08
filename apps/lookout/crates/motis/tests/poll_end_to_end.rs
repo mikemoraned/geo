@@ -7,6 +7,7 @@ use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready}
 use medallion::Root;
 use motis::bronze::SegmentLog;
 use motis::client::MotisClient;
+use motis::details::TripDetailsCache;
 use motis::poll::{PollConfig, PollOutcome, poll_once};
 use motis::window::PositionWindow;
 
@@ -29,6 +30,7 @@ async fn poll_once_captures_rail_from_local_motis_end_to_end() {
     let store = tempfile::tempdir().expect("temp store");
     let log = SegmentLog::new(Root::new(store.path()), common::local_source().id());
     let client = MotisClient::default();
+    let mut details = TripDetailsCache::default();
     let mut window = PositionWindow::new(Duration::from_secs(30 * 60));
     let config = PollConfig {
         recent_lookback: Duration::from_secs(5 * 60),
@@ -37,9 +39,17 @@ async fn poll_once_captures_rail_from_local_motis_end_to_end() {
         sample_limit: 1000,
     };
 
-    let outcome = poll_once(now, &mut conn, &client, &log, &mut window, &config)
-        .await
-        .expect("poll once against local motis");
+    let outcome = poll_once(
+        now,
+        &mut conn,
+        &client,
+        &log,
+        &mut window,
+        &mut details,
+        &config,
+    )
+    .await
+    .expect("poll once against local motis");
 
     let PollOutcome::Queried { segments, .. } = outcome else {
         panic!("expected a Motis query, got {outcome:?}");

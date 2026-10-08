@@ -1,3 +1,6 @@
+use std::fmt::{self, Display};
+use std::str::FromStr;
+
 use chrono::{DateTime, NaiveDate, Utc};
 use domain::TrainNumber;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
@@ -16,6 +19,43 @@ pub const TRAIN_SEGMENT: DatasetSpec<layers::Silver> =
 
 pub const TRAIN_SEGMENT_V2: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("train_segment_v2", "departure_date");
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TripId(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("a trip id cannot be empty")]
+pub struct EmptyTripId;
+
+impl TripId {
+    pub fn new(id: impl Into<String>) -> Result<Self, EmptyTripId> {
+        let id = id.into();
+        if id.is_empty() {
+            Err(EmptyTripId)
+        } else {
+            Ok(Self(id))
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl FromStr for TripId {
+    type Err = EmptyTripId;
+
+    fn from_str(id: &str) -> Result<Self, Self::Err> {
+        Self::new(id)
+    }
+}
+
+impl Display for TripId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MotisSegmentRow {
@@ -188,6 +228,19 @@ mod tests {
     use arrow::datatypes::DataType;
 
     use super::*;
+
+    #[test]
+    fn a_trip_id_is_written_back_as_given() {
+        let id: TripId = "20261008_09:12_de-DELFI_123".parse().expect("a trip id");
+
+        assert_eq!(id.to_string(), "20261008_09:12_de-DELFI_123");
+        assert_eq!(id.as_str(), "20261008_09:12_de-DELFI_123");
+    }
+
+    #[test]
+    fn an_empty_trip_id_is_refused() {
+        assert_eq!(TripId::new(""), Err(EmptyTripId));
+    }
 
     #[test]
     fn a_capture_carries_every_segment_column_and_its_source() {

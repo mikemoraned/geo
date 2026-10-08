@@ -278,7 +278,9 @@ mod tests {
     async fn append_legacy(root: &Root, captured_at: DateTime<Utc>) {
         let rows: Vec<MotisSegmentRow> = fixture()
             .iter()
-            .map(|segment| segment_row(captured_at, segment, &Map::new()))
+            .map(|segment| {
+                segment_row(captured_at, segment, &Map::new()).expect("a segment with one trip")
+            })
             .collect();
         root.rows_of::<MotisSegmentRow>()
             .on_date(captured_at.date_naive())

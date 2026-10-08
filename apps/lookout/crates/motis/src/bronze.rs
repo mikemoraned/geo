@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use crate::api::types::TripSegment;
 use chrono::{DateTime, Utc};
 use medallion::Root;
-use medallion_model::{MotisCaptureRow, MotisSegmentRow, MotisSourceId};
+use medallion_model::{MotisCaptureRow, MotisSegmentRow, MotisSourceId, TripId};
 
 use crate::client::TripDetails;
+use crate::segment::NoTripOfItsOwn;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BronzeError {
@@ -13,26 +14,27 @@ pub enum BronzeError {
     Path(#[from] medallion::PathError),
     #[error("writing the capture log: {0}")]
     Write(#[from] medallion::AppendError),
+    #[error("capturing a segment: {0}")]
+    Segment(#[from] NoTripOfItsOwn),
 }
 
 pub(crate) fn segment_row(
     captured_at: DateTime<Utc>,
     segment: &TripSegment,
-    details: &HashMap<String, TripDetails>,
-) -> MotisSegmentRow {
-    let trip = segment.trips.first();
-    let trip_id = trip.map(|t| t.trip_id.as_str()).unwrap_or_default();
-    let details = details.get(trip_id);
+    details: &HashMap<TripId, TripDetails>,
+) -> Result<MotisSegmentRow, NoTripOfItsOwn> {
+    let trip = segment.trip()?;
+    let trip_id = segment.trip_id()?;
+    let details = details.get(&trip_id);
     let agency = details.map(|d| &d.agency);
 
-    MotisSegmentRow {
+    Ok(MotisSegmentRow {
         captured_at,
         trip_id: trip_id.to_string(),
-        route_name: trip.and_then(|t| {
-            t.display_name
-                .clone()
-                .or_else(|| t.route_short_name.clone())
-        }),
+        route_name: trip
+            .display_name
+            .clone()
+            .or_else(|| trip.route_short_name.clone()),
         train_number: details.and_then(|d| d.train_number),
         agency_id: agency.and_then(|a| a.id.clone()),
         agency_name: agency.and_then(|a| a.name.clone()),
@@ -50,7 +52,7 @@ pub(crate) fn segment_row(
         scheduled_arrival: segment.scheduled_arrival,
         realtime: segment.real_time,
         polyline: segment.polyline.clone(),
-    }
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -82,17 +84,17 @@ impl SegmentLog {
         &self,
         captured_at: DateTime<Utc>,
         segments: &[TripSegment],
-        details: &HashMap<String, TripDetails>,
+        details: &HashMap<TripId, TripDetails>,
     ) -> Result<usize, BronzeError> {
-        let rows: Vec<MotisCaptureRow> = segments
+        let rows = segments
             .iter()
             .map(|segment| {
-                MotisCaptureRow::of(
+                Ok(MotisCaptureRow::of(
                     self.source_id.clone(),
-                    segment_row(captured_at, segment, details),
-                )
+                    segment_row(captured_at, segment, details)?,
+                ))
             })
-            .collect();
+            .collect::<Result<Vec<_>, NoTripOfItsOwn>>()?;
 
         self.append_rows(captured_at, &rows).await
     }

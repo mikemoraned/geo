@@ -1,14 +1,16 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::time::Duration;
 
 use crate::api::types::{Mode, TripSegment};
 use chrono::{DateTime, Utc};
+use medallion_model::TripId;
 use redis::aio::MultiplexedConnection;
 use shared::{Message, V0Message, V1Message};
 use telemetry::RawSample;
 
 use crate::bronze::{BronzeError, SegmentLog};
-use crate::client::{MotisClient, MotisError, TimeWindow, TripDetails};
+use crate::client::{MotisClient, MotisError, TimeWindow};
+use crate::details::TripDetailsCache;
 use crate::window::{Position, PositionWindow};
 
 #[derive(Debug, Clone)]
@@ -28,7 +30,14 @@ pub enum PollOutcome {
         ingested: usize,
         positions: usize,
         segments: usize,
+        unresolved: Vec<Unresolved>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Unresolved {
+    Segment { reason: String },
+    Details { trip_id: TripId, reason: String },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -47,6 +56,7 @@ pub async fn poll_once(
     client: &MotisClient,
     log: &SegmentLog,
     window: &mut PositionWindow,
+    details: &mut TripDetailsCache,
     config: &PollConfig,
 ) -> Result<PollOutcome, PollError> {
     let now_ms = now.timestamp_millis();
@@ -71,19 +81,42 @@ pub async fn poll_once(
     let half = chrono::Duration::from_std(config.query_window_half)
         .expect("query window fits in chrono::Duration");
     let query_window = TimeWindow::around(now, half);
-    let segments: Vec<TripSegment> = client
+    let mut unresolved = Vec::new();
+    let mut captured: Vec<TripSegment> = Vec::new();
+    let mut trip_ids: HashSet<TripId> = HashSet::new();
+    for segment in client
         .trips_in_bbox(&bbox, &query_window, config.zoom)
         .await?
         .into_iter()
         .filter(|s| is_rail(&s.mode))
-        .collect();
-    let details = resolve_details(client, &segments).await;
-    let written = log.append(now, &segments, &details).await?;
+    {
+        match segment.trip_id() {
+            Ok(trip_id) => {
+                trip_ids.insert(trip_id);
+                captured.push(segment);
+            }
+            Err(err) => unresolved.push(Unresolved::Segment {
+                reason: err.to_string(),
+            }),
+        }
+    }
+    let resolution = details.resolve(client, &trip_ids).await;
+    unresolved.extend(
+        resolution
+            .failed
+            .into_iter()
+            .map(|(trip_id, err)| Unresolved::Details {
+                trip_id,
+                reason: err.to_string(),
+            }),
+    );
+    let written = log.append(now, &captured, &resolution.details).await?;
 
     Ok(PollOutcome::Queried {
         ingested,
         positions: window.len(),
         segments: written,
+        unresolved,
     })
 }
 
@@ -97,27 +130,6 @@ fn is_rail(mode: &Mode) -> bool {
             | Mode::RegionalRail
             | Mode::Rail
     )
-}
-
-async fn resolve_details(
-    client: &MotisClient,
-    segments: &[TripSegment],
-) -> HashMap<String, TripDetails> {
-    let trip_ids: std::collections::HashSet<&str> = segments
-        .iter()
-        .filter_map(|s| s.trips.first())
-        .map(|t| t.trip_id.as_str())
-        .collect();
-    let mut details = HashMap::new();
-    for trip_id in trip_ids {
-        match client.trip_details(trip_id).await {
-            Ok(d) => {
-                details.insert(trip_id.to_string(), d);
-            }
-            Err(err) => tracing::warn!(%trip_id, %err, "resolving trip details failed"),
-        }
-    }
-    details
 }
 
 fn sample_gps(raw: &RawSample) -> Option<(i64, f64, f64)> {

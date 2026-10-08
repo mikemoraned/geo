@@ -4,7 +4,9 @@ pub mod api {
 }
 pub mod bronze;
 pub mod client;
+pub mod details;
 pub mod ingest;
 pub mod poll;
+pub mod segment;
 pub mod source;
 pub mod window;

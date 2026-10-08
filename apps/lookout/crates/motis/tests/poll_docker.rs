@@ -7,6 +7,7 @@ use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready}
 use medallion::Root;
 use motis::bronze::SegmentLog;
 use motis::client::MotisClient;
+use motis::details::TripDetailsCache;
 use motis::poll::{PollConfig, PollOutcome, poll_once};
 use motis::window::PositionWindow;
 use shared::{Accel, AccelReading, Message, V1Message};
@@ -82,6 +83,7 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
     let store = tempfile::tempdir().expect("temp store");
     let log = SegmentLog::new(Root::new(store.path()), common::local_source().id());
     let client = MotisClient::new(&motis.uri());
+    let mut details = TripDetailsCache::default();
     let mut window = PositionWindow::new(Duration::from_secs(30 * 60));
     let config = PollConfig {
         recent_lookback: Duration::from_secs(5 * 60),
@@ -90,9 +92,17 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
         sample_limit: 1000,
     };
 
-    let outcome = poll_once(now, &mut conn, &client, &log, &mut window, &config)
-        .await
-        .expect("poll once");
+    let outcome = poll_once(
+        now,
+        &mut conn,
+        &client,
+        &log,
+        &mut window,
+        &mut details,
+        &config,
+    )
+    .await
+    .expect("poll once");
 
     assert_eq!(
         outcome,
@@ -100,6 +110,7 @@ async fn poll_once_ingests_recent_gps_and_logs_motis_segments_docker() {
             ingested: 3,
             positions: 3,
             segments: rail_fixture_len(),
+            unresolved: Vec::new(),
         }
     );
 

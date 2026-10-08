@@ -28,9 +28,12 @@ Mainline and regional rail, by Motis's own modes: highspeed, long-distance, nigh
 regional and plain rail. Urban transit and road modes are dropped, so the capture is trains rather
 than all transit.
 
-A poll resolves the details a segment does not carry — the operating agency and the train number —
-once per distinct trip, and caches nothing between polls: the server is local and a poll is
-coarse. A trip whose lookup fails costs its row those two fields and nothing else.
+A segment does not carry its operating agency or its train number, so the poller asks the server
+for them. It asks once per trip per run, and every later poll seeing that trip reuses the answer.
+A remote server sees one request per train rather than one per poll. A trip whose lookup fails is
+still captured without those two fields, and is asked about again at the next poll. A segment
+without exactly one trip is not captured. Each poll reports both kinds of failure, and the poller
+logs them as errors.
 
 ## The client
 

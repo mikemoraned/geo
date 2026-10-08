@@ -5,7 +5,7 @@ use crate::api::{
 use chrono::{DateTime, Duration, Timelike, Utc};
 use domain::TrainNumber;
 use geo_types::Rect;
-use medallion_model::{MotisVersion, NotAMotisVersion};
+use medallion_model::{MotisVersion, NotAMotisVersion, TripId};
 
 pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8080";
 
@@ -27,13 +27,13 @@ pub enum MotisError {
     Version(#[from] NotAMotisVersion),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Agency {
     pub id: Option<String>,
     pub name: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TripDetails {
     pub agency: Agency,
     pub train_number: Option<TrainNumber>,
@@ -103,11 +103,11 @@ impl MotisClient {
         Ok(response.into_inner())
     }
 
-    pub async fn trip_details(&self, trip_id: &str) -> Result<TripDetails, MotisError> {
+    pub async fn trip_details(&self, trip_id: &TripId) -> Result<TripDetails, MotisError> {
         let itinerary = self
             .inner
             .trip()
-            .trip_id(trip_id)
+            .trip_id(trip_id.as_str())
             .join_interlined_legs(false)
             .send()
             .await?
@@ -125,7 +125,10 @@ fn details_of(itinerary: Itinerary) -> TripDetails {
             id: leg.agency_id.clone(),
             name: leg.agency_name.clone(),
         })
-        .unwrap_or_default();
+        .unwrap_or(Agency {
+            id: None,
+            name: None,
+        });
     let train_number = itinerary.legs.iter().find_map(|leg| {
         leg.trip_short_name
             .as_deref()
@@ -225,7 +228,7 @@ mod tests {
             "expected some trip segments in the Frankfurt box"
         );
 
-        let trip_id = segments[0].trips[0].trip_id.clone();
+        let trip_id = segments[0].trip_id().expect("a segment with one trip");
         let details = client
             .trip_details(&trip_id)
             .await
