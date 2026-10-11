@@ -73,6 +73,13 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   alone, made a mirror fail `verify`. Confirmed 2026-10-04.
 - **`indicatif` draws the spinner and the bars.** It offers spinners, several bars at once, and
   a time remaining for each bar, so nothing of it is hand-rolled. Confirmed 2026-10-04.
+- **The rate and time left cover the last 60 seconds.** indicatif's own estimate gives data
+  older than 15 seconds a tenth of its weight. A whole-file copy advances the bar by a whole file
+  at once, often more than 15 seconds apart, so that estimate spikes as each file completes and
+  decays between them. A 60-second window spans several files, so it holds steady. The bar's own
+  fields compute it, through indicatif's `ProgressTracker`. Reporting a copy's bytes as they
+  arrive would also smooth the input, and stays open if the window is not enough. Confirmed
+  2026-10-11.
 - **The crossing-check baseline is taken before silver is re-derived.** `just crossing-checks`
   reads the silver the store holds, and `just silver-init` overwrites it. Without the baseline
   there are no old counts to compare against.
@@ -136,6 +143,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       The time is shown for the release alone, as the bar is.
 - [x] Split `sync` into a checking stage and a copying stage, each with its own bar, sharing
       `verify`'s check.
+- [x] Show the rate and the time left over the last 60 seconds, as fields of the bar's style in
+      `tools/overture-mirror/src/progress.rs`.
 
 #### The release pin
 

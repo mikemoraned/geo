@@ -18,6 +18,7 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 
 use crate::location::Location;
 use crate::progress::{Display, Progress};
+use crate::rate::Rate;
 use crate::release::Release;
 use crate::signature::Signature;
 
@@ -216,13 +217,13 @@ impl Source {
                 write_stream(chunks, &partial, progress).await?;
             }
         }
-        let seconds = started.elapsed().as_secs_f64();
-        let per_second = (object.size as f64 / seconds.max(f64::EPSILON)) as u64;
+        let elapsed = started.elapsed();
+        let rate = Rate::across(object.size, elapsed).unwrap_or_default();
         tracing::info!(
-            "copied {} ({}) in {seconds:.1}s, {}/s",
+            "copied {} ({}) in {:.1}s, {rate}",
             object.location,
             BinaryBytes(object.size),
-            BinaryBytes(per_second),
+            elapsed.as_secs_f64(),
         );
         tokio::fs::rename(&partial, local)
             .await

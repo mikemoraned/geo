@@ -52,7 +52,11 @@ total. `verify` ends there.
 `copying`. Its total is the size of those files, fixed before the first download starts, so it
 counts only what is still to come. Where every file is complete, `sync` skips the copying stage.
 
-Each bar shows a spinner, the bytes done out of the total, the rate, and the time left.
+Each bar shows a spinner, the bytes done out of the total, the rate, and the time left. The rate
+and the time left cover the last 60 seconds. A copy from a source mirror advances its bar by a
+whole file at once, so a shorter window would leap as each file completes and sink between them.
+Until a stage has run for a minute, both figures rest on the time it has run. Before its first
+bytes arrive, the time left reads `time left unknown`.
 
 ## A sync resumes from what the mirror holds
 

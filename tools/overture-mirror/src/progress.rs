@@ -1,10 +1,65 @@
-use std::time::Duration;
+use std::fmt;
+use std::time::{Duration, Instant};
 
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressFinish, ProgressStyle};
+use indicatif::style::ProgressTracker;
+use indicatif::{
+    HumanDuration, ProgressBar, ProgressDrawTarget, ProgressFinish, ProgressState, ProgressStyle,
+};
 
-const TEMPLATE: &str = "{spinner} {prefix:<8} [{bar:40}] {bytes:>10} / {total_bytes:<10} {binary_bytes_per_sec:>12}  {eta} left";
+use crate::rate::RateWindow;
+
+const TEMPLATE: &str =
+    "{spinner} {prefix:<8} [{bar:40}] {bytes:>10} / {total_bytes:<10} {rate:>12}  {left}";
 
 const TICK: Duration = Duration::from_millis(120);
+
+const RATE_WINDOW_LENGTH: Duration = Duration::from_secs(60);
+
+#[derive(Debug, Clone)]
+struct WindowedRate(RateWindow);
+
+impl ProgressTracker for WindowedRate {
+    fn clone_box(&self) -> Box<dyn ProgressTracker> {
+        Box::new(self.clone())
+    }
+
+    fn tick(&mut self, state: &ProgressState, now: Instant) {
+        self.0.record(now, state.pos());
+    }
+
+    fn reset(&mut self, _state: &ProgressState, _now: Instant) {
+        self.0.clear();
+    }
+
+    fn write(&self, _state: &ProgressState, w: &mut dyn fmt::Write) {
+        let _ = write!(w, "{}", self.0.rate().unwrap_or_default());
+    }
+}
+
+#[derive(Debug, Clone)]
+struct WindowedTimeLeft(RateWindow);
+
+impl ProgressTracker for WindowedTimeLeft {
+    fn clone_box(&self) -> Box<dyn ProgressTracker> {
+        Box::new(self.clone())
+    }
+
+    fn tick(&mut self, state: &ProgressState, now: Instant) {
+        self.0.record(now, state.pos());
+    }
+
+    fn reset(&mut self, _state: &ProgressState, _now: Instant) {
+        self.0.clear();
+    }
+
+    fn write(&self, state: &ProgressState, w: &mut dyn fmt::Write) {
+        let remaining = state.len().unwrap_or_default().saturating_sub(state.pos());
+        let _ = match self.0.rate().and_then(|rate| rate.time_for(remaining)) {
+            Some(left) => write!(w, "{} left", HumanDuration(left)),
+            None => write!(w, "time left unknown"),
+        };
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Display {
@@ -25,7 +80,12 @@ impl Progress {
         };
         let style = ProgressStyle::with_template(TEMPLATE)
             .expect("TEMPLATE is a constant indicatif accepts")
-            .progress_chars("=> ");
+            .progress_chars("=> ")
+            .with_key("rate", WindowedRate(RateWindow::new(RATE_WINDOW_LENGTH)))
+            .with_key(
+                "left",
+                WindowedTimeLeft(RateWindow::new(RATE_WINDOW_LENGTH)),
+            );
         let bar = ProgressBar::with_draw_target(Some(total), target)
             .with_style(style)
             .with_prefix(stage)
