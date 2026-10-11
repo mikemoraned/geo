@@ -232,6 +232,10 @@ Next, so data accumulates while the rest is built.
 - [x] Refactor `crates/motis` again once the area mode lands: a function taking too many
       arguments or doing too much, a hand-rolled type a library or `std` provides, a raw number
       standing in for a type.
+- [ ] Log, for each poll, how many requests of each kind it sent to Motis and how long each kind
+      took in total. A capture of Thuringia on 2026-10-11 took 5.0, 4.7, and 8.9 minutes per poll,
+      though the second and third looked up only 8 and 16 new trips, so the trip lookups alone do
+      not explain the time.
 - [ ] Capture Thuringia from Transitous every 10 minutes, for 2 hours. This is only 12 samples, so not a lot of data.
       Sanity-check this has worked by visualising this data in a notebook i.e. show the trains changing over time along their paths.
       The intent of this is to see if train positions make sense and just to spot any other anomalies.
