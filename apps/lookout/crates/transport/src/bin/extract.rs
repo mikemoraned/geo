@@ -18,10 +18,10 @@ struct Args {
     #[command(flatten)]
     medallion: MedallionArgs,
     /// Read the release from a local mirror of the bucket's `release/` prefix rooted
-    /// here, rather than from S3. The path holds a directory per release, named by its
-    /// id.
+    /// here when the path is mounted, and from S3 when not. The path holds a directory
+    /// per release, named by its id.
     #[arg(long, global = true)]
-    mirror: Option<PathBuf>,
+    mirror_if_mounted: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -66,6 +66,7 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let root = args.medallion.root()?;
+    let mirror = mirror_in_use(args.mirror_if_mounted);
     let at = Utc::now();
 
     match args
@@ -73,7 +74,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(Command::Backfill { extract_id: None })
     {
         Command::Backfill { extract_id: None } => {
-            let backfilled = backfill_recorded(&root, &args.mirror, at).await?;
+            let backfilled = backfill_recorded(&root, &mirror, at).await?;
             tracing::info!(
                 filled = %named(&backfilled.filled),
                 skipped = %named(&backfilled.skipped),
@@ -84,13 +85,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             extract_id: Some(id),
         } => {
             let recorded = extract::recorded_as(&root, &id).await?;
-            report(&backfill(&root, &args.mirror, recorded, at).await?);
+            report(&backfill(&root, &mirror, recorded, at).await?);
         }
         Command::New { release, country } => {
             let id = ExtractId::at(at);
-            let release = ReleaseChoice::from(release)
-                .resolve(args.mirror.clone())
-                .await?;
+            let release = ReleaseChoice::from(release).resolve(mirror).await?;
             tracing::info!(
                 %id,
                 release = release.id(),
@@ -109,6 +108,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn mirror_in_use(if_mounted: Option<PathBuf>) -> Option<PathBuf> {
+    let if_mounted = if_mounted?;
+    if if_mounted.is_dir() {
+        return Some(if_mounted);
+    }
+    tracing::info!(mirror = %if_mounted.display(), "no mirror mounted; reading the public bucket");
+    None
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -318,5 +326,25 @@ mod tests {
             ReleaseChoice::from(release),
             ReleaseChoice::NamedRelease("2026-07-22.0".into())
         );
+    }
+
+    #[test]
+    fn a_mounted_mirror_is_read() {
+        let mounted = tempfile::tempdir().expect("a temp dir");
+
+        assert_eq!(
+            mirror_in_use(Some(mounted.path().into())),
+            Some(mounted.path().into())
+        );
+    }
+
+    #[test]
+    fn an_unmounted_mirror_leaves_the_bucket() {
+        assert_eq!(mirror_in_use(Some(PathBuf::from("/no/such/mirror"))), None);
+    }
+
+    #[test]
+    fn with_no_mirror_the_bucket_is_read() {
+        assert_eq!(mirror_in_use(None), None);
     }
 }

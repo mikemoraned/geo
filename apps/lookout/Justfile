@@ -134,15 +134,7 @@ bronze-poll-motis *args:
 
 # Take an Overture extract into bronze, from the mirror if mounted. No args fills in every recorded one; `new` takes a fresh one.
 bronze-extract *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -d "{{overture_mirror}}" ]; then
-        echo "reading the Overture mirror at {{overture_mirror}}"
-        cargo run --release -p transport --bin extract -- --mirror "{{overture_mirror}}" {{args}}
-    else
-        echo "no Overture mirror at {{overture_mirror}}; reading the public bucket"
-        cargo run --release -p transport --bin extract -- {{args}}
-    fi
+    cargo run --release -p transport --bin extract -- --mirror-if-mounted "{{overture_mirror}}" {{args}}
 
 # Re-derive every silver dataset from bronze, in order. Safe to re-run; needs `bronze-init` first.
 silver-init *args:
