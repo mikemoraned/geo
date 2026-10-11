@@ -97,10 +97,10 @@ test-geo:
 test-doc:
     cargo test --doc --workspace
 
-# The Python tests, rebuilding `lookout-predictor` so a change to the rust crates reaches it.
+# The Python tests. Each extension rebuilds when a rust crate it wraps changes.
 test-python:
     uv run --directory crates/medallion-py pytest -q
-    uv run --directory crates/platform/rerun-py --reinstall-package lookout-predictor pytest -q
+    uv run --directory crates/platform/rerun-py pytest -q
     uv run --directory notebooks/water_crossings pytest -q
 
 # Tests against real services, in release, with credentials from 1Password. Hits the real redis.

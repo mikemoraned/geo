@@ -15,6 +15,19 @@ classifiers = ["Private :: Do Not Upload"]
 features = ["pyo3/extension-module"]
 module-name = "lookout_predictor"
 
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "src/**/*.rs" },
+    { file = "../../predictor/Cargo.toml" },
+    { file = "../../predictor/src/**/*.rs" },
+    { file = "../../domain/Cargo.toml" },
+    { file = "../../domain/src/**/*.rs" },
+    { file = "../../../Cargo.toml" },
+    { file = "../../../Cargo.lock" },
+]
+
 # The wheel is the extension module alone, and it depends on nothing. What is listed here is
 # what the runner beside it needs: it shares this project rather than having one of its own,
 # so that driving the predictor takes no install step.

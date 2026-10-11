@@ -194,7 +194,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       lookout-medallion` from `silver-water-crossings`, `test-python` and
       `crates/medallion-py/README.md`. The README states that a crate added to its
       dependencies joins the list, and that `--reinstall-package` still forces a rebuild.
-- [ ] Do the same for `lookout-predictor` in `crates/platform/rerun-py`.
+- [x] Do the same for `lookout-predictor` in `crates/platform/rerun-py`.
 
 #### Wrap-up
 
