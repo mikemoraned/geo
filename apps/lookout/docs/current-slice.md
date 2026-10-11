@@ -80,7 +80,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   fields compute it, through indicatif's `ProgressTracker`. Reporting a copy's bytes as they
   arrive would also smooth the input, and stays open if the window is not enough. Confirmed
   2026-10-11.
-- **The crossing-check baseline is taken before silver is re-derived.** `just crossing-checks`
+- **The crossing-check baseline is taken before silver is re-derived.** `just test-geo`
   reads the silver the store holds, and `just silver-init` overwrites it. Without the baseline
   there are no old counts to compare against.
 
@@ -163,11 +163,17 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Re-derive, re-pack, and re-measure
 
-- [ ] Run `just crossing-checks` on the current silver, and keep its output as the baseline.
+- [x] Replace `just crossing-checks` with `just test-geo`. Both check the same silver against
+      the same cases, but only `crossing-checks` reports a passing case's detail. Make each
+      case in `crates/crossings/tests/geo.rs` print its expected count, its found count and
+      its country, and make the `geo` nextest profile show a passing test's output. Remove
+      the recipe and `notebooks/water_crossings/check_cases.py`, and name `just test-geo`
+      wherever this slice names `just crossing-checks`.
+- [ ] Run `just test-geo` on the current silver, and keep its output as the baseline.
       It must run before `just silver-init`.
 - [ ] Point `EXTRACTS` in `notebooks/water_crossings/v10.py` at the two new ids, and re-run
       `just silver-init`.
-- [ ] Re-run `just crossing-checks`, and record each test case whose count moved from the
+- [ ] Re-run `just test-geo`, and record each test case whose count moved from the
       baseline.
 - [ ] Re-run `just gold-pack-crossings`, `just crossings`, `just gold-pack-sessions` and `just
       kiosk-sessions`, and commit the packed artefacts with the versions adopted.
