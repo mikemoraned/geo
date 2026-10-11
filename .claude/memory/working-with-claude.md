@@ -42,3 +42,10 @@ See [docs-style.md](docs-style.md).
 ## Tests
 
 See [testing-limits.md](testing-limits.md) for what a passing run in the sandbox proves.
+
+## Shell
+
+Keep shell plain: a recipe runs commands in sequence, with at most a simple `if`. When a recipe
+starts to need arrays, parameter-expansion tricks, or workarounds for a shell's version, move
+the logic into Rust or Python. macOS ships bash 3.2, so a construct that works in a newer bash
+can fail there. One example: under `set -u`, bash 3.2 rejects an empty array as unbound.

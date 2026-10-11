@@ -4642,6 +4642,7 @@ dependencies = [
  "arrow 57.3.1",
  "chrono",
  "domain",
+ "geo-types",
  "medallion",
  "serde",
  "serde_json",

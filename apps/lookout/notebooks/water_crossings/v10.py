@@ -44,8 +44,8 @@ def _(lookout_medallion):
     # covers every country here and writes them in one go, which is what keeps the crossing ids
     # unique across the dataset.
     EXTRACTS = {
-        "DE": "20260804T152143Z",
-        "GB": "20260927T172559Z",
+        "DE": "20261011T154538Z",
+        "GB": "20261011T154005Z",
     }
 
     # The medallion store in the repo. Asked of the store's own writer rather than worked out

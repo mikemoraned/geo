@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::path::Path;
 
@@ -8,6 +8,7 @@ use geo_types::{Geometry, Point};
 use geojson::{FeatureCollection, GeoJson};
 use libtest_mimic::{Arguments, Failed, Trial};
 use medallion::{Query, Root};
+use medallion_model::ExtractManifestRow;
 
 const CASES: &str = "../../notebooks/water_crossings/test_cases.geojson";
 
@@ -45,6 +46,26 @@ async fn rail_of(
     Ok(rail)
 }
 
+async fn extracts(root: &Root) -> Result<Vec<ExtractManifestRow>, Box<dyn Error>> {
+    let query = Query::new(root.clone());
+    query
+        .register_by_name(medallion_model::EXTRACT_MANIFEST)
+        .await?;
+    Ok(query.rows("SELECT * FROM extract_manifest").await?)
+}
+
+fn countries_covering(extracts: &[ExtractManifestRow], bbox: &Geometry<f64>) -> String {
+    let countries: BTreeSet<&str> = extracts
+        .iter()
+        .filter(|extract| extract.bbox().intersects(bbox))
+        .map(|extract| extract.country.as_str())
+        .collect();
+    match countries.is_empty() {
+        true => "no country".to_string(),
+        false => countries.into_iter().collect::<Vec<_>>().join(", "),
+    }
+}
+
 fn slug(name: &str) -> String {
     name.chars()
         .map(|letter| match letter.is_ascii_alphanumeric() {
@@ -74,6 +95,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "water_crossing",
         crossings::silver::PLACED,
     ))?;
+    let extracts = runtime.block_on(extracts(&root))?;
 
     let mut trials = Vec::new();
     for case in cases.features {
@@ -109,6 +131,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             rail.extend(runtime.block_on(rail_of(&root, extract_id, &ids))?);
         }
 
+        let country = countries_covering(&extracts, &bbox);
         let found = inside.len();
         let named: Vec<String> = inside
             .iter()
@@ -118,6 +141,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         trials.push(Trial::test(
             format!("{}::crossings", slug(&name)),
             move || -> Result<(), Failed> {
+                println!("expected {expected}, found {found}, in {country}");
                 if found != expected {
                     return Err(
                         format!("expected {expected} crossings, found {found}: {named:?}").into(),

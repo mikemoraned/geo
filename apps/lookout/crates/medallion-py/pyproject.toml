@@ -15,6 +15,21 @@ classifiers = ["Private :: Do Not Upload"]
 features = ["pyo3/extension-module"]
 module-name = "lookout_medallion"
 
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "src/**/*.rs" },
+    { file = "../medallion/Cargo.toml" },
+    { file = "../medallion/src/**/*.rs" },
+    { file = "../medallion-model/Cargo.toml" },
+    { file = "../medallion-model/src/**/*.rs" },
+    { file = "../domain/Cargo.toml" },
+    { file = "../domain/src/**/*.rs" },
+    { file = "../../Cargo.toml" },
+    { file = "../../Cargo.lock" },
+]
+
 [dependency-groups]
 dev = [
     "duckdb==1.5.5",

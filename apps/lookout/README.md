@@ -23,7 +23,8 @@ PROJ and jq for `crs-definitions`, and the wasm target.
 A fresh worktree carries bronze and derives the rest: `just init` fills in the Overture extract
 and re-derives every silver dataset. The extract comes from a local mirror of the Overture bucket
 when its drive is mounted, and from the public bucket otherwise; no live source is touched either
-way.
+way. [`tools/overture-mirror`](../../tools/overture-mirror/README.md) makes the mirror and states
+where it is.
 
 Gold is packed when it is needed rather than by `init`, and each packing adopts what it wrote:
 `crossings.version` and `sessions.version` name the versions in play. The device's build script
@@ -47,5 +48,6 @@ in its `src/lib.rs`, so `help(…)` in a notebook or a REPL is the documentation
 
 `just test` runs everything, `just test-no-docker` everything a sandbox can. Among them,
 [doclinks](crates/doclinks/README.md) checks that the links between these docs still resolve. Both
-run the doctests separately from nextest, which does not support them, and both rebuild the two
-python extensions — uv's wheel cache does not notice a change to the rust crates underneath.
+run the doctests separately from nextest, which does not support them. uv rebuilds each python
+extension when a file named under `cache-keys` in its `pyproject.toml` changes, so a change to the
+rust crates underneath reaches the python tests.

@@ -72,6 +72,7 @@ says nothing, so without that check a replay into no viewer is silent and looks 
 
 ## Running the tests
 
-`just test-python` (from `apps/lookout`) runs them, or `uv run --reinstall-package
-lookout-predictor pytest -q` from here. [The app's README](../../../README.md#testing) says why
-the rebuild is forced.
+`just test-python` (from `apps/lookout`) runs them, or `uv run pytest -q` from here. uv rebuilds
+the extension when a file named under `cache-keys` in `pyproject.toml` changes, as
+[`medallion-py`'s README](../../medallion-py/README.md) describes for its own extension. To force
+a rebuild, pass `--reinstall-package lookout-predictor` to `uv run`.

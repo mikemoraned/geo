@@ -1,3 +1,5 @@
+import '../../tools/overture-mirror/mirror.just'
+
 git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git diff --quiet 2>/dev/null || echo -dirty)"`
 
 # Install the tools every other recipe needs. See README.md for what each is for.
@@ -95,10 +97,10 @@ test-geo:
 test-doc:
     cargo test --doc --workspace
 
-# The Python tests, rebuilding both extensions so a change to the rust crates reaches them.
+# The Python tests. Each extension rebuilds when a rust crate it wraps changes.
 test-python:
-    uv run --directory crates/medallion-py --reinstall-package lookout-medallion pytest -q
-    uv run --directory crates/platform/rerun-py --reinstall-package lookout-predictor --reinstall-package lookout-medallion pytest -q
+    uv run --directory crates/medallion-py pytest -q
+    uv run --directory crates/platform/rerun-py pytest -q
     uv run --directory notebooks/water_crossings pytest -q
 
 # Tests against real services, in release, with credentials from 1Password. Hits the real redis.
@@ -114,19 +116,9 @@ deploy:
 # Set up a fresh worktree's store from what the checkout carries. Gold waits until needed.
 init: bronze-init silver-init
 
-overture_mirror := "/Volumes/PRO-G40/OvertureMaps/data/release"
-
-# Fill in the bronze a checkout leaves out: every recorded Overture extract, from a mirror if mounted.
+# Fill in the bronze a checkout leaves out: every recorded Overture extract.
 bronze-init *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -d "{{overture_mirror}}" ]; then
-        echo "reading the Overture mirror at {{overture_mirror}}"
-        just bronze-extract --mirror "{{overture_mirror}}" {{args}}
-    else
-        echo "no Overture mirror at {{overture_mirror}}; reading the public bucket"
-        just bronze-extract {{args}}
-    fi
+    just bronze-extract {{args}}
 
 # Report what the store holds, layer by layer.
 summarise *args:
@@ -140,9 +132,9 @@ bronze-record *args:
 bronze-poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 
-# Take an Overture extract into bronze. No args fills in every recorded one; `new` takes a fresh one.
+# Take an Overture extract into bronze, from the mirror if mounted. No args fills in every recorded one; `new` takes a fresh one.
 bronze-extract *args:
-    cargo run --release -p transport --bin extract -- {{args}}
+    cargo run --release -p transport --bin extract -- --mirror-if-mounted "{{overture_mirror}}" {{args}}
 
 # Re-derive every silver dataset from bronze, in order. Safe to re-run; needs `bronze-init` first.
 silver-init *args:
@@ -165,12 +157,7 @@ silver-crossings *args:
 
 # Derive silver `water_crossing` from the crossings notebook. Always writes the repo store.
 silver-water-crossings:
-    uv run --no-project --reinstall-package lookout-medallion notebooks/water_crossings/v10.py
-
-# Check the water crossings the store holds against the bbox test cases. Reads; derives nothing.
-crossing-checks:
-    uv run --no-project --reinstall-package lookout-medallion \
-        notebooks/water_crossings/check_cases.py
+    uv run --no-project notebooks/water_crossings/v10.py
 
 # Derive silver `session_crossing`: the crossings each recorded session passed.
 silver-session-crossings *args:

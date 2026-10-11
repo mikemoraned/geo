@@ -7,7 +7,7 @@ use medallion::{Country, MedallionArgs, Root};
 use medallion_model::ExtractManifestRow;
 use transport::{
     extract::{self, ExtractId, Extraction, Extractor},
-    overture::{DEFAULT_RELEASE, Overture, Release},
+    overture::{Overture, Release, ReleaseChoice},
 };
 
 #[derive(Parser)]
@@ -18,10 +18,10 @@ struct Args {
     #[command(flatten)]
     medallion: MedallionArgs,
     /// Read the release from a local mirror of the bucket's `release/` prefix rooted
-    /// here, rather than from S3. The path holds a directory per release, named by its
-    /// id.
+    /// here when the path is mounted, and from S3 when not. The path holds a directory
+    /// per release, named by its id.
     #[arg(long, global = true)]
-    mirror: Option<PathBuf>,
+    mirror_if_mounted: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -35,9 +35,10 @@ enum Command {
     },
     /// Take a new extract, under a new id, and record it in the manifest.
     New {
-        /// Overture release to extract (see docs.overturemaps.org/release).
-        #[arg(long, default_value = DEFAULT_RELEASE)]
-        release: String,
+        /// Overture release to extract (see docs.overturemaps.org/release). Without
+        /// one, the latest release the mirror or the bucket holds.
+        #[arg(long)]
+        release: Option<String>,
         /// Country to extract, as an ISO 3166-1 alpha-2 code.
         #[arg(long, default_value = "DE")]
         country: Country,
@@ -65,6 +66,7 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let root = args.medallion.root()?;
+    let mirror = mirror_in_use(args.mirror_if_mounted);
     let at = Utc::now();
 
     match args
@@ -72,7 +74,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(Command::Backfill { extract_id: None })
     {
         Command::Backfill { extract_id: None } => {
-            let backfilled = backfill_recorded(&root, &args.mirror, at).await?;
+            let backfilled = backfill_recorded(&root, &mirror, at).await?;
             tracing::info!(
                 filled = %named(&backfilled.filled),
                 skipped = %named(&backfilled.skipped),
@@ -83,18 +85,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             extract_id: Some(id),
         } => {
             let recorded = extract::recorded_as(&root, &id).await?;
-            report(&backfill(&root, &args.mirror, recorded, at).await?);
+            report(&backfill(&root, &mirror, recorded, at).await?);
         }
         Command::New { release, country } => {
             let id = ExtractId::at(at);
-            let overture = Overture::open(release_at(&release, &args.mirror));
+            let release = ReleaseChoice::from(release).resolve(mirror).await?;
             tracing::info!(
                 %id,
-                %release,
+                release = release.id(),
+                source = release.location(),
                 %country,
                 root = %root.path().display(),
                 "extracting",
             );
+            let overture = Overture::open(release);
             report(
                 &Extractor::new(&overture, &root)
                     .extract(id, country, at)
@@ -104,6 +108,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn mirror_in_use(if_mounted: Option<PathBuf>) -> Option<PathBuf> {
+    let if_mounted = if_mounted?;
+    if if_mounted.is_dir() {
+        return Some(if_mounted);
+    }
+    tracing::info!(mirror = %if_mounted.display(), "no mirror mounted; reading the public bucket");
+    None
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -175,25 +188,20 @@ async fn backfill(
     recorded: ExtractManifestRow,
     at: chrono::DateTime<Utc>,
 ) -> Result<Extraction, Box<dyn std::error::Error>> {
-    let overture = Overture::open(release_at(&recorded.release, mirror));
+    let release = Release::at(&recorded.release, mirror.clone());
     tracing::info!(
         id = %recorded.extract_id,
         release = %recorded.release,
+        source = release.location(),
         country = %recorded.country,
         extracted_at = %recorded.extracted_at,
         root = %root.path().display(),
         "backfilling",
     );
+    let overture = Overture::open(release);
     Ok(Extractor::new(&overture, root)
         .backfill(&recorded, at)
         .await?)
-}
-
-fn release_at(release: &str, mirror: &Option<PathBuf>) -> Release {
-    match mirror {
-        Some(path) => Release::mirrored(release, path.clone()),
-        None => Release::published(release),
-    }
 }
 
 #[cfg(test)]
@@ -294,13 +302,49 @@ mod tests {
     }
 
     #[test]
-    fn a_new_extract_defaults_to_the_pinned_release_and_germany() {
+    fn a_new_extract_defaults_to_the_latest_release_available_and_germany() {
         let args = Args::parse_from(["extract", "new"]);
 
         let Some(Command::New { release, country }) = args.command else {
             panic!("expected a new extract");
         };
-        assert_eq!(release, DEFAULT_RELEASE);
+        assert_eq!(
+            ReleaseChoice::from(release),
+            ReleaseChoice::LatestReleaseAvailable
+        );
         assert_eq!(country, Country::Germany);
+    }
+
+    #[test]
+    fn a_new_extract_takes_a_named_release() {
+        let args = Args::parse_from(["extract", "new", "--release", "2026-07-22.0"]);
+
+        let Some(Command::New { release, .. }) = args.command else {
+            panic!("expected a new extract");
+        };
+        assert_eq!(
+            ReleaseChoice::from(release),
+            ReleaseChoice::NamedRelease("2026-07-22.0".into())
+        );
+    }
+
+    #[test]
+    fn a_mounted_mirror_is_read() {
+        let mounted = tempfile::tempdir().expect("a temp dir");
+
+        assert_eq!(
+            mirror_in_use(Some(mounted.path().into())),
+            Some(mounted.path().into())
+        );
+    }
+
+    #[test]
+    fn an_unmounted_mirror_leaves_the_bucket() {
+        assert_eq!(mirror_in_use(Some(PathBuf::from("/no/such/mirror"))), None);
+    }
+
+    #[test]
+    fn with_no_mirror_the_bucket_is_read() {
+        assert_eq!(mirror_in_use(None), None);
     }
 }
