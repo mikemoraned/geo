@@ -116,17 +116,9 @@ deploy:
 # Set up a fresh worktree's store from what the checkout carries. Gold waits until needed.
 init: bronze-init silver-init
 
-# Fill in the bronze a checkout leaves out: every recorded Overture extract, from a mirror if mounted.
+# Fill in the bronze a checkout leaves out: every recorded Overture extract.
 bronze-init *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -d "{{overture_mirror}}" ]; then
-        echo "reading the Overture mirror at {{overture_mirror}}"
-        just bronze-extract --mirror "{{overture_mirror}}" {{args}}
-    else
-        echo "no Overture mirror at {{overture_mirror}}; reading the public bucket"
-        just bronze-extract {{args}}
-    fi
+    just bronze-extract {{args}}
 
 # Report what the store holds, layer by layer.
 summarise *args:
@@ -140,9 +132,17 @@ bronze-record *args:
 bronze-poll-motis *args:
     op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
 
-# Take an Overture extract into bronze. No args fills in every recorded one; `new` takes a fresh one.
+# Take an Overture extract into bronze, from the mirror if mounted. No args fills in every recorded one; `new` takes a fresh one.
 bronze-extract *args:
-    cargo run --release -p transport --bin extract -- {{args}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -d "{{overture_mirror}}" ]; then
+        echo "reading the Overture mirror at {{overture_mirror}}"
+        cargo run --release -p transport --bin extract -- --mirror "{{overture_mirror}}" {{args}}
+    else
+        echo "no Overture mirror at {{overture_mirror}}; reading the public bucket"
+        cargo run --release -p transport --bin extract -- {{args}}
+    fi
 
 # Re-derive every silver dataset from bronze, in order. Safe to re-run; needs `bronze-init` first.
 silver-init *args:
