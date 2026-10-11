@@ -62,6 +62,14 @@ impl CountryAreas {
 
         Ok(Self { areas })
     }
+
+    pub fn shapes_of(&self, country: Country) -> Vec<Geometry<f64>> {
+        self.areas
+            .iter()
+            .filter(|(of, _)| *of == country)
+            .map(|(_, area)| area.clone())
+            .collect()
+    }
 }
 
 impl Countries for CountryAreas {
@@ -186,6 +194,22 @@ mod tests {
         assert_eq!(
             areas.containing(Point::new(5.0, 5.0)),
             Some(Country::Germany)
+        );
+    }
+
+    #[test]
+    fn a_country_has_the_shapes_of_its_own_areas_alone() {
+        let areas = CountryAreas {
+            areas: vec![
+                (Country::Germany, square(10.0)),
+                (Country::UnitedKingdom, square_from(20.0, 10.0)),
+                (Country::Germany, square_from(40.0, 1.0)),
+            ],
+        };
+
+        assert_eq!(
+            areas.shapes_of(Country::Germany),
+            vec![square(10.0), square_from(40.0, 1.0)]
         );
     }
 

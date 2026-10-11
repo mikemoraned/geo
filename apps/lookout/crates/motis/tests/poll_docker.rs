@@ -1,12 +1,13 @@
 mod common;
 
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready};
 use medallion::Root;
 use motis::bronze::SegmentLog;
-use motis::capture::{Capture, Captured};
+use motis::capture::{Capture, Captured, Coverage};
 use motis::client::MotisClient;
 use motis::near_gps::NearGps;
+use motis::span::Span;
 use shared::{Accel, AccelReading, Message, V1Message};
 use uuid::Uuid;
 use wiremock::matchers::{method, path};
@@ -78,23 +79,31 @@ async fn recent_gps_names_the_area_whose_motis_segments_are_logged_docker() {
     let motis = mock_motis(TRIPS_FIXTURE).await;
 
     let store = tempfile::tempdir().expect("temp store");
-    let mut near_gps = NearGps::new(Duration::minutes(30), Duration::minutes(5), 1000);
+    let mut near_gps = NearGps::new(
+        "30m".parse::<Span>().expect("a span").age(),
+        "5m".parse::<Span>().expect("a span").age(),
+        1000,
+    );
     let mut capture = Capture::new(
         MotisClient::new(&motis.uri()),
         SegmentLog::new(Root::new(store.path()), common::local_source().id()),
         8.0,
-        Duration::minutes(5),
+        "5m".parse().expect("a span"),
     );
 
     let seen = near_gps.look(now, &mut conn).await.expect("look");
     assert_eq!((seen.ingested, seen.positions), (3, 3));
     let area = seen.area.expect("an area around recent GPS");
-    let captured = capture.capture(now, &area).await.expect("capture");
+    let captured = capture
+        .capture(now, &Coverage::bbox(area))
+        .await
+        .expect("capture");
 
     assert_eq!(
         captured,
         Captured {
             segments: rail_fixture_len(),
+            outside: 0,
             unresolved: Vec::new(),
         }
     );

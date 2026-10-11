@@ -57,6 +57,16 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
 - Use typed representations instead of untyped arrays (e.g. `DynamicImage` not `Vec<u8>` for images)
 - Arguments convey meaning through types (`C-CUSTOM-TYPE`) — don't take a bare `bool` or `Option` parameter whose meaning is opaque at the call site (`f(true, false)`); use a two-variant enum (`Overwrite::Yes`/`No`). This is the argument-side mirror of "never return `bool` for success" below.
 - Eagerly derive common traits (`C-COMMON-TRAITS`, `C-DEBUG`) — `Debug, Clone, PartialEq, Eq, Hash, Default` wherever they apply, and every public type implements `Debug`.
+- **An age is an `Age`, never a bare number or duration.** A maximum age, a lookback, or any
+  other measure of how old something may be is a positive span held in the `Age` newtype, whose
+  constructor refuses zero and anything below it. Where no age applies, write `Option<Age>` and
+  `None`, never an `Age` of zero. A signed duration such as `chrono::TimeDelta`, or an integer of
+  minutes, lets a negative or zero age compile; the newtype makes one unrepresentable.
+- **A span of time a person writes is human-readable, never a count of seconds or minutes.** A
+  flag, a config value, or a recipe argument for a duration, an interval, or an age takes text
+  such as `30s`, `10m`, or `4h`, read by the `humantime` crate into a `Span` that refuses zero.
+  Name the flag for what it measures, `--poll-interval` rather than `--poll-interval-secs`, since
+  the unit travels with the value. An age read this way becomes an `Age` through `Span::age`.
 - Represent missing/not-set/disabled data that is expected and valid with `Option<T>` (`None`) — never with sentinel values like `0`, `-1`, or empty strings to encode absence. Use `Result::Err` when the absence instead represents an invalid state the caller should propagate with `?`
 - Errors (`C-GOOD-ERR`): structured [thiserror](https://docs.rs/thiserror/latest/thiserror/) enums for library/domain code, where callers match on outcomes. At a binary's `main`/orchestration layer a type-erased error (`Box<dyn std::error::Error>`) is acceptable — nobody matches on it, a human reads it.
   - Functions that can fail must return `Result<T, E>`, never `bool` for success/failure

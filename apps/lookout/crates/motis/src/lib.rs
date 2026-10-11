@@ -10,4 +10,5 @@ pub mod ingest;
 pub mod near_gps;
 pub mod segment;
 pub mod source;
+pub mod span;
 pub mod window;

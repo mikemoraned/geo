@@ -22,3 +22,5 @@ success-output = "immediate"
 
 [profile.end-to-end]
 default-filter = "test(/end_to_end/)"
+status-level = "pass"
+final-status-level = "fail"

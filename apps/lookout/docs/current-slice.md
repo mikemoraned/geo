@@ -222,7 +222,13 @@ Next, so data accumulates while the rest is built.
 - [x] Read both datasets in `motis_ingest`, and carry `source_id` into `TrainSegmentRow`.
       Each derives its own silver version: `TrainSegmentRowV1` from `motis_segment`, and
       `TrainSegmentRowV2`, with a required `source_id`, from `motis_segment_v2`.
-- [ ] Add the area mode to `motis_poll`, and a recipe for it beside `bronze-poll-motis`.
+- [x] Add the area mode to `motis_poll`, and a recipe for it beside `bronze-poll-motis`.
+      `--overture-country` and `--overture-region` take Overture's own codes, such as DE and
+      DE-TH. `just bronze-poll-transitous` polls Thuringia every 10 minutes. Against the local
+      server one poll of Thuringia kept 56 of 140 rail legs in its bounding box.
+- [ ] Split `motis_poll` into two binaries sharing `Capture`: `motis_follow_gps`, which follows
+      an area that moves with recent GPS, and `motis_track_area`, which tracks one fixed Overture
+      country or region over time. Point `bronze-poll-motis` and `bronze-poll-transitous` at them.
 - [ ] Refactor `crates/motis` again once the area mode lands: a function taking too many
       arguments or doing too much, a hand-rolled type a library or `std` provides, a raw number
       standing in for a type.
@@ -297,6 +303,14 @@ At the end of the slice, once its features are in.
 - [ ] Look across the lookout crates for types a library or `std` already provides, as
       `TimeWindow` was a `Range<DateTime<Utc>>`, and for raw numbers standing in for a type.
       Replace each where the code reads better.
+- [ ] Name every flag and field whose value is Overture's own after Overture, as
+      `--overture-country` and `--overture-region` are. Check the other crates follow it.
+- [ ] Apply the `Age` rule in `.claude/rules/rust.md` across `lookout`: every maximum age,
+      lookback, or other age held as `domain::Age`, every age flag read as a `Span`, and
+      `Option<Age>` where no age applies.
+- [ ] Take every duration, interval, and age a person writes across `lookout` as a human-readable
+      `Span`, such as `30s` or `4h`, as `motis_poll` does. Move `Span` out of `crates/motis` to
+      where every crate can reach it.
 
 #### Wrap-up
 

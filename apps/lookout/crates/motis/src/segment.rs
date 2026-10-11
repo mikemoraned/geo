@@ -1,7 +1,18 @@
 use chrono::{DateTime, Utc};
+use geo_types::LineString;
 use medallion_model::{EmptyTripId, TripId};
 
 use crate::api::types::{TripInfo, TripSegment};
+
+pub const POLYLINE_PRECISION: u32 = 5;
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("decoding polyline: {0}")]
+pub struct NotAPolyline(String);
+
+pub fn decode_polyline(encoded: &str) -> Result<LineString<f64>, NotAPolyline> {
+    polyline::decode_polyline(encoded, POLYLINE_PRECISION).map_err(|e| NotAPolyline(e.to_string()))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NoTripOfItsOwn {
@@ -35,6 +46,10 @@ impl TripSegment {
             from: self.leaving_from(),
             departure: self.departure,
         })
+    }
+
+    pub fn line(&self) -> Result<LineString<f64>, NotAPolyline> {
+        decode_polyline(&self.polyline)
     }
 
     fn leaving_from(&self) -> String {

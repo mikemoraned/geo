@@ -1,4 +1,5 @@
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
+use domain::Age;
 use geo_types::{Point, Rect};
 use redis::aio::MultiplexedConnection;
 use shared::{Message, V0Message, V1Message};
@@ -9,7 +10,7 @@ use crate::window::{Position, PositionWindow};
 #[derive(Debug, Clone)]
 pub struct NearGps {
     window: PositionWindow,
-    lookback: Duration,
+    lookback: Age,
     sample_limit: usize,
 }
 
@@ -21,7 +22,7 @@ pub struct Seen {
 }
 
 impl NearGps {
-    pub fn new(window_age: Duration, lookback: Duration, sample_limit: usize) -> Self {
+    pub fn new(window_age: Age, lookback: Age, sample_limit: usize) -> Self {
         Self {
             window: PositionWindow::new(window_age),
             lookback,
@@ -34,7 +35,7 @@ impl NearGps {
         now: DateTime<Utc>,
         conn: &mut MultiplexedConnection,
     ) -> Result<Seen, telemetry::QueueError> {
-        let cutoff = now - self.lookback;
+        let cutoff = self.lookback.before(now);
         let samples = telemetry::peek_newest_samples(conn, self.sample_limit).await?;
         let recent: Vec<Position> = samples
             .iter()

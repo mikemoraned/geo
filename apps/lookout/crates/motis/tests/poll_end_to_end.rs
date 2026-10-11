@@ -1,12 +1,13 @@
 mod common;
 
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready};
 use medallion::Root;
 use motis::bronze::SegmentLog;
-use motis::capture::Capture;
+use motis::capture::{Capture, Coverage};
 use motis::client::MotisClient;
 use motis::near_gps::NearGps;
+use motis::span::Span;
 
 #[tokio::test]
 async fn recent_gps_near_frankfurt_captures_rail_from_local_motis_end_to_end() {
@@ -25,12 +26,16 @@ async fn recent_gps_near_frankfurt_captures_rail_from_local_motis_end_to_end() {
     }
 
     let store = tempfile::tempdir().expect("temp store");
-    let mut near_gps = NearGps::new(Duration::minutes(30), Duration::minutes(5), 1000);
+    let mut near_gps = NearGps::new(
+        "30m".parse::<Span>().expect("a span").age(),
+        "5m".parse::<Span>().expect("a span").age(),
+        1000,
+    );
     let mut capture = Capture::new(
         MotisClient::default(),
         SegmentLog::new(Root::new(store.path()), common::local_source().id()),
         8.0,
-        Duration::minutes(5),
+        "5m".parse().expect("a span"),
     );
 
     let area = near_gps
@@ -40,7 +45,7 @@ async fn recent_gps_near_frankfurt_captures_rail_from_local_motis_end_to_end() {
         .area
         .expect("an area around recent GPS");
     let captured = capture
-        .capture(now, &area)
+        .capture(now, &Coverage::bbox(area))
         .await
         .expect("capture against local motis");
 

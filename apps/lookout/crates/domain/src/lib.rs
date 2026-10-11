@@ -1,3 +1,4 @@
+pub mod age;
 pub mod bbox;
 pub mod crossing;
 pub mod device;
@@ -10,6 +11,7 @@ pub mod sample;
 pub mod session;
 pub mod train;
 
+pub use age::{Age, NotAnAge};
 pub use bbox::{Bbox, BboxError};
 pub use crossing::{Crossing, CrossingCompact, CrossingCompactId, CrossingId};
 pub use device::{DeviceId, DeviceInfo, DeviceType, EmptyDeviceId};

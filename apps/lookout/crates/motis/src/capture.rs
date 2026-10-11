@@ -1,13 +1,15 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, Duration, Utc};
-use geo_types::Rect;
+use chrono::{DateTime, Utc};
+use geo::{BoundingRect, Intersects};
+use geo_types::{Geometry, GeometryCollection, LineString, Rect};
 use medallion_model::TripId;
 
 use crate::api::types::{Mode, TripSegment};
 use crate::bronze::{BronzeError, SegmentLog};
 use crate::client::{MotisClient, MotisError};
 use crate::details::TripDetailsCache;
+use crate::span::Span;
 
 #[derive(Debug)]
 pub struct Capture {
@@ -15,12 +17,39 @@ pub struct Capture {
     details: TripDetailsCache,
     log: SegmentLog,
     zoom: f64,
-    window_half: Duration,
+    window_half: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Coverage {
+    bbox: Rect<f64>,
+    shapes: Option<Vec<Geometry<f64>>>,
+}
+
+impl Coverage {
+    pub fn bbox(bbox: Rect<f64>) -> Self {
+        Self { bbox, shapes: None }
+    }
+
+    pub fn shapes(shapes: Vec<Geometry<f64>>) -> Option<Self> {
+        let bbox = GeometryCollection::new_from(shapes.clone()).bounding_rect()?;
+        Some(Self {
+            bbox,
+            shapes: Some(shapes),
+        })
+    }
+
+    fn touches(&self, line: &LineString<f64>) -> bool {
+        self.shapes
+            .as_ref()
+            .is_none_or(|shapes| shapes.iter().any(|shape| shape.intersects(line)))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Captured {
     pub segments: usize,
+    pub outside: usize,
     pub unresolved: Vec<Unresolved>,
 }
 
@@ -39,7 +68,7 @@ pub enum CaptureError {
 }
 
 impl Capture {
-    pub fn new(client: MotisClient, log: SegmentLog, zoom: f64, window_half: Duration) -> Self {
+    pub fn new(client: MotisClient, log: SegmentLog, zoom: f64, window_half: Span) -> Self {
         Self {
             client,
             details: TripDetailsCache::default(),
@@ -52,27 +81,28 @@ impl Capture {
     pub async fn capture(
         &mut self,
         now: DateTime<Utc>,
-        area: &Rect<f64>,
+        coverage: &Coverage,
     ) -> Result<Captured, CaptureError> {
-        let window = now - self.window_half..now + self.window_half;
+        let half = self.window_half.time_delta();
+        let window = now - half..now + half;
         let mut unresolved = Vec::new();
         let mut captured: Vec<TripSegment> = Vec::new();
         let mut trip_ids: HashSet<TripId> = HashSet::new();
+        let mut outside = 0;
         for segment in self
             .client
-            .trips_in_bbox(area, &window, self.zoom)
+            .trips_in_bbox(&coverage.bbox, &window, self.zoom)
             .await?
             .into_iter()
             .filter(|segment| is_rail(&segment.mode))
         {
-            match segment.trip_id() {
-                Ok(trip_id) => {
+            match sorted(coverage, &segment) {
+                Sorted::Kept(trip_id) => {
                     trip_ids.insert(trip_id);
                     captured.push(segment);
                 }
-                Err(err) => unresolved.push(Unresolved::Segment {
-                    reason: err.to_string(),
-                }),
+                Sorted::Outside => outside += 1,
+                Sorted::Unresolved(reason) => unresolved.push(Unresolved::Segment { reason }),
             }
         }
 
@@ -87,8 +117,26 @@ impl Capture {
 
         Ok(Captured {
             segments,
+            outside,
             unresolved,
         })
+    }
+}
+
+enum Sorted {
+    Kept(TripId),
+    Outside,
+    Unresolved(String),
+}
+
+fn sorted(coverage: &Coverage, segment: &TripSegment) -> Sorted {
+    match segment.line() {
+        Err(err) => Sorted::Unresolved(err.to_string()),
+        Ok(line) if !coverage.touches(&line) => Sorted::Outside,
+        Ok(_) => match segment.trip_id() {
+            Ok(trip_id) => Sorted::Kept(trip_id),
+            Err(err) => Sorted::Unresolved(err.to_string()),
+        },
     }
 }
 
@@ -102,4 +150,116 @@ fn is_rail(mode: &Mode) -> bool {
             | Mode::RegionalRail
             | Mode::Rail
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use geo_types::{Coord, polygon};
+    use medallion::Root;
+    use medallion_model::{Feed, MotisSource};
+    use url::Url;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::*;
+
+    const TRIPS: &str = include_str!("../tests/fixtures/trips.json");
+    const TRIP: &str = include_str!("../tests/fixtures/trip.json");
+
+    async fn motis() -> MockServer {
+        let server = MockServer::start().await;
+        for (route, body) in [("/api/v6/map/trips", TRIPS), ("/api/v6/trip", TRIP)] {
+            Mock::given(method("GET"))
+                .and(path(route))
+                .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+                .mount(&server)
+                .await;
+        }
+        server
+    }
+
+    fn capture(server: &MockServer, store: &std::path::Path) -> Capture {
+        let source = MotisSource {
+            base_url: Url::parse(&server.uri()).expect("a URL"),
+            motis_version: "v2.11.3".parse().expect("a version"),
+            feed: Feed::Local,
+            area: None,
+        };
+        Capture::new(
+            MotisClient::new(&server.uri()),
+            SegmentLog::new(Root::new(store), source.id()),
+            8.0,
+            "5m".parse().expect("a span"),
+        )
+    }
+
+    fn square(min_lon: f64, min_lat: f64, size: f64) -> Geometry<f64> {
+        Geometry::Polygon(polygon![
+            (x: min_lon, y: min_lat),
+            (x: min_lon + size, y: min_lat),
+            (x: min_lon + size, y: min_lat + size),
+            (x: min_lon, y: min_lat + size),
+        ])
+    }
+
+    #[test]
+    fn a_coverage_of_shapes_queries_their_bounding_box() {
+        let coverage = Coverage::shapes(vec![square(8.0, 50.0, 1.0), square(10.0, 52.0, 1.0)])
+            .expect("shapes");
+
+        assert_eq!(
+            coverage.bbox,
+            Rect::new(Coord { x: 8.0, y: 50.0 }, Coord { x: 11.0, y: 53.0 })
+        );
+    }
+
+    #[test]
+    fn no_shapes_cover_nothing() {
+        assert_eq!(Coverage::shapes(Vec::new()), None);
+    }
+
+    #[tokio::test]
+    async fn a_leg_touching_the_shapes_is_captured() {
+        let server = motis().await;
+        let store = tempfile::tempdir().expect("tempdir");
+        let around_frankfurt = Coverage::shapes(vec![square(8.0, 49.5, 2.0)]).expect("shapes");
+
+        let captured = capture(&server, store.path())
+            .capture(chrono::Utc::now(), &around_frankfurt)
+            .await
+            .expect("capture");
+
+        assert_eq!((captured.segments, captured.outside), (1, 0));
+    }
+
+    #[tokio::test]
+    async fn a_leg_inside_the_bounding_box_but_clear_of_the_shapes_is_outside() {
+        let server = motis().await;
+        let store = tempfile::tempdir().expect("tempdir");
+        let elsewhere = Coverage::shapes(vec![square(0.0, 0.0, 1.0)]).expect("shapes");
+
+        let captured = capture(&server, store.path())
+            .capture(chrono::Utc::now(), &elsewhere)
+            .await
+            .expect("capture");
+
+        assert_eq!((captured.segments, captured.outside), (0, 1));
+    }
+
+    #[tokio::test]
+    async fn a_bounding_box_alone_keeps_every_leg() {
+        let server = motis().await;
+        let store = tempfile::tempdir().expect("tempdir");
+        let anywhere = Coverage::bbox(Rect::new(
+            Coord { x: 0.0, y: 0.0 },
+            Coord { x: 1.0, y: 1.0 },
+        ));
+
+        let captured = capture(&server, store.path())
+            .capture(chrono::Utc::now(), &anywhere)
+            .await
+            .expect("capture");
+
+        assert_eq!((captured.segments, captured.outside), (1, 0));
+    }
 }

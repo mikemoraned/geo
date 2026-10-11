@@ -1,5 +1,6 @@
 use std::ops::Add;
 
+use crate::segment::{NotAPolyline, decode_polyline};
 use chrono::{DateTime, Utc};
 use domain::TrainNumber;
 use geo_types::{LineString, Point};
@@ -8,8 +9,6 @@ use medallion_model::{
     MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, TrainSegmentRowV1, TrainSegmentRowV2,
 };
 use serde::{Deserialize, Serialize};
-
-const POLYLINE_PRECISION: u32 = 5;
 
 const LEG_COLUMNS: &str = "trip_id, route_name, train_number, agency_id, agency_name, mode,
     route_color, realtime, from_stop_id, departure, arrival, polyline";
@@ -39,8 +38,8 @@ impl Add for IngestOutcome {
 pub enum IngestError {
     #[error("querying the capture log: {0}")]
     Query(#[from] medallion::QueryError),
-    #[error("decoding polyline: {0}")]
-    Polyline(String),
+    #[error(transparent)]
+    Polyline(#[from] NotAPolyline),
     #[error("writing the dataset: {0}")]
     Write(#[from] medallion::TableError),
     #[error("a capture of trip `{trip_id}` names no source")]
@@ -220,11 +219,6 @@ fn starts_from(line: &LineString<f64>) -> Point<f64> {
     line.points()
         .next()
         .expect("a polyline decodes to at least one point")
-}
-
-fn decode_polyline(encoded: &str) -> Result<LineString<f64>, IngestError> {
-    polyline::decode_polyline(encoded, POLYLINE_PRECISION)
-        .map_err(|e| IngestError::Polyline(e.to_string()))
 }
 
 #[cfg(test)]
@@ -412,10 +406,11 @@ mod tests {
     async fn each_leg_keeps_its_polyline_as_a_line_string() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let expected = polyline::decode_polyline(&fixture()[0].polyline, POLYLINE_PRECISION)
-            .expect("decode")
-            .0
-            .len();
+        let expected =
+            polyline::decode_polyline(&fixture()[0].polyline, crate::segment::POLYLINE_PRECISION)
+                .expect("decode")
+                .0
+                .len();
 
         ingest_polls(
             &root,
