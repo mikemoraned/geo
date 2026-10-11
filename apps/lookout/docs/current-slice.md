@@ -182,6 +182,17 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [ ] Re-measure the firmware size and the scan cost on the final set, and confirm the device
       still carries it.
 
+#### Refactors / improvements
+
+- [ ] Rebuild `lookout-medallion` only when its sources change. List the files it builds from
+      as `cache-keys` in `crates/medallion-py/pyproject.toml`: its own `pyproject.toml`,
+      `Cargo.toml` and `src/**/*.rs`, the same of `medallion`, `medallion-model` and `domain`,
+      and the workspace's `Cargo.toml` and `Cargo.lock`. Drop `--reinstall-package
+      lookout-medallion` from `silver-water-crossings`, `test-python` and
+      `crates/medallion-py/README.md`. The README states that a crate added to its
+      dependencies joins the list, and that `--reinstall-package` still forces a rebuild.
+- [ ] Do the same for `lookout-predictor` in `crates/platform/rerun-py`.
+
 #### Wrap-up
 
 - [ ] Run `just test-no-docker` and `just test-geo`.
