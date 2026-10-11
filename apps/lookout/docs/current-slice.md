@@ -157,8 +157,9 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Replace `DEFAULT_RELEASE` with an enum of two variants, `LatestReleaseAvailable` and
       `NamedRelease(<version>)`. `extract new` without `--release` takes
       `LatestReleaseAvailable`, which resolves to the latest release the source holds.
-- [ ] Take a DE and a GB extract with `just bronze-extract new`, from the mirror. Each becomes
+- [x] Take a DE and a GB extract with `just bronze-extract new`, from the mirror. Each becomes
       its country's newest.
+      DE is `20261011T154538Z` and GB is `20261011T154005Z`.
 
 #### Re-derive, re-pack, and re-measure
 
