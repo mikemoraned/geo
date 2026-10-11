@@ -120,6 +120,11 @@ just verify 2026-09-23.1 /Volumes/portable/release /Volumes/nas/release
 A source mirror's directories that are not releases are skipped, since a NAS or an operating
 system can add its own. A `.part` file in a source is an unfinished copy, and is skipped too.
 
+A file from a source mirror is copied whole by the operating system, rather than streamed in
+chunks as a download is. On one APFS volume, macOS clones the file without copying its bytes. The
+`copying` bar advances by each file's size as that file completes, rather than as its bytes
+arrive.
+
 ## A superseded release is never mirrored
 
 Overture names a release `YYYY-MM-DD.N`. A later `.N` of the same date replaces the earlier

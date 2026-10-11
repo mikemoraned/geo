@@ -3,13 +3,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use bytes::Bytes;
+use futures::stream::BoxStream;
 use futures::{StreamExt, TryStreamExt};
 use indicatif::BinaryBytes;
 use object_store::aws::AmazonS3Builder;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use object_store::{
-    BackoffConfig, ClientOptions, ObjectMeta, ObjectStore, ObjectStoreExt, RetryConfig,
+    BackoffConfig, ClientOptions, GetResultPayload, ObjectMeta, ObjectStore, ObjectStoreExt,
+    RetryConfig,
 };
 use tokio::io::{AsyncWriteExt, BufWriter};
 
@@ -201,21 +204,18 @@ impl Source {
         let mut partial = local.as_os_str().to_owned();
         partial.push(PARTIAL);
         let partial = PathBuf::from(partial);
-        let file = tokio::fs::File::create(&partial)
-            .await
-            .map_err(MirrorError::local_io(&partial))?;
-        let mut file = BufWriter::with_capacity(WRITE_BUFFER, file);
         let started = std::time::Instant::now();
-        let mut chunks = self.store.get(&object.location).await?.into_stream();
-        while let Some(chunk) = chunks.try_next().await? {
-            file.write_all(&chunk)
-                .await
-                .map_err(MirrorError::local_io(&partial))?;
-            progress.advance(chunk.len() as u64);
+        match self.store.get(&object.location).await?.payload {
+            GetResultPayload::File(_, source) => {
+                tokio::fs::copy(&source, &partial)
+                    .await
+                    .map_err(MirrorError::local_io(&partial))?;
+                progress.advance(object.size);
+            }
+            GetResultPayload::Stream(chunks) => {
+                write_stream(chunks, &partial, progress).await?;
+            }
         }
-        file.flush()
-            .await
-            .map_err(MirrorError::local_io(&partial))?;
         let seconds = started.elapsed().as_secs_f64();
         let per_second = (object.size as f64 / seconds.max(f64::EPSILON)) as u64;
         tracing::info!(
@@ -282,6 +282,24 @@ fn statuses(checked: &BTreeMap<ObjectPath, Checked>) -> BTreeMap<ObjectPath, Loc
         .iter()
         .map(|(location, checked)| (location.clone(), checked.status))
         .collect()
+}
+
+async fn write_stream(
+    mut chunks: BoxStream<'static, object_store::Result<Bytes>>,
+    partial: &Path,
+    progress: &Progress,
+) -> Result<(), MirrorError> {
+    let file = tokio::fs::File::create(partial)
+        .await
+        .map_err(MirrorError::local_io(partial))?;
+    let mut file = BufWriter::with_capacity(WRITE_BUFFER, file);
+    while let Some(chunk) = chunks.try_next().await? {
+        file.write_all(&chunk)
+            .await
+            .map_err(MirrorError::local_io(partial))?;
+        progress.advance(chunk.len() as u64);
+    }
+    file.flush().await.map_err(MirrorError::local_io(partial))
 }
 
 fn copy_reason(status: LocalStatus) -> Option<&'static str> {

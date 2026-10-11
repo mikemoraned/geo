@@ -121,7 +121,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Give each recipe a `source` argument defaulting to the bucket, and `sync` a `mirror`
       argument defaulting to `overture_mirror`.
 - [x] Describe verifying and backing up a second mirror in `tools/overture-mirror/README.md`.
-- [ ] Copy a file from a mirror source whole, by a file copy, not in object_store's 8 KiB
+- [x] Copy a file from a mirror source whole, by a file copy, not in object_store's 8 KiB
       stream chunks. A release from a mirror takes about 75 million chunked reads, each a
       blocking call, which caps a disk-to-disk copy below the disks' speed.
 
