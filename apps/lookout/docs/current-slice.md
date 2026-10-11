@@ -175,8 +175,9 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       `just silver-init`.
 - [x] Re-run `just test-geo`, and record each test case whose count moved from the
       baseline.
-- [ ] Re-run `just gold-pack-crossings`, `just crossings`, `just gold-pack-sessions` and `just
+- [x] Re-run `just gold-pack-crossings`, `just crossings`, `just gold-pack-sessions` and `just
       kiosk-sessions`, and commit the packed artefacts with the versions adopted.
+      Crossings are `20261011T172420832Z` and sessions `20261011T172440982Z`.
 - [ ] Count the crossing ids shared by gold crossings `20260928T215057796Z` and the new
       version, and record the share under Observations.
 - [ ] Re-measure the firmware size and the scan cost on the final set, and confirm the device
