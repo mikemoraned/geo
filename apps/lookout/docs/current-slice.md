@@ -178,7 +178,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Re-run `just gold-pack-crossings`, `just crossings`, `just gold-pack-sessions` and `just
       kiosk-sessions`, and commit the packed artefacts with the versions adopted.
       Crossings are `20261011T172420832Z` and sessions `20261011T172440982Z`.
-- [ ] Count the crossing ids shared by gold crossings `20260928T215057796Z` and the new
+- [x] Count the crossing ids shared by gold crossings `20260928T215057796Z` and the new
       version, and record the share under Observations.
 - [ ] Re-measure the firmware size and the scan cost on the final set, and confirm the device
       still carries it.
@@ -230,3 +230,27 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   finds the count of the baseline, so no case moved. `water_crossing` holds 10,254 rows
   against 10,268 at 2026-07-22.0, and `session_crossing` holds 259 rows at both. The
   derivation read the nested columns without error, which settles the open question.
+- 2026-10-11: 8,804 of the 10,268 crossings at 2026-07-22.0, 86%, keep their id at
+  2026-09-23.1. The counts compare the compact ids of gold crossings `20260928T215057796Z` and
+  `20261011T172420832Z`.
+
+  | Crossing at 2026-07-22.0     | Count  |
+  |------------------------------|--------|
+  | Id present at 2026-09-23.1   | 8,804  |
+  | Id absent at 2026-09-23.1    | 1,464  |
+  | Total                        | 10,268 |
+
+  | Crossing at 2026-09-23.1                    | Count  |
+  |---------------------------------------------|--------|
+  | Id present at 2026-07-22.0                  | 8,804  |
+  | New id, at a position 2026-07-22.0 held     | 849    |
+  | New id, at a position 2026-07-22.0 lacked   | 601    |
+  | Total                                       | 10,254 |
+
+  3 of the 8,804 kept their id at a changed position. A crossing id joins four parts: the
+  water's id, the track's id, the rail segment's id, and the crossing's fraction along that
+  segment. The track's id is the smallest segment id in the track. A change to any part gives a
+  new id at an unchanged position, so the 849 can come from a new water id, a segment added to
+  or removed from the track, a new segment id, or a segment reshaped about the crossing. A
+  reshaped segment can equally move a crossing and keep its fraction, which would explain the
+  3. These counts do not say which part changed.
