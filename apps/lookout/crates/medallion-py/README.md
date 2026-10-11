@@ -53,7 +53,13 @@ metadata, with the path resolved relative to the notebook:
 # ///
 ```
 
-Run such a notebook with `uv run --no-project --reinstall-package lookout-medallion
-<notebook>.py`: uv caches the built wheel against this crate's own sources, and would otherwise
-not notice a change to the rust crates it wraps. `just test-python` (from `apps/lookout`) runs the
-tests the same way; nothing needs installing first, since uv builds the extension with maturin.
+Run such a notebook with `uv run --no-project <notebook>.py`. Nothing needs installing first,
+since uv builds the extension with maturin. `just test-python` (from `apps/lookout`) runs the
+tests the same way.
+
+uv rebuilds the extension when a file named under `cache-keys` in `pyproject.toml` changes. The
+list names this crate's sources, the sources of the workspace crates it wraps, and the
+workspace's `Cargo.toml` and `Cargo.lock`. If this crate comes to depend on another workspace
+crate, add that crate's `Cargo.toml` and sources to the list. A change to an unlisted crate
+leaves the old extension in place. To force a rebuild, pass `--reinstall-package
+lookout-medallion` to `uv run`.

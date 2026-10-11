@@ -97,10 +97,10 @@ test-geo:
 test-doc:
     cargo test --doc --workspace
 
-# The Python tests, rebuilding both extensions so a change to the rust crates reaches them.
+# The Python tests, rebuilding `lookout-predictor` so a change to the rust crates reaches it.
 test-python:
-    uv run --directory crates/medallion-py --reinstall-package lookout-medallion pytest -q
-    uv run --directory crates/platform/rerun-py --reinstall-package lookout-predictor --reinstall-package lookout-medallion pytest -q
+    uv run --directory crates/medallion-py pytest -q
+    uv run --directory crates/platform/rerun-py --reinstall-package lookout-predictor pytest -q
     uv run --directory notebooks/water_crossings pytest -q
 
 # Tests against real services, in release, with credentials from 1Password. Hits the real redis.
@@ -165,7 +165,7 @@ silver-crossings *args:
 
 # Derive silver `water_crossing` from the crossings notebook. Always writes the repo store.
 silver-water-crossings:
-    uv run --no-project --reinstall-package lookout-medallion notebooks/water_crossings/v10.py
+    uv run --no-project notebooks/water_crossings/v10.py
 
 # Derive silver `session_crossing`: the crossings each recorded session passed.
 silver-session-crossings *args:

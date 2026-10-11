@@ -187,7 +187,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Refactors / improvements
 
-- [ ] Rebuild `lookout-medallion` only when its sources change. List the files it builds from
+- [x] Rebuild `lookout-medallion` only when its sources change. List the files it builds from
       as `cache-keys` in `crates/medallion-py/pyproject.toml`: its own `pyproject.toml`,
       `Cargo.toml` and `src/**/*.rs`, the same of `medallion`, `medallion-model` and `domain`,
       and the workspace's `Cargo.toml` and `Cargo.lock`. Drop `--reinstall-package
