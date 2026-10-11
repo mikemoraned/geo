@@ -2,13 +2,12 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use arrow::array::RecordBatch;
+use chrono::NaiveDate;
 use datafusion::error::DataFusionError;
 use datafusion::execution::SendableRecordBatchStream;
 use object_store::{ObjectStore, aws::AmazonS3Builder, path::Path as ObjectPath};
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
-
-pub const DEFAULT_RELEASE: &str = "2026-06-17.0";
 
 const S3_REGION: &str = "us-west-2";
 
@@ -49,6 +48,66 @@ pub enum OvertureError {
     },
     #[error("no mirror at {root}")]
     MirrorAbsent { root: String },
+    #[error("{location} holds no releases")]
+    NoRelease { location: String },
+    #[error("could not list the releases: {0}")]
+    Listing(#[from] object_store::Error),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReleaseChoice {
+    LatestReleaseAvailable,
+    NamedRelease(String),
+}
+
+impl From<Option<String>> for ReleaseChoice {
+    fn from(release: Option<String>) -> Self {
+        release.map_or(Self::LatestReleaseAvailable, Self::NamedRelease)
+    }
+}
+
+impl ReleaseChoice {
+    pub async fn resolve(self, mirror: Option<PathBuf>) -> Result<Release, OvertureError> {
+        match self {
+            Self::NamedRelease(id) => Ok(Release::at(id, mirror)),
+            Self::LatestReleaseAvailable => {
+                let available = match &mirror {
+                    Some(root) if !root.is_dir() => {
+                        return Err(OvertureError::MirrorAbsent {
+                            root: root.display().to_string(),
+                        });
+                    }
+                    Some(root) => mirrored_releases(root),
+                    None => published_releases().await?,
+                };
+                let latest = available
+                    .into_iter()
+                    .filter_map(|id| Some((release_order(&id)?, id)))
+                    .max();
+                match latest {
+                    Some((_, id)) => Ok(Release::at(id, mirror)),
+                    None => Err(OvertureError::NoRelease {
+                        location: location(mirror.as_deref()),
+                    }),
+                }
+            }
+        }
+    }
+}
+
+fn release_order(id: &str) -> Option<(NaiveDate, u32)> {
+    let (date, reissue) = id.rsplit_once('.')?;
+    Some((
+        NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?,
+        reissue.parse().ok()?,
+    ))
+}
+
+fn location(mirror: Option<&Path>) -> String {
+    match mirror {
+        Some(root) => root.display().to_string(),
+        None => format!("s3://overturemaps-{S3_REGION}/{RELEASE_PREFIX}"),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,15 +131,19 @@ impl Release {
         }
     }
 
+    pub fn at(id: impl Into<String>, mirror: Option<PathBuf>) -> Self {
+        Self {
+            id: id.into(),
+            mirror,
+        }
+    }
+
     pub fn id(&self) -> &str {
         &self.id
     }
 
     fn location(&self) -> String {
-        match &self.mirror {
-            Some(root) => root.display().to_string(),
-            None => format!("s3://overturemaps-{S3_REGION}/{RELEASE_PREFIX}"),
-        }
+        location(self.mirror.as_deref())
     }
 
     fn path(&self, overture_type: OvertureType) -> String {
@@ -269,6 +332,91 @@ mod tests {
         assert!(
             matches!(error, OvertureError::DataFusion(_)),
             "expected the read's own failure, got {error}"
+        );
+    }
+
+    fn mirror_holding(names: &[&str]) -> tempfile::TempDir {
+        let mirror = tempfile::tempdir().expect("a temp dir");
+        for name in names {
+            std::fs::create_dir(mirror.path().join(name)).expect("a mirrored directory");
+        }
+        mirror
+    }
+
+    #[tokio::test]
+    async fn the_latest_release_available_is_the_newest_a_mirror_holds() {
+        let mirror = mirror_holding(&["2026-08-19.0", "2026-09-23.1", "2026-09-23.0"]);
+
+        let release = ReleaseChoice::LatestReleaseAvailable
+            .resolve(Some(mirror.path().into()))
+            .await
+            .expect("a release");
+
+        assert_eq!(release, Release::mirrored("2026-09-23.1", mirror.path()));
+    }
+
+    #[tokio::test]
+    async fn the_latest_release_available_orders_reissues_by_number() {
+        let mirror = mirror_holding(&["2026-09-23.2", "2026-09-23.10"]);
+
+        let release = ReleaseChoice::LatestReleaseAvailable
+            .resolve(Some(mirror.path().into()))
+            .await
+            .expect("a release");
+
+        assert_eq!(release.id(), "2026-09-23.10");
+    }
+
+    #[tokio::test]
+    async fn the_latest_release_available_ignores_directories_that_are_not_releases() {
+        let mirror = mirror_holding(&["2026-09-23.1", "@eaDir", "#recycle", ".Trashes"]);
+
+        let release = ReleaseChoice::LatestReleaseAvailable
+            .resolve(Some(mirror.path().into()))
+            .await
+            .expect("a release");
+
+        assert_eq!(release.id(), "2026-09-23.1");
+    }
+
+    #[tokio::test]
+    async fn a_mirror_without_releases_has_no_latest_release() {
+        let mirror = mirror_holding(&["@eaDir"]);
+
+        let error = ReleaseChoice::LatestReleaseAvailable
+            .resolve(Some(mirror.path().into()))
+            .await
+            .expect_err("no release");
+
+        assert!(
+            matches!(error, OvertureError::NoRelease { .. }),
+            "expected no release, got {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_absent_mirror_has_no_latest_release() {
+        let error = ReleaseChoice::LatestReleaseAvailable
+            .resolve(Some("/no/such/mirror".into()))
+            .await
+            .expect_err("no mirror");
+
+        assert!(
+            matches!(error, OvertureError::MirrorAbsent { .. }),
+            "expected an absent mirror, got {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_named_release_resolves_without_reading_the_mirror() {
+        let release = ReleaseChoice::NamedRelease("2026-07-22.0".into())
+            .resolve(Some("/no/such/mirror".into()))
+            .await
+            .expect("a release");
+
+        assert_eq!(
+            release,
+            Release::mirrored("2026-07-22.0", "/no/such/mirror")
         );
     }
 

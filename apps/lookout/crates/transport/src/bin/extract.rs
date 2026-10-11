@@ -7,7 +7,7 @@ use medallion::{Country, MedallionArgs, Root};
 use medallion_model::ExtractManifestRow;
 use transport::{
     extract::{self, ExtractId, Extraction, Extractor},
-    overture::{DEFAULT_RELEASE, Overture, Release},
+    overture::{Overture, Release, ReleaseChoice},
 };
 
 #[derive(Parser)]
@@ -35,9 +35,10 @@ enum Command {
     },
     /// Take a new extract, under a new id, and record it in the manifest.
     New {
-        /// Overture release to extract (see docs.overturemaps.org/release).
-        #[arg(long, default_value = DEFAULT_RELEASE)]
-        release: String,
+        /// Overture release to extract (see docs.overturemaps.org/release). Without
+        /// one, the latest release the mirror or the bucket holds.
+        #[arg(long)]
+        release: Option<String>,
         /// Country to extract, as an ISO 3166-1 alpha-2 code.
         #[arg(long, default_value = "DE")]
         country: Country,
@@ -87,14 +88,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::New { release, country } => {
             let id = ExtractId::at(at);
-            let overture = Overture::open(release_at(&release, &args.mirror));
+            let release = ReleaseChoice::from(release)
+                .resolve(args.mirror.clone())
+                .await?;
             tracing::info!(
                 %id,
-                %release,
+                release = release.id(),
                 %country,
                 root = %root.path().display(),
                 "extracting",
             );
+            let overture = Overture::open(release);
             report(
                 &Extractor::new(&overture, &root)
                     .extract(id, country, at)
@@ -175,7 +179,7 @@ async fn backfill(
     recorded: ExtractManifestRow,
     at: chrono::DateTime<Utc>,
 ) -> Result<Extraction, Box<dyn std::error::Error>> {
-    let overture = Overture::open(release_at(&recorded.release, mirror));
+    let overture = Overture::open(Release::at(&recorded.release, mirror.clone()));
     tracing::info!(
         id = %recorded.extract_id,
         release = %recorded.release,
@@ -187,13 +191,6 @@ async fn backfill(
     Ok(Extractor::new(&overture, root)
         .backfill(&recorded, at)
         .await?)
-}
-
-fn release_at(release: &str, mirror: &Option<PathBuf>) -> Release {
-    match mirror {
-        Some(path) => Release::mirrored(release, path.clone()),
-        None => Release::published(release),
-    }
 }
 
 #[cfg(test)]
@@ -294,13 +291,29 @@ mod tests {
     }
 
     #[test]
-    fn a_new_extract_defaults_to_the_pinned_release_and_germany() {
+    fn a_new_extract_defaults_to_the_latest_release_available_and_germany() {
         let args = Args::parse_from(["extract", "new"]);
 
         let Some(Command::New { release, country }) = args.command else {
             panic!("expected a new extract");
         };
-        assert_eq!(release, DEFAULT_RELEASE);
+        assert_eq!(
+            ReleaseChoice::from(release),
+            ReleaseChoice::LatestReleaseAvailable
+        );
         assert_eq!(country, Country::Germany);
+    }
+
+    #[test]
+    fn a_new_extract_takes_a_named_release() {
+        let args = Args::parse_from(["extract", "new", "--release", "2026-07-22.0"]);
+
+        let Some(Command::New { release, .. }) = args.command else {
+            panic!("expected a new extract");
+        };
+        assert_eq!(
+            ReleaseChoice::from(release),
+            ReleaseChoice::NamedRelease("2026-07-22.0".into())
+        );
     }
 }
