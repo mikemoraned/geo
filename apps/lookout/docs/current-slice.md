@@ -198,7 +198,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Wrap-up
 
-- [ ] Run `just test-no-docker` and `just test-geo`.
+- [x] Run `just test-no-docker` and `just test-geo`.
+      `just test` ran in place of `just test-no-docker`, since it adds the Docker tests to it.
 
 #### Open questions
 
