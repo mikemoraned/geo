@@ -2,17 +2,19 @@ import 'mirror.just'
 
 overture_bucket := "s3://overturemaps-us-west-2/release"
 
+log_dir := "logs"
+
 # List the releases a source holds, marking each superseded one. The source defaults to the bucket.
 releases source=overture_bucket:
-    cargo run -q --release -- releases --source "{{source}}"
+    cargo run -q --release -- releases --source "{{source}}" --log-dir "{{log_dir}}"
 
 # Copy a release into a mirror, resuming a partial copy. Defaults: the bucket, to mirror.just's mirror.
 sync release source=overture_bucket mirror=overture_mirror:
-    cargo run -q --release -- sync {{release}} --source "{{source}}" --mirror "{{mirror}}"
+    cargo run -q --release -- sync {{release}} --source "{{source}}" --mirror "{{mirror}}" --log-dir "{{log_dir}}"
 
 # Check a mirrored release against its source, copying nothing. Defaults as for sync.
 verify release source=overture_bucket mirror=overture_mirror:
-    cargo run -q --release -- verify {{release}} --source "{{source}}" --mirror "{{mirror}}"
+    cargo run -q --release -- verify {{release}} --source "{{source}}" --mirror "{{mirror}}" --log-dir "{{log_dir}}"
 
 # Run the tests.
 test:

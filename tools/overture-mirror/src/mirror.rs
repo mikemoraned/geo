@@ -256,7 +256,7 @@ async fn check(
         .map(|object| Signature::read_size(object.size))
         .sum();
     let progress = &Progress::new("checking", to_read, display);
-    let checked = futures::stream::iter(objects)
+    let checked: BTreeMap<ObjectPath, Checked> = futures::stream::iter(objects)
         .map(|object| async move {
             let local = source.local_path(mirror, &object.location);
             let comparison = source.compare_signatures(&object, &local).await?;
@@ -268,12 +268,13 @@ async fn check(
                 local,
                 status: comparison.status,
             };
-            Ok((source.within_prefix(&checked.object.location), checked))
+            Ok::<_, MirrorError>((source.within_prefix(&checked.object.location), checked))
         })
         .buffer_unordered(CONCURRENT_CHECKS)
         .try_collect()
-        .await;
-    progress.close(checked)
+        .await?;
+    progress.finish();
+    Ok(checked)
 }
 
 fn statuses(checked: &BTreeMap<ObjectPath, Checked>) -> BTreeMap<ObjectPath, LocalStatus> {
@@ -298,26 +299,23 @@ pub async fn sync(
     display: Display,
 ) -> Result<BTreeMap<ObjectPath, LocalStatus>, MirrorError> {
     let checked = check(source, release, mirror, display).await?;
-    let to_copy: Vec<(&Checked, &str)> = checked
-        .values()
-        .filter_map(|checked| Some((checked, copy_reason(checked.status)?)))
-        .collect();
-    for checked in checked
-        .values()
-        .filter(|checked| checked.status == LocalStatus::Complete)
-    {
-        tracing::info!(
-            "skipping {} ({}): complete in the mirror",
-            checked.object.location,
-            BinaryBytes(checked.object.size),
-        );
+    let mut to_copy = Vec::new();
+    for checked in checked.values() {
+        match copy_reason(checked.status) {
+            Some(reason) => to_copy.push((checked, reason)),
+            None => tracing::info!(
+                "skipping {} ({}): complete in the mirror",
+                checked.object.location,
+                BinaryBytes(checked.object.size),
+            ),
+        }
     }
     if to_copy.is_empty() {
         return Ok(statuses(&checked));
     }
     let to_download = to_copy.iter().map(|(checked, _)| checked.object.size).sum();
     let progress = &Progress::new("copying", to_download, display);
-    let copied = futures::stream::iter(to_copy)
+    futures::stream::iter(to_copy)
         .map(Ok)
         .try_for_each_concurrent(CONCURRENT_COPIES, |(checked, reason)| async move {
             tracing::info!(
@@ -327,8 +325,8 @@ pub async fn sync(
             );
             source.copy(&checked.object, &checked.local, progress).await
         })
-        .await;
-    progress.close(copied)?;
+        .await?;
+    progress.finish();
     Ok(statuses(&checked))
 }
 

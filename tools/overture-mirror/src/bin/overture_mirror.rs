@@ -27,10 +27,9 @@ use overture_mirror::sync::{Refused, check_syncable, check_verifiable};
 struct Cli {
     #[command(subcommand)]
     command: Commands,
-    /// The file each download, retry, and copied file is logged to. Defaults to a new file named
-    /// for the run's start time.
-    #[arg(long, global = true)]
-    log: Option<PathBuf>,
+    /// The directory each run's log is created in, named for the run's start time.
+    #[arg(long, global = true, default_value = ".")]
+    log_dir: PathBuf,
 }
 
 #[derive(Subcommand)]
@@ -100,14 +99,12 @@ impl Incomplete {
     }
 }
 
-fn log_named_for_now() -> PathBuf {
+fn log_named_for_now(log_dir: &Path) -> PathBuf {
     let started = chrono::Utc::now().format("%Y%m%dT%H%M%S%.3fZ");
-    Path::new(LOGS).join(format!("overture-mirror-{started}.log"))
+    log_dir.join(format!("overture-mirror-{started}.log"))
 }
 
 const SCREEN: &str = "screen";
-
-const LOGS: &str = "logs";
 
 fn open_log(path: &Path) -> Result<File, String> {
     let unopened = |err| format!("opening the log {}: {err}", path.display());
@@ -205,8 +202,8 @@ fn log_panics() {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let Cli { command, log } = Cli::parse();
-    let log = open_log(&log.unwrap_or_else(log_named_for_now));
+    let Cli { command, log_dir } = Cli::parse();
+    let log = open_log(&log_named_for_now(&log_dir));
     let unopened = log.as_ref().err().cloned();
     start_logging(log.ok());
     if let Some(err) = unopened {

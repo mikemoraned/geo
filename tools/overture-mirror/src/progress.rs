@@ -42,11 +42,8 @@ impl Progress {
         self.bar.dec_length(bytes);
     }
 
-    pub fn close<T, E>(&self, outcome: Result<T, E>) -> Result<T, E> {
-        if outcome.is_ok() {
-            self.bar.finish();
-        }
-        outcome
+    pub fn finish(&self) {
+        self.bar.finish();
     }
 }
 
@@ -80,24 +77,12 @@ mod tests {
     }
 
     #[test]
-    fn closing_on_success_completes_the_bar() {
+    fn finishing_completes_the_bar() {
         let progress = Progress::new("testing", 180, Display::Hidden);
         progress.advance(40);
 
-        let outcome: Result<(), ()> = progress.close(Ok(()));
+        progress.finish();
 
-        assert_eq!(outcome, Ok(()));
         assert_eq!(done_and_total(&progress), (180, 180));
-    }
-
-    #[test]
-    fn closing_on_failure_leaves_the_bar_where_it_stopped() {
-        let progress = Progress::new("testing", 180, Display::Hidden);
-        progress.advance(40);
-
-        let outcome: Result<(), ()> = progress.close(Err(()));
-
-        assert_eq!(outcome, Err(()));
-        assert_eq!(done_and_total(&progress), (40, 180));
     }
 }
