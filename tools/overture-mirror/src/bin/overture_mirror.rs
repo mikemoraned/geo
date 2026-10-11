@@ -102,17 +102,23 @@ impl Incomplete {
 
 fn log_named_for_now() -> PathBuf {
     let started = chrono::Utc::now().format("%Y%m%dT%H%M%S%.3fZ");
-    PathBuf::from(format!("overture-mirror-{started}.log"))
+    Path::new(LOGS).join(format!("overture-mirror-{started}.log"))
 }
 
 const SCREEN: &str = "screen";
 
+const LOGS: &str = "logs";
+
 fn open_log(path: &Path) -> Result<File, String> {
+    let unopened = |err| format!("opening the log {}: {err}", path.display());
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(unopened)?;
+    }
     std::fs::OpenOptions::new()
         .create_new(true)
         .write(true)
         .open(path)
-        .map_err(|err| format!("opening the log {}: {err}", path.display()))
+        .map_err(unopened)
 }
 
 fn start_logging(log: Option<File>) {
@@ -149,31 +155,40 @@ fn start_logging(log: Option<File>) {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Signal {
     name: &'static str,
-    number: u8,
+    kind: SignalKind,
 }
 
-#[derive(Debug)]
-enum Stopped {
-    Failed(Box<dyn Error>),
-    Signalled(Signal),
-}
-
-async fn signal_received() -> Result<Signal, Box<dyn Error>> {
+async fn signal_received() -> std::io::Result<Signal> {
     let watched = [
-        ("SIGHUP", SignalKind::hangup(), 1),
-        ("SIGINT", SignalKind::interrupt(), 2),
-        ("SIGQUIT", SignalKind::quit(), 3),
-        ("SIGTERM", SignalKind::terminate(), 15),
+        ("SIGHUP", SignalKind::hangup()),
+        ("SIGINT", SignalKind::interrupt()),
+        ("SIGQUIT", SignalKind::quit()),
+        ("SIGTERM", SignalKind::terminate()),
     ];
     let mut waits = Vec::new();
-    for (name, kind, number) in watched {
+    for (name, kind) in watched {
         let mut stream = signal(kind)?;
         waits.push(Box::pin(async move {
             stream.recv().await;
-            Signal { name, number }
+            Signal { name, kind }
         }));
     }
     Ok(futures::future::select_all(waits).await.0)
+}
+
+fn finished(summary: String) -> ExitCode {
+    tracing::info!(target: SCREEN, "finished: {summary}");
+    ExitCode::SUCCESS
+}
+
+fn failed(err: impl std::fmt::Display) -> ExitCode {
+    tracing::error!(target: SCREEN, "failed: {err}");
+    ExitCode::FAILURE
+}
+
+fn stopped(Signal { name, kind }: Signal) -> ExitCode {
+    tracing::error!(target: SCREEN, "stopped by {name}");
+    u8::try_from(128 + kind.as_raw_value()).map_or(ExitCode::FAILURE, ExitCode::from)
 }
 
 fn log_panics() {
@@ -190,13 +205,12 @@ fn log_panics() {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let cli = Cli::parse();
-    let log = open_log(&cli.log.clone().unwrap_or_else(log_named_for_now));
+    let Cli { command, log } = Cli::parse();
+    let log = open_log(&log.unwrap_or_else(log_named_for_now));
     let unopened = log.as_ref().err().cloned();
     start_logging(log.ok());
     if let Some(err) = unopened {
-        tracing::error!(target: SCREEN, "failed: {err}");
-        return ExitCode::FAILURE;
+        return failed(err);
     }
     log_panics();
     let arguments: Vec<String> = std::env::args().collect();
@@ -205,26 +219,9 @@ async fn main() -> ExitCode {
         std::process::id(),
         arguments.join(" ")
     );
-    let stopped = tokio::select! {
-        outcome = run(cli.command) => outcome.map_err(Stopped::Failed),
-        signal = signal_received() => Err(match signal {
-            Ok(signal) => Stopped::Signalled(signal),
-            Err(err) => Stopped::Failed(err),
-        }),
-    };
-    match stopped {
-        Ok(summary) => {
-            tracing::info!(target: SCREEN, "finished: {summary}");
-            ExitCode::SUCCESS
-        }
-        Err(Stopped::Failed(err)) => {
-            tracing::error!(target: SCREEN, "failed: {err}");
-            ExitCode::FAILURE
-        }
-        Err(Stopped::Signalled(Signal { name, number })) => {
-            tracing::error!(target: SCREEN, "stopped by {name}");
-            ExitCode::from(128 + number)
-        }
+    tokio::select! {
+        outcome = run(command) => outcome.map_or_else(failed, finished),
+        signal = signal_received() => signal.map_or_else(failed, stopped),
     }
 }
 

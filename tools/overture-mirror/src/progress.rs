@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressFinish, ProgressStyle};
 
 const TEMPLATE: &str = "{spinner} {prefix:<8} [{bar:40}] {bytes:>10} / {total_bytes:<10} {binary_bytes_per_sec:>12}  {eta} left";
 
@@ -28,7 +28,8 @@ impl Progress {
             .progress_chars("=> ");
         let bar = ProgressBar::with_draw_target(Some(total), target)
             .with_style(style)
-            .with_prefix(stage);
+            .with_prefix(stage)
+            .with_finish(ProgressFinish::Abandon);
         bar.enable_steady_tick(TICK);
         Self { bar }
     }
@@ -42,9 +43,8 @@ impl Progress {
     }
 
     pub fn close<T, E>(&self, outcome: Result<T, E>) -> Result<T, E> {
-        match outcome {
-            Ok(_) => self.bar.finish(),
-            Err(_) => self.bar.abandon(),
+        if outcome.is_ok() {
+            self.bar.finish();
         }
         outcome
     }

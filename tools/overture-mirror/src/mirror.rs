@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::{StreamExt, TryStreamExt};
+use indicatif::BinaryBytes;
 use object_store::aws::AmazonS3Builder;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
@@ -21,11 +22,11 @@ const REGION: &str = "us-west-2";
 
 const CONCURRENT_COPIES: usize = 8;
 
+const CONCURRENT_CHECKS: usize = 32;
+
 const WRITE_BUFFER: usize = 8 << 20;
 
 const STALL_TIMEOUT: Duration = Duration::from_secs(60);
-
-const MIB: f64 = (1 << 20) as f64;
 
 const PARTIAL: &str = ".part";
 
@@ -216,11 +217,12 @@ impl Source {
             .await
             .map_err(MirrorError::local_io(&partial))?;
         let seconds = started.elapsed().as_secs_f64();
+        let per_second = (object.size as f64 / seconds.max(f64::EPSILON)) as u64;
         tracing::info!(
-            "copied {} ({:.1} MiB) in {seconds:.1}s, {:.1} MiB/s",
+            "copied {} ({}) in {seconds:.1}s, {}/s",
             object.location,
-            object.size as f64 / MIB,
-            object.size as f64 / MIB / seconds.max(f64::EPSILON),
+            BinaryBytes(object.size),
+            BinaryBytes(per_second),
         );
         tokio::fs::rename(&partial, local)
             .await
@@ -268,7 +270,7 @@ async fn check(
             };
             Ok((source.within_prefix(&checked.object.location), checked))
         })
-        .buffer_unordered(CONCURRENT_COPIES)
+        .buffer_unordered(CONCURRENT_CHECKS)
         .try_collect()
         .await;
     progress.close(checked)
@@ -281,6 +283,14 @@ fn statuses(checked: &BTreeMap<ObjectPath, Checked>) -> BTreeMap<ObjectPath, Loc
         .collect()
 }
 
+fn copy_reason(status: LocalStatus) -> Option<&'static str> {
+    match status {
+        LocalStatus::Complete => None,
+        LocalStatus::Missing => Some("missing from the mirror"),
+        LocalStatus::Differs => Some("differs from the source"),
+    }
+}
+
 pub async fn sync(
     source: &Source,
     release: &Release,
@@ -290,22 +300,18 @@ pub async fn sync(
     let checked = check(source, release, mirror, display).await?;
     let to_copy: Vec<(&Checked, &str)> = checked
         .values()
-        .filter_map(|checked| {
-            let size = checked.object.size as f64 / MIB;
-            let reason = match checked.status {
-                LocalStatus::Complete => {
-                    tracing::info!(
-                        "skipping {} ({size:.1} MiB): complete in the mirror",
-                        checked.object.location
-                    );
-                    return None;
-                }
-                LocalStatus::Missing => "missing from the mirror",
-                LocalStatus::Differs => "differs from the source",
-            };
-            Some((checked, reason))
-        })
+        .filter_map(|checked| Some((checked, copy_reason(checked.status)?)))
         .collect();
+    for checked in checked
+        .values()
+        .filter(|checked| checked.status == LocalStatus::Complete)
+    {
+        tracing::info!(
+            "skipping {} ({}): complete in the mirror",
+            checked.object.location,
+            BinaryBytes(checked.object.size),
+        );
+    }
     if to_copy.is_empty() {
         return Ok(statuses(&checked));
     }
@@ -315,9 +321,9 @@ pub async fn sync(
         .map(Ok)
         .try_for_each_concurrent(CONCURRENT_COPIES, |(checked, reason)| async move {
             tracing::info!(
-                "copying {} ({:.1} MiB): {reason}",
+                "copying {} ({}): {reason}",
                 checked.object.location,
-                checked.object.size as f64 / MIB,
+                BinaryBytes(checked.object.size),
             );
             source.copy(&checked.object, &checked.local, progress).await
         })
