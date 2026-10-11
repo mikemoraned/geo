@@ -377,8 +377,8 @@ position, so each is an upper bound on the scan alone.
 - **The set costs flash, not RAM.** Nothing copies the columns out of flash: the reader
   borrows them where they lie. A scan therefore allocates only for what it reports, a few
   hundred bytes, and a bigger set would cost flash alone. Measured on the release ELF, the
-  whole firmware is 837,490 bytes against 8 MB, of which 269,616 is the rodata carrying the
-  123,228-byte set, with 7,922 bytes of static RAM. Nearly doubling the set cost 57,360 bytes of
+  whole firmware is 850,832 bytes against 8 MB, of which 262,448 is the rodata carrying the
+  123,060-byte set, with 7,922 bytes of static RAM. Nearly doubling the set cost 57,360 bytes of
   rodata and 40 bytes of static RAM.
 - **Build the set into the binary rather than reading it from a filesystem.** At 123 KB
   against 8 MB the saving would be nothing. A filesystem would cost a partition table, a

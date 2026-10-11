@@ -180,8 +180,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       Crossings are `20261011T172420832Z` and sessions `20261011T172440982Z`.
 - [x] Count the crossing ids shared by gold crossings `20260928T215057796Z` and the new
       version, and record the share under Observations.
-- [ ] Re-measure the firmware size and the scan cost on the final set, and confirm the device
+- [x] Re-measure the firmware size and the scan cost on the final set, and confirm the device
       still carries it.
+      The scan cost was not re-measured. The set fell from 10,268 crossings to 10,254, and
+      `docs/device.md` records the scan as linear in the count.
 
 #### Refactors / improvements
 
@@ -254,3 +256,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   or removed from the track, a new segment id, or a segment reshaped about the crossing. A
   reshaped segment can equally move a crossing and keep its fraction, which would explain the
   3. These counts do not say which part changed.
+- 2026-10-11: the release firmware is 850,832 bytes against 8 MB of flash, carrying the
+  123,060-byte set. Built from the same code with the previous set, it is 850,992 bytes. The
+  `.flash.rodata` section that holds the set fell from 262,608 bytes to 262,448, and static RAM
+  stayed at 7,922 bytes. Sizes are from `xtensa-esp32-elf-size` on the release ELF.
