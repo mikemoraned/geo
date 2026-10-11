@@ -236,6 +236,17 @@ Next, so data accumulates while the rest is built.
       took in total. A capture of Thuringia on 2026-10-11 took 5.0, 4.7, and 8.9 minutes per poll,
       though the second and third looked up only 8 and 16 new trips, so the trip lookups alone do
       not explain the time.
+- [ ] Record in a source's area the Overture release its shape came from. A new release can move
+      a region's outline, yet a capture at it now registers under the same source id.
+      The id covers the release from here on. Only this branch has written `motis_source`, so the
+      change is in place, with no new dataset version:
+      1. Add the release to `Area` and `MotisSourceRow`, and to the fields the id hashes.
+      2. Backfill the one existing source with duckdb, not Rust: release `2026-07-22.0`, from DE
+         extract `20260804T152143Z`, the newest when it was captured on 2026-10-11. Rewrite its
+         `source_id` in `motis_source` and in the three `motis_segment_v2` files to the new id.
+      3. Read the backfilled source and segments back through Rust.
+      4. After `just bronze-init` and `just silver-init` finish at `2026-09-23.1`, run a short
+         capture of Thuringia, and check it registers a second source.
 - [ ] Capture Thuringia from Transitous every 10 minutes, for 2 hours. This is only 12 samples, so not a lot of data.
       Sanity-check this has worked by visualising this data in a notebook i.e. show the trains changing over time along their paths.
       The intent of this is to see if train positions make sense and just to spot any other anomalies.
