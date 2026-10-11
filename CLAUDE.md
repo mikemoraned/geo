@@ -32,8 +32,8 @@ for working practice and for the limits of this environment. Current notes:
 - [`.claude/memory/testing-limits.md`](.claude/memory/testing-limits.md) — Docker tests
   don't run in the sandbox, so binaries need running directly
 - [`.claude/memory/working-with-claude.md`](.claude/memory/working-with-claude.md) —
-  committing only on explicit instruction, keeping formatting out of feature commits, and
-  why Claude cannot flash the device
+  committing only on explicit instruction, keeping formatting out of feature commits, why
+  Claude cannot flash the device, and keeping shell plain
 
 Lookout's own facts are in [`apps/lookout/docs/`](apps/lookout/docs/): `medallion.md` (the
 store), `architecture.md` (the pipeline), `telemetry.md` (the wire a device sends),
