@@ -94,6 +94,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             tracing::info!(
                 %id,
                 release = release.id(),
+                source = release.location(),
                 %country,
                 root = %root.path().display(),
                 "extracting",
@@ -179,15 +180,17 @@ async fn backfill(
     recorded: ExtractManifestRow,
     at: chrono::DateTime<Utc>,
 ) -> Result<Extraction, Box<dyn std::error::Error>> {
-    let overture = Overture::open(Release::at(&recorded.release, mirror.clone()));
+    let release = Release::at(&recorded.release, mirror.clone());
     tracing::info!(
         id = %recorded.extract_id,
         release = %recorded.release,
+        source = release.location(),
         country = %recorded.country,
         extracted_at = %recorded.extracted_at,
         root = %root.path().display(),
         "backfilling",
     );
+    let overture = Overture::open(release);
     Ok(Extractor::new(&overture, root)
         .backfill(&recorded, at)
         .await?)

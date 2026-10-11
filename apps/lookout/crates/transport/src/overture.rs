@@ -142,7 +142,7 @@ impl Release {
         &self.id
     }
 
-    fn location(&self) -> String {
+    pub fn location(&self) -> String {
         location(self.mirror.as_deref())
     }
 
