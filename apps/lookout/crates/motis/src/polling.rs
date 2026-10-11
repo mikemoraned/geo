@@ -11,8 +11,7 @@ use crate::capture::{Capture, Captured, Coverage, Unresolved};
 use crate::client::{DEFAULT_BASE_URL, MotisClient, MotisError};
 use crate::source::{SourceError, register};
 use crate::span::Span;
-
-const DEFAULT_ZOOM: f64 = 8.0;
+use crate::zoom::Zoom;
 
 #[derive(Debug, clap::Args)]
 pub struct PollArgs {
@@ -26,8 +25,8 @@ pub struct PollArgs {
     #[arg(long, default_value = "5m")]
     pub query_window_half: Span,
     /// Motis zoom level (higher adds subway/tram/bus on top of long-distance rail).
-    #[arg(long, default_value_t = DEFAULT_ZOOM)]
-    pub zoom: f64,
+    #[arg(long, default_value_t = Zoom::default())]
+    pub zoom: Zoom,
     /// Base URL of the Motis server.
     #[arg(long, default_value = DEFAULT_BASE_URL)]
     pub motis_url: Url,
@@ -69,7 +68,7 @@ impl Poller {
         root: &Root,
         area: Option<Area>,
     ) -> Result<Self, StartError> {
-        let client = MotisClient::new(args.motis_url.as_str().trim_end_matches('/'));
+        let client = MotisClient::new(&args.motis_url);
         let motis_version = client.motis_version().await.map_err(StartError::Version)?;
         let source = MotisSource {
             base_url: args.motis_url.clone(),
@@ -84,7 +83,7 @@ impl Poller {
             medallion_root = %root.path().display(),
             poll_interval = %args.poll_interval,
             poll_duration = %args.poll_duration,
-            zoom = args.zoom,
+            zoom = %args.zoom,
             "starting motis poll loop (Ctrl-C to stop early)"
         );
         Ok(Self {

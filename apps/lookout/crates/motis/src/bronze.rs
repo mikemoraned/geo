@@ -96,17 +96,9 @@ impl SegmentLog {
             })
             .collect::<Result<Vec<_>, NoTripOfItsOwn>>()?;
 
-        self.append_rows(captured_at, &rows).await
-    }
-
-    pub async fn append_rows(
-        &self,
-        captured_at: DateTime<Utc>,
-        rows: &[MotisCaptureRow],
-    ) -> Result<usize, BronzeError> {
         Ok(self
             .partition(captured_at)?
-            .append_rows(captured_at, rows)
+            .append_rows(captured_at, &rows)
             .await?)
     }
 }

@@ -13,3 +13,4 @@ pub mod segment;
 pub mod source;
 pub mod span;
 pub mod window;
+pub mod zoom;

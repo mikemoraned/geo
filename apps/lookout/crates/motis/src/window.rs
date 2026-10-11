@@ -1,11 +1,7 @@
-use std::num::NonZeroU32;
-
 use chrono::{DateTime, Utc};
 use domain::Age;
 use geo::{BoundingRect, Scale};
 use geo_types::{MultiPoint, Point, Rect};
-
-pub const DEFAULT_MAX_AGE: Age = Age::minutes(NonZeroU32::new(30).expect("thirty is not zero"));
 
 const BUFFER_FACTOR: f64 = 2.0;
 
@@ -19,12 +15,6 @@ pub struct Position {
 pub struct PositionWindow {
     max_age: Age,
     positions: Vec<Position>,
-}
-
-impl Default for PositionWindow {
-    fn default() -> Self {
-        Self::new(DEFAULT_MAX_AGE)
-    }
 }
 
 impl PositionWindow {
@@ -64,9 +54,13 @@ impl PositionWindow {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU32;
+
     use super::*;
     use geo_types::Coord;
     use proptest::prelude::*;
+
+    const DEFAULT_MAX_AGE: Age = Age::minutes(NonZeroU32::new(30).expect("thirty is not zero"));
 
     fn pos(t: i64, lat: f64, lon: f64) -> Position {
         Position {

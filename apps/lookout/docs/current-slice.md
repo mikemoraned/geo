@@ -229,7 +229,7 @@ Next, so data accumulates while the rest is built.
 - [x] Split `motis_poll` into two binaries sharing `Capture`: `motis_follow_gps`, which follows
       an area that moves with recent GPS, and `motis_track_area`, which tracks one fixed Overture
       country or region over time. Point `bronze-poll-motis` and `bronze-poll-transitous` at them.
-- [ ] Refactor `crates/motis` again once the area mode lands: a function taking too many
+- [x] Refactor `crates/motis` again once the area mode lands: a function taking too many
       arguments or doing too much, a hand-rolled type a library or `std` provides, a raw number
       standing in for a type.
 - [ ] Capture Thuringia from Transitous every 10 minutes, for 2 hours. This is only 12 samples, so not a lot of data.

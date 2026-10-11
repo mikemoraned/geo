@@ -4,10 +4,13 @@ use crate::api::{
 };
 use std::ops::Range;
 
-use chrono::{DateTime, Timelike, Utc};
+use chrono::{DateTime, SubsecRound, Utc};
 use domain::TrainNumber;
-use geo_types::Rect;
+use geo_types::{Coord, Rect};
 use medallion_model::{MotisVersion, NotAMotisVersion, TripId};
+use url::Url;
+
+use crate::zoom::Zoom;
 
 pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8080";
 
@@ -29,7 +32,7 @@ pub enum MotisError {
     Version(#[from] NotAMotisVersion),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Agency {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -48,12 +51,12 @@ pub struct MotisClient {
 
 impl Default for MotisClient {
     fn default() -> Self {
-        Self::new(DEFAULT_BASE_URL)
+        Self::new(&Url::parse(DEFAULT_BASE_URL).expect("the default base URL is a URL"))
     }
 }
 
 impl MotisClient {
-    pub fn new(base_url: &str) -> Self {
+    pub fn new(base_url: &Url) -> Self {
         let http = reqwest::ClientBuilder::new()
             .user_agent(USER_AGENT)
             .connect_timeout(TIMEOUT)
@@ -61,7 +64,7 @@ impl MotisClient {
             .build()
             .expect("a client with only a user agent and timeouts set builds");
         Self {
-            inner: Client::new_with_client(base_url, http),
+            inner: Client::new_with_client(base_url.as_str().trim_end_matches('/'), http),
         }
     }
 
@@ -74,17 +77,16 @@ impl MotisClient {
         &self,
         bbox: &Rect<f64>,
         window: &Range<DateTime<Utc>>,
-        zoom: f64,
+        zoom: Zoom,
     ) -> Result<Vec<TripSegment>, MotisError> {
-        let (min, max) = bbox_corners(bbox);
         let response = self
             .inner
             .trips()
-            .zoom(zoom)
-            .min(min)
-            .max(max)
-            .start_time(whole_second(window.start))
-            .end_time(whole_second(window.end))
+            .zoom(zoom.level())
+            .min(lat_lon(bbox.min()))
+            .max(lat_lon(bbox.max()))
+            .start_time(window.start.trunc_subsecs(0))
+            .end_time(window.end.trunc_subsecs(0))
             .send()
             .await?;
         Ok(response.into_inner())
@@ -112,10 +114,7 @@ fn details_of(itinerary: Itinerary) -> TripDetails {
             id: leg.agency_id.clone(),
             name: leg.agency_name.clone(),
         })
-        .unwrap_or(Agency {
-            id: None,
-            name: None,
-        });
+        .unwrap_or_default();
     let train_number = itinerary.legs.iter().find_map(|leg| {
         leg.trip_short_name
             .as_deref()
@@ -127,38 +126,17 @@ fn details_of(itinerary: Itinerary) -> TripDetails {
     }
 }
 
-fn whole_second(t: DateTime<Utc>) -> DateTime<Utc> {
-    t.with_nanosecond(0)
-        .expect("zero nanoseconds is always a valid time")
-}
-
-fn bbox_corners(bbox: &Rect<f64>) -> (String, String) {
-    (
-        format!("{},{}", bbox.min().y, bbox.min().x),
-        format!("{},{}", bbox.max().y, bbox.max().x),
-    )
+fn lat_lon(corner: Coord<f64>) -> String {
+    format!("{},{}", corner.y, corner.x)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use geo_types::Coord;
 
     #[test]
-    fn bbox_maps_to_sw_and_ne_corner_strings() {
-        let bbox = Rect::new(Coord { x: 8.4, y: 49.5 }, Coord { x: 9.75, y: 50.25 });
-        let (min, max) = bbox_corners(&bbox);
-        assert_eq!(min, "49.5,8.4");
-        assert_eq!(max, "50.25,9.75");
-    }
-
-    #[test]
-    fn whole_second_drops_sub_second_precision() {
-        let t = DateTime::from_timestamp(1_700_000_000, 738_002_000).unwrap();
-        assert_eq!(
-            whole_second(t),
-            DateTime::from_timestamp(1_700_000_000, 0).unwrap()
-        );
+    fn a_corner_is_written_latitude_first() {
+        assert_eq!(lat_lon(Coord { x: 8.4, y: 49.5 }), "49.5,8.4");
     }
 
     #[test]
@@ -199,7 +177,7 @@ mod tests {
         let now = Utc::now();
         let window = now - chrono::Duration::minutes(5)..now + chrono::Duration::minutes(5);
         let segments = client
-            .trips_in_bbox(&over_frankfurt, &window, 8.0)
+            .trips_in_bbox(&over_frankfurt, &window, Zoom::default())
             .await
             .expect("query the local Motis server");
         assert!(
@@ -238,7 +216,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let version = MotisClient::new(&server.uri())
+        let version = MotisClient::new(&Url::parse(&server.uri()).expect("a URL"))
             .motis_version()
             .await
             .expect("the mock answers a request carrying the user agent");

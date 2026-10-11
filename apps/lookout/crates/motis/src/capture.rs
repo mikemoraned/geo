@@ -10,13 +10,14 @@ use crate::bronze::{BronzeError, SegmentLog};
 use crate::client::{MotisClient, MotisError};
 use crate::details::TripDetailsCache;
 use crate::span::Span;
+use crate::zoom::Zoom;
 
 #[derive(Debug)]
 pub struct Capture {
     client: MotisClient,
     details: TripDetailsCache,
     log: SegmentLog,
-    zoom: f64,
+    zoom: Zoom,
     window_half: Span,
 }
 
@@ -66,7 +67,7 @@ pub enum CaptureError {
 }
 
 impl Capture {
-    pub fn new(client: MotisClient, log: SegmentLog, zoom: f64, window_half: Span) -> Self {
+    pub fn new(client: MotisClient, log: SegmentLog, zoom: Zoom, window_half: Span) -> Self {
         Self {
             client,
             details: TripDetailsCache::default(),
@@ -184,9 +185,9 @@ mod tests {
             area: None,
         };
         Capture::new(
-            MotisClient::new(&server.uri()),
+            MotisClient::new(&source.base_url),
             SegmentLog::new(Root::new(store), source.id()),
-            8.0,
+            Zoom::default(),
             "5m".parse().expect("a span"),
         )
     }

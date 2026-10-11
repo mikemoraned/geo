@@ -8,6 +8,7 @@ use motis::capture::{Capture, Coverage};
 use motis::client::MotisClient;
 use motis::near_gps::NearGps;
 use motis::span::Span;
+use motis::zoom::Zoom;
 
 #[tokio::test]
 async fn recent_gps_near_frankfurt_captures_rail_from_local_motis_end_to_end() {
@@ -29,12 +30,11 @@ async fn recent_gps_near_frankfurt_captures_rail_from_local_motis_end_to_end() {
     let mut near_gps = NearGps::new(
         "30m".parse::<Span>().expect("a span").age(),
         "5m".parse::<Span>().expect("a span").age(),
-        1000,
     );
     let mut capture = Capture::new(
         MotisClient::default(),
         SegmentLog::new(Root::new(store.path()), common::local_source().id()),
-        8.0,
+        Zoom::default(),
         "5m".parse().expect("a span"),
     );
 

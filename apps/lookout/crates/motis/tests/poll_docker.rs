@@ -8,7 +8,9 @@ use motis::capture::{Capture, Captured, Coverage};
 use motis::client::MotisClient;
 use motis::near_gps::NearGps;
 use motis::span::Span;
+use motis::zoom::Zoom;
 use shared::{Accel, AccelReading, Message, V1Message};
+use url::Url;
 use uuid::Uuid;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -82,12 +84,11 @@ async fn recent_gps_names_the_area_whose_motis_segments_are_logged_docker() {
     let mut near_gps = NearGps::new(
         "30m".parse::<Span>().expect("a span").age(),
         "5m".parse::<Span>().expect("a span").age(),
-        1000,
     );
     let mut capture = Capture::new(
-        MotisClient::new(&motis.uri()),
+        MotisClient::new(&Url::parse(&motis.uri()).expect("a URL")),
         SegmentLog::new(Root::new(store.path()), common::local_source().id()),
-        8.0,
+        Zoom::default(),
         "5m".parse().expect("a span"),
     );
 

@@ -7,11 +7,12 @@ use telemetry::RawSample;
 
 use crate::window::{Position, PositionWindow};
 
+const SAMPLE_LIMIT: usize = 1000;
+
 #[derive(Debug, Clone)]
 pub struct NearGps {
     window: PositionWindow,
     lookback: Age,
-    sample_limit: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,11 +23,10 @@ pub struct Seen {
 }
 
 impl NearGps {
-    pub fn new(window_age: Age, lookback: Age, sample_limit: usize) -> Self {
+    pub fn new(window_age: Age, lookback: Age) -> Self {
         Self {
             window: PositionWindow::new(window_age),
             lookback,
-            sample_limit,
         }
     }
 
@@ -36,7 +36,7 @@ impl NearGps {
         conn: &mut MultiplexedConnection,
     ) -> Result<Seen, telemetry::QueueError> {
         let cutoff = self.lookback.before(now);
-        let samples = telemetry::peek_newest_samples(conn, self.sample_limit).await?;
+        let samples = telemetry::peek_newest_samples(conn, SAMPLE_LIMIT).await?;
         let recent: Vec<Position> = samples
             .iter()
             .filter_map(position_of)

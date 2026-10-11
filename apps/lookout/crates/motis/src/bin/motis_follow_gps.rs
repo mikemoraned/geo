@@ -8,8 +8,6 @@ use motis::near_gps::{NearGps, Seen};
 use motis::polling::{Look, PollArgs, Poller};
 use motis::span::Span;
 
-const SAMPLE_LIMIT: usize = 1000;
-
 #[derive(Parser)]
 #[command(about = "Poll Motis for train trips near recently logged GPS, and log them")]
 struct Args {
@@ -81,11 +79,7 @@ async fn main() {
         "capturing near recent GPS"
     );
     let mut follow = FollowGps {
-        near_gps: NearGps::new(
-            args.window_age.age(),
-            args.recent_lookback.age(),
-            SAMPLE_LIMIT,
-        ),
+        near_gps: NearGps::new(args.window_age.age(), args.recent_lookback.age()),
         conn,
     };
     Poller::start(&args.poll, &root, None)

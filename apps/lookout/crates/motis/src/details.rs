@@ -49,6 +49,8 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    use url::Url;
+
     use crate::api::types::TripSegment;
 
     use super::*;
@@ -77,7 +79,7 @@ mod tests {
     #[tokio::test]
     async fn a_trip_is_asked_about_once_however_many_polls_see_it() {
         let server = trip_server(200, trip_ids().len()).await;
-        let client = MotisClient::new(&server.uri());
+        let client = MotisClient::new(&Url::parse(&server.uri()).expect("a URL"));
         let mut cache = TripDetailsCache::default();
 
         let first = cache.resolve(&client, &trip_ids()).await;
@@ -91,7 +93,7 @@ mod tests {
     #[tokio::test]
     async fn a_failed_lookup_is_reported_and_asked_again_next_time() {
         let server = trip_server(500, trip_ids().len() * 2).await;
-        let client = MotisClient::new(&server.uri());
+        let client = MotisClient::new(&Url::parse(&server.uri()).expect("a URL"));
         let mut cache = TripDetailsCache::default();
 
         let first = cache.resolve(&client, &trip_ids()).await;
@@ -111,7 +113,7 @@ mod tests {
     #[tokio::test]
     async fn a_poll_gets_details_for_its_own_trips_alone() {
         let server = trip_server(200, trip_ids().len()).await;
-        let client = MotisClient::new(&server.uri());
+        let client = MotisClient::new(&Url::parse(&server.uri()).expect("a URL"));
         let mut cache = TripDetailsCache::default();
         cache.resolve(&client, &trip_ids()).await;
 
