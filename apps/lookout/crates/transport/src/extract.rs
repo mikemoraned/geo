@@ -139,7 +139,7 @@ impl<'a> Extractor<'a> {
         at: DateTime<Utc>,
     ) -> Result<Extraction, ExtractError> {
         let id = ExtractId::new(recorded.extract_id.clone())?;
-        let bbox = bbox_of(recorded);
+        let bbox = recorded.bbox();
 
         let opened = self.overture.release().id();
         if opened != recorded.release {
@@ -298,19 +298,6 @@ impl<'a> Extractor<'a> {
             .await?;
         Ok(())
     }
-}
-
-fn bbox_of(recorded: &ExtractManifestRow) -> Rect<f64> {
-    Rect::new(
-        Coord {
-            x: recorded.min_lon,
-            y: recorded.min_lat,
-        },
-        Coord {
-            x: recorded.max_lon,
-            y: recorded.max_lat,
-        },
-    )
 }
 
 fn of_country(code: &str) -> String {

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crossings::PlacedCrossing;
 use geo::{Contains, Intersects};
-use geo_types::{Geometry, Point, Rect, coord};
+use geo_types::{Geometry, Point};
 use geojson::{FeatureCollection, GeoJson};
 use libtest_mimic::{Arguments, Failed, Trial};
 use medallion::{Query, Root};
@@ -57,13 +57,7 @@ async fn extracts(root: &Root) -> Result<Vec<ExtractManifestRow>, Box<dyn Error>
 fn countries_covering(extracts: &[ExtractManifestRow], bbox: &Geometry<f64>) -> String {
     let countries: BTreeSet<&str> = extracts
         .iter()
-        .filter(|extract| {
-            Rect::new(
-                coord! { x: extract.min_lon, y: extract.min_lat },
-                coord! { x: extract.max_lon, y: extract.max_lat },
-            )
-            .intersects(bbox)
-        })
+        .filter(|extract| extract.bbox().intersects(bbox))
         .map(|extract| extract.country.as_str())
         .collect();
     match countries.is_empty() {

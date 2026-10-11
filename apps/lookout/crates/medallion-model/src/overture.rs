@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use geo_types::{Coord, Rect};
 use medallion::{Country, DatasetSpec, Row, layers};
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +32,21 @@ pub fn division_id(country: Country) -> GersId {
         Country::UnitedKingdom => "ce3429b1-d5c6-4763-91e7-0107e26d613e",
     };
     GersId::new(id).expect("a division id written here is a constant, checked by the tests below")
+}
+
+impl ExtractManifestRow {
+    pub fn bbox(&self) -> Rect<f64> {
+        Rect::new(
+            Coord {
+                x: self.min_lon,
+                y: self.min_lat,
+            },
+            Coord {
+                x: self.max_lon,
+                y: self.max_lat,
+            },
+        )
+    }
 }
 
 impl Row for ExtractManifestRow {

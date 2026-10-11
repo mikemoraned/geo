@@ -71,16 +71,8 @@ impl ReleaseChoice {
         match self {
             Self::NamedRelease(id) => Ok(Release::at(id, mirror)),
             Self::LatestReleaseAvailable => {
-                let available = match &mirror {
-                    Some(root) if !root.is_dir() => {
-                        return Err(OvertureError::MirrorAbsent {
-                            root: root.display().to_string(),
-                        });
-                    }
-                    Some(root) => mirrored_releases(root),
-                    None => published_releases().await?,
-                };
-                let latest = available
+                let latest = available_releases(mirror.as_deref())
+                    .await?
                     .into_iter()
                     .filter_map(|id| Some((release_order(&id)?, id)))
                     .max();
@@ -117,14 +109,16 @@ pub struct Release {
 }
 
 impl Release {
-    pub fn published(id: impl Into<String>) -> Self {
+    #[cfg(test)]
+    pub(crate) fn published(id: impl Into<String>) -> Self {
         Self {
             id: id.into(),
             mirror: None,
         }
     }
 
-    pub fn mirrored(id: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+    #[cfg(test)]
+    pub(crate) fn mirrored(id: impl Into<String>, path: impl Into<PathBuf>) -> Self {
         Self {
             id: id.into(),
             mirror: Some(path.into()),
@@ -164,20 +158,13 @@ impl Release {
 }
 
 async fn diagnose(release: &Release, error: DataFusionError) -> OvertureError {
-    let available = match &release.mirror {
-        Some(root) if !root.is_dir() => {
-            return OvertureError::MirrorAbsent {
-                root: root.display().to_string(),
-            };
+    let available = match available_releases(release.mirror.as_deref()).await {
+        Ok(releases) => releases,
+        Err(OvertureError::Listing(failure)) => {
+            tracing::warn!(error = %failure, "could not list the published releases");
+            return error.into();
         }
-        Some(root) => mirrored_releases(root),
-        None => match published_releases().await {
-            Ok(releases) => releases,
-            Err(failure) => {
-                tracing::warn!(error = %failure, "could not list the published releases");
-                return error.into();
-            }
-        },
+        Err(absent) => return absent,
     };
     if available.contains(&release.id) {
         error.into()
@@ -187,6 +174,16 @@ async fn diagnose(release: &Release, error: DataFusionError) -> OvertureError {
             location: release.location(),
             available,
         }
+    }
+}
+
+async fn available_releases(mirror: Option<&Path>) -> Result<Vec<String>, OvertureError> {
+    match mirror {
+        Some(root) if !root.is_dir() => Err(OvertureError::MirrorAbsent {
+            root: root.display().to_string(),
+        }),
+        Some(root) => Ok(mirrored_releases(root)),
+        None => Ok(published_releases().await?),
     }
 }
 
