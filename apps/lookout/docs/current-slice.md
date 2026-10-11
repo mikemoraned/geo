@@ -169,7 +169,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       its country, and make the `geo` nextest profile show a passing test's output. Remove
       the recipe and `notebooks/water_crossings/check_cases.py`, and name `just test-geo`
       wherever this slice names `just crossing-checks`.
-- [ ] Run `just test-geo` on the current silver, and keep its output as the baseline.
+- [x] Run `just test-geo` on the current silver, and keep its output as the baseline.
       It must run before `just silver-init`.
 - [ ] Point `EXTRACTS` in `notebooks/water_crossings/v10.py` at the two new ids, and re-run
       `just silver-init`.
@@ -202,3 +202,12 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   `transportation` 90.3 GiB and `divisions` 5.2 GiB.
 - 2026-10-03: the parquet schemas of 2026-09-23.1 carry `subtype`, `class` and `bbox` on water.
   Segment carries `connectors`, and division_area carries `country` and `division_id`.
+- 2026-10-11: the crossing-check baseline, from `just test-geo` on silver derived at
+  2026-07-22.0. Every case passes, and each finds the count it expects.
+
+  | Case                  | Country | Expected | Found |
+  |-----------------------|---------|----------|-------|
+  | Mannheim, 4 tracks    | DE      | 4        | 4     |
+  | Horseshoe re-crossing | DE      | 2        | 2     |
+  | Hamburg tunnel        | DE      | 0        | 0     |
+  | Forth Bridge          | GB      | 2        | 2     |
