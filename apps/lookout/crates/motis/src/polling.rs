@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::time::Instant;
 
 use chrono::{DateTime, Utc};
 use url::Url;
@@ -124,7 +125,11 @@ async fn poll(now: DateTime<Utc>, look: &mut impl Look, capture: &mut Capture) {
     let Some(coverage) = look.coverage(now).await else {
         return;
     };
-    match capture.capture(now, &coverage).await {
+    tracing::info!("polling motis");
+    let started = Instant::now();
+    let captured = capture.capture(now, &coverage).await;
+    let took = started.elapsed();
+    match captured {
         Ok(Captured {
             segments,
             outside,
@@ -134,6 +139,7 @@ async fn poll(now: DateTime<Utc>, look: &mut impl Look, capture: &mut Capture) {
                 segments,
                 outside,
                 unresolved = unresolved.len(),
+                ?took,
                 "polled motis"
             );
             for failure in &unresolved {
@@ -147,6 +153,6 @@ async fn poll(now: DateTime<Utc>, look: &mut impl Look, capture: &mut Capture) {
                 }
             }
         }
-        Err(err) => tracing::error!(%err, "capturing from motis failed"),
+        Err(err) => tracing::error!(%err, ?took, "capturing from motis failed"),
     }
 }
