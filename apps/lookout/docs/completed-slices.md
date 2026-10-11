@@ -451,3 +451,44 @@ together. No new crates.
   notifying on the web and the device, for the UK and Germany. V2 adds the phone apps, a second
   device, and a predictor that uses reachability. Five slices stay unassigned.
 - **No slice covers V1's visual notifications yet.**
+
+## Slice: up to date on the latest Overture release
+
+Moved the DE and GB extracts together from 2026-07-22.0 to 2026-09-23.1, the newest release the
+bucket served, and re-derived silver, gold, the device set and the kiosk sessions from them.
+Mirroring Overture became a tool of its own, `tools/overture-mirror`, a separate cargo project
+beside `tools/motis-server`.
+
+### The mirror
+
+- **The mirror takes a whole release, not the themes an extract reads.** It serves work outside
+  this repo, and a whole release is 577 GiB against 122 GiB for the three themes.
+- **The mirror's path is stated once**, and imported by the tool's recipes and by lookout's.
+- **A later `.N` of the same date supersedes a release.** The tool marks a superseded release
+  and refuses to mirror it.
+- **A resumed sync copies only the files a signature check finds missing or differing.** A
+  signature is a file's size with its first and last kibibyte. A separate verify reports the
+  same check with no copy.
+- **A source is the bucket or another mirror**, so one mirror backs up and verifies another.
+- **Progress counts bytes, not files**, with the rate and time left taken over the last minute.
+
+### The release
+
+- **No release is pinned any more.** A new extract takes the latest release its source holds,
+  unless a release is named.
+- **The extract reads the mirror when it is mounted, and the public bucket otherwise.**
+- **The nested columns kept their shape**, so the bump needed no schema work.
+
+### What moved
+
+- **Every geographic test case found its baseline count at the new release.** The geographic
+  tests now print each case's expected count, found count and country, and replace a slower
+  notebook check that did the same.
+- **8,804 of the 10,268 crossings, 86%, kept their id across the release.**
+- **The firmware stayed at about 851 KB**, carrying a set that fell from 10,268 crossings to
+  10,254.
+
+### Python extensions
+
+- **Each python extension rebuilds only when a crate it wraps changes**, by uv's cache keys, in
+  place of a forced reinstall on every run.
