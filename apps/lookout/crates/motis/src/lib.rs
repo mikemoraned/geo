@@ -8,6 +8,7 @@ pub mod client;
 pub mod details;
 pub mod ingest;
 pub mod near_gps;
+pub mod polling;
 pub mod segment;
 pub mod source;
 pub mod span;

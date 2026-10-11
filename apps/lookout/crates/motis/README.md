@@ -1,7 +1,8 @@
 # motis
 
-Trains near where a device has been: poll a Motis server for the trips around recent GPS fixes,
-keep every answer, and derive one row per scheduled leg from them.
+Trains near where a device has been, or across one country or region: poll a Motis server for the
+trips there, keep every answer, and derive one row per scheduled leg from them. `motis_follow_gps`
+polls around recent GPS fixes, and `motis_track_area` polls one Overture country or region.
 
 [motis.md](../../docs/motis.md) covers what the server and the feed behind it can answer;
 [medallion.md](../../docs/medallion.md) covers the layers the three stages write.
@@ -12,8 +13,10 @@ A **poll** has two parts: one decides where to look, and the other captures what
 there. Near recent GPS, the first reads the newest queued telemetry samples, keeps the GPS fixes
 younger than its lookback, and holds them in a rolling window pruned by age. The area it names is
 the window's own bbox scaled about its centre, so a train just off the trace still comes back.
-While the window is empty it names no area, and nothing is captured. The capture queries Motis
-over the area it is given, whatever decided it.
+While the window is empty it names no area, and nothing is captured. Over a fixed country or
+region, the first names the same area at every poll: its Overture shape. The capture queries Motis
+over the bounding box of the area it is given, whatever decided it, and keeps the legs that touch
+the area.
 
 The **capture log** takes what a poll saw, one file per poll, verbatim: the times as instants and
 the polyline as the encoded string the server sent. Nothing is rewritten, so overlapping polls

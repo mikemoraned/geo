@@ -23,26 +23,24 @@ pub struct Capture {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Coverage {
     bbox: Rect<f64>,
-    shapes: Option<Vec<Geometry<f64>>>,
+    shapes: Vec<Geometry<f64>>,
 }
 
 impl Coverage {
     pub fn bbox(bbox: Rect<f64>) -> Self {
-        Self { bbox, shapes: None }
+        Self {
+            bbox,
+            shapes: vec![Geometry::Rect(bbox)],
+        }
     }
 
     pub fn shapes(shapes: Vec<Geometry<f64>>) -> Option<Self> {
         let bbox = GeometryCollection::new_from(shapes.clone()).bounding_rect()?;
-        Some(Self {
-            bbox,
-            shapes: Some(shapes),
-        })
+        Some(Self { bbox, shapes })
     }
 
     fn touches(&self, line: &LineString<f64>) -> bool {
-        self.shapes
-            .as_ref()
-            .is_none_or(|shapes| shapes.iter().any(|shape| shape.intersects(line)))
+        self.shapes.iter().any(|shape| shape.intersects(line))
     }
 }
 
@@ -247,19 +245,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_bounding_box_alone_keeps_every_leg() {
+    async fn a_leg_touching_the_bounding_box_is_captured() {
         let server = motis().await;
         let store = tempfile::tempdir().expect("tempdir");
-        let anywhere = Coverage::bbox(Rect::new(
+        let around_frankfurt = Coverage::bbox(Rect::new(
+            Coord { x: 8.0, y: 49.5 },
+            Coord { x: 10.0, y: 51.5 },
+        ));
+
+        let captured = capture(&server, store.path())
+            .capture(chrono::Utc::now(), &around_frankfurt)
+            .await
+            .expect("capture");
+
+        assert_eq!((captured.segments, captured.outside), (1, 0));
+    }
+
+    #[tokio::test]
+    async fn a_leg_clear_of_the_bounding_box_is_outside() {
+        let server = motis().await;
+        let store = tempfile::tempdir().expect("tempdir");
+        let elsewhere = Coverage::bbox(Rect::new(
             Coord { x: 0.0, y: 0.0 },
             Coord { x: 1.0, y: 1.0 },
         ));
 
         let captured = capture(&server, store.path())
-            .capture(chrono::Utc::now(), &anywhere)
+            .capture(chrono::Utc::now(), &elsewhere)
             .await
             .expect("capture");
 
-        assert_eq!((captured.segments, captured.outside), (1, 0));
+        assert_eq!((captured.segments, captured.outside), (0, 1));
     }
 }

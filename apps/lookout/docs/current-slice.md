@@ -226,7 +226,7 @@ Next, so data accumulates while the rest is built.
       `--overture-country` and `--overture-region` take Overture's own codes, such as DE and
       DE-TH. `just bronze-poll-transitous` polls Thuringia every 10 minutes. Against the local
       server one poll of Thuringia kept 56 of 140 rail legs in its bounding box.
-- [ ] Split `motis_poll` into two binaries sharing `Capture`: `motis_follow_gps`, which follows
+- [x] Split `motis_poll` into two binaries sharing `Capture`: `motis_follow_gps`, which follows
       an area that moves with recent GPS, and `motis_track_area`, which tracks one fixed Overture
       country or region over time. Point `bronze-poll-motis` and `bronze-poll-transitous` at them.
 - [ ] Refactor `crates/motis` again once the area mode lands: a function taking too many
@@ -311,7 +311,7 @@ At the end of the slice, once its features are in.
       lookback, or other age held as `domain::Age`, every age flag read as a `Span`, and
       `Option<Age>` where no age applies.
 - [ ] Take every duration, interval, and age a person writes across `lookout` as a human-readable
-      `Span`, such as `30s` or `4h`, as `motis_poll` does. Move `Span` out of `crates/motis` to
+      `Span`, such as `30s` or `4h`, as the Motis pollers do. Move `Span` out of `crates/motis` to
       where every crate can reach it.
 
 #### Wrap-up
