@@ -140,8 +140,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 #### The release pin
 
 - [x] List the bucket's releases, and name the latest. It becomes the new pin.
-- [ ] Confirm the mirror drive has 577 GiB free. The user's to check, with the drive mounted.
-- [ ] Sync 2026-09-23.1 whole to the mirror with the new recipe. The user's to run: it needs
+- [x] Confirm the mirror drive has 577 GiB free. The user's to check, with the drive mounted.
+- [x] Sync 2026-09-23.1 whole to the mirror with the new recipe. The user's to run: it needs
       the drive mounted and hours of transfer. Every task after this one waits on it.
 - [ ] Bump `DEFAULT_RELEASE` in `crates/transport/src/overture.rs` to 2026-09-23.1.
 - [ ] Take a DE and a GB extract with `just bronze-extract new`, from the mirror. Each becomes
