@@ -171,9 +171,9 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       wherever this slice names `just crossing-checks`.
 - [x] Run `just test-geo` on the current silver, and keep its output as the baseline.
       It must run before `just silver-init`.
-- [ ] Point `EXTRACTS` in `notebooks/water_crossings/v10.py` at the two new ids, and re-run
+- [x] Point `EXTRACTS` in `notebooks/water_crossings/v10.py` at the two new ids, and re-run
       `just silver-init`.
-- [ ] Re-run `just test-geo`, and record each test case whose count moved from the
+- [x] Re-run `just test-geo`, and record each test case whose count moved from the
       baseline.
 - [ ] Re-run `just gold-pack-crossings`, `just crossings`, `just gold-pack-sessions` and `just
       kiosk-sessions`, and commit the packed artefacts with the versions adopted.
@@ -202,6 +202,9 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - Whether the nested columns kept their shape. 2026-09-23.1 carries every column the
   predicates name, at the top level. A changed struct inside `connectors` or `bbox` shows up
   only at the first extract, and turns the bump into schema work.
+  Resolved 2026-10-11: they kept it. The extract reads each segment's `connectors` and every
+  type's `bbox` fields, and `v10.py` reads the same, and both ran on 2026-09-23.1 without
+  error. No schema work follows.
 
 ### Observations
 
@@ -222,3 +225,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   | Horseshoe re-crossing | DE      | 2        | 2     |
   | Hamburg tunnel        | DE      | 0        | 0     |
   | Forth Bridge          | GB      | 2        | 2     |
+- 2026-10-11: silver re-derived from the 2026-09-23.1 extracts. Every case in `just test-geo`
+  finds the count of the baseline, so no case moved. `water_crossing` holds 10,254 rows
+  against 10,268 at 2026-07-22.0, and `session_crossing` holds 259 rows at both. The
+  derivation read the nested columns without error, which settles the open question.
