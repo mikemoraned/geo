@@ -35,6 +35,13 @@ before it is committed leaves only its conclusion, with no way to check the conc
 Say in the spike commit message what is being asked; say in the removing commit what the
 answer was.
 
+## Notebooks
+
+A notebook is built with the user in a live marimo session, one step at a time, never drafted
+alone in a file. The user starts the session. Each step adds or changes one cell, then stops for
+review before the next. Querying the store directly, for example with the duckdb CLI, to learn what
+the data holds before proposing a step is permitted.
+
 ## Reference docs
 
 See [docs-style.md](docs-style.md).
