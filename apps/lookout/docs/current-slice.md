@@ -232,10 +232,12 @@ Next, so data accumulates while the rest is built.
 - [ ] Refactor `crates/motis` again once the area mode lands: a function taking too many
       arguments or doing too much, a hand-rolled type a library or `std` provides, a raw number
       standing in for a type.
-- [ ] Post the plan on Transitous's Matrix channel: area, interval, request count, and
+- [ ] Capture Thuringia from Transitous every 10 minutes, for 2 hours. This is only 12 samples, so not a lot of data.
+      Sanity-check this has worked by visualising this data in a notebook i.e. show the trains changing over time along their paths.
+      The intent of this is to see if train positions make sense and just to spot any other anomalies.
+- [ ] Post the longer plan on Transitous's Matrix channel: area, interval, request count, and
       `User-Agent`. The user does this.
-- [ ] Capture Thuringia from Transitous every 10 minutes, for an hour, then for a day. The user
-      runs it, the day-long run only after the Matrix post.
+- [ ] Capture Thuringia from Transitous every 10 minutes, for a day. The user runs it, the day-long run only after the Matrix post.
 - [ ] Describe the source and `motis_segment_v2` in `docs/medallion.md`, and the area mode,
       Transitous, and its usage policy in `docs/motis.md`.
 
