@@ -99,8 +99,8 @@ Motis gives something else, as [motis.md](motis.md) establishes:
   reported GPS fix, so the samples hold derived positions. Speed and direction differentiated
   from them follow partly from the cell and the shape, rather than carrying independent signal.
   On this feed, the advantage of learning real behaviour over the timetable is only partly real.
-- **Rail geometry is straight lines.** Motis loads `shapes.txt`, but only bus and coach operators
-  populate it. Rail legs come back as polylines of four points or fewer. The interpolation
+- **Rail geometry is straight lines.** Every trip in the feed carries a shape, but rail shapes run
+  straight from stop to stop. Rail legs come back as polylines of four points or fewer. The interpolation
   therefore runs along straight chords between stops, not along the curved track. An
   observational map built from Motis rail learns chord geometry, not track geometry. A cell- and
   topology-aware predictor depends on exactly that geometry. Curved rail needs shapes synthesised
