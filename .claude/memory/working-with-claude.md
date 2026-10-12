@@ -42,6 +42,12 @@ alone in a file. The user starts the session. Each step adds or changes one cell
 review before the next. Querying the store directly, for example with the duckdb CLI, to learn what
 the data holds before proposing a step is permitted.
 
+## External services
+
+Claude sends no request to an external service such as Transitous, not even one within its usage
+policy. The user runs every capture or check against one. When a change needs measuring against a
+live service, apply it to the real code in small steps, and hand over the command for each.
+
 ## Reference docs
 
 See [docs-style.md](docs-style.md).
