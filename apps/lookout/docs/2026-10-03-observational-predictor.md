@@ -104,8 +104,8 @@ Motis gives something else, as [motis.md](motis.md) establishes:
   therefore runs along straight chords between stops, not along the curved track. An
   observational map built from Motis rail learns chord geometry, not track geometry. A cell- and
   topology-aware predictor depends on exactly that geometry. Curved rail needs shapes synthesised
-  by map-matching against OSM, which the parked pfaedle slice in [next-slices.md](next-slices.md)
-  covers.
+  by map-matching against OSM, which
+  [2026-10-12-track-shapes-and-realtime.md](2026-10-12-track-shapes-and-realtime.md) assesses.
 - **Delay is the live variable worth modelling.** DELFI static with DELFI RT resolves about
   99.96% of trip updates. About 80% of segments in a city-sized box come back
   realtime-corrected. Beyond the timetable, Motis offers less a position-to-crossing map than an
@@ -168,8 +168,8 @@ aggregator for areas the project does not feed itself.
   the goal it stops short of
 - [motis.md](motis.md): no vehicle positions, interpolated position, straight-line rail shapes,
   DELFI realtime resolution, and the second call for trip identity
-- [next-slices.md](next-slices.md): the parked pfaedle map-matching slice, which would give
-  curved rail shapes
+- [2026-10-12-track-shapes-and-realtime.md](2026-10-12-track-shapes-and-realtime.md): curved
+  rail shapes, computed by Motis during import, and the pfaedle attempt
 - [Transitous](https://transitous.org/) and its [API](https://transitous.org/api/): the community
   MOTIS instance, its usage policy, and the MOTIS 2 endpoint
 - [MOTIS](https://github.com/motis-project/motis): input formats (GTFS, GTFS-RT, …) and the REST

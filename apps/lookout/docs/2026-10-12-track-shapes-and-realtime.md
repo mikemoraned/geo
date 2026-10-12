@@ -2,13 +2,12 @@
 
 *Assessment of 2026-10-12. No import has run with the setting it recommends, so no import time or
 match rate has been measured. The evidence is Transitous's repository and API, the Motis source at
-v2.11.3, and the DELFI feed of 2026-10-05. It also takes in the two Motis captures in bronze and one
-snapshot of each German realtime feed. Whatever survives a first import belongs in
-[motis.md](motis.md), and the rest goes stale.*
+v2.11.3, and the DELFI feed of 2026-10-05. It also takes in the two Motis captures in bronze, one
+snapshot of each German realtime feed, and the pfaedle attempt of July 2026. Whatever survives a
+first import belongs in [motis.md](motis.md), and the rest goes stale.*
 
 How a Motis server can give every German train a shape that follows the track, with realtime
-corrections. It is for whoever next changes the local server in `tools/motis-server`, or resumes the
-parked pfaedle slice in [next-slices.md](next-slices.md).
+corrections. It is for whoever next changes the local server in `tools/motis-server`.
 
 A shape is the line a trip is drawn along. `map/trips` returns it for each leg, as an encoded
 polyline.
@@ -158,13 +157,24 @@ source. What the SIRI feed adds is unmeasured. Motis v2.11.3 accepts SIRI feeds 
 
 ## The pfaedle attempt, compared
 
-The parked pfaedle slice matched rail to OSM outside Motis, and spliced the result into the feed's
-`shapes.txt`. The shapes came out right, but realtime resolution fell to about 0.4% of trip
-updates, for a reason never found. The `route_shapes` step leaves the feed alone, so Motis imports
-the feed whose realtime resolves today.
+In July 2026, against Motis v2.10.2, `tools/pfaedle` matched rail to OSM with pfaedle, and spliced
+the result into the feed's `shapes.txt`. The shapes came out right, but realtime resolution fell to
+about 0.4% of trip updates, for a reason never found. The `route_shapes` step leaves the feed
+alone, so Motis imports the feed whose realtime resolves today.
 
-The pfaedle slice's fallback, to "accept straight-line rail — which is what transitous does", no
-longer describes Transitous.
+Three imports of such a feed broke realtime alike. In one, `trips.txt` matched the raw feed byte
+for byte, apart from the rail `shape_id` values. The trips that failed to resolve there were bus
+trips, whose `shape_id` was untouched. The remaining difference was `shapes.txt`, grown from 308 MB
+to 2.3 GB. A same-day realtime fetch still overlapped the static feed's trip ids by 99.6%, so feed
+currency was not the cause. The leading hypothesis, never tested, is that a feed that size hits a
+limit in `motis import`. The realtime trip index then comes out incomplete, while scheduled queries
+work.
+
+pfaedle has no Homebrew formula, and builds from source against `cmake` and `libzip`. Only an
+installed pfaedle finds its default matching config, so a run from the build directory passes the
+config path. `-D -m rail` recomputes rail shapes and leaves the others alone. Its GTFS parser is
+stricter than Motis's, and aborts on the dangling references in DELFI's `transfers.txt` and
+`pathways.txt`. Commit `dfd86558` removed `tools/pfaedle` from the tree.
 
 pfaedle keeps one advantage. It prefers track that belongs to an OSM route relation carrying the
 train's line. Its default config multiplies the cost of other track by 1.2. Motis takes the
@@ -201,7 +211,7 @@ Germany-wide capture at a shorter interval belongs on the local server.
 against DELFI's 530 MB, with the shapes already dropped. Mode `all` achieves the same from DELFI's
 own feed, without a dependency on Transitous's pipeline.
 
-**pfaedle.** Parked. If Motis issue #1596 stays open and wrong parallel lines prove common, its
+**pfaedle.** Rejected for now. If Motis issue #1596 stays open and wrong parallel lines prove common, its
 line-relation penalty is the reason to return to it.
 
 **Computing shapes in lookout's own code.** Matching stops to OSM or Overture rail repeats what

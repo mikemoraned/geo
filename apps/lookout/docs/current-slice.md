@@ -1,60 +1,19 @@
-# Current Slice: Evaluation framework with associated Crow Flies predictor improvement
+# Current Slice: Motis as ground truth
 
 ### Target
 
-I have some larger ideas for how to come up with a good predictor, but for now I want to prove I can improve things + measure that improvement in some way.
-
-So, I'd like to go from a very simple Crow Flies predictor I have now, which effectively just shows distance to nearby crossings, to one that takes into account current speed and average direction, and predicts when a crossing will be passed in next N minutes.
-
-### Straw Man
-
-This approach means we have to become a lot crisper in what a prediction means. Right now the display just shows a radar style view which isn't really making a prediction and is instead just a map of nearby crossings. My thinking here is that, for each crossing, we need to have a little state-machine, something like:
-
-States:
-* OutOfReach: this is maybe an implicit state that any crossing sits in, if it is just in the pointset data, and isn't reachable at all
-* CandidatePass: this is when it becomes nearby enough to be considered as a possible crossing
-* PredictedPass: this is when we expect we will actually pass by this crossing in the next N minutes
-* ActualPass: we just actually passed the crossing
-
-Transitions:
-* OutOfReach <-> CandidatePass: a crossing can oscillate in and out of being a candidate
-* OutOfReach -> PredictedPass or CandidatePass -> PredictedPass: this is us making a prediction, and this transition should lead to a notification of some kind to the user
-* PredictedPass -> CandidatePass or PredictedPass -> OutOfReach: this counts as a failed prediction
-* PredictedPass -> ActualPass: a successful prediction. Note that a crossing stays in the ActualPass state until we've gotten some distance away from it to avoid re-notifying repeatedly. In general, the state transitions should probably have some sort of debouncing to avoid frequent flips in and out of states.
-* ActualPass -> PredictedPass: it's always possible we can pass somewhere multiple times, so this is a new prediction
-* ActualPass -> CandidatePass: still within reach but not currently predicted
-* ActualPass -> OutOfReach: it's now distance from us and we don't even think it is a candidate
-
-In this framework, depending on how clever the predictor is, we may be able to display a crossing but still label it as OutOfReach. This could be, for example, if we decide it is technically close by but we are not going to reach it because it's not on our current track.
-
-However, the cleverness of the predictor we do in this slice should be limited to using a current-speed/direction + light-cone approach i.e. predict what we will reach based on where we will pass by based on current vector. This can start with a low-level of cleverness about current speed/direction (i.e. just literal current speed) and then start building up an overall speed/direction based on an average over last few fixes and/or on speed reported by the GPS device. 
-
-I suspect on Web we could benefit from the cleverness of the GPS baked into the phone, as it's probably doing something clever, but I'd prefer not to use that and instead do it ourselves, as then we have consistent performance across platforms. I am thinking here of some sort of Kalman-filter or similar.
-
-We should implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session table) and from motis (bronze/motis_segment). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
+Before I continue down the route of relying on Transitous, I'd first like to try bringing my local
+Motis setup up to scratch, as at least a source of correct geo routes and correct train arrival
+times. The focus is establishing a ground truth with large coverage.
 
 We should get new motis data by polling motis live in a particular bbox and watching when trains arrive. The idea is that we need to get enough data that we can put together a reasonable size test dataset, and *also* that we gather enough data to do more ambitious stuff with it later, where we use the motis data as effectively input data for a model or a dataset.
 
-If we use transitious.org then we can benefit from more accurate paths (see pfaedle slice), but we should be good citizens and not spam it constantly. We also *probably* don't need this level of route accuracy for a first-cut of a prediction framework. However, it means we should be sure to explicitly model the source of our motis data with metadata about e.g. as a small table in bronze which records which motis version/setup was used and which the actual motis samples in bronze can have a foreign key to. This allows us to ignore sources as needed when building the canonical datasets in Silver.
-
-### What a prediction is
-
-Each crossing is in one of four states:
-
-- **OutOfReach**: the predictor rules it out.
-- **CandidatePass**: reachable, but not expected within N minutes.
-- **PredictedPass**: expected within N minutes. Entering it raises an alert, which is the
-  notification the user sees and what the evaluation scores.
-- **ActualPass**: recently passed, until the train is far enough away that a new alert means a
-  second pass.
-
-The evaluation scores the first alert before each pass. A train reversing out of Leipzig passes
-the same crossings twice, so the unit is (session, crossing, pass), not the (session, crossing)
-pair of [2026-08-01-evaluation.md](2026-08-01-evaluation.md).
+The slice "Evaluation framework with associated Crow Flies predictor improvement" scores predictions
+against this ground truth.
 
 ### Decisions
 
-Decisions taken before starting, as each changes what gets built. Confirmed 2026-10-03.
+Decisions taken before starting, as each changes what gets built.
 
 #### Upgrades
 
@@ -72,33 +31,12 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   geo as well as crux. Narrowed on 2026-10-04 from a fresh baseline after the geo move: the geo
   move is not expected to affect stability, and a build and the Rust tests cover it.
 
-#### Prediction
-
-- **The state machine lives in `predictor`, over any `Predict`**, so the device, the browser, the
-  replay, and the evaluation share it.
-- **A light cone decides reachability, and the current velocity decides the prediction.** A
-  train's maximum speed and acceleration bound where it can be within the horizon. Projecting the
-  current velocity estimates when a reachable crossing is passed. The bounds are recorded per
-  country, with sources.
-- **`LightCone` sits beside `CrowFlies`.** `CrowFlies` stays as the baseline, and marks every
-  crossing in its radius reachable.
-- **Speed and direction come from the fixes alone**, averaged over the last few, so every platform
-  estimates alike. `CrowFlies` keeps the reported speed, as the constant-velocity baseline.
-- **Transitions debounce with hysteresis and a minimum dwell**, as geofencing APIs do. ActualPass
-  is entered within the 250 m match radius, and left beyond a larger one.
-
-#### Ground truth and evaluation
+#### Ground truth
 
 - **A pass per visit, at an interpolated instant.** `match_crossings` keeps one pass per
   (session, crossing) today, at the nearest fix, which at line speed lies over 100 m off. It
   instead splits the fixes within the match radius into visits, and interpolates each pass's
   instant between the bracketing fixes.
-- **A Rust binary scores, and a notebook measures.** The binary writes a gold row per pass or false
-  alarm, with the outcome, the lead time, and the run's parameters. An alert with no pass following
-  within the horizon is a false alarm.
-- **A Motis train is a synthetic session, built inside the run.** It holds a position every 10 s,
-  the recorded sessions' median, along its legs in `train_segment`. Motis results are reported
-  apart from recorded sessions.
 
 #### Motis capture
 
@@ -108,13 +46,13 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   and `train_segment_v2` derives from it, every row naming its source. `motis_segment` stays as
   written, and `train_segment` derives from it with no source. A reader wanting every train reads
   both. Changed on 2026-10-07 from one silver dataset with an optional source id.
-- **Transitous is the sampling source, until a local Motis matches its shapes.** Its rail legs
-  follow the track. The local DELFI server's are straight chords between stops, too coarse for
-  ground truth. Changed on 2026-10-06 from the local server alone.
+- **The local server is the sampling source, and Transitous checks it.** With rail legs that
+  follow the track, the local server covers Germany without loading a volunteer-run service.
+  Transitous's shapes and times for the same DELFI trips check that it reaches the Target.
 - **Polls to Transitous are polite.** One poll every 10 minutes, over Thuringia alone. Each request
   carries a `User-Agent` naming lookout, its version, and `https://github.com/mikemoraned/geo`, as
-  the usage policy requires. A train's details are fetched once per run, not once per poll. The
-  user posts the plan on Transitous's Matrix channel before the day-long run. Confirmed 2026-10-06.
+  the usage policy requires. A train's details are fetched once per run, not once per poll.
+  Confirmed 2026-10-06.
 - **Anything showing Transitous data links to https://transitous.org/sources/**, as the usage
   policy requires.
 - **S-Bahn stays out of the capture.** The poller keeps mainline and regional rail, and drops
@@ -122,8 +60,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **`motis_poll` gains an area mode**: a country and an optional region, such as DE and
   Thuringia. It queries the area's bounding box, from Overture's `division_area`, and keeps the
   legs touching the area.
-- **A first capture runs an hour, then a day, over Thuringia**, and a week once the day's is
-  checked.
 - **A source's id is a UUID v5 of its fields**, as a session's is. Registering a source twice
   writes one row, and a Motis upgrade makes a new source. Confirmed 2026-10-05.
 - **The poller asks the server for its Motis version**, from `serverConfig.motisVersion` in
@@ -135,12 +71,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   `progenitor` reads OpenAPI 3.0 alone, so the build declares the 3.1 spec as 3.0.3, which
   generates for v2.11.3. Confirmed 2026-10-05.
 
-#### Notifications
-
-- **The core raises a notification as a crux effect, on entry into PredictedPass.** The web
-  element shows a banner, and a system notification while the page is hidden. The M5 panel shows a
-  banner.
-
 #### Consequences elsewhere
 
 - `docs/device.md` and the pin comment in `crates/platform/web/core/Cargo.toml` say crux after
@@ -148,25 +78,28 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - The workspace `Cargo.toml` comment ties geo to sedona-geo's version. The SedonaDB 0.5.0 slice
   moves geo from 0.32 rather than 0.31.
 - `App` in `crates/platform-core/src/app.rs` loses `type Capabilities` and the `_caps` argument.
-- `Prediction` gains a reachability field.
 - `silver/session_crossing` can hold several rows per (session, crossing), so the packed sessions
   and `sessions.version` change.
-- The `lookout_predictor` binding in `crates/platform/rerun-py` exposes `CrowFlies` alone.
-- The picture in `docs/web.md` and the derivation graph in `docs/architecture.md` change.
+- The derivation graph in `docs/architecture.md` changes.
 
 #### Open questions
 
-- Why the sentence that scans takes 262 ms on the device rather than 8.5 ms. geo 0.32 takes it
-  to 119 ms, and crux 0.20 to 262 ms. On the host, neither changes it, so the cause lies in the
-  device build. The light cone adds work to that sentence, so the answer matters before it lands.
+- How a source records whether its server computes rail shapes. A server registers one source id
+  whether `route_shapes` is on or off. The id hashes only the base URL, the version, the feed, and
+  the area.
+- Which feed a local source names. `local` covers both the July captures, on gtfs.de, and today's
+  DELFI server.
 
 #### Rejected / deferred
 
-- **A Kalman filter**, until the evaluation shows averaging limits the result. It then comes from
-  a crate that builds for the device.
-- **A local Motis as the sampling source**, until its rail shapes match Transitous's, for example
-  through the pfaedle slice. It becomes a new source row.
-- **Snapping Motis legs to rail**, to the parked pfaedle slice.
+- **pfaedle, for now.** Its rail shapes followed the track, but importing a feed carrying them
+  broke realtime, for a reason never found. Motis's `route_shapes` import step computes shapes and
+  leaves the feed alone. If Motis issue #1596 stays open and wrong parallel lines prove common,
+  pfaedle's line-relation penalty is the reason to return.
+  [2026-10-12-track-shapes-and-realtime.md](2026-10-12-track-shapes-and-realtime.md) keeps what the
+  attempt established.
+- **Snapping Motis legs to rail in lookout's own code.** It repeats what `route_shapes` does, and
+  meets the same wrong-parallel-line problem.
 
 ### Tasks
 
@@ -247,12 +180,6 @@ Next, so data accumulates while the rest is built.
       3. Read the backfilled source and segments back through Rust.
       4. After `just bronze-init` and `just silver-init` finish at `2026-09-23.1`, run a short
          capture of Thuringia, and check it registers a second source.
-- [ ] Capture Thuringia from Transitous every 10 minutes, for 2 hours. This is only 12 samples, so not a lot of data.
-      Sanity-check this has worked by visualising this data in a notebook i.e. show the trains changing over time along their paths.
-      The intent of this is to see if train positions make sense and just to spot any other anomalies.
-- [ ] Post the longer plan on Transitous's Matrix channel: area, interval, request count, and
-      `User-Agent`. The user does this.
-- [ ] Capture Thuringia from Transitous every 10 minutes, for a day. The user runs it, the day-long run only after the Matrix post.
 - [ ] Describe the source and `motis_segment_v2` in `docs/medallion.md`, and the area mode,
       Transitous, and its usage policy in `docs/motis.md`.
 
@@ -274,45 +201,6 @@ maps them into `train_segment_v2`.
 - [ ] Run `just silver-session-crossings` and `just gold-pack-sessions`, and move
       `sessions.version`.
 
-#### The state machine
-
-- [ ] Survey how geofencing APIs debounce, and record the choice under Decisions.
-- [ ] Add reachability to `Prediction`, and set it in `CrowFlies`.
-- [ ] Add the four states to `predictor`, reporting each transition as an event.
-- [ ] Debounce each transition, with its thresholds as parameters.
-
-#### The evaluation
-
-- [ ] Add an `evaluation` crate, with a binary replaying `silver/session_sample` through a
-      predictor and the state machine.
-- [ ] Score each pass in `silver/session_crossing`, and each unmatched alert, as `EvaluationRow`
-      under gold evaluation results.
-- [ ] Add a recipe for the run.
-- [ ] Add a marimo notebook: the headline measures with n, the threshold sweep, and the horizon
-      diagnostic.
-- [ ] Run `CrowFlies` across a sweep of N, as the baseline.
-- [ ] Score the Motis trains as synthetic sessions, and report them apart in the notebook. Only
-      after the day's capture.
-
-#### The light cone
-
-- [ ] Record a maximum speed and acceleration for trains in DE and GB, each with its source.
-- [ ] Add a velocity estimate to `predictor`, averaged over the last few fixes.
-- [ ] Add `LightCone` to `predictor`.
-- [ ] Evaluate it across a sweep of N against the baseline, and choose the operating point.
-- [ ] Bind `LightCone` and the state machine in `crates/platform/rerun-py`. Low priority.
-
-#### Notifications
-
-- [ ] Run `LightCone` and the state machine in `crates/platform-core/src/app.rs`, at the operating
-      point.
-- [ ] Add a notification effect to `Effect`.
-- [ ] Show it in the web element, with a system notification while the page is hidden, and on the
-      M5 panel.
-- [ ] Draw each crossing's state in the web picture and on the M5 panel.
-- [ ] Describe the notification and the states in `docs/web.md` and `docs/device.md`.
-- [ ] Build both shells, and flash the device. The user rides with it.
-
 #### Refactoring
 
 At the end of the slice, once its features are in.
@@ -331,6 +219,5 @@ At the end of the slice, once its features are in.
 
 #### Wrap-up
 
-- [ ] Add the evaluation and the Motis source to the derivation graph in `docs/architecture.md`.
-- [ ] Fold what holds of `docs/2026-08-01-evaluation.md` into a durable doc, and delete it.
+- [ ] Add the Motis source to the derivation graph in `docs/architecture.md`.
 - [ ] Run `just test-no-docker` before every commit. The user runs `just test`.

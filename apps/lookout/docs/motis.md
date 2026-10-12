@@ -36,11 +36,10 @@ What it still does not give:
   empty for 101/102, and `route_type` cannot split IC from EC. Synthesising a category
   prefix would mislabel EC trains, so the mode carries the family and the train number stays
   a bare integer.
-- **Rail geometry is straight lines.** `shapes.txt` is present and Motis loads it, but only
-  bus and coach operators populate it — rail legs come back as polylines of four points or
-  fewer, where a coach leg has a thousand. Curved rail needs shapes synthesised by
-  map-matching against OSM, which is parked; see the pfaedle slice in
-  [next-slices.md](next-slices.md).
+- **Rail geometry is straight lines.** Every trip in the feed carries a shape, but rail shapes
+  run straight from stop to stop. A rail leg comes back as a polyline of four points or fewer,
+  where a coach leg has a thousand. Motis's `route_shapes` import step can compute rail shapes
+  instead, by matching each route's stops to OpenStreetMap rail.
 
 **An RT feed must match its static feed's ID namespace.** Pairing gtfs.de RT with a DELFI
 static timetable makes around 99.9% of trip updates fail to resolve, because the trip and
