@@ -10,6 +10,7 @@ use crate::bronze::{BronzeError, SegmentLog};
 use crate::client::{MotisClient, MotisError};
 use crate::details::TripDetailsCache;
 use crate::span::Span;
+use crate::tally::Tally;
 use crate::zoom::Zoom;
 
 #[derive(Debug)]
@@ -50,6 +51,13 @@ pub struct Captured {
     pub segments: usize,
     pub outside: usize,
     pub unresolved: Vec<Unresolved>,
+    pub requests: Requests,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Requests {
+    pub map_trips: Tally,
+    pub trip: Tally,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,9 +96,12 @@ impl Capture {
         let mut captured: Vec<TripSegment> = Vec::new();
         let mut trip_ids: HashSet<TripId> = HashSet::new();
         let mut outside = 0;
-        for segment in self
-            .client
-            .trips_in_bbox(&coverage.bbox, &window, self.zoom)
+        let mut map_trips = Tally::default();
+        for segment in map_trips
+            .time(
+                self.client
+                    .trips_in_bbox(&coverage.bbox, &window, self.zoom),
+            )
             .await?
             .into_iter()
             .filter(|segment| is_rail(&segment.mode))
@@ -106,6 +117,10 @@ impl Capture {
         }
 
         let resolution = self.details.resolve(&self.client, &trip_ids).await;
+        let requests = Requests {
+            map_trips,
+            trip: resolution.lookups,
+        };
         unresolved.extend(resolution.failed.into_iter().map(|(trip_id, err)| {
             Unresolved::Details {
                 trip_id,
@@ -118,6 +133,7 @@ impl Capture {
             segments,
             outside,
             unresolved,
+            requests,
         })
     }
 }
@@ -260,6 +276,32 @@ mod tests {
             .expect("capture");
 
         assert_eq!((captured.segments, captured.outside), (1, 0));
+    }
+
+    #[tokio::test]
+    async fn a_poll_counts_its_requests_of_each_kind() {
+        let server = motis().await;
+        let store = tempfile::tempdir().expect("tempdir");
+        let around_frankfurt = Coverage::shapes(vec![square(8.0, 49.5, 2.0)]).expect("shapes");
+        let mut capture = capture(&server, store.path());
+
+        let first = capture
+            .capture(chrono::Utc::now(), &around_frankfurt)
+            .await
+            .expect("capture");
+        let second = capture
+            .capture(chrono::Utc::now(), &around_frankfurt)
+            .await
+            .expect("capture");
+
+        let counts = |captured: &Captured| {
+            (
+                captured.requests.map_trips.requests,
+                captured.requests.trip.requests,
+            )
+        };
+        assert_eq!(counts(&first), (1, 1));
+        assert_eq!(counts(&second), (1, 0), "the trip's details are cached");
     }
 
     #[tokio::test]
