@@ -213,6 +213,12 @@ Next, so data accumulates while the rest is built.
       legs kept fell from 83 to 67, while each poll tested 164–171 legs against the area.
 - [x] Log, for each poll, how long it spent filtering legs against the area and writing the
       capture log, beside the request times.
+      On 2026-10-12 a dev build's poll took 483 s: 480.8 s filtering 147 legs, 2.2 s on
+      requests, and 18 ms writing the log.
+- [ ] Build the Motis pollers with `--release` in their recipes, and measure the filter again.
+- [ ] If the filter still takes more than a few seconds a poll, make the test of a leg against the
+      area cheaper: reject a leg clear of the area's bounding box first, and test the rest against
+      a simplified or prepared outline.
 - [ ] Record in a source's area the Overture release its shape came from. A new release can move
       a region's outline, yet a capture at it now registers under the same source id.
       The id covers the release from here on. Only this branch has written `motis_source`, so the
