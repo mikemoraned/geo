@@ -130,11 +130,11 @@ bronze-record *args:
 
 # Poll Motis for trips near recent GPS into bronze for a duration such as 1h, redis URL from 1Password.
 bronze-poll-motis duration *args:
-    BUILD_GIT_HASH={{git_hash}} op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_follow_gps -- --feed local --poll-duration {{duration}} {{args}}
+    BUILD_GIT_HASH={{git_hash}} op run --env-file=deploy/lookout.env -- cargo run --release -p motis --bin motis_follow_gps -- --feed local --poll-duration {{duration}} {{args}}
 
 # Capture every train in Thuringia from Transitous into bronze, every 10 minutes for a duration such as 1h.
 bronze-poll-transitous duration *args:
-    BUILD_GIT_HASH={{git_hash}} cargo run -p motis --bin motis_track_area -- --motis-url https://api.transitous.org --feed transitous --overture-country DE --overture-region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
+    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --motis-url https://api.transitous.org --feed transitous --overture-country DE --overture-region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
 
 # Fetch the API spec of the Motis version tools/motis-server pins; the motis client is generated from it.
 motis-openapi:
