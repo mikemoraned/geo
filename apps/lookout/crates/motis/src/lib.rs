@@ -12,5 +12,6 @@ pub mod polling;
 pub mod segment;
 pub mod source;
 pub mod span;
+pub mod tally;
 pub mod window;
 pub mod zoom;

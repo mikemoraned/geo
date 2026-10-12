@@ -134,12 +134,17 @@ async fn poll(now: DateTime<Utc>, look: &mut impl Look, capture: &mut Capture) {
             segments,
             outside,
             unresolved,
+            requests,
         }) => {
             tracing::info!(
                 segments,
                 outside,
                 unresolved = unresolved.len(),
                 ?took,
+                map_trips_requests = requests.map_trips.requests,
+                map_trips_took = ?requests.map_trips.took,
+                trip_requests = requests.trip.requests,
+                trip_took = ?requests.trip.took,
                 "polled motis"
             );
             for failure in &unresolved {

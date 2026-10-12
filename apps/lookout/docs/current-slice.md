@@ -200,7 +200,7 @@ Next, so data accumulates while the rest is built.
 - [x] Refactor `crates/motis` again once the area mode lands: a function taking too many
       arguments or doing too much, a hand-rolled type a library or `std` provides, a raw number
       standing in for a type.
-- [ ] Log, for each poll, how many requests of each kind it sent to Motis and how long each kind
+- [x] Log, for each poll, how many requests of each kind it sent to Motis and how long each kind
       took in total. A capture of Thuringia on 2026-10-11 took 5.0, 4.7, and 8.9 minutes per poll,
       though the second and third looked up only 8 and 16 new trips, so the trip lookups alone do
       not explain the time.

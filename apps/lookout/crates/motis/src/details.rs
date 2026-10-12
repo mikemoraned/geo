@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use medallion_model::TripId;
 
 use crate::client::{MotisClient, MotisError, TripDetails};
+use crate::tally::Tally;
 
 #[derive(Debug, Clone, Default)]
 pub struct TripDetailsCache {
@@ -13,6 +14,7 @@ pub struct TripDetailsCache {
 pub struct Resolution {
     pub details: HashMap<TripId, TripDetails>,
     pub failed: Vec<(TripId, MotisError)>,
+    pub lookups: Tally,
 }
 
 impl TripDetailsCache {
@@ -22,9 +24,10 @@ impl TripDetailsCache {
         trip_ids: &HashSet<TripId>,
     ) -> Resolution {
         let mut failed = Vec::new();
+        let mut lookups = Tally::default();
         for trip_id in trip_ids {
             if !self.known.contains_key(trip_id) {
-                match client.trip_details(trip_id).await {
+                match lookups.time(client.trip_details(trip_id)).await {
                     Ok(details) => {
                         self.known.insert(trip_id.clone(), details);
                     }
@@ -40,7 +43,11 @@ impl TripDetailsCache {
                     .map(|details| (trip_id.clone(), details.clone()))
             })
             .collect();
-        Resolution { details, failed }
+        Resolution {
+            details,
+            failed,
+            lookups,
+        }
     }
 }
 
@@ -87,6 +94,10 @@ mod tests {
 
         assert_eq!(first.details.len(), trip_ids().len());
         assert_eq!(second.details, first.details);
+        assert_eq!(
+            (first.lookups.requests, second.lookups.requests),
+            (trip_ids().len(), 0)
+        );
         assert!(first.failed.is_empty() && second.failed.is_empty());
     }
 
@@ -101,6 +112,7 @@ mod tests {
 
         for resolution in [first, second] {
             assert!(resolution.details.is_empty());
+            assert_eq!(resolution.lookups.requests, trip_ids().len());
             let failed: HashSet<TripId> = resolution
                 .failed
                 .into_iter()

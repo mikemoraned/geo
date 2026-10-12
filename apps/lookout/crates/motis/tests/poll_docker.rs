@@ -100,13 +100,15 @@ async fn recent_gps_names_the_area_whose_motis_segments_are_logged_docker() {
         .await
         .expect("capture");
 
+    let Captured {
+        segments,
+        outside,
+        unresolved,
+        ..
+    } = captured;
     assert_eq!(
-        captured,
-        Captured {
-            segments: rail_fixture_len(),
-            outside: 0,
-            unresolved: Vec::new(),
-        }
+        (segments, outside, unresolved),
+        (rail_fixture_len(), 0, Vec::new())
     );
 
     let captured = captured_segments(&Root::new(store.path())).await;
