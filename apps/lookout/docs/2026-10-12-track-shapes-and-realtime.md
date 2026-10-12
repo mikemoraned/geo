@@ -51,10 +51,11 @@ The captured legs show the difference in the shapes themselves:
 
 | Capture | Rail legs | Median points per regional leg | Median points per high-speed leg |
 | --- | --- | --- | --- |
-| Local server, gtfs.de feed, 19–25 July 2026 | 60,007 | 2 | 3 |
+| Local server, gtfs.de feed, 19–22 July 2026 | 51,029 | 2 | none: gtfs.de types all rail as regional |
+| Local server, DELFI feed, 25 July 2026 | 8,978 | 3 | 3 |
 | Transitous, DELFI feed, Thuringia, 2026-10-11 | 482 | 114 | 2,170 |
 
-The local capture predates the server's move to DELFI, but DELFI's rail shapes are no finer. Every
+DELFI's rail shapes are no finer than gtfs.de's. Every
 DELFI trip carries a shape, but the rail shapes are straight lines between stops. They hold a median
 of 2 points per leg, for regional, S-Bahn, and ICE trips alike.
 
