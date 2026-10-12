@@ -13,28 +13,6 @@ your speed and distance from crossings.
 
 It need only support UK and Germany.
 
-## Slice: Protect /record to avoid accidental misuse
-
-### Target
-
-Currently, anyone can access <https://lookout-hom.fly.dev/record/>. Right now, very few people should know about this site, but this means technically anyone could be recording their position in my data, and I'd like to stop that being possible.
-
-I'd like to do this by protecting `/record/` route so that only I can access it.
-
-### Straw man
-
-I suggest we do this using Passkeys. The way I'd like it to work is something like:
-1. User goes to <https://lookout-hom.fly.dev/record/>
-2. Server creates a Passkey, with an id, records it in a valkey hashmap as `lookout-passkeys`, and the returns it to the user, with another different short-code shown as something to pass to the Admin, which is unique enough to identify the Passkey.
-3. Admin runs a small cli which looks-up the Passkey by short-code and adds it to a new `lookout-passkeys-allowed` set which says who's allowed access
-4. User visits <https://lookout-hom.fly.dev/record/> again, presents Passkey, which is found in `lookout-passkeys` and also in `lookout-passkeys-allowed`, so they are allowed through
-
-### Tasks
-
-#### Upgrades / Refactors
-
-It may be worth refactoring to use something <https://cot.rs/> if that has any re-usable built-in support for the sort of thing we need.
-
 ## Slice: Evaluation framework based on sampled sessions from myself and motis
 
 ### Target
