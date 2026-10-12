@@ -211,7 +211,7 @@ Next, so data accumulates while the rest is built.
       On 2026-10-12 the cache worked: the three polls sent 40, 6, and 2 `trip` requests. Each
       poll took 382–392 s, of which its requests took at most 3.3 s. The time held steady as the
       legs kept fell from 83 to 67, while each poll tested 164–171 legs against the area.
-- [ ] Log, for each poll, how long it spent filtering legs against the area and writing the
+- [x] Log, for each poll, how long it spent filtering legs against the area and writing the
       capture log, beside the request times.
 - [ ] Record in a source's area the Overture release its shape came from. A new release can move
       a region's outline, yet a capture at it now registers under the same source id.
