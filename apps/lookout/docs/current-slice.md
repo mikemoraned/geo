@@ -215,7 +215,9 @@ Next, so data accumulates while the rest is built.
       capture log, beside the request times.
       On 2026-10-12 a dev build's poll took 483 s: 480.8 s filtering 147 legs, 2.2 s on
       requests, and 18 ms writing the log.
-- [ ] Build the Motis pollers with `--release` in their recipes, and measure the filter again.
+- [x] Build the Motis pollers with `--release` in their recipes, and measure the filter again.
+      On 2026-10-12 a release build's poll took 55.8 s: 53.7 s filtering 89 legs, 0.6 s a leg
+      against the dev build's 3.3 s.
 - [ ] If the filter still takes more than a few seconds a poll, make the test of a leg against the
       area cheaper: reject a leg clear of the area's bounding box first, and test the rest against
       a simplified or prepared outline.
