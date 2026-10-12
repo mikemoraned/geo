@@ -1,9 +1,11 @@
 use std::collections::HashSet;
+use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use geo::{BoundingRect, Intersects};
 use geo_types::{Geometry, GeometryCollection, LineString, Rect};
 use medallion_model::TripId;
+use tokio::time::Instant;
 
 use crate::api::types::{Mode, TripSegment};
 use crate::bronze::{BronzeError, SegmentLog};
@@ -52,6 +54,8 @@ pub struct Captured {
     pub outside: usize,
     pub unresolved: Vec<Unresolved>,
     pub requests: Requests,
+    pub filter_took: Duration,
+    pub log_took: Duration,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -97,15 +101,14 @@ impl Capture {
         let mut trip_ids: HashSet<TripId> = HashSet::new();
         let mut outside = 0;
         let mut map_trips = Tally::default();
-        for segment in map_trips
+        let in_bbox = map_trips
             .time(
                 self.client
                     .trips_in_bbox(&coverage.bbox, &window, self.zoom),
             )
-            .await?
-            .into_iter()
-            .filter(|segment| is_rail(&segment.mode))
-        {
+            .await?;
+        let filtering = Instant::now();
+        for segment in in_bbox.into_iter().filter(|segment| is_rail(&segment.mode)) {
             match sorted(coverage, &segment) {
                 Sorted::Kept(trip_id) => {
                     trip_ids.insert(trip_id);
@@ -115,6 +118,7 @@ impl Capture {
                 Sorted::Unresolved(reason) => unresolved.push(Unresolved::Segment { reason }),
             }
         }
+        let filter_took = filtering.elapsed();
 
         let resolution = self.details.resolve(&self.client, &trip_ids).await;
         let requests = Requests {
@@ -127,13 +131,17 @@ impl Capture {
                 reason: err.to_string(),
             }
         }));
+        let writing = Instant::now();
         let segments = self.log.append(now, &captured, &resolution.details).await?;
+        let log_took = writing.elapsed();
 
         Ok(Captured {
             segments,
             outside,
             unresolved,
             requests,
+            filter_took,
+            log_took,
         })
     }
 }
