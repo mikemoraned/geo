@@ -218,9 +218,12 @@ Next, so data accumulates while the rest is built.
 - [x] Build the Motis pollers with `--release` in their recipes, and measure the filter again.
       On 2026-10-12 a release build's poll took 55.8 s: 53.7 s filtering 89 legs, 0.6 s a leg
       against the dev build's 3.3 s.
-- [ ] If the filter still takes more than a few seconds a poll, make the test of a leg against the
+- [x] If the filter still takes more than a few seconds a poll, make the test of a leg against the
       area cheaper: reject a leg clear of the area's bounding box first, and test the rest against
       a simplified or prepared outline.
+      Prepared alone: geo's `relate` already rejects disjoint bounding boxes, and needed no
+      simplified outline. On 2026-10-12 a poll took 2.1 s, 0.25 s of it filtering 73 legs, 3.5 ms
+      a leg against 0.6 s before.
 - [ ] Record in a source's area the Overture release its shape came from. A new release can move
       a region's outline, yet a capture at it now registers under the same source id.
       The id covers the release from here on. Only this branch has written `motis_source`, so the

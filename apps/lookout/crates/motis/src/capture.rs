@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use geo::{BoundingRect, Intersects};
+use geo::{BoundingRect, PreparedGeometry, Relate};
 use geo_types::{Geometry, GeometryCollection, LineString, Rect};
 use medallion_model::TripId;
 use tokio::time::Instant;
@@ -24,27 +24,32 @@ pub struct Capture {
     window_half: Span,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Coverage {
     bbox: Rect<f64>,
-    shapes: Vec<Geometry<f64>>,
+    shapes: Vec<PreparedGeometry<'static, Geometry<f64>>>,
 }
 
 impl Coverage {
     pub fn bbox(bbox: Rect<f64>) -> Self {
         Self {
             bbox,
-            shapes: vec![Geometry::Rect(bbox)],
+            shapes: vec![PreparedGeometry::from(Geometry::Rect(bbox))],
         }
     }
 
     pub fn shapes(shapes: Vec<Geometry<f64>>) -> Option<Self> {
         let bbox = GeometryCollection::new_from(shapes.clone()).bounding_rect()?;
-        Some(Self { bbox, shapes })
+        Some(Self {
+            bbox,
+            shapes: shapes.into_iter().map(PreparedGeometry::from).collect(),
+        })
     }
 
     fn touches(&self, line: &LineString<f64>) -> bool {
-        self.shapes.iter().any(|shape| shape.intersects(line))
+        self.shapes
+            .iter()
+            .any(|shape| shape.relate(line).is_intersects())
     }
 }
 
@@ -238,7 +243,7 @@ mod tests {
 
     #[test]
     fn no_shapes_cover_nothing() {
-        assert_eq!(Coverage::shapes(Vec::new()), None);
+        assert!(Coverage::shapes(Vec::new()).is_none());
     }
 
     #[tokio::test]
