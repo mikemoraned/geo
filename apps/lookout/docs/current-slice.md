@@ -70,6 +70,40 @@ Decisions taken before starting, as each changes what gets built.
   `motis-openapi-progenitor` 0.4.0, the latest, targets API v4 and has no `serverConfig`.
   `progenitor` reads OpenAPI 3.0 alone, so the build declares the 3.1 spec as 3.0.3, which
   generates for v2.11.3. Confirmed 2026-10-05.
+- **A source carries an optional free-text label**, set by `--label` beside `--feed`, and the id
+  hashes it when present. The label holds whatever tells two setups of one server apart, such as
+  the DELFI build and whether shapes are computed. The alternatives fix the meaning in new fields,
+  or hash the server's `config.yml`, which no reader can interpret. A source without a label keeps
+  its id. Confirmed 2026-10-12.
+
+#### A complete local server
+
+- **The import computes rail shapes with `route_shapes`, in mode `all`.** Every DELFI trip
+  carries a shape, so mode `missing` skips rail. Mode `all`, with every class but high-speed,
+  long-distance, night, and regional turned off, recomputes the classes the capture keeps and
+  leaves DELFI's other shapes alone. Transitous instead drops the feed's shapes and runs
+  `missing`. The block goes into `config.yml` between `motis config` and `motis import`.
+- **The import loads Transitous's `de-DELFI.lua`**, as the DELFI dataset's `script`, so a train's
+  name reads as Transitous's does, such as `ICE 123`. A recipe fetches it from Transitous's
+  repository at a pinned commit, rather than vendoring an AGPL-3.0 file into the tree. The
+  captured line name changes with it, since bronze takes `displayName` before
+  `routeShortName`. Confirmed 2026-10-12.
+- **SIRI ET waits on the measurement.** Transitous adds DELFI's SIRI ET forecasts to the
+  trip-update feed both servers poll. The local server takes them only if the side-by-side shows
+  times disagreeing on trips Transitous corrects. Confirmed 2026-10-12.
+
+#### Side-by-side check
+
+- **Two side-by-side passes, one before the fixes and one after.** Each polls the local server
+  and Transitous together, over Thuringia, every 10 minutes, for 2 hours. The first measures how
+  far an unchanged local server is from Transitous, so the second shows what the fixes moved.
+  Confirmed 2026-10-12.
+- **Both servers import the same weekly DELFI build.** A leg from each joins on DELFI's own trip
+  id, the suffix of both servers' trip ids, with the departure stop and time. Transitous imports
+  the latest build, so the local server takes it fresh before each pass.
+- **The comparison is per joined leg**: the distance between the two shapes, and the difference
+  between the two realtime arrivals. Legs only one server returns are counted too. What counts as
+  agreement comes from the baseline's distributions, not from this decomposition.
 
 #### Consequences elsewhere
 
@@ -81,14 +115,15 @@ Decisions taken before starting, as each changes what gets built.
 - `silver/session_crossing` can hold several rows per (session, crossing), so the packed sessions
   and `sessions.version` change.
 - The derivation graph in `docs/architecture.md` changes.
+- `docs/motis.md` says `displayName` is null on raw DELFI. With the script loaded, the local
+  server fills it.
 
 #### Open questions
 
-- How a source records whether its server computes rail shapes. A server registers one source id
-  whether `route_shapes` is on or off. The id hashes only the base URL, the version, the feed, and
-  the area.
-- Which feed a local source names. `local` covers both the July captures, on gtfs.de, and today's
-  DELFI server.
+- The threshold for agreement on shape distance and arrival difference. The baseline pass sets
+  it.
+- Whether wrong parallel lines are common in German rail. Comparing computed shapes against
+  recorded sessions answers it, and decides whether pfaedle comes back.
 
 #### Rejected / deferred
 
@@ -180,17 +215,76 @@ Next, so data accumulates while the rest is built.
       3. Read the backfilled source and segments back through Rust.
       4. After `just bronze-init` and `just silver-init` finish at `2026-09-23.1`, run a short
          capture of Thuringia, and check it registers a second source.
+- [ ] Add an optional `label` to `MotisSource` and `MotisSourceRow`, hashed into the id only when
+      present, and a `--label` flag to `motis_track_area` and `motis_follow_gps`.
 - [ ] Describe the source and `motis_segment_v2` in `docs/medallion.md`, and the area mode,
       Transitous, and its usage policy in `docs/motis.md`.
+
+#### Baseline side-by-side
+
+The local server as it stands, against Transitous. Only after `--label` lands.
+
+- [ ] Add a recipe `bronze-poll-local-area` beside `bronze-poll-transitous`: the local server,
+      the same area and interval, and a `--label` naming the DELFI build and the setup.
+- [ ] Run `download_geo_data` and `motis_setup` in `tools/motis-server` for the latest DELFI build,
+      with no other change. The user runs this, outside the sandbox.
+- [ ] Run `bronze-poll-local-area` and `bronze-poll-transitous` together for 2 hours. The user
+      runs this.
+- [ ] Count the joined legs, and the legs only one server returned, in a new notebook
+      `notebooks/motis_capture/side_by_side.py`. Built with the user in a live marimo session.
+- [ ] Plot, per joined leg, the distance between the shapes and the difference between the
+      realtime arrivals, by mode.
+- [ ] Set the agreement thresholds from those distributions.
+- [ ] Record the local server's realtime resolution from its log, against the 99.96% in
+      `docs/motis.md`.
+
+#### A complete local server
+
+Only after the baseline pass, so the fixes land on a measured starting point.
+
+- [ ] Add the `route_shapes` block to `config.yml` with `yq` in `motis_setup`, between
+      `motis config` and `motis import`.
+- [ ] Add a recipe fetching `de-DELFI.lua` from Transitous's repository at a pinned commit, and
+      set it as the `germanygtfs` dataset's `script` in `motis_setup`.
+- [ ] Run `motis_setup` on the same DELFI build. The user runs this.
+- [ ] Record the import's time, peak memory, and computed shape files' size, and the routes
+      matched, segments routed, and segments beelined from the import log.
+- [ ] Check realtime resolution against the baseline's.
+- [ ] Check `displayName` on a local `map/trips` leg reads as Transitous's does.
+
+#### Fixed side-by-side
+
+Only after the complete local server is running.
+
+- [ ] Download the latest DELFI build, and run `motis_setup` again if Transitous has moved to it.
+      The user runs this.
+- [ ] Run `bronze-poll-local-area`, labelled for the new setup, and `bronze-poll-transitous`
+      together for 2 hours. The user runs this.
+- [ ] Rerun `notebooks/motis_capture/side_by_side.py` on the new captures, and compare each
+      distribution with the baseline's.
+- [ ] Decide on SIRI ET from the arrival differences on trips Transitous corrects. If it is
+      needed, add the feed to `enable_rt` and run a third pass.
+- [ ] Compare the computed shapes with recorded sessions in `silver/session` on German lines, and
+      count the legs drawn along a parallel line.
+
+#### Country-wide capture
+
+Only after the fixed pass agrees.
+
+- [ ] Measure one `motis_track_area` poll of DE against the local server, and set the interval
+      from its duration.
+- [ ] Add a recipe `bronze-poll-local-de` for DE at that interval.
+- [ ] Capture DE for a day. The user runs this.
 
 #### One train_segment version
 
 Next after Motis capture. Bronze stays as written: `motis_segment` keeps its rows, and ingest
 maps them into `train_segment_v2`.
 
-- [ ] Record a source for the `motis_segment` captures: the local server, feed `local`, Motis
-      v2.10.2, the version `tools/motis-server/Justfile` pinned from 19 July. Derive their legs
-      into `train_segment_v2` under it.
+- [ ] Record two sources for the `motis_segment` captures, both the local server, feed `local`, and
+      Motis v2.10.2: label `gtfs.de` for the captures of 19–22 July 2026, and label `delfi` for
+      that of 25 July, after the server moved to DELFI on 23 July. Derive their legs into
+      `train_segment_v2` under each.
 - [ ] Remove `train_segment` and `TrainSegmentRowV1` once nothing reads them.
 
 #### Ground truth
@@ -220,4 +314,7 @@ At the end of the slice, once its features are in.
 #### Wrap-up
 
 - [ ] Add the Motis source to the derivation graph in `docs/architecture.md`.
+- [ ] Fold what holds of `2026-10-12-track-shapes-and-realtime.md` into `docs/motis.md`: the
+      `route_shapes` setup, the train-name script, realtime resolution, and the measured import.
+      Correct the `displayName` claim there. Then delete the research doc.
 - [ ] Run `just test-no-docker` before every commit. The user runs `just test`.
