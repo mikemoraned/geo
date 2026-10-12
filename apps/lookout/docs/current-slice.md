@@ -204,10 +204,15 @@ Next, so data accumulates while the rest is built.
       took in total. A capture of Thuringia on 2026-10-11 took 5.0, 4.7, and 8.9 minutes per poll,
       though the second and third looked up only 8 and 16 new trips, so the trip lookups alone do
       not explain the time.
-- [ ] Run `just bronze-poll-transitous 30m`, three polls, and read each poll's request counts and
+- [x] Run `just bronze-poll-transitous 30m`, three polls, and read each poll's request counts and
       times from its log. The user runs this. If the cache works, each later poll sends far fewer
       `trip` requests than the first. If the request times fall well short of the poll's time, the
       rest goes on writing the capture log and filtering legs.
+      On 2026-10-12 the cache worked: the three polls sent 40, 6, and 2 `trip` requests. Each
+      poll took 382–392 s, of which its requests took at most 3.3 s. The time held steady as the
+      legs kept fell from 83 to 67, while each poll tested 164–171 legs against the area.
+- [ ] Log, for each poll, how long it spent filtering legs against the area and writing the
+      capture log, beside the request times.
 - [ ] Record in a source's area the Overture release its shape came from. A new release can move
       a region's outline, yet a capture at it now registers under the same source id.
       The id covers the release from here on. Only this branch has written `motis_source`, so the
