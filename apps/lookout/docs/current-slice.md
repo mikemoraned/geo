@@ -70,8 +70,9 @@ Proposed during decomposition, not yet confirmed:
   `PasskeyRegistration` and `PasskeyAuthentication` only under `danger-allow-state-serialisation`.
   The feature exists for state held on the server, which a session in redis is.
 - **Each sign-in writes the passkey back.** `finish_passkey_authentication` returns a counter and
-  backup state, and `Passkey::update_credential` applies them. Writing it back keeps the
-  counter's clone detection working.
+  backup state, and `Passkey::update_credential` applies them. Synced passkeys, such as
+  1Password's, usually report a counter of 0, and webauthn-rs skips the counter check at 0. The
+  write-back records the backup state, not a counter for clone detection.
 - **A session lasts 30 days from its last request.** A recording runs for hours, and a phone signs
   in once. `Expiry::OnInactivity` renews the session on each request.
 - **The relying party comes from `LOOKOUT_ORIGIN`**, which defaults to `http://localhost:3000`.
@@ -160,4 +161,7 @@ Its memory stores go when the gate lands.
 - [ ] Describe signing in, and the signed-out state of `/record/`, in `docs/web.md`.
 - [ ] Run `just test-no-docker` and the server's Docker tests.
 - [ ] Deploy, register from the phone, allow it with `just passkeys allow`, and record a journey.
+- [ ] Set 1Password as the iPhone's passkey provider, under AutoFill in Settings.
+- [ ] Register through 1Password on the laptop, and allow it. Sign in from the iPhone without
+      registering again.
 - [ ] From a second browser, check that `/record/` redirects and that `/ws` refuses the upgrade.
