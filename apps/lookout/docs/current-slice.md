@@ -248,8 +248,9 @@ Next, so data accumulates while the rest is built.
 
 The local server as it stands, against Transitous. Only after `--label` lands.
 
-- [ ] Add a recipe `bronze-poll-local-area` beside `bronze-poll-transitous`: the local server,
+- [x] Add a recipe `bronze-poll-local-area` beside `bronze-poll-transitous`: the local server,
       the same area and interval, and a `--label` naming the DELFI build and the setup.
+      The label is the recipe's first argument, since the build changes with each pass.
 - [ ] Run `download_geo_data` and `motis_setup` in `tools/motis-server` for the latest DELFI build,
       with no other change. The user runs this, outside the sandbox.
 - [ ] Run `bronze-poll-local-area` and `bronze-poll-transitous` together for 2 hours. The user

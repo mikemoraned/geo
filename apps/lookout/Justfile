@@ -136,6 +136,10 @@ bronze-poll-motis duration *args:
 bronze-poll-transitous duration *args:
     BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --motis-url https://api.transitous.org --feed transitous --overture-country DE --overture-region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
 
+# Capture every train in Thuringia from the local Motis server into bronze, every 10 minutes for a duration such as 2h. The label names the DELFI build and the setup, such as delfi-2026-10-12.plain.
+bronze-poll-local-area label duration *args:
+    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --overture-country DE --overture-region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
+
 # Fetch the API spec of the Motis version tools/motis-server pins; the motis client is generated from it.
 motis-openapi:
     version=$(just --justfile ../../tools/motis-server/Justfile --evaluate VERSION) && curl -fsSL "https://raw.githubusercontent.com/motis-project/motis/$version/openapi.yaml" | yq -o=json '.' > crates/motis/openapi.json
