@@ -28,11 +28,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 uuid = { version = "1", features = ["v4", "v5", "serde"] }
-# `tokio-rustls-comp` gives async TLS streams, but redis 0.27 only parses a
-# `rediss://` URL when `tls-rustls` is also enabled (otherwise `Client::open`
-# fails with InvalidClientConfig). `tls-rustls-webpki-roots` bundles CA roots so
-# TLS to upstash doesn't depend on the runtime image's system cert store.
-redis = { version = "0.27", features = ["tokio-rustls-comp", "tls-rustls", "tls-rustls-webpki-roots"] }
+# `tokio-rustls-comp` opens `rediss://` URLs over rustls. `tls-rustls-webpki-roots`
+# bundles the CA roots, so TLS to Upstash works without the runtime image's cert store.
+redis = { version = "1.7", features = ["tokio-rustls-comp", "tls-rustls-webpki-roots"] }
 rustls = { version = "0.23", features = ["ring"] }
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }

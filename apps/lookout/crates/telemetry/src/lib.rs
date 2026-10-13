@@ -49,8 +49,8 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 pub async fn connect(url: &str) -> Result<MultiplexedConnection, RedisError> {
     let client = Client::open(url)?;
     let config = AsyncConnectionConfig::new()
-        .set_connection_timeout(TIMEOUT)
-        .set_response_timeout(TIMEOUT);
+        .set_connection_timeout(Some(TIMEOUT))
+        .set_response_timeout(Some(TIMEOUT));
     client
         .get_multiplexed_async_connection_with_config(&config)
         .await
