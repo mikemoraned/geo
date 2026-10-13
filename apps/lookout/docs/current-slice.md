@@ -43,6 +43,13 @@ Decisions taken before starting, as each changes what gets built. The user confi
 - **webauthn-rs on the existing axum server, not cot.** webauthn-rs 0.5.5 runs the registration
   and sign-in ceremonies. cot 0.7 is built on axum, but its auth uses passwords and a database and
   has no passkeys. Adopting it rewrites the server and still needs webauthn-rs.
+- **webauthn-rs builds its own OpenSSL, and `passkey-auth` is the fallback.** Confirmed on
+  2026-10-13. webauthn-rs 0.5 depends on OpenSSL, with no feature to drop it. The `vendored`
+  feature compiles OpenSSL into the binary, so neither the host nor the runtime image needs a
+  system OpenSSL. The Docker builder installs `make` and `perl` for that build. If the build
+  fails, locally or under Docker, `passkey-auth` 0.1 replaces webauthn-rs. It is pure Rust and
+  makes every check this slice needs. One author wrote it in two days, and no other project
+  appears to use it. That risk is acceptable at this project's scope.
 - **Sessions use tower-sessions, with a `SessionStore` impl over the existing `redis` client.** The
   session carries the ceremony state between start and finish, then marks the browser signed in.
   tower-sessions handles the cookie and the expiry, and the impl keeps the server on one redis
@@ -115,7 +122,7 @@ Proposed during decomposition, not yet confirmed:
 The ceremony on an iPhone is the largest unknown, so it runs end to end before the stores exist.
 Its memory stores go when the gate lands.
 
-- [ ] Add `webauthn-rs` 0.5 with `danger-allow-state-serialisation`, and `tower-sessions`, to
+- [x] Add `webauthn-rs` 0.5 with `danger-allow-state-serialisation`, and `tower-sessions`, to
       `crates/server`.
 - [ ] Add `/auth/register/start`, `/auth/register/finish`, `/auth/login/start`, and
       `/auth/login/finish`, over a `MemoryStore` and an in-memory passkey list.

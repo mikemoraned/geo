@@ -16,6 +16,11 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 shared = { workspace = true }
 telemetry = { workspace = true }
+webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
+tower-sessions = "0.15"
+# Builds the OpenSSL that webauthn-rs links into the binary. Without `vendored`, the build
+# needs a system OpenSSL, and so does the runtime image.
+openssl = { version = "0.10", features = ["vendored"] }
 
 [dev-dependencies]
 domain = { workspace = true }
