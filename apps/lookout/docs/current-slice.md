@@ -30,8 +30,9 @@ I suggest we do this using Passkeys. The way I'd like it to work is something li
 ### The records
 
 The site has one account, `recording`, named for its purpose. A device gets access to it in
-three steps. It registers a passkey, which waits as a pending passkey under a short code. The admin allows the code. The device then signs in, which leaves a session.
-Every request to `/record/` or `/ws` checks the session and the passkey that opened it.
+three steps. It registers a passkey, which waits as a pending passkey under a short code. The
+admin allows the code. The device then signs in, which leaves a session. Every request to
+`/record/` or `/ws` checks the session and the passkey that opened it.
 
 A **pending passkey** has been registered but not allowed, and grants nothing. It sits under
 `lookout-passkey-pending:<code>`, keyed by its short code, and expires an hour after
@@ -43,7 +44,7 @@ optional label, and when it was registered, allowed, and last used. It stays unt
 revokes it.
 
 A **ceremony** is the server's half of a registration or a sign-in: the challenge it issued, and
-what it expects back. It sits under `lookout-ceremony:<id>`, a random ID, for 5 minutes. A finish
+what it expects back. It sits under `lookout-ceremony:<id>`, a random ID, for 10 minutes. A finish
 takes it out, so each ceremony finishes at most once.
 
 A **session** is what a successful sign-in leaves: a cookie in the browser naming a
@@ -117,19 +118,23 @@ The user confirmed these on 2026-10-13, after a security review of the first pla
   [overwrites](https://www.w3.org/TR/webauthn-3/#dom-publickeycredentialcreationoptions-user) any
   passkey the same authenticator holds for that handle, so registering again does not pile
   passkeys up in a password manager. Sign-in checks that the returned user handle is the
-  account's, as [§7.2](https://www.w3.org/TR/webauthn-3/#sctn-verifying-assertion) requires. A fresh
-  handle per registration lost: each registration added another passkey to the device.
+  account's, as [§7.2](https://www.w3.org/TR/webauthn-3/#sctn-verifying-assertion) requires.
+  A fresh handle per registration lost: each registration added another passkey to the device.
 - **Registration asks for a discoverable passkey.** Discoverable sign-in finds no other kind.
   webauthn-rs asks for
   [`residentKey`](https://www.w3.org/TR/webauthn-3/#dom-authenticatorselectioncriteria-residentkey)
   `discouraged`, and its verifier ignores the setting, so the server raises it to `required` in
   the options it sends. iCloud Keychain and 1Password create discoverable passkeys either way. A
   security key without discoverable storage then fails at registration, not at sign-in.
-- **A ceremony waits under its own random ID for 5 minutes, and a finish takes it out.** The
-  start answers with the ID and the options, and the finish sends the ID back. webauthn-rs sends
-  its 5-minute timeout to the browser but never expires a ceremony itself, so the store's expiry
-  does. Taking the ceremony out makes it single-use. Carrying it in the session, as first decided,
-  gave every visitor who started a ceremony a 30-day session in redis.
+- **A ceremony waits under its own random ID for 10 minutes, and a finish takes it out.** The
+  start answers with the ID and the options, and the finish sends the ID back. webauthn-rs never
+  expires a ceremony itself, so the store's expiry does.
+  [§13.4.3](https://www.w3.org/TR/webauthn-3/#sctn-cryptographic-challenges) recommends a
+  challenge stay valid for about the upper limit of the recommended timeout range, 10 minutes. A
+  browser can lengthen the 5-minute timeout it gets, for accessibility. Raised from 5 minutes on
+  2026-10-13, after reading §13.4.3. Taking the ceremony out makes it single-use. Carrying it in
+  the session, as first decided, gave every visitor who started a ceremony a 30-day session in
+  redis.
 - **Only a sign-in creates a session, and with a fresh ID.** No session exists before sign-in,
   so the
   [rule to renew the ID at sign-in](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#renew-the-session-id-after-any-privilege-level-change)
@@ -156,10 +161,10 @@ The user confirmed these on 2026-10-13, after a security review of the first pla
   [open redirect](https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html)
   unless validated, and `/record/` is the only gated page.
 - **`POST /auth/signout` ends the session.** It deletes the session's key and clears the cookie.
-- **The stores are ports, like the sample sink.** One trait covers ceremonies, pending passkeys,
-  and allowed passkeys. Its memory implementation serves tests and runs without redis, and its
-  redis implementation serves production. Sessions have the same pair: tower-sessions'
-  `MemoryStore`, and `RedisSessionStore`.
+- **The stores sit behind traits, as the sample sink does.** One trait, `AuthStore`, covers
+  ceremonies, pending passkeys, and allowed passkeys. Its memory implementation serves tests and
+  runs without redis, and its redis implementation serves production. Sessions have the same
+  pair: tower-sessions' `MemoryStore`, and `RedisSessionStore`.
 - **Tests drive real ceremonies with 1Password's `passkey` crate.** It implements a client and an
   authenticator, with discoverable passkeys and user handles. The tests pass its credentials to
   the server as JSON, as a browser does. webauthn-rs's own `SoftPasskey` refuses resident keys and
@@ -206,7 +211,7 @@ The user confirmed these on 2026-10-13, after a security review of the first pla
   access, it gets an account of its own, with its own user handle. Each passkey then records its
   account, and the gate checks the account a page needs.
 - **A rate limit on ceremony starts.** Anyone can start a ceremony, which holds a few hundred
-  bytes in redis for 5 minutes. If the redis bill or the store's size shows abuse, a limit comes
+  bytes in redis for 10 minutes. If the redis bill or the store's size shows abuse, a limit comes
   in.
 
 #### Open questions
@@ -236,10 +241,10 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 - [-] Add `/auth/register/start`, `/auth/register/finish`, `/auth/login/start`, and
       `/auth/login/finish`, over a `MemoryStore` and an in-memory passkey list. Superseded before
       commit by the security review.
-- [ ] Turn on webauthn-rs's `conditional-ui` feature, and add `rand` and `base32` for short codes,
+- [x] Turn on webauthn-rs's `conditional-ui` feature, and add `rand` and `base32` for short codes,
       and `passkey` as a dev-dependency.
-- [ ] Add the store port in `crates/server/src/auth/store.rs`, with its memory implementation and
-      unit tests of expiry and single use.
+- [x] Add the `AuthStore` trait in `crates/server/src/auth/store.rs`, with its memory
+      implementation and unit tests of expiry and single use.
 - [ ] Add `/auth/register/start` and `/auth/register/finish`, storing a pending passkey, or an
       allowed one for `localhost` without redis.
 - [ ] Add `/auth/signin/start` and `/auth/signin/finish`, creating the session.
@@ -253,7 +258,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 
 #### The redis stores
 
-- [ ] Add the store port's redis implementation in `crates/server/src/auth/redis.rs`.
+- [ ] Add the redis implementation of `AuthStore` in `crates/server/src/auth/redis.rs`.
 - [ ] Test it against a containerised redis, as `redis_sink_docker.rs` tests the sink.
 - [ ] Add `RedisSessionStore`, a `tower_sessions::SessionStore` over the `redis` client, with the
       session's expiry as its key's TTL.
@@ -292,6 +297,8 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 #### Wrap-up
 
 - [ ] Describe the gate, the session store, and the CLI in `crates/server/README.md`.
+- [ ] Before `/complete-slice`, record in `crates/server/README.md` every fact about the server
+      that only this slice doc holds, with its sources.
 - [ ] Describe signing in, and the signed-out state of `/record/`, in `docs/web.md`.
 - [ ] Describe who can record, how a passkey gains and loses access, and the risks the design
       accepts, in `docs/access.md`, and index it in `CLAUDE.md`.

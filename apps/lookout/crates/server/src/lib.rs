@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod queue;
 
 use std::sync::Arc;
