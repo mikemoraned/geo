@@ -28,15 +28,16 @@ for working practice and for the limits of this environment. Current notes:
 - [`.claude/memory/python-conventions.md`](.claude/memory/python-conventions.md) — keep
   Python minimal, in a uv project dir, no low-level fiddliness
 - [`.claude/memory/docs-style.md`](.claude/memory/docs-style.md) — reference docs are
-  written abstractly (no component names in rules) and in dry language
+  written abstractly (no component names in rules) and in dry language, and a README change
+  cites the sources behind it
 - [`.claude/memory/testing-limits.md`](.claude/memory/testing-limits.md) — Docker tests
   don't run in the sandbox, so binaries need running directly
 - [`.claude/memory/working-with-claude.md`](.claude/memory/working-with-claude.md) —
   committing only on explicit instruction, recording each step as a tree until it is
   committed, keeping formatting out of feature commits, tracing a repeat to its source before
   memoising it, writing a store migration through the row types and medallion's interfaces, why
-  Claude cannot flash the device, keeping shell plain, and fitting a workspace build into the free
-  disk
+  Claude cannot flash the device, keeping shell plain, fitting a workspace build into the free
+  disk, what `cargo remove` prunes, and clearing prose that states a rejected design
 
 Lookout's own facts are in [`apps/lookout/docs/`](apps/lookout/docs/): `medallion.md` (the
 store), `architecture.md` (the pipeline), `telemetry.md` (the wire a device sends),

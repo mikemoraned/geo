@@ -124,3 +124,16 @@ The command printed a failure all the same, so judge it by free disk. The sandbo
 `tmutil listlocalsnapshots /` lists nothing there, and `diskutil` cannot reach its daemon, so the
 user runs both `tmutil` commands. Check free disk after clearing, and keep the third-party builds
 unless the space is needed.
+
+## Cargo
+
+`cargo remove` also deletes every `[workspace.dependencies]` entry that no member of the
+workspace uses, and the lookout workspace keeps some of those on purpose. After running it, check
+`git diff Cargo.toml` at the workspace root, and restore any entry it pruned.
+
+## Rejected designs
+
+When a review rejects a design, correct or remove every uncommitted doc and comment that still
+states it. Do it before reporting the review, not in a later rewrite. Prose reads as current: a
+README left for a later rewrite once described a credential-ID leak the review had already
+rejected.
