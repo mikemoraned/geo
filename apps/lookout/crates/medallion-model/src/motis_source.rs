@@ -9,6 +9,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::gers::{GersId, NotAGersId};
+use crate::overture_release::{NotAnOvertureRelease, OvertureRelease};
 
 const MOTIS_SOURCE_NAMESPACE: Uuid = Uuid::from_u128(0x3c41_9e2d_7a58_4b06_8f13_d2e6_5a90_c71b);
 
@@ -127,6 +128,7 @@ pub struct Region {
 pub struct Area {
     pub country: Country,
     pub region: Option<Region>,
+    pub release: OvertureRelease,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,10 +153,14 @@ pub enum NotAMotisSource {
     Country(#[from] UnknownCountry),
     #[error(transparent)]
     Region(#[from] NotAGersId),
+    #[error(transparent)]
+    Release(#[from] NotAnOvertureRelease),
     #[error("a region needs both an id and a name, and the row holds only one")]
     HalfARegion,
     #[error("a region needs a country, and the row holds none")]
     RegionWithoutCountry,
+    #[error("an area needs both a country and an Overture release, and the row holds only one")]
+    HalfAnArea,
 }
 
 impl MotisSource {
@@ -167,6 +173,7 @@ impl MotisSource {
             .map(|region| region.id.to_string())
             .unwrap_or_default();
         let version = self.motis_version.to_string();
+        let release = self.area.as_ref().map(|area| area.release.to_string());
         let name = [
             self.base_url.as_str(),
             version.as_str(),
@@ -174,6 +181,9 @@ impl MotisSource {
             country,
             region.as_str(),
         ]
+        .into_iter()
+        .chain(release.as_deref())
+        .collect::<Vec<_>>()
         .join("\n");
         MotisSourceId(Uuid::new_v5(&MOTIS_SOURCE_NAMESPACE, name.as_bytes()).to_string())
     }
@@ -191,6 +201,7 @@ impl MotisSource {
                 .map(|area| area.country.code().to_string()),
             region_id: region.map(|region| region.id.to_string()),
             region_name: region.map(|region| region.name.clone()),
+            overture_release: self.area.as_ref().map(|area| area.release.to_string()),
             registered_at,
         }
     }
@@ -212,13 +223,15 @@ impl TryFrom<MotisSourceRow> for MotisSource {
             (None, None) => None,
             _ => return Err(NotAMotisSource::HalfARegion),
         };
-        let area = match (row.country, region) {
-            (Some(country), region) => Some(Area {
+        let area = match (row.country, row.overture_release, region) {
+            (Some(country), Some(release), region) => Some(Area {
                 country: country.parse()?,
                 region,
+                release: release.parse()?,
             }),
-            (None, None) => None,
-            (None, Some(_)) => return Err(NotAMotisSource::RegionWithoutCountry),
+            (None, None, None) => None,
+            (None, _, Some(_)) => return Err(NotAMotisSource::RegionWithoutCountry),
+            (Some(_), None, _) | (None, Some(_), None) => return Err(NotAMotisSource::HalfAnArea),
         };
         Ok(Self {
             base_url,
@@ -238,6 +251,7 @@ pub struct MotisSourceRow {
     pub country: Option<String>,
     pub region_id: Option<String>,
     pub region_name: Option<String>,
+    pub overture_release: Option<String>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub registered_at: DateTime<Utc>,
 }
@@ -271,8 +285,13 @@ mod tests {
                     id: GersId::new(REGION_ID).expect("a GERS id"),
                     name: "Thüringen".to_string(),
                 }),
+                release: release("2026-09-23.1"),
             }),
         }
+    }
+
+    fn release(text: &str) -> OvertureRelease {
+        text.parse().expect("an Overture release")
     }
 
     fn instant() -> DateTime<Utc> {
@@ -354,6 +373,14 @@ mod tests {
                 area: Some(Area {
                     country: Country::Germany,
                     region: None,
+                    release: release("2026-09-23.1"),
+                }),
+                ..source.clone()
+            },
+            MotisSource {
+                area: Some(Area {
+                    release: release("2026-07-22.0"),
+                    ..source.area.clone().expect("an area")
                 }),
                 ..source.clone()
             },
@@ -379,6 +406,7 @@ mod tests {
         assert_eq!(row.country.as_deref(), Some("DE"));
         assert_eq!(row.region_id.as_deref(), Some(REGION_ID));
         assert_eq!(row.region_name.as_deref(), Some("Thüringen"));
+        assert_eq!(row.overture_release.as_deref(), Some("2026-09-23.1"));
         assert_eq!(row.registered_at, instant());
     }
 
@@ -407,6 +435,49 @@ mod tests {
 
         assert!(MotisSource::try_from(bad_url).is_err());
         assert!(MotisSource::try_from(bad_version).is_err());
+    }
+
+    #[test]
+    fn a_row_holding_a_country_or_a_release_without_the_other_is_refused() {
+        let row = transitous().row(instant());
+
+        let no_release = MotisSourceRow {
+            overture_release: None,
+            ..row.clone()
+        };
+        let no_country = MotisSourceRow {
+            country: None,
+            region_id: None,
+            region_name: None,
+            ..row.clone()
+        };
+        let bad_release = MotisSourceRow {
+            overture_release: Some("2026-09-23".to_string()),
+            ..row
+        };
+
+        assert!(MotisSource::try_from(no_release).is_err());
+        assert!(MotisSource::try_from(no_country).is_err());
+        assert!(MotisSource::try_from(bad_release).is_err());
+    }
+
+    #[test]
+    fn a_source_with_no_area_keeps_the_id_it_had_before_areas_carried_a_release() {
+        let local = MotisSource {
+            base_url: Url::parse("http://127.0.0.1:8080").expect("a URL"),
+            motis_version: version("v2.11.3"),
+            feed: Feed::Local,
+            area: None,
+        };
+
+        assert_eq!(
+            local.id().to_string(),
+            Uuid::new_v5(
+                &MOTIS_SOURCE_NAMESPACE,
+                "http://127.0.0.1:8080/\nv2.11.3\nlocal\n\n".as_bytes()
+            )
+            .to_string()
+        );
     }
 
     #[test]

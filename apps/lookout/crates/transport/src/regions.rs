@@ -3,7 +3,9 @@ use std::str::FromStr;
 
 use geo_types::Geometry;
 use medallion::{Country, GEOMETRY, Query, Root};
-use medallion_model::{DIVISION_ID, ExtractManifestRow, GersId, NotAGersId};
+use medallion_model::{
+    DIVISION_ID, ExtractManifestRow, GersId, NotAGersId, NotAnOvertureRelease, OvertureRelease,
+};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -60,6 +62,7 @@ pub struct RegionArea {
     pub id: GersId,
     pub name: String,
     pub shapes: Vec<Geometry<f64>>,
+    pub release: OvertureRelease,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -80,6 +83,8 @@ pub enum RegionError {
     SeveralDivisions { code: RegionCode, country: Country },
     #[error(transparent)]
     Division(#[from] NotAGersId),
+    #[error("reading the extract's release: {0}")]
+    Release(#[from] NotAnOvertureRelease),
 }
 
 #[derive(Debug, Deserialize)]
@@ -104,11 +109,12 @@ pub async fn region_area(
         .register_by_name(medallion_model::EXTRACT_MANIFEST)
         .await?;
     let extracts: Vec<ExtractManifestRow> = query.rows(crate::extract::RECORDED).await?;
-    let extract_id = extracts
+    let extract = extracts
         .iter()
         .find(|extract| extract.country == country.code())
-        .map(|extract| extract.extract_id.clone())
         .ok_or(RegionError::NoExtract { country })?;
+    let extract_id = extract.extract_id.clone();
+    let release = extract.release.parse()?;
 
     let division_area = root
         .dataset(medallion_model::OVERTURE_EXTRACT)
@@ -156,6 +162,7 @@ pub async fn region_area(
         id: division.division_id.parse()?,
         name: division.name.clone(),
         shapes,
+        release,
     })
 }
 
@@ -319,6 +326,7 @@ mod tests {
         assert_eq!(area.id.to_string(), THURINGIA);
         assert_eq!(area.name, "Thüringen");
         assert_eq!(area.shapes, vec![square_from(0.0, 10.0)]);
+        assert_eq!(area.release.to_string(), "2026-09-17.0");
     }
 
     #[tokio::test]
