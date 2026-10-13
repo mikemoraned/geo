@@ -108,7 +108,7 @@ Proposed during decomposition, not yet confirmed:
 
 - [x] Move `redis` to 1.7 across the workspace, and rewrite its TLS feature comment in `Cargo.toml`.
 - [x] Run the Docker tests of `telemetry`, `server`, `recorder`, and `motis` against `redis` 1.7.
-- [ ] Move `tower-http` to 0.7, in a commit of its own.
+- [x] Move `tower-http` to 0.7, in a commit of its own.
 
 #### A throwaway sign-in
 
