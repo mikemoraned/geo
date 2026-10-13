@@ -31,6 +31,10 @@ How docs under `docs/` (as opposed to slice docs) are written in this repo.
   link or by name. A research doc disappears once what holds of it moves into reference docs, and
   a slice disappears once it completes. A reference doc restates any fact it needs from either.
 
+- **Say "trait", not "port", for an interface the code depends on.** In a repo full of servers and
+  devices, a bare "port" reads as a network or serial port. Name the trait instead: "behind the
+  `AuthStore` trait", not "behind a port".
+
 - **Describe new behaviour in the crate's README in the same change, and ground it in sources.**
   If a change adds behaviour, the change also updates the README of the crate it lands in. Link
   the standard, specification section, or library documentation behind each claim, so a reader
