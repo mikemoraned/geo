@@ -35,6 +35,9 @@ before it is committed leaves only its conclusion, with no way to check the conc
 Say in the spike commit message what is being asked; say in the removing commit what the
 answer was.
 
+A one-off migration of the store, such as a backfill binary, follows the same rule: commit it
+with the data it rewrote, then remove it in a later commit.
+
 ## Notebooks
 
 A notebook is built with the user in a live marimo session, one step at a time, never drafted
