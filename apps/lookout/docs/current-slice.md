@@ -241,8 +241,8 @@ Next, so data accumulates while the rest is built.
       cannot write the store's Parquet types, such as required columns and UTC milliseconds.
 - [x] Add an optional `label` to `MotisSource` and `MotisSourceRow`, hashed into the id only when
       present, and a `--label` flag to `motis_track_area` and `motis_follow_gps`.
-- [ ] Describe the source and `motis_segment_v2` in `docs/medallion.md`, and the area mode,
-      Transitous, and its usage policy in `docs/motis.md`.
+- [x] Describe the source and `motis_segment_v2`, the area mode, Transitous, and its usage policy
+      in `docs/motis.md`.
 
 #### Baseline side-by-side
 
