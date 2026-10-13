@@ -12,7 +12,7 @@ ENV BUILD_GIT_HASH=$BUILD_GIT_HASH
 # `just prerequisites` installs, so a deploy compiles the core the same way a laptop does.
 ARG WASM_PACK_VERSION=0.15.0
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && apt-get install -y --no-install-recommends ca-certificates curl make perl \
     && rm -rf /var/lib/apt/lists/* \
     && curl -sSfL "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-$(uname -m)-unknown-linux-musl.tar.gz" \
        | tar xz -C /usr/local/bin --strip-components=1 --wildcards "*/wasm-pack" \
