@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use url::Url;
 
 use medallion::{MedallionArgs, Root};
-use medallion_model::{Area, Feed, MotisSource};
+use medallion_model::{Area, Feed, Label, MotisSource};
 
 use crate::bronze::SegmentLog;
 use crate::capture::{Capture, Captured, Coverage, Unresolved};
@@ -34,6 +34,9 @@ pub struct PollArgs {
     /// Which feed the Motis server answers from.
     #[arg(long)]
     pub feed: Feed,
+    /// Free text telling two setups of one server apart, such as the timetable build.
+    #[arg(long)]
+    pub label: Option<Label>,
     #[command(flatten)]
     pub medallion: MedallionArgs,
 }
@@ -76,6 +79,7 @@ impl Poller {
             motis_version,
             feed: args.feed,
             area,
+            label: args.label.clone(),
         };
         let registration = register(root, &source, Utc::now()).await?;
         tracing::info!(source_id = %source.id(), ?registration, "recorded the Motis source");

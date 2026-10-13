@@ -73,6 +73,68 @@ impl Display for MotisVersion {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct Label(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "`{text}` is not a label: use lowercase letters and digits, with a single `-` or `.` between \
+    words, such as delfi-2026-10-12 or gtfs.de"
+)]
+pub struct NotALabel {
+    text: String,
+}
+
+impl Label {
+    pub fn new(text: impl Into<String>) -> Result<Self, NotALabel> {
+        let text = text.into();
+        let words_ok = text.split(['-', '.']).all(|word| {
+            !word.is_empty()
+                && word
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        });
+        if words_ok {
+            Ok(Self(text))
+        } else {
+            Err(NotALabel { text })
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl FromStr for Label {
+    type Err = NotALabel;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::new(text)
+    }
+}
+
+impl TryFrom<String> for Label {
+    type Error = NotALabel;
+
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        Self::new(text)
+    }
+}
+
+impl From<Label> for String {
+    fn from(label: Label) -> Self {
+        label.0
+    }
+}
+
+impl Display for Label {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Feed {
@@ -137,6 +199,7 @@ pub struct MotisSource {
     pub motis_version: MotisVersion,
     pub feed: Feed,
     pub area: Option<Area>,
+    pub label: Option<Label>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -155,6 +218,8 @@ pub enum NotAMotisSource {
     Region(#[from] NotAGersId),
     #[error(transparent)]
     Release(#[from] NotAnOvertureRelease),
+    #[error(transparent)]
+    Label(#[from] NotALabel),
     #[error("a region needs both an id and a name, and the row holds only one")]
     HalfARegion,
     #[error("a region needs a country, and the row holds none")]
@@ -183,6 +248,7 @@ impl MotisSource {
         ]
         .into_iter()
         .chain(release.as_deref())
+        .chain(self.label.as_ref().map(Label::as_str))
         .collect::<Vec<_>>()
         .join("\n");
         MotisSourceId(Uuid::new_v5(&MOTIS_SOURCE_NAMESPACE, name.as_bytes()).to_string())
@@ -202,6 +268,7 @@ impl MotisSource {
             region_id: region.map(|region| region.id.to_string()),
             region_name: region.map(|region| region.name.clone()),
             overture_release: self.area.as_ref().map(|area| area.release.to_string()),
+            label: self.label.as_ref().map(Label::to_string),
             registered_at,
         }
     }
@@ -238,6 +305,7 @@ impl TryFrom<MotisSourceRow> for MotisSource {
             motis_version: row.motis_version.parse()?,
             feed: row.feed,
             area,
+            label: row.label.map(|label| label.parse()).transpose()?,
         })
     }
 }
@@ -252,6 +320,7 @@ pub struct MotisSourceRow {
     pub region_id: Option<String>,
     pub region_name: Option<String>,
     pub overture_release: Option<String>,
+    pub label: Option<String>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub registered_at: DateTime<Utc>,
 }
@@ -287,7 +356,12 @@ mod tests {
                 }),
                 release: release("2026-09-23.1"),
             }),
+            label: None,
         }
+    }
+
+    fn label(text: &str) -> Label {
+        text.parse().expect("a label")
     }
 
     fn release(text: &str) -> OvertureRelease {
@@ -321,6 +395,61 @@ mod tests {
         let err = MotisVersion::new("2.11.3").expect_err("no Motis version");
 
         assert!(err.to_string().contains("2.11.3"), "{err}");
+    }
+
+    #[test]
+    fn a_label_of_lowercase_words_and_digits_joined_by_single_dashes_is_accepted() {
+        for text in [
+            "delfi",
+            "foo-blah-blah",
+            "delfi-2026-10-12",
+            "gtfs-de",
+            "v2",
+        ] {
+            assert_eq!(Label::new(text).map(String::from), Ok(text.to_string()));
+        }
+    }
+
+    #[test]
+    fn a_label_with_capitals_spaces_or_stray_separators_is_refused() {
+        for text in [
+            "",
+            "Foo-blah-blah",
+            "foo-blah--blah",
+            "Foo Blah Blah",
+            "foo blah",
+            "-foo",
+            "foo-",
+            "-",
+            "foo_blah",
+            "foo..blah",
+            "foo.-blah",
+            ".foo",
+            "foo.",
+            ".",
+            "straße",
+        ] {
+            assert!(Label::new(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_label_is_checked_when_it_is_read_back() {
+        assert!(serde_json::from_str::<Label>(r#""delfi-2026""#).is_ok());
+        assert!(serde_json::from_str::<Label>(r#""Delfi 2026""#).is_err());
+    }
+
+    #[test]
+    fn a_row_holding_a_bad_label_is_refused() {
+        let row = MotisSourceRow {
+            label: Some("Delfi 2026".to_string()),
+            ..transitous().row(instant())
+        };
+
+        assert!(matches!(
+            MotisSource::try_from(row),
+            Err(NotAMotisSource::Label(_))
+        ));
     }
 
     #[test]
@@ -384,11 +513,54 @@ mod tests {
                 }),
                 ..source.clone()
             },
+            MotisSource {
+                label: Some(label("delfi")),
+                ..source.clone()
+            },
         ];
 
         for other in changed {
             assert_ne!(other.id(), source.id(), "{other:?}");
         }
+    }
+
+    #[test]
+    fn a_source_without_a_label_keeps_the_id_recorded_before_labels() {
+        let thuringia = MotisSource {
+            area: Some(Area {
+                country: Country::Germany,
+                region: Some(Region {
+                    id: GersId::new("e0ff5492-5758-4335-aabd-af1747925cd1").expect("a GERS id"),
+                    name: "Thüringen".to_string(),
+                }),
+                release: release("2026-09-23.1"),
+            }),
+            ..transitous()
+        };
+
+        assert_eq!(
+            thuringia.id().to_string(),
+            "dbc79993-2a04-51e0-a6f4-245ab1dfe468"
+        );
+    }
+
+    #[test]
+    fn a_label_tells_apart_sources_with_and_without_an_area() {
+        let local = MotisSource {
+            area: None,
+            label: Some(label("de")),
+            ..transitous()
+        };
+        let area_only = MotisSource {
+            area: Some(Area {
+                country: Country::Germany,
+                region: None,
+                release: release("2026-09-23.1"),
+            }),
+            ..transitous()
+        };
+
+        assert_ne!(local.id(), area_only.id());
     }
 
     #[test]
@@ -407,12 +579,16 @@ mod tests {
         assert_eq!(row.region_id.as_deref(), Some(REGION_ID));
         assert_eq!(row.region_name.as_deref(), Some("Thüringen"));
         assert_eq!(row.overture_release.as_deref(), Some("2026-09-23.1"));
+        assert_eq!(row.label, None);
         assert_eq!(row.registered_at, instant());
     }
 
     #[test]
     fn a_source_read_back_from_its_row_is_the_source_written() {
-        let source = transitous();
+        let source = MotisSource {
+            label: Some(label("delfi-2026-10-12-shapes-computed")),
+            ..transitous()
+        };
 
         assert_eq!(
             MotisSource::try_from(source.row(instant())).ok(),
@@ -468,6 +644,7 @@ mod tests {
             motis_version: version("v2.11.3"),
             feed: Feed::Local,
             area: None,
+            label: None,
         };
 
         assert_eq!(

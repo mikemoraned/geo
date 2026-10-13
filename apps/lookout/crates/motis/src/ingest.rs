@@ -262,6 +262,7 @@ mod tests {
             motis_version: "v2.11.3".parse().expect("a version"),
             feed,
             area: None,
+            label: None,
         }
     }
 
