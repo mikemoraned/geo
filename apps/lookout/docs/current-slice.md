@@ -239,7 +239,7 @@ Next, so data accumulates while the rest is built.
       Two sources, not one: the `2026-09-23.1` extracts reached this branch at 23:00 UTC on
       2026-10-11, after the first captures and before the rest. DuckDB was dropped because it
       cannot write the store's Parquet types, such as required columns and UTC milliseconds.
-- [ ] Add an optional `label` to `MotisSource` and `MotisSourceRow`, hashed into the id only when
+- [x] Add an optional `label` to `MotisSource` and `MotisSourceRow`, hashed into the id only when
       present, and a `--label` flag to `motis_track_area` and `motis_follow_gps`.
 - [ ] Describe the source and `motis_segment_v2` in `docs/medallion.md`, and the area mode,
       Transitous, and its usage policy in `docs/motis.md`.

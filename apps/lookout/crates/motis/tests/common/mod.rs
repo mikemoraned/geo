@@ -100,5 +100,6 @@ pub fn local_source() -> medallion_model::MotisSource {
         motis_version: "v2.11.3".parse().expect("a version"),
         feed: medallion_model::Feed::Local,
         area: None,
+        label: None,
     }
 }

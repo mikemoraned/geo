@@ -21,8 +21,8 @@ pub use motis::{
     TRAIN_SEGMENT_V2, TrainSegmentRowV1, TrainSegmentRowV2, TripId,
 };
 pub use motis_source::{
-    Area, Feed, MOTIS_SOURCE, MotisSource, MotisSourceId, MotisSourceRow, MotisVersion,
-    NotAMotisSource, NotAMotisVersion, Region, UnknownFeed,
+    Area, Feed, Label, MOTIS_SOURCE, MotisSource, MotisSourceId, MotisSourceRow, MotisVersion,
+    NotALabel, NotAMotisSource, NotAMotisVersion, Region, UnknownFeed,
 };
 pub use overture::{
     DIVISION_ID, EXTRACT_MANIFEST, ExtractManifestRow, OVERTURE_EXTRACT, division_id,

@@ -212,6 +212,7 @@ mod tests {
             motis_version: "v2.11.3".parse().expect("a version"),
             feed: Feed::Local,
             area: None,
+            label: None,
         };
         Capture::new(
             MotisClient::new(&source.base_url),
