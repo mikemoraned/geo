@@ -4,6 +4,7 @@ mod gers;
 mod motis;
 mod motis_source;
 mod overture;
+mod overture_release;
 mod session;
 mod silver;
 mod telemetry;
@@ -26,6 +27,7 @@ pub use motis_source::{
 pub use overture::{
     DIVISION_ID, EXTRACT_MANIFEST, ExtractManifestRow, OVERTURE_EXTRACT, division_id,
 };
+pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
 pub use session::{SESSION, SESSION_SAMPLE, SessionRow, SessionSampleRow};
 pub use silver::{TargetError, silver_target};
 pub use telemetry::{

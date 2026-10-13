@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use geo::Contains;
 use geo_types::{Geometry, Point};
 use medallion::{Countries, Country, GEOMETRY, Query, Root};
-use medallion_model::{DIVISION_ID, ExtractManifestRow};
+use medallion_model::{DIVISION_ID, ExtractManifestRow, NotAnOvertureRelease, OvertureRelease};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CountryError {
@@ -11,11 +13,14 @@ pub enum CountryError {
     Geo(#[from] medallion::GeoError),
     #[error("partitioning the extract: {0}")]
     Path(#[from] medallion::PathError),
+    #[error("reading the extract's release: {0}")]
+    Release(#[from] NotAnOvertureRelease),
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct CountryAreas {
     areas: Vec<(Country, Geometry<f64>)>,
+    releases: HashMap<Country, OvertureRelease>,
 }
 
 impl CountryAreas {
@@ -30,11 +35,14 @@ impl CountryAreas {
             extracts
                 .iter()
                 .find(|extract| extract.country == country.code())
-                .map(|extract| (country, extract.extract_id.as_str()))
+                .map(|extract| (country, extract))
         });
 
         let mut areas = Vec::new();
-        for (country, extract_id) in newest_of_each_country {
+        let mut releases = HashMap::new();
+        for (country, extract) in newest_of_each_country {
+            releases.insert(country, extract.release.parse()?);
+            let extract_id = extract.extract_id.as_str();
             let division_area = root
                 .dataset(medallion_model::OVERTURE_EXTRACT)
                 .for_id(extract_id)?
@@ -60,7 +68,11 @@ impl CountryAreas {
             }
         }
 
-        Ok(Self { areas })
+        Ok(Self { areas, releases })
+    }
+
+    pub fn release_of(&self, country: Country) -> Option<OvertureRelease> {
+        self.releases.get(&country).copied()
     }
 
     pub fn shapes_of(&self, country: Country) -> Vec<Geometry<f64>> {
@@ -189,6 +201,7 @@ mod tests {
     fn a_point_inside_an_area_is_in_that_country() {
         let areas = CountryAreas {
             areas: vec![(Country::Germany, square(10.0))],
+            ..CountryAreas::default()
         };
 
         assert_eq!(
@@ -205,6 +218,7 @@ mod tests {
                 (Country::UnitedKingdom, square_from(20.0, 10.0)),
                 (Country::Germany, square_from(40.0, 1.0)),
             ],
+            ..CountryAreas::default()
         };
 
         assert_eq!(
@@ -217,6 +231,7 @@ mod tests {
     fn a_point_outside_every_area_is_in_no_country() {
         let areas = CountryAreas {
             areas: vec![(Country::Germany, square(10.0))],
+            ..CountryAreas::default()
         };
 
         assert_eq!(areas.containing(Point::new(20.0, 20.0)), None);
@@ -306,6 +321,18 @@ mod tests {
         assert_eq!(
             areas.containing(Point::new(25.0, 25.0)),
             Some(Country::UnitedKingdom)
+        );
+        assert_eq!(
+            areas
+                .release_of(Country::Germany)
+                .map(|release| release.to_string()),
+            Some("2026-05-21.0".to_string())
+        );
+        assert_eq!(
+            areas
+                .release_of(Country::UnitedKingdom)
+                .map(|release| release.to_string()),
+            Some("2026-07-22.0".to_string())
         );
     }
 
