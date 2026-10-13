@@ -224,17 +224,21 @@ Next, so data accumulates while the rest is built.
       Prepared alone: geo's `relate` already rejects disjoint bounding boxes, and needed no
       simplified outline. On 2026-10-12 a poll took 2.1 s, 0.25 s of it filtering 73 legs, 3.5 ms
       a leg against 0.6 s before.
-- [ ] Record in a source's area the Overture release its shape came from. A new release can move
+- [x] Record in a source's area the Overture release its shape came from. A new release can move
       a region's outline, yet a capture at it now registers under the same source id.
       The id covers the release from here on. Only this branch has written `motis_source`, so the
       change is in place, with no new dataset version:
       1. Add the release to `Area` and `MotisSourceRow`, and to the fields the id hashes.
-      2. Backfill the one existing source with duckdb, not Rust: release `2026-07-22.0`, from DE
-         extract `20260804T152143Z`, the newest when it was captured on 2026-10-11. Rewrite its
-         `source_id` in `motis_source` and in the three `motis_segment_v2` files to the new id.
-      3. Read the backfilled source and segments back through Rust.
-      4. After `just bronze-init` and `just silver-init` finish at `2026-09-23.1`, run a short
-         capture of Thuringia, and check it registers a second source.
+      2. Backfill the one existing source as two, with a migration binary committed and then
+         removed: release `2026-07-22.0` for the three captures of 2026-10-11, and `2026-09-23.1`
+         for the seven of 2026-10-12. Rewrite `source_id` in `motis_source` and in the ten
+         `motis_segment_v2` files to the new ids, and derive `train_segment_v2` again.
+      3. Read the backfilled sources and segments back through Rust.
+      4. Run a short capture of Thuringia, and check it finds the `2026-09-23.1` source already
+         recorded. The user runs this.
+      Two sources, not one: the `2026-09-23.1` extracts reached this branch at 23:00 UTC on
+      2026-10-11, after the first captures and before the rest. DuckDB was dropped because it
+      cannot write the store's Parquet types, such as required columns and UTC milliseconds.
 - [ ] Add an optional `label` to `MotisSource` and `MotisSourceRow`, hashed into the id only when
       present, and a `--label` flag to `motis_track_area` and `motis_follow_gps`.
 - [ ] Describe the source and `motis_segment_v2` in `docs/medallion.md`, and the area mode,
