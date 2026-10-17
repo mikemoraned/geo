@@ -321,8 +321,11 @@ Only after the complete local server is running.
       The comparison is a notebook of its own, `compare_delfi-2026-10-10.plain_route-shapes.py`.
       Every joined leg of the route-shapes pass lies within 12.6 m of Transitous's shape, and
       regional arrivals agree. The local server is usable as ground truth, confirmed 2026-10-17.
-- [ ] Decide on SIRI ET from the arrival differences on trips Transitous corrects. If it is
+- [-] Decide on SIRI ET from the arrival differences on trips Transitous corrects. If it is
       needed, add the feed to `enable_rt` and run a third pass.
+      Deferred on 2026-10-17: the local server goes without SIRI ET for now. In the route-shapes
+      pass, only ICE 599 differed from Transitous by more than 13 minutes, by up to 38. The slice's summary in `completed-slices.md` names
+      this gap.
 - [ ] Compare the computed shapes with recorded sessions in `silver/session` on German lines, and
       count the legs drawn along a parallel line.
 
