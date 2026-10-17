@@ -123,15 +123,14 @@ Decisions taken before starting, as each changes what gets built.
 
 #### Open questions
 
-- Whether wrong parallel lines are common in German rail. Comparing computed shapes against
-  recorded sessions answers it, and decides whether pfaedle comes back.
+None remain.
 
 #### Rejected / deferred
 
-- **pfaedle, for now.** Its rail shapes followed the track, but importing a feed carrying them
-  broke realtime, for a reason never found. Motis's `route_shapes` import step computes shapes and
-  leaves the feed alone. If Motis issue #1596 stays open and wrong parallel lines prove common,
-  pfaedle's line-relation penalty is the reason to return.
+- **pfaedle.** Its rail shapes followed the track, but importing a feed carrying them broke
+  realtime, for a reason never found. Motis's `route_shapes` import step computes shapes and leaves
+  the feed alone. Its line-relation penalty only matters for placing a train on the right one of
+  two parallel lines, which lookout does not need. Rejected on 2026-10-17.
   [2026-10-12-track-shapes-and-realtime.md](2026-10-12-track-shapes-and-realtime.md) keeps what the
   attempt established.
 - **Snapping Motis legs to rail in lookout's own code.** It repeats what `route_shapes` does, and
@@ -327,8 +326,10 @@ Only after the complete local server is running.
       Deferred on 2026-10-17: the local server goes without SIRI ET for now. In the route-shapes
       pass, only ICE 599 differed from Transitous by more than 13 minutes, by up to 38. The slice's summary in `completed-slices.md` names
       this gap.
-- [ ] Compare the computed shapes with recorded sessions in `silver/session` on German lines, and
+- [-] Compare the computed shapes with recorded sessions in `silver/session` on German lines, and
       count the legs drawn along a parallel line.
+      Moot on 2026-10-17: the recorded sessions are too few to base a decision on. Lookout also
+      has no need to place a train on one of two parallel lines.
 
 #### Country-wide capture
 
