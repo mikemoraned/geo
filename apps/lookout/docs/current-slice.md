@@ -104,6 +104,9 @@ Decisions taken before starting, as each changes what gets built.
 - **The comparison is per joined leg**: the distance between the two shapes, and the difference
   between the two realtime arrivals. Legs only one server returns are counted too. What counts as
   agreement comes from the baseline's distributions, not from this decomposition.
+- **Two shapes agree when they lie within 15 m of each other**, rounded up from the largest shape
+  distance in the route-shapes pass, 12.6 m. The baseline could not set it, since every local shape
+  there runs straight between its stops. Confirmed 2026-10-17.
 
 #### Consequences elsewhere
 
@@ -120,8 +123,6 @@ Decisions taken before starting, as each changes what gets built.
 
 #### Open questions
 
-- The threshold for agreement on shape distance. The fixed pass sets it, since every local shape
-  in the baseline runs straight between its stops.
 - Whether wrong parallel lines are common in German rail. Comparing computed shapes against
   recorded sessions answers it, and decides whether pfaedle comes back.
 
