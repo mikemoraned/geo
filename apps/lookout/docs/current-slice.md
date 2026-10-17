@@ -120,8 +120,8 @@ Decisions taken before starting, as each changes what gets built.
 
 #### Open questions
 
-- The threshold for agreement on shape distance and arrival difference. The baseline pass sets
-  it.
+- The threshold for agreement on shape distance. The fixed pass sets it, since every local shape
+  in the baseline runs straight between its stops.
 - Whether wrong parallel lines are common in German rail. Comparing computed shapes against
   recorded sessions answers it, and decides whether pfaedle comes back.
 
@@ -255,13 +255,19 @@ The local server as it stands, against Transitous. Only after `--label` lands.
       with no other change. The user runs this, outside the sandbox.
 - [ ] Run `bronze-poll-local-area` and `bronze-poll-transitous` together for 2 hours. The user
       runs this.
-- [ ] Count the joined legs, and the legs only one server returned, in a new notebook
+- [x] Count the joined legs, and the legs only one server returned, in a new notebook
       `notebooks/motis_capture/side_by_side.py`. Built with the user in a live marimo session.
-- [ ] Plot, per joined leg, the distance between the shapes and the difference between the
+- [x] Plot, per joined leg, the distance between the shapes and the difference between the
       realtime arrivals, by mode.
-- [ ] Set the agreement thresholds from those distributions.
-- [ ] Record the local server's realtime resolution from its log, against the 99.96% in
+- [x] Set the agreement thresholds from those distributions.
+      Two arrivals agree when they differ by at most 1 minute, from the 145 regional legs both
+      servers had realtime for. The shape threshold waits for the fixed pass: every local shape in
+      the baseline runs straight between its stops.
+- [x] Record the local server's realtime resolution from its log, against the 99.96% in
       `docs/motis.md`.
+      99.966% in each of eight updates from 12:00 to 12:08 UTC on 14 October: 229,392 to
+      230,803 entities an update, 77 or 78 of them unresolved. The log covers the day after the pass, on
+      the same server and build. The figure matches `docs/motis.md`.
 
 #### A complete local server
 
