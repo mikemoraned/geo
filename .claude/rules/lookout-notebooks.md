@@ -7,8 +7,8 @@ paths:
 
 A notebook is built with the user in a live marimo session, one step at a time, never drafted
 alone in a file. The user starts the session. Each step adds or changes one cell, then stops for
-review before the next. Querying the store directly, for example with the duckdb CLI, to learn what
-the data holds before proposing a step is permitted.
+review before the next. Querying the store through the medallion binding, for example from the
+session's scratchpad, to learn what the data holds before proposing a step is permitted.
 
 A notebook is written so the user can check it for correctness, in two ways:
 
@@ -20,6 +20,7 @@ A notebook is written so the user can check it for correctness, in two ways:
   drawn: the whole dataset on a map, chosen cases such as the smallest, median, and largest, and a
   table whose selected rows draw on a map. A wrong shape is easier to spot drawn than as a number.
 
-Datasets load through the medallion library's Python binding, never through duckdb directly.
+Datasets load through the medallion library's Python binding, in a cell and while exploring alike,
+never through duckdb.
 Joins stay in SQL, run by the binding on Sedona and DataFusion, and results stay in Arrow until a
 step needs pandas or geopandas.
