@@ -312,11 +312,12 @@ Only after the complete local server is running.
       The user runs this.
       Unchanged on 2026-10-17: Transitous last updated DELFI at 07:36 UTC on 12 October, so both
       servers stay on the build of 2026-10-10.
-- [ ] Run `bronze-poll-local-area`, labelled for the new setup, and `bronze-poll-transitous`
+- [x] Run `bronze-poll-local-area`, labelled for the new setup, and `bronze-poll-transitous`
       together for 2 hours. The user runs this.
 - [ ] Copy `notebooks/motis_capture/side_by_side_delfi-2026-10-10.plain.py` to
       `side_by_side_delfi-2026-10-10.route-shapes.py`, point it at the new captures, and compare
-      each distribution with the baseline's. The baseline notebook stays as it is.
+      each distribution with the baseline's. The baseline notebook keeps its own captures, and
+      changes only where the method does.
 - [ ] Decide on SIRI ET from the arrival differences on trips Transitous corrects. If it is
       needed, add the feed to `enable_rt` and run a third pass.
 - [ ] Compare the computed shapes with recorded sessions in `silver/session` on German lines, and

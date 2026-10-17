@@ -342,8 +342,9 @@ def _(mo):
     Only the polls both servers answered count. A leg joins across the whole pass rather than within
     one poll. Each poll asks for the legs running at its instant, by realtime, so a train late on one
     server and on time on the other appears in different polls. Each server's side of a joined leg is
-    its latest sighting of that leg. `in_same_poll` marks the joined legs both servers returned in at
-    least one poll.
+    its sighting at the last poll in which both servers returned the leg. A leg the two servers never
+    returned in the same poll takes each server's latest sighting instead. `in_same_poll` marks the
+    joined legs both servers returned in at least one poll.
 
     A Transitous leg from a feed other than DELFI has no counterpart on the local server, so it is
     counted apart from the DELFI legs one server alone returned.
@@ -378,27 +379,62 @@ def _(PASS_LEG, bronze):
 @app.cell
 def _(mo):
     mo.md(r"""
-    `latest` keeps each server's last sighting of each leg, so `legs` is at most `sightings`.
+    `shared_poll` lists, for each DELFI leg, the polls in which both servers returned it. `latest` keeps
+    one sighting of each leg per server: the last shared poll, or the last poll for a leg with none.
+    `legs` is at most `sightings`, and `at_shared_poll` counts the legs taken from a shared poll.
     """)
     return
 
 
 @app.cell
 def _(ANSWERED, bronze):
-    LATEST = ANSWERED + (
+    SHARED_POLL = ANSWERED + (
+        """
+    shared_poll AS (
+        SELECT delfi_trip, from_stop, scheduled_departure, poll
+        FROM answered
+        WHERE delfi_trip IS NOT NULL
+        GROUP BY delfi_trip, from_stop, scheduled_departure, poll
+        HAVING count(DISTINCT server) = 2
+    )""",
+    )
+    bronze(
+        """
+        SELECT count(*) AS shared_polls,
+               count(DISTINCT (delfi_trip, from_stop, scheduled_departure)) AS legs
+        FROM shared_poll
+        """,
+        SHARED_POLL,
+    )
+    return (SHARED_POLL,)
+
+
+@app.cell
+def _(SHARED_POLL, bronze):
+    LATEST = SHARED_POLL + (
         """
     latest AS (
-        SELECT * FROM answered
+        SELECT answered.*, shared_poll.poll IS NOT NULL AS at_shared_poll
+        FROM answered LEFT JOIN shared_poll
+            ON answered.delfi_trip = shared_poll.delfi_trip
+           AND answered.from_stop = shared_poll.from_stop
+           AND answered.scheduled_departure = shared_poll.scheduled_departure
+           AND answered.poll = shared_poll.poll
         QUALIFY row_number() OVER (
-            PARTITION BY server, trip_id, from_stop, scheduled_departure ORDER BY poll DESC
+            PARTITION BY server, trip_id, answered.from_stop, answered.scheduled_departure
+            ORDER BY shared_poll.poll IS NOT NULL DESC, answered.poll DESC
         ) = 1
     )""",
     )
     bronze(
         """
-        SELECT server, sightings, legs
+        SELECT server, sightings, legs, at_shared_poll
         FROM (SELECT server, count(*) AS sightings FROM answered GROUP BY server)
-        JOIN (SELECT server, count(*) AS legs FROM latest GROUP BY server) USING (server)
+        JOIN (
+            SELECT server, count(*) AS legs,
+                   sum(CASE WHEN at_shared_poll THEN 1 ELSE 0 END) AS at_shared_poll
+            FROM latest GROUP BY server
+        ) USING (server)
         ORDER BY server
         """,
         LATEST,
@@ -412,10 +448,7 @@ def _(LATEST, bronze):
         """
     seen_together AS (
         SELECT DISTINCT delfi_trip, from_stop, scheduled_departure, true AS in_same_poll
-        FROM answered
-        WHERE delfi_trip IS NOT NULL
-        GROUP BY delfi_trip, from_stop, scheduled_departure, poll
-        HAVING count(DISTINCT server) = 2
+        FROM shared_poll
     )""",
     )
     bronze(
