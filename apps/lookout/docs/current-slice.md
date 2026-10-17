@@ -282,18 +282,35 @@ Only after the baseline pass, so the fixes land on a measured starting point.
       set it as the `germanygtfs` dataset's `script` in `motis_setup`.
       The script loads `scripts/de-delfi-colors.lua` with `require`, which Lua resolves against
       the directory the import runs from. The recipe fetches both into `motis_server/scripts`.
-- [ ] Run `motis_setup` on the same DELFI build. The user runs this.
-- [ ] Record the import's time, peak memory, and computed shape files' size, and the routes
+- [x] Run `motis_setup` on the same DELFI build. The user runs this.
+      On 2026-10-17, with the DELFI build of 2026-10-10. The import log shows the script loaded,
+      with handlers for agencies, routes, and trips.
+- [x] Record the import's time, peak memory, and computed shape files' size, and the routes
       matched, segments routed, and segments beelined from the import log.
-- [ ] Check realtime resolution against the baseline's.
-- [ ] Check `displayName` on a local `map/trips` leg reads as Transitous's does.
+      The import took 6 minutes 8 seconds, with a peak resident set of 5.1 GB. The street graph,
+      geocoding, and tiles were reused from the import of 2026-10-13, so the timetable and
+      `route_shapes` took most of it. `route_shapes` took 3 minutes 17 seconds. The timetable
+      took 1 minute 44 seconds, against 39–43 seconds without the script. The computed shapes take
+      1.46 GB, and their cache 26 MB. 24,029 routes matched, 261,025 segments routed, and 16,385
+      segments beelined: 5.9% of the segments run straight between their stops.
+- [x] Check realtime resolution against the baseline's.
+      99.977–99.979% in each of eight updates from 10:37 to 10:44 UTC on 17 October, against the
+      baseline's 99.966%: 143,996 to 144,152 entities an update, 31 to 33 of them unresolved.
+      Computed shapes leave realtime resolving, unlike pfaedle's.
+- [x] Check `displayName` on a local `map/trips` leg reads as Transitous's does.
+      On 2026-10-17 at 10:40 UTC, every rail leg over Thuringia carried one: 28 high-speed legs, such
+      as `ICE 1007`, and 108 regional legs, such as `RB1 (20814)`. Long-distance legs read as
+      `IC 2065` and `FLX10`. The shapes follow the track, with a median of 140 points a regional
+      leg and 1,812 a high-speed leg, against 114 and 2,170 on Transitous on 2026-10-11.
 
 #### Fixed side-by-side
 
 Only after the complete local server is running.
 
-- [ ] Download the latest DELFI build, and run `motis_setup` again if Transitous has moved to it.
+- [x] Download the latest DELFI build, and run `motis_setup` again if Transitous has moved to it.
       The user runs this.
+      Unchanged on 2026-10-17: Transitous last updated DELFI at 07:36 UTC on 12 October, so both
+      servers stay on the build of 2026-10-10.
 - [ ] Run `bronze-poll-local-area`, labelled for the new setup, and `bronze-poll-transitous`
       together for 2 hours. The user runs this.
 - [ ] Rerun `notebooks/motis_capture/side_by_side.py` on the new captures, and compare each
