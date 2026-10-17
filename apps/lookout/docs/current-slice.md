@@ -251,9 +251,9 @@ The local server as it stands, against Transitous. Only after `--label` lands.
 - [x] Add a recipe `bronze-poll-local-area` beside `bronze-poll-transitous`: the local server,
       the same area and interval, and a `--label` naming the DELFI build and the setup.
       The label is the recipe's first argument, since the build changes with each pass.
-- [ ] Run `download_geo_data` and `motis_setup` in `tools/motis-server` for the latest DELFI build,
+- [x] Run `download_geo_data` and `motis_setup` in `tools/motis-server` for the latest DELFI build,
       with no other change. The user runs this, outside the sandbox.
-- [ ] Run `bronze-poll-local-area` and `bronze-poll-transitous` together for 2 hours. The user
+- [x] Run `bronze-poll-local-area` and `bronze-poll-transitous` together for 2 hours. The user
       runs this.
 - [x] Count the joined legs, and the legs only one server returned, in a new notebook
       `notebooks/motis_capture/side_by_side.py`. Built with the user in a live marimo session.
@@ -273,8 +273,11 @@ The local server as it stands, against Transitous. Only after `--label` lands.
 
 Only after the baseline pass, so the fixes land on a measured starting point.
 
-- [ ] Add the `route_shapes` block to `config.yml` with `yq` in `motis_setup`, between
+- [x] Add the `route_shapes` block to `config.yml` with `yq` in `motis_setup`, between
       `motis config` and `motis import`.
+      The block turns off funicular as well as the classes in the research doc's block, since
+      funicular takes the railway profile too. Motis accepts an unknown class name without error,
+      so a misspelt class goes on being computed without warning.
 - [ ] Add a recipe fetching `de-DELFI.lua` from Transitous's repository at a pinned commit, and
       set it as the `germanygtfs` dataset's `script` in `motis_setup`.
 - [ ] Run `motis_setup` on the same DELFI build. The user runs this.
