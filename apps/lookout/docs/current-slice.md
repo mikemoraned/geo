@@ -314,10 +314,13 @@ Only after the complete local server is running.
       servers stay on the build of 2026-10-10.
 - [x] Run `bronze-poll-local-area`, labelled for the new setup, and `bronze-poll-transitous`
       together for 2 hours. The user runs this.
-- [ ] Copy `notebooks/motis_capture/side_by_side_delfi-2026-10-10.plain.py` to
+- [x] Copy `notebooks/motis_capture/side_by_side_delfi-2026-10-10.plain.py` to
       `side_by_side_delfi-2026-10-10.route-shapes.py`, point it at the new captures, and compare
       each distribution with the baseline's. The baseline notebook keeps its own captures, and
       changes only where the method does.
+      The comparison is a notebook of its own, `compare_delfi-2026-10-10.plain_route-shapes.py`.
+      Every joined leg of the route-shapes pass lies within 12.6 m of Transitous's shape, and
+      regional arrivals agree. The local server is usable as ground truth, confirmed 2026-10-17.
 - [ ] Decide on SIRI ET from the arrival differences on trips Transitous corrects. If it is
       needed, add the feed to `enable_rt` and run a third pass.
 - [ ] Compare the computed shapes with recorded sessions in `silver/session` on German lines, and
