@@ -92,9 +92,18 @@ Consecutive polls therefore cover time with no gap and no overlap.
 ## `map/trips` answers a bounding box, not an area
 
 The request takes a bounding box alone. A capture of an area, such as a country or a region within
-one, asks for the bounding box of the area's outline. It then keeps the legs whose polyline touches
-the outline, and counts the rest as outside. The outline comes from Overture's `division_area`. In
-one poll of Thuringia, 108 rail legs were kept and 114 fell outside.
+one, asks for the bounding box of the area's outline. It then keeps a leg when its polyline
+touches the area and lies wholly within the area's country, and counts the rest as outside. For a
+country, the area and the country are one outline. Each outline is the union of its
+`division_area` rows in Overture, so a leg crossing from a country's land onto its territorial
+waters stays within it. A capture around a point, such as recent GPS, keeps every leg touching
+its bounding box.
+
+A leg that leaves the country is cut from the capture because the local server routes over one
+country's OSM extract. Beyond the border it has no track, and draws the leg straight. A leg that
+leaves a region but stays in the country runs on track throughout, so it stays. In one poll of
+Germany, 417 rail legs were kept and 18 fell outside. In one poll of Thuringia, 16 were kept and
+11 fell outside.
 
 Testing every polyline against a detailed outline is slow unless the outline is indexed. For one
 poll of Thuringia in a release build, the unindexed test takes 54 s and the indexed one 0.1–0.25 s.

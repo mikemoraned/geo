@@ -56,7 +56,11 @@ async fn fixed_area(
     country: Country,
     region: Option<&RegionCode>,
 ) -> (Area, Coverage) {
-    let (region, release, shapes) = match region {
+    let areas = CountryAreas::newest_per_country(root)
+        .await
+        .expect("read the country areas from the Overture extracts");
+    let country_shapes = areas.shapes_of(country);
+    let (region, release, area_shapes) = match region {
         Some(code) => {
             let found = region_area(root, country, code)
                 .await
@@ -68,16 +72,13 @@ async fn fixed_area(
             (Some(region), found.release, found.shapes)
         }
         None => {
-            let areas = CountryAreas::newest_per_country(root)
-                .await
-                .expect("read the country areas from the Overture extracts");
             let release = areas
                 .release_of(country)
                 .expect("the store holds an Overture extract of the country to capture");
-            (None, release, areas.shapes_of(country))
+            (None, release, country_shapes.clone())
         }
     };
-    let coverage = Coverage::shapes(shapes)
+    let coverage = Coverage::area(area_shapes, country_shapes)
         .expect("the newest Overture extract holds a shape for the area to capture");
     tracing::info!(
         country = country.code(),
