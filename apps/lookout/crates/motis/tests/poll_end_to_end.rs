@@ -35,7 +35,7 @@ async fn recent_gps_near_frankfurt_captures_rail_from_local_motis_end_to_end() {
         MotisClient::default(),
         SegmentLog::new(Root::new(store.path()), common::local_source().id()),
         Zoom::default(),
-        "5m".parse().expect("a span"),
+        "10m".parse().expect("a span"),
     );
 
     let area = near_gps

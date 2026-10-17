@@ -83,6 +83,12 @@ One `map/trips` request over Germany's bounding box, at zoom 8 and a ten-minute 
 7.1 MB in 0.23 s from the local server. Measured once, at 09:00 on a weekday: 7,146 legs from 2,939
 trips, 3,594 of the legs rail. A poll covering the country therefore needs no tiling.
 
+## A poll asks for its own interval
+
+`map/trips` takes a time window beside the bounding box, and returns the legs running within it.
+Each poll asks for a window as wide as the interval between polls, centred on the poll's instant.
+Consecutive polls therefore cover time with no gap and no overlap.
+
 ## `map/trips` answers a bounding box, not an area
 
 The request takes a bounding box alone. A capture of an area, such as a country or a region within
