@@ -257,6 +257,7 @@ The local server as it stands, against Transitous. Only after `--label` lands.
       runs this.
 - [x] Count the joined legs, and the legs only one server returned, in a new notebook
       `notebooks/motis_capture/side_by_side.py`. Built with the user in a live marimo session.
+      Renamed `side_by_side_delfi-2026-10-10.plain.py`, after the label of the pass it compares.
 - [x] Plot, per joined leg, the distance between the shapes and the difference between the
       realtime arrivals, by mode.
 - [x] Set the agreement thresholds from those distributions.
@@ -313,8 +314,9 @@ Only after the complete local server is running.
       servers stay on the build of 2026-10-10.
 - [ ] Run `bronze-poll-local-area`, labelled for the new setup, and `bronze-poll-transitous`
       together for 2 hours. The user runs this.
-- [ ] Rerun `notebooks/motis_capture/side_by_side.py` on the new captures, and compare each
-      distribution with the baseline's.
+- [ ] Copy `notebooks/motis_capture/side_by_side_delfi-2026-10-10.plain.py` to
+      `side_by_side_delfi-2026-10-10.route-shapes.py`, point it at the new captures, and compare
+      each distribution with the baseline's. The baseline notebook stays as it is.
 - [ ] Decide on SIRI ET from the arrival differences on trips Transitous corrects. If it is
       needed, add the feed to `enable_rt` and run a third pass.
 - [ ] Compare the computed shapes with recorded sessions in `silver/session` on German lines, and
