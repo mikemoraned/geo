@@ -3,6 +3,8 @@ TARGET := "macos-arm64"
 VERSION := "v2.11.3"
 MOTIS_DIR := "motis_server"
 GEO_DATA_DIR := "geo_data"
+TRANSITOUS_COMMIT := "95e54e95d041239ffa1341e3cb086bfa56fbc724"
+TRANSITOUS_SCRIPTS := "https://raw.githubusercontent.com/public-transport/transitous/" + TRANSITOUS_COMMIT + "/scripts"
 
 # Install host tools the recipes depend on. `brew install` is idempotent.
 prerequisites:
@@ -27,17 +29,30 @@ download_geo_data: create_dirs
     time wget https://download.geofabrik.de/europe/germany-latest.osm.pbf -O ./{{ GEO_DATA_DIR }}/germany.osm.pbf
     time wget --max-redirect=5 "https://www.opendata-oepnv.de/ht/de/datensaetze/sharing?tx_vrrkit_view%5Bsharing%5D=eyJkYXRhc2V0IjoiZGV1dHNjaGxhbmR3ZWl0ZS1zb2xsZmFocnBsYW5kYXRlbi1ndGZzIn0" -O ./{{ GEO_DATA_DIR }}/germany_gtfs.zip
 
+# Fetch Transitous's import script for DELFI, and the route colours it loads, at the pinned Transitous commit.
 [working-directory: 'motis_server']
-motis_setup:
+download_delfi_script: create_dirs
+    mkdir -p scripts
+    wget {{ TRANSITOUS_SCRIPTS }}/de-DELFI.lua -O scripts/de-DELFI.lua
+    wget {{ TRANSITOUS_SCRIPTS }}/de-delfi-colors.lua -O scripts/de-delfi-colors.lua
+
+[working-directory: 'motis_server']
+motis_setup: download_delfi_script
     time ./motis config ../{{ GEO_DATA_DIR }}/germany.osm.pbf ../{{ GEO_DATA_DIR }}/germany_gtfs.zip
     just route_shapes
-    time ./motis import
+    just train_names
+    /usr/bin/time -l ./motis import
     just enable_rt
 
 # Have the import route high-speed, long-distance, night, and regional rail along OSM track, in place of DELFI's straight lines between stops. Every other class keeps DELFI's shapes.
 [working-directory: 'motis_server']
 route_shapes: prerequisites
     yq -i '.timetable.route_shapes = {"mode": "all", "clasz": {"BUS": false, "COACH": false, "RIDESHARING": false, "ODM": false, "TRAM": false, "SUBWAY": false, "SUBURBAN": false, "FUNICULAR": false, "SHIP": false}}' config.yml
+
+# Have the import name trains as Transitous does, such as `ICE 123`, with the script `download_delfi_script` fetches.
+[working-directory: 'motis_server']
+train_names: prerequisites
+    yq -i '.timetable.datasets.germanygtfs.script = "scripts/de-DELFI.lua"' config.yml
 
 # `motis server` reads data/config.yml (written by `import`), which has no realtime feed,
 # so add DELFI's GTFS-RT feed (TripUpdates + ServiceAlerts; no VehiclePositions in any

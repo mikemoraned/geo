@@ -278,8 +278,10 @@ Only after the baseline pass, so the fixes land on a measured starting point.
       The block turns off funicular as well as the classes in the research doc's block, since
       funicular takes the railway profile too. Motis accepts an unknown class name without error,
       so a misspelt class goes on being computed without warning.
-- [ ] Add a recipe fetching `de-DELFI.lua` from Transitous's repository at a pinned commit, and
+- [x] Add a recipe fetching `de-DELFI.lua` from Transitous's repository at a pinned commit, and
       set it as the `germanygtfs` dataset's `script` in `motis_setup`.
+      The script loads `scripts/de-delfi-colors.lua` with `require`, which Lua resolves against
+      the directory the import runs from. The recipe fetches both into `motis_server/scripts`.
 - [ ] Run `motis_setup` on the same DELFI build. The user runs this.
 - [ ] Record the import's time, peak memory, and computed shape files' size, and the routes
       matched, segments routed, and segments beelined from the import log.
