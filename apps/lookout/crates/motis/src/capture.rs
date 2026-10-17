@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use geo::{BoundingRect, PreparedGeometry, Relate};
-use geo_types::{Geometry, GeometryCollection, LineString, Rect};
+use geo::{BoundingRect, PreparedGeometry, Relate, unary_union};
+use geo_types::{Geometry, GeometryCollection, LineString, MultiPolygon, Rect};
 use medallion_model::TripId;
 use tokio::time::Instant;
 
@@ -27,29 +27,47 @@ pub struct Capture {
 #[derive(Debug, Clone)]
 pub struct Coverage {
     bbox: Rect<f64>,
-    shapes: Vec<PreparedGeometry<'static, Geometry<f64>>>,
+    area: PreparedGeometry<'static, Geometry<f64>>,
+    country: Option<PreparedGeometry<'static, Geometry<f64>>>,
 }
 
 impl Coverage {
     pub fn bbox(bbox: Rect<f64>) -> Self {
         Self {
             bbox,
-            shapes: vec![PreparedGeometry::from(Geometry::Rect(bbox))],
+            area: PreparedGeometry::from(Geometry::Rect(bbox)),
+            country: None,
         }
     }
 
-    pub fn shapes(shapes: Vec<Geometry<f64>>) -> Option<Self> {
-        let bbox = GeometryCollection::new_from(shapes.clone()).bounding_rect()?;
+    pub fn area(area: Vec<Geometry<f64>>, country: Vec<Geometry<f64>>) -> Option<Self> {
+        let bbox = GeometryCollection::new_from(area.clone()).bounding_rect()?;
         Some(Self {
             bbox,
-            shapes: shapes.into_iter().map(PreparedGeometry::from).collect(),
+            area: union(area),
+            country: Some(union(country)),
         })
     }
 
-    fn touches(&self, line: &LineString<f64>) -> bool {
-        self.shapes
-            .iter()
-            .any(|shape| shape.relate(line).is_intersects())
+    fn keeps(&self, line: &LineString<f64>) -> bool {
+        self.area.relate(line).is_intersects()
+            && self
+                .country
+                .as_ref()
+                .is_none_or(|country| country.relate(line).is_covers())
+    }
+}
+
+fn union(shapes: Vec<Geometry<f64>>) -> PreparedGeometry<'static, Geometry<f64>> {
+    let polygons: Vec<MultiPolygon<f64>> = shapes.into_iter().filter_map(polygonal).collect();
+    PreparedGeometry::from(Geometry::MultiPolygon(unary_union(&polygons)))
+}
+
+fn polygonal(shape: Geometry<f64>) -> Option<MultiPolygon<f64>> {
+    match shape {
+        Geometry::Polygon(polygon) => Some(MultiPolygon::new(vec![polygon])),
+        Geometry::MultiPolygon(polygons) => Some(polygons),
+        _ => None,
     }
 }
 
@@ -160,7 +178,7 @@ enum Sorted {
 fn sorted(coverage: &Coverage, segment: &TripSegment) -> Sorted {
     match segment.line() {
         Err(err) => Sorted::Unresolved(err.to_string()),
-        Ok(line) if !coverage.touches(&line) => Sorted::Outside,
+        Ok(line) if !coverage.keeps(&line) => Sorted::Outside,
         Ok(_) => match segment.trip_id() {
             Ok(trip_id) => Sorted::Kept(trip_id),
             Err(err) => Sorted::Unresolved(err.to_string()),
@@ -232,10 +250,27 @@ mod tests {
         ])
     }
 
+    fn whole_country(shapes: Vec<Geometry<f64>>) -> Coverage {
+        Coverage::area(shapes.clone(), shapes).expect("shapes")
+    }
+
+    async fn sorted_by(coverage: &Coverage) -> (usize, usize) {
+        let server = motis().await;
+        let store = tempfile::tempdir().expect("tempdir");
+        let captured = capture(&server, store.path())
+            .capture(chrono::Utc::now(), coverage)
+            .await
+            .expect("capture");
+        (captured.segments, captured.outside)
+    }
+
     #[test]
-    fn a_coverage_of_shapes_queries_their_bounding_box() {
-        let coverage = Coverage::shapes(vec![square(8.0, 50.0, 1.0), square(10.0, 52.0, 1.0)])
-            .expect("shapes");
+    fn a_coverage_of_an_area_queries_its_bounding_box() {
+        let coverage = Coverage::area(
+            vec![square(8.0, 50.0, 1.0), square(10.0, 52.0, 1.0)],
+            vec![square(0.0, 40.0, 20.0)],
+        )
+        .expect("shapes");
 
         assert_eq!(
             coverage.bbox,
@@ -244,36 +279,51 @@ mod tests {
     }
 
     #[test]
-    fn no_shapes_cover_nothing() {
-        assert!(Coverage::shapes(Vec::new()).is_none());
+    fn no_area_covers_nothing() {
+        assert!(Coverage::area(Vec::new(), vec![square(0.0, 40.0, 20.0)]).is_none());
     }
 
     #[tokio::test]
-    async fn a_leg_touching_the_shapes_is_captured() {
-        let server = motis().await;
-        let store = tempfile::tempdir().expect("tempdir");
-        let around_frankfurt = Coverage::shapes(vec![square(8.0, 49.5, 2.0)]).expect("shapes");
-
-        let captured = capture(&server, store.path())
-            .capture(chrono::Utc::now(), &around_frankfurt)
-            .await
-            .expect("capture");
-
-        assert_eq!((captured.segments, captured.outside), (1, 0));
+    async fn a_leg_within_the_country_is_captured() {
+        assert_eq!(
+            sorted_by(&whole_country(vec![square(8.0, 49.5, 2.0)])).await,
+            (1, 0)
+        );
     }
 
     #[tokio::test]
-    async fn a_leg_inside_the_bounding_box_but_clear_of_the_shapes_is_outside() {
-        let server = motis().await;
-        let store = tempfile::tempdir().expect("tempdir");
-        let elsewhere = Coverage::shapes(vec![square(0.0, 0.0, 1.0)]).expect("shapes");
+    async fn a_leg_leaving_the_country_is_outside() {
+        assert_eq!(
+            sorted_by(&whole_country(vec![square(8.0, 49.5, 1.0)])).await,
+            (0, 1)
+        );
+    }
 
-        let captured = capture(&server, store.path())
-            .capture(chrono::Utc::now(), &elsewhere)
-            .await
-            .expect("capture");
+    #[tokio::test]
+    async fn a_leg_leaving_a_region_but_within_its_country_is_captured() {
+        let frankfurt_in_germany =
+            Coverage::area(vec![square(8.0, 49.5, 1.0)], vec![square(5.0, 47.0, 10.0)])
+                .expect("shapes");
 
-        assert_eq!((captured.segments, captured.outside), (0, 1));
+        assert_eq!(sorted_by(&frankfurt_in_germany).await, (1, 0));
+    }
+
+    #[tokio::test]
+    async fn a_leg_across_two_adjoining_shapes_of_the_country_is_captured() {
+        let two_halves = whole_country(vec![square(8.0, 49.5, 1.0), square(8.0, 50.5, 2.0)]);
+
+        assert_eq!(sorted_by(&two_halves).await, (1, 0));
+    }
+
+    #[tokio::test]
+    async fn a_leg_within_the_country_but_clear_of_the_area_is_outside() {
+        let elsewhere_in_the_country = Coverage::area(
+            vec![square(0.0, 0.0, 1.0)],
+            vec![square(-10.0, -10.0, 80.0)],
+        )
+        .expect("shapes");
+
+        assert_eq!(sorted_by(&elsewhere_in_the_country).await, (0, 1));
     }
 
     #[tokio::test]
@@ -282,7 +332,7 @@ mod tests {
         let store = tempfile::tempdir().expect("tempdir");
         let around_frankfurt = Coverage::bbox(Rect::new(
             Coord { x: 8.0, y: 49.5 },
-            Coord { x: 10.0, y: 51.5 },
+            Coord { x: 9.0, y: 50.5 },
         ));
 
         let captured = capture(&server, store.path())
@@ -297,7 +347,7 @@ mod tests {
     async fn a_poll_counts_its_requests_of_each_kind() {
         let server = motis().await;
         let store = tempfile::tempdir().expect("tempdir");
-        let around_frankfurt = Coverage::shapes(vec![square(8.0, 49.5, 2.0)]).expect("shapes");
+        let around_frankfurt = whole_country(vec![square(8.0, 49.5, 2.0)]);
         let mut capture = capture(&server, store.path());
 
         let first = capture
@@ -323,7 +373,7 @@ mod tests {
     async fn a_poll_asks_for_the_trips_within_its_interval_centred_on_now() {
         let server = motis().await;
         let store = tempfile::tempdir().expect("tempdir");
-        let around_frankfurt = Coverage::shapes(vec![square(8.0, 49.5, 2.0)]).expect("shapes");
+        let around_frankfurt = whole_country(vec![square(8.0, 49.5, 2.0)]);
         let now: DateTime<Utc> = "2026-10-17T12:00:00Z".parse().expect("an instant");
 
         capture(&server, store.path())

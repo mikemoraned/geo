@@ -59,7 +59,9 @@ Decisions taken before starting, as each changes what gets built.
   `SUBURBAN`, almost half of a country-wide response. Confirmed 2026-10-06.
 - **`motis_poll` gains an area mode**: a country and an optional region, such as DE and
   Thuringia. It queries the area's bounding box, from Overture's `division_area`, and keeps the
-  legs touching the area.
+  legs touching the area and lying wholly within its country. Changed on 2026-10-18 from every leg
+  touching the area: the local server routes over one country's OSM extract, and draws a leg
+  straight beyond its border.
 - **A source's id is a UUID v5 of its fields**, as a session's is. Registering a source twice
   writes one row, and a Motis upgrade makes a new source. Confirmed 2026-10-05.
 - **The poller asks the server for its Motis version**, from `serverConfig.motisVersion` in
@@ -352,6 +354,11 @@ maps them into `train_segment_v2`.
       Motis v2.10.2: label `gtfs.de` for the captures of 19–22 July 2026, and label `delfi` for
       that of 25 July, after the server moved to DELFI on 23 July. Derive their legs into
       `train_segment_v2` under each.
+- [ ] Measure `off_track_share` over the day's DE capture: the share of a leg's length lying more
+      than 20 m from every rail segment in the country's Overture extract, sampled every 25 m.
+      `notebooks/motis_capture/germany_delfi-2026-10-10.route-shapes.py` derives it. If any leg
+      within Germany scores above 0, add it to `train_segment_v2`, with the extract's id beside it.
+      Otherwise the poller's own filter, which keeps only legs within the country, is enough.
 - [ ] Remove `train_segment` and `TrainSegmentRowV1` once nothing reads them.
 
 #### Ground truth
