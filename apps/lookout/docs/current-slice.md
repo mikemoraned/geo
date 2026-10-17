@@ -335,9 +335,12 @@ Only after the complete local server is running.
 
 Only after the fixed pass agrees.
 
-- [ ] Measure one `motis_track_area` poll of DE against the local server, and set the interval
+- [-] Measure one `motis_track_area` poll of DE against the local server, and set the interval
       from its duration.
-- [ ] Add a recipe `bronze-poll-local-de` for DE at that interval.
+      Moot on 2026-10-18: DE polls every 10 minutes, as Thuringia does. Each poll's window now
+      spans its interval, so a shorter interval buys only fresher forecasts. The first poll of the
+      day's capture logs its duration.
+- [x] Add a recipe `bronze-poll-local-de` for DE at that interval.
 - [ ] Capture DE for a day. The user runs this.
 
 #### One train_segment version
