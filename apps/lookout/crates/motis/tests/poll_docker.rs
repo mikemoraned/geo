@@ -89,7 +89,7 @@ async fn recent_gps_names_the_area_whose_motis_segments_are_logged_docker() {
         MotisClient::new(&Url::parse(&motis.uri()).expect("a URL")),
         SegmentLog::new(Root::new(store.path()), common::local_source().id()),
         Zoom::default(),
-        "5m".parse().expect("a span"),
+        "10m".parse().expect("a span"),
     );
 
     let seen = near_gps.look(now, &mut conn).await.expect("look");

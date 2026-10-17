@@ -21,7 +21,7 @@ pub struct Capture {
     details: TripDetailsCache,
     log: SegmentLog,
     zoom: Zoom,
-    window_half: Span,
+    poll_interval: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -84,13 +84,13 @@ pub enum CaptureError {
 }
 
 impl Capture {
-    pub fn new(client: MotisClient, log: SegmentLog, zoom: Zoom, window_half: Span) -> Self {
+    pub fn new(client: MotisClient, log: SegmentLog, zoom: Zoom, poll_interval: Span) -> Self {
         Self {
             client,
             details: TripDetailsCache::default(),
             log,
             zoom,
-            window_half,
+            poll_interval,
         }
     }
 
@@ -99,7 +99,7 @@ impl Capture {
         now: DateTime<Utc>,
         coverage: &Coverage,
     ) -> Result<Captured, CaptureError> {
-        let half = self.window_half.time_delta();
+        let half = self.poll_interval.time_delta() / 2;
         let window = now - half..now + half;
         let mut unresolved = Vec::new();
         let mut captured: Vec<TripSegment> = Vec::new();
@@ -182,6 +182,7 @@ fn is_rail(mode: &Mode) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use chrono::TimeDelta;
     use geo_types::{Coord, polygon};
     use medallion::Root;
     use medallion_model::{Feed, MotisSource};
@@ -218,7 +219,7 @@ mod tests {
             MotisClient::new(&source.base_url),
             SegmentLog::new(Root::new(store), source.id()),
             Zoom::default(),
-            "5m".parse().expect("a span"),
+            "10m".parse().expect("a span"),
         )
     }
 
@@ -316,6 +317,39 @@ mod tests {
         };
         assert_eq!(counts(&first), (1, 1));
         assert_eq!(counts(&second), (1, 0), "the trip's details are cached");
+    }
+
+    #[tokio::test]
+    async fn a_poll_asks_for_the_trips_within_its_interval_centred_on_now() {
+        let server = motis().await;
+        let store = tempfile::tempdir().expect("tempdir");
+        let around_frankfurt = Coverage::shapes(vec![square(8.0, 49.5, 2.0)]).expect("shapes");
+        let now: DateTime<Utc> = "2026-10-17T12:00:00Z".parse().expect("an instant");
+
+        capture(&server, store.path())
+            .capture(now, &around_frankfurt)
+            .await
+            .expect("capture");
+
+        let requests = server.received_requests().await.expect("recorded requests");
+        let map_trips = requests
+            .iter()
+            .find(|request| request.url.path() == "/api/v6/map/trips")
+            .expect("a map/trips request");
+        let instant = |name: &str| -> DateTime<Utc> {
+            let (_, value) = map_trips
+                .url
+                .query_pairs()
+                .find(|(key, _)| key == name)
+                .expect(name);
+            DateTime::parse_from_rfc3339(&value)
+                .expect("an RFC 3339 instant")
+                .to_utc()
+        };
+        assert_eq!(
+            (instant("startTime"), instant("endTime")),
+            (now - TimeDelta::minutes(5), now + TimeDelta::minutes(5))
+        );
     }
 
     #[tokio::test]

@@ -22,9 +22,6 @@ pub struct PollArgs {
     /// Time between polls, such as 30s or 10m.
     #[arg(long, default_value = "30s")]
     pub poll_interval: Span,
-    /// Half the width of the window of departures each poll asks about, centred on now.
-    #[arg(long, default_value = "5m")]
-    pub query_window_half: Span,
     /// Motis zoom level (higher adds subway/tram/bus on top of long-distance rail).
     #[arg(long, default_value_t = Zoom::default())]
     pub zoom: Zoom,
@@ -96,7 +93,7 @@ impl Poller {
                 client,
                 SegmentLog::new(root.clone(), source.id()),
                 args.zoom,
-                args.query_window_half,
+                args.poll_interval,
             ),
             interval: args.poll_interval,
             duration: args.poll_duration,
