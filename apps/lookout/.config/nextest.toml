@@ -1,23 +1,23 @@
 # Test naming conventions used by these profiles:
 #   *_docker      → needs a Docker daemon (testcontainers)
 #   *end_to_end*  → hits real external services (needs credentials)
-# The `geo` binary is named rather than matched on a test name, since a name holding `geo`
+# The `geo` binaries are named rather than matched on a test name, since a name holding `geo`
 # is what half the geometry tests are called.
 # The default profile skips end_to_end (no credentials in normal runs) and geo (a checkout
 # carries no silver to check); no-docker additionally skips docker tests; end-to-end and geo
 # run only their own.
 [profile.default]
-default-filter = "not test(/end_to_end/) and not binary_id(crossings::geo)"
+default-filter = "not test(/end_to_end/) and not binary_id(crossings::geo) and not binary_id(session_crossings::geo)"
 status-level = "skip"
 final-status-level = "skip"
 
 [profile.no-docker]
-default-filter = "not test(/end_to_end/) and not test(/docker/) and not binary_id(crossings::geo)"
+default-filter = "not test(/end_to_end/) and not test(/docker/) and not binary_id(crossings::geo) and not binary_id(session_crossings::geo)"
 status-level = "skip"
 final-status-level = "skip"
 
 [profile.geo]
-default-filter = "binary_id(crossings::geo)"
+default-filter = "binary_id(crossings::geo) or binary_id(session_crossings::geo)"
 success-output = "immediate"
 
 [profile.end-to-end]

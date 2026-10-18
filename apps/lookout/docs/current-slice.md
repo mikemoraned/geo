@@ -401,7 +401,7 @@ maps them into `train_segment_v2`.
 - [x] Add a bridge in `crates/session-crossings-py`, as `crates/platform/rerun-py` binds the
       predictor. It runs those steps from Python and returns each as an Arrow table. Test it with
       pytest, and run the tests under `just test-python`.
-- [ ] Add a geo test of real sessions to `session_crossings`, run by `just test-geo`. It reads named
+- [x] Add a geo test of real sessions to `session_crossings`, run by `just test-geo`. It reads named
       cases from a cases file. Each case names a session, a crossing, the passes expected, and why
       the case was chosen. The first case is a session that reverses over a crossing.
 - [ ] Add a notebook that draws those steps for each case, through the bridge. It draws the
