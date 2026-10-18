@@ -30,7 +30,7 @@ pub struct Session {
     pub samples: Vec<Sample>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sample {
     pub t: DateTime<Utc>,
     pub projected: Point<f64>,
@@ -51,36 +51,65 @@ pub fn passes(sessions: &[Session], crossings: &[Crossing], radius: Radius) -> V
     passed
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Near {
+    pub sample: Sample,
+    pub distance_metres: f64,
+    pub visit: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Steps {
+    pub near: Vec<Near>,
+    pub passes: Vec<Pass>,
+}
+
+pub fn steps(
+    session_id: &SessionId,
+    samples: &[Sample],
+    crossing: &Crossing,
+    radius: Radius,
+) -> Steps {
+    let nearby = |sample: &Sample| distance(sample, crossing) <= radius.as_metres();
+    let runs = samples.chunk_by(|a, b| nearby(a) == nearby(b));
+    let visits: Vec<&[Sample]> = runs.filter(|run| nearby(&run[0])).collect();
+    let near: Vec<Near> = visits
+        .iter()
+        .enumerate()
+        .flat_map(|(visit, visit_samples)| {
+            visit_samples.iter().map(move |sample| Near {
+                sample: *sample,
+                distance_metres: distance(sample, crossing),
+                visit,
+            })
+        })
+        .collect();
+    let near_by_visit = near.chunk_by(|a, b| a.visit == b.visit);
+    let passes = near_by_visit
+        .filter_map(|visit| pass_of(session_id, crossing, visit))
+        .collect();
+    Steps { near, passes }
+}
+
 fn passes_of(session: &Session, crossings: &[Crossing], radius: Radius) -> Vec<Pass> {
     let reachable = grown(session.bbox, radius);
     crossings
         .iter()
         .filter(|crossing| contains(&reachable, crossing.crossing.position))
-        .flat_map(|crossing| visits(session, crossing, radius))
+        .flat_map(|crossing| steps(&session.session_id, &session.samples, crossing, radius).passes)
         .collect()
 }
 
-fn visits(session: &Session, crossing: &Crossing, radius: Radius) -> Vec<Pass> {
-    let near = |sample: &Sample| distance(sample, crossing) <= radius.as_metres();
-    session
-        .samples
-        .chunk_by(|a, b| near(a) == near(b))
-        .filter(|run| near(&run[0]))
-        .filter_map(|visit| pass_of(session, crossing, visit))
-        .collect()
-}
-
-fn pass_of(session: &Session, crossing: &Crossing, visit: &[Sample]) -> Option<Pass> {
-    let (distance_metres, nearest) = visit
+fn pass_of(session_id: &SessionId, crossing: &Crossing, visit: &[Near]) -> Option<Pass> {
+    let nearest = visit
         .iter()
-        .map(|sample| (distance(sample, crossing), sample))
-        .min_by(|(a, _), (b, _)| a.total_cmp(b))?;
+        .min_by(|a, b| a.distance_metres.total_cmp(&b.distance_metres))?;
 
     Some(Pass {
-        session_id: session.session_id.clone(),
+        session_id: session_id.clone(),
         crossing_id: crossing.crossing.id.clone(),
-        crossed_at: nearest.t,
-        distance_metres,
+        crossed_at: nearest.sample.t,
+        distance_metres: nearest.distance_metres,
         samples_within: visit.len().try_into().unwrap_or(u32::MAX),
     })
 }
@@ -264,6 +293,58 @@ mod tests {
                 .map(|pass| pass.samples_within)
                 .collect::<Vec<_>>(),
             [3, 1]
+        );
+    }
+
+    #[test]
+    fn the_steps_number_each_near_sample_by_its_visit() {
+        let session = session(vec![
+            sample(0, 0.0),
+            sample(1, 190.0),
+            sample(2, 210.0),
+            sample(3, 400.0),
+            sample(4, 200.0),
+        ]);
+
+        let steps = steps(
+            &session.session_id,
+            &session.samples,
+            &crossing("c", 200.0),
+            Radius::new(50.0),
+        );
+
+        assert_eq!(
+            steps
+                .near
+                .iter()
+                .map(|near| (near.sample.t, near.visit))
+                .collect::<Vec<_>>(),
+            [(at(1), 0), (at(2), 0), (at(4), 1)]
+        );
+        assert!((steps.near[1].distance_metres - 10.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn the_steps_end_in_the_passes_the_matching_records() {
+        let session = session(vec![
+            sample(0, 0.0),
+            sample(1, 200.0),
+            sample(2, 400.0),
+            sample(3, 200.0),
+        ]);
+        let crossing = crossing("c", 200.0);
+
+        let steps = steps(
+            &session.session_id,
+            &session.samples,
+            &crossing,
+            Radius::new(50.0),
+        );
+
+        assert_eq!(steps.passes.len(), 2);
+        assert_eq!(
+            steps.passes,
+            passes(&[session], &[crossing], Radius::new(50.0))
         );
     }
 
