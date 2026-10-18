@@ -91,7 +91,7 @@ establishes.
   alarm, with the outcome, the lead time, and the run's parameters. An alert with no pass following
   within the horizon is a false alarm.
 - **A Motis train is a synthetic session, built inside the run.** It holds a position every 10 s,
-  the recorded sessions' median, along its legs in `train_segment`. Motis results are reported
+  the recorded sessions' median, along its legs in `train_segment_v2`. Motis results are reported
   apart from recorded sessions.
 
 #### Notifications

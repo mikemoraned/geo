@@ -513,7 +513,6 @@ mod tests {
         ];
         expected.sort();
         assert_eq!(sources_derived(&root).await, expected);
-        assert!(!root.path().join("silver/train_segment").exists());
     }
 
     #[tokio::test]

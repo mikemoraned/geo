@@ -132,7 +132,7 @@ def _(mo, read_silver):
         "session_id, seq",
     )
     legs = read_silver(
-        "train_segment",
+        "train_segment_v2",
         """trip_id, route_name, train_number, mode, realtime, departure, arrival,
            CAST(departure_date AS VARCHAR) AS day""",
         "departure",
