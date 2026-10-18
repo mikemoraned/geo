@@ -410,6 +410,16 @@ maps them into `train_segment_v2`.
       and the interpolated point in the notebook too.
       Moot on 2026-10-19: the nearest sample is at most about 5 s off, at 10 s between samples.
       Every instant the capture records from Motis is a whole minute, realtime ones included.
+- [ ] Derive silver `train_session` and `train_session_sample` from bronze `motis_segment_v2`, in
+      `motis_ingest` beside `train_segment_v2`. A train session is one trip, and its samples say
+      where the train was every 10 s. Take each leg's times from its newest capture, as
+      `train_segment_v2` does. Place the train along each leg's shape at constant speed, and at
+      the stop between legs. Give both datasets the columns and partitions of `session` and
+      `session_sample`, with `source_id` and `trip_id` in place of `device_id`. Leave out what
+      only a device reports: `alt`, `acc`, `speed`, `heading`, `started_by`, `gap_seconds`, and
+      `lead_seconds`. Name a train session by a UUID v5 of its source and trip. Draw one train's
+      samples in a notebook, over its route. Later slices replay trains this way, at scale, to
+      evaluate the predictor.
 - [ ] Research how to represent a crossing's discernibility in space and time. Compare how closely
       a real train can revisit a crossing with how uncertain a session's samples leave the train.
       Look for prior art, such as scale space in images. Record the findings before changing the
