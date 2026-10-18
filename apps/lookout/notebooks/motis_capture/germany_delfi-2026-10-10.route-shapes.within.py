@@ -62,11 +62,11 @@ def _():
 @app.cell
 def _(mo):
     mo.md(r"""
-    # Germany: `delfi-2026-10-10.route-shapes`
+    # Germany: `delfi-2026-10-10.route-shapes.within`
 
     Every mainline and regional train in Germany, captured from the local Motis server every 10
     minutes over a day. The import computed rail shapes along OSM track with `route_shapes`, from the
-    DELFI build of 10 October 2026.
+    DELFI build of 10 October 2026. The capture keeps only the legs lying wholly within Germany.
 
     Each step below adds one named query to those before it, and shows what it returns.
     """)
@@ -76,7 +76,7 @@ def _(mo):
 @app.cell
 def _(LineString, gpd, lookout_medallion, pa, pd, polyline):
     MEDALLION_ROOT = lookout_medallion.default_root()
-    LABEL = "delfi-2026-10-10.route-shapes"
+    LABEL = "delfi-2026-10-10.route-shapes.within"
     COUNTRY = "DE"
     POLYLINE_PRECISION = 5
     # Motis encodes each shape as a Google polyline, whose points are WGS 84 latitude and longitude.

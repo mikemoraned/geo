@@ -356,8 +356,9 @@ maps them into `train_segment_v2`.
       `train_segment_v2` under each.
 - [ ] Measure `off_track_share` over the day's DE capture: the share of a leg's length lying more
       than 20 m from every rail segment in the country's Overture extract, sampled every 25 m.
-      `notebooks/motis_capture/germany_delfi-2026-10-10.route-shapes.py` derives it. If any leg
-      within Germany scores above 0, add it to `train_segment_v2`, with the extract's id beside it.
+      `notebooks/motis_capture/germany_delfi-2026-10-10.route-shapes.within.py` derives it. If any
+      leg within Germany scores above 0, add it to `train_segment_v2`, with the extract's id beside
+      it.
       Otherwise the poller's own filter, which keeps only legs within the country, is enough.
 - [ ] Remove `train_segment` and `TrainSegmentRowV1` once nothing reads them.
 

@@ -140,7 +140,7 @@ bronze-poll-transitous duration *args:
 bronze-poll-local-area label duration *args:
     BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --overture-country DE --overture-region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
 
-# Capture every train in Germany from the local Motis server into bronze, every 10 minutes for a duration such as 1d. The label names the DELFI build and the setup, such as delfi-2026-10-10.route-shapes.
+# Capture every train in Germany from the local Motis server into bronze, every 10 minutes for a duration such as 1d. The label names the DELFI build and the setup, such as delfi-2026-10-10.route-shapes.within.
 bronze-poll-local-de label duration *args:
     BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --overture-country DE --poll-interval 10m --poll-duration {{duration}} {{args}}
 
