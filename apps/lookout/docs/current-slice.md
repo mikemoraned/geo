@@ -350,10 +350,13 @@ Only after the fixed pass agrees.
 Next after Motis capture. Bronze stays as written: `motis_segment` keeps its rows, and ingest
 maps them into `train_segment_v2`.
 
-- [ ] Record two sources for the `motis_segment` captures, both the local server, feed `local`, and
+- [x] Record two sources for the `motis_segment` captures, both the local server, feed `local`, and
       Motis v2.10.2: label `gtfs.de` for the captures of 19–22 July 2026, and label `delfi` for
       that of 25 July, after the server moved to DELFI on 23 July. Derive their legs into
       `train_segment_v2` under each.
+      Ingest gives each `motis_segment` row its source by capture date, and deduplicates within
+      each source. A binary committed and then removed recorded the two sources. Each July day
+      derives the same number of legs as in `train_segment`: 1,361, 1,394, 1,835, and 588.
 - [ ] Measure `off_track_share` over the day's DE capture: the share of a leg's length lying more
       than 20 m from every rail segment in the country's Overture extract, sampled every 25 m.
       `notebooks/motis_capture/germany_delfi-2026-10-10.route-shapes.within.py` derives it. If any
