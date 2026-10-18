@@ -33,10 +33,10 @@ Decisions taken before starting, as each changes what gets built.
 
 #### Ground truth
 
-- **A pass per visit, at an interpolated instant.** `match_crossings` keeps one pass per
-  (session, crossing) today, at the nearest sample, which at line speed lies over 100 m off. It
-  instead splits the samples within the match radius into visits, and interpolates each pass's
-  instant between the bracketing samples.
+- **A pass per visit, at the visit's nearest sample.** `match_crossings` kept one pass per
+  (session, crossing), so a session reversing over a crossing passed it once. It instead splits
+  the samples within the match radius into visits, with a pass at each visit's nearest sample.
+  Narrowed on 2026-10-19 from an instant interpolated between the bracketing samples.
 
 #### Motis capture
 
@@ -406,8 +406,10 @@ maps them into `train_segment_v2`.
       the case was chosen. The first case is a session that reverses over a crossing.
 - [x] Add a notebook that draws those steps for each case, through the bridge. It draws the
       session's path, the crossing, the match radius, each visit's samples, and each pass.
-- [ ] Interpolate each pass's instant between the bracketing samples. Draw the bracketing samples
+- [-] Interpolate each pass's instant between the bracketing samples. Draw the bracketing samples
       and the interpolated point in the notebook too.
+      Moot on 2026-10-19: the nearest sample is at most about 5 s off, at 10 s between samples.
+      Every instant the capture records from Motis is a whole minute, realtime ones included.
 - [ ] Research how to represent a crossing's discernibility in space and time. Compare how closely
       a real train can revisit a crossing with how uncertain a session's samples leave the train.
       Look for prior art, such as scale space in images. Record the findings before changing the
