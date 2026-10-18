@@ -404,7 +404,7 @@ maps them into `train_segment_v2`.
 - [x] Add a geo test of real sessions to `session_crossings`, run by `just test-geo`. It reads named
       cases from a cases file. Each case names a session, a crossing, the passes expected, and why
       the case was chosen. The first case is a session that reverses over a crossing.
-- [ ] Add a notebook that draws those steps for each case, through the bridge. It draws the
+- [x] Add a notebook that draws those steps for each case, through the bridge. It draws the
       session's path, the crossing, the match radius, each visit's samples, and each pass.
 - [ ] Interpolate each pass's instant between the bracketing samples. Draw the bracketing samples
       and the interpolated point in the notebook too.
