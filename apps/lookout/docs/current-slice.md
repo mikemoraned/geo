@@ -34,9 +34,9 @@ Decisions taken before starting, as each changes what gets built.
 #### Ground truth
 
 - **A pass per visit, at an interpolated instant.** `match_crossings` keeps one pass per
-  (session, crossing) today, at the nearest fix, which at line speed lies over 100 m off. It
-  instead splits the fixes within the match radius into visits, and interpolates each pass's
-  instant between the bracketing fixes.
+  (session, crossing) today, at the nearest sample, which at line speed lies over 100 m off. It
+  instead splits the samples within the match radius into visits, and interpolates each pass's
+  instant between the bracketing samples.
 
 #### Motis capture
 
@@ -396,7 +396,7 @@ maps them into `train_segment_v2`.
 
 - [x] Record a pass per visit in `crates/session_crossings/src/matching.rs`. Test it on a session
       that reverses over a crossing.
-- [x] Expose the matching's steps from `matching.rs`: the fixes near a crossing, the visits, and
+- [x] Expose the matching's steps from `matching.rs`: the samples near a crossing, the visits, and
       the passes. Build `passes()` from the same steps, so the two cannot drift apart.
 - [x] Add a bridge in `crates/session-crossings-py`, as `crates/platform/rerun-py` binds the
       predictor. It runs those steps from Python and returns each as an Arrow table. Test it with
@@ -405,11 +405,11 @@ maps them into `train_segment_v2`.
       cases from a cases file. Each case names a session, a crossing, the passes expected, and why
       the case was chosen. The first case is a session that reverses over a crossing.
 - [ ] Add a notebook that draws those steps for each case, through the bridge. It draws the
-      session's path, the crossing, the match radius, each visit's fixes, and each pass.
-- [ ] Interpolate each pass's instant between the bracketing fixes. Draw the bracketing fixes and
-      the interpolated point in the notebook too.
+      session's path, the crossing, the match radius, each visit's samples, and each pass.
+- [ ] Interpolate each pass's instant between the bracketing samples. Draw the bracketing samples
+      and the interpolated point in the notebook too.
 - [ ] Research how to represent a crossing's discernibility in space and time. Compare how closely
-      a real train can revisit a crossing with how uncertain a session's fixes leave the train.
+      a real train can revisit a crossing with how uncertain a session's samples leave the train.
       Look for prior art, such as scale space in images. Record the findings before changing the
       matching.
 - [ ] Run `just silver-session-crossings` and `just gold-pack-sessions`, and move
@@ -441,17 +441,17 @@ At the end of the slice, once its features are in.
 
 ### Investigation
 
-#### A pass split by imprecise fixes
+#### A pass split by imprecise samples
 
 Re-deriving `session_crossing` with a pass per visit, on 2026-10-18, gave two sessions passing one
 crossing twice. Session `d4d6e062` reverses at Frankfurt (Main) Hbf, a terminus, and crosses the
-Main out and back, 13 minutes apart. Its fixes report 2–5 m of accuracy, and it is the first geo
+Main out and back, 13 minutes apart. Its samples report 2–5 m of accuracy, and it is the first geo
 test case.
 
 Session `43fffff4`, on 26 July near (50.355, 11.023), passes four crossings twice each, 22 s apart.
-Its fixes report about 1,450 m of accuracy. Their distance from one crossing runs 6,682 m, 234 m,
-588 m, 155 m, and 2,873 m. The middle fix falls outside the 250 m radius, so one approach splits
-into two visits. Fixes that imprecise cannot show whether the train passed the crossing at all.
+Its samples report about 1,450 m of accuracy. Their distance from one crossing runs 6,682 m, 234 m,
+588 m, 155 m, and 2,873 m. The middle sample falls outside the 250 m radius, so one approach splits
+into two visits. Samples that imprecise cannot show whether the train passed the crossing at all.
 
 The visit rule cannot tell such jitter from a real revisit. A real revisit needs the train to leave
 and return, which takes a span of space and time. Where a session's uncertainty exceeds that span,
