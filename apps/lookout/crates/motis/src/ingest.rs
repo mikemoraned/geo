@@ -1,13 +1,12 @@
 use std::ops::Add;
 
+use crate::legacy::legacy_source_id_sql;
 use crate::segment::{NotAPolyline, decode_polyline};
 use chrono::{DateTime, Utc};
 use domain::TrainNumber;
 use geo_types::{LineString, Point};
-use medallion::{Countries, DatasetSpec, Dated, GeoRow, Query, Root, layers};
-use medallion_model::{
-    MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, TrainSegmentRowV1, TrainSegmentRowV2,
-};
+use medallion::{Countries, DatasetSpec, GeoRow, Query, Root, layers};
+use medallion_model::{MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, TrainSegmentRowV2};
 use serde::{Deserialize, Serialize};
 
 const LEG_COLUMNS: &str = "trip_id, route_name, train_number, agency_id, agency_name, mode,
@@ -65,24 +64,6 @@ struct Leg {
     polyline: String,
 }
 
-impl From<&Leg> for TrainSegmentRowV1 {
-    fn from(leg: &Leg) -> Self {
-        Self {
-            trip_id: leg.trip_id.clone(),
-            route_name: leg.route_name.clone(),
-            train_number: leg.train_number,
-            agency_id: leg.agency_id.clone(),
-            agency_name: leg.agency_name.clone(),
-            mode: leg.mode.clone(),
-            route_color: leg.route_color.clone(),
-            realtime: leg.realtime,
-            from_stop_id: leg.from_stop_id.clone(),
-            departure: leg.departure,
-            arrival: leg.arrival,
-        }
-    }
-}
-
 impl TryFrom<&Leg> for TrainSegmentRowV2 {
     type Error = IngestError;
 
@@ -117,38 +98,46 @@ struct Captured {
 
 pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOutcome, IngestError> {
     let query = Query::new(root.clone());
+    let legacy_source_id = legacy_source_id_sql("captured_at");
+    let captures = [
+        captured(
+            &query,
+            MOTIS_SEGMENT,
+            &format!("{legacy_source_id} AS source_id"),
+            &format!("{legacy_source_id}, trip_id, from_stop_id, departure"),
+        )
+        .await?,
+        captured(
+            &query,
+            MOTIS_SEGMENT_V2,
+            "source_id",
+            "source_id, trip_id, from_stop_id, departure",
+        )
+        .await?,
+    ];
+
     let mut outcome = IngestOutcome::default();
-
-    if let Some(captured) = captured(
-        &query,
-        MOTIS_SEGMENT,
-        "CAST(NULL AS VARCHAR) AS source_id",
-        "trip_id, from_stop_id, departure",
-    )
-    .await?
-    {
-        outcome = outcome
-            + derive(root, countries, captured, |leg| {
-                Ok(TrainSegmentRowV1::from(leg))
-            })
-            .await?;
+    let mut placed: Vec<GeoRow<TrainSegmentRowV2, LineString<f64>>> = Vec::new();
+    for captured in captures.into_iter().flatten() {
+        outcome.read += captured.read;
+        outcome.deduped += captured.legs.len();
+        for leg in &captured.legs {
+            let line = decode_polyline(&leg.polyline)?;
+            match countries.containing(starts_from(&line)) {
+                Some(country) => placed.push(GeoRow {
+                    row: TrainSegmentRowV2::try_from(leg)?,
+                    geometry: line,
+                    country,
+                }),
+                None => outcome.unplaceable += 1,
+            }
+        }
     }
 
-    if let Some(captured) = captured(
-        &query,
-        MOTIS_SEGMENT_V2,
-        "source_id",
-        "source_id, trip_id, from_stop_id, departure",
-    )
-    .await?
-    {
-        outcome = outcome
-            + derive(root, countries, captured, |leg| {
-                TrainSegmentRowV2::try_from(leg)
-            })
-            .await?;
-    }
-
+    outcome.partitions = medallion::write_geo_rows(root, &placed)
+        .await?
+        .partitions
+        .written;
     Ok(outcome)
 }
 
@@ -181,40 +170,6 @@ async fn captured(
     Ok(Some(Captured { read, legs }))
 }
 
-async fn derive<R>(
-    root: &Root,
-    countries: &impl Countries,
-    captured: Captured,
-    row: impl Fn(&Leg) -> Result<R, IngestError>,
-) -> Result<IngestOutcome, IngestError>
-where
-    R: Dated<Layer = layers::Silver> + Clone,
-{
-    let mut outcome = IngestOutcome {
-        read: captured.read,
-        deduped: captured.legs.len(),
-        ..IngestOutcome::default()
-    };
-    let mut placed: Vec<GeoRow<R, LineString<f64>>> = Vec::new();
-    for leg in &captured.legs {
-        let line = decode_polyline(&leg.polyline)?;
-        match countries.containing(starts_from(&line)) {
-            Some(country) => placed.push(GeoRow {
-                row: row(leg)?,
-                geometry: line,
-                country,
-            }),
-            None => outcome.unplaceable += 1,
-        }
-    }
-
-    outcome.partitions = medallion::write_geo_rows(root, &placed)
-        .await?
-        .partitions
-        .written;
-    Ok(outcome)
-}
-
 fn starts_from(line: &LineString<f64>) -> Point<f64> {
     line.points()
         .next()
@@ -235,6 +190,7 @@ mod tests {
     use url::Url;
 
     use super::*;
+    use crate::legacy::legacy_source;
 
     struct Everywhere(Country);
 
@@ -540,23 +496,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_capture_from_before_sources_were_recorded_is_derived_into_the_first_version() {
+    async fn a_capture_from_before_sources_were_recorded_is_derived_under_its_legacy_source() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        append_legacy(&root, Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap()).await;
+        let before_delfi = Utc.with_ymd_and_hms(2026, 7, 21, 14, 0, 0).unwrap();
+        let after_delfi = Utc.with_ymd_and_hms(2026, 7, 25, 14, 0, 0).unwrap();
+        append_legacy(&root, before_delfi).await;
+        append_legacy(&root, after_delfi).await;
 
         let outcome = ingest(&root, &germany()).await.expect("ingest");
 
-        assert_eq!(outcome.deduped, fixture().len());
-        assert_eq!(
-            derived_from(&root, medallion_model::TRAIN_SEGMENT)
-                .await
-                .count("SELECT COUNT(*) AS count FROM derived")
-                .await
-                .expect("count"),
-            fixture().len() as i64
-        );
-        assert!(!root.path().join("silver/train_segment_v2").exists());
+        assert_eq!(outcome.deduped, fixture().len() * 2);
+        let mut expected = vec![
+            legacy_source(before_delfi).id().to_string(),
+            legacy_source(after_delfi).id().to_string(),
+        ];
+        expected.sort();
+        assert_eq!(sources_derived(&root).await, expected);
+        assert!(!root.path().join("silver/train_segment").exists());
     }
 
     #[tokio::test]

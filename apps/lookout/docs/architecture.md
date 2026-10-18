@@ -32,7 +32,7 @@ produces, so any of them can be re-run over unchanged input to the same result.
 
 ```
 bronze telemetry     ──sessionise──────▶ session, session_sample
-bronze motis log     ──motis_ingest────▶ train_segment
+bronze motis log     ──motis_ingest────▶ train_segment_v2
 bronze overture      ──notebook────────▶ water_crossing
 session + crossings  ──match_crossings─▶ session_crossing
 water_crossing       ──pack_crossings──▶ gold crossings.pointset, crossings.json

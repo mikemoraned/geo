@@ -163,8 +163,11 @@ present writes nothing. Bronze `motis_segment_v2` holds the captured legs, parti
 `polled_date`, with one file per poll. A row is one leg seen in one poll: the trip, its train
 number and agency, the mode, both stops, the scheduled and realtime times, and the polyline.
 
-The earlier captures in `motis_segment` carry no source. Silver `train_segment_v2` derives from
-`motis_segment_v2`, and `train_segment` from `motis_segment`.
+The earlier captures in `motis_segment` carry no source. Two sources stand for them, both the
+local server at Motis v2.10.2 with no area: one labelled `gtfs.de`, for the captures before the
+server moved to DELFI on 23 July 2026, and one labelled `delfi`, for those from then on. Silver
+`train_segment_v2` derives from both capture datasets, and gives each earlier capture the source
+its capture date falls under.
 
 ## Two server quirks a caller has to absorb
 

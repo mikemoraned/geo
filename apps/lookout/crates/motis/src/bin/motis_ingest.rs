@@ -6,7 +6,7 @@ use motis::ingest::ingest;
 use transport::countries::CountryAreas;
 
 #[derive(Parser)]
-#[command(about = "Derive the silver train_segment dataset from the bronze motis capture log")]
+#[command(about = "Derive the silver train_segment_v2 dataset from the bronze motis capture logs")]
 struct Args {
     #[command(flatten)]
     medallion: MedallionArgs,
