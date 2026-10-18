@@ -398,7 +398,7 @@ maps them into `train_segment_v2`.
       that reverses over a crossing.
 - [x] Expose the matching's steps from `matching.rs`: the fixes near a crossing, the visits, and
       the passes. Build `passes()` from the same steps, so the two cannot drift apart.
-- [ ] Add a bridge in `crates/session-crossings-py`, as `crates/platform/rerun-py` binds the
+- [x] Add a bridge in `crates/session-crossings-py`, as `crates/platform/rerun-py` binds the
       predictor. It runs those steps from Python and returns each as an Arrow table. Test it with
       pytest, and run the tests under `just test-python`.
 - [ ] Add a geo test of real sessions to `session_crossings`, run by `just test-geo`. It reads named

@@ -101,6 +101,7 @@ test-doc:
 test-python:
     uv run --directory crates/medallion-py pytest -q
     uv run --directory crates/platform/rerun-py pytest -q
+    uv run --directory crates/session-crossings-py pytest -q
     uv run --directory notebooks/water_crossings pytest -q
 
 # Tests against real services, in release, with credentials from 1Password. Hits the real redis.

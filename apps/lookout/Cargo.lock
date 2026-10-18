@@ -7183,6 +7183,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "session-crossings-py"
+version = "0.1.0"
+dependencies = [
+ "arrow 57.3.1",
+ "chrono",
+ "domain",
+ "geo-types",
+ "medallion",
+ "pyo3",
+ "pyo3-arrow",
+ "session_crossings",
+]
+
+[[package]]
 name = "session_crossings"
 version = "0.1.0"
 dependencies = [
