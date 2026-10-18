@@ -7205,6 +7205,8 @@ dependencies = [
  "domain",
  "geo 0.32.0",
  "geo-types",
+ "geojson",
+ "libtest-mimic",
  "medallion",
  "medallion-model",
  "recorder",

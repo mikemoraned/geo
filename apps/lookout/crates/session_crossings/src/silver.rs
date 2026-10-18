@@ -134,13 +134,10 @@ async fn matched_in(
     country: Country,
     radius: Radius,
 ) -> Result<(MatchOutcome, Vec<SessionCrossingRow>), CrossingError> {
-    let query = Query::new(root.clone());
-    for (dataset, table) in READ {
-        query.register_of_country(dataset, table, country).await?;
-    }
-
-    let sessions = sessions_in(&query).await?;
-    let crossings = crossings_in(&query).await?;
+    let Inputs {
+        sessions,
+        crossings,
+    } = inputs(root, country).await?;
     let matched = passes(&sessions, &crossings, radius);
 
     let devices: HashMap<&SessionId, &DeviceId> = sessions
@@ -165,6 +162,23 @@ async fn matched_in(
         },
         rows,
     ))
+}
+
+#[derive(Debug, Clone)]
+pub struct Inputs {
+    pub sessions: Vec<Session>,
+    pub crossings: Vec<Crossing>,
+}
+
+pub async fn inputs(root: &Root, country: Country) -> Result<Inputs, CrossingError> {
+    let query = Query::new(root.clone());
+    for (dataset, table) in READ {
+        query.register_of_country(dataset, table, country).await?;
+    }
+    Ok(Inputs {
+        sessions: sessions_in(&query).await?,
+        crossings: crossings_in(&query).await?,
+    })
 }
 
 const READ: [(DatasetSpec<layers::Silver>, &str); 3] = [
