@@ -470,33 +470,6 @@ def _(gpd, lonboard, mo, shape_of, straight_table):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ### Where the straight shapes come from
-
-    The local import routes along `germany.osm.pbf`, which holds no track beyond the border. A
-    segment with a stop abroad can be routed only as far as German track reaches. One whose foreign
-    stop lies far from that track is drawn straight from end to end. The table counts segments by
-    whether a stop lies abroad, and whether the shape has only its two endpoints. A stop is abroad
-    when its DELFI id does not start with `de:`.
-    """)
-    return
-
-
-@app.cell
-def _(pd, segment_straightness):
-    _abroad = ~(
-        segment_straightness["from_stop_id"].str.contains("_de:")
-        & segment_straightness["to_stop_id"].str.contains("_de:")
-    )
-    pd.crosstab(
-        _abroad.rename("a stop abroad"),
-        (segment_straightness["points"] == 2).rename("straight, 2 points"),
-    ).rename(columns=str, index=str)
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
     ## Distance from track
 
     `longest_edge_share` reads a shape's own geometry, and cannot tell a straight line drawn because
@@ -579,10 +552,6 @@ def _(METRIC_CRS, gpd, np, pd, rail_tracks, shapely):
 @app.cell
 def _(off_track_share, segment_straightness, shape_of):
     segment_track = segment_straightness.assign(
-        abroad=~(
-            segment_straightness["from_stop_id"].str.contains("_de:")
-            & segment_straightness["to_stop_id"].str.contains("_de:")
-        ),
         off_track_share=off_track_share(
             shape_of(segment_straightness["polyline"])
         ),
@@ -637,8 +606,8 @@ def _(mo):
     mo.md(r"""
     ### The two measures, segment by segment
 
-    One dot per segment, with a stop abroad in magenta. Many short segments on straight track score
-    high on `longest_edge_share`, and every one of them scores 0 on `off_track_share`.
+    One dot per segment. Many short segments on straight track score high on `longest_edge_share`,
+    and every one of them scores 0 on `off_track_share`.
     """)
     return
 
@@ -646,27 +615,20 @@ def _(mo):
 @app.cell
 def _(plt, segment_track):
     _fig, _ax = plt.subplots(figsize=(6, 4.5))
-    for _abroad, _colour, _label in (
-        (False, "#2a78d6", "both stops in Germany"),
-        (True, "#e87ba4", "a stop abroad"),
-    ):
-        _segments = segment_track[segment_track["abroad"] == _abroad]
-        _ax.scatter(
-            _segments["longest_edge_share"],
-            _segments["off_track_share"],
-            s=24,
-            color=_colour,
-            edgecolors="white",
-            linewidths=0.8,
-            label=_label,
-            zorder=3,
-        )
+    _ax.scatter(
+        segment_track["longest_edge_share"],
+        segment_track["off_track_share"],
+        s=24,
+        color="#2a78d6",
+        edgecolors="white",
+        linewidths=0.8,
+        zorder=3,
+    )
     _ax.set_xlabel("longest_edge_share")
     _ax.set_ylabel("off_track_share")
     _ax.grid(color="#e4e3df", linewidth=0.8, zorder=0)
     for _side in ("top", "right"):
         _ax.spines[_side].set_visible(False)
-    _ax.legend(frameon=False, loc="upper left")
     _fig.tight_layout()
     _fig
     return
