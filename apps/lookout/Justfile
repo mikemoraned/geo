@@ -122,11 +122,11 @@ bronze-init *args:
 
 # Report what the store holds, layer by layer.
 summarise *args:
-    cargo run -q -p summary --bin summarise -- {{args}}
+    cargo run -q --release -p summary --bin summarise -- {{args}}
 
 # Read the telemetry queue into bronze, with the redis URL from 1Password.
 bronze-record *args:
-    op run --env-file=deploy/lookout.env -- cargo run -p recorder --bin recorder -- {{args}}
+    op run --env-file=deploy/lookout.env -- cargo run --release -p recorder --bin recorder -- {{args}}
 
 # Poll Motis for trips near recent GPS into bronze for a duration such as 1h, redis URL from 1Password.
 bronze-poll-motis duration *args:
@@ -160,7 +160,7 @@ silver-init *args:
 
 # Derive silver `train_segment_v2` from the bronze motis capture logs.
 silver-motis-ingest *args:
-    cargo run -p motis --bin motis_ingest -- {{args}}
+    cargo run --release -p motis --bin motis_ingest -- {{args}}
 
 # Derive silver `session` and `session_sample` from the bronze telemetry.
 silver-sessionise *args:
@@ -181,7 +181,7 @@ silver-session-crossings *args:
 
 # Pack the silver water crossings into gold, and adopt the version written.
 gold-pack-crossings *args:
-    cargo run -p crossings --bin pack_crossings -- --version-file crossings.version {{args}}
+    cargo run --release -p crossings --bin pack_crossings -- --version-file crossings.version {{args}}
 
 export LIBCLANG_PATH := `ls -d "$HOME"/.rustup/toolchains/esp-1.98.1.0/xtensa-esp32-elf-clang/*/esp-clang/lib 2>/dev/null | tail -1`
 
