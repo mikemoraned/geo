@@ -359,12 +359,20 @@ maps them into `train_segment_v2`.
       Ingest gives each `motis_segment` row its source by capture date, and deduplicates within
       each source. A binary committed and then removed recorded the two sources. Each July day
       derives the same number of legs as in `train_segment`: 1,361, 1,394, 1,835, and 588.
-- [ ] Measure `off_track_share` over the day's DE capture: the share of a leg's length lying more
+- [x] Measure `off_track_share` over the day's DE capture: the share of a leg's length lying more
       than 20 m from every rail segment in the country's Overture extract, sampled every 25 m.
       `notebooks/motis_capture/germany_delfi-2026-10-10.route-shapes.within.py` derives it. If any
       leg within Germany scores above 0, add it to `train_segment_v2`, with the extract's id beside
       it.
       Otherwise the poller's own filter, which keeps only legs within the country, is enough.
+      - Measured over half a day, from 00:01 to 10:31 UTC on 18 October, which is enough to show
+        the problem's size. Of 16,076 segments, 65 score above 0. They cover 114 km of 183,050 km,
+        and 46 km of it lies off track. Every high-speed and long-distance segment scores 0.
+      - 50 of the 58 segments scoring over 0.5 are on Chemnitz's tram-train lines, C11 to C15. The
+        rest are RB25 near Saalfeld, the Kandertalbahn, and one RB69/RE7 leg at Augsburg.
+      - A check of these segments on the map found each one follows a sensible real route.
+      - Too few legs score above 0 to justify a column. The poller's filter is enough, and
+        `train_segment_v2` stays as it is.
 - [x] Remove `train_segment` and `TrainSegmentRowV1` once nothing reads them.
 
 #### Ground truth
