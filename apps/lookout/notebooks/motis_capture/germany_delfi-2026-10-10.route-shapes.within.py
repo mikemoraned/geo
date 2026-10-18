@@ -1,5 +1,6 @@
 # /// script
 # dependencies = [
+#     "altair==6.3.0",
 #     "geopandas==1.1.4",
 #     "lonboard==0.16.0",
 #     "lookout-medallion",
@@ -26,10 +27,10 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     import marimo as mo
+    import altair as alt
     import geopandas as gpd
     import lonboard
     import matplotlib.colors as mcolors
-    import matplotlib.dates as mdates
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
@@ -43,12 +44,12 @@ def _():
 
     return (
         LineString,
+        alt,
         apply_continuous_cmap,
         gpd,
         lonboard,
         lookout_medallion,
         mcolors,
-        mdates,
         mo,
         np,
         pa,
@@ -207,31 +208,58 @@ def _(CAPTURE, bronze):
 
 
 @app.cell
-def _(mdates, plt, trains_per_poll):
-    _modes = trains_per_poll.sum().sort_values(ascending=False).index
+def _(alt, trains_per_poll):
+    _modes = list(trains_per_poll.sum().sort_values(ascending=False).index)
     _colours = ["#2a78d6", "#1baf7a", "#eb6834", "#e87ba4"][: len(_modes)]
-    _fig, _ax = plt.subplots(figsize=(11, 3.6))
-    _ax.stackplot(
-        trains_per_poll.index,
-        [trains_per_poll[_mode] for _mode in _modes],
-        labels=_modes,
-        colors=_colours,
-        edgecolor="white",
-        linewidth=1,
+    _wide = (
+        trains_per_poll[_modes]
+        .assign(total=trains_per_poll[_modes].sum(axis=1))
+        .reset_index()
     )
-    _ax.set_ylabel("trains running")
-    _ax.grid(axis="y", color="#e4e3df", linewidth=0.8)
-    _ax.tick_params(colors="#52514e", length=0)
-    for _side in ("top", "right", "left"):
-        _ax.spines[_side].set_visible(False)
-    _ax.spines["bottom"].set_color("#c9c8c2")
-    _ax.legend(loc="upper left", frameon=False, ncols=len(_modes))
-    _ax.set_xlabel("poll (UTC)", color="#52514e")
-    _ax.xaxis.set_major_formatter(
-        mdates.DateFormatter("%d %b %H:%M", tz="UTC")
+    _wide["time"] = _wide["poll"].dt.strftime("%d %b %H:%M UTC")
+    _long = _wide.melt(
+        id_vars=["poll"],
+        value_vars=_modes,
+        var_name="mode",
+        value_name="trains",
     )
-    _fig.tight_layout()
-    _fig
+    _long["order"] = _long["mode"].map(_modes.index)
+    _x = alt.X(
+        "poll:T",
+        title="poll (UTC)",
+        scale=alt.Scale(type="utc"),
+        axis=alt.Axis(format="%d %b %H:%M", grid=False),
+    )
+    _nearest = alt.selection_point(
+        nearest=True, on="pointerover", fields=["poll"], empty=False
+    )
+    _areas = (
+        alt.Chart(_long)
+        .mark_area(stroke="white", strokeWidth=1)
+        .encode(
+            x=_x,
+            y=alt.Y("trains:Q", stack=True, title="trains running"),
+            color=alt.Color(
+                "mode:N",
+                scale=alt.Scale(domain=_modes, range=_colours),
+                legend=alt.Legend(orient="top", title=None),
+            ),
+            order=alt.Order("order:Q"),
+        )
+    )
+    _rule = (
+        alt.Chart(_wide)
+        .mark_rule(color="#52514e")
+        .encode(
+            x=_x,
+            opacity=alt.condition(_nearest, alt.value(1), alt.value(0)),
+            tooltip=[alt.Tooltip("time:N", title="poll")]
+            + [alt.Tooltip(f"{_mode}:Q") for _mode in _modes]
+            + [alt.Tooltip("total:Q")],
+        )
+        .add_params(_nearest)
+    )
+    (_areas + _rule).properties(width="container", height=280)
     return
 
 
