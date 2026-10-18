@@ -113,7 +113,7 @@ def _(LineString, gpd, lookout_medallion, pa, pd, polyline):
             crs=POLYLINE_CRS,
         )
 
-    return METRIC_CRS, bronze, shape_of
+    return METRIC_CRS, POLYLINE_CRS, POLYLINE_PRECISION, bronze, shape_of
 
 
 @app.cell
@@ -277,6 +277,76 @@ def _(CAPTURE, bronze):
 @app.cell
 def _(mo):
     mo.md(r"""
+    ### Legs without a shape
+
+    A line needs two distinct points. With `route_shapes`, a leg's polyline can decode to fewer, and
+    GEOS refuses to draw it. `short_shapes` holds every such leg the capture saw, with its two stops
+    drawn below. The silver derivation runs these legs straight between their stops.
+    """)
+    return
+
+
+@app.cell
+def _(
+    POLYLINE_CRS,
+    POLYLINE_PRECISION,
+    SOURCE,
+    bronze,
+    gpd,
+    lonboard,
+    mo,
+    pd,
+    polyline,
+):
+    _legs = bronze(
+        """
+        SELECT DISTINCT route_name, mode, from_stop_id, from_lat, from_lon,
+               to_stop_id, to_lat, to_lon, scheduled_departure, polyline
+        FROM motis_segment_v2 JOIN source USING (source_id)
+        """,
+        SOURCE,
+    ).to_pandas()
+    short_shapes = _legs[
+        _legs["polyline"].map(
+            lambda line: len(set(polyline.decode(line, POLYLINE_PRECISION)))
+        )
+        < 2
+    ].reset_index(drop=True)
+    _stops = pd.concat(
+        [
+            short_shapes[
+                ["route_name", "from_stop_id", "from_lon", "from_lat"]
+            ].set_axis(["route_name", "stop_id", "lon", "lat"], axis=1),
+            short_shapes[
+                ["route_name", "to_stop_id", "to_lon", "to_lat"]
+            ].set_axis(["route_name", "stop_id", "lon", "lat"], axis=1),
+        ]
+    )
+    mo.vstack(
+        [
+            short_shapes.drop(columns="polyline"),
+            lonboard.Map(
+                lonboard.ScatterplotLayer.from_geopandas(
+                    gpd.GeoDataFrame(
+                        _stops[["route_name", "stop_id"]],
+                        geometry=gpd.points_from_xy(
+                            _stops["lon"], _stops["lat"]
+                        ),
+                        crs=POLYLINE_CRS,
+                    ),
+                    get_fill_color=[232, 123, 164],
+                    radius_units="pixels",
+                    get_radius=6,
+                )
+            ),
+        ]
+    )
+    return (short_shapes,)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
     ### Every segment, by trains seen
 
     Colour runs from yellow, for a segment one train used, to dark red, for the busiest, on a log
@@ -296,11 +366,15 @@ def _(
     mo,
     plt,
     shape_of,
+    short_shapes,
 ):
     _segments = bronze(
         "SELECT mode, from_stop_id, to_stop_id, trains, routes, polyline FROM segment",
         SEGMENT,
     ).to_pandas()
+    _segments = _segments[
+        ~_segments["polyline"].isin(short_shapes["polyline"])
+    ].reset_index(drop=True)
     _norm = mcolors.LogNorm(vmin=1, vmax=max(_segments["trains"].max(), 2))
     _cmap = mcolors.LinearSegmentedColormap.from_list(
         "trains", plt.get_cmap("YlOrRd")([0.3, 1.0])
@@ -358,11 +432,22 @@ def _(METRIC_CRS, gpd, np, pd, shapely):
 
 
 @app.cell
-def _(METRIC_CRS, SEGMENT, bronze, longest_edge_share, shape_of, shapely):
+def _(
+    METRIC_CRS,
+    SEGMENT,
+    bronze,
+    longest_edge_share,
+    shape_of,
+    shapely,
+    short_shapes,
+):
     _segments = bronze(
         "SELECT mode, from_stop_id, to_stop_id, trains, routes, polyline FROM segment",
         SEGMENT,
     ).to_pandas()
+    _segments = _segments[
+        ~_segments["polyline"].isin(short_shapes["polyline"])
+    ].reset_index(drop=True)
     _shapes = shape_of(_segments["polyline"])
     segment_straightness = _segments.assign(
         points=shapely.get_num_coordinates(_shapes),
