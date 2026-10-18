@@ -394,9 +394,20 @@ maps them into `train_segment_v2`.
 
 #### Ground truth
 
-- [ ] Record a pass per visit in `crates/session_crossings/src/matching.rs`. Test it on a session
+- [x] Record a pass per visit in `crates/session_crossings/src/matching.rs`. Test it on a session
       that reverses over a crossing.
-- [ ] Interpolate each pass's instant between the bracketing fixes.
+- [ ] Expose the matching's steps from `matching.rs`: the fixes near a crossing, the visits, and
+      the passes. Build `passes()` from the same steps, so the two cannot drift apart.
+- [ ] Add a bridge in `crates/session-crossings-py`, as `crates/platform/rerun-py` binds the
+      predictor. It runs those steps from Python and returns each as an Arrow table. Test it with
+      pytest, and run the tests under `just test-python`.
+- [ ] Add a geo test of real sessions to `session_crossings`, run by `just test-geo`. It reads named
+      cases from a cases file. Each case names a session, a crossing, the passes expected, and why
+      the case was chosen. The first case is a session that reverses over a crossing.
+- [ ] Add a notebook that draws those steps for each case, through the bridge. It draws the
+      session's path, the crossing, the match radius, each visit's fixes, and each pass.
+- [ ] Interpolate each pass's instant between the bracketing fixes. Draw the bracketing fixes and
+      the interpolated point in the notebook too.
 - [ ] Run `just silver-session-crossings` and `just gold-pack-sessions`, and move
       `sessions.version`.
 
