@@ -108,6 +108,20 @@ Germany, 417 rail legs were kept and 18 fell outside. In one poll of Thuringia, 
 Testing every polyline against a detailed outline is slow unless the outline is indexed. For one
 poll of Thuringia in a release build, the unindexed test takes 54 s and the indexed one 0.1–0.25 s.
 
+## A leg's shape can lack a second point
+
+With `route_shapes`, a leg's polyline can decode to a single point, the start of the leg. One poll
+of Germany held such a leg: two stops 120 m apart at Niebüll, seven minutes apart in the timetable.
+
+The encoding's precision does not cause it. Precision 5 resolves about a metre, and the two stops
+lie about 185 steps apart. The encoding keeps a repeated point as a zero step, so it never merges
+points either. The server emits the one point.
+
+A line of one point is not a valid geometry, and GEOS refuses to read one. The capture keeps the
+polyline as it arrived. Deriving silver, a leg whose shape has fewer than two distinct points takes
+the straight line between its two stops. A leg whose stops share one position has no line at all,
+and is counted rather than written.
+
 ## Train number and agency need a second call
 
 `map/trips` carries neither. Its `TripInfo` exposes `routeShortName` — the bare line, `"55"`

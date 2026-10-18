@@ -4,13 +4,14 @@ use crate::legacy::legacy_source_id_sql;
 use crate::segment::{NotAPolyline, decode_polyline};
 use chrono::{DateTime, Utc};
 use domain::TrainNumber;
-use geo_types::{LineString, Point};
+use geo_types::{Coord, LineString, Point};
 use medallion::{Countries, DatasetSpec, GeoRow, Query, Root, layers};
 use medallion_model::{MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, TrainSegmentRowV2};
 use serde::{Deserialize, Serialize};
 
 const LEG_COLUMNS: &str = "trip_id, route_name, train_number, agency_id, agency_name, mode,
-    route_color, realtime, from_stop_id, departure, arrival, polyline";
+    route_color, realtime, from_stop_id, from_lat, from_lon, to_lat, to_lon, departure, arrival,
+    polyline";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct IngestOutcome {
@@ -18,6 +19,8 @@ pub struct IngestOutcome {
     pub deduped: usize,
     pub partitions: usize,
     pub unplaceable: usize,
+    pub shapeless: usize,
+    pub shape_corrected: usize,
 }
 
 impl Add for IngestOutcome {
@@ -29,6 +32,8 @@ impl Add for IngestOutcome {
             deduped: self.deduped + other.deduped,
             partitions: self.partitions + other.partitions,
             unplaceable: self.unplaceable + other.unplaceable,
+            shapeless: self.shapeless + other.shapeless,
+            shape_corrected: self.shape_corrected + other.shape_corrected,
         }
     }
 }
@@ -57,6 +62,10 @@ struct Leg {
     route_color: Option<String>,
     realtime: bool,
     from_stop_id: Option<String>,
+    from_lat: f64,
+    from_lon: f64,
+    to_lat: f64,
+    to_lon: f64,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     departure: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
@@ -122,7 +131,17 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
         outcome.read += captured.read;
         outcome.deduped += captured.legs.len();
         for leg in &captured.legs {
-            let line = decode_polyline(&leg.polyline)?;
+            let line = match shape_of(leg)? {
+                Shape::Captured(line) => line,
+                Shape::Corrected(line) => {
+                    outcome.shape_corrected += 1;
+                    line
+                }
+                Shape::Missing => {
+                    outcome.shapeless += 1;
+                    continue;
+                }
+            };
             match countries.containing(starts_from(&line)) {
                 Some(country) => placed.push(GeoRow {
                     row: TrainSegmentRowV2::try_from(leg)?,
@@ -168,6 +187,37 @@ async fn captured(
         ))
         .await?;
     Ok(Some(Captured { read, legs }))
+}
+
+enum Shape {
+    Captured(LineString<f64>),
+    Corrected(LineString<f64>),
+    Missing,
+}
+
+fn shape_of(leg: &Leg) -> Result<Shape, NotAPolyline> {
+    let line = decode_polyline(&leg.polyline)?;
+    if has_two_distinct_points(&line) {
+        return Ok(Shape::Captured(line));
+    }
+    let from = Coord {
+        x: leg.from_lon,
+        y: leg.from_lat,
+    };
+    let to = Coord {
+        x: leg.to_lon,
+        y: leg.to_lat,
+    };
+    Ok(match from != to {
+        true => Shape::Corrected(LineString::new(vec![from, to])),
+        false => Shape::Missing,
+    })
+}
+
+fn has_two_distinct_points(line: &LineString<f64>) -> bool {
+    line.0
+        .first()
+        .is_some_and(|first| line.0.iter().any(|coord| coord != first))
 }
 
 fn starts_from(line: &LineString<f64>) -> Point<f64> {
@@ -378,6 +428,115 @@ mod tests {
         let batches = geometry_batches(&root).await;
         assert_eq!(first_line(&batches[0], GEOMETRY).len(), expected);
         assert_eq!(first_line(&batches[0], PROJECTED_GEOMETRY).len(), expected);
+    }
+
+    fn shaped(points: &[(f64, f64)]) -> TripSegment {
+        let mut segment = fixture().remove(0);
+        segment.polyline = polyline::encode_coordinates(
+            points.iter().map(|&(x, y)| geo_types::Coord { x, y }),
+            crate::segment::POLYLINE_PRECISION,
+        )
+        .expect("encode");
+        segment
+    }
+
+    fn between_stops(segment: &TripSegment) -> Vec<(f64, f64)> {
+        vec![
+            (segment.from.lon, segment.from.lat),
+            (segment.to.lon, segment.to.lat),
+        ]
+    }
+
+    async fn ingest_one(root: &Root, segment: &TripSegment) -> IngestOutcome {
+        log(root)
+            .append(
+                Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
+                std::slice::from_ref(segment),
+                &Map::new(),
+            )
+            .await
+            .expect("append poll");
+        ingest(root, &germany()).await.expect("ingest")
+    }
+
+    async fn line_of_one(segment: &TripSegment) -> (Vec<(f64, f64)>, usize) {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let outcome = ingest_one(&root, segment).await;
+        (
+            first_line(&geometry_batches(&root).await[0], GEOMETRY),
+            outcome.shape_corrected,
+        )
+    }
+
+    fn close(actual: &[(f64, f64)], expected: &[(f64, f64)]) -> bool {
+        actual.len() == expected.len()
+            && actual
+                .iter()
+                .zip(expected)
+                .all(|(a, e)| (a.0 - e.0).abs() < 1e-5 && (a.1 - e.1).abs() < 1e-5)
+    }
+
+    #[tokio::test]
+    async fn a_leg_whose_shape_is_one_point_runs_straight_between_its_stops() {
+        let start = fixture()[0].from.clone();
+        let segment = shaped(&[(start.lon, start.lat)]);
+
+        let (line, corrected) = line_of_one(&segment).await;
+
+        assert!(close(&line, &between_stops(&segment)), "{line:?}");
+        assert_eq!(corrected, 1);
+    }
+
+    #[tokio::test]
+    async fn a_leg_whose_shape_is_empty_runs_straight_between_its_stops() {
+        let segment = shaped(&[]);
+
+        let (line, corrected) = line_of_one(&segment).await;
+
+        assert!(close(&line, &between_stops(&segment)), "{line:?}");
+        assert_eq!(corrected, 1);
+    }
+
+    #[tokio::test]
+    async fn a_leg_whose_shape_repeats_one_point_runs_straight_between_its_stops() {
+        let start = fixture()[0].from.clone();
+        let segment = shaped(&[(start.lon, start.lat), (start.lon, start.lat)]);
+
+        let (line, corrected) = line_of_one(&segment).await;
+
+        assert!(close(&line, &between_stops(&segment)), "{line:?}");
+        assert_eq!(corrected, 1);
+    }
+
+    #[tokio::test]
+    async fn a_leg_with_a_shape_keeps_it_uncorrected() {
+        let segment = fixture().remove(0);
+        let captured: Vec<(f64, f64)> =
+            polyline::decode_polyline(&segment.polyline, crate::segment::POLYLINE_PRECISION)
+                .expect("decode")
+                .coords()
+                .map(|c| (c.x, c.y))
+                .collect();
+
+        let (line, corrected) = line_of_one(&segment).await;
+
+        assert!(close(&line, &captured), "{line:?}");
+        assert_eq!(corrected, 0);
+    }
+
+    #[tokio::test]
+    async fn a_shapeless_leg_between_stops_in_one_place_is_left_out_and_counted() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let mut segment = shaped(&[]);
+        segment.to.lat = segment.from.lat;
+        segment.to.lon = segment.from.lon;
+
+        let outcome = ingest_one(&root, &segment).await;
+
+        assert_eq!((outcome.deduped, outcome.shapeless), (1, 1));
+        assert_eq!(outcome.partitions, 0);
     }
 
     #[tokio::test]

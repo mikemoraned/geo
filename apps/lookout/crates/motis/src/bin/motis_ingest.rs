@@ -35,6 +35,8 @@ async fn main() {
         deduped = outcome.deduped,
         partitions = outcome.partitions,
         unplaceable = outcome.unplaceable,
+        shapeless = outcome.shapeless,
+        shape_corrected = outcome.shape_corrected,
         medallion_root = %root.path().display(),
         "derived train segments"
     );
