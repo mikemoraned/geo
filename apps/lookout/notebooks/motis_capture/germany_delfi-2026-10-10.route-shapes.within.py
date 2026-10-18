@@ -285,7 +285,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(expand_output=True)
 def _(
     SEGMENT,
     apply_continuous_cmap,
