@@ -346,6 +346,23 @@ Only after the fixed pass agrees.
       day's capture logs its duration.
 - [x] Add a recipe `bronze-poll-local-de` for DE at that interval.
 - [ ] Capture DE for a day. The user runs this.
+      - The count of trains per poll peaks at 1,630, at 09:42 UTC on Sunday 18 October: 1,384
+        regional, 191 high-speed, and 55 long-distance. A poll counts every trip running at any
+        point in its 10-minute window. At the poll's instant alone, the count falls to 1,256.
+      - The counts are of the order the published figures imply. No source publishes how many
+        trains run at once, so the comparison is per day:
+        - In 2024, DB Regio ran 20,930 trains a day and DB Fernverkehr 1,518 [1].
+        - DB ran 59.3% of the regional train-km ordered in 2024 [2]. Scaled by that share, every
+          operator together runs about 35,000 regional trains a day. That figure includes S-Bahn
+          trains, which the capture leaves out.
+        - From 00:01 to 10:31 UTC, the capture saw 7,814 regional trips and 474 high-speed and
+          long-distance trips.
+      - No train is counted twice. At the peak poll, 1,384 regional trip ids carry 1,382 distinct
+        pairs of agency and train number.
+      - [1] Deutsche Bahn, *Daten & Fakten 2024*, "Züge/Tag",
+        https://ibir.deutschebahn.com/2024/fileadmin/downloads/DB_DuF_d_2024.pdf
+      - [2] Deutsche Bahn, *Wettbewerbskennzahlen 2024/25*, "Marktanteile im Regionalverkehr",
+        https://www.deutschebahn.com/resource/blob/13583690/400096e0d9ac96425187a689c7a33a6e/Wettbewerbskennzahlen-2024_25-data.pdf
 
 #### One train_segment version
 
