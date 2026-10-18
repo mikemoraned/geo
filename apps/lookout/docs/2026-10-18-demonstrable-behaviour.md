@@ -1,9 +1,10 @@
 # Demonstrable behaviour
 
 *Assessment of 2026-10-18, from the code, tests, notebooks, and Python extensions as they stand,
-three build timings, and published prior art. Nothing described here is built. It records a concept,
-the three uses it serves, the prior art behind it, and what a first demonstration has to measure.
-Whatever survives a first demonstration belongs in a durable doc, and the rest goes stale.*
+three build timings, and published prior art. Nothing described here is built. It records a concept
+and the three uses it serves, with the observability and curation behind them. It also records the
+prior art, and what a first demonstration has to measure. Whatever survives a first demonstration
+belongs in a durable doc, and the rest goes stale.*
 
 How the steps of the real code, run on real data, serve three uses. They find that something is
 wrong, find out why, and explain how the system works. The reader is anyone working on the code or
@@ -33,6 +34,9 @@ Rust, for speed, and no use edits Rust from a notebook.
 The uses hand work to one another. Validation raises an anomaly, and investigation takes it up. A
 surviving option lands in Rust with an example and a check, which validation then runs on every
 commit. Explanation takes up the same example to show the behaviour it pins.
+
+Two concerns serve all three uses. Observability records what a deployed run saw and decided, so its
+code can later be inspected on that input. Curation records why each example and lens was chosen.
 
 ## Why look at the steps
 
@@ -148,6 +152,32 @@ Pimentel et al. found that 24.1% of 1.4 million notebooks ran and 4% reproduced 
 marimo's dependency-ordered cells remove two of the causes they name: hidden state and out-of-order
 execution.
 
+### For observability
+
+| Prior art | What it contributes |
+| --- | --- |
+| Elm's debugger | A session's exact sequence of messages, exported for a bug report and replayed elsewhere |
+| rr | A nondeterministic run recorded once and replayed deterministically, as often as needed |
+| Crux | A core whose side effects are values the shell performs, so its events and effects record a whole run |
+| Stripe's canonical log lines | One wide line per unit of work, holding every field that later questions slice by |
+
+Elm and rr show that a recording of a run's inputs reproduces the run, given a deterministic core.
+Crux gives the core that property here.
+
+### For curation
+
+| Prior art | What it contributes |
+| --- | --- |
+| OSRM's test scenarios | A scenario's map drawn inside the test, under a title stating its intent |
+| Example Mapping | Each example tied to the rule it illustrates, with open questions kept beside them |
+| Datasheets for Datasets | The questions a dataset's documentation answers: motivation, composition, collection, uses, and maintenance |
+| Nygard's architecture decision records | A decision recorded with its context and its consequences |
+| Storybook's docs and Great Expectations' Data Docs | Documentation generated from the stories or expectations themselves, so it stays current |
+| GitHub's GeoJSON maps | A committed GeoJSON file drawn as a map in the browser |
+
+OSRM's scenarios and Example Mapping both keep the reason beside the example. Generated
+documentation keeps the reasons current, since they live in the entries they describe.
+
 ### Across all three
 
 | Prior art | What it contributes |
@@ -179,6 +209,7 @@ The practices this repository already holds select among the prior art.
 | The area cases run through a custom harness | One harness runs every registered example as a named test |
 | Tests are written first | The example the first failing test needs is the first example a notebook shows |
 | Bronze is committed and silver is not | An example runs anywhere, and a lens over silver runs where the store is filled |
+| Device captures are gitignored, since a run of fixes is a movement trace | Recordings of real journeys stay local, and public explanations use Motis trains |
 | Rust already runs in the browser, through a bridge that wasm-pack builds on stable Rust | The fallback route into an exported notebook, on a toolchain already installed |
 | The blog hosts notebooks under `web/static/notebooks`, with their data beside them | An exported notebook, its browser build, and its lens snapshots are hosted the same way |
 
@@ -295,6 +326,36 @@ absence needs the step that dropped the row. The poller counts the legs it drops
 keeps none of them. The demonstration of its area rule returns each dropped leg with the decision
 against it.
 
+### Why each example and lens exists
+
+An example or a lens is chosen for a reason: an anomaly it caught, a boundary it sits on, or a case
+it represents. The reason belongs beside it, where a reader of the test or the notebook finds it.
+The area cases already work this way. Each carries a note. The Mannheim case's reads "Four parallel
+tracks cross the Rhine here on a single bridge over one river body." Elsewhere the reasons are
+missing:
+
+- The Dresden values do not say how they were obtained.
+- The recorded Motis response does not say which server and feed answered it, or when.
+- The capture tests' areas give their reasons only through the tests' names.
+
+An entry in the registry states five things:
+
+| Field | What it states |
+| --- | --- |
+| Rule | The behaviour it illustrates, such as a leg leaving the country falling outside |
+| Reason | Why it was chosen: an anomaly found, a boundary case, or a representative case |
+| Provenance | When it was made, from which data versions, and how its expected values were obtained, such as by eye in the Overture explorer or by an independent calculation |
+| Expectation | What its checks assert |
+| Uses | The tests and notebooks that read it |
+
+A rule with no example, or an example with no rule, then shows as a gap, as in Example Mapping. An
+entry with an area lives in GeoJSON, which GitHub draws as a map. The crate's notebook renders the
+registry, with each entry's reason beside its steps.
+
+The pattern is reference material, and a reference doc states what an entry holds. The entries stay
+beside their data, so each reason changes with its example, rather than in a separate list that
+dates.
+
 ## Where a demonstration runs
 
 Validation and investigation run natively, on the machine holding the store. Explanation runs
@@ -366,12 +427,63 @@ The blog is the host to start with. It needs no server, and it extends how the b
 publishes notebooks. A notebook server earns its upkeep once an explanation needs the store live,
 or more memory than a browser gives.
 
+## Observability and inspectability
+
+Observability records what a run saw and decided, while it runs. Inspectability re-runs the real
+code afterwards, to show why it decided. Demonstrations give inspectability, and a recording gives
+them an input from the field.
+
+The deployments run standalone, in a browser and on the M5Plus, and neither reports to a server.
+Observability here is therefore a recording that a later replay reads, rather than telemetry a
+service collects. Motis feeds the ground truth rather than the deployed system, so its capture needs
+no live watching.
+
+### Recording and replay
+
+A recording holds a run's inputs and its decisions. The inputs are its fixes and its clock. The
+decisions are its predictions, its state transitions, and its notifications.
+
+| Part | Recorded today | How |
+| --- | --- | --- |
+| A phone's fixes | Yes | The recording page sends them over the telemetry wire, into bronze and then silver sessions |
+| The device's fixes | No | Nothing records them. Sentences captured by hand during development seed the test fixtures, with their coordinates replaced, and stay out of git |
+| Predictions, transitions, and notifications | No | None |
+
+The next slice reports each state transition as an event and raises each notification as an effect,
+which is where recording decisions starts. Crux keeps the core's side effects as values for the
+shell to perform. A run's events in and effects out therefore make a complete recording, and
+replaying the events reproduces the effects.
+
+A recording does two things. Replayed through the core, natively and in the browser build, it
+reproduces its recorded decisions or shows where the builds differ. The differences to expect are
+version drift, and the device's f32 arithmetic against the host's f64. A demonstration over the
+recording then shows the steps behind any notification a rider saw.
+
+Each platform records in its own way. The device reports to no server. It keeps its recent events in
+a ring buffer, and writes them out over serial or its Bluetooth link. That buffer is the first
+record of a device journey, its fixes included. The browser offers a recording for download, or
+sends it over the telemetry wire, which needs a new message type for decisions.
+
+Recordings of real journeys stay local, as the device's captures already do, since a run of fixes is
+a movement trace. A public explanation uses a Motis train instead. Its timetable is public, and the
+next slice already builds synthetic sessions from Motis legs.
+
+### Run records for offline derivations
+
+An offline derivation records what it read, what it wrote, and what it dropped, where a question
+needs it. The poller already writes one wide line per poll, with the legs kept and left outside, the
+requests made, and their timings. That line is a canonical log line in Stripe's sense: one line per
+unit of work, holding every field that later questions slice by. Storing the lines, or the dropped
+legs, as data waits for a question that needs them. A lens over a day's capture shows the dropped
+legs only once they are stored.
+
 ## How each use draws on it
 
 | Technique | Validation | Investigation | Explanation |
 | --- | --- | --- | --- |
 | Demonstration | Steps drawn, so an eye catches what no check asked about | The baseline that every option is compared against | The narrative's content, so the story is the code's own |
-| Registered example | Run as a Rust test, with its checks, on every commit | The failing input, taken up by the investigation's notebook | A stable input that a narrative can rely on |
+| Registered example | Run as a Rust test, with its checks, on every commit | The failing input, taken up by the investigation's notebook | A stable input, with the reason it was chosen, that a narrative can rely on |
+| Recording | Replayed through the core, which reproduces its recorded decisions | The input behind a decision that looked wrong, opened as an example | A recorded journey where privacy allows it, and a Motis train otherwise |
 | Check | Asserts on the steps, in Rust | Names the failed assertion and the rows it failed on | Shows, coloured, that each claim of the narrative holds |
 | Snapshot | Approved once by eye on a map, then diffed on every run | The accepted steps, drawn beside the new ones | None |
 | Lens | Scans live data natively, in a notebook of its own, for rows a layer dropped | Frames the anomaly's place and time | Shows a chosen place through every layer, from an exported snapshot |
@@ -487,6 +599,9 @@ recorded session.
 - The time the example harnesses add to `just test-no-docker`.
 - Whether the parameters a demonstration exposes cover the options an investigation wants to try.
 - The lines of Rust per example, and the lines of notebook per step.
+- Whether replaying a recording reproduces its recorded decisions, in the device's build and in the
+  browser's.
+- The size of a journey's recorded events, against the space the device can spare for them.
 - Whether the notebook finds anything the tests miss.
 - The size of each step over a country-wide lens, against the memory of the machine running it.
 
@@ -497,6 +612,12 @@ recorded session.
 - Moving tests to Python. They stay in Rust, for speed.
 - Writing to the store from a demonstration.
 - Profiling a derivation's performance.
+- Evaluating a predictor against the ground truth. A slice of its own covers it, with its own
+  assessment in `2026-08-01-evaluation.md`.
+- Fitness for purpose: whether a criterion is the right one, rather than whether the code meets it.
+- Demonstrations for the product's users, such as the kiosk's sped-up replay of a journey. They
+  serve riders rather than developers, though they share this assessment's components: recordings,
+  replay through the core, and named examples.
 
 ## Approaches considered and rejected
 
@@ -543,6 +664,11 @@ shows a run apart from any narrative.
 **A Python pipeline framework.** Hamilton, Kedro, and Dagster derive the graph from Python
 functions. The derivations here are Rust binaries, so a framework would describe a graph it does not
 run. The idea taken from them is a graph derived from code, here from the dataset registry.
+
+**Server-centric observability.** OpenTelemetry backends, live dashboards, a lineage server, and
+per-request log lines each assume a long-running service to observe. The deployments here run
+standalone, in a browser and on the device. Motis feeds the ground truth rather than the deployed
+system, so its capture needs no live watching.
 
 **A bespoke macro first.** Deferred rather than rejected, until registration by attribute proves
 repetitive or the example's source text is wanted in the notebook.
@@ -622,6 +748,32 @@ Explanation:
   [WebAssembly exports](https://docs.marimo.io/guides/exporting/webassembly_html/), with
   [Pyodide's packages](https://pyodide.org/en/stable/usage/loading-packages.html) — running,
   testing, and publishing a notebook
+
+Observability:
+
+- [The Perfect Bug Report](https://elm-lang.org/news/the-perfect-bug-report) and
+  [Time Travel made Easy](https://elm-lang.org/news/time-travel-made-easy) — a session's messages
+  exported and replayed
+- [Debugging Firefox with rr](https://firefox-source-docs.mozilla.org/contributing/debugging/debugging_firefox_with_rr.html)
+  — a run recorded once and replayed deterministically
+- [crux_core](https://docs.rs/crux_core/) — side effects as values, so the core replays
+- [Fast and flexible observability with canonical log lines](https://stripe.com/blog/canonical-log-lines)
+  — one wide line per unit of work
+
+Curation:
+
+- [OSRM's testing guide](https://github.com/Project-OSRM/osrm-backend/blob/master/docs/testing.md)
+  — a scenario's map drawn inside the test
+- [Example Mapping](https://www.cucumber.io/docs/bdd/example-mapping) — rules, examples, and
+  questions
+- [Datasheets for Datasets](https://arxiv.org/pdf/1803.09010.pdf) (Gebru et al.) — the questions a
+  dataset's documentation answers
+- [Documenting Architecture Decisions](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions)
+  (Nygard, 2011) — a decision with its context and consequences
+- [Data Docs](https://docs.greatexpectations.io/docs/terms/data_docs) — expectations and their
+  results rendered as documentation
+- [There's a map for that](https://github.blog/news-insights/product-news/there-s-a-map-for-that/)
+  — GeoJSON drawn as a map on GitHub
 
 Hosting:
 
@@ -705,6 +857,16 @@ Notebooks themselves:
   (CHI 2019) — the two uses pulling a notebook apart, and recovering the code behind an output
 - [marimo: an open-source reactive notebook for Python](https://www.youtube.com/watch?v=9R2cQygaoxQ)
   (Akshay Agrawal) — a notebook stored as Python and run in dependency order
+
+Observability:
+
+- [Record and replay debugging with "rr"](https://www.youtube.com/watch?v=ytNlefY8PIE) (Robert
+  O'Callahan, linux.conf.au) — recording a run once and debugging it deterministically
+
+Curation:
+
+- [Introducing Example Mapping](https://www.youtube.com/watch?v=VwvrGfWmG_U) — rules, examples,
+  and questions on cards
 
 Hosting:
 
