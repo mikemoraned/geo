@@ -8,7 +8,9 @@ reference data — so it sits beside both rather than inside either.
 ## A crossing is passed when a sample comes near it
 
 The rule is pure distance: a crossing was passed in a session if any sample came within the match
-radius, and the nearest sample says when. It is deliberately simple, with a known failure — a
+radius. Each run of consecutive samples within the radius is one visit, and each visit is one
+pass, so a session that reverses over a crossing passes it twice. The visit's nearest sample says
+when. The rule is deliberately simple, with a known failure — a
 crossing on a line running parallel to the one travelled is within the radius, so it is recorded
 as passed though it never was. Fixing that means matching a session to track rather than to
 points, which is work in its own right.
@@ -47,7 +49,7 @@ not the same claim, so a row stays interpretable after the default changes.
 ## Choosing what a kiosk replays
 
 A session is worth replaying if it passes crossings, since one that passes none shows an empty
-screen for as long as it runs. That is already derived — a row per session per crossing passed —
+screen for as long as it runs. That is already derived — a row per pass —
 so choosing is a count over those rows rather than a second pass over the geometry: keep the
 sessions passing at least so many, take the best few, and write each with the samples that replay
 it.
