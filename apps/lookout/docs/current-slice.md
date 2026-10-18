@@ -45,7 +45,9 @@ Decisions taken before starting, as each changes what gets built.
 - **Each capture version derives its own silver version.** New captures go to `motis_segment_v2`,
   and `train_segment_v2` derives from it, every row naming its source. `motis_segment` stays as
   written, and `train_segment` derives from it with no source. A reader wanting every train reads
-  both. Changed on 2026-10-07 from one silver dataset with an optional source id.
+  both. Changed on 2026-10-07 from one silver dataset with an optional source id. Superseded on
+  2026-10-18 by the group One train_segment version: both capture datasets derive into
+  `train_segment_v2`, the earlier captures under two legacy sources.
 - **The local server is the sampling source, and Transitous checks it.** With rail legs that
   follow the track, the local server covers Germany without loading a volunteer-run service.
   Transitous's shapes and times for the same DELFI trips check that it reaches the Target.
@@ -363,7 +365,7 @@ maps them into `train_segment_v2`.
       leg within Germany scores above 0, add it to `train_segment_v2`, with the extract's id beside
       it.
       Otherwise the poller's own filter, which keeps only legs within the country, is enough.
-- [ ] Remove `train_segment` and `TrainSegmentRowV1` once nothing reads them.
+- [x] Remove `train_segment` and `TrainSegmentRowV1` once nothing reads them.
 
 #### Ground truth
 

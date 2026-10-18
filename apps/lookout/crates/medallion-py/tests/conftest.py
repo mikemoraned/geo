@@ -20,6 +20,9 @@ def train_segment_table(trip_ids, departures, countries):
     rows = len(trip_ids)
     return pa.table(
         {
+            "source_id": pa.array(
+                ["ba47e8c2-43db-51b1-ac4a-22aaef82535d"] * rows, pa.string()
+            ),
             "trip_id": pa.array(trip_ids, pa.string()),
             "route_name": pa.array(["ICE 123"] * rows, pa.string()),
             "train_number": pa.array([123] * rows, pa.uint32()),

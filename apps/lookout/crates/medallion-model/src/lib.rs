@@ -17,8 +17,8 @@ pub use crossing::{
 };
 pub use gers::{GersId, NotAGersId};
 pub use motis::{
-    EmptyTripId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisCaptureRow, MotisSegmentRow, TRAIN_SEGMENT,
-    TRAIN_SEGMENT_V2, TrainSegmentRowV1, TrainSegmentRowV2, TripId,
+    EmptyTripId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisCaptureRow, MotisSegmentRow,
+    TRAIN_SEGMENT_V2, TrainSegmentRowV2, TripId,
 };
 pub use motis_source::{
     Area, Feed, Label, MOTIS_SOURCE, MotisSource, MotisSourceId, MotisSourceRow, MotisVersion,
@@ -35,7 +35,7 @@ pub use telemetry::{
     RAW_SAMPLE, RawSampleRow,
 };
 
-pub const ALL: [DatasetInfo; 15] = [
+pub const ALL: [DatasetInfo; 14] = [
     RAW_SAMPLE.info(),
     GPS_READING.info(),
     ACCEL_READING.info(),
@@ -43,7 +43,6 @@ pub const ALL: [DatasetInfo; 15] = [
     MOTIS_SEGMENT.info(),
     MOTIS_SEGMENT_V2.info(),
     MOTIS_SOURCE.info(),
-    TRAIN_SEGMENT.info(),
     TRAIN_SEGMENT_V2.info(),
     SESSION.info(),
     SESSION_SAMPLE.info(),
@@ -90,7 +89,6 @@ mod tests {
                 "session",
                 "session_crossing",
                 "session_sample",
-                "train_segment",
                 "train_segment_v2",
                 "water_crossing"
             ]
@@ -168,7 +166,6 @@ mod tests {
         check_rows_of::<MotisSegmentRow>();
         check_rows_of::<MotisCaptureRow>();
         check_rows_of::<MotisSourceRow>();
-        check_rows_of::<TrainSegmentRowV1>();
         check_rows_of::<TrainSegmentRowV2>();
         check_rows_of::<SessionRow>();
         check_rows_of::<SessionSampleRow>();
