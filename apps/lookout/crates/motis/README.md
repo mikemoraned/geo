@@ -1,8 +1,9 @@
 # motis
 
 Trains near where a device has been, or across one country or region: poll a Motis server for the
-trips there, keep every answer, and derive one row per scheduled leg from them. `motis_follow_gps`
-polls around recent GPS fixes, and `motis_track_area` polls one Overture country or region.
+trips there, keep every answer, and derive from them one row per scheduled leg and one train
+session per trip. `motis_follow_gps` polls around recent GPS fixes, and `motis_track_area` polls
+one Overture country or region.
 
 [motis.md](../../docs/motis.md) covers what the server and the feed behind it can answer;
 [medallion.md](../../docs/medallion.md) covers the layers the three stages write.
@@ -26,6 +27,28 @@ The **ingest** collapses those to one row per leg, the newest capture winning so
 corrections survive, and decodes each polyline into geometry. A leg is written under the country
 it starts in, since that fixes the zone its projected geometry is measured in; a leg starting
 outside every country the store knows is counted and left unwritten.
+
+## A train as a session
+
+The ingest also derives one train session per trip, from the same collapsed legs. A train session
+is shaped as a recorded session is, so whatever replays a recorded session replays a train too. Its
+samples simulate a device recording on board the train: one every 10 s, as a device
+[sends them](../../docs/telemetry.md).
+
+Each sample's `source` says where its position came from:
+
+- `Stop`: the train at a stop, at a leg's departure or arrival there. A poll states both directly.
+- `Interpolated`: every other sample. Between a departure and the next arrival, the train moves
+  along the leg's shape at the leg's own speed: the shape's length over the time from departure to
+  arrival. Between an arrival and the next departure, it waits at the stop.
+
+A sample falling on a departure or an arrival is one sample, a `Stop`. Each leg's times are its
+newest capture's, realtime where Motis had it. Motis gives them to the whole minute, which bounds
+how closely any sample places the train.
+
+A train session is named by a UUID v5 of its source and its trip, and carries both ids where a
+recorded session carries its device. It leaves out what only a device reports: altitude,
+accuracy, speed, heading, and how the recorder opened the session.
 
 ## What counts as a train
 
