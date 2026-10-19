@@ -410,7 +410,7 @@ maps them into `train_segment_v2`.
       and the interpolated point in the notebook too.
       Moot on 2026-10-19: the nearest sample is at most about 5 s off, at 10 s between samples.
       Every instant the capture records from Motis is a whole minute, realtime ones included.
-- [ ] Derive silver `train_session` and `train_session_sample` from bronze `motis_segment_v2`, in
+- [x] Derive silver `train_session` and `train_session_sample` from bronze `motis_segment_v2`, in
       `motis_ingest` beside `train_segment_v2`. A train session is one trip, and its samples say
       where the train was every 10 s. Take each leg's times from its newest capture, as
       `train_segment_v2` does. Collapse a trip's legs by the stop each leaves from, not by its
@@ -422,9 +422,14 @@ maps them into `train_segment_v2`.
       `session_sample`, with `source_id` and `trip_id` in place of `device_id`. Leave out what
       only a device reports: `alt`, `acc`, `speed`, `heading`, `started_by`, `gap_seconds`, and
       `lead_seconds`. Name a train session by a UUID v5 of its source and trip. Mark each sample's
-      `geometry_source` as `Stop`, at a leg's departure or arrival, or `Interpolated`. Draw one
-      train's samples in a notebook, over its route, coloured by `geometry_source`. Later slices
-      replay trains this way, at scale, to evaluate the predictor.
+      `geometry_source` as `Stop`, at a leg's departure or arrival, or `Interpolated`. Later
+      slices replay trains this way, at scale, to evaluate the predictor.
+- [ ] Make `train_session` readable by a filtered query, before the notebook below. A `WHERE` on
+      a column other than the partition key panics in SedonaDB, at `spatial_filter.rs:526`,
+      because `bbox` is a struct ahead of the geometry.
+      [2026-10-03-sedona-nested-column-panic.md](2026-10-03-sedona-nested-column-panic.md)
+      describes the panic, and the medallion README gives the two ways round it.
+- [ ] Draw one train's samples in a notebook, over its route, coloured by `geometry_source`.
 - [-] Research how to represent a crossing's discernibility in space and time. Compare how closely
       a real train can revisit a crossing with how uncertain a session's samples leave the train.
       Look for prior art, such as scale space in images. Record the findings before changing the
@@ -449,6 +454,22 @@ At the end of the slice, once its features are in.
 - [ ] Take every duration, interval, and age a person writes across `lookout` as a human-readable
       `Span`, such as `30s` or `4h`, as the Motis pollers do. Move `Span` out of `crates/motis` to
       where every crate can reach it.
+- [ ] Give each id in the ingest's `Leg`, in `crates/motis/src/ingest.rs`, a newtype in place of
+      its `String`, as `TripId` is for `trip_id`. That covers `trip_id`, `from_stop_id`, and
+      `agency_id`. Make `mode` an enum of the modes the capture keeps, in place of its `String`.
+      Carry the new types into the rows built from a `Leg`. Drop `route_color` from `Leg` and
+      `TrainSegmentRowV2`, since nothing reads it. Bronze keeps it, as the poll saw it.
+
+#### Optimisation
+
+After Refactoring, once the slice works end to end.
+
+- [ ] Cut the memory `motis_ingest` takes. On the capture to 19 October, it peaked at 7.6 GB
+      and wrote 15 million train session samples in 302 s. Profile it by phase before changing
+      it. Three costs are suspected. Every collapsed leg is held twice, once for segments and
+      once for sessions. Each session's path runs through every sample, held in degrees and
+      projected. Each open partition file buffers a row group of up to a million rows. A path
+      from the legs' shapes would also shrink `train_session`, at 460 MB on disk.
 
 #### Wrap-up
 

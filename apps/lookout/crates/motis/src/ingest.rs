@@ -48,29 +48,51 @@ pub enum IngestError {
     Write(#[from] medallion::TableError),
     #[error("a capture of trip `{trip_id}` names no source")]
     Unsourced { trip_id: String },
+    #[error("a capture names its trip with an empty id")]
+    EmptyTripId,
+    #[error("placing a train: {0}")]
+    Unplaced(#[from] crate::sampling::NoWhereabouts),
+    #[error("projecting a train's sample: {0}")]
+    Projection(#[from] medallion::GeoError),
+    #[error("trip `{trip_id}`: {source}")]
+    InvalidLeg {
+        trip_id: String,
+        #[source]
+        source: crate::sampling::InvalidLeg,
+    },
+    #[error("trip `{trip_id}`: {source}")]
+    InvalidLegs {
+        trip_id: String,
+        #[source]
+        source: crate::sampling::InvalidLegs,
+    },
+    #[error("trip `{trip_id}` sampled to no samples")]
+    NoSamples { trip_id: String },
+    #[error("trip `{trip_id}` has more samples than a u32 can number")]
+    TooManySamples { trip_id: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Leg {
-    source_id: Option<MotisSourceId>,
-    trip_id: String,
-    route_name: Option<String>,
-    train_number: Option<TrainNumber>,
-    agency_id: Option<String>,
-    agency_name: Option<String>,
-    mode: String,
-    route_color: Option<String>,
-    realtime: bool,
-    from_stop_id: Option<String>,
-    from_lat: f64,
-    from_lon: f64,
-    to_lat: f64,
-    to_lon: f64,
+pub(crate) struct Leg {
+    pub(crate) source_id: Option<MotisSourceId>,
+    pub(crate) trip_id: String,
+    pub(crate) route_name: Option<String>,
+    pub(crate) train_number: Option<TrainNumber>,
+    pub(crate) agency_id: Option<String>,
+    pub(crate) agency_name: Option<String>,
+    pub(crate) mode: String,
+    pub(crate) route_color: Option<String>,
+    pub(crate) realtime: bool,
+    pub(crate) from_stop_id: Option<String>,
+    pub(crate) from_lat: f64,
+    pub(crate) from_lon: f64,
+    pub(crate) to_lat: f64,
+    pub(crate) to_lon: f64,
     #[serde(with = "chrono::serde::ts_milliseconds")]
-    departure: DateTime<Utc>,
+    pub(crate) departure: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
-    arrival: DateTime<Utc>,
-    polyline: String,
+    pub(crate) arrival: DateTime<Utc>,
+    pub(crate) polyline: String,
 }
 
 impl TryFrom<&Leg> for TrainSegmentRowV2 {
@@ -100,30 +122,13 @@ impl TryFrom<&Leg> for TrainSegmentRowV2 {
     }
 }
 
-struct Captured {
-    read: usize,
-    legs: Vec<Leg>,
+pub(crate) struct Captured {
+    pub(crate) read: usize,
+    pub(crate) legs: Vec<Leg>,
 }
 
 pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOutcome, IngestError> {
-    let query = Query::new(root.clone());
-    let legacy_source_id = legacy_source_id_sql("captured_at");
-    let captures = [
-        captured(
-            &query,
-            MOTIS_SEGMENT,
-            &format!("{legacy_source_id} AS source_id"),
-            &format!("{legacy_source_id}, trip_id, from_stop_id, departure"),
-        )
-        .await?,
-        captured(
-            &query,
-            MOTIS_SEGMENT_V2,
-            "source_id",
-            "source_id, trip_id, from_stop_id, departure",
-        )
-        .await?,
-    ];
+    let captures = captures(root, "trip_id, from_stop_id, departure").await?;
 
     let mut outcome = IngestOutcome::default();
     let mut placed: Vec<GeoRow<TrainSegmentRowV2, LineString<f64>>> = Vec::new();
@@ -160,6 +165,30 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
     Ok(outcome)
 }
 
+pub(crate) async fn captures(
+    root: &Root,
+    keyed_by: &str,
+) -> Result<[Option<Captured>; 2], IngestError> {
+    let query = Query::new(root.clone());
+    let legacy_source_id = legacy_source_id_sql("captured_at");
+    Ok([
+        captured(
+            &query,
+            MOTIS_SEGMENT,
+            &format!("{legacy_source_id} AS source_id"),
+            &format!("{legacy_source_id}, {keyed_by}"),
+        )
+        .await?,
+        captured(
+            &query,
+            MOTIS_SEGMENT_V2,
+            "source_id",
+            &format!("source_id, {keyed_by}"),
+        )
+        .await?,
+    ])
+}
+
 async fn captured(
     query: &Query,
     dataset: DatasetSpec<layers::Bronze>,
@@ -189,13 +218,13 @@ async fn captured(
     Ok(Some(Captured { read, legs }))
 }
 
-enum Shape {
+pub(crate) enum Shape {
     Captured(LineString<f64>),
     Corrected(LineString<f64>),
     Missing,
 }
 
-fn shape_of(leg: &Leg) -> Result<Shape, NotAPolyline> {
+pub(crate) fn shape_of(leg: &Leg) -> Result<Shape, NotAPolyline> {
     let line = decode_polyline(&leg.polyline)?;
     if has_two_distinct_points(&line) {
         return Ok(Shape::Captured(line));

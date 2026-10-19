@@ -133,6 +133,10 @@ impl NormalisedLegs {
         })
     }
 
+    pub fn departure(&self) -> DateTime<Utc> {
+        self.departure
+    }
+
     pub fn position_at(&self, t: DateTime<Utc>) -> Result<Whereabouts, NoWhereabouts> {
         if self.arrival < t {
             return Err(NoWhereabouts::AfterAllLegs {
