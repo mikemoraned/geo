@@ -429,7 +429,7 @@ maps them into `train_segment_v2`.
       because `bbox` is a struct ahead of the geometry.
       [2026-10-03-sedona-nested-column-panic.md](2026-10-03-sedona-nested-column-panic.md)
       describes the panic, and the medallion README gives the two ways round it.
-- [ ] Draw one train's samples in a notebook, over its route, coloured by `geometry_source`.
+- [x] Draw one train's samples in a notebook, over its route, coloured by `geometry_source`.
 - [-] Research how to represent a crossing's discernibility in space and time. Compare how closely
       a real train can revisit a crossing with how uncertain a session's samples leave the train.
       Look for prior art, such as scale space in images. Record the findings before changing the
