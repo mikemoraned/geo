@@ -426,7 +426,7 @@ maps them into `train_segment_v2`.
       matching.
       Moved on 2026-10-19 to the slice "Evaluation framework with associated Crow Flies predictor
       improvement", which scores each pass, so a split pass scores twice.
-- [ ] Run `just silver-session-crossings` and `just gold-pack-sessions`, and move
+- [x] Run `just silver-session-crossings` and `just gold-pack-sessions`, and move
       `sessions.version`.
 
 #### Refactoring
