@@ -48,6 +48,10 @@ pub enum IngestError {
     Write(#[from] medallion::TableError),
     #[error("a capture of trip `{trip_id}` names no source")]
     Unsourced { trip_id: String },
+    #[error("a capture names the source `{source_id}`, which was never registered")]
+    UnregisteredSource { source_id: MotisSourceId },
+    #[error("reading the registered sources: {0}")]
+    Sources(#[from] crate::source::SourceError),
     #[error("a capture names its trip with an empty id")]
     EmptyTripId,
     #[error("placing a train: {0}")]

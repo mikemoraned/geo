@@ -459,6 +459,10 @@ At the end of the slice, once its features are in.
       `agency_id`. Make `mode` an enum of the modes the capture keeps, in place of its `String`.
       Carry the new types into the rows built from a `Leg`. Drop `route_color` from `Leg` and
       `TrainSegmentRowV2`, since nothing reads it. Bronze keeps it, as the poll saw it.
+- [ ] Store `TrainSessionRow::source_label` as a `Label`, in place of its `String`. Tracing a
+      row's schema deserialises an empty string into each field, and `Label` refuses one, so
+      `medallion` needs a way to trace a checked newtype first. `MotisSourceRow::label` has the
+      same `String` for the same reason.
 
 #### Optimisation
 
@@ -473,6 +477,9 @@ After Refactoring, once the slice works end to end.
 
 #### Wrap-up
 
+- [ ] Finish the six-day capture of Germany, which started on 19 October and ends around 25
+      October. Commit its polls as they accumulate, and its last ones once the poller stops. Then
+      run `just silver-motis-ingest`, so the train sessions cover the whole week.
 - [ ] Add the Motis source to the derivation graph in `docs/architecture.md`.
 - [ ] Fold what holds of `2026-10-12-track-shapes-and-realtime.md` into `docs/motis.md`: the
       `route_shapes` setup, the train-name script, realtime resolution, and the measured import.

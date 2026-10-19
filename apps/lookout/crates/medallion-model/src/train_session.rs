@@ -30,6 +30,7 @@ pub enum GeometrySource {
 pub struct TrainSessionRow {
     pub session_id: SessionId,
     pub source_id: MotisSourceId,
+    pub source_label: Option<String>,
     pub trip_id: TripId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub started_at: DateTime<Utc>,
@@ -179,9 +180,24 @@ mod tests {
             columns::<TrainSessionRow>(),
             swapped::<SessionRow>(
                 &["device_id", "started_by", "gap_seconds", "lead_seconds"],
-                &["source_id", "trip_id"]
+                &["source_id", "source_label", "trip_id"]
             )
         );
+    }
+
+    #[test]
+    fn a_source_without_a_label_is_stored_as_null() {
+        let field = medallion::fields::<TrainSessionRow>()
+            .expect("describe the rows")
+            .into_iter()
+            .find(|field| field.name() == "source_label")
+            .expect("a source_label column");
+
+        assert!(
+            matches!(field.data_type(), DataType::Utf8 | DataType::LargeUtf8),
+            "{field:?}"
+        );
+        assert!(field.is_nullable(), "{field:?}");
     }
 
     #[test]
