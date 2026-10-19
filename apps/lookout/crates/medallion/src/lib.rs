@@ -49,7 +49,7 @@ pub use args::MedallionArgs;
 pub use country::{COUNTRY, Countries, Country, UnknownCountry};
 pub use datafusion::scalar::ScalarValue;
 pub use dataset::{DatasetInfo, DatasetSpec};
-pub use derive::{GeoRow, write_geo_rows, write_rows};
+pub use derive::{GeoRow, GeoRowWriter, write_geo_rows, write_rows};
 pub use geo::{
     GEOMETRY, GeoError, PROJECTED_GEOMETRY, Projector, geo_batch, geometries, projected_wkb_field,
     wkb_column, wkb_field,

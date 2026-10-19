@@ -87,6 +87,8 @@ pub enum TableError {
     GeometryMissing { dataset: &'static str },
     #[error("{dataset} carries no geometry, so its rows cannot be written with it")]
     GeometryUnexpected { dataset: &'static str },
+    #[error("{dataset} names each row uniquely, so its rows are written in one call")]
+    UniqueAcrossWrites { dataset: &'static str },
     #[error("reading the table: {0}")]
     Arrow(#[from] arrow::error::ArrowError),
     #[error("reading the geometry: {0}")]
