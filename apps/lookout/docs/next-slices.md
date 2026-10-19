@@ -277,6 +277,11 @@ pins current, and gets the arrow generation off 57 before more code depends on i
 
 - 2026-10-03: a scratch copy of the app built against 0.5.0-rc0 and the versions above with no
   source change. 490 non-Docker tests and the geo tests passed. The device build was not tried.
+- 2026-10-19: silver `train_session` hits the same panic, since its `bbox` struct comes before
+  its geometry. A filter on `session_id` panics at `spatial_filter.rs:526`. `Query::register_silver`
+  now reads any silver dataset holding a struct or a list as plain parquet, so its geometry arrives
+  as WKB. Once a release fixes the panic, that branch goes, and these datasets read their geometry
+  through SedonaDB again.
 
 ## Slice: the writing rules applied at the edit, not at the stop
 

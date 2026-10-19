@@ -125,6 +125,12 @@ impl SilverTarget {
         self.spec
     }
 
+    pub(crate) fn holds_nested_columns(&self) -> bool {
+        self.columns
+            .iter()
+            .any(|field| field.data_type().is_nested())
+    }
+
     pub fn name(&self) -> &'static str {
         self.spec.name
     }

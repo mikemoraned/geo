@@ -424,7 +424,7 @@ maps them into `train_segment_v2`.
       `lead_seconds`. Name a train session by a UUID v5 of its source and trip. Mark each sample's
       `geometry_source` as `Stop`, at a leg's departure or arrival, or `Interpolated`. Later
       slices replay trains this way, at scale, to evaluate the predictor.
-- [ ] Make `train_session` readable by a filtered query, before the notebook below. A `WHERE` on
+- [x] Make `train_session` readable by a filtered query, before the notebook below. A `WHERE` on
       a column other than the partition key panics in SedonaDB, at `spatial_filter.rs:526`,
       because `bbox` is a struct ahead of the geometry.
       [2026-10-03-sedona-nested-column-panic.md](2026-10-03-sedona-nested-column-panic.md)
