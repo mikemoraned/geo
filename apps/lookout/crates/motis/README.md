@@ -59,8 +59,11 @@ many it dropped for each reason:
 - `unplaceable`: the trip starts outside every country the store knows.
 
 A train session is named by a UUID v5 of its source and its trip, and carries both ids where a
-recorded session carries its device. It leaves out what only a device reports: altitude,
-accuracy, speed, heading, and how the recorder opened the session.
+recorded session carries its device. It also carries its source's label, such as
+`delfi-2026-10-10.route-shapes`, so a query can keep or leave out the captures of one server
+setup. A source registered without a label, such as Transitous, leaves it null. It leaves out
+what only a device reports: altitude, accuracy, speed, heading, and how the recorder opened the
+session.
 
 ## What counts as a train
 

@@ -42,6 +42,7 @@ impl DroppedTrips {
 
 struct Trip {
     source_id: MotisSourceId,
+    source_label: Option<String>,
     trip_id: TripId,
     legs: NormalisedLegs,
 }
@@ -68,6 +69,11 @@ pub async fn derive_train_sessions(
     countries: &impl Countries,
     interval: Span,
 ) -> Result<TrainSessionsOutcome, IngestError> {
+    let labels: HashMap<MotisSourceId, Option<String>> = crate::source::recorded(root)
+        .await?
+        .into_iter()
+        .map(|source| (source.source_id, source.label))
+        .collect();
     let mut by_trip: HashMap<(MotisSourceId, String), Vec<ingest::Leg>> = HashMap::new();
     for captured in captures(root, "trip_id, from_stop_id")
         .await?
@@ -94,7 +100,14 @@ pub async fn derive_train_sessions(
     };
     let mut trips = Vec::with_capacity(by_trip.len());
     for ((source_id, trip_id), legs) in by_trip {
-        match normalised(source_id, trip_id, &legs)? {
+        let source_label =
+            labels
+                .get(&source_id)
+                .cloned()
+                .ok_or_else(|| IngestError::UnregisteredSource {
+                    source_id: source_id.clone(),
+                })?;
+        match normalised(source_id, source_label, trip_id, &legs)? {
             Normalised::Trip(trip) => trips.push(trip),
             Normalised::Dropped(Drop::Shapeless) => outcome.dropped.shapeless += 1,
             Normalised::Dropped(Drop::ArrivesBeforeDeparting) => {
@@ -152,6 +165,7 @@ pub async fn derive_train_sessions(
 
 fn normalised(
     source_id: MotisSourceId,
+    source_label: Option<String>,
     trip_id: String,
     captured: &[ingest::Leg],
 ) -> Result<Normalised, IngestError> {
@@ -190,6 +204,7 @@ fn normalised(
     match NormalisedLegs::new(&legs) {
         Ok(legs) => Ok(Normalised::Trip(Trip {
             source_id,
+            source_label,
             trip_id,
             legs,
         })),
@@ -253,6 +268,7 @@ fn session_of(
     let row = TrainSessionRow {
         session_id,
         source_id: trip.source_id.clone(),
+        source_label: trip.source_label.clone(),
         trip_id: trip.trip_id.clone(),
         started_at: first.t,
         ended_at: last.t,
@@ -318,7 +334,7 @@ mod tests {
             motis_version: "v2.11.3".parse().expect("a version"),
             feed: Feed::Local,
             area: None,
-            label: None,
+            label: Some("delfi-2026-10-10.route-shapes".parse().expect("a label")),
         }
     }
 
@@ -335,6 +351,13 @@ mod tests {
     }
 
     async fn poll(root: &Root, captured_at: DateTime<Utc>, segments: &[TripSegment]) {
+        crate::source::register(root, &source(), captured_at)
+            .await
+            .expect("register the source");
+        poll_unregistered(root, captured_at, segments).await;
+    }
+
+    async fn poll_unregistered(root: &Root, captured_at: DateTime<Utc>, segments: &[TripSegment]) {
         SegmentLog::new(root.clone(), source().id())
             .append(captured_at, segments, &Map::new())
             .await
@@ -422,6 +445,49 @@ mod tests {
             .map(|session| session.session_id)
             .collect();
         assert_eq!(named, [id.to_string()]);
+    }
+
+    #[tokio::test]
+    async fn a_session_carries_its_sources_label() {
+        #[derive(Deserialize)]
+        struct Labelled {
+            source_label: Option<String>,
+        }
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        poll(&root, polled_at(0), &fixture()[..1]).await;
+
+        derive(&root, &germany()).await;
+
+        let query = Query::new(root.clone());
+        query
+            .register(TRAIN_SESSION, "sessions")
+            .await
+            .expect("register sessions");
+        let labels: Vec<Option<String>> = query
+            .rows::<Labelled>("SELECT source_label FROM sessions")
+            .await
+            .expect("labels")
+            .into_iter()
+            .map(|labelled| labelled.source_label)
+            .collect();
+        assert_eq!(labels, [Some("delfi-2026-10-10.route-shapes".to_string())]);
+    }
+
+    #[tokio::test]
+    async fn a_capture_from_a_source_never_registered_fails_the_ingest() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        poll_unregistered(&root, polled_at(0), &fixture()[..1]).await;
+
+        let err = derive_train_sessions(&root, &germany(), every_10s())
+            .await
+            .expect_err("an unregistered source");
+
+        assert!(
+            matches!(err, IngestError::UnregisteredSource { .. }),
+            "{err}"
+        );
     }
 
     #[tokio::test]
