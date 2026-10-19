@@ -3,11 +3,12 @@ use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
 use arrow::array::RecordBatch;
+use arrow::datatypes::Schema;
 use chrono::{DateTime, NaiveDate, Utc};
 use datafusion::execution::SendableRecordBatchStream;
 
 use crate::dataset::DatasetSpec;
-use crate::geo::{GeoError, write_geo_batches, write_geo_stream};
+use crate::geo::{GeoError, GeoParquetFile, write_geo_batches, write_geo_stream};
 use crate::layer::{Layer, LayerKind, Replaceable};
 use crate::partition::{DATE_FORMAT, Partition, PathError};
 use crate::rows::{Row, RowError, batch};
@@ -269,6 +270,10 @@ impl<L: Replaceable> Dataset<L> {
         let path = self.partition_file();
         write_batches(&path, batches).await?;
         Ok(path)
+    }
+
+    pub(crate) fn create_geo_partition(&self, schema: &Schema) -> Result<GeoParquetFile, GeoError> {
+        GeoParquetFile::create(&self.partition_file(), schema)
     }
 
     pub async fn replace_with_geo(&self, batches: &[RecordBatch]) -> Result<PathBuf, GeoError> {

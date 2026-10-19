@@ -11,6 +11,8 @@ use arrow::array::{Array, ArrayRef, BinaryArray, RecordBatch};
 use arrow::datatypes::{DataType, Field, FieldRef, Schema};
 use geoarrow_schema::{Crs, Metadata, WkbType};
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
+use parquet::arrow::AsyncArrowWriter;
+use parquet::arrow::async_writer::ParquetObjectWriter;
 
 const CRS84_PROJJSON: &str = include_str!("crs84.projjson.json");
 
@@ -143,6 +145,36 @@ pub fn geometries(
         .collect()
 }
 
+pub(crate) struct GeoParquetFile {
+    encoder: GeoParquetRecordBatchEncoder,
+    writer: AsyncArrowWriter<ParquetObjectWriter>,
+}
+
+impl GeoParquetFile {
+    pub(crate) fn create(path: &Path, schema: &Schema) -> Result<Self, GeoError> {
+        let encoder =
+            GeoParquetRecordBatchEncoder::try_new(schema, &GeoParquetWriterOptions::default())?;
+        let writer = crate::write::writer_at(path, encoder.target_schema())?;
+        Ok(Self { encoder, writer })
+    }
+
+    pub(crate) async fn write(&mut self, batch: &RecordBatch) -> Result<(), GeoError> {
+        let encoded = self.encoder.encode_record_batch(batch)?;
+        self.writer
+            .write(&encoded)
+            .await
+            .map_err(WriteError::from)?;
+        Ok(())
+    }
+
+    pub(crate) async fn close(mut self) -> Result<(), GeoError> {
+        self.writer
+            .append_key_value_metadata(self.encoder.into_keyvalue()?);
+        self.writer.close().await.map_err(WriteError::from)?;
+        Ok(())
+    }
+}
+
 pub(crate) async fn write_geo_batches(
     path: &Path,
     batches: &[RecordBatch],
@@ -151,34 +183,26 @@ pub(crate) async fn write_geo_batches(
         return Err(WriteError::Empty.into());
     };
 
-    let options = GeoParquetWriterOptions::default();
-    let mut encoder = GeoParquetRecordBatchEncoder::try_new(first.schema().as_ref(), &options)?;
-    let mut writer = crate::write::writer_at(path, encoder.target_schema())?;
-
+    let mut file = GeoParquetFile::create(path, first.schema().as_ref())?;
     for batch in batches {
-        writer.write(&encoder.encode_record_batch(batch)?).await?;
+        file.write(batch).await?;
     }
-    writer.append_key_value_metadata(encoder.into_keyvalue()?);
-    writer.close().await?;
-    Ok(())
+    file.close().await
 }
 
 pub(crate) async fn write_geo_stream(
     path: &Path,
     mut batches: SendableRecordBatchStream,
 ) -> Result<usize, GeoError> {
-    let options = GeoParquetWriterOptions::default();
-    let mut encoder = GeoParquetRecordBatchEncoder::try_new(batches.schema().as_ref(), &options)?;
-    let mut writer = crate::write::writer_at(path, encoder.target_schema())?;
+    let mut file = GeoParquetFile::create(path, batches.schema().as_ref())?;
 
     let mut rows = 0;
     while let Some(batch) = batches.next().await {
         let batch = batch?;
         rows += batch.num_rows();
-        writer.write(&encoder.encode_record_batch(&batch)?).await?;
+        file.write(&batch).await?;
     }
-    writer.append_key_value_metadata(encoder.into_keyvalue()?);
-    writer.close().await?;
+    file.close().await?;
     Ok(rows)
 }
 
