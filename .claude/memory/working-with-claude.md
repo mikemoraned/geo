@@ -8,9 +8,11 @@ Only run `git commit` after an explicit instruction to commit ("commit this", "p
 commit"). Approval to *do* a task — "yes", "proceed", "next task" — is not approval to
 commit its result: finish the work, propose a pithy commit message, and stop.
 
-Even after an instruction to commit, expect the diff to be reviewed first. If a commit has
-already been made and review was wanted, `git reset --soft HEAD~1` puts it back as staged
-changes rather than discarding it.
+Even after an instruction to commit, expect the diff to be reviewed first. An instruction to
+commit covers only a diff the user has seen. When code went in after the last diff shown, or
+none was shown, show what the commit holds and wait. If a commit has already been made and
+review was wanted, `git reset --soft HEAD~1` puts it back as staged changes rather than
+discarding it.
 
 Keep mechanical churn out of feature commits. When `cargo fmt` would touch files a change
 never went near, stash the work, commit the formatting on its own, then restore and

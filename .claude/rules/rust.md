@@ -50,6 +50,13 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
 
 - Always remove dead code — never suppress warnings with `#[allow(dead_code)]` to keep code "for later". Git history is the archive; the working tree should only contain what's currently used.
 - Prefer an explicit `Result` with a `thiserror` error over a panic. Reserve `unwrap()`/`expect()` for cases that are genuinely infallible by construction (a compile-time constant, a just-checked invariant) or where panicking is the intended behaviour (build scripts, a once-per-process startup install); annotate those with a justification of why it can't fail. When replacing an `expect()` whose message explained *why* it failed, carry that reason into a `thiserror` variant rather than dropping it into a bare `?` or a stringly error. `unwrap()` and `expect()` are fine in tests.
+- **Refuse invalid input where it enters, then treat any later inconsistency as an error.** A
+  constructor checks what the rest of the code relies on, such as an interval that ends after it
+  starts or a line of at least two points, and returns an `Err` for input that breaks it. Code
+  downstream relies on that check rather than repeating it. Where a library call still returns an
+  `Option` or a `Result` that the check has made impossible to fail, map that failure to an error
+  naming the inconsistency and return it. Never drop it silently with `filter_map`, and never
+  replace it with a default.
 - Follow the [NewType](https://doc.rust-lang.org/rust-by-example/generics/new_types.html) idiom — avoid bare Strings or f32s
   - When creating a NewType in Rust that is parsed from a `String`, implement the `FromStr` trait, which returns `Result<Self, Self::Err>` where Err is an associated error type you define. 
   - Additionally, provide a `pub fn new(s: impl Into<String>) -> Result<Self, YourError>` constructor for ergonomic direct construction, and have your `FromStr` implementation delegate to `new()`.
