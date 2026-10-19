@@ -417,7 +417,8 @@ maps them into `train_segment_v2`.
       the stop between legs. Give both datasets the columns and partitions of `session` and
       `session_sample`, with `source_id` and `trip_id` in place of `device_id`. Leave out what
       only a device reports: `alt`, `acc`, `speed`, `heading`, `started_by`, `gap_seconds`, and
-      `lead_seconds`. Name a train session by a UUID v5 of its source and trip. Draw one train's
+      `lead_seconds`. Name a train session by a UUID v5 of its source and trip. Mark each sample's
+      `source` as `Stop`, at a leg's departure or arrival, or `Interpolated`. Draw one train's
       samples in a notebook, over its route. Later slices replay trains this way, at scale, to
       evaluate the predictor.
 - [-] Research how to represent a crossing's discernibility in space and time. Compare how closely
