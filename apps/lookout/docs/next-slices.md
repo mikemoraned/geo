@@ -212,6 +212,16 @@ become urgent at a size we are not at yet, and both are cheaper to build before 
   them. The definitions are plain data every engine can read; a catalog is one engine's view
   of it, and those traits move between that engine's releases.
 
+## Slice: replay the trains whose legs overlap
+
+### Target
+
+Derive train sessions for the trips the ingest drops as `overlapping`. On the capture to 19
+October, that was 7,177 of 47,149 trips, about 15%. In most of them, the next leg was captured
+after the leg before it, and departs before that leg's older arrival. Trusting the newer capture
+where two legs overlap would keep those trips. `motis_ingest` logs each reason it drops a trip, so
+the counts show what a change gains.
+
 ## Slice: Enrich and use relative direction of POI
 
 ### Target

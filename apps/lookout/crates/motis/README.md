@@ -46,6 +46,18 @@ A sample falling on a departure or an arrival is one sample, a `Stop`. Each leg'
 newest capture's, realtime where Motis had it. Motis gives them to the whole minute, which bounds
 how closely any sample places the train.
 
+A trip's legs are collapsed by the stop each leaves from, the newest capture winning, since a
+changed delay moves a leg's departure. The ingest drops a trip it cannot replay, and logs how
+many it dropped for each reason:
+
+- `shapeless`: a leg has no shape, and its stops are in one place.
+- `arrives_before_departing`: a leg arrives before it departs.
+- `overlapping`: a leg departs before the one before it arrives. Each leg's times are its own
+  newest capture's. A leg the train has run keeps the times of the last capture to include it,
+  and a newer capture of the next leg can bring that leg's departure forward, past the older
+  arrival.
+- `unplaceable`: the trip starts outside every country the store knows.
+
 A train session is named by a UUID v5 of its source and its trip, and carries both ids where a
 recorded session carries its device. It leaves out what only a device reports: altitude,
 accuracy, speed, heading, and how the recorder opened the session.
