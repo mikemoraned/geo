@@ -63,6 +63,12 @@ The evaluation scores the first alert before each pass. A train reversing out of
 the same crossings twice, so the unit is (session, crossing, pass), not the (session, crossing)
 pair of [2026-08-01-evaluation.md](2026-08-01-evaluation.md).
 
+Imprecise samples can split one pass into two. Session `43fffff4`, on 26 July, reports about
+1,450 m of accuracy, and passes four crossings twice each, 22 s apart. The rule that splits a
+session's samples into visits cannot tell such jitter from a real revisit. A real revisit needs
+the train to leave and return, which takes a span of space and time. Where a session's
+uncertainty exceeds that span, two visits are no longer discernible.
+
 ### Decisions
 
 Decisions taken before starting, as each changes what gets built. Confirmed 2026-10-03.
@@ -90,9 +96,9 @@ establishes.
 - **A Rust binary scores, and a notebook measures.** The binary writes a gold row per pass or false
   alarm, with the outcome, the lead time, and the run's parameters. An alert with no pass following
   within the horizon is a false alarm.
-- **A Motis train is a synthetic session, built inside the run.** It holds a position every 10 s,
-  the recorded sessions' median, along its legs in `train_segment_v2`. Motis results are reported
-  apart from recorded sessions.
+- **A Motis train is a train session in silver.** `train_session_sample` holds its position every
+  10 s, the recorded sessions' median, along its legs. Motis results are reported apart from
+  recorded sessions.
 
 #### Notifications
 
@@ -128,6 +134,10 @@ establishes.
 
 #### The evaluation
 
+- [ ] Research how to represent a crossing's discernibility in space and time, before scoring a
+      second pass. Compare how closely a real train can revisit a crossing with how uncertain a
+      session's samples leave the train. Look for prior art, such as scale space in images.
+      Record the findings under Decisions.
 - [ ] Add an `evaluation` crate, with a binary replaying `silver/session_sample` through a
       predictor and the state machine.
 - [ ] Score each pass in `silver/session_crossing`, and each unmatched alert, as `EvaluationRow`
@@ -136,8 +146,7 @@ establishes.
 - [ ] Add a marimo notebook: the headline measures with n, the threshold sweep, and the horizon
       diagnostic.
 - [ ] Run `CrowFlies` across a sweep of N, as the baseline.
-- [ ] Score the Motis trains as synthetic sessions, and report them apart in the notebook. Only
-      after the day's capture.
+- [ ] Score the train sessions, and report them apart in the notebook.
 
 #### The light cone
 

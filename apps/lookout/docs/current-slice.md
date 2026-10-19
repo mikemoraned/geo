@@ -420,10 +420,12 @@ maps them into `train_segment_v2`.
       `lead_seconds`. Name a train session by a UUID v5 of its source and trip. Draw one train's
       samples in a notebook, over its route. Later slices replay trains this way, at scale, to
       evaluate the predictor.
-- [ ] Research how to represent a crossing's discernibility in space and time. Compare how closely
+- [-] Research how to represent a crossing's discernibility in space and time. Compare how closely
       a real train can revisit a crossing with how uncertain a session's samples leave the train.
       Look for prior art, such as scale space in images. Record the findings before changing the
       matching.
+      Moved on 2026-10-19 to the slice "Evaluation framework with associated Crow Flies predictor
+      improvement", which scores each pass, so a split pass scores twice.
 - [ ] Run `just silver-session-crossings` and `just gold-pack-sessions`, and move
       `sessions.version`.
 
@@ -468,4 +470,5 @@ into two visits. Samples that imprecise cannot show whether the train passed the
 The visit rule cannot tell such jitter from a real revisit. A real revisit needs the train to leave
 and return, which takes a span of space and time. Where a session's uncertainty exceeds that span,
 two visits are no longer discernible. A representation of this in space and time, akin to scale
-space in images, is a research task under Ground truth.
+space in images, is a research task in the slice "Evaluation framework with associated Crow Flies
+predictor improvement".
