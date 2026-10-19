@@ -345,7 +345,7 @@ Only after the fixed pass agrees.
       spans its interval, so a shorter interval buys only fresher forecasts. The first poll of the
       day's capture logs its duration.
 - [x] Add a recipe `bronze-poll-local-de` for DE at that interval.
-- [ ] Capture DE for a day. The user runs this.
+- [x] Capture DE for a day. The user runs this.
       - The count of trains per poll peaks at 1,630, at 09:42 UTC on Sunday 18 October: 1,384
         regional, 191 high-speed, and 55 long-distance. A poll counts every trip running at any
         point in its 10-minute window. At the poll's instant alone, the count falls to 1,256.
