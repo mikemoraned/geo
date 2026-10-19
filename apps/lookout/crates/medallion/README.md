@@ -97,7 +97,9 @@ There are two ways round it:
 
 - **Read the dataset as plain parquet.** `Query::register_at_without_geometry` registers it without
   SedonaDB's geometry handling, so the geometry column arrives as WKB bytes. `medallion::geometries`
-  decodes them.
+  decodes them. `Query::register_silver`, and so `query_silver`, takes this route itself for a
+  silver dataset whose own columns include a struct or a list. `train_session` and its `bbox` are
+  one such dataset.
 - **Write the geometry first.** A file whose geometry precedes every nested column reads normally.
   A fixture can take this route. Bronze cannot, since it keeps the column order of the release it
   records.

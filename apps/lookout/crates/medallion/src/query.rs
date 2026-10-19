@@ -155,6 +155,11 @@ impl Query {
         );
 
         match (has_country_level, country) {
+            (true, Some(country)) if target.holds_nested_columns() => {
+                self.register_of_country_without_geometry(target, country)
+                    .await?;
+                Ok(())
+            }
             (true, Some(country)) => {
                 self.register_of_country(target.spec(), target.name(), country)
                     .await?;
@@ -168,6 +173,23 @@ impl Query {
             }),
             (false, None) => self.register_by_name(target.spec()).await,
         }
+    }
+
+    async fn register_of_country_without_geometry(
+        &self,
+        target: &SilverTarget,
+        country: Country,
+    ) -> Result<bool, QueryError> {
+        let of_country = self
+            .root
+            .dataset(target.spec())
+            .partition(COUNTRY, country)?;
+        let date_keys: Vec<&str> = match target.layout() {
+            Ok(Layout::CountryAndDate(key)) => vec![key],
+            _ => Vec::new(),
+        };
+        self.register_as_parquet(&of_country, target.name(), &date_keys)
+            .await
     }
 
     pub async fn register_bronze(
@@ -397,6 +419,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
+    use crate::geo::GEOMETRY;
     use crate::layer::layers;
     use crate::rows::Row as _;
 
@@ -429,6 +452,109 @@ mod tests {
     impl crate::rows::Row for PlacedRow {
         type Layer = layers::Silver;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("placed", COUNTRY);
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    struct Corner {
+        x: f64,
+        y: f64,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    struct BoxedRow {
+        box_id: String,
+        #[serde(with = "chrono::serde::ts_milliseconds")]
+        seen_at: chrono::DateTime<Utc>,
+        corner: Corner,
+    }
+
+    impl crate::rows::Row for BoxedRow {
+        type Layer = layers::Silver;
+        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("boxed", "seen_date");
+        const GEOMETRY: crate::rows::Geometry = crate::rows::Geometry::LatLonAndProjected;
+        const INSTANTS: &'static [&'static str] = &["seen_at"];
+    }
+
+    impl crate::rows::Dated for BoxedRow {
+        fn partition_date(&self) -> chrono::NaiveDate {
+            self.seen_at.date_naive()
+        }
+    }
+
+    fn berlin() -> geo_types::Point<f64> {
+        geo_types::Point::new(13.404954, 52.520008)
+    }
+
+    async fn store_boxes(dir: &std::path::Path, ids: &[&str]) -> Root {
+        let root = Root::new(dir);
+        let rows: Vec<crate::GeoRow<BoxedRow, geo_types::Point<f64>>> = ids
+            .iter()
+            .map(|id| crate::GeoRow {
+                row: BoxedRow {
+                    box_id: id.to_string(),
+                    seen_at: Utc.with_ymd_and_hms(2026, 7, 21, 9, 0, 0).unwrap(),
+                    corner: Corner { x: 1.0, y: 2.0 },
+                },
+                geometry: berlin(),
+                country: Country::Germany,
+            })
+            .collect();
+        crate::write_geo_rows(&root, &rows).await.unwrap();
+        root
+    }
+
+    async fn boxes(root: Root) -> Query {
+        let query = Query::new(root);
+        query
+            .register_silver(
+                &SilverTarget::of::<BoxedRow>().unwrap(),
+                Some(Country::Germany),
+            )
+            .await
+            .unwrap();
+        query
+    }
+
+    #[tokio::test]
+    async fn a_silver_dataset_holding_a_struct_can_be_filtered() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Named {
+            box_id: String,
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = store_boxes(tmp.path(), &["a", "b"]).await;
+
+        let named: Vec<Named> = boxes(root)
+            .await
+            .rows("SELECT box_id FROM boxed WHERE box_id = 'a'")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            named,
+            [Named {
+                box_id: "a".to_string()
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_silver_dataset_holding_a_struct_keeps_its_date_and_geometry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = store_boxes(tmp.path(), &["a"]).await;
+
+        let batches = boxes(root)
+            .await
+            .sql(&format!(
+                "SELECT {GEOMETRY} FROM boxed WHERE seen_date = '2026-07-21' AND box_id = 'a'"
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            crate::geo::geometries(&batches[0], GEOMETRY).unwrap(),
+            [geo_types::Geometry::Point(berlin())]
+        );
     }
 
     async fn store_with_rows(dir: &std::path::Path, ids: Vec<i64>, names: Vec<&str>) -> Root {
