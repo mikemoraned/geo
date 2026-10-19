@@ -10,6 +10,7 @@ pub mod ingest;
 pub mod legacy;
 pub mod near_gps;
 pub mod polling;
+pub mod sampling;
 pub mod segment;
 pub mod source;
 pub mod span;

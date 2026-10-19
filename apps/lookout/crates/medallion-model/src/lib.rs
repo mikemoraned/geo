@@ -8,6 +8,7 @@ mod overture_release;
 mod session;
 mod silver;
 mod telemetry;
+mod train_session;
 
 use medallion::DatasetInfo;
 
@@ -34,8 +35,12 @@ pub use telemetry::{
     ACCEL_READING, AccelReadingRow, DEVICE_SESSION, DeviceSessionRow, GPS_READING, GpsReadingRow,
     RAW_SAMPLE, RawSampleRow,
 };
+pub use train_session::{
+    GeometrySource, TRAIN_SESSION, TRAIN_SESSION_SAMPLE, TrainSessionRow, TrainSessionSampleRow,
+    train_session_id,
+};
 
-pub const ALL: [DatasetInfo; 14] = [
+pub const ALL: [DatasetInfo; 16] = [
     RAW_SAMPLE.info(),
     GPS_READING.info(),
     ACCEL_READING.info(),
@@ -46,6 +51,8 @@ pub const ALL: [DatasetInfo; 14] = [
     TRAIN_SEGMENT_V2.info(),
     SESSION.info(),
     SESSION_SAMPLE.info(),
+    TRAIN_SESSION.info(),
+    TRAIN_SESSION_SAMPLE.info(),
     WATER_CROSSING.info(),
     SESSION_CROSSING.info(),
     OVERTURE_EXTRACT.info(),
@@ -90,6 +97,8 @@ mod tests {
                 "session_crossing",
                 "session_sample",
                 "train_segment_v2",
+                "train_session",
+                "train_session_sample",
                 "water_crossing"
             ]
         );
@@ -169,6 +178,8 @@ mod tests {
         check_rows_of::<TrainSegmentRowV2>();
         check_rows_of::<SessionRow>();
         check_rows_of::<SessionSampleRow>();
+        check_rows_of::<TrainSessionRow>();
+        check_rows_of::<TrainSessionSampleRow>();
         check_rows_of::<WaterCrossingRow>();
         check_rows_of::<SessionCrossingRow>();
         check_rows_of::<ExtractManifestRow>();

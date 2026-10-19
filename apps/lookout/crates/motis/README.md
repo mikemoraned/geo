@@ -35,7 +35,7 @@ is shaped as a recorded session is, so whatever replays a recorded session repla
 samples simulate a device recording on board the train: one every 10 s, as a device
 [sends them](../../docs/telemetry.md).
 
-Each sample's `source` says where its position came from:
+Each sample's `geometry_source` says where its position came from:
 
 - `Stop`: the train at a stop, at a leg's departure or arrival there. A poll states both directly.
 - `Interpolated`: every other sample. Between a departure and the next arrival, the train moves

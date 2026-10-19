@@ -413,14 +413,18 @@ maps them into `train_segment_v2`.
 - [ ] Derive silver `train_session` and `train_session_sample` from bronze `motis_segment_v2`, in
       `motis_ingest` beside `train_segment_v2`. A train session is one trip, and its samples say
       where the train was every 10 s. Take each leg's times from its newest capture, as
-      `train_segment_v2` does. Place the train along each leg's shape at constant speed, and at
+      `train_segment_v2` does. Collapse a trip's legs by the stop each leaves from, not by its
+      departure. A changed delay moves a leg's departure, so collapsing by departure keeps the old
+      copy beside the new one. Of 452,521 pairs of consecutive legs captured by 19 October, 92,717
+      overlap, and 68,214 of those leave from the same stop. Refuse a trip whose legs still
+      overlap. Place the train along each leg's shape at constant speed, and at
       the stop between legs. Give both datasets the columns and partitions of `session` and
       `session_sample`, with `source_id` and `trip_id` in place of `device_id`. Leave out what
       only a device reports: `alt`, `acc`, `speed`, `heading`, `started_by`, `gap_seconds`, and
       `lead_seconds`. Name a train session by a UUID v5 of its source and trip. Mark each sample's
-      `source` as `Stop`, at a leg's departure or arrival, or `Interpolated`. Draw one train's
-      samples in a notebook, over its route. Later slices replay trains this way, at scale, to
-      evaluate the predictor.
+      `geometry_source` as `Stop`, at a leg's departure or arrival, or `Interpolated`. Draw one
+      train's samples in a notebook, over its route, coloured by `geometry_source`. Later slices
+      replay trains this way, at scale, to evaluate the predictor.
 - [-] Research how to represent a crossing's discernibility in space and time. Compare how closely
       a real train can revisit a crossing with how uncertain a session's samples leave the train.
       Look for prior art, such as scale space in images. Record the findings before changing the

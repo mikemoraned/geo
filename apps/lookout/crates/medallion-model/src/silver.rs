@@ -2,7 +2,8 @@ use medallion::{RowError, SilverTarget};
 
 use crate::{
     SESSION, SESSION_CROSSING, SESSION_SAMPLE, SessionCrossingRow, SessionRow, SessionSampleRow,
-    TRAIN_SEGMENT_V2, TrainSegmentRowV2, WATER_CROSSING, WaterCrossingRow,
+    TRAIN_SEGMENT_V2, TRAIN_SESSION, TRAIN_SESSION_SAMPLE, TrainSegmentRowV2, TrainSessionRow,
+    TrainSessionSampleRow, WATER_CROSSING, WaterCrossingRow,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -15,10 +16,15 @@ pub enum TargetError {
 
 type Definition = fn() -> Result<SilverTarget, RowError>;
 
-const TARGETS: [(&str, Definition); 5] = [
+const TARGETS: [(&str, Definition); 7] = [
     (SESSION.name, SilverTarget::of::<SessionRow>),
     (SESSION_SAMPLE.name, SilverTarget::of::<SessionSampleRow>),
     (TRAIN_SEGMENT_V2.name, SilverTarget::of::<TrainSegmentRowV2>),
+    (TRAIN_SESSION.name, SilverTarget::of::<TrainSessionRow>),
+    (
+        TRAIN_SESSION_SAMPLE.name,
+        SilverTarget::of::<TrainSessionSampleRow>,
+    ),
     (WATER_CROSSING.name, SilverTarget::of::<WaterCrossingRow>),
     (
         SESSION_CROSSING.name,
@@ -70,6 +76,13 @@ mod tests {
                 "{} can be named",
                 dataset.name
             );
+        }
+    }
+
+    #[test]
+    fn the_train_sessions_can_be_named() {
+        for name in [TRAIN_SESSION.name, TRAIN_SESSION_SAMPLE.name] {
+            assert!(silver_target(name).is_ok(), "{name} cannot be named");
         }
     }
 
