@@ -13,12 +13,28 @@ pub const OVERTURE_EXTRACT: DatasetSpec<layers::Bronze> =
 pub const EXTRACT_MANIFEST: DatasetSpec<layers::Bronze> =
     DatasetSpec::unpartitioned("extract_manifest");
 
+pub const EXTRACT_MANIFEST_V2: DatasetSpec<layers::Bronze> =
+    DatasetSpec::unpartitioned("extract_manifest_v2");
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExtractManifestRow {
     pub extract_id: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub extracted_at: DateTime<Utc>,
     pub release: String,
+    pub country: String,
+    pub min_lon: f64,
+    pub min_lat: f64,
+    pub max_lon: f64,
+    pub max_lat: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExtractManifestRowV2 {
+    pub extract_id: String,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub extracted_at: DateTime<Utc>,
+    pub overture_release: String,
     pub country: String,
     pub min_lon: f64,
     pub min_lat: f64,
@@ -58,6 +74,12 @@ impl ExtractManifestRow {
 impl Row for ExtractManifestRow {
     type Layer = layers::Bronze;
     const DATASET: DatasetSpec<Self::Layer> = EXTRACT_MANIFEST;
+    const INSTANTS: &'static [&'static str] = &["extracted_at"];
+}
+
+impl Row for ExtractManifestRowV2 {
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = EXTRACT_MANIFEST_V2;
     const INSTANTS: &'static [&'static str] = &["extracted_at"];
 }
 

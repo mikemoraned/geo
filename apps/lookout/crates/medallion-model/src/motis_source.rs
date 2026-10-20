@@ -16,6 +16,9 @@ const MOTIS_SOURCE_NAMESPACE: Uuid = Uuid::from_u128(0x3c41_9e2d_7a58_4b06_8f13_
 
 pub const MOTIS_SOURCE: DatasetSpec<layers::Bronze> = DatasetSpec::unpartitioned("motis_source");
 
+pub const MOTIS_SOURCE_V2: DatasetSpec<layers::Bronze> =
+    DatasetSpec::unpartitioned("motis_source_v2");
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct MotisSourceId(String);
@@ -332,6 +335,27 @@ pub struct MotisSourceRow {
 impl Row for MotisSourceRow {
     type Layer = layers::Bronze;
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_SOURCE;
+    const INSTANTS: &'static [&'static str] = &["registered_at"];
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MotisSourceRowV2 {
+    pub source_id: MotisSourceId,
+    pub base_url: String,
+    pub motis_version: String,
+    pub feed: Feed,
+    pub country: Option<String>,
+    pub overture_region_id: Option<String>,
+    pub overture_region_name: Option<String>,
+    pub overture_release: Option<String>,
+    pub label: Option<String>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub registered_at: DateTime<Utc>,
+}
+
+impl Row for MotisSourceRowV2 {
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = MOTIS_SOURCE_V2;
     const INSTANTS: &'static [&'static str] = &["registered_at"];
 }
 

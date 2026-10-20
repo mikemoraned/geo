@@ -1,8 +1,8 @@
 use medallion::{DatasetSpec, layers};
 
 use crate::{
-    ACCEL_READING, DEVICE_SESSION, EXTRACT_MANIFEST, GPS_READING, MOTIS_SEGMENT, MOTIS_SEGMENT_V2,
-    MOTIS_SOURCE, OVERTURE_EXTRACT, RAW_SAMPLE,
+    ACCEL_READING, DEVICE_SESSION, EXTRACT_MANIFEST, EXTRACT_MANIFEST_V2, GPS_READING,
+    MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MOTIS_SOURCE, MOTIS_SOURCE_V2, OVERTURE_EXTRACT, RAW_SAMPLE,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -11,7 +11,7 @@ pub struct NoSuchBronzeDataset {
     pub name: String,
 }
 
-const DATASETS: [DatasetSpec<layers::Bronze>; 9] = [
+const DATASETS: [DatasetSpec<layers::Bronze>; 11] = [
     RAW_SAMPLE,
     GPS_READING,
     ACCEL_READING,
@@ -19,8 +19,10 @@ const DATASETS: [DatasetSpec<layers::Bronze>; 9] = [
     MOTIS_SEGMENT,
     MOTIS_SEGMENT_V2,
     MOTIS_SOURCE,
+    MOTIS_SOURCE_V2,
     OVERTURE_EXTRACT,
     EXTRACT_MANIFEST,
+    EXTRACT_MANIFEST_V2,
 ];
 
 pub fn bronze_dataset(name: &str) -> Result<DatasetSpec<layers::Bronze>, NoSuchBronzeDataset> {

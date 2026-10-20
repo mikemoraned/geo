@@ -469,9 +469,10 @@ At the end of the slice, once its features are in.
       3. Copy every row of `motis_source` and `extract_manifest` into its new version, with a
          migration binary committed and then removed.
       4. Point every reader and writer at the new versions. These are `motis/src/source.rs`,
-         `transport`, the `crossings` geo test, the `motis_capture` and `water_crossings`
-         notebooks, and the docs describing either dataset. Once nothing reads them, remove
-         `MotisSourceRow` and `ExtractManifestRow`.
+         `transport`, the `crossings` geo test, `medallion-py`'s bronze query test, the
+         `motis_capture` and `water_crossings` notebooks, the comment in
+         `data/medallion/.gitignore`, and the docs describing either dataset. Once nothing reads
+         them, remove `MotisSourceRow` and `ExtractManifestRow`.
       5. Once nothing reads `motis_source` or `extract_manifest`, decide whether to delete them.
          Their rows live on in the new versions.
       Changed on 2026-10-20 from naming the country and region codes after Overture, as
