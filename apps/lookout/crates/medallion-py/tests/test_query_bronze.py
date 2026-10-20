@@ -17,12 +17,12 @@ def write_parquet(path, table):
 @pytest.fixture
 def filled(store):
     write_parquet(
-        store / "bronze" / "extract_manifest" / "part-0.parquet",
+        store / "bronze" / "extract_manifest_v2" / "part-0.parquet",
         pa.table(
             {
                 "extract_id": pa.array(list(EXTRACTS), pa.string()),
                 "country": pa.array(list(EXTRACTS.values()), pa.string()),
-                "release": pa.array(["2026-07-22.0"] * 2, pa.string()),
+                "overture_release": pa.array(["2026-07-22.0"] * 2, pa.string()),
             }
         ),
     )
@@ -58,7 +58,7 @@ def query(filled, sql, **kwargs):
 
 
 def test_a_dataset_is_read_under_its_own_name(filled):
-    table = query(filled, "SELECT country FROM extract_manifest ORDER BY country")
+    table = query(filled, "SELECT country FROM extract_manifest_v2 ORDER BY country")
 
     assert table.column("country").to_pylist() == ["DE", "GB"]
 
@@ -85,7 +85,7 @@ def test_an_extract_joins_to_the_manifest_that_recorded_it(filled):
     table = query(
         filled,
         """
-        SELECT s.id FROM segment s JOIN extract_manifest m USING (extract_id)
+        SELECT s.id FROM segment s JOIN extract_manifest_v2 m USING (extract_id)
         WHERE m.country = 'GB'
         """,
         tables={"segment": {"theme": "transportation", "type": "segment"}},

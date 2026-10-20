@@ -133,14 +133,14 @@ def _(bronze):
     SOURCE = (
         """
     source AS (
-        SELECT source_id FROM motis_source
-        WHERE feed = 'local' AND label = $label AND country = $country AND region_id IS NULL
+        SELECT source_id FROM motis_source_v2
+        WHERE feed = 'local' AND label = $label AND country = $country AND overture_region_id IS NULL
     )""",
     )
     bronze(
         """
         SELECT source_id, base_url, motis_version, overture_release, registered_at
-        FROM source JOIN motis_source USING (source_id)
+        FROM source JOIN motis_source_v2 USING (source_id)
         """,
         SOURCE,
     )
@@ -604,7 +604,7 @@ def _(bronze):
     EXTRACT = (
         """
     extract AS (
-        SELECT extract_id, release FROM extract_manifest
+        SELECT extract_id, overture_release FROM extract_manifest_v2
         WHERE country = $country
         QUALIFY row_number() OVER (ORDER BY extracted_at DESC) = 1
     )""",

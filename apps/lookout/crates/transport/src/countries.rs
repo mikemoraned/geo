@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use geo::Contains;
 use geo_types::{Geometry, Point};
 use medallion::{Countries, Country, GEOMETRY, Query, Root};
-use medallion_model::{DIVISION_ID, ExtractManifestRow, NotAnOvertureRelease, OvertureRelease};
+use medallion_model::{DIVISION_ID, ExtractManifestRowV2, NotAnOvertureRelease, OvertureRelease};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CountryError {
@@ -27,9 +27,9 @@ impl CountryAreas {
     pub async fn newest_per_country(root: &Root) -> Result<Self, CountryError> {
         let query = Query::new(root.clone());
         query
-            .register_by_name(medallion_model::EXTRACT_MANIFEST)
+            .register_by_name(medallion_model::EXTRACT_MANIFEST_V2)
             .await?;
-        let extracts: Vec<ExtractManifestRow> = query.rows(crate::extract::RECORDED).await?;
+        let extracts: Vec<ExtractManifestRowV2> = query.rows(crate::extract::RECORDED).await?;
 
         let newest_of_each_country = Country::ALL.into_iter().filter_map(|country| {
             extracts
@@ -41,7 +41,7 @@ impl CountryAreas {
         let mut areas = Vec::new();
         let mut releases = HashMap::new();
         for (country, extract) in newest_of_each_country {
-            releases.insert(country, extract.release.parse()?);
+            releases.insert(country, extract.overture_release.parse()?);
             let extract_id = extract.extract_id.as_str();
             let division_area = root
                 .dataset(medallion_model::OVERTURE_EXTRACT)
@@ -102,7 +102,7 @@ mod tests {
     use chrono::{DateTime, TimeZone, Utc};
     use datafusion::execution::SendableRecordBatchStream;
     use geo_types::{Geometry, polygon};
-    use medallion_model::ExtractManifestRow;
+    use medallion_model::ExtractManifestRowV2;
 
     use super::*;
 
@@ -170,17 +170,17 @@ mod tests {
         taken_at: DateTime<Utc>,
         areas: &[(&str, Geometry<f64>)],
     ) {
-        let row = ExtractManifestRow {
+        let row = ExtractManifestRowV2 {
             extract_id: id.to_string(),
             extracted_at: taken_at,
-            release: release.to_string(),
+            overture_release: release.to_string(),
             country: country.code().to_string(),
             min_lon: 0.0,
             min_lat: 0.0,
             max_lon: 0.0,
             max_lat: 0.0,
         };
-        root.rows_of::<ExtractManifestRow>()
+        root.rows_of::<ExtractManifestRowV2>()
             .append_rows(taken_at, &[row])
             .await
             .expect("record the extract");

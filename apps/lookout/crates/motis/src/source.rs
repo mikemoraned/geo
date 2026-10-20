@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use medallion::{Query, Root};
-use medallion_model::{MOTIS_SOURCE, MotisSource, MotisSourceRow};
+use medallion_model::{MOTIS_SOURCE_V2, MotisSource, MotisSourceRowV2};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Registration {
@@ -28,22 +28,22 @@ pub async fn register(
     {
         return Ok(Registration::AlreadyRecorded);
     }
-    root.rows_of::<MotisSourceRow>()
+    root.rows_of::<MotisSourceRowV2>()
         .append_rows(at, &[source.row(at)])
         .await?;
     Ok(Registration::Written)
 }
 
-pub async fn recorded(root: &Root) -> Result<Vec<MotisSourceRow>, SourceError> {
+pub async fn recorded(root: &Root) -> Result<Vec<MotisSourceRowV2>, SourceError> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(MOTIS_SOURCE, MOTIS_SOURCE.name)
+        .register_if_present(MOTIS_SOURCE_V2, MOTIS_SOURCE_V2.name)
         .await?
     {
         return Ok(Vec::new());
     }
     Ok(query
-        .rows(&format!("SELECT * FROM {}", MOTIS_SOURCE.name))
+        .rows(&format!("SELECT * FROM {}", MOTIS_SOURCE_V2.name))
         .await?)
 }
 
@@ -129,65 +129,5 @@ mod tests {
             MotisSource::try_from(row).expect("a valid source"),
             source(Feed::Transitous)
         );
-    }
-
-    #[derive(serde::Serialize, serde::Deserialize)]
-    struct UnlabelledRow {
-        source_id: medallion_model::MotisSourceId,
-        base_url: String,
-        motis_version: String,
-        feed: Feed,
-        country: Option<String>,
-        region_id: Option<String>,
-        region_name: Option<String>,
-        overture_release: Option<String>,
-        #[serde(with = "chrono::serde::ts_milliseconds")]
-        registered_at: DateTime<Utc>,
-    }
-
-    impl medallion::Row for UnlabelledRow {
-        type Layer = medallion::layers::Bronze;
-        const DATASET: medallion::DatasetSpec<Self::Layer> = MOTIS_SOURCE;
-        const INSTANTS: &'static [&'static str] = &["registered_at"];
-    }
-
-    #[tokio::test]
-    async fn a_source_recorded_before_labels_reads_back_unlabelled_beside_a_labelled_one() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let root = Root::new(tmp.path());
-        let unlabelled = source(Feed::Local);
-        root.rows_of::<UnlabelledRow>()
-            .append_rows(
-                at(0),
-                &[UnlabelledRow {
-                    source_id: unlabelled.id(),
-                    base_url: unlabelled.base_url.to_string(),
-                    motis_version: unlabelled.motis_version.to_string(),
-                    feed: unlabelled.feed,
-                    country: None,
-                    region_id: None,
-                    region_name: None,
-                    overture_release: None,
-                    registered_at: at(0),
-                }],
-            )
-            .await
-            .expect("record a source before labels");
-        let labelled = MotisSource {
-            label: Some("delfi".parse().expect("a label")),
-            ..source(Feed::Local)
-        };
-        register(&root, &labelled, at(1)).await.expect("register");
-
-        let sources: Vec<MotisSource> = recorded(&root)
-            .await
-            .expect("read back")
-            .into_iter()
-            .map(|row| MotisSource::try_from(row).expect("a valid source"))
-            .collect();
-
-        assert_eq!(sources.len(), 2);
-        assert!(sources.contains(&unlabelled), "{sources:?}");
-        assert!(sources.contains(&labelled), "{sources:?}");
     }
 }

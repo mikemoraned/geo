@@ -113,9 +113,9 @@ def _(EXTRACT_ID, MEDALLION_ROOT, con):
     # rather than leaving them implicit in a path, and so a missing extract fails loudly at the
     # top instead of as an empty table further down.
     extract_manifest = con.execute(f"""
-        SELECT extract_id, extracted_at, release, country,
+        SELECT extract_id, extracted_at, overture_release, country,
                min_lon, min_lat, max_lon, max_lat
-        FROM read_parquet('{MEDALLION_ROOT}/bronze/extract_manifest/*.parquet')
+        FROM read_parquet('{MEDALLION_ROOT}/bronze/extract_manifest_v2/*.parquet')
         WHERE extract_id = '{EXTRACT_ID}'
     """).fetchdf()
     assert len(extract_manifest) == 1, (

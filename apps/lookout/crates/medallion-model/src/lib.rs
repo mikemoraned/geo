@@ -22,12 +22,12 @@ pub use motis::{
     TRAIN_SEGMENT_V2, TrainSegmentRowV2, TripId,
 };
 pub use motis_source::{
-    Area, Feed, Label, MOTIS_SOURCE, MOTIS_SOURCE_V2, MotisSource, MotisSourceId, MotisSourceRow,
-    MotisSourceRowV2, MotisVersion, NotALabel, NotAMotisSource, NotAMotisVersion, UnknownFeed,
+    Area, Feed, Label, MOTIS_SOURCE, MOTIS_SOURCE_V2, MotisSource, MotisSourceId, MotisSourceRowV2,
+    MotisVersion, NotALabel, NotAMotisSource, NotAMotisVersion, UnknownFeed,
 };
 pub use overture::{
-    DIVISION_ID, EXTRACT_MANIFEST, EXTRACT_MANIFEST_V2, ExtractManifestRow, ExtractManifestRowV2,
-    OVERTURE_EXTRACT, OvertureRegion, division_id,
+    DIVISION_ID, EXTRACT_MANIFEST, EXTRACT_MANIFEST_V2, ExtractManifestRowV2, OVERTURE_EXTRACT,
+    OvertureRegion, division_id,
 };
 pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
 pub use session::{SESSION, SESSION_SAMPLE, SessionRow, SessionSampleRow};
@@ -177,7 +177,6 @@ mod tests {
         check_rows_of::<DeviceSessionRow>();
         check_rows_of::<MotisSegmentRow>();
         check_rows_of::<MotisCaptureRow>();
-        check_rows_of::<MotisSourceRow>();
         check_rows_of::<MotisSourceRowV2>();
         check_rows_of::<TrainSegmentRowV2>();
         check_rows_of::<SessionRow>();
@@ -186,7 +185,6 @@ mod tests {
         check_rows_of::<TrainSessionSampleRow>();
         check_rows_of::<WaterCrossingRow>();
         check_rows_of::<SessionCrossingRow>();
-        check_rows_of::<ExtractManifestRow>();
         check_rows_of::<ExtractManifestRowV2>();
     }
 }

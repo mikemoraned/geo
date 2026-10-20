@@ -4,7 +4,7 @@ use std::process::ExitCode;
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use medallion::{Country, MedallionArgs, Root};
-use medallion_model::ExtractManifestRow;
+use medallion_model::ExtractManifestRowV2;
 use transport::{
     extract::{self, ExtractId, Extraction, Extractor},
     overture::{Overture, Release, ReleaseChoice},
@@ -139,7 +139,7 @@ async fn backfill_recorded(
     if recorded.is_empty() {
         return Err(extract::ExtractError::NoExtract.into());
     }
-    let in_the_order_taken: Vec<ExtractManifestRow> = recorded.into_iter().rev().collect();
+    let in_the_order_taken: Vec<ExtractManifestRowV2> = recorded.into_iter().rev().collect();
 
     let mut skipped = Vec::new();
     let mut missing = Vec::new();
@@ -190,13 +190,13 @@ fn report(extraction: &Extraction) {
 async fn backfill(
     root: &Root,
     mirror: &Option<PathBuf>,
-    recorded: ExtractManifestRow,
+    recorded: ExtractManifestRowV2,
     at: chrono::DateTime<Utc>,
 ) -> Result<Extraction, Box<dyn std::error::Error>> {
-    let release = Release::at(&recorded.release, mirror.clone());
+    let release = Release::at(&recorded.overture_release, mirror.clone());
     tracing::info!(
         id = %recorded.extract_id,
-        release = %recorded.release,
+        release = %recorded.overture_release,
         source = release.location(),
         country = %recorded.country,
         extracted_at = %recorded.extracted_at,
@@ -216,11 +216,11 @@ mod tests {
 
     use super::*;
 
-    fn recorded_row(id: &str, hour: u32) -> ExtractManifestRow {
-        ExtractManifestRow {
+    fn recorded_row(id: &str, hour: u32) -> ExtractManifestRowV2 {
+        ExtractManifestRowV2 {
             extract_id: id.to_string(),
             extracted_at: Utc.with_ymd_and_hms(2026, 9, 27, hour, 0, 0).unwrap(),
-            release: "2026-07-22.0".to_string(),
+            overture_release: "2026-07-22.0".to_string(),
             country: Country::Germany.code().to_string(),
             min_lon: 5.8,
             min_lat: 47.2,
@@ -229,11 +229,11 @@ mod tests {
         }
     }
 
-    async fn store_filled_with(rows: &[ExtractManifestRow]) -> (tempfile::TempDir, Root) {
+    async fn store_filled_with(rows: &[ExtractManifestRowV2]) -> (tempfile::TempDir, Root) {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         for row in rows {
-            root.rows_of::<ExtractManifestRow>()
+            root.rows_of::<ExtractManifestRowV2>()
                 .append_rows(row.extracted_at, std::slice::from_ref(row))
                 .await
                 .expect("record the extract");

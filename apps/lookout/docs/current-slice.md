@@ -474,8 +474,8 @@ At the end of the slice, once its features are in.
          `motis_capture` and `water_crossings` notebooks, the comment in
          `data/medallion/.gitignore`, and the docs describing either dataset. Once nothing reads
          them, remove `MotisSourceRow` and `ExtractManifestRow`.
-      5. Once nothing reads `motis_source` or `extract_manifest`, decide whether to delete them.
-         Their rows live on in the new versions.
+      5. Delete `motis_source` and `extract_manifest`, and remove both from the bronze registry.
+         Their rows live on in the new versions, and their files in git history.
       Changed on 2026-10-20 from naming the country and region codes after Overture, as
       `--overture-country` and `--overture-region` did.
 - [ ] Apply the `Age` rule in `.claude/rules/rust.md` across `lookout`: every maximum age,

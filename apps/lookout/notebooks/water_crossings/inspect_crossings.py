@@ -171,7 +171,7 @@ def _(bronze):
             SELECT country, extract_id, min_lon, min_lat, max_lon, max_lat,
                    row_number() OVER (PARTITION BY country ORDER BY extracted_at DESC)
                        AS newest
-            FROM extract_manifest
+            FROM extract_manifest_v2
         )
         SELECT country, extract_id, min_lon, min_lat, max_lon, max_lat
         FROM ranked WHERE newest = 1 ORDER BY country
