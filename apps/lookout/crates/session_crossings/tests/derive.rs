@@ -13,7 +13,8 @@ use serde::Deserialize;
 use shared::{GpsReading, Message, V1Message};
 use uuid::Uuid;
 
-use session_crossings::matching::Radius;
+use domain::Radius;
+use session_crossings::matching::DEFAULT_RADIUS;
 
 struct Germany;
 
@@ -184,7 +185,7 @@ async fn a_crossing_the_session_ran_past_is_recorded_against_it() {
     let just_past_the_second_sample = SAMPLE_SPACING_M + 60.0;
     store_with_crossings(&root, &[just_past_the_second_sample]).await;
 
-    let outcome = session_crossings::silver::derive(&root, Radius::default())
+    let outcome = session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 
@@ -207,7 +208,7 @@ async fn a_crossing_nowhere_near_the_session_is_not() {
     store_with_a_session(&root, 3).await;
     store_with_crossings(&root, &[50_000.0]).await;
 
-    let outcome = session_crossings::silver::derive(&root, Radius::default())
+    let outcome = session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 
@@ -238,11 +239,11 @@ async fn a_rerun_leaves_the_same_passes() {
     store_with_a_session(&root, 3).await;
     store_with_crossings(&root, &[1_060.0, 2_020.0]).await;
 
-    session_crossings::silver::derive(&root, Radius::default())
+    session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
     let first = passes_in(&root).await;
-    let second_run = session_crossings::silver::derive(&root, Radius::default())
+    let second_run = session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive again");
 
@@ -256,7 +257,7 @@ async fn a_pass_the_rerun_no_longer_makes_is_swept() {
     let root = Root::new(tmp.path());
     store_with_a_session(&root, 3).await;
     store_with_crossings(&root, &[1_060.0]).await;
-    session_crossings::silver::derive(&root, Radius::default())
+    session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 
@@ -275,7 +276,7 @@ async fn passes_are_partitioned_by_the_date_they_happened_on() {
     store_with_a_session(&root, 3).await;
     store_with_crossings(&root, &[1_060.0]).await;
 
-    session_crossings::silver::derive(&root, Radius::default())
+    session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 
@@ -293,7 +294,7 @@ async fn a_session_that_never_moved_still_records_what_it_sat_beside() {
     store_with_a_session(&root, 1).await;
     store_with_crossings(&root, &[30.0]).await;
 
-    let outcome = session_crossings::silver::derive(&root, Radius::default())
+    let outcome = session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 
@@ -361,7 +362,7 @@ async fn a_country_holding_only_some_of_the_datasets_is_left_out_rather_than_fai
     store_with_a_session_in_each_of_two_countries(&root).await;
     store_with_crossings(&root, &[SAMPLE_SPACING_M + 60.0]).await;
 
-    let outcome = session_crossings::silver::derive(&root, Radius::default())
+    let outcome = session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 

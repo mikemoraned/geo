@@ -1,8 +1,6 @@
 use chrono::{DateTime, FixedOffset, Utc};
-use domain::{CrossingCompact, Sample};
-use predictor::{
-    CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS_METRES, Event, ObserveError, Predict,
-};
+use domain::{CrossingCompact, Radius, Sample};
+use predictor::{CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS, Event, ObserveError, Predict};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -49,7 +47,7 @@ impl CrowFlies {
     /// A predictor over `crossings`, each `(id, latitude_degrees, longitude_degrees)`,
     /// reporting everything within `radius_metres`.
     #[new]
-    #[pyo3(signature = (crossings, *, radius_metres=DEFAULT_RADIUS_METRES))]
+    #[pyo3(signature = (crossings, *, radius_metres=DEFAULT_RADIUS.as_metres()))]
     fn new(crossings: Vec<(u32, f64, f64)>, radius_metres: f64) -> PyResult<Self> {
         let crossings = crossings
             .into_iter()
@@ -60,7 +58,7 @@ impl CrowFlies {
             .collect::<PyResult<Vec<_>>>()?;
 
         Ok(Self {
-            inner: CrowFliesPredictor::new(crossings, radius_metres),
+            inner: CrowFliesPredictor::new(crossings, Radius::new(radius_metres)),
         })
     }
 
@@ -142,6 +140,6 @@ impl CrowFlies {
 fn lookout_predictor(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<CrowFlies>()?;
     module.add_class::<Prediction>()?;
-    module.add("DEFAULT_RADIUS_METRES", DEFAULT_RADIUS_METRES)?;
+    module.add("DEFAULT_RADIUS_METRES", DEFAULT_RADIUS.as_metres())?;
     Ok(())
 }

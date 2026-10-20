@@ -443,9 +443,12 @@ maps them into `train_segment_v2`.
 
 At the end of the slice, once its features are in.
 
-- [ ] Look across the lookout crates for types a library or `std` already provides, as
+- [x] Look across the lookout crates for types a library or `std` already provides, as
       `TimeWindow` was a `Range<DateTime<Utc>>`, and for raw numbers standing in for a type.
       Replace each where the code reads better.
+      A row type keeps `lat` and `lon` as `f64`, since each field mirrors a stored column. A
+      distance stays an `f64` in metres, since the predictor's arithmetic reads better on raw
+      numbers.
 - [ ] Name every flag and field whose value is Overture's own after Overture, as
       `--overture-country` and `--overture-region` are. Check the other crates follow it.
 - [ ] Apply the `Age` rule in `.claude/rules/rust.md` across `lookout`: every maximum age,
@@ -463,6 +466,12 @@ At the end of the slice, once its features are in.
       row's schema deserialises an empty string into each field, and `Label` refuses one, so
       `medallion` needs a way to trace a checked newtype first. `MotisSourceRow::label` has the
       same `String` for the same reason.
+- [ ] Define `path_through` and `implied_speed` once, where `recorder` and `motis` can both
+      reach them. `crates/recorder/src/silver.rs` and `crates/motis/src/train_sessions.rs` each
+      define both.
+- [ ] Make `Radius::new` refuse anything but a positive, finite number of metres, as `Age`
+      refuses zero. Refuse an invalid radius where it enters: `--match-radius-m` at parsing, and
+      both Python bindings with a `ValueError`.
 
 #### Optimisation
 

@@ -65,9 +65,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let crossings: Vec<_> = match args.bbox {
         Some(bbox) => read
             .into_iter()
-            .filter(|crossing| {
-                bbox.contains(crossing.crossing.longitude(), crossing.crossing.latitude())
-            })
+            .filter(|crossing| bbox.contains(crossing.crossing.position))
             .collect(),
         None => read,
     };

@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use predictor::{DEFAULT_RADIUS_METRES, Prediction};
+use predictor::{DEFAULT_RADIUS, Prediction};
 
 use platform_core::Float;
 use platform_core::battery::Charge;
@@ -41,7 +41,7 @@ pub(crate) fn bars(charge: Charge) -> &'static str {
 }
 
 pub(crate) fn within(count: usize) -> String {
-    format!("{count} in {:.0}km", DEFAULT_RADIUS_METRES / 1_000.0)
+    format!("{count} in {:.0}km", DEFAULT_RADIUS.as_metres() / 1_000.0)
 }
 
 fn distance(metres: Float) -> String {

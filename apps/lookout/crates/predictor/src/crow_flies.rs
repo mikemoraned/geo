@@ -1,12 +1,12 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
-use domain::{CrossingCompact, Precision, Sample};
+use domain::{CrossingCompact, Precision, Radius, Sample};
 
 use crate::crossings::Crossings;
 use crate::predict::{Event, ObserveError, Predict, Prediction};
 
-pub const DEFAULT_RADIUS_METRES: f64 = 5_000.0;
+pub const DEFAULT_RADIUS: Radius = Radius::new(5_000.0);
 
 #[derive(Debug, Clone)]
 pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
@@ -19,10 +19,10 @@ pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
 }
 
 impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
-    pub fn new(crossings: C, radius_metres: f64) -> Self {
+    pub fn new(crossings: C, radius: Radius) -> Self {
         // Infallible: `from_f64` only declines a value the target cannot represent, and a
         // radius in metres is an ordinary magnitude in any float.
-        let radius_metres = P::from_f64(radius_metres).expect("a radius fits in any float");
+        let radius_metres = P::from_f64(radius.as_metres()).expect("a radius fits in any float");
         Self {
             crossings,
             radius_metres,
@@ -108,7 +108,7 @@ fn speed_mps<P: Precision>(sample: &Sample<P>, previous: Option<&Sample<P>>) -> 
 }
 
 fn implied_speed_mps<P: Precision>(sample: &Sample<P>, previous: &Sample<P>) -> Option<P> {
-    let seconds = P::from_f64((sample.t - previous.t).num_milliseconds() as f64 / 1_000.0)?;
+    let seconds = P::from_f64((sample.t - previous.t).as_seconds_f64())?;
     (seconds > P::zero())
         .then(|| Haversine.distance(previous.gps.position, sample.gps.position) / seconds)
 }
@@ -167,7 +167,7 @@ mod tests {
     }
 
     fn predictor() -> CrowFlies<f64> {
-        CrowFlies::new(crossings(), DEFAULT_RADIUS_METRES)
+        CrowFlies::new(crossings(), DEFAULT_RADIUS)
     }
 
     fn fix_at(latitude: f64, after: i64) -> Sample<f64> {
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn a_crossing_outside_the_radius_is_not_predicted() {
-        let mut predictor = CrowFlies::new(crossings(), 2_000.0);
+        let mut predictor = CrowFlies::new(crossings(), Radius::new(2_000.0));
 
         predictor
             .observe(Event::Sampled(fix()))
@@ -238,7 +238,7 @@ mod tests {
             .expect("an event in order");
 
         let predicted = predictor.predictions()[0].at.expect("a time");
-        let seconds = (predicted - instant()).num_milliseconds() as f64 / 1_000.0;
+        let seconds = (predicted - instant()).as_seconds_f64();
         assert!(
             (seconds - HUNDREDTH_DEGREE_M / 10.0).abs() < 1.0,
             "{seconds}s is not the time to cover {HUNDREDTH_DEGREE_M}m at 10m/s",
@@ -335,8 +335,7 @@ mod tests {
             .expect("an event in order");
 
         let predicted = predictor.predictions()[0].at.expect("a time");
-        let seconds =
-            (predicted - (instant() + TimeDelta::seconds(100))).num_milliseconds() as f64 / 1_000.0;
+        let seconds = (predicted - (instant() + TimeDelta::seconds(100))).as_seconds_f64();
         assert!((seconds - 100.0f64).abs() < 1.0, "{seconds}s is not 100s");
     }
 
@@ -454,7 +453,7 @@ mod tests {
 
     #[test]
     fn the_whole_prediction_runs_at_the_precision_the_device_uses() {
-        let mut predictor: CrowFlies<f32> = CrowFlies::new(crossings(), DEFAULT_RADIUS_METRES);
+        let mut predictor: CrowFlies<f32> = CrowFlies::new(crossings(), DEFAULT_RADIUS);
         let fix = Sample::<f32>::at(instant(), 50.0, 0.0)
             .expect("on the globe")
             .with_speed_mps(Some(10.0));
@@ -470,7 +469,7 @@ mod tests {
         );
 
         let predicted = predictor.predictions()[0].at.expect("a time");
-        let seconds = (predicted - instant()).num_milliseconds() as f64 / 1_000.0;
+        let seconds = (predicted - instant()).as_seconds_f64();
         assert!(
             (seconds - HUNDREDTH_DEGREE_M / 10.0).abs() < 1.0,
             "{seconds}s is not the time to cover {HUNDREDTH_DEGREE_M}m at 10m/s",
@@ -479,7 +478,7 @@ mod tests {
 
     #[test]
     fn an_empty_set_of_crossings_predicts_nothing() {
-        let mut predictor = CrowFlies::new(Vec::new(), DEFAULT_RADIUS_METRES);
+        let mut predictor = CrowFlies::new(Vec::new(), DEFAULT_RADIUS);
 
         predictor
             .observe(Event::Sampled(fix()))

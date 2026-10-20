@@ -3,7 +3,7 @@ use std::num::ParseFloatError;
 use std::str::FromStr;
 
 use geo::Intersects;
-use geo_types::{Coord, Rect, coord};
+use geo_types::{Coord, Point, Rect, coord};
 use serde::{Deserialize, Serialize};
 
 const CORNERS: usize = 4;
@@ -61,8 +61,8 @@ impl Bbox {
         self.0
     }
 
-    pub fn contains(&self, longitude: f64, latitude: f64) -> bool {
-        self.0.intersects(&coord! { x: longitude, y: latitude })
+    pub fn contains(&self, point: Point<f64>) -> bool {
+        self.0.intersects(&point)
     }
 
     pub fn min(&self) -> Coord<f64> {
@@ -217,18 +217,18 @@ mod tests {
     fn a_bbox_holds_the_points_inside_it_and_on_its_edges() {
         let bbox: Bbox = GERMANY.parse().unwrap();
 
-        assert!(bbox.contains(13.54, 51.61));
-        assert!(bbox.contains(6.08, 47.42));
-        assert!(bbox.contains(15.04, 54.93));
-        assert!(!bbox.contains(-0.12, 51.50));
-        assert!(!bbox.contains(13.54, 55.00));
+        assert!(bbox.contains(Point::new(13.54, 51.61)));
+        assert!(bbox.contains(Point::new(6.08, 47.42)));
+        assert!(bbox.contains(Point::new(15.04, 54.93)));
+        assert!(!bbox.contains(Point::new(-0.12, 51.50)));
+        assert!(!bbox.contains(Point::new(13.54, 55.00)));
     }
 
     #[test]
     fn a_degenerate_bbox_holds_only_its_own_point() {
         let point = Bbox::new(13.54, 51.61, 13.54, 51.61).unwrap();
 
-        assert!(point.contains(13.54, 51.61));
-        assert!(!point.contains(13.55, 51.61));
+        assert!(point.contains(Point::new(13.54, 51.61)));
+        assert!(!point.contains(Point::new(13.55, 51.61)));
     }
 }

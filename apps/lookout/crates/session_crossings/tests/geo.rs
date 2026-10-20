@@ -7,7 +7,7 @@ use domain::{CrossingId, SessionId};
 use geojson::{Feature, FeatureCollection, GeoJson};
 use libtest_mimic::{Arguments, Failed, Trial};
 use medallion::{Country, Root};
-use session_crossings::matching::{Radius, steps};
+use session_crossings::matching::{DEFAULT_RADIUS, steps};
 use session_crossings::silver::{Inputs, inputs};
 
 const CASES: &str = "tests/passes.geojson";
@@ -60,7 +60,7 @@ fn passes_found(case: &Case, inputs: &Inputs) -> Result<usize, String> {
         &session.session_id,
         &session.samples,
         crossing,
-        Radius::default(),
+        DEFAULT_RADIUS,
     )
     .passes
     .len())

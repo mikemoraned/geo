@@ -1,15 +1,16 @@
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
+use domain::Radius;
 use medallion::MedallionArgs;
-use session_crossings::matching::Radius;
+use session_crossings::matching::DEFAULT_RADIUS;
 use session_crossings::silver;
 
 #[derive(Parser)]
 #[command(about = "Derive the crossings each session passed")]
 struct Args {
     /// How near a sample has to come to a crossing, in metres, for it to count as passed.
-    #[arg(long, default_value_t = Radius::default().as_metres())]
+    #[arg(long, default_value_t = DEFAULT_RADIUS.as_metres())]
     match_radius_m: f64,
     #[command(flatten)]
     medallion: MedallionArgs,

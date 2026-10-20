@@ -2,13 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use domain::Bbox;
-use domain::{DeviceId, Pass, SessionId};
+use domain::{DeviceId, Pass, Radius, SessionId};
 use geo_types::Point;
 use medallion::{COUNTRY, Country, DatasetSpec, Query, Replaced, Root, layers};
 use medallion_model::{SessionCrossingRow, WaterCrossingRow};
 use serde::Deserialize;
 
-use crate::matching::{Crossing, Radius, Sample, Session, passes};
+use crate::matching::{Crossing, Sample, Session, passes};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MatchOutcome {

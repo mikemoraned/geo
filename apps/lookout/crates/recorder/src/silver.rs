@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use domain::Bbox;
 use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
@@ -132,7 +132,7 @@ fn locate(session: &Session, projector: &Projector) -> Result<Vec<Located>, meda
             speed: sample.speed,
             heading: sample.heading,
             implied_speed_mps: previous
-                .map(|previous| implied_speed(previous, (projected, sample.t))),
+                .map(|(from, then)| implied_speed(from, projected, sample.t - then)),
         };
         located.push(Located { row, point });
         previous = Some((projected, sample.t));
@@ -141,9 +141,8 @@ fn locate(session: &Session, projector: &Projector) -> Result<Vec<Located>, meda
     Ok(located)
 }
 
-fn implied_speed(from: (Point<f64>, DateTime<Utc>), to: (Point<f64>, DateTime<Utc>)) -> f64 {
-    let seconds = (to.1 - from.1).num_milliseconds() as f64 / 1_000.0;
-    Euclidean.distance(from.0, to.0) / seconds
+fn implied_speed(from: Point<f64>, to: Point<f64>, took: TimeDelta) -> f64 {
+    Euclidean.distance(from, to) / took.as_seconds_f64()
 }
 
 #[cfg(test)]
