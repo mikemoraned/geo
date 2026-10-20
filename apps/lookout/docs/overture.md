@@ -46,6 +46,19 @@ old. A derivation keyed on one renames its own rows across a release even where 
 still. Every id is a 36-character UUID, and in the releases read so far the
 registry's ids are version 4 and the derived ones version 3.
 
+## A country or region code is an ISO 3166 code
+
+A division's `country` holds the ISO 3166-1 alpha-2 code of its country, such as `DE`. Its
+optional `region` holds the ISO 3166-2 code of the principal subdivision it lies in, such as
+`DE-TH`. The schema's
+[`CountryCodeAlpha2`](https://docs.overturemaps.org/schema/reference/system/country_code_alpha2/)
+and [`RegionCode`](https://docs.overturemaps.org/schema/reference/system/region_code/) types hold
+each to its standard's form. A country code is two capital letters. A region code is its
+country's code, a hyphen, and one to three capital letters or digits.
+
+ISO defines both codes, so each means the same outside Overture. A division id and a release's
+name are Overture's own.
+
 ## Every row carries its own bbox
 
 Overture writes a `bbox` struct on each row — `xmin`, `ymin`, `xmax`, `ymax` — beside the

@@ -3,7 +3,7 @@
 Trains near where a device has been, or across one country or region: poll a Motis server for the
 trips there, keep every answer, and derive from them one row per scheduled leg and one train
 session per trip. `motis_follow_gps` polls around recent GPS fixes, and `motis_track_area` polls
-one Overture country or region.
+one country or region, named by its ISO 3166 code, such as `DE` or `DE-TH`.
 
 [motis.md](../../docs/motis.md) covers what the server and the feed behind it can answer;
 [medallion.md](../../docs/medallion.md) covers the layers the three stages write.

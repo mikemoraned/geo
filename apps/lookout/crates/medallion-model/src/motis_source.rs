@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 
-use crate::gers::{GersId, NotAGersId};
+use crate::gers::NotAGersId;
+use crate::overture::OvertureRegion;
 use crate::overture_release::{NotAnOvertureRelease, OvertureRelease};
 
 const MOTIS_SOURCE_NAMESPACE: Uuid = Uuid::from_u128(0x3c41_9e2d_7a58_4b06_8f13_d2e6_5a90_c71b);
@@ -181,16 +182,10 @@ impl FromStr for Feed {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Region {
-    pub id: GersId,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Area {
     pub country: Country,
-    pub region: Option<Region>,
-    pub release: OvertureRelease,
+    pub overture_region: Option<OvertureRegion>,
+    pub overture_release: OvertureRelease,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -234,11 +229,14 @@ impl MotisSource {
         let region = self
             .area
             .as_ref()
-            .and_then(|area| area.region.as_ref())
+            .and_then(|area| area.overture_region.as_ref())
             .map(|region| region.id.to_string())
             .unwrap_or_default();
         let version = self.motis_version.to_string();
-        let release = self.area.as_ref().map(|area| area.release.to_string());
+        let release = self
+            .area
+            .as_ref()
+            .map(|area| area.overture_release.to_string());
         let name = [
             self.base_url.as_str(),
             version.as_str(),
@@ -255,7 +253,10 @@ impl MotisSource {
     }
 
     pub fn row(&self, registered_at: DateTime<Utc>) -> MotisSourceRow {
-        let region = self.area.as_ref().and_then(|area| area.region.as_ref());
+        let region = self
+            .area
+            .as_ref()
+            .and_then(|area| area.overture_region.as_ref());
         MotisSourceRow {
             source_id: self.id(),
             base_url: self.base_url.to_string(),
@@ -267,7 +268,10 @@ impl MotisSource {
                 .map(|area| area.country.code().to_string()),
             region_id: region.map(|region| region.id.to_string()),
             region_name: region.map(|region| region.name.clone()),
-            overture_release: self.area.as_ref().map(|area| area.release.to_string()),
+            overture_release: self
+                .area
+                .as_ref()
+                .map(|area| area.overture_release.to_string()),
             label: self.label.as_ref().map(Label::to_string),
             registered_at,
         }
@@ -283,7 +287,7 @@ impl TryFrom<MotisSourceRow> for MotisSource {
             source,
         })?;
         let region = match (row.region_id, row.region_name) {
-            (Some(id), Some(name)) => Some(Region {
+            (Some(id), Some(name)) => Some(OvertureRegion {
                 id: id.parse()?,
                 name,
             }),
@@ -293,8 +297,8 @@ impl TryFrom<MotisSourceRow> for MotisSource {
         let area = match (row.country, row.overture_release, region) {
             (Some(country), Some(release), region) => Some(Area {
                 country: country.parse()?,
-                region,
-                release: release.parse()?,
+                overture_region: region,
+                overture_release: release.parse()?,
             }),
             (None, None, None) => None,
             (None, _, Some(_)) => return Err(NotAMotisSource::RegionWithoutCountry),
@@ -336,6 +340,7 @@ mod tests {
     use arrow::datatypes::DataType;
 
     use super::*;
+    use crate::gers::GersId;
 
     const REGION_ID: &str = "0fbd2c80-46c8-4e2b-9ab6-36d2a5c4b0a1";
 
@@ -350,11 +355,11 @@ mod tests {
             feed: Feed::Transitous,
             area: Some(Area {
                 country: Country::Germany,
-                region: Some(Region {
+                overture_region: Some(OvertureRegion {
                     id: GersId::new(REGION_ID).expect("a GERS id"),
                     name: "Thüringen".to_string(),
                 }),
-                release: release("2026-09-23.1"),
+                overture_release: release("2026-09-23.1"),
             }),
             label: None,
         }
@@ -501,14 +506,14 @@ mod tests {
             MotisSource {
                 area: Some(Area {
                     country: Country::Germany,
-                    region: None,
-                    release: release("2026-09-23.1"),
+                    overture_region: None,
+                    overture_release: release("2026-09-23.1"),
                 }),
                 ..source.clone()
             },
             MotisSource {
                 area: Some(Area {
-                    release: release("2026-07-22.0"),
+                    overture_release: release("2026-07-22.0"),
                     ..source.area.clone().expect("an area")
                 }),
                 ..source.clone()
@@ -529,11 +534,11 @@ mod tests {
         let thuringia = MotisSource {
             area: Some(Area {
                 country: Country::Germany,
-                region: Some(Region {
+                overture_region: Some(OvertureRegion {
                     id: GersId::new("e0ff5492-5758-4335-aabd-af1747925cd1").expect("a GERS id"),
                     name: "Thüringen".to_string(),
                 }),
-                release: release("2026-09-23.1"),
+                overture_release: release("2026-09-23.1"),
             }),
             ..transitous()
         };
@@ -554,8 +559,8 @@ mod tests {
         let area_only = MotisSource {
             area: Some(Area {
                 country: Country::Germany,
-                region: None,
-                release: release("2026-09-23.1"),
+                overture_region: None,
+                overture_release: release("2026-09-23.1"),
             }),
             ..transitous()
         };
