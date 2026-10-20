@@ -119,5 +119,5 @@ def test_a_theme_no_extract_holds_is_reported(filled):
 
 
 def test_a_dataset_bronze_does_not_hold_is_refused_with_the_known_ones(filled):
-    with pytest.raises(ValueError, match="water_crossing"):
-        query(filled, "SELECT * FROM water_crossing")
+    with pytest.raises(ValueError, match="water_crossing_v2"):
+        query(filled, "SELECT * FROM water_crossing_v2")

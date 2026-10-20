@@ -38,7 +38,7 @@ def _():
     # A projected column is written in each country's own zone, so silver is read a country at a
     # time. See docs/medallion.md.
     COUNTRIES = lookout_medallion.countries_of(
-        "water_crossing", root=str(MEDALLION_ROOT)
+        "water_crossing_v2", root=str(MEDALLION_ROOT)
     )
 
     COUNTRIES
@@ -87,10 +87,11 @@ def _(MEDALLION_ROOT, gpd, lookout_medallion, pa, pd):
 @app.cell
 def _(COUNTRIES, pd, silver):
     CROSSINGS = """
-        SELECT crossing_id, water_id, water_class, water_subtype, track_id, rail_id,
+        SELECT crossing_id, overture_water_id, overture_water_class, overture_water_subtype,
+               track_id, overture_rail_id,
                overlap_kind, overlap_m, total_overlap_m, merged_parts, frac,
                ST_AsBinary(geometry) AS wkb
-        FROM water_crossing
+        FROM water_crossing_v2
     """
 
     crossings = pd.concat(
@@ -106,8 +107,8 @@ def _(crossings, lonboard, mo, np):
     KIND_COLOUR = {"line": [11, 132, 165], "point": [246, 153, 30]}
 
     HOVER = [
-        "water_class",
-        "water_subtype",
+        "overture_water_class",
+        "overture_water_subtype",
         "overlap_kind",
         "overlap_m",
         "merged_parts",

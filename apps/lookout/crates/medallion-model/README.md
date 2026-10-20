@@ -62,8 +62,8 @@ overlap in — a bridge is one crossing, not one per span — so a row carries i
 total over the parts merged into it, and how many parts those were. `frac` says where along the
 named segment it sits, from 0 at the start to 1 at the end. `track_id` is the connected stretch of
 physical track, named canonically from its own members rather than by a label a run assigned;
-`rail_id` is the upstream segment the representative part lies on, one of possibly several making
-up the track.
+`overture_rail_id` is the upstream segment the representative part lies on, one of possibly
+several making up the track.
 
 The columns saying how close two parts had to be to merge, and the shortest overlap the run kept,
 travel with the row. Unlike the sessions, where a threshold belongs to whoever is reading: two

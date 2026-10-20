@@ -84,12 +84,12 @@ def _crossing_table():
         {
             "crossing_id": pa.array(["w1-t1", "w2-t1"], pa.string()),
             "crossing_compact_id": pa.array([NEAR, FAR], pa.uint32()),
-            "water_id": pa.array(["water-1", "water-2"], pa.string()),
-            "water_subtype": pa.array(["river"] * rows, pa.string()),
-            "water_class": pa.array(["river"] * rows, pa.string()),
+            "overture_water_id": pa.array(["water-1", "water-2"], pa.string()),
+            "overture_water_subtype": pa.array(["river"] * rows, pa.string()),
+            "overture_water_class": pa.array(["river"] * rows, pa.string()),
             "track_id": pa.array(["track-1"] * rows, pa.string()),
-            "rail_id": pa.array(["rail-1"] * rows, pa.string()),
-            "rail_class": pa.array(["rail"] * rows, pa.string()),
+            "overture_rail_id": pa.array(["rail-1"] * rows, pa.string()),
+            "overture_rail_class": pa.array(["rail"] * rows, pa.string()),
             "overlap_kind": pa.array(["point"] * rows, pa.string()),
             "overlap_m": pa.array([0.0] * rows, pa.float64()),
             "total_overlap_m": pa.array([0.0] * rows, pa.float64()),
@@ -135,7 +135,7 @@ def store(tmp_path):
     lookout_medallion.write_silver(
         "session_sample", _samples_of_every_country(), root=str(tmp_path)
     )
-    lookout_medallion.write_silver("water_crossing", _crossing_table(), root=str(tmp_path))
+    lookout_medallion.write_silver("water_crossing_v2", _crossing_table(), root=str(tmp_path))
     return tmp_path
 
 

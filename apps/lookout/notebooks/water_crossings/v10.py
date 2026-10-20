@@ -787,13 +787,13 @@ def _(mo, reps_v5_gdf):
     _ = reps_v5_gdf  # dataflow: what the write below would write
 
     write_crossings = mo.ui.run_button(
-        label="write water_crossing to silver"
+        label="write water_crossing_v2 to silver"
     )
     mo.vstack(
         [
             mo.md(
                 "**Write the collapsed crossings into the store.** This replaces the whole "
-                "`water_crossing` dataset for this country with what the tuning above "
+                "`water_crossing_v2` dataset for this country with what the tuning above "
                 "produced — so it is a button rather than something the sliders do. "
                 "Run as a script and it writes without asking, which is how a rebuild of "
                 "the dataset is driven."
@@ -842,12 +842,12 @@ def _(
             "crossing_compact_id": _pa.array(
                 _reps["crossing_compact_id"], _pa.uint32()
             ),
-            "water_id": _pa.array(_reps["water_id"], _pa.string()),
-            "water_subtype": _pa.array(_reps["water_subtype"], _pa.string()),
-            "water_class": _pa.array(_reps["water_class"], _pa.string()),
+            "overture_water_id": _pa.array(_reps["water_id"], _pa.string()),
+            "overture_water_subtype": _pa.array(_reps["water_subtype"], _pa.string()),
+            "overture_water_class": _pa.array(_reps["water_class"], _pa.string()),
             "track_id": _pa.array(_reps["track_id"], _pa.string()),
-            "rail_id": _pa.array(_reps["rail_id"], _pa.string()),
-            "rail_class": _pa.array(_reps["rail_class"], _pa.string()),
+            "overture_rail_id": _pa.array(_reps["rail_id"], _pa.string()),
+            "overture_rail_class": _pa.array(_reps["rail_class"], _pa.string()),
             "overlap_kind": _pa.array(_reps["overlap_kind"], _pa.string()),
             "overlap_m": _pa.array(_reps["overlap_m"], _pa.float64()),
             "total_overlap_m": _pa.array(
@@ -873,7 +873,7 @@ def _(
     )
 
     written_crossings = lookout_medallion.write_silver(
-        "water_crossing", crossings_table, root=str(MEDALLION_ROOT)
+        "water_crossing_v2", crossings_table, root=str(MEDALLION_ROOT)
     )
     # A script run is how the dataset gets rebuilt, so it says what it did; in the notebook
     # the value below is the cell's output already.
@@ -891,13 +891,14 @@ def _(MEDALLION_ROOT, con, crossings_table, gpd):
     # crossing the write dropped or moved has to show up here.
     _ = crossings_table  # dataflow: after the write
     _written = con.execute(f"""
-        SELECT crossing_id, water_id, water_class, water_subtype, track_id, rail_id,
+        SELECT crossing_id, overture_water_id, overture_water_class, overture_water_subtype,
+               track_id, overture_rail_id,
                overlap_kind, overlap_m, total_overlap_m, merged_parts, frac,
                -- the position as plain numbers too, for the case-capture tool, which filters
                -- by the map's visible bounds rather than by a geometry predicate
                ST_X(geometry) AS lon, ST_Y(geometry) AS lat,
                ST_AsWKB(geometry) AS wkb
-        FROM read_parquet('{MEDALLION_ROOT}/silver/water_crossing/**/*.parquet')
+        FROM read_parquet('{MEDALLION_ROOT}/silver/water_crossing_v2/**/*.parquet')
     """).fetchdf()
     silver_crossings_gdf = gpd.GeoDataFrame(
         _written.drop(columns=["wkb"]),
