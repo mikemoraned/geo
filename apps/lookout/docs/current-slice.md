@@ -467,7 +467,8 @@ At the end of the slice, once its features are in.
          `overture_region_id` and `overture_region_name`. Add bronze `extract_manifest_v2`, with
          `release` renamed to `overture_release`.
       3. Copy every row of `motis_source` and `extract_manifest` into its new version, with a
-         migration binary committed and then removed.
+         one-off binary committed and then removed. The binary skips a row the new version
+         already holds. Run it again once step 4 moves the writers, then remove it.
       4. Point every reader and writer at the new versions. These are `motis/src/source.rs`,
          `transport`, the `crossings` geo test, `medallion-py`'s bronze query test, the
          `motis_capture` and `water_crossings` notebooks, the comment in
