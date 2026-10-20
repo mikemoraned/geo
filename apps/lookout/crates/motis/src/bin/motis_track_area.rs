@@ -2,24 +2,25 @@ use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 use medallion::{Country, Root};
-use medallion_model::{Area, Region};
+use medallion_model::Area;
 use motis::capture::Coverage;
 use motis::polling::{PollArgs, Poller};
 use transport::countries::CountryAreas;
 use transport::regions::{RegionCode, region_area};
 
 #[derive(Parser)]
-#[command(about = "Poll Motis for every train in one Overture country or region, and log them")]
+#[command(about = "Poll Motis for every train in one country or region, and log them")]
 struct Args {
     #[command(flatten)]
     poll: PollArgs,
-    /// The country to capture, as Overture's `country` column names it, such as DE. Its shape
-    /// comes from the country's newest extract.
+    /// The country to capture, as an ISO 3166-1 alpha-2 code, such as DE. Its shape comes from
+    /// the country's newest Overture extract.
     #[arg(long)]
-    overture_country: Country,
-    /// Narrow the country to this region, as Overture's `region` column names it, such as DE-TH.
+    country: Country,
+    /// Narrow the country to one of its principal subdivisions, named by its ISO 3166-2 code,
+    /// such as DE-TH.
     #[arg(long)]
-    overture_region: Option<RegionCode>,
+    region: Option<RegionCode>,
 }
 
 #[tokio::main]
@@ -42,8 +43,7 @@ async fn main() {
         .install_default()
         .expect("install rustls crypto provider");
 
-    let (area, mut coverage) =
-        fixed_area(&root, args.overture_country, args.overture_region.as_ref()).await;
+    let (area, mut coverage) = fixed_area(&root, args.country, args.region.as_ref()).await;
     Poller::start(&args.poll, &root, Some(area))
         .await
         .expect("start polling Motis")
@@ -65,11 +65,7 @@ async fn fixed_area(
             let found = region_area(root, country, code)
                 .await
                 .expect("find the region in the country's newest Overture extract");
-            let region = Region {
-                id: found.id,
-                name: found.name,
-            };
-            (Some(region), found.release, found.shapes)
+            (Some(found.region), found.release, found.shapes)
         }
         None => {
             let release = areas
@@ -89,8 +85,8 @@ async fn fixed_area(
     (
         Area {
             country,
-            region,
-            release,
+            overture_region: region,
+            overture_release: release,
         },
         coverage,
     )

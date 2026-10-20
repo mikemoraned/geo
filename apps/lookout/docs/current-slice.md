@@ -449,8 +449,33 @@ At the end of the slice, once its features are in.
       A row type keeps `lat` and `lon` as `f64`, since each field mirrors a stored column. A
       distance stays an `f64` in metres, since the predictor's arithmetic reads better on raw
       numbers.
-- [ ] Name every flag and field whose value is Overture's own after Overture, as
-      `--overture-country` and `--overture-region` are. Check the other crates follow it.
+- [ ] Name every flag, field, and type whose value is Overture's own after Overture, such as a
+      release or a division's id and name. Check the other crates follow it. A country or region
+      code keeps a plain name, since ISO defines it. Overture's schema types `country` as an ISO
+      3166-1 alpha-2 code, and `region` as an ISO 3166-2 code. A type or dataset named after
+      Overture, such as `OvertureRegion` or `overture_extract`, keeps plain field names. A stored
+      column takes its new name in a new version of its bronze dataset, and the old version keeps
+      its data:
+      1. Rename `--release` on `extract new` to `--overture-release`, and `Area`'s `region` and
+         `release` to `overture_region` and `overture_release`. Rename `Region`, which holds a
+         GERS id, to `OvertureRegion`, and move it to `overture.rs`. Rename `transport`'s
+         `RegionArea` to `OvertureRegionArea`, holding an `OvertureRegion` in place of its `id` and
+         `name`. Rename `--overture-country` and `--overture-region` on `motis_track_area` to
+         `--country` and `--region`. Name each code's standard in its flag's help, in
+         `RegionCode`'s error, and in the docs.
+      2. Add bronze `motis_source_v2`, with `region_id` and `region_name` renamed to
+         `overture_region_id` and `overture_region_name`. Add bronze `extract_manifest_v2`, with
+         `release` renamed to `overture_release`.
+      3. Copy every row of `motis_source` and `extract_manifest` into its new version, with a
+         migration binary committed and then removed.
+      4. Point every reader and writer at the new versions. These are `motis/src/source.rs`,
+         `transport`, the `crossings` geo test, the `motis_capture` and `water_crossings`
+         notebooks, and the docs describing either dataset. Once nothing reads them, remove
+         `MotisSourceRow` and `ExtractManifestRow`.
+      5. Once nothing reads `motis_source` or `extract_manifest`, decide whether to delete them.
+         Their rows live on in the new versions.
+      Changed on 2026-10-20 from naming the country and region codes after Overture, as
+      `--overture-country` and `--overture-region` did.
 - [ ] Apply the `Age` rule in `.claude/rules/rust.md` across `lookout`: every maximum age,
       lookback, or other age held as `domain::Age`, every age flag read as a `Span`, and
       `Option<Age>` where no age applies.

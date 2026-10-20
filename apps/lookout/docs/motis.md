@@ -163,10 +163,11 @@ fields describe a source:
   outline came from
 - an optional label
 
-A region is recorded as its Overture division id, which joins to the extract, and its name, for a
-reader. The label tells apart two setups of one server that the other fields cannot, such as two
-DELFI builds. It holds lowercase letters and digits, with a single `-` or `.` between words, such
-as `gtfs.de` or `delfi-2026-10-12`.
+A country is recorded as its ISO 3166-1 alpha-2 code, such as `DE`. A caller names a region by its
+ISO 3166-2 code, such as `DE-TH`. The region is recorded as its Overture division id, which joins
+to the extract, and its name, for a reader. The label tells apart two setups of one server that the
+other fields cannot, such as two DELFI builds. It holds lowercase letters and digits, with a single
+`-` or `.` between words, such as `gtfs.de` or `delfi-2026-10-12`.
 
 The id is a UUID v5 of those fields, so one source always gets the same id. A change to any field,
 such as a Motis upgrade or a new Overture release, makes a new source. A label adds to the hash

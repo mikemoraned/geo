@@ -4,7 +4,8 @@ use std::str::FromStr;
 use geo_types::Geometry;
 use medallion::{Country, GEOMETRY, Query, Root};
 use medallion_model::{
-    DIVISION_ID, ExtractManifestRow, GersId, NotAGersId, NotAnOvertureRelease, OvertureRelease,
+    DIVISION_ID, ExtractManifestRow, NotAGersId, NotAnOvertureRelease, OvertureRegion,
+    OvertureRelease,
 };
 use serde::Deserialize;
 
@@ -12,7 +13,7 @@ use serde::Deserialize;
 pub struct RegionCode(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("`{code}` is not an Overture region code, such as DE-TH")]
+#[error("`{code}` is not an ISO 3166-2 code, such as DE-TH")]
 pub struct NotARegionCode {
     code: String,
 }
@@ -58,9 +59,8 @@ impl Display for RegionCode {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct RegionArea {
-    pub id: GersId,
-    pub name: String,
+pub struct OvertureRegionArea {
+    pub region: OvertureRegion,
     pub shapes: Vec<Geometry<f64>>,
     pub release: OvertureRelease,
 }
@@ -97,7 +97,7 @@ pub async fn region_area(
     root: &Root,
     country: Country,
     code: &RegionCode,
-) -> Result<RegionArea, RegionError> {
+) -> Result<OvertureRegionArea, RegionError> {
     if code.country_code() != country.code() {
         return Err(RegionError::OtherCountry {
             code: code.clone(),
@@ -158,9 +158,11 @@ pub async fn region_area(
         shapes.extend(medallion::geometries(&batch, GEOMETRY)?);
     }
 
-    Ok(RegionArea {
-        id: division.division_id.parse()?,
-        name: division.name.clone(),
+    Ok(OvertureRegionArea {
+        region: OvertureRegion {
+            id: division.division_id.parse()?,
+            name: division.name.clone(),
+        },
         shapes,
         release,
     })
@@ -323,8 +325,8 @@ mod tests {
             .await
             .expect("Thuringia");
 
-        assert_eq!(area.id.to_string(), THURINGIA);
-        assert_eq!(area.name, "Thüringen");
+        assert_eq!(area.region.id.to_string(), THURINGIA);
+        assert_eq!(area.region.name, "Thüringen");
         assert_eq!(area.shapes, vec![square_from(0.0, 10.0)]);
         assert_eq!(area.release.to_string(), "2026-09-17.0");
     }

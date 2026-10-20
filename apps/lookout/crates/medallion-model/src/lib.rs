@@ -23,10 +23,11 @@ pub use motis::{
 };
 pub use motis_source::{
     Area, Feed, Label, MOTIS_SOURCE, MotisSource, MotisSourceId, MotisSourceRow, MotisVersion,
-    NotALabel, NotAMotisSource, NotAMotisVersion, Region, UnknownFeed,
+    NotALabel, NotAMotisSource, NotAMotisVersion, UnknownFeed,
 };
 pub use overture::{
-    DIVISION_ID, EXTRACT_MANIFEST, ExtractManifestRow, OVERTURE_EXTRACT, division_id,
+    DIVISION_ID, EXTRACT_MANIFEST, ExtractManifestRow, OVERTURE_EXTRACT, OvertureRegion,
+    division_id,
 };
 pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
 pub use session::{SESSION, SESSION_SAMPLE, SessionRow, SessionSampleRow};

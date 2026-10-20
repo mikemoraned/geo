@@ -26,6 +26,12 @@ pub struct ExtractManifestRow {
     pub max_lat: f64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OvertureRegion {
+    pub id: GersId,
+    pub name: String,
+}
+
 pub fn division_id(country: Country) -> GersId {
     let id = match country {
         Country::Germany => "567d1698-7209-4b94-b7b8-0bc71bde0104",

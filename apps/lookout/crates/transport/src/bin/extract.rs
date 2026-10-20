@@ -38,7 +38,7 @@ enum Command {
         /// Overture release to extract (see docs.overturemaps.org/release). Without
         /// one, the latest release the mirror or the bucket holds.
         #[arg(long)]
-        release: Option<String>,
+        overture_release: Option<String>,
         /// Country to extract, as an ISO 3166-1 alpha-2 code.
         #[arg(long, default_value = "DE")]
         country: Country,
@@ -87,9 +87,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let recorded = extract::recorded_as(&root, &id).await?;
             report(&backfill(&root, &mirror, recorded, at).await?);
         }
-        Command::New { release, country } => {
+        Command::New {
+            overture_release,
+            country,
+        } => {
             let id = ExtractId::at(at);
-            let release = ReleaseChoice::from(release).resolve(mirror).await?;
+            let release = ReleaseChoice::from(overture_release)
+                .resolve(mirror)
+                .await?;
             tracing::info!(
                 %id,
                 release = release.id(),
@@ -305,11 +310,15 @@ mod tests {
     fn a_new_extract_defaults_to_the_latest_release_available_and_germany() {
         let args = Args::parse_from(["extract", "new"]);
 
-        let Some(Command::New { release, country }) = args.command else {
+        let Some(Command::New {
+            overture_release,
+            country,
+        }) = args.command
+        else {
             panic!("expected a new extract");
         };
         assert_eq!(
-            ReleaseChoice::from(release),
+            ReleaseChoice::from(overture_release),
             ReleaseChoice::LatestReleaseAvailable
         );
         assert_eq!(country, Country::Germany);
@@ -317,13 +326,16 @@ mod tests {
 
     #[test]
     fn a_new_extract_takes_a_named_release() {
-        let args = Args::parse_from(["extract", "new", "--release", "2026-07-22.0"]);
+        let args = Args::parse_from(["extract", "new", "--overture-release", "2026-07-22.0"]);
 
-        let Some(Command::New { release, .. }) = args.command else {
+        let Some(Command::New {
+            overture_release, ..
+        }) = args.command
+        else {
             panic!("expected a new extract");
         };
         assert_eq!(
-            ReleaseChoice::from(release),
+            ReleaseChoice::from(overture_release),
             ReleaseChoice::NamedRelease("2026-07-22.0".into())
         );
     }
