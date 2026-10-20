@@ -22,12 +22,12 @@ pub use motis::{
     TRAIN_SEGMENT_V2, TrainSegmentRowV2, TripId,
 };
 pub use motis_source::{
-    Area, Feed, Label, MOTIS_SOURCE, MOTIS_SOURCE_V2, MotisSource, MotisSourceId, MotisSourceRowV2,
-    MotisVersion, NotALabel, NotAMotisSource, NotAMotisVersion, UnknownFeed,
+    Area, Feed, Label, MOTIS_SOURCE_V2, MotisSource, MotisSourceId, MotisSourceRowV2, MotisVersion,
+    NotALabel, NotAMotisSource, NotAMotisVersion, UnknownFeed,
 };
 pub use overture::{
-    DIVISION_ID, EXTRACT_MANIFEST, EXTRACT_MANIFEST_V2, ExtractManifestRowV2, OVERTURE_EXTRACT,
-    OvertureRegion, division_id,
+    DIVISION_ID, EXTRACT_MANIFEST_V2, ExtractManifestRowV2, OVERTURE_EXTRACT, OvertureRegion,
+    division_id,
 };
 pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
 pub use session::{SESSION, SESSION_SAMPLE, SessionRow, SessionSampleRow};
@@ -41,14 +41,13 @@ pub use train_session::{
     train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 18] = [
+pub const ALL: [DatasetInfo; 16] = [
     RAW_SAMPLE.info(),
     GPS_READING.info(),
     ACCEL_READING.info(),
     DEVICE_SESSION.info(),
     MOTIS_SEGMENT.info(),
     MOTIS_SEGMENT_V2.info(),
-    MOTIS_SOURCE.info(),
     MOTIS_SOURCE_V2.info(),
     TRAIN_SEGMENT_V2.info(),
     SESSION.info(),
@@ -58,7 +57,6 @@ pub const ALL: [DatasetInfo; 18] = [
     WATER_CROSSING.info(),
     SESSION_CROSSING.info(),
     OVERTURE_EXTRACT.info(),
-    EXTRACT_MANIFEST.info(),
     EXTRACT_MANIFEST_V2.info(),
 ];
 
