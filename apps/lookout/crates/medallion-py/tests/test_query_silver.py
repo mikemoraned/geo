@@ -15,7 +15,7 @@ def written(store):
         root=str(store),
     )
     lookout_medallion.write_silver(
-        "water_crossing",
+        "water_crossing_v2",
         water_crossing_table([0x292E417A], [BERLIN], [BERLIN_UTM32N]),
         root=str(store),
     )
@@ -84,7 +84,7 @@ def test_a_parameter_carrying_a_quote_matches_nothing(written):
 def test_geometry_reads_back_as_geometry_rather_than_as_bytes(written):
     table = query(
         written,
-        "SELECT ST_X(geometry) AS lon, ST_Y(geometry) AS lat FROM water_crossing",
+        "SELECT ST_X(geometry) AS lon, ST_Y(geometry) AS lat FROM water_crossing_v2",
     )
 
     assert (table.column("lon")[0].as_py(), table.column("lat")[0].as_py()) == BERLIN
@@ -93,7 +93,7 @@ def test_geometry_reads_back_as_geometry_rather_than_as_bytes(written):
 def test_two_datasets_can_be_read_in_one_query(written):
     table = query(
         written,
-        "SELECT c.crossing_compact_id, s.trip_id FROM water_crossing c, train_segment_v2 s "
+        "SELECT c.crossing_compact_id, s.trip_id FROM water_crossing_v2 c, train_segment_v2 s "
         "WHERE s.trip_id = 'a'",
     )
 
@@ -127,12 +127,12 @@ def test_a_read_answers_with_the_named_country_and_no_other(store):
 
 class TestWhatIsRefused:
     def test_a_dataset_written_one_zone_to_a_country_without_naming_one(self, written):
-        with pytest.raises(ValueError, match="water_crossing"):
-            query(written, "SELECT * FROM water_crossing", country=None)
+        with pytest.raises(ValueError, match="water_crossing_v2"):
+            query(written, "SELECT * FROM water_crossing_v2", country=None)
 
     def test_a_country_the_store_has_no_zone_for(self, written):
         with pytest.raises(ValueError, match="ZZ"):
-            query(written, "SELECT * FROM water_crossing", country="ZZ")
+            query(written, "SELECT * FROM water_crossing_v2", country="ZZ")
 
     def test_a_dataset_the_store_does_not_define(self, written):
         with pytest.raises(ValueError, match="crossing_candidates"):
@@ -156,8 +156,8 @@ class TestWhatIsRefused:
 
 
 def test_the_countries_a_dataset_holds_come_back_as_codes(written):
-    assert lookout_medallion.countries_of("water_crossing", root=str(written)) == ["DE"]
+    assert lookout_medallion.countries_of("water_crossing_v2", root=str(written)) == ["DE"]
 
 
 def test_a_dataset_that_was_never_written_holds_no_countries(store):
-    assert lookout_medallion.countries_of("water_crossing", root=str(store)) == []
+    assert lookout_medallion.countries_of("water_crossing_v2", root=str(store)) == []

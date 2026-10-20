@@ -5,7 +5,7 @@ use domain::Bbox;
 use domain::{DeviceId, Pass, Radius, SessionId};
 use geo_types::Point;
 use medallion::{COUNTRY, Country, DatasetSpec, Query, Replaced, Root, layers};
-use medallion_model::{SessionCrossingRow, WaterCrossingRow};
+use medallion_model::{SessionCrossingRow, WaterCrossingRowV2};
 use serde::Deserialize;
 
 use crate::matching::{Crossing, Sample, Session, passes};
@@ -52,7 +52,7 @@ struct StoredSample {
 #[derive(Debug, Deserialize)]
 struct PlacedCrossing {
     #[serde(flatten)]
-    row: WaterCrossingRow,
+    row: WaterCrossingRowV2,
     x: f64,
     y: f64,
     lon: f64,
@@ -184,7 +184,7 @@ pub async fn inputs(root: &Root, country: Country) -> Result<Inputs, CrossingErr
 const READ: [(DatasetSpec<layers::Silver>, &str); 3] = [
     (medallion_model::SESSION, "session"),
     (medallion_model::SESSION_SAMPLE, "session_sample"),
-    (medallion_model::WATER_CROSSING, "water_crossing"),
+    (medallion_model::WATER_CROSSING_V2, "water_crossing_v2"),
 ];
 
 async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
@@ -233,7 +233,7 @@ async fn crossings_in(query: &Query) -> Result<Vec<Crossing>, CrossingError> {
             "SELECT *,
                     ST_X(geometry_projected) AS x, ST_Y(geometry_projected) AS y,
                     ST_X(geometry) AS lon, ST_Y(geometry) AS lat
-             FROM water_crossing",
+             FROM water_crossing_v2",
         )
         .await?;
 

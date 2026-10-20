@@ -5,7 +5,7 @@ use medallion::{
     COUNTRY, Countries, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Query, Root, geo_batch,
     projected_wkb_field, wkb_field,
 };
-use medallion_model::{OverlapKind, WaterCrossingRow};
+use medallion_model::{OverlapKind, WaterCrossingRowV2};
 use recorder::bronze::{Archive, Payload};
 use recorder::sessions::{Gap, Lead, sessions};
 use recorder::silver;
@@ -108,18 +108,18 @@ async fn store_with_a_session(root: &Root, samples: usize) {
 
 async fn store_with_crossings(root: &Root, at_metres: &[f64]) {
     let projector = Projector::for_country(Country::Germany).expect("projector");
-    let rows: Vec<WaterCrossingRow> = at_metres
+    let rows: Vec<WaterCrossingRowV2> = at_metres
         .iter()
         .enumerate()
-        .map(|(n, _)| WaterCrossingRow {
+        .map(|(n, _)| WaterCrossingRowV2 {
             crossing_id: CrossingId::new(format!("water:track:rail@{n}")).expect("id"),
             crossing_compact_id: CrossingCompactId::new(n as u32),
-            water_id: "water".into(),
-            water_subtype: Some("river".into()),
-            water_class: Some("river".into()),
+            overture_water_id: "water".into(),
+            overture_water_subtype: Some("river".into()),
+            overture_water_class: Some("river".into()),
             track_id: "track".into(),
-            rail_id: "rail".into(),
-            rail_class: Some("rail".into()),
+            overture_rail_id: "rail".into(),
+            overture_rail_class: Some("rail".into()),
             overlap_kind: OverlapKind::Line,
             overlap_m: 40.0,
             total_overlap_m: 40.0,
@@ -151,7 +151,7 @@ async fn store_with_crossings(root: &Root, at_metres: &[f64]) {
     )
     .expect("build the batch");
 
-    root.rows_of::<WaterCrossingRow>()
+    root.rows_of::<WaterCrossingRowV2>()
         .partition(COUNTRY, Country::Germany)
         .expect("partition")
         .replace_with_geo(&[batch])

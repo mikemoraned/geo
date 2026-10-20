@@ -17,7 +17,7 @@ samples = lookout_medallion.query_silver(
     params={"session": session_id},
 )
 crossings = lookout_medallion.query_silver(
-    "SELECT crossing_id, geometry, geometry_projected FROM water_crossing",
+    "SELECT crossing_id, geometry, geometry_projected FROM water_crossing_v2",
     country="DE",
 )
 steps = lookout_session_crossings.steps(session_id, samples, crossings, radius_metres=250.0)

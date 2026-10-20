@@ -110,15 +110,15 @@ class TestCountryOnlyAndGeometrylessLayouts:
         table = water_crossing_table([0x292E417A], [BERLIN], [BERLIN_UTM32N])
 
         written = lookout_medallion.write_silver(
-            "water_crossing", table, root=str(store)
+            "water_crossing_v2", table, root=str(store)
         )
 
         assert written.rows == 1
-        assert (store / "silver/water_crossing/country=DE/part-0.parquet").exists()
+        assert (store / "silver/water_crossing_v2/country=DE/part-0.parquet").exists()
         rows = read_with_duckdb(
             store,
             "SELECT overlap_kind, geometry FROM read_parquet("
-            "'{store}/silver/water_crossing/**/*.parquet')",
+            "'{store}/silver/water_crossing_v2/**/*.parquet')",
         )
         assert rows[0][0] == "line"
         assert shapely.from_wkb(bytes(rows[0][1])).coords[0] == BERLIN
@@ -247,20 +247,20 @@ class TestNamesThatIdentifyARow:
         table = crossings(ids=["w1-t1", "w1-t1"], compact_ids=[1, 2])
 
         with pytest.raises(ValueError, match="crossing_id"):
-            lookout_medallion.write_silver("water_crossing", table, root=str(store))
+            lookout_medallion.write_silver("water_crossing_v2", table, root=str(store))
 
     def test_two_crossings_of_one_compact_id_are_refused(self, store):
         table = crossings(ids=["w1-t1", "w1-t2"], compact_ids=[7, 7])
 
         with pytest.raises(ValueError, match="crossing_compact_id"):
-            lookout_medallion.write_silver("water_crossing", table, root=str(store))
+            lookout_medallion.write_silver("water_crossing_v2", table, root=str(store))
 
     def test_distinct_names_are_written(self, store):
         table = crossings(ids=["w1-t1", "w1-t2"], compact_ids=[7, 8])
 
         assert (
             lookout_medallion.write_silver(
-                "water_crossing", table, root=str(store)
+                "water_crossing_v2", table, root=str(store)
             ).rows
             == 2
         )

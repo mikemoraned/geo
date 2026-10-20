@@ -89,7 +89,7 @@ rebuild that only reorders rows produces an identical file and needs no reflash.
 
 ## What it reads
 
-The silver `water_crossing` dataset, read through `medallion` like every other reader of the
+The silver `water_crossing_v2` dataset, read through `medallion` like every other reader of the
 store, taking each position from the `geometry` column that dataset keeps it in.
 
 **Every country the store holds is packed**, rather than one named by a flag: the buffer holds

@@ -3,8 +3,8 @@ use domain::{CrossingCompactId, CrossingId, DeviceId, SessionId};
 use medallion::{COUNTRY, DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
-pub const WATER_CROSSING: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("water_crossing", COUNTRY);
+pub const WATER_CROSSING_V2: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("water_crossing_v2", COUNTRY);
 
 pub const SESSION_CROSSING: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("session_crossing", "crossed_date");
@@ -17,15 +17,15 @@ pub enum OverlapKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct WaterCrossingRow {
+pub struct WaterCrossingRowV2 {
     pub crossing_id: CrossingId,
     pub crossing_compact_id: CrossingCompactId,
-    pub water_id: String,
-    pub water_subtype: Option<String>,
-    pub water_class: Option<String>,
+    pub overture_water_id: String,
+    pub overture_water_subtype: Option<String>,
+    pub overture_water_class: Option<String>,
     pub track_id: String,
-    pub rail_id: String,
-    pub rail_class: Option<String>,
+    pub overture_rail_id: String,
+    pub overture_rail_class: Option<String>,
     pub overlap_kind: OverlapKind,
     pub overlap_m: f64,
     pub total_overlap_m: f64,
@@ -36,9 +36,9 @@ pub struct WaterCrossingRow {
     pub min_crossing_m: f64,
 }
 
-impl Row for WaterCrossingRow {
+impl Row for WaterCrossingRowV2 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = WATER_CROSSING;
+    const DATASET: DatasetSpec<Self::Layer> = WATER_CROSSING_V2;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const UNIQUE: &'static [&'static str] = &["crossing_id", "crossing_compact_id"];
 }
@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn a_compact_id_is_a_four_byte_column() {
         assert_eq!(
-            column::<WaterCrossingRow>("crossing_compact_id"),
+            column::<WaterCrossingRowV2>("crossing_compact_id"),
             DataType::UInt32
         );
     }
@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn a_crossing_id_is_a_string_column_in_both_datasets() {
         assert!(matches!(
-            column::<WaterCrossingRow>("crossing_id"),
+            column::<WaterCrossingRowV2>("crossing_id"),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn the_kind_of_overlap_is_a_string_column() {
         assert!(matches!(
-            column::<WaterCrossingRow>("overlap_kind"),
+            column::<WaterCrossingRowV2>("overlap_kind"),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn a_crossing_carries_how_it_was_collapsed() {
         for tuning in ["merge_distance_m", "min_crossing_m"] {
-            assert_eq!(column::<WaterCrossingRow>(tuning), DataType::Float64);
+            assert_eq!(column::<WaterCrossingRowV2>(tuning), DataType::Float64);
         }
         assert_eq!(
             column::<SessionCrossingRow>("match_radius_m"),

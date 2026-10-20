@@ -7,7 +7,7 @@ use medallion::{
     COUNTRY, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Root, geo_batch,
     projected_wkb_field, wkb_field,
 };
-use medallion_model::{OverlapKind, WaterCrossingRow};
+use medallion_model::{OverlapKind, WaterCrossingRowV2};
 
 fn compact_id(n: usize) -> CrossingCompactId {
     CrossingCompactId::new(0x1000_0000 + n as u32)
@@ -23,18 +23,18 @@ const GB_LAT: f64 = 55.953251;
 
 async fn store_with_crossings(root: &Root, country: Country, positions: &[(f64, f64)]) {
     let projector = Projector::for_country(country).expect("projector");
-    let rows: Vec<WaterCrossingRow> = positions
+    let rows: Vec<WaterCrossingRowV2> = positions
         .iter()
         .enumerate()
-        .map(|(n, _)| WaterCrossingRow {
+        .map(|(n, _)| WaterCrossingRowV2 {
             crossing_id: CrossingId::new(format!("water:track:rail@{n}")).expect("id"),
             crossing_compact_id: compact_id(n),
-            water_id: "water".into(),
-            water_subtype: Some("river".into()),
-            water_class: Some("river".into()),
+            overture_water_id: "water".into(),
+            overture_water_subtype: Some("river".into()),
+            overture_water_class: Some("river".into()),
             track_id: "track".into(),
-            rail_id: format!("rail-{n}"),
-            rail_class: Some("rail".into()),
+            overture_rail_id: format!("rail-{n}"),
+            overture_rail_class: Some("rail".into()),
             overlap_kind: OverlapKind::Point,
             overlap_m: 0.0,
             total_overlap_m: 0.0,
@@ -66,7 +66,7 @@ async fn store_with_crossings(root: &Root, country: Country, positions: &[(f64, 
     )
     .expect("build the batch");
 
-    root.dataset(medallion_model::WATER_CROSSING)
+    root.dataset(medallion_model::WATER_CROSSING_V2)
         .partition(COUNTRY, country)
         .expect("partition")
         .replace_with_geo(&[batch])
@@ -114,11 +114,11 @@ async fn a_partition_for_a_country_the_store_has_no_zone_for_is_reported() {
     let root = Root::new(tmp.path());
     store_with_crossings(&root, Country::Germany, &[(LON, LAT)]).await;
     std::fs::rename(
-        root.dataset(medallion_model::WATER_CROSSING)
+        root.dataset(medallion_model::WATER_CROSSING_V2)
             .partition(COUNTRY, Country::Germany)
             .expect("partition")
             .dir(),
-        root.dataset(medallion_model::WATER_CROSSING)
+        root.dataset(medallion_model::WATER_CROSSING_V2)
             .partition(COUNTRY, "FR")
             .expect("partition")
             .dir(),
@@ -142,7 +142,7 @@ async fn a_store_without_the_dataset_says_which_one_is_missing() {
     assert!(matches!(
         err,
         silver::ReadError::Missing {
-            dataset: "water_crossing"
+            dataset: "water_crossing_v2"
         }
     ));
 }

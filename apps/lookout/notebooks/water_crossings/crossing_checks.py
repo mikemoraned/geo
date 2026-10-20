@@ -62,15 +62,17 @@ def run_cases(
     """Check each case against the crossing representatives.
 
     A case passes when the number of representatives inside its bbox equals
-    `expected_crossings`, and every such representative sits on a rail segment (`rail_id`)
-    whose geometry intersects the bbox. Returns one result row per case.
+    `expected_crossings`, and every such representative sits on a rail segment
+    (`overture_rail_id`) whose geometry intersects the bbox. Returns one result row per case.
     """
     rows = []
     for _, case in cases.iterrows():
         bbox = case.geometry
         inside = reps_gdf[reps_gdf.geometry.within(bbox)]
         segments_ok = bool(
-            rail_gdf[rail_gdf["id"].isin(inside["rail_id"])].geometry.intersects(bbox).all()
+            rail_gdf[rail_gdf["id"].isin(inside["overture_rail_id"])]
+            .geometry.intersects(bbox)
+            .all()
         )
         expected = int(case["expected_crossings"])
         rows.append(

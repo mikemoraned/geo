@@ -1,6 +1,6 @@
 use domain::{CoordinateError, CrossingCompactId};
 use medallion::Root;
-use medallion_model::WaterCrossingRow;
+use medallion_model::WaterCrossingRowV2;
 use serde::Deserialize;
 
 #[derive(Debug, thiserror::Error)]
@@ -23,25 +23,25 @@ pub struct Crossing {
 #[derive(Debug, Deserialize)]
 pub struct PlacedCrossing {
     #[serde(flatten)]
-    pub row: WaterCrossingRow,
+    pub row: WaterCrossingRowV2,
     pub lon: f64,
     pub lat: f64,
 }
 
 pub const PLACED: &str = "SELECT *, ST_X(geometry) AS lon, ST_Y(geometry) AS lat
-                          FROM water_crossing";
+                          FROM water_crossing_v2";
 
 pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
     let stored: Vec<PlacedCrossing> = medallion::rows_of_every_country(
         root,
-        medallion_model::WATER_CROSSING,
-        "water_crossing",
+        medallion_model::WATER_CROSSING_V2,
+        "water_crossing_v2",
         PLACED,
     )
     .await?;
     if stored.is_empty() {
         return Err(ReadError::Missing {
-            dataset: medallion_model::WATER_CROSSING.name,
+            dataset: medallion_model::WATER_CROSSING_V2.name,
         });
     }
 

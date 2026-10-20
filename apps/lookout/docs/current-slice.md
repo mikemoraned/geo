@@ -478,7 +478,7 @@ At the end of the slice, once its features are in.
          Their rows live on in the new versions, and their files in git history.
       Changed on 2026-10-20 from naming the country and region codes after Overture, as
       `--overture-country` and `--overture-region` did.
-- [ ] Name every column of silver `water_crossing` whose value is Overture's own after Overture:
+- [x] Name every column of silver `water_crossing` whose value is Overture's own after Overture:
       `water_id`, `water_subtype`, `water_class`, `rail_id`, and `rail_class`. Add
       `water_crossing_v2` with the new names, as `train_segment_v2` replaced `train_segment`.
       Derive it, point every reader at it, and remove `water_crossing` and `WaterCrossingRow` once

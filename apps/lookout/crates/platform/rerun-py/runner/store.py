@@ -83,7 +83,7 @@ class Store:
         table = self._query(
             """
             SELECT crossing_compact_id AS id, ST_Y(geometry) AS lat, ST_X(geometry) AS lon
-            FROM water_crossing
+            FROM water_crossing_v2
             """,
             country=country,
         )

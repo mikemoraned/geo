@@ -102,8 +102,8 @@ def _(case_picker, cases, lookout_medallion, pa):
     )
     crossing = pa.table(
         lookout_medallion.query_silver(
-            "SELECT crossing_id, water_class, rail_class, geometry, geometry_projected "
-            "FROM water_crossing WHERE crossing_id = $crossing",
+            "SELECT crossing_id, overture_water_class, overture_rail_class, geometry, "
+            "geometry_projected FROM water_crossing_v2 WHERE crossing_id = $crossing",
             country=case.country,
             params={"crossing": case.crossing_id},
         )

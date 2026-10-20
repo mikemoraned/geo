@@ -172,7 +172,7 @@ silver-crossings *args:
     just silver-water-crossings
     just silver-session-crossings {{args}}
 
-# Derive silver `water_crossing` from the crossings notebook. Always writes the repo store.
+# Derive silver `water_crossing_v2` from the crossings notebook. Always writes the repo store.
 silver-water-crossings:
     uv run --no-project notebooks/water_crossings/v10.py
 

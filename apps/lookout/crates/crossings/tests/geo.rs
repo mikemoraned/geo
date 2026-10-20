@@ -91,8 +91,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let runtime = tokio::runtime::Runtime::new()?;
     let crossings: Vec<PlacedCrossing> = runtime.block_on(medallion::rows_of_every_country(
         &root,
-        medallion_model::WATER_CROSSING,
-        "water_crossing",
+        medallion_model::WATER_CROSSING_V2,
+        "water_crossing_v2",
         crossings::silver::PLACED,
     ))?;
     let extracts = runtime.block_on(extracts(&root))?;
@@ -124,7 +124,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             by_extract
                 .entry(&crossing.row.extract_id)
                 .or_default()
-                .push(crossing.row.rail_id.clone());
+                .push(crossing.row.overture_rail_id.clone());
         }
         let mut rail = Vec::new();
         for (extract_id, ids) in by_extract {
