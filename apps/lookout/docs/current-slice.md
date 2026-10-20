@@ -449,7 +449,7 @@ At the end of the slice, once its features are in.
       A row type keeps `lat` and `lon` as `f64`, since each field mirrors a stored column. A
       distance stays an `f64` in metres, since the predictor's arithmetic reads better on raw
       numbers.
-- [ ] Name every flag, field, and type whose value is Overture's own after Overture, such as a
+- [x] Name every flag, field, and type whose value is Overture's own after Overture, such as a
       release or a division's id and name. Check the other crates follow it. A country or region
       code keeps a plain name, since ISO defines it. Overture's schema types `country` as an ISO
       3166-1 alpha-2 code, and `region` as an ISO 3166-2 code. A type or dataset named after
@@ -478,6 +478,9 @@ At the end of the slice, once its features are in.
          Their rows live on in the new versions, and their files in git history.
       Changed on 2026-10-20 from naming the country and region codes after Overture, as
       `--overture-country` and `--overture-region` did.
+- [ ] Name every column of silver `water_crossing` whose value is Overture's own after Overture:
+      `water_id`, `water_subtype`, `water_class`, `rail_id`, and `rail_class`. Silver is derived
+      wholesale from bronze, so rename each column in place and derive `water_crossing` again.
 - [ ] Apply the `Age` rule in `.claude/rules/rust.md` across `lookout`: every maximum age,
       lookback, or other age held as `domain::Age`, every age flag read as a `Span`, and
       `Option<Age>` where no age applies.
@@ -491,7 +494,7 @@ At the end of the slice, once its features are in.
       `TrainSegmentRowV2`, since nothing reads it. Bronze keeps it, as the poll saw it.
 - [ ] Store `TrainSessionRow::source_label` as a `Label`, in place of its `String`. Tracing a
       row's schema deserialises an empty string into each field, and `Label` refuses one, so
-      `medallion` needs a way to trace a checked newtype first. `MotisSourceRow::label` has the
+      `medallion` needs a way to trace a checked newtype first. `MotisSourceRowV2::label` has the
       same `String` for the same reason.
 - [ ] Define `path_through` and `implied_speed` once, where `recorder` and `motis` can both
       reach them. `crates/recorder/src/silver.rs` and `crates/motis/src/train_sessions.rs` each

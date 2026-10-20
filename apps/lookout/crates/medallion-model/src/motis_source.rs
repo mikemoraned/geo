@@ -14,8 +14,6 @@ use crate::overture_release::{NotAnOvertureRelease, OvertureRelease};
 
 const MOTIS_SOURCE_NAMESPACE: Uuid = Uuid::from_u128(0x3c41_9e2d_7a58_4b06_8f13_d2e6_5a90_c71b);
 
-pub const MOTIS_SOURCE: DatasetSpec<layers::Bronze> = DatasetSpec::unpartitioned("motis_source");
-
 pub const MOTIS_SOURCE_V2: DatasetSpec<layers::Bronze> =
     DatasetSpec::unpartitioned("motis_source_v2");
 

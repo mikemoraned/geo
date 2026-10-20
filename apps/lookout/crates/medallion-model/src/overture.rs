@@ -10,9 +10,6 @@ pub const DIVISION_ID: &str = "division_id";
 pub const OVERTURE_EXTRACT: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("overture_extract", "extract_id");
 
-pub const EXTRACT_MANIFEST: DatasetSpec<layers::Bronze> =
-    DatasetSpec::unpartitioned("extract_manifest");
-
 pub const EXTRACT_MANIFEST_V2: DatasetSpec<layers::Bronze> =
     DatasetSpec::unpartitioned("extract_manifest_v2");
 
