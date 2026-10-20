@@ -222,6 +222,22 @@ after the leg before it, and departs before that leg's older arrival. Trusting t
 where two legs overlap would keep those trips. `motis_ingest` logs each reason it drops a trip, so
 the counts show what a change gains.
 
+## Slice: derive the water crossings in Rust
+
+### Target
+
+Derive silver `water_crossing_v2` in Rust, in place of the `v10` notebook, so that unchanged
+extracts give the same crossings. `docs/architecture.md` claims this of every derivation, and the
+notebook breaks the claim. The slice "Sessionisation and Water crossings per session + Refactor to
+Medallion" kept the pipeline a notebook, with only its write in Rust.
+
+A run on 20 October, over the same pinned extracts, changed 42 of the 10,254 crossings that the
+12 October run wrote. At least 40 of them moved onto another segment of the same track, a median
+of about 5 m away and at most 13.6 m. The gold pack in use comes from a third run, on 11 October.
+It differs from the 12 October run by 40 crossings, and from the 20 October run by 48. A moved
+crossing takes a new id and compact id, so packing after any run changes what the device carries.
+What makes the runs differ is unknown.
+
 ## Slice: Enrich and use relative direction of POI
 
 ### Target
