@@ -7,13 +7,13 @@ use arrow::array::{
 use arrow::compute::{cast, concat_batches};
 use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
 use chrono::{DateTime, Utc};
-use domain::{CrossingId, SessionId};
+use domain::{CrossingId, Radius, SessionId};
 use geo_types::{Geometry, Point};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_arrow::PyTable;
-use session_crossings::matching::{self, Crossing, Near, Radius, Sample};
+use session_crossings::matching::{self, Crossing, DEFAULT_RADIUS, Near, Sample};
 
 /// The steps the session crossings matching takes for one session, as two tables.
 ///
@@ -26,7 +26,7 @@ use session_crossings::matching::{self, Crossing, Near, Radius, Sample};
 /// crossing, with its distance and the number of its visit. `passes` holds one pass per visit,
 /// at the visit's nearest sample. A missing or unreadable column raises `ValueError`.
 #[pyfunction]
-#[pyo3(signature = (session_id, samples, crossings, *, radius_metres=250.0))]
+#[pyo3(signature = (session_id, samples, crossings, *, radius_metres=DEFAULT_RADIUS.as_metres()))]
 fn steps<'py>(
     py: Python<'py>,
     session_id: &str,

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use chrono::{DateTime, Utc};
+use chrono::TimeDelta;
 use domain::Bbox;
 use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
@@ -232,14 +232,10 @@ fn session_of(
         .iter()
         .map(|sample| projector.project(&sample.position))
         .collect::<Result<Vec<Point<f64>>, _>>()?;
-    let speeds = std::iter::once(None).chain(placed.windows(2).zip(projected.windows(2)).map(
-        |(times, points)| {
-            Some(implied_speed(
-                (points[0], times[0].t),
-                (points[1], times[1].t),
-            ))
-        },
-    ));
+    let speeds =
+        std::iter::once(None).chain(placed.windows(2).zip(projected.windows(2)).map(
+            |(times, points)| Some(implied_speed(points[0], points[1], times[1].t - times[0].t)),
+        ));
 
     let samples = placed
         .iter()
@@ -286,8 +282,8 @@ fn path_through(placed: &[Placed]) -> LineString<f64> {
     }
 }
 
-fn implied_speed(from: (Point<f64>, DateTime<Utc>), to: (Point<f64>, DateTime<Utc>)) -> f64 {
-    Euclidean.distance(from.0, to.0) / (to.1 - from.1).as_seconds_f64()
+fn implied_speed(from: Point<f64>, to: Point<f64>, took: TimeDelta) -> f64 {
+    Euclidean.distance(from, to) / took.as_seconds_f64()
 }
 
 #[cfg(test)]

@@ -1,26 +1,9 @@
 use chrono::{DateTime, Utc};
-use domain::{DeviceId, Pass, SessionId};
-use geo::{Distance, Euclidean};
+use domain::{DeviceId, Pass, Radius, SessionId};
+use geo::{Distance, Euclidean, Intersects};
 use geo_types::{Point, Rect};
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Radius(f64);
-
-impl Radius {
-    pub fn new(metres: f64) -> Self {
-        Self(metres)
-    }
-
-    pub fn as_metres(self) -> f64 {
-        self.0
-    }
-}
-
-impl Default for Radius {
-    fn default() -> Self {
-        Self(250.0)
-    }
-}
+pub const DEFAULT_RADIUS: Radius = Radius::new(250.0);
 
 #[derive(Debug, Clone)]
 pub struct Session {
@@ -95,7 +78,7 @@ fn passes_of(session: &Session, crossings: &[Crossing], radius: Radius) -> Vec<P
     let reachable = grown(session.bbox, radius);
     crossings
         .iter()
-        .filter(|crossing| contains(&reachable, crossing.crossing.position))
+        .filter(|crossing| reachable.intersects(&crossing.crossing.position))
         .flat_map(|crossing| steps(&session.session_id, &session.samples, crossing, radius).passes)
         .collect()
 }
@@ -128,11 +111,6 @@ fn grown(bbox: Rect<f64>, radius: Radius) -> Rect<f64> {
     let north_east = Haversine.destination(north_east, 90.0, metres);
 
     Rect::new(south_west.0, north_east.0)
-}
-
-fn contains(bbox: &Rect<f64>, point: Point<f64>) -> bool {
-    (bbox.min().x..=bbox.max().x).contains(&point.x())
-        && (bbox.min().y..=bbox.max().y).contains(&point.y())
 }
 
 #[cfg(test)]
