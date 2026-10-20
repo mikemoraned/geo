@@ -137,9 +137,9 @@ def _(EXTRACTS, MEDALLION_ROOT, con):
     # has to hold is that each extract was taken for the country it is pinned under.
     _ids = ", ".join(f"'{extract_id}'" for extract_id in EXTRACTS.values())
     extract_manifest = con.execute(f"""
-        SELECT extract_id, extracted_at, release, country,
+        SELECT extract_id, extracted_at, overture_release, country,
                min_lon, min_lat, max_lon, max_lat
-        FROM read_parquet('{MEDALLION_ROOT}/bronze/extract_manifest/*.parquet')
+        FROM read_parquet('{MEDALLION_ROOT}/bronze/extract_manifest_v2/*.parquet')
         WHERE extract_id IN ({_ids})
         ORDER BY country
     """).fetchdf()

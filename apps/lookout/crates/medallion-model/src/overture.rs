@@ -17,19 +17,6 @@ pub const EXTRACT_MANIFEST_V2: DatasetSpec<layers::Bronze> =
     DatasetSpec::unpartitioned("extract_manifest_v2");
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ExtractManifestRow {
-    pub extract_id: String,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub extracted_at: DateTime<Utc>,
-    pub release: String,
-    pub country: String,
-    pub min_lon: f64,
-    pub min_lat: f64,
-    pub max_lon: f64,
-    pub max_lat: f64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExtractManifestRowV2 {
     pub extract_id: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]
@@ -56,7 +43,7 @@ pub fn division_id(country: Country) -> GersId {
     GersId::new(id).expect("a division id written here is a constant, checked by the tests below")
 }
 
-impl ExtractManifestRow {
+impl ExtractManifestRowV2 {
     pub fn bbox(&self) -> Rect<f64> {
         Rect::new(
             Coord {
@@ -69,12 +56,6 @@ impl ExtractManifestRow {
             },
         )
     }
-}
-
-impl Row for ExtractManifestRow {
-    type Layer = layers::Bronze;
-    const DATASET: DatasetSpec<Self::Layer> = EXTRACT_MANIFEST;
-    const INSTANTS: &'static [&'static str] = &["extracted_at"];
 }
 
 impl Row for ExtractManifestRowV2 {

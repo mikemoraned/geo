@@ -255,12 +255,12 @@ impl MotisSource {
         MotisSourceId(Uuid::new_v5(&MOTIS_SOURCE_NAMESPACE, name.as_bytes()).to_string())
     }
 
-    pub fn row(&self, registered_at: DateTime<Utc>) -> MotisSourceRow {
+    pub fn row(&self, registered_at: DateTime<Utc>) -> MotisSourceRowV2 {
         let region = self
             .area
             .as_ref()
             .and_then(|area| area.overture_region.as_ref());
-        MotisSourceRow {
+        MotisSourceRowV2 {
             source_id: self.id(),
             base_url: self.base_url.to_string(),
             motis_version: self.motis_version.to_string(),
@@ -269,8 +269,8 @@ impl MotisSource {
                 .area
                 .as_ref()
                 .map(|area| area.country.code().to_string()),
-            region_id: region.map(|region| region.id.to_string()),
-            region_name: region.map(|region| region.name.clone()),
+            overture_region_id: region.map(|region| region.id.to_string()),
+            overture_region_name: region.map(|region| region.name.clone()),
             overture_release: self
                 .area
                 .as_ref()
@@ -281,15 +281,15 @@ impl MotisSource {
     }
 }
 
-impl TryFrom<MotisSourceRow> for MotisSource {
+impl TryFrom<MotisSourceRowV2> for MotisSource {
     type Error = NotAMotisSource;
 
-    fn try_from(row: MotisSourceRow) -> Result<Self, Self::Error> {
+    fn try_from(row: MotisSourceRowV2) -> Result<Self, Self::Error> {
         let base_url = Url::parse(&row.base_url).map_err(|source| NotAMotisSource::BaseUrl {
             text: row.base_url.clone(),
             source,
         })?;
-        let region = match (row.region_id, row.region_name) {
+        let region = match (row.overture_region_id, row.overture_region_name) {
             (Some(id), Some(name)) => Some(OvertureRegion {
                 id: id.parse()?,
                 name,
@@ -315,27 +315,6 @@ impl TryFrom<MotisSourceRow> for MotisSource {
             label: row.label.map(|label| label.parse()).transpose()?,
         })
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MotisSourceRow {
-    pub source_id: MotisSourceId,
-    pub base_url: String,
-    pub motis_version: String,
-    pub feed: Feed,
-    pub country: Option<String>,
-    pub region_id: Option<String>,
-    pub region_name: Option<String>,
-    pub overture_release: Option<String>,
-    pub label: Option<String>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub registered_at: DateTime<Utc>,
-}
-
-impl Row for MotisSourceRow {
-    type Layer = layers::Bronze;
-    const DATASET: DatasetSpec<Self::Layer> = MOTIS_SOURCE;
-    const INSTANTS: &'static [&'static str] = &["registered_at"];
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -470,7 +449,7 @@ mod tests {
 
     #[test]
     fn a_row_holding_a_bad_label_is_refused() {
-        let row = MotisSourceRow {
+        let row = MotisSourceRowV2 {
             label: Some("Delfi 2026".to_string()),
             ..transitous().row(instant())
         };
@@ -605,8 +584,8 @@ mod tests {
 
         assert_eq!(row.source_id, transitous().id());
         assert_eq!(row.country.as_deref(), Some("DE"));
-        assert_eq!(row.region_id.as_deref(), Some(REGION_ID));
-        assert_eq!(row.region_name.as_deref(), Some("Thüringen"));
+        assert_eq!(row.overture_region_id.as_deref(), Some(REGION_ID));
+        assert_eq!(row.overture_region_name.as_deref(), Some("Thüringen"));
         assert_eq!(row.overture_release.as_deref(), Some("2026-09-23.1"));
         assert_eq!(row.label, None);
         assert_eq!(row.registered_at, instant());
@@ -629,11 +608,11 @@ mod tests {
     fn a_row_holding_a_bad_url_or_version_is_refused() {
         let row = transitous().row(instant());
 
-        let bad_url = MotisSourceRow {
+        let bad_url = MotisSourceRowV2 {
             base_url: "not a url".to_string(),
             ..row.clone()
         };
-        let bad_version = MotisSourceRow {
+        let bad_version = MotisSourceRowV2 {
             motis_version: "2.11.3".to_string(),
             ..row
         };
@@ -646,17 +625,17 @@ mod tests {
     fn a_row_holding_a_country_or_a_release_without_the_other_is_refused() {
         let row = transitous().row(instant());
 
-        let no_release = MotisSourceRow {
+        let no_release = MotisSourceRowV2 {
             overture_release: None,
             ..row.clone()
         };
-        let no_country = MotisSourceRow {
+        let no_country = MotisSourceRowV2 {
             country: None,
-            region_id: None,
-            region_name: None,
+            overture_region_id: None,
+            overture_region_name: None,
             ..row.clone()
         };
-        let bad_release = MotisSourceRow {
+        let bad_release = MotisSourceRowV2 {
             overture_release: Some("2026-09-23".to_string()),
             ..row
         };
@@ -688,7 +667,7 @@ mod tests {
 
     #[test]
     fn the_feed_is_a_string_column() {
-        let feed = medallion::fields::<MotisSourceRow>()
+        let feed = medallion::fields::<MotisSourceRowV2>()
             .expect("describe the rows")
             .iter()
             .find(|field| field.name() == "feed")

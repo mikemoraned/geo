@@ -33,7 +33,7 @@ normalised form of it.
 
 `overture_extract` holds upstream reference rows in the upstream's own shape and layout, so those
 rows have no row type here: they keep whatever columns the release gives them, plus the
-`extract_id` joining them to `extract_manifest`.
+`extract_id` joining them to `extract_manifest_v2`.
 
 The manifest is one row per extraction, and its bbox is four bounds — `xmin`, `ymin`, `xmax`,
 `ymax` — rather than a geometry column in a Simple Features encoding. It is provenance, answering

@@ -185,7 +185,7 @@ def _(per_pass):
     LOCAL_SOURCE = (
         """
     local_source AS (
-        SELECT source_id, region_id FROM motis_source WHERE feed = 'local' AND label = $label
+        SELECT source_id, overture_region_id FROM motis_source_v2 WHERE feed = 'local' AND label = $label
     )""",
     )
     per_pass("SELECT * FROM local_source", LOCAL_SOURCE)
@@ -221,14 +221,14 @@ def _(SPAN, per_pass):
     pass_source AS (
         SELECT source_id, 'local' AS server FROM local_source
         UNION ALL
-        SELECT source_id, 'transitous' AS server FROM motis_source
-        WHERE feed = 'transitous' AND region_id IN (SELECT region_id FROM local_source)
+        SELECT source_id, 'transitous' AS server FROM motis_source_v2
+        WHERE feed = 'transitous' AND overture_region_id IN (SELECT overture_region_id FROM local_source)
     )""",
     )
     per_pass(
         """
         SELECT server, source_id, base_url, overture_release, registered_at
-        FROM pass_source JOIN motis_source USING (source_id)
+        FROM pass_source JOIN motis_source_v2 USING (source_id)
         ORDER BY server, registered_at
         """,
         PASS_SOURCE,

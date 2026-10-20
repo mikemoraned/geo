@@ -16,6 +16,6 @@
 !/gold/artifact=crossings/
 !/gold/artifact=sessions/
 
-# Point-in-time extracts of Overture: 1.5 GB, and re-derivable — `bronze/extract_manifest`
+# Point-in-time extracts of Overture: 1.5 GB, and re-derivable — `bronze/extract_manifest_v2`
 # records the release and window each one took, and an Overture release never changes.
 /bronze/overture_extract/

@@ -74,7 +74,7 @@ def _(MEDALLION_ROOT, duckdb):
     con.execute(
         f"""
         CREATE VIEW source AS
-        SELECT * FROM read_parquet('{MEDALLION_ROOT}/bronze/motis_source/*.parquet')
+        SELECT * FROM read_parquet('{MEDALLION_ROOT}/bronze/motis_source_v2/*.parquet')
         """
     )
     con.execute(
@@ -100,7 +100,7 @@ def _(con, mo):
         """
     ).df()
     source_options = {
-        f"{row.feed} {row.region_name or row.country or 'near GPS'} {row.registered_at:%Y-%m-%d %H:%M}": row.source_id
+        f"{row.feed} {row.overture_region_name or row.country or 'near GPS'} {row.registered_at:%Y-%m-%d %H:%M}": row.source_id
         for row in sources.itertuples()
     }
     source_choice = mo.ui.dropdown(
