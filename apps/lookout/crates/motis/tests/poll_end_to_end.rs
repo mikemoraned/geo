@@ -2,12 +2,12 @@ mod common;
 
 use chrono::Utc;
 use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready};
+use domain::Span;
 use medallion::Root;
 use motis::bronze::SegmentLog;
 use motis::capture::{Capture, Coverage};
 use motis::client::MotisClient;
 use motis::near_gps::NearGps;
-use motis::span::Span;
 use motis::zoom::Zoom;
 
 #[tokio::test]

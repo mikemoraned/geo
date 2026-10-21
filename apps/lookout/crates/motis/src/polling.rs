@@ -4,6 +4,7 @@ use std::time::Instant;
 use chrono::{DateTime, Utc};
 use url::Url;
 
+use domain::Span;
 use medallion::{MedallionArgs, Root};
 use medallion_model::{Area, Feed, Label, MotisSource};
 
@@ -11,7 +12,6 @@ use crate::bronze::SegmentLog;
 use crate::capture::{Capture, Captured, Coverage, Unresolved};
 use crate::client::{DEFAULT_BASE_URL, MotisClient, MotisError};
 use crate::source::{SourceError, register};
-use crate::span::Span;
 use crate::zoom::Zoom;
 
 #[derive(Debug, clap::Args)]

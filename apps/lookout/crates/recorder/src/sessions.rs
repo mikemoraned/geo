@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use std::num::NonZeroU32;
 
 use chrono::{DateTime, Duration, Utc};
-use domain::{DeviceId, SessionId, StartedBy};
+use domain::{Age, DeviceId, SessionId, StartedBy};
 use geo_types::Point;
 use medallion::{Query, Root};
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,10 @@ const DISTINCT_SESSION_STARTS: &str = "
     SELECT DISTINCT device_id, t FROM session_starts ORDER BY device_id, t
 ";
 
+const DEFAULT_GAP: Age = Age::minutes(NonZeroU32::new(10).expect("ten is not zero"));
+
+const DEFAULT_LEAD: Age = Age::minutes(NonZeroU32::new(1).expect("one is not zero"));
+
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
     #[error("reading the bronze telemetry: {0}")]
@@ -33,48 +38,48 @@ pub enum SessionError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Gap(Duration);
+pub struct Gap(Age);
 
 impl Gap {
-    pub fn new(silence: Duration) -> Self {
+    pub fn new(silence: Age) -> Self {
         Self(silence)
     }
 
     pub fn as_seconds(self) -> u32 {
-        self.0.num_seconds().try_into().unwrap_or(u32::MAX)
+        self.0.span().num_seconds().try_into().unwrap_or(u32::MAX)
     }
 
     fn separates(self, interval: Duration) -> bool {
-        interval > self.0
+        interval > self.0.span()
     }
 }
 
 impl Default for Gap {
     fn default() -> Self {
-        Self(Duration::minutes(10))
+        Self(DEFAULT_GAP)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Lead(Duration);
+pub struct Lead(Age);
 
 impl Lead {
-    pub fn new(before: Duration) -> Self {
+    pub fn new(before: Age) -> Self {
         Self(before)
     }
 
     pub fn as_seconds(self) -> u32 {
-        self.0.num_seconds().try_into().unwrap_or(u32::MAX)
+        self.0.span().num_seconds().try_into().unwrap_or(u32::MAX)
     }
 
     fn reaches(self, announced_at: DateTime<Utc>, started_at: DateTime<Utc>) -> bool {
-        started_at >= announced_at - self.0
+        started_at >= self.0.before(announced_at)
     }
 }
 
 impl Default for Lead {
     fn default() -> Self {
-        Self(Duration::minutes(1))
+        Self(DEFAULT_LEAD)
     }
 }
 
@@ -313,6 +318,10 @@ mod tests {
         Duration::seconds(n)
     }
 
+    fn age(span: Duration) -> Age {
+        Age::new(span).expect("a positive span")
+    }
+
     #[tokio::test]
     async fn samples_no_session_start_precedes_still_form_a_session() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -346,7 +355,7 @@ mod tests {
                 gps(id, start() + minutes(9), 52.6),
                 gps(id, start() + minutes(30), 52.7),
             ],
-            Gap::new(minutes(10)),
+            Gap::new(age(minutes(10))),
         )
         .await;
 
@@ -367,7 +376,7 @@ mod tests {
         let sessions = derived_at(
             &tmp,
             &[gps(id, start(), 52.5), gps(id, start() + minutes(10), 52.6)],
-            Gap::new(minutes(10)),
+            Gap::new(age(minutes(10))),
         )
         .await;
 

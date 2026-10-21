@@ -150,7 +150,7 @@ mod tests {
     use arrow::array::RecordBatch;
     use chrono::{Duration, TimeZone};
     use domain::Gps;
-    use domain::{DeviceId, SessionId};
+    use domain::{Age, DeviceId, SessionId};
     use medallion::{Country, GEOMETRY, PROJECTED_GEOMETRY, Query};
     use serde::Deserialize;
     use shared::{GpsReading, Message, V1Message};
@@ -602,7 +602,8 @@ mod tests {
         assert_eq!(first.sessions, 2, "one session starting on each date");
         assert_eq!(first.session_partitions.written, 2);
 
-        let longer_than_the_silence = Gap::new(Duration::hours(2));
+        let longer_than_the_silence =
+            Gap::new(Age::new(Duration::hours(2)).expect("a positive span"));
         let derived = sessions(&root, longer_than_the_silence, Lead::default())
             .await
             .expect("derive sessions");

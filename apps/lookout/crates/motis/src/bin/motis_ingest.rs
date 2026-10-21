@@ -1,9 +1,9 @@
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
+use domain::Span;
 use medallion::MedallionArgs;
 use motis::ingest::ingest;
-use motis::span::Span;
 use motis::train_sessions::derive_train_sessions;
 use transport::countries::CountryAreas;
 

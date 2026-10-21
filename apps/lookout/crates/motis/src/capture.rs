@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use domain::Span;
 use geo::{BoundingRect, PreparedGeometry, Relate, unary_union};
 use geo_types::{Geometry, GeometryCollection, LineString, MultiPolygon, Rect};
 use medallion_model::TripId;
@@ -11,7 +12,6 @@ use crate::api::types::{Mode, TripSegment};
 use crate::bronze::{BronzeError, SegmentLog};
 use crate::client::{MotisClient, MotisError};
 use crate::details::TripDetailsCache;
-use crate::span::Span;
 use crate::tally::Tally;
 use crate::zoom::Zoom;
 

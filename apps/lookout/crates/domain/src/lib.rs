@@ -10,6 +10,7 @@ pub mod precision;
 pub mod radius;
 pub mod sample;
 pub mod session;
+pub mod span;
 pub mod train;
 
 pub use age::{Age, NotAnAge};
@@ -24,4 +25,5 @@ pub use precision::Precision;
 pub use radius::Radius;
 pub use sample::Sample;
 pub use session::{SessionId, StartedBy};
+pub use span::{NotASpan, Span};
 pub use train::TrainNumber;

@@ -483,9 +483,13 @@ At the end of the slice, once its features are in.
       `water_crossing_v2` with the new names, as `train_segment_v2` replaced `train_segment`.
       Derive it, point every reader at it, and remove `water_crossing` and `WaterCrossingRow` once
       nothing reads them.
-- [ ] Apply the `Age` rule in `.claude/rules/rust.md` across `lookout`: every maximum age,
+- [x] Apply the `Age` rule in `.claude/rules/rust.md` across `lookout`: every maximum age,
       lookback, or other age held as `domain::Age`, every age flag read as a `Span`, and
       `Option<Age>` where no age applies.
+      Outside `motis`, which already followed the rule, the ages were the recorder's gap and
+      lead. `sessionise` takes them as `--gap` and `--lead`, in place of `--gap-mins` and
+      `--lead-secs`. `Span` moved to `domain`, beside `Age`, here rather than in the next task,
+      since the recorder does not depend on `motis`.
 - [ ] Take every duration, interval, and age a person writes across `lookout` as a human-readable
       `Span`, such as `30s` or `4h`, as the Motis pollers do. Move `Span` out of `crates/motis` to
       where every crate can reach it.

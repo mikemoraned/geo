@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
 use chrono::TimeDelta;
-use domain::Bbox;
+use domain::{Bbox, Span};
 use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
 use medallion::{Countries, Country, GeoRow, GeoRowWriter, Projector, Replaced, Root};
@@ -12,7 +12,6 @@ use medallion_model::{
 
 use crate::ingest::{self, IngestError, Shape, captures, shape_of};
 use crate::sampling::{InvalidLeg, InvalidLegs, Leg, NormalisedLegs, Placed};
-use crate::span::Span;
 
 const SAMPLES_PER_WRITE: usize = 100_000;
 
