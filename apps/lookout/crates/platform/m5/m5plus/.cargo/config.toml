@@ -16,7 +16,9 @@ ESP_IDF_VERSION = "v5.5.3"
 # worktree this repo is worked in. The template's `workspace` default puts 4.3 GB under each
 # one instead.
 #
-# Only the first build writes there; later builds read it, including those that rebuild ESP-IDF
-# itself. So a sandbox confined to this repo can build against an install it could not have
-# created — the one-time install has to be run outside it.
+# The first build installs ESP-IDF there. After each new pip release, the first build to run the
+# `esp-idf-sys` build script also writes there, upgrading pip in ESP-IDF's Python environment.
+# Every other build needs only to read it, including one that rebuilds ESP-IDF itself. So a
+# sandbox confined to this repo can build against an install it cannot write. Only those builds
+# have to run outside it.
 ESP_IDF_TOOLS_INSTALL_DIR = "global"

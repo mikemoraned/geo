@@ -44,8 +44,10 @@ timetable feed), `overture.md` (the reference source and what an extract takes).
 
 Launch Claude from the repo root with `just claude`, which runs it under the safehouse sandbox.
 The sandbox grants read/write inside the repo. `~/.espressif` is granted read-only, so a device
-build uses the one shared ESP-IDF install rather than several gigabytes under every worktree. Only
-the first install writes there, and that one runs outside the sandbox.
+build uses the one shared ESP-IDF install rather than several gigabytes under every worktree. Two
+kinds of device build write there, so each runs outside the sandbox. One is the first, which
+installs ESP-IDF. The other is the first to run the `esp-idf-sys` build script after a new pip
+release, since that script upgrades pip in ESP-IDF's Python environment.
 
 ## Prose: invoke the two writing skills before drafting
 
