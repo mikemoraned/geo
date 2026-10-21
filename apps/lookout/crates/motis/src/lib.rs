@@ -13,7 +13,6 @@ pub mod polling;
 pub mod sampling;
 pub mod segment;
 pub mod source;
-pub mod span;
 pub mod tally;
 pub mod train_sessions;
 pub mod window;

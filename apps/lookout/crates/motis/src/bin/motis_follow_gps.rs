@@ -3,10 +3,10 @@ use clap::Parser;
 use redis::aio::MultiplexedConnection;
 use tracing_subscriber::EnvFilter;
 
+use domain::Span;
 use motis::capture::Coverage;
 use motis::near_gps::{NearGps, Seen};
 use motis::polling::{Look, PollArgs, Poller};
-use motis::span::Span;
 
 #[derive(Parser)]
 #[command(about = "Poll Motis for train trips near recently logged GPS, and log them")]

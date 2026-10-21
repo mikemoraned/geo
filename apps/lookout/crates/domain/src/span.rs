@@ -3,7 +3,8 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use chrono::TimeDelta;
-use domain::Age;
+
+use crate::age::Age;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Span(Duration);

@@ -3,11 +3,10 @@ use std::iter::successors;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use domain::Span;
 use geo::{Haversine, InterpolatableLine};
 use geo_types::{LineString, Point};
 use medallion_model::GeometrySource;
-
-use crate::span::Span;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Leg {
