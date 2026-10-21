@@ -490,9 +490,13 @@ At the end of the slice, once its features are in.
       lead. `sessionise` takes them as `--gap` and `--lead`, in place of `--gap-mins` and
       `--lead-secs`. `Span` moved to `domain`, beside `Age`, here rather than in the next task,
       since the recorder does not depend on `motis`.
-- [ ] Take every duration, interval, and age a person writes across `lookout` as a human-readable
+- [x] Take every duration, interval, and age a person writes across `lookout` as a human-readable
       `Span`, such as `30s` or `4h`, as the Motis pollers do. Move `Span` out of `crates/motis` to
       where every crate can reach it.
+      The `Age` task did this. It moved `Span`, and converted `sessionise`'s `--gap-mins` and
+      `--lead-secs`, the only duration flags left. No config value holds a duration, and every
+      recipe already passes one as text, such as `10m`. The browser's and the device's timing
+      constants stay, since no person writes them at run time.
 - [ ] Give each id in the ingest's `Leg`, in `crates/motis/src/ingest.rs`, a newtype in place of
       its `String`, as `TripId` is for `trip_id`. That covers `trip_id`, `from_stop_id`, and
       `agency_id`. Make `mode` an enum of the modes the capture keeps, in place of its `String`.
