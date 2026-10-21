@@ -43,4 +43,10 @@ What a passing test run does and doesn't prove when Claude runs it.
   compiled for the host. A clean device build proves it compiles and links for the target and
   nothing more; behaviour needs a flash, which Claude cannot do. See
   [working-with-claude.md](working-with-claude.md).
+- **Once pip has a newer release, a device build writes to `~/.espressif`.** When the
+  `esp-idf-sys` build script runs, it upgrades pip in ESP-IDF's Python environment there. The
+  sandbox refuses that write, and the build ends in `Could not install esp-idf`. One device build
+  outside the sandbox makes the upgrade, and builds here succeed again until pip's next release.
+  `cargo build --release -p m5-core`, run in the device shell's directory, compiles `m5-core` and
+  the crates it depends on for Xtensa without ESP-IDF, so it still works here.
 - Say plainly, when reporting, which tests could not be run.
