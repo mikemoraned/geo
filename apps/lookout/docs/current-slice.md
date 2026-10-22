@@ -559,3 +559,18 @@ and return, which takes a span of space and time. Where a session's uncertainty 
 two visits are no longer discernible. A representation of this in space and time, akin to scale
 space in images, is a research task in the slice "Evaluation framework with associated Crow Flies
 predictor improvement".
+
+### Observations
+
+#### `motis_ingest` on the captures to 22 October
+
+On 22 October, `motis_ingest` read 1,975,310 captured rows, which collapse to 1,319,928 legs.
+
+- A full run took 666 s and wrote 44.9 million train session samples. `/usr/bin/time -l` reported
+  a peak memory footprint of 12.7 GB and a peak resident set of 7.9 GB, on a machine with 24 GB.
+  Swap grew by 5.4 GB.
+- The segment derivation alone reaches that peak. An earlier run died writing `train_segment_v2`,
+  before the session derivation began, with a peak memory footprint of 12.7 GB too.
+- A run needs disk room for swap as well as for what it writes. That earlier run started with
+  about 4 GB of disk free, and its swap growth filled the disk. The capture then lost its polls at
+  19:10 UTC and from 19:30 to 21:50 UTC.
