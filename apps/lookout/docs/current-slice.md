@@ -497,11 +497,16 @@ At the end of the slice, once its features are in.
       `--lead-secs`, the only duration flags left. No config value holds a duration, and every
       recipe already passes one as text, such as `10m`. The browser's and the device's timing
       constants stay, since no person writes them at run time.
-- [ ] Give each id in the ingest's `Leg`, in `crates/motis/src/ingest.rs`, a newtype in place of
+- [x] Give each id in the ingest's `Leg`, in `crates/motis/src/ingest.rs`, a newtype in place of
       its `String`, as `TripId` is for `trip_id`. That covers `trip_id`, `from_stop_id`, and
       `agency_id`. Make `mode` an enum of the modes the capture keeps, in place of its `String`.
       Carry the new types into the rows built from a `Leg`. Drop `route_color` from `Leg` and
       `TrainSegmentRowV2`, since nothing reads it. Bronze keeps it, as the poll saw it.
+      `RailMode` holds the six modes, and the capture's filter now reads it. The July captures
+      hold 20 ferry legs, from 9 Rhine cruise ships on 21 July, a mode today's capture refuses.
+      Ingest leaves out any leg of another mode and counts it as `not_rail`, so the next
+      `silver-motis-ingest` drops those ferries from both silver datasets. A `Leg` checks its ids
+      as it is read, so an empty id in bronze is an error.
 - [ ] Store `TrainSessionRow::source_label` as a `Label`, in place of its `String`. Tracing a
       row's schema deserialises an empty string into each field, and `Label` refuses one, so
       `medallion` needs a way to trace a checked newtype first. `MotisSourceRowV2::label` has the

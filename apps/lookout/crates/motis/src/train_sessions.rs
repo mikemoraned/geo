@@ -7,7 +7,7 @@ use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{LineString, Point};
 use medallion::{Countries, Country, GeoRow, GeoRowWriter, Projector, Replaced, Root};
 use medallion_model::{
-    EmptyTripId, MotisSourceId, TrainSessionRow, TrainSessionSampleRow, TripId, train_session_id,
+    MotisSourceId, TrainSessionRow, TrainSessionSampleRow, TripId, train_session_id,
 };
 
 use crate::ingest::{self, IngestError, Shape, captures, shape_of};
@@ -73,7 +73,7 @@ pub async fn derive_train_sessions(
         .into_iter()
         .map(|source| (source.source_id, source.label))
         .collect();
-    let mut by_trip: HashMap<(MotisSourceId, String), Vec<ingest::Leg>> = HashMap::new();
+    let mut by_trip: HashMap<(MotisSourceId, TripId), Vec<ingest::Leg>> = HashMap::new();
     for captured in captures(root, "trip_id, from_stop_id")
         .await?
         .into_iter()
@@ -124,7 +124,7 @@ pub async fn derive_train_sessions(
     for trip in &trips {
         let placed = trip.legs.sampled(interval)?;
         let start = placed.first().ok_or_else(|| IngestError::NoSamples {
-            trip_id: trip.trip_id.to_string(),
+            trip_id: trip.trip_id.clone(),
         })?;
         match countries.containing(start.position) {
             None => outcome.dropped.unplaceable += 1,
@@ -165,10 +165,9 @@ pub async fn derive_train_sessions(
 fn normalised(
     source_id: MotisSourceId,
     source_label: Option<String>,
-    trip_id: String,
+    trip_id: TripId,
     captured: &[ingest::Leg],
 ) -> Result<Normalised, IngestError> {
-    let trip_id = TripId::new(trip_id).map_err(|EmptyTripId| IngestError::EmptyTripId)?;
     let shapes = captured
         .iter()
         .map(shape_of)
@@ -194,10 +193,7 @@ fn normalised(
             return Ok(Normalised::Dropped(Drop::ArrivesBeforeDeparting));
         }
         Err(source) => {
-            return Err(IngestError::InvalidLeg {
-                trip_id: trip_id.to_string(),
-                source,
-            });
+            return Err(IngestError::InvalidLeg { trip_id, source });
         }
     };
     match NormalisedLegs::new(&legs) {
@@ -208,10 +204,7 @@ fn normalised(
             legs,
         })),
         Err(InvalidLegs::Overlapping { .. }) => Ok(Normalised::Dropped(Drop::Overlapping)),
-        Err(source) => Err(IngestError::InvalidLegs {
-            trip_id: trip_id.to_string(),
-            source,
-        }),
+        Err(source) => Err(IngestError::InvalidLegs { trip_id, source }),
     }
 }
 
@@ -221,10 +214,10 @@ fn session_of(
     projector: &Projector,
 ) -> Result<Session, IngestError> {
     let no_samples = || IngestError::NoSamples {
-        trip_id: trip.trip_id.to_string(),
+        trip_id: trip.trip_id.clone(),
     };
     let too_many = || IngestError::TooManySamples {
-        trip_id: trip.trip_id.to_string(),
+        trip_id: trip.trip_id.clone(),
     };
     let session_id = train_session_id(&trip.source_id, &trip.trip_id);
     let projected = placed
@@ -298,7 +291,7 @@ mod tests {
     use serde::Deserialize;
     use url::Url;
 
-    use crate::api::types::TripSegment;
+    use crate::api::types::{Mode, TripSegment};
     use crate::bronze::SegmentLog;
 
     use super::*;
@@ -338,7 +331,16 @@ mod tests {
     }
 
     fn fixture() -> Vec<TripSegment> {
-        serde_json::from_str(include_str!("../tests/fixtures/trips.json")).expect("parse fixture")
+        let captured: Vec<TripSegment> =
+            serde_json::from_str(include_str!("../tests/fixtures/trips.json"))
+                .expect("parse fixture");
+        captured
+            .into_iter()
+            .map(|segment| TripSegment {
+                mode: Mode::RegionalRail,
+                ..segment
+            })
+            .collect()
     }
 
     fn polled_at(minute: u32) -> DateTime<Utc> {

@@ -41,6 +41,7 @@ async fn main() {
         read = outcome.read,
         deduped = outcome.deduped,
         partitions = outcome.partitions,
+        not_rail = outcome.not_rail,
         unplaceable = outcome.unplaceable,
         shapeless = outcome.shapeless,
         shape_corrected = outcome.shape_corrected,

@@ -29,7 +29,6 @@ def train_segment_table(trip_ids, departures, countries):
             "agency_id": pa.array(["db"] * rows, pa.string()),
             "agency_name": pa.array(["DB"] * rows, pa.string()),
             "mode": pa.array(["HIGHSPEED_RAIL"] * rows, pa.string()),
-            "route_color": pa.array(["ff0000"] * rows, pa.string()),
             "realtime": pa.array([True] * rows, pa.bool_()),
             "from_stop_id": pa.array(["berlin-hbf"] * rows, pa.string()),
             "departure": pa.array(

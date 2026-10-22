@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use domain::Span;
 use geo::{BoundingRect, PreparedGeometry, Relate, unary_union};
 use geo_types::{Geometry, GeometryCollection, LineString, MultiPolygon, Rect};
-use medallion_model::TripId;
+use medallion_model::{RailMode, TripId};
 use tokio::time::Instant;
 
 use crate::api::types::{Mode, TripSegment};
@@ -187,15 +187,7 @@ fn sorted(coverage: &Coverage, segment: &TripSegment) -> Sorted {
 }
 
 fn is_rail(mode: &Mode) -> bool {
-    matches!(
-        mode,
-        Mode::HighspeedRail
-            | Mode::LongDistance
-            | Mode::NightRail
-            | Mode::RegionalFastRail
-            | Mode::RegionalRail
-            | Mode::Rail
-    )
+    mode.to_string().parse::<RailMode>().is_ok()
 }
 
 #[cfg(test)]
@@ -417,5 +409,29 @@ mod tests {
             .expect("capture");
 
         assert_eq!((captured.segments, captured.outside), (0, 1));
+    }
+
+    #[test]
+    fn the_capture_keeps_rail_and_drops_every_other_mode() {
+        let rail = [
+            Mode::HighspeedRail,
+            Mode::LongDistance,
+            Mode::NightRail,
+            Mode::RegionalFastRail,
+            Mode::RegionalRail,
+            Mode::Rail,
+        ];
+        for mode in rail {
+            assert!(is_rail(&mode), "{mode}");
+        }
+        for mode in [
+            Mode::Suburban,
+            Mode::Ferry,
+            Mode::Bus,
+            Mode::Tram,
+            Mode::Walk,
+        ] {
+            assert!(!is_rail(&mode), "{mode}");
+        }
     }
 }

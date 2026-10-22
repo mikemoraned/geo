@@ -5,6 +5,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use domain::TrainNumber;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
+use strum::{AsRefStr, EnumIter, EnumString};
 
 use crate::motis_source::MotisSourceId;
 
@@ -52,6 +53,86 @@ impl Display for TripId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct StopId(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("a stop id cannot be empty")]
+pub struct EmptyStopId;
+
+impl StopId {
+    pub fn new(id: impl Into<String>) -> Result<Self, EmptyStopId> {
+        let id = id.into();
+        if id.is_empty() {
+            Err(EmptyStopId)
+        } else {
+            Ok(Self(id))
+        }
+    }
+}
+
+impl FromStr for StopId {
+    type Err = EmptyStopId;
+
+    fn from_str(id: &str) -> Result<Self, Self::Err> {
+        Self::new(id)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AgencyId(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("an agency id cannot be empty")]
+pub struct EmptyAgencyId;
+
+impl AgencyId {
+    pub fn new(id: impl Into<String>) -> Result<Self, EmptyAgencyId> {
+        let id = id.into();
+        if id.is_empty() {
+            Err(EmptyAgencyId)
+        } else {
+            Ok(Self(id))
+        }
+    }
+}
+
+impl FromStr for AgencyId {
+    type Err = EmptyAgencyId;
+
+    fn from_str(id: &str) -> Result<Self, Self::Err> {
+        Self::new(id)
+    }
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    EnumIter,
+    EnumString,
+    AsRefStr,
+)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum RailMode {
+    HighspeedRail,
+    LongDistance,
+    NightRail,
+    RegionalFastRail,
+    RegionalRail,
+    Rail,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -162,15 +243,14 @@ impl Row for MotisCaptureRow {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TrainSegmentRowV2 {
     pub source_id: MotisSourceId,
-    pub trip_id: String,
+    pub trip_id: TripId,
     pub route_name: Option<String>,
     pub train_number: Option<TrainNumber>,
-    pub agency_id: Option<String>,
+    pub agency_id: Option<AgencyId>,
     pub agency_name: Option<String>,
-    pub mode: String,
-    pub route_color: Option<String>,
+    pub mode: RailMode,
     pub realtime: bool,
-    pub from_stop_id: Option<String>,
+    pub from_stop_id: Option<StopId>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub departure: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
@@ -193,6 +273,7 @@ impl Dated for TrainSegmentRowV2 {
 #[cfg(test)]
 mod tests {
     use arrow::datatypes::DataType;
+    use strum::IntoEnumIterator;
 
     use super::*;
 
@@ -207,6 +288,57 @@ mod tests {
     #[test]
     fn an_empty_trip_id_is_refused() {
         assert_eq!(TripId::new(""), Err(EmptyTripId));
+    }
+
+    #[test]
+    fn an_empty_stop_or_agency_id_is_refused() {
+        assert_eq!(StopId::new(""), Err(EmptyStopId));
+        assert_eq!(AgencyId::new(""), Err(EmptyAgencyId));
+    }
+
+    #[test]
+    fn a_rail_mode_is_named_as_motis_names_it() {
+        let names: Vec<String> = RailMode::iter()
+            .map(|mode| mode.as_ref().to_string())
+            .collect();
+
+        assert_eq!(
+            names,
+            [
+                "HIGHSPEED_RAIL",
+                "LONG_DISTANCE",
+                "NIGHT_RAIL",
+                "REGIONAL_FAST_RAIL",
+                "REGIONAL_RAIL",
+                "RAIL"
+            ]
+        );
+        for mode in RailMode::iter() {
+            assert_eq!(serde_json::to_value(mode).expect("a name"), mode.as_ref());
+            assert_eq!(mode.as_ref().parse(), Ok(mode));
+        }
+    }
+
+    #[test]
+    fn a_mode_the_capture_drops_is_no_rail_mode() {
+        for name in ["FERRY", "SUBURBAN", "BUS", ""] {
+            assert!(name.parse::<RailMode>().is_err(), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_rail_mode_is_stored_as_text() {
+        let fields = medallion::fields::<TrainSegmentRowV2>().expect("describe the rows");
+        let type_of = |name: &str| {
+            fields
+                .iter()
+                .find(|field| field.name() == name)
+                .expect("a column")
+                .data_type()
+                .clone()
+        };
+
+        assert_eq!(type_of("mode"), type_of("route_name"));
     }
 
     #[test]
