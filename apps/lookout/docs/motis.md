@@ -184,6 +184,9 @@ server moved to DELFI on 23 July 2026, and one labelled `delfi`, for those from 
 `train_segment_v2` derives from both capture datasets, and gives each earlier capture the source
 its capture date falls under.
 
+Silver derived from either capture dataset holds only the rail modes a capture keeps. Deriving the
+segments leaves out a leg of any other mode, such as a ferry in the earlier captures, and counts it.
+
 ## Two server quirks a caller has to absorb
 
 Both are Motis behaviours rather than ours, and both look like an empty or nonsensical

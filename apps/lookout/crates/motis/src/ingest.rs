@@ -1,4 +1,6 @@
+use std::fmt::Display;
 use std::ops::Add;
+use std::str::FromStr;
 
 use crate::legacy::legacy_source_id_sql;
 use crate::segment::{NotAPolyline, decode_polyline};
@@ -6,18 +8,22 @@ use chrono::{DateTime, Utc};
 use domain::TrainNumber;
 use geo_types::{Coord, LineString, Point};
 use medallion::{Countries, DatasetSpec, GeoRow, Query, Root, layers};
-use medallion_model::{MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, TrainSegmentRowV2};
-use serde::{Deserialize, Serialize};
+use medallion_model::{
+    AgencyId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, RailMode, StopId, TrainSegmentRowV2,
+    TripId,
+};
+use serde::{Deserialize, Deserializer, Serialize};
+use strum::IntoEnumIterator;
 
 const LEG_COLUMNS: &str = "trip_id, route_name, train_number, agency_id, agency_name, mode,
-    route_color, realtime, from_stop_id, from_lat, from_lon, to_lat, to_lon, departure, arrival,
-    polyline";
+    realtime, from_stop_id, from_lat, from_lon, to_lat, to_lon, departure, arrival, polyline";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct IngestOutcome {
     pub read: usize,
     pub deduped: usize,
     pub partitions: usize,
+    pub not_rail: usize,
     pub unplaceable: usize,
     pub shapeless: usize,
     pub shape_corrected: usize,
@@ -31,6 +37,7 @@ impl Add for IngestOutcome {
             read: self.read + other.read,
             deduped: self.deduped + other.deduped,
             partitions: self.partitions + other.partitions,
+            not_rail: self.not_rail + other.not_rail,
             unplaceable: self.unplaceable + other.unplaceable,
             shapeless: self.shapeless + other.shapeless,
             shape_corrected: self.shape_corrected + other.shape_corrected,
@@ -47,47 +54,47 @@ pub enum IngestError {
     #[error("writing the dataset: {0}")]
     Write(#[from] medallion::TableError),
     #[error("a capture of trip `{trip_id}` names no source")]
-    Unsourced { trip_id: String },
+    Unsourced { trip_id: TripId },
     #[error("a capture names the source `{source_id}`, which was never registered")]
     UnregisteredSource { source_id: MotisSourceId },
     #[error("reading the registered sources: {0}")]
     Sources(#[from] crate::source::SourceError),
-    #[error("a capture names its trip with an empty id")]
-    EmptyTripId,
     #[error("placing a train: {0}")]
     Unplaced(#[from] crate::sampling::NoWhereabouts),
     #[error("projecting a train's sample: {0}")]
     Projection(#[from] medallion::GeoError),
     #[error("trip `{trip_id}`: {source}")]
     InvalidLeg {
-        trip_id: String,
+        trip_id: TripId,
         #[source]
         source: crate::sampling::InvalidLeg,
     },
     #[error("trip `{trip_id}`: {source}")]
     InvalidLegs {
-        trip_id: String,
+        trip_id: TripId,
         #[source]
         source: crate::sampling::InvalidLegs,
     },
     #[error("trip `{trip_id}` sampled to no samples")]
-    NoSamples { trip_id: String },
+    NoSamples { trip_id: TripId },
     #[error("trip `{trip_id}` has more samples than a u32 can number")]
-    TooManySamples { trip_id: String },
+    TooManySamples { trip_id: TripId },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Leg {
     pub(crate) source_id: Option<MotisSourceId>,
-    pub(crate) trip_id: String,
+    #[serde(deserialize_with = "parsed")]
+    pub(crate) trip_id: TripId,
     pub(crate) route_name: Option<String>,
     pub(crate) train_number: Option<TrainNumber>,
-    pub(crate) agency_id: Option<String>,
+    #[serde(deserialize_with = "parsed_if_present")]
+    pub(crate) agency_id: Option<AgencyId>,
     pub(crate) agency_name: Option<String>,
-    pub(crate) mode: String,
-    pub(crate) route_color: Option<String>,
+    pub(crate) mode: RailMode,
     pub(crate) realtime: bool,
-    pub(crate) from_stop_id: Option<String>,
+    #[serde(deserialize_with = "parsed_if_present")]
+    pub(crate) from_stop_id: Option<StopId>,
     pub(crate) from_lat: f64,
     pub(crate) from_lon: f64,
     pub(crate) to_lat: f64,
@@ -97,6 +104,28 @@ pub(crate) struct Leg {
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub(crate) arrival: DateTime<Utc>,
     pub(crate) polyline: String,
+}
+
+fn parsed<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: FromStr,
+    T::Err: Display,
+{
+    String::deserialize(deserializer)?
+        .parse()
+        .map_err(serde::de::Error::custom)
+}
+
+fn parsed_if_present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: FromStr,
+    T::Err: Display,
+{
+    Option::<String>::deserialize(deserializer)?
+        .map(|text| text.parse().map_err(serde::de::Error::custom))
+        .transpose()
 }
 
 impl TryFrom<&Leg> for TrainSegmentRowV2 {
@@ -116,8 +145,7 @@ impl TryFrom<&Leg> for TrainSegmentRowV2 {
             train_number: leg.train_number,
             agency_id: leg.agency_id.clone(),
             agency_name: leg.agency_name.clone(),
-            mode: leg.mode.clone(),
-            route_color: leg.route_color.clone(),
+            mode: leg.mode,
             realtime: leg.realtime,
             from_stop_id: leg.from_stop_id.clone(),
             departure: leg.departure,
@@ -128,6 +156,7 @@ impl TryFrom<&Leg> for TrainSegmentRowV2 {
 
 pub(crate) struct Captured {
     pub(crate) read: usize,
+    pub(crate) not_rail: usize,
     pub(crate) legs: Vec<Leg>,
 }
 
@@ -138,7 +167,8 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
     let mut placed: Vec<GeoRow<TrainSegmentRowV2, LineString<f64>>> = Vec::new();
     for captured in captures.into_iter().flatten() {
         outcome.read += captured.read;
-        outcome.deduped += captured.legs.len();
+        outcome.not_rail += captured.not_rail;
+        outcome.deduped += captured.legs.len() + captured.not_rail;
         for leg in &captured.legs {
             let line = match shape_of(leg)? {
                 Shape::Captured(line) => line,
@@ -206,6 +236,14 @@ async fn captured(
     let read = query
         .count(&format!("SELECT COUNT(*) AS count FROM {table}"))
         .await? as usize;
+    let rail_modes = rail_modes();
+    let not_rail = query
+        .count(&format!(
+            "SELECT COUNT(*) AS count FROM (
+               SELECT DISTINCT {one_leg} FROM {table} WHERE mode NOT IN ({rail_modes})
+             )"
+        ))
+        .await? as usize;
     let legs = query
         .rows(&format!(
             "SELECT {source}, {LEG_COLUMNS}
@@ -214,12 +252,24 @@ async fn captured(
                  PARTITION BY {one_leg} ORDER BY captured_at DESC
                ) AS rank
                FROM {table}
+               WHERE mode IN ({rail_modes})
              )
              WHERE rank = 1
              ORDER BY departure"
         ))
         .await?;
-    Ok(Some(Captured { read, legs }))
+    Ok(Some(Captured {
+        read,
+        not_rail,
+        legs,
+    }))
+}
+
+fn rail_modes() -> String {
+    RailMode::iter()
+        .map(|mode| format!("'{}'", mode.as_ref()))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 pub(crate) enum Shape {
@@ -265,7 +315,7 @@ mod tests {
 
     use crate::bronze::{SegmentLog, segment_row};
 
-    use crate::api::types::TripSegment;
+    use crate::api::types::{Mode, TripSegment};
     use arrow::array::RecordBatch;
     use chrono::TimeZone;
     use medallion::{Country, GEOMETRY, PROJECTED_GEOMETRY};
@@ -340,7 +390,16 @@ mod tests {
     }
 
     fn fixture() -> Vec<TripSegment> {
-        serde_json::from_str(include_str!("../tests/fixtures/trips.json")).expect("parse fixture")
+        let captured: Vec<TripSegment> =
+            serde_json::from_str(include_str!("../tests/fixtures/trips.json"))
+                .expect("parse fixture");
+        captured
+            .into_iter()
+            .map(|segment| TripSegment {
+                mode: Mode::RegionalRail,
+                ..segment
+            })
+            .collect()
     }
 
     async fn ingest_polls(root: &Root, polls: &[DateTime<Utc>]) -> IngestOutcome {
@@ -648,6 +707,69 @@ mod tests {
             })
             .collect();
         assert_eq!(partitions, ["country=DE"]);
+    }
+
+    #[tokio::test]
+    async fn a_leg_of_a_mode_the_capture_drops_is_left_out_and_counted() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let mut segments = fixture();
+        segments[0].mode = Mode::Ferry;
+        log(&root)
+            .append(
+                Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
+                &segments,
+                &Map::new(),
+            )
+            .await
+            .expect("append poll");
+
+        let outcome = ingest(&root, &germany()).await.expect("ingest");
+
+        assert_eq!((outcome.deduped, outcome.not_rail), (segments.len(), 1));
+        let ferries = derived(&root)
+            .await
+            .count(&format!(
+                "SELECT COUNT(*) AS count FROM derived WHERE trip_id = '{}'",
+                segments[0].trip_id().expect("a segment with one trip")
+            ))
+            .await
+            .expect("count");
+        assert_eq!(ferries, 0);
+    }
+
+    async fn refusal_of(blank: impl FnOnce(&mut MotisSegmentRow)) -> String {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
+        let mut row =
+            segment_row(captured_at, &fixture()[0], &Map::new()).expect("a segment with one trip");
+        blank(&mut row);
+        root.rows_of::<MotisSegmentRow>()
+            .on_date(captured_at.date_naive())
+            .expect("partition")
+            .append_rows(captured_at, &[row])
+            .await
+            .expect("append legacy poll");
+
+        ingest(&root, &germany())
+            .await
+            .expect_err("an empty id")
+            .to_string()
+    }
+
+    #[tokio::test]
+    async fn an_empty_trip_id_in_the_capture_log_is_refused() {
+        let refusal = refusal_of(|row| row.trip_id = String::new()).await;
+
+        assert!(refusal.contains("a trip id cannot be empty"), "{refusal}");
+    }
+
+    #[tokio::test]
+    async fn an_empty_stop_id_in_the_capture_log_is_refused() {
+        let refusal = refusal_of(|row| row.from_stop_id = Some(String::new())).await;
+
+        assert!(refusal.contains("a stop id cannot be empty"), "{refusal}");
     }
 
     #[tokio::test]
