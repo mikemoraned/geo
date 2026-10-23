@@ -19,7 +19,7 @@ pub enum StartedBy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct SessionId(String);
 
 impl SessionId {
@@ -38,6 +38,20 @@ impl FromStr for SessionId {
 
     fn from_str(id: &str) -> Result<Self, Self::Err> {
         Self::new(id)
+    }
+}
+
+impl TryFrom<String> for SessionId {
+    type Error = NameError;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Self::new(id)
+    }
+}
+
+impl From<SessionId> for String {
+    fn from(id: SessionId) -> Self {
+        id.0
     }
 }
 
@@ -103,5 +117,11 @@ mod tests {
     fn an_id_that_could_not_be_written_as_a_name_is_refused() {
         assert!(SessionId::new("a session/one").is_err());
         assert!("".parse::<SessionId>().is_err());
+    }
+
+    #[test]
+    fn an_id_is_checked_when_it_is_read_back() {
+        assert!(serde_json::from_str::<SessionId>(r#""a-session""#).is_ok());
+        assert!(serde_json::from_str::<SessionId>(r#""a session/one""#).is_err());
     }
 }
