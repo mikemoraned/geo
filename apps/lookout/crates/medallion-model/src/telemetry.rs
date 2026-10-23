@@ -86,17 +86,12 @@ mod tests {
     use arrow::datatypes::DataType;
 
     use super::*;
+    use crate::testing::column;
 
     #[test]
     fn the_class_of_device_is_a_string_column() {
-        let fields = medallion::fields::<DeviceSessionRow>().expect("describe the rows");
-        let column = fields
-            .iter()
-            .find(|field| field.name() == "device_type")
-            .expect("a device_type column");
-
         assert!(matches!(
-            column.data_type(),
+            column::<DeviceSessionRow>("device_type").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }

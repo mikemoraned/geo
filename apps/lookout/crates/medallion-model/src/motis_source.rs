@@ -342,6 +342,7 @@ mod tests {
 
     use super::*;
     use crate::gers::GersId;
+    use crate::testing::column;
 
     const REGION_ID: &str = "0fbd2c80-46c8-4e2b-9ab6-36d2a5c4b0a1";
 
@@ -665,16 +666,10 @@ mod tests {
 
     #[test]
     fn the_feed_is_a_string_column() {
-        let feed = medallion::fields::<MotisSourceRowV2>()
-            .expect("describe the rows")
-            .iter()
-            .find(|field| field.name() == "feed")
-            .expect("a feed column")
-            .data_type()
-            .clone();
+        let feed = column::<MotisSourceRowV2>("feed");
 
         assert!(
-            matches!(feed, DataType::Utf8 | DataType::LargeUtf8),
+            matches!(feed.data_type(), DataType::Utf8 | DataType::LargeUtf8),
             "{feed:?}"
         );
     }

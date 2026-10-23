@@ -72,33 +72,24 @@ mod tests {
     use arrow::datatypes::DataType;
 
     use super::*;
-
-    fn column<T: Row>(name: &str) -> DataType {
-        medallion::fields::<T>()
-            .expect("describe the rows")
-            .iter()
-            .find(|field| field.name() == name)
-            .unwrap_or_else(|| panic!("no column named `{name}`"))
-            .data_type()
-            .clone()
-    }
+    use crate::testing::column;
 
     #[test]
     fn a_compact_id_is_a_four_byte_column() {
         assert_eq!(
-            column::<WaterCrossingRowV2>("crossing_compact_id"),
-            DataType::UInt32
+            column::<WaterCrossingRowV2>("crossing_compact_id").data_type(),
+            &DataType::UInt32
         );
     }
 
     #[test]
     fn a_crossing_id_is_a_string_column_in_both_datasets() {
         assert!(matches!(
-            column::<WaterCrossingRowV2>("crossing_id"),
+            column::<WaterCrossingRowV2>("crossing_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionCrossingRow>("crossing_id"),
+            column::<SessionCrossingRow>("crossing_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
@@ -106,7 +97,7 @@ mod tests {
     #[test]
     fn the_kind_of_overlap_is_a_string_column() {
         assert!(matches!(
-            column::<WaterCrossingRowV2>("overlap_kind"),
+            column::<WaterCrossingRowV2>("overlap_kind").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
@@ -121,11 +112,14 @@ mod tests {
     #[test]
     fn a_crossing_carries_how_it_was_collapsed() {
         for tuning in ["merge_distance_m", "min_crossing_m"] {
-            assert_eq!(column::<WaterCrossingRowV2>(tuning), DataType::Float64);
+            assert_eq!(
+                column::<WaterCrossingRowV2>(tuning).data_type(),
+                &DataType::Float64
+            );
         }
         assert_eq!(
-            column::<SessionCrossingRow>("match_radius_m"),
-            DataType::Float64
+            column::<SessionCrossingRow>("match_radius_m").data_type(),
+            &DataType::Float64
         );
     }
 }

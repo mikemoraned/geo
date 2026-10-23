@@ -71,33 +71,24 @@ mod tests {
     use arrow::datatypes::DataType;
 
     use super::*;
-
-    fn column<T: Row>(name: &str) -> DataType {
-        medallion::fields::<T>()
-            .expect("describe the rows")
-            .iter()
-            .find(|field| field.name() == name)
-            .unwrap_or_else(|| panic!("no column named `{name}`"))
-            .data_type()
-            .clone()
-    }
+    use crate::testing::column;
 
     #[test]
     fn an_id_is_a_string_column() {
         assert!(matches!(
-            column::<SessionRow>("session_id"),
+            column::<SessionRow>("session_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionSampleRow>("session_id"),
+            column::<SessionSampleRow>("session_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionRow>("device_id"),
+            column::<SessionRow>("device_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionSampleRow>("device_id"),
+            column::<SessionSampleRow>("device_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
@@ -105,14 +96,15 @@ mod tests {
     #[test]
     fn what_started_a_session_is_a_string_column() {
         assert!(matches!(
-            column::<SessionRow>("started_by"),
+            column::<SessionRow>("started_by").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
 
     #[test]
     fn the_bbox_is_a_struct_of_its_four_bounds() {
-        let DataType::Struct(bounds) = column::<SessionRow>("bbox") else {
+        let bbox = column::<SessionRow>("bbox");
+        let DataType::Struct(bounds) = bbox.data_type() else {
             panic!("bbox should be a struct");
         };
 

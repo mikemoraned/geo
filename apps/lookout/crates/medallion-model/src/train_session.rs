@@ -88,6 +88,7 @@ mod tests {
     use arrow::datatypes::DataType;
 
     use super::*;
+    use crate::testing::{column, column_names};
     use crate::{SessionRow, SessionSampleRow};
 
     fn source(id: &str) -> MotisSourceId {
@@ -98,16 +99,8 @@ mod tests {
         TripId::new(id).expect("a trip id")
     }
 
-    fn columns<T: Row>() -> BTreeSet<String> {
-        medallion::fields::<T>()
-            .expect("describe the rows")
-            .iter()
-            .map(|field| field.name().clone())
-            .collect()
-    }
-
     fn swapped<T: Row>(left_out: &[&str], added: &[&str]) -> BTreeSet<String> {
-        columns::<T>()
+        column_names::<T>()
             .into_iter()
             .filter(|name| !left_out.contains(&name.as_str()))
             .chain(added.iter().map(|name| name.to_string()))
@@ -158,15 +151,10 @@ mod tests {
 
     #[test]
     fn where_a_samples_geometry_came_from_is_stored_as_its_name() {
-        let column = medallion::fields::<TrainSessionSampleRow>()
-            .expect("describe the rows")
-            .iter()
-            .find(|field| field.name() == "geometry_source")
-            .expect("a geometry_source column")
-            .data_type()
-            .clone();
-
-        assert!(matches!(column, DataType::Utf8 | DataType::LargeUtf8));
+        assert!(matches!(
+            column::<TrainSessionSampleRow>("geometry_source").data_type(),
+            DataType::Utf8 | DataType::LargeUtf8
+        ));
         assert_eq!(
             serde_json::to_value([GeometrySource::Stop, GeometrySource::Interpolated])
                 .expect("serialise"),
@@ -177,7 +165,7 @@ mod tests {
     #[test]
     fn a_train_session_has_a_recorded_sessions_columns_but_what_only_a_device_reports() {
         assert_eq!(
-            columns::<TrainSessionRow>(),
+            column_names::<TrainSessionRow>(),
             swapped::<SessionRow>(
                 &["device_id", "started_by", "gap_seconds", "lead_seconds"],
                 &["source_id", "source_label", "trip_id"]
@@ -187,11 +175,7 @@ mod tests {
 
     #[test]
     fn a_source_without_a_label_is_stored_as_null() {
-        let field = medallion::fields::<TrainSessionRow>()
-            .expect("describe the rows")
-            .into_iter()
-            .find(|field| field.name() == "source_label")
-            .expect("a source_label column");
+        let field = column::<TrainSessionRow>("source_label");
 
         assert!(
             matches!(field.data_type(), DataType::Utf8 | DataType::LargeUtf8),
@@ -203,7 +187,7 @@ mod tests {
     #[test]
     fn a_train_sample_has_a_recorded_samples_columns_but_what_only_a_device_reports() {
         assert_eq!(
-            columns::<TrainSessionSampleRow>(),
+            column_names::<TrainSessionSampleRow>(),
             swapped::<SessionSampleRow>(
                 &["device_id", "alt", "acc", "speed", "heading"],
                 &["source_id", "trip_id", "geometry_source"]
