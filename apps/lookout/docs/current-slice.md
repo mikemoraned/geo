@@ -559,7 +559,7 @@ At the end of the slice, once its features are in.
       both Python bindings with a `ValueError`.
       The replay runner's `--radius-metres` refuses one at parsing too, through `radius_metres` in
       `lookout_predictor`.
-- [ ] Make every checked newtype check its value whenever it is deserialised, as `Label` does:
+- [x] Make every checked newtype check its value whenever it is deserialised, as `Label` does:
       1. Give every row type an example. Compare each example's trace with its type's trace, in a
          test committed and then removed.
       2. Make `Row::example` required, and trace from it alone. Update
@@ -572,6 +572,7 @@ At the end of the slice, once its features are in.
       5. Hold `MotisVersion` and `OvertureRelease` in `MotisSourceRowV2`, in place of their
          `String`s. `MotisSource`'s conversion then keeps only the check that a country and a
          release come together.
+      On 23 October, no stored id broke its type's check, across the ten datasets that hold one.
 
 #### Six-day capture
 
