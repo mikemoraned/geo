@@ -3,6 +3,8 @@ use domain::{CrossingCompactId, CrossingId, DeviceId, SessionId};
 use medallion::{COUNTRY, DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
+use crate::SessionRow;
+
 pub const WATER_CROSSING_V2: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("water_crossing_v2", COUNTRY);
 
@@ -41,6 +43,27 @@ impl Row for WaterCrossingRowV2 {
     const DATASET: DatasetSpec<Self::Layer> = WATER_CROSSING_V2;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const UNIQUE: &'static [&'static str] = &["crossing_id", "crossing_compact_id"];
+
+    fn example() -> Option<Self> {
+        Some(Self {
+            crossing_id: CrossingId::new("example").expect("a constant crossing id is a name"),
+            crossing_compact_id: CrossingCompactId::new(1),
+            overture_water_id: "example".to_string(),
+            overture_water_subtype: Some("example".to_string()),
+            overture_water_class: Some("example".to_string()),
+            track_id: "example".to_string(),
+            overture_rail_id: "example".to_string(),
+            overture_rail_class: Some("example".to_string()),
+            overlap_kind: OverlapKind::Line,
+            overlap_m: 0.0,
+            total_overlap_m: 0.0,
+            merged_parts: 1,
+            frac: 0.0,
+            extract_id: "example".to_string(),
+            merge_distance_m: 0.0,
+            min_crossing_m: 0.0,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,6 +82,19 @@ impl Row for SessionCrossingRow {
     type Layer = layers::Silver;
     const DATASET: DatasetSpec<Self::Layer> = SESSION_CROSSING;
     const INSTANTS: &'static [&'static str] = &["crossed_at"];
+
+    fn example() -> Option<Self> {
+        let session = SessionRow::example()?;
+        Some(Self {
+            session_id: session.session_id,
+            crossing_id: WaterCrossingRowV2::example()?.crossing_id,
+            device_id: session.device_id,
+            crossed_at: session.started_at,
+            distance_m: 0.0,
+            samples_within: 1,
+            match_radius_m: 250.0,
+        })
+    }
 }
 
 impl Dated for SessionCrossingRow {
