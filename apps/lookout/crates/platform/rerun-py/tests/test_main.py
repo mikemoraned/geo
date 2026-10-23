@@ -35,6 +35,29 @@ def test_a_replay_scans_within_five_kilometres_unless_told_otherwise():
     assert arguments(["replay", "abc"]).radius_metres == 5_000.0
 
 
+def test_a_replay_scans_within_the_radius_it_is_given():
+    assert arguments(["replay", "abc", "--radius-metres", "2000"]).radius_metres == 2_000.0
+
+
+@pytest.mark.parametrize(
+    ("radius", "reason"),
+    [
+        ("0", "positive, finite"),
+        ("-2000", "positive, finite"),
+        ("inf", "positive, finite"),
+        ("nan", "positive, finite"),
+        ("far", "not a number of metres"),
+    ],
+)
+def test_a_radius_that_is_not_positive_and_finite_is_refused_saying_why(
+    radius, reason, capsys
+):
+    with pytest.raises(SystemExit):
+        arguments(["replay", "abc", f"--radius-metres={radius}"])
+
+    assert reason in capsys.readouterr().err
+
+
 def test_the_store_to_read_is_the_callers_to_choose_on_either_command(tmp_path):
     assert arguments(["sessions", "--medallion-root", str(tmp_path)]).medallion_root == tmp_path
     assert (

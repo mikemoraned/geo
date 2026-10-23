@@ -514,9 +514,11 @@ At the end of the slice, once its features are in.
 - [ ] Define `path_through` and `implied_speed` once, where `recorder` and `motis` can both
       reach them. `crates/recorder/src/silver.rs` and `crates/motis/src/train_sessions.rs` each
       define both.
-- [ ] Make `Radius::new` refuse anything but a positive, finite number of metres, as `Age`
+- [x] Make `Radius::new` refuse anything but a positive, finite number of metres, as `Age`
       refuses zero. Refuse an invalid radius where it enters: `--match-radius-m` at parsing, and
       both Python bindings with a `ValueError`.
+      The replay runner's `--radius-metres` refuses one at parsing too, through `radius_metres` in
+      `lookout_predictor`.
 
 #### Optimisation
 

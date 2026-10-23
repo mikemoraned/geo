@@ -46,6 +46,11 @@ pub struct CrowFlies {
 impl CrowFlies {
     /// A predictor over `crossings`, each `(id, latitude_degrees, longitude_degrees)`,
     /// reporting everything within `radius_metres`.
+    ///
+    /// # Errors
+    ///
+    /// Raises where a crossing is not on the globe, or where `radius_metres` is not a positive,
+    /// finite number.
     #[new]
     #[pyo3(signature = (crossings, *, radius_metres=DEFAULT_RADIUS.as_metres()))]
     fn new(crossings: Vec<(u32, f64, f64)>, radius_metres: f64) -> PyResult<Self> {
@@ -56,9 +61,11 @@ impl CrowFlies {
                     .map_err(|err| PyValueError::new_err(err.to_string()))
             })
             .collect::<PyResult<Vec<_>>>()?;
+        let radius =
+            Radius::new(radius_metres).map_err(|err| PyValueError::new_err(err.to_string()))?;
 
         Ok(Self {
-            inner: CrowFliesPredictor::new(crossings, Radius::new(radius_metres)),
+            inner: CrowFliesPredictor::new(crossings, radius),
         })
     }
 
@@ -136,10 +143,23 @@ impl CrowFlies {
     }
 }
 
+/// Reads `text`, such as `250`, as a radius in metres.
+///
+/// # Errors
+///
+/// Raises where `text` is not a positive, finite number.
+#[pyfunction]
+fn radius_metres(text: &str) -> PyResult<f64> {
+    text.parse::<Radius>()
+        .map(Radius::as_metres)
+        .map_err(|err| PyValueError::new_err(err.to_string()))
+}
+
 #[pymodule]
 fn lookout_predictor(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<CrowFlies>()?;
     module.add_class::<Prediction>()?;
+    module.add_function(wrap_pyfunction!(radius_metres, module)?)?;
     module.add("DEFAULT_RADIUS_METRES", DEFAULT_RADIUS.as_metres())?;
     Ok(())
 }

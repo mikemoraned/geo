@@ -285,7 +285,7 @@ mod tests {
     fn a_row_records_the_radius_it_was_matched_under() {
         let device = DeviceId::new("device-a").expect("an id");
 
-        let row = row(&pass(), &device, Radius::new(150.0));
+        let row = row(&pass(), &device, Radius::new(150.0).expect("a radius"));
 
         assert_eq!(row.match_radius_m, 150.0);
         assert_eq!(row.distance_m, 20.0);
@@ -295,7 +295,7 @@ mod tests {
     fn a_row_names_the_device_the_session_ran_on() {
         let device = DeviceId::new("device-a").expect("an id");
 
-        let row = row(&pass(), &device, Radius::new(150.0));
+        let row = row(&pass(), &device, Radius::new(150.0).expect("a radius"));
 
         assert_eq!(row.device_id, device);
         assert_eq!(row.session_id, pass().session_id);
