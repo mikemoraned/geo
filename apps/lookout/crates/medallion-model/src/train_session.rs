@@ -5,7 +5,7 @@ use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Label, MotisSourceId, MotisSourceRowV2, TripId};
+use crate::{Label, MotisSourceId, MotisSourceRowV2, TrainSegmentRowV2, TripId};
 
 pub const TRAIN_SESSION: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("train_session", "start_date");
@@ -50,7 +50,7 @@ impl Row for TrainSessionRow {
 
     fn example() -> Option<Self> {
         let source = MotisSourceRowV2::example()?;
-        let trip_id = TripId::new("example").expect("a constant trip id is not empty");
+        let trip_id = TrainSegmentRowV2::example()?.trip_id;
         Some(Self {
             session_id: train_session_id(&source.source_id, &trip_id),
             source_id: source.source_id,
@@ -89,6 +89,21 @@ impl Row for TrainSessionSampleRow {
     const DATASET: DatasetSpec<Self::Layer> = TRAIN_SESSION_SAMPLE;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["t"];
+
+    fn example() -> Option<Self> {
+        let session = TrainSessionRow::example()?;
+        Some(Self {
+            session_id: session.session_id,
+            source_id: session.source_id,
+            trip_id: session.trip_id,
+            t: session.started_at,
+            seq: 0,
+            lat: 0.0,
+            lon: 0.0,
+            implied_speed_mps: Some(0.0),
+            geometry_source: GeometrySource::Stop,
+        })
+    }
 }
 
 impl Dated for TrainSessionSampleRow {

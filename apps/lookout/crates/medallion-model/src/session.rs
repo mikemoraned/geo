@@ -1,8 +1,11 @@
 use chrono::{DateTime, NaiveDate, Utc};
+use geo_types::Rect;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
 use domain::{Bbox, DeviceId, SessionId, StartedBy};
+
+use crate::GpsReadingRow;
 
 pub const SESSION: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("session", "start_date");
 
@@ -29,6 +32,21 @@ impl Row for SessionRow {
     const DATASET: DatasetSpec<Self::Layer> = SESSION;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
+
+    fn example() -> Option<Self> {
+        let device_id = GpsReadingRow::example()?.device_id;
+        Some(Self {
+            session_id: SessionId::of(&device_id, DateTime::UNIX_EPOCH),
+            device_id,
+            started_at: DateTime::UNIX_EPOCH,
+            ended_at: DateTime::UNIX_EPOCH,
+            sample_count: 1,
+            started_by: StartedBy::StartSession,
+            gap_seconds: 0,
+            lead_seconds: 0,
+            bbox: Bbox::of(Rect::new((0.0, 0.0), (1.0, 1.0))),
+        })
+    }
 }
 
 impl Dated for SessionRow {
@@ -58,6 +76,23 @@ impl Row for SessionSampleRow {
     const DATASET: DatasetSpec<Self::Layer> = SESSION_SAMPLE;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["t"];
+
+    fn example() -> Option<Self> {
+        let session = SessionRow::example()?;
+        Some(Self {
+            session_id: session.session_id,
+            device_id: session.device_id,
+            t: session.started_at,
+            seq: 0,
+            lat: 0.0,
+            lon: 0.0,
+            alt: Some(0.0),
+            acc: 0.0,
+            speed: Some(0.0),
+            heading: Some(0.0),
+            implied_speed_mps: Some(0.0),
+        })
+    }
 }
 
 impl Dated for SessionSampleRow {

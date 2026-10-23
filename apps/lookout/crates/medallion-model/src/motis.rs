@@ -7,7 +7,7 @@ use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumIter, EnumString};
 
-use crate::motis_source::MotisSourceId;
+use crate::motis_source::{MotisSourceId, MotisSourceRowV2};
 
 pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment", "polled_date");
@@ -174,6 +174,31 @@ impl Row for MotisSegmentRow {
         "scheduled_departure",
         "scheduled_arrival",
     ];
+
+    fn example() -> Option<Self> {
+        Some(Self {
+            captured_at: DateTime::UNIX_EPOCH,
+            trip_id: "example".to_string(),
+            route_name: Some("example".to_string()),
+            train_number: TrainNumber::from_gtfs("1"),
+            agency_id: Some("example".to_string()),
+            agency_name: Some("example".to_string()),
+            mode: "RAIL".to_string(),
+            route_color: Some("example".to_string()),
+            from_stop_id: Some("example".to_string()),
+            from_lat: 0.0,
+            from_lon: 0.0,
+            to_stop_id: Some("example".to_string()),
+            to_lat: 0.0,
+            to_lon: 0.0,
+            departure: DateTime::UNIX_EPOCH,
+            arrival: DateTime::UNIX_EPOCH,
+            scheduled_departure: DateTime::UNIX_EPOCH,
+            scheduled_arrival: DateTime::UNIX_EPOCH,
+            realtime: false,
+            polyline: "example".to_string(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -238,6 +263,13 @@ impl Row for MotisCaptureRow {
     type Layer = layers::Bronze;
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_SEGMENT_V2;
     const INSTANTS: &'static [&'static str] = MotisSegmentRow::INSTANTS;
+
+    fn example() -> Option<Self> {
+        Some(Self::of(
+            MotisSourceRowV2::example()?.source_id,
+            MotisSegmentRow::example()?,
+        ))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -262,6 +294,22 @@ impl Row for TrainSegmentRowV2 {
     const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT_V2;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
+
+    fn example() -> Option<Self> {
+        Some(Self {
+            source_id: MotisSourceRowV2::example()?.source_id,
+            trip_id: TripId("example".to_string()),
+            route_name: Some("example".to_string()),
+            train_number: TrainNumber::from_gtfs("1"),
+            agency_id: Some(AgencyId("example".to_string())),
+            agency_name: Some("example".to_string()),
+            mode: RailMode::HighspeedRail,
+            realtime: false,
+            from_stop_id: Some(StopId("example".to_string())),
+            departure: DateTime::UNIX_EPOCH,
+            arrival: DateTime::UNIX_EPOCH,
+        })
+    }
 }
 
 impl Dated for TrainSegmentRowV2 {

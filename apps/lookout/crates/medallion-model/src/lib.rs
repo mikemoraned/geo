@@ -65,9 +65,47 @@ pub const ALL: [DatasetInfo; 16] = [
 #[cfg(test)]
 mod tests {
     use arrow::datatypes::DataType;
-    use medallion::Row;
+    use medallion::{DatasetSpec, Row};
+    use serde::{Deserialize, Serialize};
 
     use super::*;
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(transparent)]
+    struct TracedFromType<T>(T);
+
+    impl<T: Row> Row for TracedFromType<T> {
+        type Layer = T::Layer;
+        const DATASET: DatasetSpec<Self::Layer> = T::DATASET;
+        const INSTANTS: &'static [&'static str] = T::INSTANTS;
+    }
+
+    fn check_example_of<T: Row>() {
+        assert!(T::example().is_some(), "{}: no example", T::DATASET.name);
+        assert_eq!(
+            medallion::fields::<T>().expect("trace the example"),
+            medallion::fields::<TracedFromType<T>>().expect("trace the type"),
+            "{}",
+            T::DATASET.name
+        );
+    }
+
+    #[test]
+    fn every_example_traces_the_columns_its_type_does() {
+        check_example_of::<RawSampleRow>();
+        check_example_of::<GpsReadingRow>();
+        check_example_of::<AccelReadingRow>();
+        check_example_of::<DeviceSessionRow>();
+        check_example_of::<MotisSegmentRow>();
+        check_example_of::<MotisCaptureRow>();
+        check_example_of::<TrainSegmentRowV2>();
+        check_example_of::<SessionRow>();
+        check_example_of::<SessionSampleRow>();
+        check_example_of::<TrainSessionSampleRow>();
+        check_example_of::<WaterCrossingRowV2>();
+        check_example_of::<SessionCrossingRow>();
+        check_example_of::<ExtractManifestRowV2>();
+    }
 
     #[test]
     fn dataset_names_are_unique() {
