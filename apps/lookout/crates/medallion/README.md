@@ -22,6 +22,47 @@ naming its rows, and a reader of a dataset it did not write reads it back throug
 Instants are declared as UTC millisecond timestamps in that one place, so no two datasets can
 drift apart on how time is stored.
 
+## A dataset's schema is traced from its row type
+
+A dataset's schema is traced from its row type through serde, so no schema is written out by hand.
+By default the trace reads the type alone, and deserialises each text field from an empty string. A
+field whose type refuses an empty string, such as a newtype that checks its text, fails that trace.
+
+A row type holding such a field supplies an example through `Row::example`, and the trace reads
+the example's values instead. Both traces give the same schema for the same fields. Reading a row
+back still checks each value, since the example changes only how the schema is traced.
+
+The trace learns each field's type from the value the example holds there. Two kinds of field need
+a particular value:
+
+- **An `Option` holds `Some`.** A field holding `None` shows no type, and the trace fails.
+- **An enum whose variants carry no data holds its first variant.**
+
+The enum rule follows from how the trace reads such an enum. For each value, serde hands the trace
+its variant's name and its position in the declaration, counting from 0. The trace stores the enum
+as text only when it has seen every position from 0 up to the highest one handed to it. An example
+holds a single value, so it covers every position only when that value is at position 0. For
+example, with `enum Colour { Red, Green, Blue }`:
+
+- An example holding `Colour::Red` covers position 0, so the column is stored as text. `Green` and
+  `Blue` need not appear.
+- An example holding `Colour::Green` leaves position 0 unseen, and the trace fails with
+  `Encountered null only field Green`.
+
+### Adding a dataset
+
+1. Define the dataset as a `DatasetSpec` constant, naming it and any partition key.
+2. Define its row type beside it, with one field per column, deriving `Serialize` and `Deserialize`.
+3. Implement `Row` for the row type, setting `DATASET` to the dataset.
+4. Set `GEOMETRY` for rows written with a geometry, `INSTANTS` for fields holding instants, and
+   `UNIQUE` for identifying columns.
+5. If the dataset is partitioned by date, implement `Dated` to give the date each row is stored
+   under.
+6. If a field's type refuses an empty string, implement `example`, following the two rules for an
+   example.
+7. Call `fields` on the row type in a test. A row type that fails to trace then fails the tests, not
+   the first write.
+
 ## Appending never overwrites; deriving always replaces
 
 The immutable layers append. A batch lands in a file named for the instant of the write, at

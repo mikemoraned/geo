@@ -6,7 +6,7 @@ use geo::BoundingRect;
 use geo_types::{LineString, Point};
 use medallion::{Countries, Country, GeoRow, GeoRowWriter, Projector, Replaced, Root};
 use medallion_model::{
-    MotisSourceId, TrainSessionRow, TrainSessionSampleRow, TripId, train_session_id,
+    Label, MotisSourceId, TrainSessionRow, TrainSessionSampleRow, TripId, train_session_id,
 };
 
 use crate::ingest::{self, IngestError, Shape, captures, shape_of};
@@ -40,7 +40,7 @@ impl DroppedTrips {
 
 struct Trip {
     source_id: MotisSourceId,
-    source_label: Option<String>,
+    source_label: Option<Label>,
     trip_id: TripId,
     legs: NormalisedLegs,
 }
@@ -67,7 +67,7 @@ pub async fn derive_train_sessions(
     countries: &impl Countries,
     interval: Span,
 ) -> Result<TrainSessionsOutcome, IngestError> {
-    let labels: HashMap<MotisSourceId, Option<String>> = crate::source::recorded(root)
+    let labels: HashMap<MotisSourceId, Option<Label>> = crate::source::recorded(root)
         .await?
         .into_iter()
         .map(|source| (source.source_id, source.label))
@@ -163,7 +163,7 @@ pub async fn derive_train_sessions(
 
 fn normalised(
     source_id: MotisSourceId,
-    source_label: Option<String>,
+    source_label: Option<Label>,
     trip_id: TripId,
     captured: &[ingest::Leg],
 ) -> Result<Normalised, IngestError> {

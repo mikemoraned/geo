@@ -544,10 +544,13 @@ At the end of the slice, once its features are in.
       Ingest leaves out any leg of another mode and counts it as `not_rail`, so the next
       `silver-motis-ingest` drops those ferries from both silver datasets. A `Leg` checks its ids
       as it is read, so an empty id in bronze is an error.
-- [ ] Store `TrainSessionRow::source_label` as a `Label`, in place of its `String`. Tracing a
+- [x] Store `TrainSessionRow::source_label` as a `Label`, in place of its `String`. Tracing a
       row's schema deserialises an empty string into each field, and `Label` refuses one, so
       `medallion` needs a way to trace a checked newtype first. `MotisSourceRowV2::label` has the
       same `String` for the same reason.
+      `Row::example` is that way: a row type that supplies an example is traced from it. The
+      example holds `Some` in every `Option`. It holds the first variant of each enum whose
+      variants carry no data, as `crates/medallion/README.md` describes.
 - [x] Define `path_through` and `implied_speed` once, where `recorder` and `motis` can both
       reach them. `crates/recorder/src/silver.rs` and `crates/motis/src/train_sessions.rs` each
       define both.
@@ -556,6 +559,19 @@ At the end of the slice, once its features are in.
       both Python bindings with a `ValueError`.
       The replay runner's `--radius-metres` refuses one at parsing too, through `radius_metres` in
       `lookout_predictor`.
+- [ ] Make every checked newtype check its value whenever it is deserialised, as `Label` does:
+      1. Give every row type an example. Compare each example's trace with its type's trace, in a
+         test committed and then removed.
+      2. Make `Row::example` required, and trace from it alone. Update
+         `crates/medallion/README.md` to match.
+      3. Query the store for an empty id, since every read would then refuse one.
+      4. Switch `TripId`, `StopId`, `AgencyId`, `SessionId`, `DeviceId`, and `CrossingId` from
+         `#[serde(transparent)]` to `try_from = "String"`. Remove `parsed` and
+         `parsed_if_present` from `crates/motis/src/ingest.rs`. Build for the device and for
+         wasm, since `domain` holds three of the ids.
+      5. Hold `MotisVersion` and `OvertureRelease` in `MotisSourceRowV2`, in place of their
+         `String`s. `MotisSource`'s conversion then keeps only the check that a country and a
+         release come together.
 
 #### Six-day capture
 
