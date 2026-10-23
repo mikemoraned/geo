@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use chrono::TimeDelta;
-use domain::{Bbox, Span};
-use geo::{BoundingRect, Distance, Euclidean};
+use domain::{Bbox, Span, implied_speed, path_through};
+use geo::BoundingRect;
 use geo_types::{LineString, Point};
 use medallion::{Countries, Country, GeoRow, GeoRowWriter, Projector, Replaced, Root};
 use medallion_model::{
@@ -252,7 +251,7 @@ fn session_of(
     let (Some(first), Some(last)) = (placed.first(), placed.last()) else {
         return Err(no_samples());
     };
-    let path = path_through(placed);
+    let path = path_through(placed.iter().map(|sample| sample.position));
     let row = TrainSessionRow {
         session_id,
         source_id: trip.source_id.clone(),
@@ -264,18 +263,6 @@ fn session_of(
         bbox: Bbox::of(path.bounding_rect().ok_or_else(no_samples)?),
     };
     Ok(Session { row, path, samples })
-}
-
-fn path_through(placed: &[Placed]) -> LineString<f64> {
-    let coords: Vec<_> = placed.iter().map(|sample| sample.position.0).collect();
-    match coords.as_slice() {
-        [only] => LineString::new(vec![*only, *only]),
-        _ => LineString::new(coords),
-    }
-}
-
-fn implied_speed(from: Point<f64>, to: Point<f64>, took: TimeDelta) -> f64 {
-    Euclidean.distance(from, to) / took.as_seconds_f64()
 }
 
 #[cfg(test)]

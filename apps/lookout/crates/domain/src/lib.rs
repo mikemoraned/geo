@@ -12,6 +12,7 @@ pub mod sample;
 pub mod session;
 pub mod span;
 pub mod train;
+pub mod travel;
 
 pub use age::{Age, NotAnAge};
 pub use bbox::{Bbox, BboxError};
@@ -27,3 +28,4 @@ pub use sample::Sample;
 pub use session::{SessionId, StartedBy};
 pub use span::{NotASpan, Span};
 pub use train::TrainNumber;
+pub use travel::{implied_speed, path_through};
