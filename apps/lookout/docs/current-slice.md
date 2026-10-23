@@ -112,6 +112,43 @@ Decisions taken before starting, as each changes what gets built.
   distance in the route-shapes pass, 12.6 m. The baseline could not set it, since every local shape
   there runs straight between its stops. Confirmed 2026-10-17.
 
+#### Compact capture
+
+The measurements behind the Compact capture decisions are in
+[2026-10-23-compact-bronze.md](2026-10-23-compact-bronze.md).
+
+- **Polls land in landing, and a drain moves them into bronze.** Bronze never rewrites a file, and
+  git keeps every committed blob, so polls merge before they reach git. Merging poll files after
+  committing them frees nothing. Landing sits at `data/medallion/landing/`, ignored by git.
+  `docs/medallion.md` already describes landing as the capture log a polling process appends to,
+  drained into bronze. Confirmed 2026-10-23.
+- **A drain writes the polylines bronze lacks, then the polls.** It appends the polylines
+  `motis_polyline` lacks as one new file, each keyed by a UUID v5 of its text, as a source's id is.
+  It then writes the polls to `motis_segment_v3`, one zstd file per `polled_date`, each row carrying
+  a polyline id in place of its polyline. Rows sort by stop pair, polyline id, trip, and capture
+  time. Draining every 10–24 hours, a day then takes 5.4–7 MB in git, against 58–70 MB as poll
+  files. Appending every polyline a drain sees, rather than the missing ones, adds at least 7 MB a
+  day. Confirmed 2026-10-23.
+- **A drain is safe to re-run.** It writes polylines before polls, reads both back, and only then
+  deletes the landing files. A re-run skips any poll whose source and capture instant bronze
+  already holds. A crash then leaves at worst an unused polyline, never a lost or doubled poll.
+  Confirmed 2026-10-23.
+- **`writer_at` compresses with zstd, for bronze and silver alike.** It writes both layers, so
+  compressing both needs no writer properties per layer, as compressing bronze alone would. It also
+  shrinks silver on disk, which an ingest run needs room for. Confirmed 2026-10-23.
+- **The running capture finishes as it started.** The poller keeps writing `motis_segment_v2` until
+  about 25 October, committed and pushed as now, as a backup the rewrite later drops. Stopping it
+  mid-capture risks a gap. Confirmed 2026-10-23.
+- **A one-off binary migrates `motis_segment_v2` into `motis_segment_v3` and `motis_polyline`.** It
+  is committed with the data it writes, then removed, as earlier migrations were. The drain then
+  handles landing alone, rather than reading `motis_segment_v2` as it reads landing. Once nothing
+  reads `motis_segment_v2`, its files and code support go. Confirmed 2026-10-23.
+- **This branch drops its poll files from history before it merges.** A merge keeps a branch's
+  commits, so `main` would hold the poll files for good. They take 316 MB packed now, and about
+  500 MB once the capture ends. `main` holds none of them today, and no other branch carries them,
+  so the rewrite touches this branch alone, with a force-push. A squash merge would also leave them
+  out, but loses the slice's commit history. Confirmed 2026-10-23.
+
 #### Consequences elsewhere
 
 - `docs/device.md` and the pin comment in `crates/platform/web/core/Cargo.toml` say crux after
@@ -520,6 +557,49 @@ At the end of the slice, once its features are in.
       The replay runner's `--radius-metres` refuses one at parsing too, through `radius_metres` in
       `lookout_predictor`.
 
+#### Six-day capture
+
+Before the branch merges, so `main` never holds a poll file. Before Optimisation, since the
+polyline table changes what `motis_ingest` reads.
+
+- [ ] Finish the six-day capture of Germany, which started on 19 October and ends around 25
+      October. Commit its polls as they accumulate, and its last ones once the poller stops. Then
+      run `just silver-motis-ingest`, so the train sessions cover the whole week.
+- [ ] Give `writer_at`, in `crates/medallion/src/write.rs`, zstd compression, for bronze and
+      silver alike.
+- [ ] Add bronze `motis_polyline` and `motis_segment_v3` to `crates/medallion-model`, with a
+      `PolylineId` newtype holding the UUID v5 of a polyline's text.
+- [ ] Add a landing dataset for the capture's polls, on `layers::Landing`, which no dataset uses
+      yet. Give `medallion` a way to list its files and delete one once drained. Ignore
+      `/landing/` in `data/medallion/.gitignore`.
+- [ ] Point `SegmentLog`, in `crates/motis/src/bronze.rs`, at the landing dataset, and rename the
+      `bronze-poll-*` recipes `landing-poll-*`.
+- [ ] Add `motis_drain` to `crates/motis/src/bin/`, and a recipe `bronze-drain-motis`, draining
+      landing into `motis_polyline` and `motis_segment_v3`.
+- [ ] Read `motis_segment_v3` in `captures`, in `crates/motis/src/ingest.rs`, joining
+      `motis_polyline` after picking each leg's newest capture.
+- [ ] Migrate `motis_segment_v2` into `motis_segment_v3` and `motis_polyline` with a one-off binary,
+      writing through the drain's code. Commit it with the data it writes, and remove it in a later
+      commit. Only after the capture ends.
+- [ ] Record, under Observations, the sizes of the migrated files against the research doc's
+      DuckDB figures.
+- [ ] Check `just silver-motis-ingest` derives the same `train_segment_v2` and `train_session`
+      rows from `motis_segment_v3` alone as from `motis_segment_v2` alone.
+- [ ] Point the other readers of `motis_segment_v2` at `motis_segment_v3`, joining
+      `motis_polyline`. These are the `motis_capture` notebooks
+      `compare_delfi-2026-10-10.plain_route-shapes.py`,
+      `germany_delfi-2026-10-10.route-shapes.within.py`, both `side_by_side_delfi-2026-10-10`
+      notebooks, and `v1.py`, and the shared test setup in `crates/motis/tests/common/mod.rs`.
+- [ ] Delete `motis_segment_v2`'s files, `MOTIS_SEGMENT_V2`, its entry in
+      `crates/medallion-model/src/bronze.rs`, and its reading in `captures`. Its rows live on in
+      `motis_segment_v3`.
+- [ ] Describe landing, the drain, `motis_polyline`, and `motis_segment_v3` in `docs/medallion.md`
+      and `docs/motis.md`, in place of `motis_segment_v2`. A third-party service's samples take one
+      bronze file per drain. Then fold what holds of `2026-10-23-compact-bronze.md` into them, and
+      delete it.
+- [ ] Rewrite this branch's commits since it left `main` without the `motis_segment_v2` files,
+      using `git filter-repo` in a fresh clone. Before opening the PR, force-push the result.
+
 #### Optimisation
 
 After Refactoring, once the slice works end to end.
@@ -533,9 +613,6 @@ After Refactoring, once the slice works end to end.
 
 #### Wrap-up
 
-- [ ] Finish the six-day capture of Germany, which started on 19 October and ends around 25
-      October. Commit its polls as they accumulate, and its last ones once the poller stops. Then
-      run `just silver-motis-ingest`, so the train sessions cover the whole week.
 - [ ] Add the Motis source to the derivation graph in `docs/architecture.md`.
 - [ ] Fold what holds of `2026-10-12-track-shapes-and-realtime.md` into `docs/motis.md`: the
       `route_shapes` setup, the train-name script, realtime resolution, and the measured import.
