@@ -1,3 +1,4 @@
+import math
 from datetime import UTC, datetime, timedelta
 
 import pyarrow as pa
@@ -97,3 +98,9 @@ def test_a_table_missing_a_column_is_refused():
             samples((0, 0.0)).drop_columns(["geometry_projected"]),
             crossings(("c", 0.0)),
         )
+
+
+@pytest.mark.parametrize("radius_metres", [0.0, -50.0, math.inf, math.nan])
+def test_a_radius_that_is_not_positive_and_finite_is_refused(radius_metres):
+    with pytest.raises(ValueError, match="radius"):
+        steps(samples((0, 0.0)), crossings(("c", 0.0)), radius_metres=radius_metres)

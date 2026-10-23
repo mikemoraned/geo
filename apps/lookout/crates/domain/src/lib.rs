@@ -22,7 +22,7 @@ pub use name::NameError;
 pub use pass::Pass;
 pub use position::{CoordinateError, position};
 pub use precision::Precision;
-pub use radius::Radius;
+pub use radius::{NotARadius, Radius};
 pub use sample::Sample;
 pub use session::{SessionId, StartedBy};
 pub use span::{NotASpan, Span};

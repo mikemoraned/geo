@@ -1,8 +1,9 @@
 import datetime
+import math
 
 import pytest
 
-from lookout_predictor import DEFAULT_RADIUS_METRES, CrowFlies, Prediction
+from lookout_predictor import DEFAULT_RADIUS_METRES, CrowFlies, Prediction, radius_metres
 
 CROSSINGS = [(1, 50.01, 0.0), (2, 50.02, 0.0), (3, 50.03, 0.0)]
 HUNDREDTH_DEGREE_M = 1111.95
@@ -36,6 +37,22 @@ def test_the_radius_is_the_callers_to_choose():
 
     assert [prediction.crossing_compact_id for prediction in predictor.predictions()] == [1]
     assert DEFAULT_RADIUS_METRES == 5_000.0
+
+
+@pytest.mark.parametrize("metres", [0.0, -2_000.0, math.inf, math.nan])
+def test_a_radius_that_is_not_positive_and_finite_is_refused(metres):
+    with pytest.raises(ValueError, match="radius"):
+        CrowFlies(CROSSINGS, radius_metres=metres)
+
+
+def test_a_radius_is_read_from_text_in_metres():
+    assert radius_metres("2000") == 2_000.0
+
+
+@pytest.mark.parametrize("text", ["0", "-2000", "inf", "nan", "far"])
+def test_text_that_is_not_a_positive_finite_number_is_no_radius(text):
+    with pytest.raises(ValueError, match="metres"):
+        radius_metres(text)
 
 
 def test_an_arrival_crosses_as_an_aware_instant(predictor):

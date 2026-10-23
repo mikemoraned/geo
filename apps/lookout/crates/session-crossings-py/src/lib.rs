@@ -24,7 +24,8 @@ use session_crossings::matching::{self, Crossing, DEFAULT_RADIUS, Near, Sample};
 ///
 /// The answer is a dict of two tables. `near` holds each sample within `radius_metres` of a
 /// crossing, with its distance and the number of its visit. `passes` holds one pass per visit,
-/// at the visit's nearest sample. A missing or unreadable column raises `ValueError`.
+/// at the visit's nearest sample. A missing or unreadable column raises `ValueError`, as does a
+/// `radius_metres` that is not a positive, finite number.
 #[pyfunction]
 #[pyo3(signature = (session_id, samples, crossings, *, radius_metres=DEFAULT_RADIUS.as_metres()))]
 fn steps<'py>(
@@ -37,7 +38,7 @@ fn steps<'py>(
     let session_id = SessionId::new(session_id).map_err(value_error)?;
     let samples = samples_of(&one_batch(samples)?)?;
     let crossings = crossings_of(&one_batch(crossings)?)?;
-    let radius = Radius::new(radius_metres);
+    let radius = Radius::new(radius_metres).map_err(value_error)?;
 
     let mut near: Vec<(CrossingId, Near)> = Vec::new();
     let mut passes = Vec::new();

@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import rerun as rr
-from lookout_predictor import DEFAULT_RADIUS_METRES, CrowFlies
+from lookout_predictor import DEFAULT_RADIUS_METRES, CrowFlies, radius_metres
 
 from .blueprint import blueprint
 from .log import draw
@@ -38,6 +38,13 @@ def listening(address: tuple[str, int]) -> bool:
         return False
 
 
+def radius(text: str) -> float:
+    try:
+        return radius_metres(text)
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(str(err)) from err
+
+
 def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
 
@@ -48,7 +55,7 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     session.add_argument("session", help="the session to replay")
     session.add_argument(
         "--radius-metres",
-        type=float,
+        type=radius,
         default=DEFAULT_RADIUS_METRES,
         help="how far ahead to predict",
     )

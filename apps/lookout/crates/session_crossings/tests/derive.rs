@@ -224,7 +224,7 @@ async fn the_radius_decides_what_counts_as_passed() {
     store_with_a_session(&root, 3).await;
     store_with_crossings(&root, &[1_060.0]).await;
 
-    let narrow = session_crossings::silver::derive(&root, Radius::new(20.0))
+    let narrow = session_crossings::silver::derive(&root, Radius::new(20.0).expect("a radius"))
         .await
         .expect("derive");
 
@@ -261,7 +261,7 @@ async fn a_pass_the_rerun_no_longer_makes_is_swept() {
         .await
         .expect("derive");
 
-    let narrowed = session_crossings::silver::derive(&root, Radius::new(20.0))
+    let narrowed = session_crossings::silver::derive(&root, Radius::new(20.0).expect("a radius"))
         .await
         .expect("derive again");
 
@@ -310,7 +310,7 @@ async fn the_samples_within_the_radius_are_counted() {
     let between_the_first_two_samples = SAMPLE_SPACING_M / 2.0;
     store_with_crossings(&root, &[between_the_first_two_samples]).await;
 
-    let outcome = session_crossings::silver::derive(&root, Radius::new(1_000.0))
+    let outcome = session_crossings::silver::derive(&root, Radius::new(1_000.0).expect("a radius"))
         .await
         .expect("derive");
 

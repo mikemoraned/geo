@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
@@ -6,7 +8,8 @@ use domain::{CrossingCompact, Precision, Radius, Sample};
 use crate::crossings::Crossings;
 use crate::predict::{Event, ObserveError, Predict, Prediction};
 
-pub const DEFAULT_RADIUS: Radius = Radius::new(5_000.0);
+pub const DEFAULT_RADIUS: Radius =
+    Radius::metres(NonZeroU32::new(5_000).expect("five thousand is not zero"));
 
 #[derive(Debug, Clone)]
 pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
@@ -208,7 +211,7 @@ mod tests {
 
     #[test]
     fn a_crossing_outside_the_radius_is_not_predicted() {
-        let mut predictor = CrowFlies::new(crossings(), Radius::new(2_000.0));
+        let mut predictor = CrowFlies::new(crossings(), Radius::new(2_000.0).expect("a radius"));
 
         predictor
             .observe(Event::Sampled(fix()))
