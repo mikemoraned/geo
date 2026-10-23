@@ -19,7 +19,7 @@ pub const TRAIN_SEGMENT_V2: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("train_segment_v2", "departure_date");
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct TripId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -49,6 +49,20 @@ impl FromStr for TripId {
     }
 }
 
+impl TryFrom<String> for TripId {
+    type Error = EmptyTripId;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Self::new(id)
+    }
+}
+
+impl From<TripId> for String {
+    fn from(id: TripId) -> Self {
+        id.0
+    }
+}
+
 impl Display for TripId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -56,7 +70,7 @@ impl Display for TripId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct StopId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -82,8 +96,22 @@ impl FromStr for StopId {
     }
 }
 
+impl TryFrom<String> for StopId {
+    type Error = EmptyStopId;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Self::new(id)
+    }
+}
+
+impl From<StopId> for String {
+    fn from(id: StopId) -> Self {
+        id.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct AgencyId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -106,6 +134,20 @@ impl FromStr for AgencyId {
 
     fn from_str(id: &str) -> Result<Self, Self::Err> {
         Self::new(id)
+    }
+}
+
+impl TryFrom<String> for AgencyId {
+    type Error = EmptyAgencyId;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Self::new(id)
+    }
+}
+
+impl From<AgencyId> for String {
+    fn from(id: AgencyId) -> Self {
+        id.0
     }
 }
 
@@ -343,6 +385,14 @@ mod tests {
     fn an_empty_stop_or_agency_id_is_refused() {
         assert_eq!(StopId::new(""), Err(EmptyStopId));
         assert_eq!(AgencyId::new(""), Err(EmptyAgencyId));
+    }
+
+    #[test]
+    fn an_id_is_checked_when_it_is_read_back() {
+        assert!(serde_json::from_str::<TripId>(r#""20261008_09:12_de-DELFI_123""#).is_ok());
+        assert!(serde_json::from_str::<TripId>(r#""""#).is_err());
+        assert!(serde_json::from_str::<StopId>(r#""""#).is_err());
+        assert!(serde_json::from_str::<AgencyId>(r#""""#).is_err());
     }
 
     #[test]

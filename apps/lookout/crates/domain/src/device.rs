@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct DeviceId(String);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -55,6 +55,20 @@ impl FromStr for DeviceId {
     }
 }
 
+impl TryFrom<String> for DeviceId {
+    type Error = EmptyDeviceId;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Self::new(id)
+    }
+}
+
+impl From<DeviceId> for String {
+    fn from(id: DeviceId) -> Self {
+        id.0
+    }
+}
+
 impl Display for DeviceId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -76,5 +90,11 @@ mod tests {
     fn an_empty_id_is_rejected() {
         assert!(DeviceId::new("").is_err());
         assert!("".parse::<DeviceId>().is_err());
+    }
+
+    #[test]
+    fn an_id_is_checked_when_it_is_read_back() {
+        assert!(serde_json::from_str::<DeviceId>(r#""device-a""#).is_ok());
+        assert!(serde_json::from_str::<DeviceId>(r#""""#).is_err());
     }
 }

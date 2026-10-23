@@ -9,7 +9,7 @@ use crate::position::{CoordinateError, degrees, position};
 use crate::precision::Precision;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct CrossingId(String);
 
 impl CrossingId {
@@ -27,6 +27,20 @@ impl FromStr for CrossingId {
 
     fn from_str(id: &str) -> Result<Self, Self::Err> {
         Self::new(id)
+    }
+}
+
+impl TryFrom<String> for CrossingId {
+    type Error = NameError;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Self::new(id)
+    }
+}
+
+impl From<CrossingId> for String {
+    fn from(id: CrossingId) -> Self {
+        id.0
     }
 }
 
@@ -211,6 +225,12 @@ mod tests {
                 .to_string(),
             "08b2a5c1fffffff-08f2a5c1"
         );
+    }
+
+    #[test]
+    fn an_id_is_checked_when_it_is_read_back() {
+        assert!(serde_json::from_str::<CrossingId>(r#""08b2a5c1fffffff-08f2a5c1""#).is_ok());
+        assert!(serde_json::from_str::<CrossingId>(r#""water track""#).is_err());
     }
 
     #[test]

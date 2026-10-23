@@ -1,6 +1,4 @@
-use std::fmt::Display;
 use std::ops::Add;
-use std::str::FromStr;
 
 use crate::legacy::legacy_source_id_sql;
 use crate::segment::{NotAPolyline, decode_polyline};
@@ -12,7 +10,7 @@ use medallion_model::{
     AgencyId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, RailMode, StopId, TrainSegmentRowV2,
     TripId,
 };
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 const LEG_COLUMNS: &str = "trip_id, route_name, train_number, agency_id, agency_name, mode,
@@ -84,16 +82,13 @@ pub enum IngestError {
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Leg {
     pub(crate) source_id: Option<MotisSourceId>,
-    #[serde(deserialize_with = "parsed")]
     pub(crate) trip_id: TripId,
     pub(crate) route_name: Option<String>,
     pub(crate) train_number: Option<TrainNumber>,
-    #[serde(deserialize_with = "parsed_if_present")]
     pub(crate) agency_id: Option<AgencyId>,
     pub(crate) agency_name: Option<String>,
     pub(crate) mode: RailMode,
     pub(crate) realtime: bool,
-    #[serde(deserialize_with = "parsed_if_present")]
     pub(crate) from_stop_id: Option<StopId>,
     pub(crate) from_lat: f64,
     pub(crate) from_lon: f64,
@@ -104,28 +99,6 @@ pub(crate) struct Leg {
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub(crate) arrival: DateTime<Utc>,
     pub(crate) polyline: String,
-}
-
-fn parsed<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    D: Deserializer<'de>,
-    T: FromStr,
-    T::Err: Display,
-{
-    String::deserialize(deserializer)?
-        .parse()
-        .map_err(serde::de::Error::custom)
-}
-
-fn parsed_if_present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: FromStr,
-    T::Err: Display,
-{
-    Option::<String>::deserialize(deserializer)?
-        .map(|text| text.parse().map_err(serde::de::Error::custom))
-        .transpose()
 }
 
 impl TryFrom<&Leg> for TrainSegmentRowV2 {
