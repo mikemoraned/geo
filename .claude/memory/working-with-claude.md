@@ -18,6 +18,21 @@ Keep mechanical churn out of feature commits. When `cargo fmt` would touch files
 never went near, stash the work, commit the formatting on its own, then restore and
 continue.
 
+Work that runs ahead of approval can still land as one commit per step. After each step,
+record the working tree as a tree object through a scratch index. That commits nothing and
+leaves the real index alone:
+
+```sh
+GIT_INDEX_FILE=<scratch>/step.index git read-tree HEAD
+GIT_INDEX_FILE=<scratch>/step.index git add <the paths the work touched>
+GIT_INDEX_FILE=<scratch>/step.index git write-tree
+```
+
+The last command prints the tree's hash. Once the user approves the commits, `git read-tree
+<hash>` loads a step into the real index for `git commit`. Each tree holds every step before
+it, so commit the steps in order. If `HEAD` moves first, as when another session commits
+polls, rebuild each tree on the new `HEAD`.
+
 ## Flashing the M5 device
 
 Claude cannot open the serial port: every `/dev/cu.*` open returns `EPERM` from its process
@@ -64,3 +79,20 @@ Keep shell plain: a recipe runs commands in sequence, with at most a simple `if`
 starts to need arrays, parameter-expansion tricks, or workarounds for a shell's version, move
 the logic into Rust or Python. macOS ships bash 3.2, so a construct that works in a newer bash
 can fail there. One example: under `set -u`, bash 3.2 rejects an empty array as unbound.
+
+## Builds and disk
+
+A test build of the whole workspace in the dev profile fills tens of gigabytes. With full debug
+info it took `target/debug` to 43 GB. With `CARGO_PROFILE_DEV_DEBUG=line-tables-only` it took
+17 GB, 16 GB of it the workspace's own test binaries, each of which links DataFusion. During those
+builds swap reached 17 GB, and swap files take space on the same disk.
+
+When a build would relink the workspace:
+
+1. Clear the workspace crates' dev artefacts first. `cargo clean --profile dev`, with a `-p` for
+   each package `cargo metadata --no-deps` lists, keeps the third-party builds.
+2. If less than 25 GB is free, build with `CARGO_PROFILE_DEV_DEBUG=line-tables-only`,
+   `CARGO_INCREMENTAL=0`, and two build jobs. The first build after the switch recompiles every
+   third-party crate.
+3. Watch free disk until the build ends. The capture's poller writes to the same disk, and a full
+   disk loses its polls.
