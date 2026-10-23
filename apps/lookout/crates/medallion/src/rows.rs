@@ -34,6 +34,10 @@ pub trait Row: Serialize + for<'de> Deserialize<'de> {
     const INSTANTS: &'static [&'static str] = &[];
 
     const UNIQUE: &'static [&'static str] = &[];
+
+    fn example() -> Option<Self> {
+        None
+    }
 }
 
 pub trait Dated: Row {
@@ -48,10 +52,11 @@ pub fn fields<T: Row>() -> Result<Vec<FieldRef>, RowError> {
             json!({"name": name, "data_type": INSTANT_TYPE, "nullable": true}),
         )
     })?;
-    Ok(Vec::<FieldRef>::from_type::<T>(options)?
-        .iter()
-        .map(undictionary)
-        .collect())
+    let traced = match T::example() {
+        Some(example) => Vec::<FieldRef>::from_samples(&[example], options)?,
+        None => Vec::<FieldRef>::from_type::<T>(options)?,
+    };
+    Ok(traced.iter().map(undictionary).collect())
 }
 
 fn undictionary(field: &FieldRef) -> FieldRef {
@@ -106,6 +111,63 @@ mod tests {
         }
     }
 
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(transparent)]
+    struct Exemplified(Reading);
+
+    impl Row for Exemplified {
+        type Layer = <Reading as Row>::Layer;
+        const DATASET: DatasetSpec<Self::Layer> = Reading::DATASET;
+        const INSTANTS: &'static [&'static str] = Reading::INSTANTS;
+
+        fn example() -> Option<Self> {
+            Some(Exemplified(Reading {
+                name: Some("a reading".to_string()),
+                ..row(1)
+            }))
+        }
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(try_from = "String", into = "String")]
+    struct Code(String);
+
+    impl TryFrom<String> for Code {
+        type Error = String;
+
+        fn try_from(text: String) -> Result<Self, Self::Error> {
+            if text.is_empty() {
+                Err("a code cannot be empty".to_string())
+            } else {
+                Ok(Self(text))
+            }
+        }
+    }
+
+    impl From<Code> for String {
+        fn from(code: Code) -> Self {
+            code.0
+        }
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Coded {
+        id: i64,
+        code: Option<Code>,
+    }
+
+    impl Row for Coded {
+        type Layer = crate::layer::layers::Bronze;
+        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::unpartitioned("coded");
+
+        fn example() -> Option<Self> {
+            Some(Coded {
+                id: 1,
+                code: Some(Code("a".to_string())),
+            })
+        }
+    }
+
     #[test]
     fn a_named_instant_column_is_typed_as_a_utc_millisecond_timestamp() {
         let fields = fields::<Reading>().unwrap();
@@ -123,6 +185,37 @@ mod tests {
 
         let id = fields.iter().find(|f| f.name() == "id").unwrap();
         assert_eq!(id.data_type(), &DataType::Int64);
+    }
+
+    #[test]
+    fn a_row_traced_from_its_example_has_the_columns_its_type_gives() {
+        assert_eq!(
+            fields::<Exemplified>().unwrap(),
+            fields::<Reading>().unwrap()
+        );
+    }
+
+    #[test]
+    fn a_row_holding_a_value_that_refuses_an_empty_string_is_traced_from_its_example() {
+        let fields = fields::<Coded>().unwrap();
+
+        let code = fields.iter().find(|f| f.name() == "code").unwrap();
+        assert!(
+            matches!(code.data_type(), DataType::Utf8 | DataType::LargeUtf8),
+            "{code:?}"
+        );
+        assert!(code.is_nullable(), "{code:?}");
+    }
+
+    #[test]
+    fn a_value_that_refuses_an_empty_string_still_checks_what_is_read_back() {
+        let batch = batch(&[Coded {
+            id: 1,
+            code: Some(Code(String::new())),
+        }])
+        .unwrap();
+
+        assert!(serde_arrow::from_record_batch::<Vec<Coded>>(&batch).is_err());
     }
 
     #[test]

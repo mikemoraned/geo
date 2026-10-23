@@ -1,10 +1,11 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use domain::{Bbox, SessionId};
+use geo_types::Rect;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{MotisSourceId, TripId};
+use crate::{Label, MotisSourceId, MotisSourceRowV2, TripId};
 
 pub const TRAIN_SESSION: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("train_session", "start_date");
@@ -30,7 +31,7 @@ pub enum GeometrySource {
 pub struct TrainSessionRow {
     pub session_id: SessionId,
     pub source_id: MotisSourceId,
-    pub source_label: Option<String>,
+    pub source_label: Option<Label>,
     pub trip_id: TripId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub started_at: DateTime<Utc>,
@@ -46,6 +47,21 @@ impl Row for TrainSessionRow {
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
     const UNIQUE: &'static [&'static str] = &["session_id"];
+
+    fn example() -> Option<Self> {
+        let source = MotisSourceRowV2::example()?;
+        let trip_id = TripId::new("example").expect("a constant trip id is not empty");
+        Some(Self {
+            session_id: train_session_id(&source.source_id, &trip_id),
+            source_id: source.source_id,
+            source_label: source.label,
+            trip_id,
+            started_at: DateTime::UNIX_EPOCH,
+            ended_at: DateTime::UNIX_EPOCH,
+            sample_count: 1,
+            bbox: Bbox::of(Rect::new((0.0, 0.0), (1.0, 1.0))),
+        })
+    }
 }
 
 impl Dated for TrainSessionRow {
@@ -84,8 +100,9 @@ impl Dated for TrainSessionSampleRow {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
+    use std::sync::Arc;
 
-    use arrow::datatypes::DataType;
+    use arrow::datatypes::{DataType, Field, TimeUnit};
 
     use super::*;
     use crate::testing::{column, column_names};
@@ -170,6 +187,36 @@ mod tests {
                 &["device_id", "started_by", "gap_seconds", "lead_seconds"],
                 &["source_id", "source_label", "trip_id"]
             )
+        );
+    }
+
+    #[test]
+    fn a_train_session_keeps_the_columns_it_is_stored_with() {
+        let instant = DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into()));
+        let bound = |name| Field::new(name, DataType::Float64, false);
+
+        assert_eq!(
+            medallion::fields::<TrainSessionRow>().expect("describe the rows"),
+            [
+                Field::new("session_id", DataType::LargeUtf8, false),
+                Field::new("source_id", DataType::LargeUtf8, false),
+                Field::new("source_label", DataType::LargeUtf8, true),
+                Field::new("trip_id", DataType::LargeUtf8, false),
+                Field::new("started_at", instant.clone(), true),
+                Field::new("ended_at", instant, true),
+                Field::new("sample_count", DataType::UInt32, false),
+                Field::new(
+                    "bbox",
+                    DataType::Struct(
+                        ["xmin", "ymin", "xmax", "ymax"]
+                            .map(bound)
+                            .into_iter()
+                            .collect()
+                    ),
+                    false
+                ),
+            ]
+            .map(Arc::new)
         );
     }
 

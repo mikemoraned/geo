@@ -214,8 +214,6 @@ pub enum NotAMotisSource {
     Region(#[from] NotAGersId),
     #[error(transparent)]
     Release(#[from] NotAnOvertureRelease),
-    #[error(transparent)]
-    Label(#[from] NotALabel),
     #[error("a region needs both an id and a name, and the row holds only one")]
     HalfARegion,
     #[error("a region needs a country, and the row holds none")]
@@ -273,7 +271,7 @@ impl MotisSource {
                 .area
                 .as_ref()
                 .map(|area| area.overture_release.to_string()),
-            label: self.label.as_ref().map(Label::to_string),
+            label: self.label.clone(),
             registered_at,
         }
     }
@@ -310,7 +308,7 @@ impl TryFrom<MotisSourceRowV2> for MotisSource {
             motis_version: row.motis_version.parse()?,
             feed: row.feed,
             area,
-            label: row.label.map(|label| label.parse()).transpose()?,
+            label: row.label,
         })
     }
 }
@@ -325,7 +323,7 @@ pub struct MotisSourceRowV2 {
     pub overture_region_id: Option<String>,
     pub overture_region_name: Option<String>,
     pub overture_release: Option<String>,
-    pub label: Option<String>,
+    pub label: Option<Label>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub registered_at: DateTime<Utc>,
 }
@@ -334,11 +332,28 @@ impl Row for MotisSourceRowV2 {
     type Layer = layers::Bronze;
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_SOURCE_V2;
     const INSTANTS: &'static [&'static str] = &["registered_at"];
+
+    fn example() -> Option<Self> {
+        Some(Self {
+            source_id: MotisSourceId(Uuid::nil().to_string()),
+            base_url: "https://api.transitous.org/".to_string(),
+            motis_version: "v2.11.3".to_string(),
+            feed: Feed::Transitous,
+            country: Some("DE".to_string()),
+            overture_region_id: Some(Uuid::nil().to_string()),
+            overture_region_name: Some("Thüringen".to_string()),
+            overture_release: Some("2026-09-23.1".to_string()),
+            label: Some(Label("example".to_string())),
+            registered_at: DateTime::UNIX_EPOCH,
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use arrow::datatypes::DataType;
+    use std::sync::Arc;
+
+    use arrow::datatypes::{DataType, Field, TimeUnit};
 
     use super::*;
     use crate::gers::GersId;
@@ -444,19 +459,6 @@ mod tests {
     fn a_label_is_checked_when_it_is_read_back() {
         assert!(serde_json::from_str::<Label>(r#""delfi-2026""#).is_ok());
         assert!(serde_json::from_str::<Label>(r#""Delfi 2026""#).is_err());
-    }
-
-    #[test]
-    fn a_row_holding_a_bad_label_is_refused() {
-        let row = MotisSourceRowV2 {
-            label: Some("Delfi 2026".to_string()),
-            ..transitous().row(instant())
-        };
-
-        assert!(matches!(
-            MotisSource::try_from(row),
-            Err(NotAMotisSource::Label(_))
-        ));
     }
 
     #[test]
@@ -661,6 +663,32 @@ mod tests {
                 "http://127.0.0.1:8080/\nv2.11.3\nlocal\n\n".as_bytes()
             )
             .to_string()
+        );
+    }
+
+    #[test]
+    fn a_source_row_keeps_the_columns_it_is_stored_with() {
+        let text = |name, nullable| Field::new(name, DataType::LargeUtf8, nullable);
+
+        assert_eq!(
+            medallion::fields::<MotisSourceRowV2>().expect("describe the rows"),
+            [
+                text("source_id", false),
+                text("base_url", false),
+                text("motis_version", false),
+                text("feed", false),
+                text("country", true),
+                text("overture_region_id", true),
+                text("overture_region_name", true),
+                text("overture_release", true),
+                text("label", true),
+                Field::new(
+                    "registered_at",
+                    DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
+                    true
+                ),
+            ]
+            .map(Arc::new)
         );
     }
 
