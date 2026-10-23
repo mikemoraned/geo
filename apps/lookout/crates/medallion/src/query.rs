@@ -441,6 +441,13 @@ mod tests {
     impl crate::rows::Row for PassRow {
         type Layer = layers::Silver;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("pass", "kind");
+
+        fn example() -> Self {
+            PassRow {
+                id: 1,
+                name: "example".to_string(),
+            }
+        }
     }
 
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -452,6 +459,13 @@ mod tests {
     impl crate::rows::Row for PlacedRow {
         type Layer = layers::Silver;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("placed", COUNTRY);
+
+        fn example() -> Self {
+            PlacedRow {
+                id: 1,
+                name: "example".to_string(),
+            }
+        }
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -473,6 +487,14 @@ mod tests {
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("boxed", "seen_date");
         const GEOMETRY: crate::rows::Geometry = crate::rows::Geometry::LatLonAndProjected;
         const INSTANTS: &'static [&'static str] = &["seen_at"];
+
+        fn example() -> Self {
+            BoxedRow {
+                box_id: "example".to_string(),
+                seen_at: chrono::DateTime::UNIX_EPOCH,
+                corner: Corner { x: 0.0, y: 0.0 },
+            }
+        }
     }
 
     impl crate::rows::Dated for BoxedRow {

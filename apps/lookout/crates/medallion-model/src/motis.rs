@@ -175,8 +175,8 @@ impl Row for MotisSegmentRow {
         "scheduled_arrival",
     ];
 
-    fn example() -> Option<Self> {
-        Some(Self {
+    fn example() -> Self {
+        Self {
             captured_at: DateTime::UNIX_EPOCH,
             trip_id: "example".to_string(),
             route_name: Some("example".to_string()),
@@ -197,7 +197,7 @@ impl Row for MotisSegmentRow {
             scheduled_arrival: DateTime::UNIX_EPOCH,
             realtime: false,
             polyline: "example".to_string(),
-        })
+        }
     }
 }
 
@@ -264,11 +264,11 @@ impl Row for MotisCaptureRow {
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_SEGMENT_V2;
     const INSTANTS: &'static [&'static str] = MotisSegmentRow::INSTANTS;
 
-    fn example() -> Option<Self> {
-        Some(Self::of(
-            MotisSourceRowV2::example()?.source_id,
-            MotisSegmentRow::example()?,
-        ))
+    fn example() -> Self {
+        Self::of(
+            MotisSourceRowV2::example().source_id,
+            MotisSegmentRow::example(),
+        )
     }
 }
 
@@ -295,9 +295,9 @@ impl Row for TrainSegmentRowV2 {
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
 
-    fn example() -> Option<Self> {
-        Some(Self {
-            source_id: MotisSourceRowV2::example()?.source_id,
+    fn example() -> Self {
+        Self {
+            source_id: MotisSourceRowV2::example().source_id,
             trip_id: TripId("example".to_string()),
             route_name: Some("example".to_string()),
             train_number: TrainNumber::from_gtfs("1"),
@@ -308,7 +308,7 @@ impl Row for TrainSegmentRowV2 {
             from_stop_id: Some(StopId("example".to_string())),
             departure: DateTime::UNIX_EPOCH,
             arrival: DateTime::UNIX_EPOCH,
-        })
+        }
     }
 }
 

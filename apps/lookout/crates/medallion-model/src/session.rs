@@ -33,9 +33,9 @@ impl Row for SessionRow {
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
 
-    fn example() -> Option<Self> {
-        let device_id = GpsReadingRow::example()?.device_id;
-        Some(Self {
+    fn example() -> Self {
+        let device_id = GpsReadingRow::example().device_id;
+        Self {
             session_id: SessionId::of(&device_id, DateTime::UNIX_EPOCH),
             device_id,
             started_at: DateTime::UNIX_EPOCH,
@@ -45,7 +45,7 @@ impl Row for SessionRow {
             gap_seconds: 0,
             lead_seconds: 0,
             bbox: Bbox::of(Rect::new((0.0, 0.0), (1.0, 1.0))),
-        })
+        }
     }
 }
 
@@ -77,9 +77,9 @@ impl Row for SessionSampleRow {
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["t"];
 
-    fn example() -> Option<Self> {
-        let session = SessionRow::example()?;
-        Some(Self {
+    fn example() -> Self {
+        let session = SessionRow::example();
+        Self {
             session_id: session.session_id,
             device_id: session.device_id,
             t: session.started_at,
@@ -91,7 +91,7 @@ impl Row for SessionSampleRow {
             speed: Some(0.0),
             heading: Some(0.0),
             implied_speed_mps: Some(0.0),
-        })
+        }
     }
 }
 

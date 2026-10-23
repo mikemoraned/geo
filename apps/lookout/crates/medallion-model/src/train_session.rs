@@ -48,10 +48,10 @@ impl Row for TrainSessionRow {
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
     const UNIQUE: &'static [&'static str] = &["session_id"];
 
-    fn example() -> Option<Self> {
-        let source = MotisSourceRowV2::example()?;
-        let trip_id = TrainSegmentRowV2::example()?.trip_id;
-        Some(Self {
+    fn example() -> Self {
+        let source = MotisSourceRowV2::example();
+        let trip_id = TrainSegmentRowV2::example().trip_id;
+        Self {
             session_id: train_session_id(&source.source_id, &trip_id),
             source_id: source.source_id,
             source_label: source.label,
@@ -60,7 +60,7 @@ impl Row for TrainSessionRow {
             ended_at: DateTime::UNIX_EPOCH,
             sample_count: 1,
             bbox: Bbox::of(Rect::new((0.0, 0.0), (1.0, 1.0))),
-        })
+        }
     }
 }
 
@@ -90,9 +90,9 @@ impl Row for TrainSessionSampleRow {
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["t"];
 
-    fn example() -> Option<Self> {
-        let session = TrainSessionRow::example()?;
-        Some(Self {
+    fn example() -> Self {
+        let session = TrainSessionRow::example();
+        Self {
             session_id: session.session_id,
             source_id: session.source_id,
             trip_id: session.trip_id,
@@ -102,7 +102,7 @@ impl Row for TrainSessionSampleRow {
             lon: 0.0,
             implied_speed_mps: Some(0.0),
             geometry_source: GeometrySource::Stop,
-        })
+        }
     }
 }
 

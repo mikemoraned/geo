@@ -18,9 +18,18 @@
 //!     type Layer = layers::Bronze;
 //!     const DATASET: DatasetSpec<Self::Layer> = GPS_READING;
 //!     const INSTANTS: &'static [&'static str] = &["t"];
+//!
+//!     fn example() -> Self {
+//!         GpsReadingRow {
+//!             device_id: "example".to_string(),
+//!             t: 0,
+//!             lat: 0.0,
+//!             lon: 0.0,
+//!         }
+//!     }
 //! }
 //!
-//! # async fn example(rows: &[GpsReadingRow]) -> Result<(), Box<dyn std::error::Error>> {
+//! # async fn append(rows: &[GpsReadingRow]) -> Result<(), Box<dyn std::error::Error>> {
 //! let now = Utc::now();
 //! medallion::Root::new(medallion::Root::default_path()?)
 //!     .rows_of::<GpsReadingRow>()

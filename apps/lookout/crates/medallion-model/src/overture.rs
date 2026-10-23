@@ -60,8 +60,8 @@ impl Row for ExtractManifestRowV2 {
     const DATASET: DatasetSpec<Self::Layer> = EXTRACT_MANIFEST_V2;
     const INSTANTS: &'static [&'static str] = &["extracted_at"];
 
-    fn example() -> Option<Self> {
-        Some(Self {
+    fn example() -> Self {
+        Self {
             extract_id: "example".to_string(),
             extracted_at: DateTime::UNIX_EPOCH,
             overture_release: "2026-09-23.1".to_string(),
@@ -70,7 +70,7 @@ impl Row for ExtractManifestRowV2 {
             min_lat: 0.0,
             max_lon: 1.0,
             max_lat: 1.0,
-        })
+        }
     }
 }
 
