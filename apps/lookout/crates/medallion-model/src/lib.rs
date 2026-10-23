@@ -8,6 +8,7 @@ mod overture_release;
 mod session;
 mod silver;
 mod telemetry;
+mod testing;
 mod train_session;
 
 use medallion::DatasetInfo;

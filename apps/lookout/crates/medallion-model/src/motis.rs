@@ -276,6 +276,7 @@ mod tests {
     use strum::IntoEnumIterator;
 
     use super::*;
+    use crate::testing::{column, column_names};
 
     #[test]
     fn a_trip_id_is_written_back_as_given() {
@@ -328,33 +329,18 @@ mod tests {
 
     #[test]
     fn a_rail_mode_is_stored_as_text() {
-        let fields = medallion::fields::<TrainSegmentRowV2>().expect("describe the rows");
-        let type_of = |name: &str| {
-            fields
-                .iter()
-                .find(|field| field.name() == name)
-                .expect("a column")
-                .data_type()
-                .clone()
-        };
-
-        assert_eq!(type_of("mode"), type_of("route_name"));
+        assert_eq!(
+            column::<TrainSegmentRowV2>("mode").data_type(),
+            &DataType::LargeUtf8
+        );
     }
 
     #[test]
     fn a_capture_carries_every_segment_column_and_its_source() {
-        let segment: Vec<String> = medallion::fields::<MotisSegmentRow>()
-            .expect("describe the rows")
-            .iter()
-            .map(|field| field.name().clone())
-            .collect();
-        let capture: Vec<String> = medallion::fields::<MotisCaptureRow>()
-            .expect("describe the rows")
-            .iter()
-            .map(|field| field.name().clone())
-            .collect();
+        let segment = column_names::<MotisSegmentRow>();
+        let capture = column_names::<MotisCaptureRow>();
 
-        assert!(capture.contains(&"source_id".to_string()), "{capture:?}");
+        assert!(capture.contains("source_id"), "{capture:?}");
         for name in &segment {
             assert!(capture.contains(name), "{name} is missing from {capture:?}");
         }
@@ -363,23 +349,11 @@ mod tests {
 
     #[test]
     fn a_train_number_is_a_four_byte_column_in_both_datasets() {
-        for column in [
-            medallion::fields::<MotisSegmentRow>()
-                .expect("describe the rows")
-                .iter()
-                .find(|field| field.name() == "train_number")
-                .expect("a train_number column")
-                .data_type()
-                .clone(),
-            medallion::fields::<TrainSegmentRowV2>()
-                .expect("describe the rows")
-                .iter()
-                .find(|field| field.name() == "train_number")
-                .expect("a train_number column")
-                .data_type()
-                .clone(),
+        for train_number in [
+            column::<MotisSegmentRow>("train_number"),
+            column::<TrainSegmentRowV2>("train_number"),
         ] {
-            assert_eq!(column, DataType::UInt32);
+            assert_eq!(train_number.data_type(), &DataType::UInt32);
         }
     }
 }
