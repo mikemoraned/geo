@@ -1,6 +1,6 @@
-use chrono::{DateTime, TimeDelta, Utc};
-use domain::Bbox;
-use geo::{BoundingRect, Distance, Euclidean};
+use chrono::{DateTime, Utc};
+use domain::{Bbox, implied_speed, path_through};
+use geo::BoundingRect;
 use geo_types::{LineString, Point};
 use medallion::{Countries, GeoRow, Projector, Replaced, Root};
 use medallion_model::{SessionRow, SessionSampleRow};
@@ -97,14 +97,6 @@ fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::
     Ok(Placed { row, path, samples })
 }
 
-fn path_through(points: impl Iterator<Item = Point<f64>>) -> LineString<f64> {
-    let coords: Vec<_> = points.map(|point| point.0).collect();
-    match coords.as_slice() {
-        [only] => LineString::new(vec![*only, *only]),
-        _ => LineString::new(coords),
-    }
-}
-
 fn bbox_of(path: &LineString<f64>) -> Bbox {
     Bbox::of(
         path.bounding_rect()
@@ -139,10 +131,6 @@ fn locate(session: &Session, projector: &Projector) -> Result<Vec<Located>, meda
     }
 
     Ok(located)
-}
-
-fn implied_speed(from: Point<f64>, to: Point<f64>, took: TimeDelta) -> f64 {
-    Euclidean.distance(from, to) / took.as_seconds_f64()
 }
 
 #[cfg(test)]

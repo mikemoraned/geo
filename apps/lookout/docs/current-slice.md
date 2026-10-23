@@ -548,7 +548,7 @@ At the end of the slice, once its features are in.
       row's schema deserialises an empty string into each field, and `Label` refuses one, so
       `medallion` needs a way to trace a checked newtype first. `MotisSourceRowV2::label` has the
       same `String` for the same reason.
-- [ ] Define `path_through` and `implied_speed` once, where `recorder` and `motis` can both
+- [x] Define `path_through` and `implied_speed` once, where `recorder` and `motis` can both
       reach them. `crates/recorder/src/silver.rs` and `crates/motis/src/train_sessions.rs` each
       define both.
 - [x] Make `Radius::new` refuse anything but a positive, finite number of metres, as `Age`
