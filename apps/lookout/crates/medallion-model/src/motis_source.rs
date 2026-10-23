@@ -333,8 +333,8 @@ impl Row for MotisSourceRowV2 {
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_SOURCE_V2;
     const INSTANTS: &'static [&'static str] = &["registered_at"];
 
-    fn example() -> Option<Self> {
-        Some(Self {
+    fn example() -> Self {
+        Self {
             source_id: MotisSourceId(Uuid::nil().to_string()),
             base_url: "https://api.transitous.org/".to_string(),
             motis_version: "v2.11.3".to_string(),
@@ -345,7 +345,7 @@ impl Row for MotisSourceRowV2 {
             overture_release: Some("2026-09-23.1".to_string()),
             label: Some(Label("example".to_string())),
             registered_at: DateTime::UNIX_EPOCH,
-        })
+        }
     }
 }
 

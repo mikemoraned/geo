@@ -27,12 +27,12 @@ impl Row for RawSampleRow {
     const DATASET: DatasetSpec<Self::Layer> = RAW_SAMPLE;
     const INSTANTS: &'static [&'static str] = &["received_at"];
 
-    fn example() -> Option<Self> {
-        Some(Self {
+    fn example() -> Self {
+        Self {
             md5: "example".to_string(),
             received_at: Some(0),
             json: "{}".to_string(),
-        })
+        }
     }
 }
 
@@ -53,8 +53,8 @@ impl Row for GpsReadingRow {
     const DATASET: DatasetSpec<Self::Layer> = GPS_READING;
     const INSTANTS: &'static [&'static str] = &["t"];
 
-    fn example() -> Option<Self> {
-        Some(Self {
+    fn example() -> Self {
+        Self {
             device_id: DeviceId::new("example").expect("a constant device id is not empty"),
             t: 0,
             lat: 0.0,
@@ -63,7 +63,7 @@ impl Row for GpsReadingRow {
             acc: 0.0,
             speed: Some(0.0),
             heading: Some(0.0),
-        })
+        }
     }
 }
 
@@ -84,9 +84,9 @@ impl Row for AccelReadingRow {
     const DATASET: DatasetSpec<Self::Layer> = ACCEL_READING;
     const INSTANTS: &'static [&'static str] = &["t"];
 
-    fn example() -> Option<Self> {
-        Some(Self {
-            device_id: GpsReadingRow::example()?.device_id,
+    fn example() -> Self {
+        Self {
+            device_id: GpsReadingRow::example().device_id,
             t: 0,
             rms: 0.0,
             peak: 0.0,
@@ -94,7 +94,7 @@ impl Row for AccelReadingRow {
             x: Some(0.0),
             y: Some(0.0),
             z: Some(0.0),
-        })
+        }
     }
 }
 
@@ -114,16 +114,16 @@ impl Row for DeviceSessionRow {
     const DATASET: DatasetSpec<Self::Layer> = DEVICE_SESSION;
     const INSTANTS: &'static [&'static str] = &["t"];
 
-    fn example() -> Option<Self> {
-        Some(Self {
-            device_id: GpsReadingRow::example()?.device_id,
+    fn example() -> Self {
+        Self {
+            device_id: GpsReadingRow::example().device_id,
             t: 0,
             device_type: DeviceType::Iphone,
             platform: "example".to_string(),
             user_agent: "example".to_string(),
             os: Some("example".to_string()),
             os_version: Some("example".to_string()),
-        })
+        }
     }
 }
 

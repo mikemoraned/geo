@@ -542,6 +542,13 @@ mod tests {
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("crossing", "country");
         const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
         const UNIQUE: &'static [&'static str] = &["crossing_id"];
+
+        fn example() -> Self {
+            CrossingRow {
+                crossing_id: "example".to_string(),
+                overlap_m: 0.0,
+            }
+        }
     }
 
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -554,6 +561,13 @@ mod tests {
         type Layer = layers::Silver;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("pass", "crossed_date");
         const INSTANTS: &'static [&'static str] = &["crossed_at"];
+
+        fn example() -> Self {
+            PassRow {
+                crossing_id: "example".to_string(),
+                crossed_at: 0,
+            }
+        }
     }
 
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -565,6 +579,12 @@ mod tests {
         type Layer = layers::Silver;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("track", "seen_date");
         const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
+
+        fn example() -> Self {
+            TrackRow {
+                track_id: "example".to_string(),
+            }
+        }
     }
 
     fn crossings() -> SilverTarget {

@@ -241,6 +241,13 @@ mod tests {
         const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
         const INSTANTS: &'static [&'static str] = &["seen_at"];
         const UNIQUE: &'static [&'static str] = &["track_id"];
+
+        fn example() -> Self {
+            TrackRow {
+                track_id: "example".to_string(),
+                seen_at: DateTime::UNIX_EPOCH,
+            }
+        }
     }
 
     impl Dated for TrackRow {
@@ -261,6 +268,13 @@ mod tests {
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("pass", "crossed_date");
         const INSTANTS: &'static [&'static str] = &["crossed_at"];
         const UNIQUE: &'static [&'static str] = &["track_id"];
+
+        fn example() -> Self {
+            PassRow {
+                track_id: "example".to_string(),
+                crossed_at: DateTime::UNIX_EPOCH,
+            }
+        }
     }
 
     impl Dated for PassRow {
@@ -281,6 +295,13 @@ mod tests {
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("sighting", "seen_date");
         const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
         const INSTANTS: &'static [&'static str] = &["seen_at"];
+
+        fn example() -> Self {
+            SightingRow {
+                track_id: "example".to_string(),
+                seen_at: DateTime::UNIX_EPOCH,
+            }
+        }
     }
 
     impl Dated for SightingRow {

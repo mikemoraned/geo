@@ -24,13 +24,13 @@ drift apart on how time is stored.
 
 ## A dataset's schema is traced from its row type
 
-A dataset's schema is traced from its row type through serde, so no schema is written out by hand.
-By default the trace reads the type alone, and deserialises each text field from an empty string. A
-field whose type refuses an empty string, such as a newtype that checks its text, fails that trace.
+A dataset's schema is traced through serde from an example of its row type, so no schema is written
+out by hand. Every row type supplies its example through `Row::example`.
 
-A row type holding such a field supplies an example through `Row::example`, and the trace reads
-the example's values instead. Both traces give the same schema for the same fields. Reading a row
-back still checks each value, since the example changes only how the schema is traced.
+The trace reads an example rather than the type alone, since a trace of the type deserialises each
+text field from an empty string. A field whose type checks its text refuses an empty string, so a
+trace of the type fails. Reading a row back still checks each value, since the example changes only
+how the schema is traced.
 
 The trace learns each field's type from the value the example holds there. Two kinds of field need
 a particular value:
@@ -58,10 +58,9 @@ example, with `enum Colour { Red, Green, Blue }`:
    `UNIQUE` for identifying columns.
 5. If the dataset is partitioned by date, implement `Dated` to give the date each row is stored
    under.
-6. If a field's type refuses an empty string, implement `example`, following the two rules for an
-   example.
-7. Call `fields` on the row type in a test. A row type that fails to trace then fails the tests, not
-   the first write.
+6. Implement `example`, returning a row that follows the two rules for an example.
+7. Call `fields` on the row type in a test. An example that breaks either rule then fails the tests,
+   not the first write.
 
 ## Appending never overwrites; deriving always replaces
 

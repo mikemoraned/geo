@@ -35,9 +35,7 @@ pub trait Row: Serialize + for<'de> Deserialize<'de> {
 
     const UNIQUE: &'static [&'static str] = &[];
 
-    fn example() -> Option<Self> {
-        None
-    }
+    fn example() -> Self;
 }
 
 pub trait Dated: Row {
@@ -52,11 +50,10 @@ pub fn fields<T: Row>() -> Result<Vec<FieldRef>, RowError> {
             json!({"name": name, "data_type": INSTANT_TYPE, "nullable": true}),
         )
     })?;
-    let traced = match T::example() {
-        Some(example) => Vec::<FieldRef>::from_samples(&[example], options)?,
-        None => Vec::<FieldRef>::from_type::<T>(options)?,
-    };
-    Ok(traced.iter().map(undictionary).collect())
+    Ok(Vec::<FieldRef>::from_samples(&[T::example()], options)?
+        .iter()
+        .map(undictionary)
+        .collect())
 }
 
 fn undictionary(field: &FieldRef) -> FieldRef {
@@ -100,6 +97,13 @@ mod tests {
         const DATASET: DatasetSpec<Self::Layer> =
             DatasetSpec::partitioned("reading", "ingested_date");
         const INSTANTS: &'static [&'static str] = &["t"];
+
+        fn example() -> Self {
+            Reading {
+                name: Some("a reading".to_string()),
+                ..row(1)
+            }
+        }
     }
 
     fn row(id: i64) -> Reading {
@@ -112,19 +116,32 @@ mod tests {
     }
 
     #[derive(Debug, Serialize, Deserialize)]
-    #[serde(transparent)]
-    struct Exemplified(Reading);
+    struct Nameless {
+        name: Option<String>,
+    }
 
-    impl Row for Exemplified {
-        type Layer = <Reading as Row>::Layer;
-        const DATASET: DatasetSpec<Self::Layer> = Reading::DATASET;
-        const INSTANTS: &'static [&'static str] = Reading::INSTANTS;
+    impl Row for Nameless {
+        type Layer = crate::layer::layers::Bronze;
+        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::unpartitioned("nameless");
 
-        fn example() -> Option<Self> {
-            Some(Exemplified(Reading {
-                name: Some("a reading".to_string()),
-                ..row(1)
-            }))
+        fn example() -> Self {
+            Nameless { name: None }
+        }
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Inferred {
+        source: Source,
+    }
+
+    impl Row for Inferred {
+        type Layer = crate::layer::layers::Bronze;
+        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::unpartitioned("inferred");
+
+        fn example() -> Self {
+            Inferred {
+                source: Source::Inferred,
+            }
         }
     }
 
@@ -160,11 +177,11 @@ mod tests {
         type Layer = crate::layer::layers::Bronze;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::unpartitioned("coded");
 
-        fn example() -> Option<Self> {
-            Some(Coded {
+        fn example() -> Self {
+            Coded {
                 id: 1,
                 code: Some(Code("a".to_string())),
-            })
+            }
         }
     }
 
@@ -188,11 +205,13 @@ mod tests {
     }
 
     #[test]
-    fn a_row_traced_from_its_example_has_the_columns_its_type_gives() {
-        assert_eq!(
-            fields::<Exemplified>().unwrap(),
-            fields::<Reading>().unwrap()
-        );
+    fn an_example_holding_none_shows_no_type_to_trace() {
+        assert!(fields::<Nameless>().is_err());
+    }
+
+    #[test]
+    fn an_example_holding_a_later_variant_of_a_dataless_enum_fails_to_trace() {
+        assert!(fields::<Inferred>().is_err());
     }
 
     #[test]
