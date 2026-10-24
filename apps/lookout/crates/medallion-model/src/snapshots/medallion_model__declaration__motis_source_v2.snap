@@ -1,0 +1,50 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: bronze
+partition_key: ~
+semantics: ""
+unique: []
+columns:
+  - name: source_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "MotisSourceId::new": 487c612645cbd6b576fd3f275f26a73e7ca182bfc6899825ba42fae32b8d846b
+  - name: base_url
+    data_type: LargeUtf8
+    nullable: false
+  - name: motis_version
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "MotisVersion::new": e0b411f6bebb507f518bf25cb0ceca770caa587bc2073f5b37894b322df528ee
+  - name: feed
+    data_type: LargeUtf8
+    nullable: false
+    variants:
+      - transitous
+      - local
+  - name: country
+    data_type: LargeUtf8
+    nullable: true
+  - name: overture_region_id
+    data_type: LargeUtf8
+    nullable: true
+  - name: overture_region_name
+    data_type: LargeUtf8
+    nullable: true
+  - name: overture_release
+    data_type: LargeUtf8
+    nullable: true
+    checks:
+      "OvertureRelease::new": c55827a07c5190babd67bf5d1abab8d98169db67dc991bcc58d59ee442a82b55
+  - name: label
+    data_type: LargeUtf8
+    nullable: true
+    checks:
+      "Label::new": 567dfbcc1b09b18b3b4aa414f0b547ebd939419ed0514e8edba3c8b2adb28aa7
+  - name: registered_at
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true

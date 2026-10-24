@@ -1,0 +1,73 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: silver
+partition_key: departure_date
+semantics: ""
+unique: []
+columns:
+  - name: geometry
+    data_type: Binary
+    nullable: true
+    extension: geoarrow.wkb
+    crs:
+      DE: "OGC:CRS84"
+      GB: "OGC:CRS84"
+  - name: geometry_projected
+    data_type: Binary
+    nullable: true
+    extension: geoarrow.wkb
+    crs:
+      DE: "EPSG:25832"
+      GB: "EPSG:25830"
+  - name: source_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "MotisSourceId::new": 487c612645cbd6b576fd3f275f26a73e7ca182bfc6899825ba42fae32b8d846b
+  - name: trip_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "TripId::new": 95faaf93fd74d90a7b1410e34146122c52444c25b436b91882c5fa432d422269
+  - name: route_name
+    data_type: LargeUtf8
+    nullable: true
+  - name: train_number
+    data_type: UInt32
+    nullable: true
+    checks:
+      "TrainNumber::new": 90e91404685c90d5d80d3638710581c6299dd9112d51dbd95b807a62287d96ea
+  - name: agency_id
+    data_type: LargeUtf8
+    nullable: true
+    checks:
+      "AgencyId::new": 1b6a7ca1bd170dee52076b18f6b6124468e9a3435c8447cfebdaa6e6be098d4e
+  - name: agency_name
+    data_type: LargeUtf8
+    nullable: true
+  - name: mode
+    data_type: LargeUtf8
+    nullable: false
+    variants:
+      - HIGHSPEED_RAIL
+      - LONG_DISTANCE
+      - NIGHT_RAIL
+      - REGIONAL_FAST_RAIL
+      - REGIONAL_RAIL
+      - RAIL
+  - name: realtime
+    data_type: Boolean
+    nullable: false
+  - name: from_stop_id
+    data_type: LargeUtf8
+    nullable: true
+    checks:
+      "StopId::new": 87b2a5b393d9f3de120a35ca49a1d2dae54e20f74cafc7d539aded0eafb5937f
+  - name: departure
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true
+  - name: arrival
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true

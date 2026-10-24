@@ -2,9 +2,10 @@ use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
+use hashfn::hashfn;
 use medallion::{Country, DatasetSpec, Row, UnknownCountry, layers};
 use semver::Version;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use url::Url;
 use uuid::Uuid;
 
@@ -18,8 +19,21 @@ pub const MOTIS_SOURCE_V2: DatasetSpec<layers::Bronze> =
     DatasetSpec::unpartitioned("motis_source_v2");
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(from = "String")]
 pub struct MotisSourceId(String);
+
+impl MotisSourceId {
+    #[hashfn]
+    pub(crate) fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+}
+
+impl From<String> for MotisSourceId {
+    fn from(id: String) -> Self {
+        Self::new(id)
+    }
+}
 
 impl Display for MotisSourceId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -27,8 +41,8 @@ impl Display for MotisSourceId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+#[serde(try_from = "String")]
 pub struct MotisVersion(Version);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -38,6 +52,7 @@ pub struct NotAMotisVersion {
 }
 
 impl MotisVersion {
+    #[hashfn]
     pub fn new(text: impl Into<String>) -> Result<Self, NotAMotisVersion> {
         let text = text.into();
         text.strip_prefix('v')
@@ -69,6 +84,12 @@ impl From<MotisVersion> for String {
     }
 }
 
+impl Serialize for MotisVersion {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_newtype_struct("MotisVersion", &self.to_string())
+    }
+}
+
 impl Display for MotisVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "v{}", self.0)
@@ -76,7 +97,7 @@ impl Display for MotisVersion {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[serde(try_from = "String")]
 pub struct Label(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -89,6 +110,7 @@ pub struct NotALabel {
 }
 
 impl Label {
+    #[hashfn]
     pub fn new(text: impl Into<String>) -> Result<Self, NotALabel> {
         let text = text.into();
         let words_ok = text.split(['-', '.']).all(|word| {
@@ -244,7 +266,7 @@ impl MotisSource {
         .chain(self.label.as_ref().map(Label::as_str))
         .collect::<Vec<_>>()
         .join("\n");
-        MotisSourceId(Uuid::new_v5(&MOTIS_SOURCE_NAMESPACE, name.as_bytes()).to_string())
+        MotisSourceId::new(Uuid::new_v5(&MOTIS_SOURCE_NAMESPACE, name.as_bytes()).to_string())
     }
 
     pub fn row(&self, registered_at: DateTime<Utc>) -> MotisSourceRowV2 {
@@ -328,7 +350,7 @@ impl Row for MotisSourceRowV2 {
 
     fn example() -> Self {
         Self {
-            source_id: MotisSourceId(Uuid::nil().to_string()),
+            source_id: MotisSourceId::new(Uuid::nil().to_string()),
             base_url: "https://api.transitous.org/".to_string(),
             motis_version: MotisVersion(Version::new(2, 11, 3)),
             feed: Feed::Transitous,

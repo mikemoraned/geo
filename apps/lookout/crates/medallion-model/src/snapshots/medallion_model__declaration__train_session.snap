@@ -1,0 +1,57 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: silver
+partition_key: start_date
+semantics: ""
+unique:
+  - session_id
+columns:
+  - name: geometry
+    data_type: Binary
+    nullable: true
+    extension: geoarrow.wkb
+    crs:
+      DE: "OGC:CRS84"
+      GB: "OGC:CRS84"
+  - name: geometry_projected
+    data_type: Binary
+    nullable: true
+    extension: geoarrow.wkb
+    crs:
+      DE: "EPSG:25832"
+      GB: "EPSG:25830"
+  - name: session_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "SessionId::new": 44f47e96890235a7505f5d1fd7c4ff32d6efb810bdf8188f6e509afeaf2e2761
+      "domain::name::checked": 595efce03785db8272f5b3751df76a43d9fc16f03ac6e5d815e263e9051f5d34
+  - name: source_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "MotisSourceId::new": 487c612645cbd6b576fd3f275f26a73e7ca182bfc6899825ba42fae32b8d846b
+  - name: source_label
+    data_type: LargeUtf8
+    nullable: true
+    checks:
+      "Label::new": 567dfbcc1b09b18b3b4aa414f0b547ebd939419ed0514e8edba3c8b2adb28aa7
+  - name: trip_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "TripId::new": 95faaf93fd74d90a7b1410e34146122c52444c25b436b91882c5fa432d422269
+  - name: started_at
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true
+  - name: ended_at
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true
+  - name: sample_count
+    data_type: UInt32
+    nullable: false
+  - name: bbox
+    data_type: "Struct(\"xmin\": non-null Float64, \"ymin\": non-null Float64, \"xmax\": non-null Float64, \"ymax\": non-null Float64)"
+    nullable: false

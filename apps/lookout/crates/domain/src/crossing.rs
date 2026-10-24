@@ -2,6 +2,7 @@ use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use geo_types::Point;
+use hashfn::hashfn;
 use serde::{Deserialize, Serialize};
 
 use crate::name::{NameError, checked};
@@ -9,10 +10,11 @@ use crate::position::{CoordinateError, degrees, position};
 use crate::precision::Precision;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[serde(try_from = "String")]
 pub struct CrossingId(String);
 
 impl CrossingId {
+    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, NameError> {
         Ok(Self(checked(id.into())?))
     }
@@ -53,10 +55,11 @@ impl Display for CrossingId {
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
 )]
-#[serde(transparent)]
+#[serde(from = "u32")]
 pub struct CrossingCompactId(u32);
 
 impl CrossingCompactId {
+    #[hashfn]
     pub fn new(id: u32) -> Self {
         Self(id)
     }

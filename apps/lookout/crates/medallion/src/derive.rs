@@ -6,10 +6,7 @@ use arrow::array::RecordBatch;
 use chrono::NaiveDate;
 
 use crate::country::{COUNTRY, Country};
-use crate::geo::{
-    GEOMETRY, GeoParquetFile, PROJECTED_GEOMETRY, Projector, geo_batch, projected_wkb_field,
-    wkb_field,
-};
+use crate::geo::{GeoParquetFile, Projector, geo_batch, geometry_fields};
 use crate::layer::layers;
 use crate::partition::DATE_FORMAT;
 use crate::path::{Replaced, Root};
@@ -194,14 +191,12 @@ where
         .map(|geometry| projector.project(geometry))
         .collect::<Result<_, _>>()?;
 
+    let [plain, projected_field] = geometry_fields(country)?;
     Ok(geo_batch(
         &rows,
         &[
-            (wkb_field(GEOMETRY)?, geometry.as_slice()),
-            (
-                projected_wkb_field(PROJECTED_GEOMETRY, country)?,
-                projected.as_slice(),
-            ),
+            (plain, geometry.as_slice()),
+            (projected_field, projected.as_slice()),
         ],
     )?)
 }
@@ -225,6 +220,7 @@ mod tests {
 
     use super::*;
     use crate::dataset::DatasetSpec;
+    use crate::geo::PROJECTED_GEOMETRY;
     use crate::query::Query;
     use crate::rows::Geometry;
 

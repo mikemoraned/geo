@@ -1,11 +1,12 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
+use hashfn::hashfn;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[serde(try_from = "String")]
 pub struct DeviceId(String);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -32,6 +33,7 @@ pub struct DeviceInfo {
 pub struct EmptyDeviceId;
 
 impl DeviceId {
+    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, EmptyDeviceId> {
         let id = id.into();
         if id.is_empty() {

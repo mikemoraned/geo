@@ -1,0 +1,81 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: silver
+partition_key: country
+semantics: ""
+unique:
+  - crossing_id
+  - crossing_compact_id
+columns:
+  - name: geometry
+    data_type: Binary
+    nullable: true
+    extension: geoarrow.wkb
+    crs:
+      DE: "OGC:CRS84"
+      GB: "OGC:CRS84"
+  - name: geometry_projected
+    data_type: Binary
+    nullable: true
+    extension: geoarrow.wkb
+    crs:
+      DE: "EPSG:25832"
+      GB: "EPSG:25830"
+  - name: crossing_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "CrossingId::new": 44f47e96890235a7505f5d1fd7c4ff32d6efb810bdf8188f6e509afeaf2e2761
+      "domain::name::checked": 595efce03785db8272f5b3751df76a43d9fc16f03ac6e5d815e263e9051f5d34
+  - name: crossing_compact_id
+    data_type: UInt32
+    nullable: false
+    checks:
+      "CrossingCompactId::new": 4b1a073ff7e10b6dd1538de05974cc89937eee19797ab18eb7e8b69cce4f68f0
+  - name: overture_water_id
+    data_type: LargeUtf8
+    nullable: false
+  - name: overture_water_subtype
+    data_type: LargeUtf8
+    nullable: true
+  - name: overture_water_class
+    data_type: LargeUtf8
+    nullable: true
+  - name: track_id
+    data_type: LargeUtf8
+    nullable: false
+  - name: overture_rail_id
+    data_type: LargeUtf8
+    nullable: false
+  - name: overture_rail_class
+    data_type: LargeUtf8
+    nullable: true
+  - name: overlap_kind
+    data_type: LargeUtf8
+    nullable: false
+    variants:
+      - line
+      - point
+  - name: overlap_m
+    data_type: Float64
+    nullable: false
+  - name: total_overlap_m
+    data_type: Float64
+    nullable: false
+  - name: merged_parts
+    data_type: UInt32
+    nullable: false
+  - name: frac
+    data_type: Float64
+    nullable: false
+  - name: extract_id
+    data_type: LargeUtf8
+    nullable: false
+  - name: merge_distance_m
+    data_type: Float64
+    nullable: false
+  - name: min_crossing_m
+    data_type: Float64
+    nullable: false

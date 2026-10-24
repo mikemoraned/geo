@@ -2,10 +2,11 @@ use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use chrono::NaiveDate;
-use serde::{Deserialize, Serialize};
+use hashfn::hashfn;
+use serde::{Deserialize, Serialize, Serializer};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
+#[serde(try_from = "String")]
 pub struct OvertureRelease {
     date: NaiveDate,
     revision: u32,
@@ -18,6 +19,7 @@ pub struct NotAnOvertureRelease {
 }
 
 impl OvertureRelease {
+    #[hashfn]
     pub fn new(text: impl Into<String>) -> Result<Self, NotAnOvertureRelease> {
         let text = text.into();
         text.split_once('.')
@@ -51,6 +53,12 @@ impl TryFrom<String> for OvertureRelease {
 impl From<OvertureRelease> for String {
     fn from(release: OvertureRelease) -> Self {
         release.to_string()
+    }
+}
+
+impl Serialize for OvertureRelease {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_newtype_struct("OvertureRelease", &self.to_string())
     }
 }
 
