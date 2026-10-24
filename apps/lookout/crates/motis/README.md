@@ -78,6 +78,16 @@ still captured without those two fields, and is asked about again at the next po
 without exactly one trip is not captured. Each poll reports both kinds of failure, and the poller
 logs them as errors.
 
+## How long a run lasts
+
+A run polls at its start and then every `--poll-interval`, and stops once `--poll-duration` has
+passed. On macOS and Linux, the poller measures both on a clock that stops while the machine
+sleeps. A run therefore counts only time the machine is awake, and lasts its duration plus however
+long the machine slept. Each sleep also delays every later poll by the sleep's length.
+
+A poll that fails, on a full disk or an unreachable server, moves neither the end of the run nor
+any later poll. The poller logs the error and writes no file for that poll.
+
 ## The client
 
 The client is generated at build time from `openapi.json`, the API spec of the Motis version
