@@ -581,7 +581,7 @@ At the end of the slice, once its features are in.
       typed geometry, where `session` and `train_session` return WKB bytes today.
       `notebooks/motis_capture/train_sessions.py` can then read its tables with
       `GeoDataFrame.from_arrow`. Re-derive silver afterwards.
-- [ ] In the "Dataset versions" section of `docs/medallion.md`, record that every change to a
+- [x] In the "Dataset versions" section of `docs/medallion.md`, record that every change to a
       dataset's declaration makes a new version. That includes an added optional column and a
       widened type. Draw on
       [2026-10-24-breaking-dataset-changes.md](2026-10-24-breaking-dataset-changes.md). State what
@@ -591,6 +591,8 @@ At the end of the slice, once its features are in.
       Correct where `docs/medallion.md` says a bronze file never changes and is never deleted.
       Bronze appends by default, and a lossless transformation can replace its files, in place or
       by migrating a version into the next. Git history keeps the files replaced.
+      The semantics tag waits for the hash test, which builds it: `docs/medallion.md` describes
+      only what holds now.
 - [ ] Apply those rules by hand to the changes this slice made to stored datasets. These include
       moving the geometry first, checking each id on every read, and dropping `route_color` from
       `train_segment_v2`. Add a task for each dataset that needs a new version.
@@ -599,7 +601,7 @@ At the end of the slice, once its features are in.
       spec, and a semantics tag, empty by default. The test compares each hash with one stored for
       the dataset's version, and fails on a difference. The stored hashes start empty, and the
       first run records them. Describe in `crates/medallion/README.md` that a failure means a new
-      version. Then delete the research doc.
+      version, and describe the semantics tag in `docs/medallion.md`.
 - [ ] Make `Leg::source_id`, in `crates/motis/src/ingest.rs`, a `MotisSourceId` rather than an
       `Option`. Both datasets `captures` reads give every leg a source: `motis_segment_v2` stores
       one in every row, and `legacy_source_id_sql` gives every `motis_segment` row one. Remove
@@ -697,6 +699,10 @@ At the end of the slice, once its features are in.
       `crates/motis/src/train_sessions.rs` and the `recorder` crate use `sessions`, `samples`,
       and `d`. Leave the test setup in `crates/motis/tests/common/mod.rs`, which registers
       `motis_segment_v2` as `captured`, to the Six-day capture's move to `motis_segment_v3`.
+- [ ] Check that everything of value in
+      [2026-10-24-breaking-dataset-changes.md](2026-10-24-breaking-dataset-changes.md) has been
+      applied or recorded. Record what has not, in `docs/medallion.md` or
+      `crates/medallion/README.md`. Then delete the research doc.
 
 #### Six-day capture
 
