@@ -573,6 +573,96 @@ At the end of the slice, once its features are in.
          `String`s. `MotisSource`'s conversion then keeps only the check that a country and a
          release come together.
       On 23 October, no stored id broke its type's check, across the ten datasets that hold one.
+- [ ] Write the geometry columns first in every silver file, in `geo_batch` in
+      `crates/medallion/src/geo.rs` and `Columns::batch` in `crates/medallion/src/table.rs`. A file
+      whose geometry precedes its nested columns reads normally in a filtered SedonaDB scan. Then
+      remove `holds_nested_columns`, `register_of_country_without_geometry`, the plain-parquet arm
+      of `register_silver`, and the README's caveat about silver. Every silver dataset then returns
+      typed geometry, where `session` and `train_session` return WKB bytes today.
+      `notebooks/motis_capture/train_sessions.py` can then read its tables with
+      `GeoDataFrame.from_arrow`. Re-derive silver afterwards.
+- [ ] Make `Leg::source_id`, in `crates/motis/src/ingest.rs`, a `MotisSourceId` rather than an
+      `Option`. Both datasets `captures` reads give every leg a source, so remove
+      `IngestError::Unsourced` and its checks in `ingest.rs` and `train_sessions.rs`. If nothing
+      else in `TryFrom<&Leg> for TrainSegmentRowV2` can fail, make it a `From`. In the same file,
+      remove `impl Add for IngestOutcome`, which nothing calls. Replace the `continue` in the
+      `Shape::Missing` arm with a match that yields an `Option`, as `.claude/rules/rust.md` asks.
+      Remove `legacy_source` from `legacy.rs` too: only tests call it, and `legacy_source_id_sql`
+      holds the same rule for production.
+- [ ] Hold an `OvertureRelease` wherever a release enters `transport`: the `--overture-release`
+      flag, `ReleaseChoice`, `Release`, and `ExtractManifestRowV2::overture_release`. Pick the
+      newest release by its order, and remove `release_order` in `crates/transport/src/overture.rs`,
+      which parses the same text. Hold `ExtractManifestRowV2::country` as a `Country` too, giving
+      `Country` the `try_from = "String"` serde the ids have. The `.parse()` calls and `Release`
+      error variants in `countries.rs` and `regions.rs` then go. The two parsers disagree today:
+      `release_order` takes `2026-09-23.01`, which `OvertureRelease` refuses.
+- [ ] Hold `base_url`, `country`, and `overture_region_id` in `MotisSourceRowV2` as `Url`,
+      `Country`, and `GersId`. Reading a row then checks each, as it checks the version, release,
+      and label. `Country` and `GersId` need the `try_from = "String"` serde the ids have, and `url`
+      its `serde` feature. If nothing outside tests then converts a row back into a `MotisSource`,
+      remove `TryFrom<MotisSourceRowV2> for MotisSource`, `NotAMotisSource`, and their tests.
+- [ ] Find a country's newest extract once, in `CountryAreas` in
+      `crates/transport/src/countries.rs`. Pass its id to `region_area` in `regions.rs`, which
+      repeats the lookup today. Then remove `OvertureRegionArea::release`, `RegionError::NoExtract`,
+      and `RegionError::Release`, and let `fixed_area` in `motis_track_area` read the manifest once.
+      Share the test helpers `regions.rs` copies from `countries.rs`, such as `square_from` and
+      `division_area`.
+- [ ] Give `captures`, in `crates/motis/src/ingest.rs`, one leg identity that survives a delay:
+      source, trip, departure stop, and scheduled departure. It replaces the `keyed_by` SQL each
+      caller passes. `ingest` keys `train_segment_v2` on the realtime departure today, so it keeps a
+      delayed leg once for each departure it saw. `train_session` keys on the departure stop alone,
+      merging them, and counts nothing. Count each dataset's legs before and after, and update "A
+      leg's identity" in `docs/motis.md`.
+- [ ] Let `Sorted::Kept`, in `crates/motis/src/capture.rs`, carry the trip id, line, and segment
+      that `sorted` has checked. `SegmentLog::append` in `bronze.rs` then cannot fail on them. The
+      same check runs twice today, and its second copy, `BronzeError::Segment`, loses a whole poll
+      where the first skips one segment and reports it.
+- [ ] Fold the two side-by-side notebooks in `notebooks/motis_capture` into one that takes its
+      pass's label. It can read the label from `mo.cli_args()` or a dropdown of `motis_source_v2`
+      labels. They differ in 44 of about 920 lines. First move each pass's findings into the slice
+      record, since each notebook records its own. Then move the steps
+      `compare_delfi-2026-10-10.plain_route-shapes.py` repeats into a module of the `motis_capture`
+      project. Move there the `bronze()` and `shape_of()` helpers four notebooks define. Do this
+      before the Six-day capture points the notebooks at `motis_segment_v3`.
+- [ ] In `notebooks/motis_capture/germany_delfi-2026-10-10.route-shapes.within.py`, build the
+      segment table and its metric shapes in one cell, and the bar charts' styling in one helper.
+      Two cells run the same query and filter today, and the same polylines are decoded and
+      projected three times. Decode only distinct polylines: about 22,000 of the 260,000 rows'
+      polylines differ.
+- [ ] Read the store through `lookout_medallion` in `notebooks/motis_capture/v1.py`, as its
+      siblings do and `.claude/rules/lookout-notebooks.md` requires. Use `default_root()` in place
+      of `medallion_root()`, and `query_bronze` in place of `read_parquet` over hand-written paths.
+- [ ] If lonboard 0.16.0 takes hex colours in `get_color` and `apply_categorical_cmap`, pass them
+      through unparsed. Four notebooks parse them by hand: the `motis_capture` side-by-side and
+      compare notebooks, and `session_crossings/passes.py`.
+- [ ] Derive `Feed`'s names, parsing, and list with strum, as `RailMode` does, in
+      `crates/medallion-model/src/motis_source.rs`. They replace its hand-written `ALL`, `as_str`,
+      `names`, and `FromStr`. Keep `UnknownFeed`, listing the names from `Feed::iter()`.
+- [ ] Move the fixtures `crates/motis`'s unit tests each define into one `#[cfg(test)]` module, as
+      `medallion-model`'s `testing.rs` holds its column helpers. These are the local `MotisSource`,
+      the `trips.json` loader, `Everywhere`, `Nowhere`, and `germany()`, defined in up to six
+      modules each. `tests/common/mod.rs` keeps its own, since an integration test cannot reach a
+      unit test module.
+- [ ] Simplify `crates/motis/src/sampling.rs`. Have `position_at` return a point, since nothing
+      outside tests tells `Travelling` from `WaitingAtStation`. Build each `Placed` directly, in
+      place of `(t, position, source)` tuples. Drop `Leg::duration`, which `arrival` minus
+      `departure` gives, and have `Leg::new` check the arrival against the departure directly.
+- [ ] In `steps`, in `crates/session_crossings/src/matching.rs`, pair each sample with its distance
+      once and group the pairs into visits once. `steps` groups, flattens, and groups again by visit
+      index today, and computes each distance three times.
+- [ ] Build `session-crossings-py`'s output tables with `serde_arrow::to_record_batch` on row
+      structs, as `medallion::batch` does. They replace its `batch` helper and the column lists
+      `src/lib.rs` keeps by hand.
+- [ ] Give `SessionId` a `From<Uuid>`, as `DeviceId` has, and make the train session namespace a
+      constant, as `SESSION_NAMESPACE` is. `train_session_id` then needs no `expect`, and hashes no
+      namespace per call.
+- [ ] Derive `sessionise`'s `--gap` and `--lead` defaults from `DEFAULT_GAP` and `DEFAULT_LEAD` with
+      `default_value_t`, as `match_crossings` does from `DEFAULT_RADIUS`. They replace the literals
+      `"10m"` and `"1m"`, and the test keeping them in step. This needs a way to turn an `Age` into
+      a `Span`.
+- [ ] If `nutype` builds for Xtensa and wasm, generate the non-empty id newtypes with it: `TripId`,
+      `StopId`, `AgencyId`, and `DeviceId`. Each writes out `new`, `FromStr`, `TryFrom<String>`,
+      `From<_> for String`, and an `Empty*` error by hand.
 
 #### Six-day capture
 
@@ -585,7 +675,9 @@ polyline table changes what `motis_ingest` reads.
 - [ ] Give `writer_at`, in `crates/medallion/src/write.rs`, zstd compression, for bronze and
       silver alike.
 - [ ] Add bronze `motis_polyline` and `motis_segment_v3` to `crates/medallion-model`, with a
-      `PolylineId` newtype holding the UUID v5 of a polyline's text.
+      `PolylineId` newtype holding the UUID v5 of a polyline's text. If serde_arrow traces a
+      flattened row, compose the new row from shared parts with `#[serde(flatten)]`. That avoids
+      restating every field, as `MotisCaptureRow` restates `MotisSegmentRow`'s.
 - [ ] Add a landing dataset for the capture's polls, on `layers::Landing`, which no dataset uses
       yet. Give `medallion` a way to list its files and delete one once drained. Ignore
       `/landing/` in `data/medallion/.gitignore`.
@@ -627,6 +719,49 @@ After Refactoring, once the slice works end to end.
       once for sessions. Each session's path runs through every sample, held in degrees and
       projected. Each open partition file buffers a row group of up to a million rows. A path
       from the legs' shapes would also shrink `train_session`, at 460 MB on disk.
+      A reading of the code on 23 October puts the peak at about 11 GB, while `train_segment_v2` is
+      written. That is 4–5 GB of open files' buffers, 3.3 GB of placed legs, and 2.5–3.3 GB of
+      `geo_day`'s copies of a day. It confirms the third suspect as the largest. The first costs
+      time rather than memory, since nothing survives between the two derivations. The second holds
+      in the session phase, which does not set the peak.
+- [ ] Flush each open partition file's row group as `GeoRowWriter` writes it, in
+      `crates/medallion/src/derive.rs`, or close each file once its rows are written. Set
+      `max_row_group_size` in `writer_at` too. Every (country, date) file buffers its encoded rows,
+      uncompressed, until `finish` today. A day of segments, at about 250,000 rows, never fills the
+      default row group of 1,048,576 rows.
+- [ ] Write `ingest`'s legs to `train_segment_v2` in batches, through `GeoRowWriter::new`, as
+      `derive_train_sessions` writes its samples. Today it collects all 1.32 million placed legs
+      first. Iterate the captured legs by value, with a `TryFrom<Leg>` that moves their strings.
+      Batching helps only once the writer flushes. About 3.3 GB of placed legs and 1.6 GB of bronze
+      legs stay resident through the write today.
+- [ ] Write a day's rows without copying them, in `geo_day` in `crates/medallion/src/derive.rs` and
+      `wkb_column` in `geo.rs`. Serialise `&R`, encode WKB from `&G`, and project and encode one
+      geometry at a time into a `BinaryBuilder`. A day's geometry exists about five times over at
+      once today, 2.5–3.3 GB for the largest day.
+- [ ] Compute each leg's cumulative distances once in `sampled`, in `crates/motis/src/sampling.rs`,
+      and interpolate within the one segment `partition_point` finds. `point_at_ratio_from_start`
+      measures and walks the whole shape again for every sample: about 6 billion Haversine
+      evaluations for 31 million travelling samples.
+- [ ] Memoise `CountryAreas::containing`, in `crates/transport/src/countries.rs`, by point, or test
+      a bounding box first. Each call walks all 160,000 vertices of Germany's outline, for 1.32
+      million legs that start from about 25,000 distinct points.
+- [ ] Project each geometry once. Let a `GeoRow` carry a projected geometry its caller already has.
+      The writer then reuses `session_of`'s projection of every sample, and `ingest` projects each
+      distinct polyline once. Of the segment projections, 98% repeat a shape already projected.
+      Share one per-country projector cache between `GeoRowWriter::write` and
+      `derive_train_sessions`, which copies it.
+- [ ] Release each trip's shapes once it is sampled. Iterate `trips` by value in
+      `derive_train_sessions`, and pass `NormalisedLegs::new` its legs by value, in place of a deep
+      copy of every shape. About 2.7 GB stays held through the session write today, and as much
+      again is copied.
+- [ ] Let `captures` skip what `derive_train_sessions` discards: both count queries and the final
+      `ORDER BY departure`. The session phase reruns the whole capture read today, sorting every
+      row's polyline text, 1.33 GB of it. The planned `motis_polyline` table takes the text out of
+      both sorts.
+- [ ] When `motis_track_area` captures a whole country, test each leg once, with `covers`, against
+      one prepared outline. Share the coverage, rather than cloning it each poll. It now passes the
+      same shapes as area and as country, so it unions and prepares them twice and tests each leg
+      twice.
 
 #### Wrap-up
 
