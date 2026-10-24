@@ -201,18 +201,10 @@ def _(
         )
     )
     _legs = gpd.GeoDataFrame.from_arrow(legs)
-    _points = gpd.GeoDataFrame(
-        samples.drop_columns(["geometry", "geometry_projected"]).to_pandas(),
-        geometry=gpd.GeoSeries.from_wkb(
-            samples["geometry"].to_pylist(), crs="EPSG:4326"
-        ),
+    _points = gpd.GeoDataFrame.from_arrow(
+        samples.drop_columns("geometry_projected")
     )
-    _recorded = gpd.GeoDataFrame(
-        recorded.drop_columns("geometry").to_pandas(),
-        geometry=gpd.GeoSeries.from_wkb(
-            recorded["geometry"].to_pylist(), crs="EPSG:4326"
-        ),
-    )
+    _recorded = gpd.GeoDataFrame.from_arrow(recorded)
     point_layers = {
         "recorded": lonboard.ScatterplotLayer.from_geopandas(
             _recorded,
