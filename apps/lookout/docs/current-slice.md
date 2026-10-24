@@ -663,6 +663,13 @@ At the end of the slice, once its features are in.
 - [ ] If `nutype` builds for Xtensa and wasm, generate the non-empty id newtypes with it: `TripId`,
       `StopId`, `AgencyId`, and `DeviceId`. Each writes out `new`, `FromStr`, `TryFrom<String>`,
       `From<_> for String`, and an `Empty*` error by hand.
+- [ ] Register each dataset under its own name, as the "Dataset versions" section of
+      `docs/medallion.md` states. In production, `crates/recorder/src/sessions.rs` registers
+      `gps_reading` as `samples` and `device_session` as `session_starts`. In tests,
+      `crates/motis/src/ingest.rs` registers `train_segment_v2` as `derived`, and
+      `crates/motis/src/train_sessions.rs` and the `recorder` crate use `sessions`, `samples`,
+      and `d`. Leave the test setup in `crates/motis/tests/common/mod.rs`, which registers
+      `motis_segment_v2` as `captured`, to the Six-day capture's move to `motis_segment_v3`.
 
 #### Six-day capture
 
@@ -699,6 +706,7 @@ polyline table changes what `motis_ingest` reads.
       `compare_delfi-2026-10-10.plain_route-shapes.py`,
       `germany_delfi-2026-10-10.route-shapes.within.py`, both `side_by_side_delfi-2026-10-10`
       notebooks, and `v1.py`, and the shared test setup in `crates/motis/tests/common/mod.rs`.
+      In the test setup, register `motis_segment_v3` under its own name, in place of `captured`.
 - [ ] Delete `motis_segment_v2`'s files, `MOTIS_SEGMENT_V2`, its entry in
       `crates/medallion-model/src/bronze.rs`, and its reading in `captures`. Its rows live on in
       `motis_segment_v3`.
