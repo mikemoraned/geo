@@ -243,6 +243,15 @@ The layout above *is* the metadata: partitioning is directory names, schema is t
 and a partition is replaced by rewriting it. Nothing holds partition spec, schema history,
 snapshots, or statistics beside the data.
 
+## Dataset versions
+
+A change that breaks a dataset's readers, such as a dropped column, makes a new version of the
+dataset. Each version after the first carries its number as a suffix of the dataset's name, as in
+`_v2`. Readers register a dataset under its name, suffix included, and query it by that name. A
+reader written against one version reads only that version, and moving it to the next takes an
+edit to its queries. Under an alias without the suffix, a reader moves to the next version
+unedited, and fails once a query reaches a dropped column.
+
 ## Rederivability
 
 Provided everything is retained in bronze, **all of silver and gold is rederivable**.
