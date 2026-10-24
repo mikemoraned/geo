@@ -7,8 +7,10 @@ paths:
 
 A notebook is built with the user in a live marimo session, one step at a time, never drafted
 alone in a file. The user starts the session. Each step adds or changes one cell, then stops for
-review before the next. Querying the store through the medallion binding, for example from the
-session's scratchpad, to learn what the data holds before proposing a step is permitted.
+review before the next. A step changes its cell through the session, with the `marimo-pair` skill.
+An edit to the notebook's file bypasses the session, which can write over it on its next save.
+Querying the store through the medallion binding, for example from the session's scratchpad, to
+learn what the data holds before proposing a step is permitted.
 
 A notebook is written so the user can check it for correctness, in two ways:
 
