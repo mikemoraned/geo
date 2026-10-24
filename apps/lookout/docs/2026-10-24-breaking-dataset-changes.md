@@ -2,9 +2,10 @@
 
 *Research of 2026-10-24. It draws on how six systems classify a change to a schema: the Avro
 specification, Confluent Schema Registry, Apache Iceberg, Delta Lake, dbt model contracts, and buf.
-Google's AIP-180 adds how a change of meaning is judged. It applies them to the store
-[medallion.md](medallion.md) describes, and to the row types that declare its datasets. Whatever
-holds of it belongs in `medallion.md`, and the rest goes stale.*
+Google's AIP-180 adds how a change of meaning is judged, and Rust crates how a check is
+fingerprinted. It applies them to the store [medallion.md](medallion.md) describes, and to the row
+types that declare its datasets. Whatever holds of it belongs in `medallion.md`, and the rest goes
+stale.*
 
 Which changes to a dataset break its readers, and so make a new version of it. It is for whoever
 writes the rules into `medallion.md`, and for whoever builds a test that a dataset's declaration
@@ -192,11 +193,41 @@ in Confluent's registry.
 
 ## Testing a declaration against a stored one
 
+### What the hash covers
+
 A hash of the schema the files store covers the first part of a declaration alone. An enum stored
 as text has the same Arrow type whatever its variants, and a checked newtype has the type of the
 `String` it checks. A hash of the whole declaration also needs each column's Rust type, each enum's
 variants, the unique columns, and the spec. A change inside a newtype's check leaves the newtype's
 name as it was, so no hash of names finds it.
+
+### Fingerprinting a check
+
+Rust crates offer four ways to fingerprint a type and its checks:
+
+- **The type's structure.** serde-reflection traces the formats serde sees into a registry: each
+  struct's fields, each enum's variants, each newtype's name. type_hash derives a hash of a type's
+  definition, meant for detecting a message type that differs between versions. Neither sees what
+  a check does.
+- **The check's tokens.** hashfn is an attribute on a function. It adds a constant holding a hash
+  of the function's tokens, such as `NEW_HASH` beside `fn new`. A declaration's hash can fold in
+  the constant of each checked newtype it uses. The hash sees one function's tokens, not the
+  functions it calls, and any edit to its code changes it, a refactor included.
+- **A check declared as data.** nutype states a newtype's checks in its attribute, such as
+  `validate(not_empty)`, and refuses a value that fails them, deserialisation included. A hash of
+  the attribute's tokens then covers the check. schemars carries the constraints of garde and
+  validator attributes into the JSON Schema it generates, but not nutype's. facet records each
+  type's attributes in a `SHAPE` constant, and its validators, such as `min_length`, run as it
+  deserialises. Its validators run only when facet deserialises, and the store reads rows through
+  serde.
+- **The check's behaviour.** A fixed list of inputs, run through each check, gives a table of
+  accepted and refused values. A snapshot of that table changes with the behaviour alone, and only
+  for the inputs on the list.
+
+Under the store's choice, a token hash makes any edit to a shared check a new version of every
+dataset using it. A behavioural snapshot makes one only where what the check accepts changes.
+
+### Comparing with a stored copy
 
 Three systems compare a schema with a stored copy:
 
@@ -212,7 +243,8 @@ the change in its failure, as a snapshot test does. A short hash can still come 
 
 ## Open questions
 
-- How a test finds a change inside a checked newtype's check.
+- Which way the test fingerprints a check: by its tokens, its declared attributes, or its
+  behaviour.
 
 ## References
 
@@ -227,3 +259,7 @@ the change in its failure, as a snapshot test does. A short hash can still come 
 - [dbt, "Model contracts"](https://docs.getdbt.com/docs/mesh/govern/model-contracts), and
   ["Model versions"](https://docs.getdbt.com/docs/mesh/govern/model-versions)
 - [buf, "Detecting breaking changes"](https://buf.build/docs/breaking/)
+- Rust crates: [serde-reflection](https://docs.rs/serde-reflection),
+  [type_hash](https://docs.rs/type_hash), [hashfn](https://docs.rs/hashfn),
+  [nutype](https://docs.rs/nutype), [schemars](https://docs.rs/schemars),
+  [facet](https://docs.rs/facet), and [facet-validate](https://docs.rs/facet-validate)
