@@ -254,7 +254,16 @@ A run on 20 October, over the same pinned extracts, changed 42 of the 10,254 cro
 of about 5 m away and at most 13.6 m. The gold pack in use comes from a third run, on 11 October.
 It differs from the 12 October run by 40 crossings, and from the 20 October run by 48. A moved
 crossing takes a new id and compact id, so packing after any run changes what the device carries.
-What makes the runs differ is unknown.
+
+The notebook names a crossing merged from several parts after the part with the longest overlap,
+through `idxmax`. A point crossing, where the rail meets water mapped as a line, overlaps nothing,
+and the notebook records its overlap as 0 m. A merged point crossing's parts therefore all tie
+at 0 m. `idxmax` then takes the first part, and nothing fixes the order of the parts between runs.
+Taking another part puts the crossing elsewhere on the same track, within the 100 m merge
+distance. That fits how at least 40 of those 42 moved. On 24 October, 642 of the 1,478 merged
+crossings were point crossings. That day's run renamed one of them, and two passes in
+`silver/session_crossing` then named an id the store no longer held. A moved line crossing needs
+another cause.
 
 ## Slice: Enrich and use relative direction of POI
 
