@@ -593,15 +593,32 @@ At the end of the slice, once its features are in.
       by migrating a version into the next. Git history keeps the files replaced.
       The semantics tag waits for the hash test, which builds it: `docs/medallion.md` describes
       only what holds now.
-- [ ] Apply those rules by hand to the changes this slice made to stored datasets. These include
+- [x] Apply those rules by hand to the changes this slice made to stored datasets. These include
       moving the geometry first, checking each id on every read, and dropping `route_color` from
       `train_segment_v2`. Add a task for each dataset that needs a new version.
+      Six datasets on `main` changed their declarations in this slice, and each gets a new
+      version. `session` and `session_sample` moved their geometry first. Those two,
+      `session_crossing`, `gps_reading`, `accel_reading`, and `device_session` check their ids on
+      every read. `session_crossing` also holds a row per pass. `raw_sample`, `motis_segment`, and
+      `overture_extract` are unchanged. The datasets this slice created keep their names. No
+      reader outside this branch saw an earlier declaration, and every stored file reads under
+      the current one. That exception covers this slice's changes alone. Once the hash test
+      lands, every change to a declaration makes a new version, on a new dataset as on any other.
 - [ ] Before any further change to a dataset, add a test that hashes each dataset's declaration.
       The declaration covers the schema its files store, the constraints its row type adds, its
       spec, and a semantics tag, empty by default. The test compares each hash with one stored for
       the dataset's version, and fails on a difference. The stored hashes start empty, and the
       first run records them. Describe in `crates/medallion/README.md` that a failure means a new
       version, and describe the semantics tag in `docs/medallion.md`.
+- [ ] Give `session` a new version, `session_v2`. Point its writer and readers at it, re-derive
+      it, and delete the old version's files.
+- [ ] Give `session_sample` a new version, `session_sample_v2`, as for `session_v2`.
+- [ ] Give `session_crossing` a new version, `session_crossing_v2`, as for `session_v2`.
+- [ ] Give `gps_reading` a new version, `gps_reading_v2`. Copy its rows into the new version with
+      a one-off binary, committed with the data it writes and then removed. Point its writer and
+      readers at it, and delete the old version's files.
+- [ ] Give `accel_reading` a new version, `accel_reading_v2`, as for `gps_reading_v2`.
+- [ ] Give `device_session` a new version, `device_session_v2`, as for `gps_reading_v2`.
 - [ ] Make `Leg::source_id`, in `crates/motis/src/ingest.rs`, a `MotisSourceId` rather than an
       `Option`. Both datasets `captures` reads give every leg a source: `motis_segment_v2` stores
       one in every row, and `legacy_source_id_sql` gives every `motis_segment` row one. Remove
