@@ -581,11 +581,13 @@ At the end of the slice, once its features are in.
       typed geometry, where `session` and `train_session` return WKB bytes today.
       `notebooks/motis_capture/train_sessions.py` can then read its tables with
       `GeoDataFrame.from_arrow`. Re-derive silver afterwards.
-- [ ] In the "Dataset versions" section of `docs/medallion.md`, record which changes break a
-      dataset's readers. Draw on
-      [2026-10-24-breaking-dataset-changes.md](2026-10-24-breaking-dataset-changes.md). Cover
-      column order, types, nullability, and the constraints a row type adds, such as an enum
-      stored as text. Include the changes no declaration shows, such as a column's meaning.
+- [ ] In the "Dataset versions" section of `docs/medallion.md`, record that every change to a
+      dataset's declaration makes a new version. That includes an added optional column and a
+      widened type. Draw on
+      [2026-10-24-breaking-dataset-changes.md](2026-10-24-breaking-dataset-changes.md). State what
+      a declaration covers: column order, types, nullability, the constraints a row type adds, and
+      the spec. Include the changes no declaration shows, such as a column's meaning. A person
+      judges whether one is significant, and sets a semantics tag that forces a new version.
       Correct where `docs/medallion.md` says a bronze file never changes and is never deleted.
       Bronze appends by default, and a lossless transformation can replace its files, in place or
       by migrating a version into the next. Git history keeps the files replaced.
@@ -593,11 +595,11 @@ At the end of the slice, once its features are in.
       moving the geometry first, checking each id on every read, and dropping `route_color` from
       `train_segment_v2`. Add a task for each dataset that needs a new version.
 - [ ] Before any further change to a dataset, add a test that hashes each dataset's declaration.
-      The declaration covers the schema its files store and the constraints its row type adds.
-      The test compares each hash with one stored for the dataset's version, and fails on a
-      difference. The stored hashes start empty, and the first run records them. Describe in
-      `crates/medallion/README.md` how to judge a failure against the rules. Then delete the
-      research doc.
+      The declaration covers the schema its files store, the constraints its row type adds, its
+      spec, and a semantics tag, empty by default. The test compares each hash with one stored for
+      the dataset's version, and fails on a difference. The stored hashes start empty, and the
+      first run records them. Describe in `crates/medallion/README.md` that a failure means a new
+      version. Then delete the research doc.
 - [ ] Make `Leg::source_id`, in `crates/motis/src/ingest.rs`, a `MotisSourceId` rather than an
       `Option`. Both datasets `captures` reads give every leg a source: `motis_segment_v2` stores
       one in every row, and `legacy_source_id_sql` gives every `motis_segment` row one. Remove
