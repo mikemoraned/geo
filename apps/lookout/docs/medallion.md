@@ -60,12 +60,11 @@ Raw data, extracted from landing and retained indefinitely. Three kinds:
 - point-in-time extracts of an upstream reference dataset, restricted to the area and
   themes we need
 
-**Bronze is immutable and versioned, not merely append-only.** A given file, once written,
-never changes. Corrections arrive as a new version, not an edit. This is enforced rather
-than trusted. An append onto a path that already holds a file fails, so two writes that
-would name the same file cannot silently replace each other's rows. Two writers collide that
-way: a batching writer whose batches fall close together, and an ingestion replayed twice.
-Batch file names therefore carry millisecond precision.
+**Bronze is append-only and versioned.** A write adds a file, and never changes one already
+written. This is enforced rather than trusted. An append onto a path that already holds a
+file fails, so two writes that would name the same file cannot silently replace each other's
+rows. Two writers collide that way: a batching writer whose batches fall close together, and
+an ingestion replayed twice. Batch file names therefore carry millisecond precision.
 
 The same enforcement covers the other direction: **the layers holding observations cannot be
 replaced or swept at all.** Nothing derives them, so nothing can put them back. The
@@ -74,6 +73,11 @@ no longer produces — therefore do not exist for them. A dataset's layer is par
 so those operations are offered only where the layer permits them, and writing one against an
 observation dataset does not compile. A dataset placed in a layer inherits the rule instead
 of restating it, and there is no call to review or error to handle.
+
+**A lossless transformation is the one way bronze files change.** It runs once, outside the
+operations a writer has, and keeps every observation. It rewrites files in place, or copies a
+version's rows into the next version and then deletes the old version's files. Git history
+keeps every file it replaces.
 
 **Bronze tolerates the same observation arriving more than once, so deduplication is the
 reader's job.** Nothing here rejects a repeat:
@@ -245,8 +249,24 @@ snapshots, or statistics beside the data.
 
 ## Dataset versions
 
-A change that breaks a dataset's readers, such as a dropped column, makes a new version of the
-dataset. Each version after the first carries its number as a suffix of the dataset's name, as in
+**Every change to a dataset's declaration makes a new version of the dataset.** The declaration
+is what a dataset's code states about it:
+
+- **the schema its files store**: each column's name, position, type, and nullability, with any
+  nested fields and column metadata, such as a geometry column's CRS
+- **the constraints its row type adds to that schema**: a checked newtype, an enum stored as
+  text, a column declared unique
+- **its name, layer, and partition key**, since a reader gets a partition key back as a column
+
+A reader finds a column by name, or by position as a dataframe can, so a column's position is
+part of the declaration. The rule covers an added optional column, which breaks no reader that
+finds columns by name, and a widened type. A version's files therefore share one declaration.
+
+A change of meaning leaves the declaration as it was. Such changes include a new unit, another
+value standing for "none applies", a new grain, and a row identity that varies between runs. A
+person judges whether such a change is significant enough to make a new version.
+
+Each version after the first carries its number as a suffix of the dataset's name, as in
 `_v2`. Readers register a dataset under its name, suffix included, and query it by that name. A
 reader written against one version reads only that version, and moving it to the next takes an
 edit to its queries. Under an alias without the suffix, a reader moves to the next version
@@ -254,11 +274,12 @@ unedited, and fails once a query reaches a dropped column.
 
 ## Rederivability
 
-Provided everything is retained in bronze, **all of silver and gold is rederivable**.
-Bronze immutability is what this guarantee rests on.
+Provided everything is retained in bronze, **all of silver and gold is rederivable**. The
+guarantee rests on bronze keeping every observation.
 
 Deletion from silver or gold is avoided, as rederiving is slow, but is permitted where
-necessary. Deleting from bronze is not allowed.
+necessary. Deleting an observation from bronze is not allowed. A lossless transformation
+deletes a file only once the observations it holds live on in the files replacing it.
 
 ## The multi-engine rule
 
@@ -358,7 +379,7 @@ that property cannot be relied on this way.
 
 ### Bronze
 
-Bronze partitions on **when data was captured or ingested**, because bronze is immutable
+Bronze partitions on **when data was captured or ingested**, because bronze is append-only
 and written one batch at a time. Every write lands in a new file, and never rewrites an
 existing directory.
 
