@@ -604,12 +604,22 @@ At the end of the slice, once its features are in.
       reader outside this branch saw an earlier declaration, and every stored file reads under
       the current one. That exception covers this slice's changes alone. Once the hash test
       lands, every change to a declaration makes a new version, on a new dataset as on any other.
-- [ ] Before any further change to a dataset, add a test that hashes each dataset's declaration.
-      The declaration covers the schema its files store, the constraints its row type adds, its
-      spec, and a semantics tag, empty by default. The test compares each hash with one stored for
-      the dataset's version, and fails on a difference. The stored hashes start empty, and the
-      first run records them. Describe in `crates/medallion/README.md` that a failure means a new
-      version, and describe the semantics tag in `docs/medallion.md`.
+- [x] Before any further change to a dataset, add an `insta` snapshot test of each dataset's
+      declaration, in `crates/medallion-model`. A dataset's snapshot holds its name, layer,
+      partition key, and a semantics tag, empty by default. It also holds the columns its files
+      store, in order, its unique columns, and its enums' variants. Take the columns from one
+      function the writers share, and the variants from `serde-reflection`. Mark each checked
+      newtype's check with `#[hashfn]`, and keep every check's hash in one more snapshot. Run the
+      test with `INSTA_UPDATE=unseen`, so a new version's snapshot is recorded on its first run. A
+      changed snapshot goes to review, by a person or an agent. Review accepts a change readers
+      cannot see, such as a refactored check, and otherwise makes a new version. Describe the
+      review in `crates/medallion/README.md`, and the semantics tag in `docs/medallion.md`.
+      Each column's checks sit in its dataset's snapshot rather than in one more snapshot. Every
+      newtype a row holds now serializes under its own name, so the trace names each column's
+      type. `TrainNumber`, `CrossingCompactId`, and `MotisSourceId` gained a `new` that accepts
+      every value, so a check added to one later is caught. The table writer takes its geometry
+      columns from `geometry_fields`, as the Rust writers do, and a test holds its layout to
+      `file_schema`.
 - [ ] Give `session` a new version, `session_v2`. Point its writer and readers at it, re-derive
       it, and delete the old version's files.
 - [ ] Give `session_sample` a new version, `session_sample_v2`, as for `session_v2`.

@@ -7,6 +7,7 @@ edition.workspace = true
 chrono = { workspace = true }
 domain = { workspace = true }
 geo-types = { workspace = true }
+hashfn = { workspace = true }
 medallion = { workspace = true }
 semver = "1"
 serde = { workspace = true }
@@ -17,6 +18,8 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 arrow = { workspace = true }
+insta = { version = "1", features = ["yaml"] }
+serde-reflection = "0.4"
 serde_json = { workspace = true }
 medallion = { workspace = true }
 

@@ -257,14 +257,17 @@ is what a dataset's code states about it:
 - **the constraints its row type adds to that schema**: a checked newtype, an enum stored as
   text, a column declared unique
 - **its name, layer, and partition key**, since a reader gets a partition key back as a column
+- **a semantics tag**, empty by default
 
 A reader finds a column by name, or by position as a dataframe can, so a column's position is
 part of the declaration. The rule covers an added optional column, which breaks no reader that
-finds columns by name, and a widened type. A version's files therefore share one declaration.
+finds columns by name, and a widened type. A version's files therefore share one declaration. A
+test records every declaration, and fails on any change to one.
 
-A change of meaning leaves the declaration as it was. Such changes include a new unit, another
-value standing for "none applies", a new grain, and a row identity that varies between runs. A
-person judges whether such a change is significant enough to make a new version.
+A change of meaning leaves the rest of the declaration as it was. Such changes include a new unit,
+another value standing for "none applies", a new grain, and a row identity that varies between
+runs. Where a person judges a change of meaning significant, they set the semantics tag, and the
+change makes a new version like any other.
 
 Each version after the first carries its number as a suffix of the dataset's name, as in
 `_v2`. Readers register a dataset under its name, suffix included, and query it by that name. A

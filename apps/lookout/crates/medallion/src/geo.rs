@@ -5,10 +5,10 @@ use datafusion::execution::SendableRecordBatchStream;
 use futures::StreamExt;
 
 use crate::country::Country;
-use crate::rows::{Row, RowError, fields};
+use crate::rows::{Geometry, Row, RowError, batch, fields};
 use crate::write::WriteError;
 use arrow::array::{Array, ArrayRef, BinaryArray, RecordBatch};
-use arrow::datatypes::{DataType, Field, FieldRef, Schema};
+use arrow::datatypes::{DataType, Field, FieldRef, Schema, SchemaRef};
 use geoarrow_schema::{Crs, Metadata, WkbType};
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
 use parquet::arrow::AsyncArrowWriter;
@@ -58,6 +58,25 @@ pub fn projected_wkb_field(name: &str, country: Country) -> Result<Field, GeoErr
     let crs = Crs::from_projjson(serde_json::from_str(country.projected_projjson())?);
     let metadata = Arc::new(Metadata::new(crs, None));
     Ok(Field::new(name, DataType::Binary, true).with_extension_type(WkbType::new(metadata)))
+}
+
+pub fn geometry_fields(country: Country) -> Result<[Field; 2], GeoError> {
+    Ok([
+        wkb_field(GEOMETRY)?,
+        projected_wkb_field(PROJECTED_GEOMETRY, country)?,
+    ])
+}
+
+pub fn file_schema<T: Row>(country: Country) -> Result<SchemaRef, GeoError> {
+    let none: &[geo_types::Point<f64>] = &[];
+    let batch = match T::GEOMETRY {
+        Geometry::Absent => batch::<T>(&[])?,
+        Geometry::LatLonAndProjected => {
+            let [plain, projected] = geometry_fields(country)?;
+            geo_batch::<T, _>(&[], &[(plain, none), (projected, none)])?
+        }
+    };
+    Ok(batch.schema())
 }
 
 pub struct Projector {
@@ -211,7 +230,82 @@ pub(crate) async fn write_geo_stream(
 
 #[cfg(test)]
 mod tests {
+    use serde::{Deserialize, Serialize};
+
     use super::*;
+    use crate::dataset::DatasetSpec;
+    use crate::layer::layers;
+    use crate::rows::Geometry;
+
+    #[derive(Serialize, Deserialize)]
+    struct PlaceRow {
+        place_id: String,
+    }
+
+    impl Row for PlaceRow {
+        type Layer = layers::Silver;
+        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("place", "seen_date");
+        const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
+
+        fn example() -> Self {
+            PlaceRow {
+                place_id: "example".to_string(),
+            }
+        }
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct NoteRow {
+        note: String,
+    }
+
+    impl Row for NoteRow {
+        type Layer = layers::Silver;
+        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("note", "seen_date");
+
+        fn example() -> Self {
+            NoteRow {
+                note: "example".to_string(),
+            }
+        }
+    }
+
+    fn names(schema: &Schema) -> Vec<&str> {
+        schema
+            .fields()
+            .iter()
+            .map(|field| field.name().as_str())
+            .collect()
+    }
+
+    #[test]
+    fn a_file_lays_out_both_geometries_before_the_rows_columns() {
+        let schema = file_schema::<PlaceRow>(Country::Germany).unwrap();
+
+        assert_eq!(names(&schema), [GEOMETRY, PROJECTED_GEOMETRY, "place_id"]);
+    }
+
+    #[test]
+    fn a_file_for_a_country_projects_into_that_countrys_crs() {
+        let schema = file_schema::<PlaceRow>(Country::UnitedKingdom).unwrap();
+
+        let projected = schema.field_with_name(PROJECTED_GEOMETRY).unwrap();
+        let extension: serde_json::Value = serde_json::from_str(
+            projected
+                .metadata()
+                .get("ARROW:extension:metadata")
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(extension["crs"]["id"]["code"], 25830);
+    }
+
+    #[test]
+    fn a_file_without_geometry_holds_only_the_rows_columns() {
+        let schema = file_schema::<NoteRow>(Country::Germany).unwrap();
+
+        assert_eq!(names(&schema), ["note"]);
+    }
 
     #[test]
     fn the_bundled_crs_is_projjson_for_crs84() {

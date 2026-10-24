@@ -2,6 +2,7 @@ use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
+use hashfn::hashfn;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -19,10 +20,11 @@ pub enum StartedBy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[serde(try_from = "String")]
 pub struct SessionId(String);
 
 impl SessionId {
+    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, NameError> {
         Ok(Self(checked(id.into())?))
     }

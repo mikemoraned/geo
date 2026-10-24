@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use domain::TrainNumber;
+use hashfn::hashfn;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumIter, EnumString};
@@ -19,7 +20,7 @@ pub const TRAIN_SEGMENT_V2: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("train_segment_v2", "departure_date");
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[serde(try_from = "String")]
 pub struct TripId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -27,6 +28,7 @@ pub struct TripId(String);
 pub struct EmptyTripId;
 
 impl TripId {
+    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, EmptyTripId> {
         let id = id.into();
         if id.is_empty() {
@@ -70,7 +72,7 @@ impl Display for TripId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[serde(try_from = "String")]
 pub struct StopId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -78,6 +80,7 @@ pub struct StopId(String);
 pub struct EmptyStopId;
 
 impl StopId {
+    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, EmptyStopId> {
         let id = id.into();
         if id.is_empty() {
@@ -111,7 +114,7 @@ impl From<StopId> for String {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[serde(try_from = "String")]
 pub struct AgencyId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -119,6 +122,7 @@ pub struct AgencyId(String);
 pub struct EmptyAgencyId;
 
 impl AgencyId {
+    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, EmptyAgencyId> {
         let id = id.into();
         if id.is_empty() {

@@ -60,8 +60,8 @@ pub use datafusion::scalar::ScalarValue;
 pub use dataset::{DatasetInfo, DatasetSpec};
 pub use derive::{GeoRow, GeoRowWriter, write_geo_rows, write_rows};
 pub use geo::{
-    GEOMETRY, GeoError, PROJECTED_GEOMETRY, Projector, geo_batch, geometries, projected_wkb_field,
-    wkb_column, wkb_field,
+    GEOMETRY, GeoError, PROJECTED_GEOMETRY, Projector, file_schema, geo_batch, geometries,
+    geometry_fields, projected_wkb_field, wkb_column, wkb_field,
 };
 pub use layer::{Layer, LayerKind, Replaceable, layers};
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};

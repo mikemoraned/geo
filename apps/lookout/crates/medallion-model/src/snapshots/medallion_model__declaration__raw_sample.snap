@@ -1,0 +1,18 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: bronze
+partition_key: ingested_date
+semantics: ""
+unique: []
+columns:
+  - name: md5
+    data_type: LargeUtf8
+    nullable: false
+  - name: received_at
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true
+  - name: json
+    data_type: LargeUtf8
+    nullable: false

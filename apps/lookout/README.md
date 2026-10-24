@@ -17,8 +17,9 @@ What is here, and where to read about it:
 ## Running the recipes
 
 `just` recipes run from this directory, and `just --list` is the index. Setting up a machine is
-`just prerequisites`: `rerun` and `wasm-pack` from cargo, then DuckDB for the multi-engine test,
-PROJ and jq for `crs-definitions`, and the wasm target.
+`just prerequisites`: `rerun`, `wasm-pack`, and `cargo-insta` from cargo, then DuckDB for the
+multi-engine test, PROJ and jq for `crs-definitions`, and the wasm target. `cargo-insta` reviews
+a changed snapshot.
 
 A fresh worktree carries bronze and derives the rest: `just init` fills in the Overture extract
 and re-derives every silver dataset. The extract comes from a local mirror of the Overture bucket

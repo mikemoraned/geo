@@ -77,9 +77,11 @@ apart, so it is refused here rather than at the buffer that packs it.
 
 ## What the tests hold steady
 
-Tracing the schema from Rust types means a change to a type changes the stored columns, so the
-tests assert the properties a reader depends on rather than the schema itself: that a dataset's
-identity cannot collide or drift, that only what the store permits to be replaced is replaceable,
-that a column a row type calls an instant really is one, and that the values readers join and
-filter on keep the type they are stored as. Each test is named for the property it holds, so a
-failure reads as the rule that broke.
+Tracing the schema from Rust types means a change to a type changes the stored columns.
+`declaration.rs` snapshots each dataset's declaration, so such a change fails the tests and goes
+to the review [medallion's README](../medallion/README.md#each-datasets-declaration-is-snapshotted)
+describes. The other tests assert the properties a reader depends on: that a dataset's identity
+cannot collide or drift, that only what the store permits to be replaced is replaceable, that a
+column a row type calls an instant really is one, and that the values readers join and filter on
+keep the type they are stored as. Each test is named for the property it holds, so a failure reads
+as the rule that broke.

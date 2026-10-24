@@ -61,6 +61,44 @@ example, with `enum Colour { Red, Green, Blue }`:
 6. Implement `example`, returning a row that follows the two rules for an example.
 7. Call `fields` on the row type in a test. An example that breaks either rule then fails the tests,
    not the first write.
+8. Add the row type to the list in `crates/medallion-model/src/declaration.rs`.
+9. Run `just test-no-docker`, which records the dataset's snapshot.
+
+## Each dataset's declaration is snapshotted
+
+A dataset's declaration is what its code states about it, as
+[medallion.md](../../docs/medallion.md#dataset-versions) defines it. A test in `medallion-model`
+records each declaration as an `insta` snapshot. It holds the dataset's layer, partition key,
+semantics tag, and unique columns. It also holds the columns its files store, in order, with the
+variants of each enum column. `file_schema` lays the columns out with the functions the writers use.
+
+A column holding a newtype lists the hash of each check the newtype runs. `#[hashfn]` on the
+check's function computes the hash from its code. The hash covers that function alone, not the
+functions it calls, so a helper holding part of a check carries `#[hashfn]` too.
+
+Every newtype a row holds takes one shape, so the test can find it:
+
+- It serializes under its own name: it takes neither `serde(transparent)` nor `serde(into = …)`,
+  and a hand-written `Serialize` calls `serialize_newtype_struct`. Arrow and JSON still store its
+  inner value.
+- It is read through `serde(try_from = …)` or `serde(from = …)`, which calls an inherent `new`
+  holding its check.
+- `new` carries `#[hashfn]`, even where it accepts every value, so a check added later changes the
+  hash.
+- The test's list of newtypes names it, with its checks. A row holding a newtype the list lacks
+  fails the test.
+
+`just test-rust` and `just test-no-docker` run with `INSTA_UPDATE=unseen`. A snapshot no run has
+recorded, such as a new version's, is then recorded on its first run. A changed snapshot fails the
+test, and goes to review, by a person or an agent:
+
+1. Run `cargo insta review` to see each change.
+2. Accept a change no reader can see, such as a check refactored without changing what it accepts.
+3. Reject any other change, and give the dataset a new version under a new name.
+
+A change of meaning leaves the declaration as it was. Where a person judges one significant enough
+for a new version, they set the row type's `SEMANTICS`, empty by default. The snapshot records it,
+so the change fails the test like any other.
 
 ## Appending never overwrites; deriving always replaces
 

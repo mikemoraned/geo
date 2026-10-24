@@ -1,0 +1,37 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: bronze
+partition_key: ingested_date
+semantics: ""
+unique: []
+columns:
+  - name: device_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "DeviceId::new": cc686f40e802c726b1e8a33c950237add568971c0f06d030a2f07b7064e0a525
+  - name: t
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true
+  - name: device_type
+    data_type: LargeUtf8
+    nullable: false
+    variants:
+      - iphone
+      - ipad
+      - laptop
+      - unknown
+  - name: platform
+    data_type: LargeUtf8
+    nullable: false
+  - name: user_agent
+    data_type: LargeUtf8
+    nullable: false
+  - name: os
+    data_type: LargeUtf8
+    nullable: true
+  - name: os_version
+    data_type: LargeUtf8
+    nullable: true

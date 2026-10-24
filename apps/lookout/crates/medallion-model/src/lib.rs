@@ -1,5 +1,7 @@
 mod bronze;
 mod crossing;
+#[cfg(test)]
+mod declaration;
 mod gers;
 mod motis;
 mod motis_source;

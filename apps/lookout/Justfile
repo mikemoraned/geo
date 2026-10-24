@@ -7,6 +7,7 @@ prerequisites:
     cd {{ justfile_directory() }}/../.. && just prerequisites
     cargo install rerun-cli --locked
     cargo install wasm-pack --locked
+    cargo install cargo-insta --locked
     rustup target add wasm32-unknown-unknown
     brew install duckdb proj jq
 
@@ -83,11 +84,11 @@ test: test-python test-rust
 
 # Every Rust test, doctests included.
 test-rust: test-doc
-    cargo nextest run --workspace
+    INSTA_UPDATE=unseen cargo nextest run --workspace
 
 # Every test but the Docker ones. The sandbox-safe run.
 test-no-docker: test-python test-doc
-    cargo nextest run --workspace --profile no-docker
+    INSTA_UPDATE=unseen cargo nextest run --workspace --profile no-docker
 
 # The geo tests: the crossings the store holds, against the bbox test cases. Needs a filled store.
 test-geo:
