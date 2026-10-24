@@ -133,16 +133,17 @@ column ahead of it. [The panic](../../docs/2026-10-03-sedona-nested-column-panic
 SedonaDB release so far. Bronze Overture `segment` files have that shape, and so does any fixture
 copying a release's column order.
 
-There are two ways round it:
+There are two workarounds:
 
 - **Read the dataset as plain parquet.** `Query::register_at_without_geometry` registers it without
   SedonaDB's geometry handling, so the geometry column arrives as WKB bytes. `medallion::geometries`
-  decodes them. `Query::register_silver`, and so `query_silver`, takes this route itself for a
-  silver dataset whose own columns include a struct or a list. `train_session` and its `bbox` are
-  one such dataset.
+  decodes them.
 - **Write the geometry first.** A file whose geometry precedes every nested column reads normally.
-  A fixture can take this route. Bronze cannot, since it keeps the column order of the release it
-  records.
+  Every silver file holds its geometry columns ahead of its other columns, as a workaround until a
+  SedonaDB release fixes [the panic](../../docs/2026-10-03-sedona-nested-column-panic.md). A silver
+  dataset holding a struct, such as `train_session` and its `bbox`, therefore reads with typed
+  geometry. A fixture can use this workaround too. Bronze cannot, since it keeps the column order
+  of the release it records.
 
 ## Where the store is
 
