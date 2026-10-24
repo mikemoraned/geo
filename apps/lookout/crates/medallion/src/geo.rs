@@ -109,14 +109,17 @@ where
     T: Row,
     G: geo_traits::GeometryTrait<T = f64>,
 {
-    let mut columns = fields::<T>()?;
-    let mut arrays = serde_arrow::to_arrow(&columns, rows)?;
-
+    let mut columns = Vec::new();
+    let mut arrays = Vec::new();
     for (field, geometries) in geometry {
         let (field, array) = wkb_column(field.clone(), geometries)?;
         columns.push(field);
         arrays.push(array);
     }
+
+    let own = fields::<T>()?;
+    arrays.extend(serde_arrow::to_arrow(&own, rows)?);
+    columns.extend(own);
 
     Ok(RecordBatch::try_new(
         Arc::new(Schema::new(columns)),

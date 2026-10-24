@@ -155,11 +155,6 @@ impl Query {
         );
 
         match (has_country_level, country) {
-            (true, Some(country)) if target.holds_nested_columns() => {
-                self.register_of_country_without_geometry(target, country)
-                    .await?;
-                Ok(())
-            }
             (true, Some(country)) => {
                 self.register_of_country(target.spec(), target.name(), country)
                     .await?;
@@ -173,23 +168,6 @@ impl Query {
             }),
             (false, None) => self.register_by_name(target.spec()).await,
         }
-    }
-
-    async fn register_of_country_without_geometry(
-        &self,
-        target: &SilverTarget,
-        country: Country,
-    ) -> Result<bool, QueryError> {
-        let of_country = self
-            .root
-            .dataset(target.spec())
-            .partition(COUNTRY, country)?;
-        let date_keys: Vec<&str> = match target.layout() {
-            Ok(Layout::CountryAndDate(key)) => vec![key],
-            _ => Vec::new(),
-        };
-        self.register_as_parquet(&of_country, target.name(), &date_keys)
-            .await
     }
 
     pub async fn register_bronze(
@@ -576,6 +554,23 @@ mod tests {
         assert_eq!(
             crate::geo::geometries(&batches[0], GEOMETRY).unwrap(),
             [geo_types::Geometry::Point(berlin())]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_silver_dataset_holding_a_struct_returns_typed_geometry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = store_boxes(tmp.path(), &["a"]).await;
+
+        let batches = boxes(root)
+            .await
+            .sql(&format!("SELECT {GEOMETRY} FROM boxed WHERE box_id = 'a'"))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            batches[0].schema().field(0).extension_type_name(),
+            Some("geoarrow.wkb")
         );
     }
 

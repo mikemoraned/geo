@@ -125,12 +125,6 @@ impl SilverTarget {
         self.spec
     }
 
-    pub(crate) fn holds_nested_columns(&self) -> bool {
-        self.columns
-            .iter()
-            .any(|field| field.data_type().is_nested())
-    }
-
     pub fn name(&self) -> &'static str {
         self.spec.name
     }
@@ -322,8 +316,8 @@ impl Columns {
         target: &SilverTarget,
         country: Option<Country>,
     ) -> Result<RecordBatch, TableError> {
-        let mut fields: Vec<FieldRef> = target.columns.clone();
-        let mut arrays: Vec<ArrayRef> = self.own.clone();
+        let mut fields: Vec<FieldRef> = Vec::new();
+        let mut arrays: Vec<ArrayRef> = Vec::new();
 
         if let Some(geometry) = &self.geometry {
             fields.push(Arc::new(wkb_field(GEOMETRY)?));
@@ -333,6 +327,8 @@ impl Columns {
             fields.push(Arc::new(projected_wkb_field(PROJECTED_GEOMETRY, country)?));
             arrays.push(projected.clone());
         }
+        fields.extend(target.columns.iter().cloned());
+        arrays.extend(self.own.iter().cloned());
 
         Ok(RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays)?)
     }
@@ -684,10 +680,10 @@ mod tests {
         assert_eq!(
             columns,
             vec![
-                "crossing_id",
-                "overlap_m",
                 GEOMETRY,
                 PROJECTED_GEOMETRY,
+                "crossing_id",
+                "overlap_m",
                 COUNTRY
             ]
         );
