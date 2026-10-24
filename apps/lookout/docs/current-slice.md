@@ -573,7 +573,7 @@ At the end of the slice, once its features are in.
          `String`s. `MotisSource`'s conversion then keeps only the check that a country and a
          release come together.
       On 23 October, no stored id broke its type's check, across the ten datasets that hold one.
-- [ ] Write the geometry columns first in every silver file, in `geo_batch` in
+- [x] Write the geometry columns first in every silver file, in `geo_batch` in
       `crates/medallion/src/geo.rs` and `Columns::batch` in `crates/medallion/src/table.rs`. A file
       whose geometry precedes its nested columns reads normally in a filtered SedonaDB scan. Then
       remove `holds_nested_columns`, `register_of_country_without_geometry`, the plain-parquet arm
