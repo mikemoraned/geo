@@ -582,13 +582,21 @@ At the end of the slice, once its features are in.
       `notebooks/motis_capture/train_sessions.py` can then read its tables with
       `GeoDataFrame.from_arrow`. Re-derive silver afterwards.
 - [ ] Make `Leg::source_id`, in `crates/motis/src/ingest.rs`, a `MotisSourceId` rather than an
-      `Option`. Both datasets `captures` reads give every leg a source, so remove
-      `IngestError::Unsourced` and its checks in `ingest.rs` and `train_sessions.rs`. If nothing
-      else in `TryFrom<&Leg> for TrainSegmentRowV2` can fail, make it a `From`. In the same file,
+      `Option`. Both datasets `captures` reads give every leg a source: `motis_segment_v2` stores
+      one in every row, and `legacy_source_id_sql` gives every `motis_segment` row one. Remove
+      `IngestError::Unsourced` and its checks in `ingest.rs` and `train_sessions.rs`. Nothing else
+      in `TryFrom<&Leg> for TrainSegmentRowV2` can fail, so make it a `From`. In the same file,
       remove `impl Add for IngestOutcome`, which nothing calls. Replace the `continue` in the
       `Shape::Missing` arm with a match that yields an `Option`, as `.claude/rules/rust.md` asks.
-      Remove `legacy_source` from `legacy.rs` too: only tests call it, and `legacy_source_id_sql`
-      holds the same rule for production.
+      `normalised`, in `train_sessions.rs`, already maps `Shape::Missing` to `None`. Remove
+      `legacy_source` from `legacy.rs` too: only tests call it, and `legacy_source_id_sql` holds
+      the same rule for production. The rule gives a legacy capture the `gtfs.de` source before
+      the move to DELFI on 23 July, and `delfi` from then on. Three tests in `legacy.rs` check
+      the rule in `legacy_source` alone. The one test that runs the SQL, in `ingest.rs`, compares
+      sorted lists of source ids, which match even with the two sources swapped. Replace all four
+      with two ingest tests, one on each side of the move. A legacy capture at 23:59:59 UTC
+      on 22 July is derived under `gtfs.de`, and one at 00:00 UTC on 23 July under `delfi`. The
+      rows `ingest` writes stay the same, so silver needs no re-deriving.
 - [ ] Hold an `OvertureRelease` wherever a release enters `transport`: the `--overture-release`
       flag, `ReleaseChoice`, `Release`, and `ExtractManifestRowV2::overture_release`. Pick the
       newest release by its order, and remove `release_order` in `crates/transport/src/overture.rs`,
@@ -739,7 +747,7 @@ After Refactoring, once the slice works end to end.
       default row group of 1,048,576 rows.
 - [ ] Write `ingest`'s legs to `train_segment_v2` in batches, through `GeoRowWriter::new`, as
       `derive_train_sessions` writes its samples. Today it collects all 1.32 million placed legs
-      first. Iterate the captured legs by value, with a `TryFrom<Leg>` that moves their strings.
+      first. Iterate the captured legs by value, with a `From<Leg>` that moves their strings.
       Batching helps only once the writer flushes. About 3.3 GB of placed legs and 1.6 GB of bronze
       legs stay resident through the write today.
 - [ ] Write a day's rows without copying them, in `geo_day` in `crates/medallion/src/derive.rs` and
