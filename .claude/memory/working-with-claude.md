@@ -60,8 +60,8 @@ with the data it rewrote, then remove it in a later commit.
 Write the migration at the level of the row types. Map each old row type to the new one in Rust.
 Read the old version through medallion's `Query`, and write the new version through its writers.
 Reading parquet files directly, or parsing the store's file and partition names, repeats layout
-rules that medallion holds. If those interfaces cannot carry something the old files hold, ask
-the user before reaching below them. A file's write instant is one example.
+rules that medallion holds. Copy only what those interfaces show. A file's write instant does
+not show through them, so the copy's files carry the instant of the copy.
 
 Pause before deleting the old version's files or the migration binary, so the user can inspect
 what the migration did.
