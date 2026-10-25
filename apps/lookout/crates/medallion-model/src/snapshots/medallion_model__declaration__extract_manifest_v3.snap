@@ -1,0 +1,35 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: bronze
+partition_key: ~
+semantics: ""
+unique: []
+columns:
+  - name: extract_id
+    data_type: LargeUtf8
+    nullable: false
+  - name: extracted_at
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true
+  - name: overture_release
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "OvertureRelease::new": c55827a07c5190babd67bf5d1abab8d98169db67dc991bcc58d59ee442a82b55
+  - name: country
+    data_type: LargeUtf8
+    nullable: false
+  - name: min_lon
+    data_type: Float64
+    nullable: false
+  - name: min_lat
+    data_type: Float64
+    nullable: false
+  - name: max_lon
+    data_type: Float64
+    nullable: false
+  - name: max_lat
+    data_type: Float64
+    nullable: false
