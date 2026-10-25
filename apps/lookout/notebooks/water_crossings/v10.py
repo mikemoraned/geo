@@ -139,7 +139,7 @@ def _(EXTRACTS, MEDALLION_ROOT, con):
     extract_manifest = con.execute(f"""
         SELECT extract_id, extracted_at, overture_release, country,
                min_lon, min_lat, max_lon, max_lat
-        FROM read_parquet('{MEDALLION_ROOT}/bronze/extract_manifest_v2/*.parquet')
+        FROM read_parquet('{MEDALLION_ROOT}/bronze/extract_manifest_v3/*.parquet')
         WHERE extract_id IN ({_ids})
         ORDER BY country
     """).fetchdf()

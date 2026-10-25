@@ -650,13 +650,17 @@ At the end of the slice, once its features are in.
       with two ingest tests, one on each side of the move. A legacy capture at 23:59:59 UTC
       on 22 July is derived under `gtfs.de`, and one at 00:00 UTC on 23 July under `delfi`. The
       rows `ingest` writes stay the same, so silver needs no re-deriving.
-- [ ] Hold an `OvertureRelease` wherever a release enters `transport`: the `--overture-release`
+- [x] Hold an `OvertureRelease` wherever a release enters `transport`: the `--overture-release`
       flag, `ReleaseChoice`, `Release`, and `ExtractManifestRowV2::overture_release`. Pick the
       newest release by its order, and remove `release_order` in `crates/transport/src/overture.rs`,
       which parses the same text. Hold `ExtractManifestRowV2::country` as a `Country` too, giving
       `Country` the `try_from = "String"` serde the ids have. The `.parse()` calls and `Release`
       error variants in `countries.rs` and `regions.rs` then go. The two parsers disagree today:
       `release_order` takes `2026-09-23.01`, which `OvertureRelease` refuses.
+      Checking the release changed the manifest's declaration, so it moved to
+      `extract_manifest_v3`, copied by a one-off binary. The country stays text, as
+      [docs/overture.md](overture.md#taking-an-extract-reads-the-country-division-filling-one-in-reads-the-manifest)
+      requires: a row naming a country the store has no zone for still fills in.
 - [ ] Hold `base_url`, `country`, and `overture_region_id` in `MotisSourceRowV2` as `Url`,
       `Country`, and `GersId`. Reading a row then checks each, as it checks the version, release,
       and label. `Country` and `GersId` need the `try_from = "String"` serde the ids have, and `url`

@@ -8,7 +8,7 @@ use geo_types::{Geometry, Point};
 use geojson::{FeatureCollection, GeoJson};
 use libtest_mimic::{Arguments, Failed, Trial};
 use medallion::{Query, Root};
-use medallion_model::ExtractManifestRowV2;
+use medallion_model::ExtractManifestRowV3;
 
 const CASES: &str = "../../notebooks/water_crossings/test_cases.geojson";
 
@@ -46,15 +46,15 @@ async fn rail_of(
     Ok(rail)
 }
 
-async fn extracts(root: &Root) -> Result<Vec<ExtractManifestRowV2>, Box<dyn Error>> {
+async fn extracts(root: &Root) -> Result<Vec<ExtractManifestRowV3>, Box<dyn Error>> {
     let query = Query::new(root.clone());
     query
-        .register_by_name(medallion_model::EXTRACT_MANIFEST_V2)
+        .register_by_name(medallion_model::EXTRACT_MANIFEST_V3)
         .await?;
-    Ok(query.rows("SELECT * FROM extract_manifest_v2").await?)
+    Ok(query.rows("SELECT * FROM extract_manifest_v3").await?)
 }
 
-fn countries_covering(extracts: &[ExtractManifestRowV2], bbox: &Geometry<f64>) -> String {
+fn countries_covering(extracts: &[ExtractManifestRowV3], bbox: &Geometry<f64>) -> String {
     let countries: BTreeSet<&str> = extracts
         .iter()
         .filter(|extract| extract.bbox().intersects(bbox))

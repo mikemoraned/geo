@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use arrow::array::RecordBatch;
-use chrono::NaiveDate;
 use datafusion::error::DataFusionError;
 use datafusion::execution::SendableRecordBatchStream;
+use medallion_model::OvertureRelease;
 use object_store::{ObjectStore, aws::AmazonS3Builder, path::Path as ObjectPath};
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
@@ -42,7 +42,7 @@ pub enum OvertureError {
         if available.is_empty() { "no releases".to_string() } else { available.join(", ") }
     )]
     ReleaseAbsent {
-        release: String,
+        release: OvertureRelease,
         location: String,
         available: Vec<String>,
     },
@@ -57,11 +57,11 @@ pub enum OvertureError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReleaseChoice {
     LatestReleaseAvailable,
-    NamedRelease(String),
+    NamedRelease(OvertureRelease),
 }
 
-impl From<Option<String>> for ReleaseChoice {
-    fn from(release: Option<String>) -> Self {
+impl From<Option<OvertureRelease>> for ReleaseChoice {
+    fn from(release: Option<OvertureRelease>) -> Self {
         release.map_or(Self::LatestReleaseAvailable, Self::NamedRelease)
     }
 }
@@ -69,15 +69,15 @@ impl From<Option<String>> for ReleaseChoice {
 impl ReleaseChoice {
     pub async fn resolve(self, mirror: Option<PathBuf>) -> Result<Release, OvertureError> {
         match self {
-            Self::NamedRelease(id) => Ok(Release::at(id, mirror)),
+            Self::NamedRelease(release) => Ok(Release::at(release, mirror)),
             Self::LatestReleaseAvailable => {
                 let latest = available_releases(mirror.as_deref())
                     .await?
-                    .into_iter()
-                    .filter_map(|id| Some((release_order(&id)?, id)))
+                    .iter()
+                    .filter_map(|name| name.parse::<OvertureRelease>().ok())
                     .max();
                 match latest {
-                    Some((_, id)) => Ok(Release::at(id, mirror)),
+                    Some(release) => Ok(Release::at(release, mirror)),
                     None => Err(OvertureError::NoRelease {
                         location: location(mirror.as_deref()),
                     }),
@@ -85,14 +85,6 @@ impl ReleaseChoice {
             }
         }
     }
-}
-
-fn release_order(id: &str) -> Option<(NaiveDate, u32)> {
-    let (date, reissue) = id.rsplit_once('.')?;
-    Some((
-        NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?,
-        reissue.parse().ok()?,
-    ))
 }
 
 fn location(mirror: Option<&Path>) -> String {
@@ -104,36 +96,33 @@ fn location(mirror: Option<&Path>) -> String {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Release {
-    id: String,
+    id: OvertureRelease,
     mirror: Option<PathBuf>,
 }
 
 impl Release {
     #[cfg(test)]
-    pub(crate) fn published(id: impl Into<String>) -> Self {
+    pub(crate) fn published(id: &str) -> Self {
         Self {
-            id: id.into(),
+            id: id.parse().expect("a test names a release Overture would"),
             mirror: None,
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn mirrored(id: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+    pub(crate) fn mirrored(id: &str, path: impl Into<PathBuf>) -> Self {
         Self {
-            id: id.into(),
+            id: id.parse().expect("a test names a release Overture would"),
             mirror: Some(path.into()),
         }
     }
 
-    pub fn at(id: impl Into<String>, mirror: Option<PathBuf>) -> Self {
-        Self {
-            id: id.into(),
-            mirror,
-        }
+    pub fn at(id: OvertureRelease, mirror: Option<PathBuf>) -> Self {
+        Self { id, mirror }
     }
 
-    pub fn id(&self) -> &str {
-        &self.id
+    pub fn id(&self) -> OvertureRelease {
+        self.id
     }
 
     pub fn location(&self) -> String {
@@ -166,11 +155,11 @@ async fn diagnose(release: &Release, error: DataFusionError) -> OvertureError {
         }
         Err(absent) => return absent,
     };
-    if available.contains(&release.id) {
+    if available.contains(&release.id.to_string()) {
         error.into()
     } else {
         OvertureError::ReleaseAbsent {
-            release: release.id.clone(),
+            release: release.id,
             location: release.location(),
             available,
         }
@@ -286,7 +275,7 @@ mod tests {
             "/mirror/release/2025-08-20.0/theme=base/type=water/"
         );
         assert_eq!(
-            release.id(),
+            release.id().to_string(),
             "2025-08-20.0",
             "the id is the release, not the path"
         );
@@ -361,7 +350,7 @@ mod tests {
             .await
             .expect("a release");
 
-        assert_eq!(release.id(), "2026-09-23.10");
+        assert_eq!(release.id().to_string(), "2026-09-23.10");
     }
 
     #[tokio::test]
@@ -373,7 +362,7 @@ mod tests {
             .await
             .expect("a release");
 
-        assert_eq!(release.id(), "2026-09-23.1");
+        assert_eq!(release.id().to_string(), "2026-09-23.1");
     }
 
     #[tokio::test]
@@ -406,7 +395,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_named_release_resolves_without_reading_the_mirror() {
-        let release = ReleaseChoice::NamedRelease("2026-07-22.0".into())
+        let release = ReleaseChoice::NamedRelease("2026-07-22.0".parse().expect("a release"))
             .resolve(Some("/no/such/mirror".into()))
             .await
             .expect("a release");
