@@ -1,9 +1,12 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
+use hashfn::hashfn;
+use serde::{Deserialize, Serialize, Serializer};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
+#[serde(try_from = "String")]
 pub struct GersId(Uuid);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -15,6 +18,7 @@ pub struct NotAGersId {
 }
 
 impl GersId {
+    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, NotAGersId> {
         let id = id.into();
         match Uuid::parse_str(&id) {
@@ -29,6 +33,20 @@ impl FromStr for GersId {
 
     fn from_str(id: &str) -> Result<Self, Self::Err> {
         Self::new(id)
+    }
+}
+
+impl TryFrom<String> for GersId {
+    type Error = NotAGersId;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Self::new(id)
+    }
+}
+
+impl Serialize for GersId {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_newtype_struct("GersId", &self.to_string())
     }
 }
 

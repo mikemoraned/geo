@@ -10,10 +10,11 @@ use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, Trace
 
 use crate::{
     ALL, AccelReadingRowV2, AgencyId, DeviceSessionRowV2, ExtractManifestRowV3, Feed,
-    GeometrySource, GpsReadingRowV2, Label, MotisCaptureRow, MotisSegmentRow, MotisSourceId,
-    MotisSourceRowV2, MotisVersion, OVERTURE_EXTRACT, OverlapKind, OvertureRelease, RailMode,
-    RawSampleRow, SessionCrossingRowV2, SessionRowV2, SessionSampleRowV2, StopId,
-    TrainSegmentRowV2, TrainSessionRow, TrainSessionSampleRow, TripId, WaterCrossingRowV2,
+    GeometrySource, GersId, GpsReadingRowV2, Label, MotisBaseUrl, MotisCaptureRow, MotisSegmentRow,
+    MotisSourceId, MotisSourceRowV2, MotisSourceRowV3, MotisVersion, OVERTURE_EXTRACT, OverlapKind,
+    OvertureRelease, RailMode, RawSampleRow, SessionCrossingRowV2, SessionRowV2,
+    SessionSampleRowV2, StopId, TrainSegmentRowV2, TrainSessionRow, TrainSessionSampleRow, TripId,
+    WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -235,7 +236,12 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
             "DeviceId",
             Checks::from([("DeviceId::new", DeviceId::NEW_HASH)]),
         ),
+        ("GersId", Checks::from([("GersId::new", GersId::NEW_HASH)])),
         ("Label", Checks::from([("Label::new", Label::NEW_HASH)])),
+        (
+            "MotisBaseUrl",
+            Checks::from([("MotisBaseUrl::new", MotisBaseUrl::NEW_HASH)]),
+        ),
         (
             "MotisSourceId",
             Checks::from([("MotisSourceId::new", MotisSourceId::NEW_HASH)]),
@@ -275,6 +281,7 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<MotisSegmentRow>(&known),
         declaration::<MotisCaptureRow>(&known),
         declaration::<MotisSourceRowV2>(&known),
+        declaration::<MotisSourceRowV3>(&known),
         declaration::<TrainSegmentRowV2>(&known),
         declaration::<SessionRowV2>(&known),
         declaration::<SessionSampleRowV2>(&known),
