@@ -161,8 +161,8 @@ class TestWhatIsRefused:
     def test_a_bronze_dataset(self, store):
         table = train_segment_table(["a"], ["2026-07-21"], ["DE"])
 
-        with pytest.raises(ValueError, match="gps_reading"):
-            lookout_medallion.write_silver("gps_reading", table, root=str(store))
+        with pytest.raises(ValueError, match="gps_reading_v2"):
+            lookout_medallion.write_silver("gps_reading_v2", table, root=str(store))
 
     def test_a_column_the_dataset_holds_but_the_table_does_not(self, store):
         table = train_segment_table(["a"], ["2026-07-21"], ["DE"]).drop_columns(["mode"])

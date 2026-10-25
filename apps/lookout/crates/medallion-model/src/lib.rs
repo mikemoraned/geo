@@ -37,20 +37,16 @@ pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
 pub use session::{SESSION_SAMPLE_V2, SESSION_V2, SessionRowV2, SessionSampleRowV2};
 pub use silver::{TargetError, silver_target};
 pub use telemetry::{
-    ACCEL_READING, ACCEL_READING_V2, AccelReadingRow, AccelReadingRowV2, DEVICE_SESSION,
-    DEVICE_SESSION_V2, DeviceSessionRow, DeviceSessionRowV2, GPS_READING, GPS_READING_V2,
-    GpsReadingRow, GpsReadingRowV2, RAW_SAMPLE, RawSampleRow,
+    ACCEL_READING_V2, AccelReadingRowV2, DEVICE_SESSION_V2, DeviceSessionRowV2, GPS_READING_V2,
+    GpsReadingRowV2, RAW_SAMPLE, RawSampleRow,
 };
 pub use train_session::{
     GeometrySource, TRAIN_SESSION, TRAIN_SESSION_SAMPLE, TrainSessionRow, TrainSessionSampleRow,
     train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 19] = [
+pub const ALL: [DatasetInfo; 16] = [
     RAW_SAMPLE.info(),
-    GPS_READING.info(),
-    ACCEL_READING.info(),
-    DEVICE_SESSION.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
     DEVICE_SESSION_V2.info(),
@@ -178,9 +174,6 @@ mod tests {
     #[test]
     fn every_row_type_describes_a_dataset_and_names_its_own_instant_columns() {
         check_rows_of::<RawSampleRow>();
-        check_rows_of::<GpsReadingRow>();
-        check_rows_of::<AccelReadingRow>();
-        check_rows_of::<DeviceSessionRow>();
         check_rows_of::<GpsReadingRowV2>();
         check_rows_of::<AccelReadingRowV2>();
         check_rows_of::<DeviceSessionRowV2>();

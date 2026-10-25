@@ -47,7 +47,7 @@ def filled(store):
                 ),
             )
     write_parquet(
-        store / "bronze" / "gps_reading" / "ingested_date=2026-07-22" / "part-0.parquet",
+        store / "bronze" / "gps_reading_v2" / "ingested_date=2026-07-22" / "part-0.parquet",
         pa.table({"device_id": pa.array(["m5-1"], pa.string())}),
     )
     return store
@@ -64,7 +64,7 @@ def test_a_dataset_is_read_under_its_own_name(filled):
 
 
 def test_a_datasets_own_partition_comes_back_as_a_column(filled):
-    table = query(filled, "SELECT device_id, ingested_date FROM gps_reading")
+    table = query(filled, "SELECT device_id, ingested_date FROM gps_reading_v2")
 
     assert table.column("ingested_date").to_pylist() == ["2026-07-22"]
 

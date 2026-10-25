@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use domain::{Bbox, DeviceId, SessionId, StartedBy};
 
-use crate::GpsReadingRow;
+use crate::GpsReadingRowV2;
 
 pub const SESSION_V2: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("session_v2", "start_date");
@@ -35,7 +35,7 @@ impl Row for SessionRowV2 {
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
 
     fn example() -> Self {
-        let device_id = GpsReadingRow::example().device_id;
+        let device_id = GpsReadingRowV2::example().device_id;
         Self {
             session_id: SessionId::of(&device_id, DateTime::UNIX_EPOCH),
             device_id,
