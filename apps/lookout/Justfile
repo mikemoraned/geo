@@ -164,7 +164,7 @@ silver-init *args:
 silver-motis-ingest *args:
     cargo run --release -p motis --bin motis_ingest -- {{args}}
 
-# Derive silver `session` and `session_sample` from the bronze telemetry.
+# Derive silver `session_v2` and `session_sample` from the bronze telemetry.
 silver-sessionise *args:
     cargo run --release -p recorder --bin sessionise -- {{args}}
 

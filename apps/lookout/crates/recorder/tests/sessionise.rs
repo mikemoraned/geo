@@ -76,7 +76,7 @@ async fn sessionise(root: &Root) -> silver::WriteOutcome {
 async fn stored_sessions(root: &Root) -> Vec<Session> {
     let query = Query::new(root.clone());
     query
-        .register(medallion_model::SESSION, "sessions")
+        .register(medallion_model::SESSION_V2, "sessions")
         .await
         .expect("register");
     query
@@ -123,7 +123,7 @@ fn partitions(root: &Root) -> Vec<(String, u64)> {
 async fn contents(root: &Root) -> String {
     let query = Query::new(root.clone());
     query
-        .register(medallion_model::SESSION, "sessions")
+        .register(medallion_model::SESSION_V2, "sessions")
         .await
         .expect("register sessions");
     query

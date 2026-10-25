@@ -3,7 +3,7 @@ use domain::{Bbox, implied_speed, path_through};
 use geo::BoundingRect;
 use geo_types::{LineString, Point};
 use medallion::{Countries, GeoRow, Projector, Replaced, Root};
-use medallion_model::{SessionRow, SessionSampleRow};
+use medallion_model::{SessionRowV2, SessionSampleRow};
 
 use crate::sessions::Session;
 
@@ -25,7 +25,7 @@ pub enum SilverError {
 }
 
 struct Placed {
-    row: SessionRow,
+    row: SessionRowV2,
     path: LineString<f64>,
     samples: Vec<Located>,
 }
@@ -41,7 +41,7 @@ pub async fn write(
     countries: &impl Countries,
 ) -> Result<WriteOutcome, SilverError> {
     let mut outcome = WriteOutcome::default();
-    let mut session_rows: Vec<GeoRow<SessionRow, LineString<f64>>> = Vec::new();
+    let mut session_rows: Vec<GeoRow<SessionRowV2, LineString<f64>>> = Vec::new();
     let mut sample_rows: Vec<GeoRow<SessionSampleRow, Point<f64>>> = Vec::new();
 
     for session in sessions {
@@ -78,7 +78,7 @@ fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::
     let samples = locate(session, projector)?;
     let path = path_through(samples.iter().map(|sample| sample.point));
 
-    let row = SessionRow {
+    let row = SessionRowV2 {
         session_id: session.id(),
         device_id: session.device_id.clone(),
         started_at: session.started_at(),
@@ -421,7 +421,7 @@ mod tests {
     async fn session_rows(root: &Root) -> Vec<WrittenSession> {
         let query = Query::new(root.clone());
         query
-            .register(medallion_model::SESSION, "sessions")
+            .register(medallion_model::SESSION_V2, "sessions")
             .await
             .expect("register");
         query
@@ -505,7 +505,7 @@ mod tests {
         assert_eq!(outcome.sample_partitions.written, 2);
         assert!(
             root.path()
-                .join("silver/session/country=DE/start_date=2026-07-26")
+                .join("silver/session_v2/country=DE/start_date=2026-07-26")
                 .exists()
         );
     }
@@ -526,7 +526,7 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(medallion_model::SESSION, "sessions")
+            .register(medallion_model::SESSION_V2, "sessions")
             .await
             .expect("register");
         let batches = query
@@ -558,7 +558,7 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(medallion_model::SESSION, "sessions")
+            .register(medallion_model::SESSION_V2, "sessions")
             .await
             .expect("register");
         let batches = query
@@ -605,7 +605,7 @@ mod tests {
         assert!(
             !root
                 .path()
-                .join("silver/session/country=DE/start_date=2026-07-27")
+                .join("silver/session_v2/country=DE/start_date=2026-07-27")
                 .exists()
         );
         assert_eq!(session_rows(&root).await.len(), 1);
@@ -642,7 +642,7 @@ mod tests {
 
         assert!(
             root.path()
-                .join("silver/session/country=DE/start_date=2026-07-26")
+                .join("silver/session_v2/country=DE/start_date=2026-07-26")
                 .exists()
         );
         assert!(
@@ -658,7 +658,7 @@ mod tests {
         let id = Uuid::from_u128(1);
         let (root, first) = written(&tmp, &[gps(id, at(9, 0, 0), 52.5, 13.4)]).await;
         assert_eq!(first.sessions, 1);
-        assert!(root.path().join("silver/session/country=DE").exists());
+        assert!(root.path().join("silver/session_v2/country=DE").exists());
 
         let derived = sessions(&root, Gap::default(), Lead::default())
             .await
@@ -668,7 +668,7 @@ mod tests {
         assert_eq!(outcome.unplaceable, 1);
         assert_eq!(outcome.session_partitions.removed, 1);
         assert_eq!(outcome.sample_partitions.removed, 1);
-        assert!(!root.path().join("silver/session/country=DE").exists());
+        assert!(!root.path().join("silver/session_v2/country=DE").exists());
         assert!(
             !root
                 .path()

@@ -12,7 +12,7 @@ use crate::{
     ALL, AccelReadingRow, AgencyId, DeviceSessionRow, ExtractManifestRowV2, Feed, GeometrySource,
     GpsReadingRow, Label, MotisCaptureRow, MotisSegmentRow, MotisSourceId, MotisSourceRowV2,
     MotisVersion, OVERTURE_EXTRACT, OverlapKind, OvertureRelease, RailMode, RawSampleRow,
-    SessionCrossingRow, SessionRow, SessionSampleRow, StopId, TrainSegmentRowV2, TrainSessionRow,
+    SessionCrossingRow, SessionRowV2, SessionSampleRow, StopId, TrainSegmentRowV2, TrainSessionRow,
     TrainSessionSampleRow, TripId, WaterCrossingRowV2,
 };
 
@@ -276,7 +276,7 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<MotisCaptureRow>(&known),
         declaration::<MotisSourceRowV2>(&known),
         declaration::<TrainSegmentRowV2>(&known),
-        declaration::<SessionRow>(&known),
+        declaration::<SessionRowV2>(&known),
         declaration::<SessionSampleRow>(&known),
         declaration::<TrainSessionRow>(&known),
         declaration::<TrainSessionSampleRow>(&known),

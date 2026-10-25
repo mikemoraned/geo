@@ -34,7 +34,7 @@ pub use overture::{
     division_id,
 };
 pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
-pub use session::{SESSION, SESSION_SAMPLE, SessionRow, SessionSampleRow};
+pub use session::{SESSION_SAMPLE, SESSION_V2, SessionRowV2, SessionSampleRow};
 pub use silver::{TargetError, silver_target};
 pub use telemetry::{
     ACCEL_READING, AccelReadingRow, DEVICE_SESSION, DeviceSessionRow, GPS_READING, GpsReadingRow,
@@ -54,7 +54,7 @@ pub const ALL: [DatasetInfo; 16] = [
     MOTIS_SEGMENT_V2.info(),
     MOTIS_SOURCE_V2.info(),
     TRAIN_SEGMENT_V2.info(),
-    SESSION.info(),
+    SESSION_V2.info(),
     SESSION_SAMPLE.info(),
     TRAIN_SESSION.info(),
     TRAIN_SESSION_SAMPLE.info(),
@@ -98,9 +98,9 @@ mod tests {
         assert_eq!(
             replaceable,
             [
-                "session",
                 "session_crossing",
                 "session_sample",
+                "session_v2",
                 "train_segment_v2",
                 "train_session",
                 "train_session_sample",
@@ -181,7 +181,7 @@ mod tests {
         check_rows_of::<MotisCaptureRow>();
         check_rows_of::<MotisSourceRowV2>();
         check_rows_of::<TrainSegmentRowV2>();
-        check_rows_of::<SessionRow>();
+        check_rows_of::<SessionRowV2>();
         check_rows_of::<SessionSampleRow>();
         check_rows_of::<TrainSessionRow>();
         check_rows_of::<TrainSessionSampleRow>();

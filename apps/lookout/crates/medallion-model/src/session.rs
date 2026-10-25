@@ -7,13 +7,14 @@ use domain::{Bbox, DeviceId, SessionId, StartedBy};
 
 use crate::GpsReadingRow;
 
-pub const SESSION: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("session", "start_date");
+pub const SESSION_V2: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("session_v2", "start_date");
 
 pub const SESSION_SAMPLE: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("session_sample", "sample_date");
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SessionRow {
+pub struct SessionRowV2 {
     pub session_id: SessionId,
     pub device_id: DeviceId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
@@ -27,9 +28,9 @@ pub struct SessionRow {
     pub bbox: Bbox,
 }
 
-impl Row for SessionRow {
+impl Row for SessionRowV2 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = SESSION;
+    const DATASET: DatasetSpec<Self::Layer> = SESSION_V2;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
 
@@ -49,7 +50,7 @@ impl Row for SessionRow {
     }
 }
 
-impl Dated for SessionRow {
+impl Dated for SessionRowV2 {
     fn partition_date(&self) -> NaiveDate {
         self.started_at.date_naive()
     }
@@ -78,7 +79,7 @@ impl Row for SessionSampleRow {
     const INSTANTS: &'static [&'static str] = &["t"];
 
     fn example() -> Self {
-        let session = SessionRow::example();
+        let session = SessionRowV2::example();
         Self {
             session_id: session.session_id,
             device_id: session.device_id,
@@ -111,7 +112,7 @@ mod tests {
     #[test]
     fn an_id_is_a_string_column() {
         assert!(matches!(
-            column::<SessionRow>("session_id").data_type(),
+            column::<SessionRowV2>("session_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
@@ -119,7 +120,7 @@ mod tests {
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionRow>("device_id").data_type(),
+            column::<SessionRowV2>("device_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
@@ -131,14 +132,14 @@ mod tests {
     #[test]
     fn what_started_a_session_is_a_string_column() {
         assert!(matches!(
-            column::<SessionRow>("started_by").data_type(),
+            column::<SessionRowV2>("started_by").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
 
     #[test]
     fn the_bbox_is_a_struct_of_its_four_bounds() {
-        let bbox = column::<SessionRow>("bbox");
+        let bbox = column::<SessionRowV2>("bbox");
         let DataType::Struct(bounds) = bbox.data_type() else {
             panic!("bbox should be a struct");
         };

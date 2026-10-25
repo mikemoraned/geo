@@ -56,7 +56,7 @@ def _(lookout_medallion, mo, pa):
     matches = pa.table(
         lookout_medallion.query_silver(
             "WITH recorded AS ("
-            "  SELECT session_id, started_at, sample_count, bbox FROM session WHERE sample_count >= 50"
+            "  SELECT session_id, started_at, sample_count, bbox FROM session_v2 WHERE sample_count >= 50"
             "), boxes AS ("
             "  SELECT r.session_id AS recorded, t.session_id AS train, t.sample_count AS train_samples,"
             "    GREATEST(0, LEAST(r.bbox['xmax'], t.bbox['xmax']) - GREATEST(r.bbox['xmin'], t.bbox['xmin']))"

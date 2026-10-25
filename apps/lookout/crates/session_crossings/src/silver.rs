@@ -182,7 +182,7 @@ pub async fn inputs(root: &Root, country: Country) -> Result<Inputs, CrossingErr
 }
 
 const READ: [(DatasetSpec<layers::Silver>, &str); 3] = [
-    (medallion_model::SESSION, "session"),
+    (medallion_model::SESSION_V2, "session_v2"),
     (medallion_model::SESSION_SAMPLE, "session_sample"),
     (medallion_model::WATER_CROSSING_V2, "water_crossing_v2"),
 ];
@@ -191,7 +191,7 @@ async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
     let stored: Vec<StoredSession> = query
         .rows(
             "SELECT s.session_id, s.device_id, s.bbox, p.samples
-             FROM session s
+             FROM session_v2 s
              LEFT JOIN (
                  SELECT session_id,
                         array_agg(
