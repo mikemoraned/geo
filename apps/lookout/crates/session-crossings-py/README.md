@@ -12,7 +12,7 @@ import lookout_medallion
 import lookout_session_crossings
 
 samples = lookout_medallion.query_silver(
-    "SELECT t, geometry_projected FROM session_sample WHERE session_id = $session",
+    "SELECT t, geometry_projected FROM session_sample_v2 WHERE session_id = $session",
     country="DE",
     params={"session": session_id},
 )

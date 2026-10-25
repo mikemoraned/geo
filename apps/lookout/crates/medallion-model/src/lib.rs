@@ -17,7 +17,7 @@ use medallion::DatasetInfo;
 
 pub use bronze::{NoSuchBronzeDataset, bronze_dataset};
 pub use crossing::{
-    OverlapKind, SESSION_CROSSING, SessionCrossingRow, WATER_CROSSING_V2, WaterCrossingRowV2,
+    OverlapKind, SESSION_CROSSING_V2, SessionCrossingRowV2, WATER_CROSSING_V2, WaterCrossingRowV2,
 };
 pub use gers::{GersId, NotAGersId};
 pub use motis::{
@@ -34,7 +34,7 @@ pub use overture::{
     division_id,
 };
 pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
-pub use session::{SESSION_SAMPLE, SESSION_V2, SessionRowV2, SessionSampleRow};
+pub use session::{SESSION_SAMPLE_V2, SESSION_V2, SessionRowV2, SessionSampleRowV2};
 pub use silver::{TargetError, silver_target};
 pub use telemetry::{
     ACCEL_READING, AccelReadingRow, DEVICE_SESSION, DeviceSessionRow, GPS_READING, GpsReadingRow,
@@ -55,11 +55,11 @@ pub const ALL: [DatasetInfo; 16] = [
     MOTIS_SOURCE_V2.info(),
     TRAIN_SEGMENT_V2.info(),
     SESSION_V2.info(),
-    SESSION_SAMPLE.info(),
+    SESSION_SAMPLE_V2.info(),
     TRAIN_SESSION.info(),
     TRAIN_SESSION_SAMPLE.info(),
     WATER_CROSSING_V2.info(),
-    SESSION_CROSSING.info(),
+    SESSION_CROSSING_V2.info(),
     OVERTURE_EXTRACT.info(),
     EXTRACT_MANIFEST_V2.info(),
 ];
@@ -98,8 +98,8 @@ mod tests {
         assert_eq!(
             replaceable,
             [
-                "session_crossing",
-                "session_sample",
+                "session_crossing_v2",
+                "session_sample_v2",
                 "session_v2",
                 "train_segment_v2",
                 "train_session",
@@ -182,11 +182,11 @@ mod tests {
         check_rows_of::<MotisSourceRowV2>();
         check_rows_of::<TrainSegmentRowV2>();
         check_rows_of::<SessionRowV2>();
-        check_rows_of::<SessionSampleRow>();
+        check_rows_of::<SessionSampleRowV2>();
         check_rows_of::<TrainSessionRow>();
         check_rows_of::<TrainSessionSampleRow>();
         check_rows_of::<WaterCrossingRowV2>();
-        check_rows_of::<SessionCrossingRow>();
+        check_rows_of::<SessionCrossingRowV2>();
         check_rows_of::<ExtractManifestRowV2>();
     }
 }

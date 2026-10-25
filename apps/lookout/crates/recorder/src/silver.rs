@@ -3,7 +3,7 @@ use domain::{Bbox, implied_speed, path_through};
 use geo::BoundingRect;
 use geo_types::{LineString, Point};
 use medallion::{Countries, GeoRow, Projector, Replaced, Root};
-use medallion_model::{SessionRowV2, SessionSampleRow};
+use medallion_model::{SessionRowV2, SessionSampleRowV2};
 
 use crate::sessions::Session;
 
@@ -31,7 +31,7 @@ struct Placed {
 }
 
 struct Located {
-    row: SessionSampleRow,
+    row: SessionSampleRowV2,
     point: Point<f64>,
 }
 
@@ -42,7 +42,7 @@ pub async fn write(
 ) -> Result<WriteOutcome, SilverError> {
     let mut outcome = WriteOutcome::default();
     let mut session_rows: Vec<GeoRow<SessionRowV2, LineString<f64>>> = Vec::new();
-    let mut sample_rows: Vec<GeoRow<SessionSampleRow, Point<f64>>> = Vec::new();
+    let mut sample_rows: Vec<GeoRow<SessionSampleRowV2, Point<f64>>> = Vec::new();
 
     for session in sessions {
         match countries.containing(session.started_from()) {
@@ -112,7 +112,7 @@ fn locate(session: &Session, projector: &Projector) -> Result<Vec<Located>, meda
     for (seq, sample) in session.samples.iter().enumerate() {
         let point = Point::new(sample.lon, sample.lat);
         let projected = projector.project(&point)?;
-        let row = SessionSampleRow {
+        let row = SessionSampleRowV2 {
             session_id: session_id.clone(),
             device_id: session.device_id.clone(),
             t: sample.t,
@@ -231,7 +231,7 @@ mod tests {
     async fn dataset(root: &Root) -> Query {
         let query = Query::new(root.clone());
         query
-            .register(medallion_model::SESSION_SAMPLE, "samples")
+            .register(medallion_model::SESSION_SAMPLE_V2, "samples")
             .await
             .expect("register");
         query
@@ -647,7 +647,7 @@ mod tests {
         );
         assert!(
             root.path()
-                .join("silver/session_sample/country=DE/sample_date=2026-07-26")
+                .join("silver/session_sample_v2/country=DE/sample_date=2026-07-26")
                 .exists()
         );
     }
@@ -672,7 +672,7 @@ mod tests {
         assert!(
             !root
                 .path()
-                .join("silver/session_sample/country=DE")
+                .join("silver/session_sample_v2/country=DE")
                 .exists()
         );
     }

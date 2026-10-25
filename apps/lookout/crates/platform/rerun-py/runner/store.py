@@ -42,11 +42,11 @@ class Store:
         return lookout_medallion.countries_of(dataset, root=self.root)
 
     def country_of(self, session_id: str) -> str:
-        for country in self.countries("session_sample"):
+        for country in self.countries("session_sample_v2"):
             held = self._query(
                 """
                 SELECT session_id
-                FROM session_sample
+                FROM session_sample_v2
                 WHERE session_id = $session_id
                 LIMIT 1
                 """,
@@ -61,7 +61,7 @@ class Store:
         table = self._query(
             """
             SELECT t, lat, lon, alt, acc, speed, heading
-            FROM session_sample
+            FROM session_sample_v2
             WHERE session_id = $session_id
             ORDER BY t, seq
             """,
@@ -98,11 +98,11 @@ class Store:
                 last=row["last"],
                 samples=row["samples"],
             )
-            for country in self.countries("session_sample")
+            for country in self.countries("session_sample_v2")
             for row in self._query(
                 """
                 SELECT session_id, min(t) AS first, max(t) AS last, count(*) AS samples
-                FROM session_sample
+                FROM session_sample_v2
                 GROUP BY session_id
                 """,
                 country=country,

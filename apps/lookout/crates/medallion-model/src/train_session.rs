@@ -121,7 +121,7 @@ mod tests {
 
     use super::*;
     use crate::testing::{column, column_names};
-    use crate::{SessionRowV2, SessionSampleRow};
+    use crate::{SessionRowV2, SessionSampleRowV2};
 
     fn source(id: &str) -> MotisSourceId {
         serde_json::from_value(serde_json::json!(id)).expect("a source id")
@@ -250,7 +250,7 @@ mod tests {
     fn a_train_sample_has_a_recorded_samples_columns_but_what_only_a_device_reports() {
         assert_eq!(
             column_names::<TrainSessionSampleRow>(),
-            swapped::<SessionSampleRow>(
+            swapped::<SessionSampleRowV2>(
                 &["device_id", "alt", "acc", "speed", "heading"],
                 &["source_id", "trip_id", "geometry_source"]
             )

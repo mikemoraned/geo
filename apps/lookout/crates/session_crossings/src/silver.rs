@@ -5,7 +5,7 @@ use domain::Bbox;
 use domain::{DeviceId, Pass, Radius, SessionId};
 use geo_types::Point;
 use medallion::{COUNTRY, Country, DatasetSpec, Query, Replaced, Root, layers};
-use medallion_model::{SessionCrossingRow, WaterCrossingRowV2};
+use medallion_model::{SessionCrossingRowV2, WaterCrossingRowV2};
 use serde::Deserialize;
 
 use crate::matching::{Crossing, Sample, Session, passes};
@@ -61,7 +61,7 @@ struct PlacedCrossing {
 
 pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, CrossingError> {
     let mut outcome = MatchOutcome::default();
-    let mut passed: Vec<SessionCrossingRow> = Vec::new();
+    let mut passed: Vec<SessionCrossingRowV2> = Vec::new();
 
     for country in countries_to_match(root)? {
         let (matched, rows) = matched_in(root, country, radius).await?;
@@ -133,7 +133,7 @@ async fn matched_in(
     root: &Root,
     country: Country,
     radius: Radius,
-) -> Result<(MatchOutcome, Vec<SessionCrossingRow>), CrossingError> {
+) -> Result<(MatchOutcome, Vec<SessionCrossingRowV2>), CrossingError> {
     let Inputs {
         sessions,
         crossings,
@@ -183,7 +183,7 @@ pub async fn inputs(root: &Root, country: Country) -> Result<Inputs, CrossingErr
 
 const READ: [(DatasetSpec<layers::Silver>, &str); 3] = [
     (medallion_model::SESSION_V2, "session_v2"),
-    (medallion_model::SESSION_SAMPLE, "session_sample"),
+    (medallion_model::SESSION_SAMPLE_V2, "session_sample_v2"),
     (medallion_model::WATER_CROSSING_V2, "water_crossing_v2"),
 ];
 
@@ -202,7 +202,7 @@ async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
                             )
                             ORDER BY t
                         ) AS samples
-                 FROM session_sample
+                 FROM session_sample_v2
                  GROUP BY session_id
              ) p ON s.session_id = p.session_id",
         )
@@ -252,8 +252,8 @@ async fn crossings_in(query: &Query) -> Result<Vec<Crossing>, CrossingError> {
         .collect()
 }
 
-fn row(pass: &Pass, device: &DeviceId, radius: Radius) -> SessionCrossingRow {
-    SessionCrossingRow {
+fn row(pass: &Pass, device: &DeviceId, radius: Radius) -> SessionCrossingRowV2 {
+    SessionCrossingRowV2 {
         session_id: pass.session_id.clone(),
         crossing_id: pass.crossing_id.clone(),
         device_id: device.clone(),

@@ -164,7 +164,7 @@ silver-init *args:
 silver-motis-ingest *args:
     cargo run --release -p motis --bin motis_ingest -- {{args}}
 
-# Derive silver `session_v2` and `session_sample` from the bronze telemetry.
+# Derive silver `session_v2` and `session_sample_v2` from the bronze telemetry.
 silver-sessionise *args:
     cargo run --release -p recorder --bin sessionise -- {{args}}
 
@@ -177,7 +177,7 @@ silver-crossings *args:
 silver-water-crossings:
     uv run --no-project notebooks/water_crossings/v10.py
 
-# Derive silver `session_crossing`: the crossings each recorded session passed.
+# Derive silver `session_crossing_v2`: the crossings each recorded session passed.
 silver-session-crossings *args:
     cargo run --release -p session_crossings --bin match_crossings -- {{args}}
 
