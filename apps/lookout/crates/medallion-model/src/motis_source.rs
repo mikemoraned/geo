@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use url::Url;
 use uuid::Uuid;
 
-use crate::gers::NotAGersId;
+use crate::gers::{GersId, NotAGersId};
 use crate::overture::OvertureRegion;
 use crate::overture_release::OvertureRelease;
 
@@ -17,6 +17,9 @@ const MOTIS_SOURCE_NAMESPACE: Uuid = Uuid::from_u128(0x3c41_9e2d_7a58_4b06_8f13_
 
 pub const MOTIS_SOURCE_V2: DatasetSpec<layers::Bronze> =
     DatasetSpec::unpartitioned("motis_source_v2");
+
+pub const MOTIS_SOURCE_V3: DatasetSpec<layers::Bronze> =
+    DatasetSpec::unpartitioned("motis_source_v3");
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(from = "String")]
@@ -93,6 +96,62 @@ impl Serialize for MotisVersion {
 impl Display for MotisVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "v{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+#[serde(try_from = "String")]
+pub struct MotisBaseUrl(Url);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("`{text}` is not a URL: {source}")]
+pub struct NotAMotisBaseUrl {
+    text: String,
+    #[source]
+    source: url::ParseError,
+}
+
+impl MotisBaseUrl {
+    #[hashfn]
+    pub fn new(text: impl Into<String>) -> Result<Self, NotAMotisBaseUrl> {
+        let text = text.into();
+        Url::parse(&text)
+            .map(Self)
+            .map_err(|source| NotAMotisBaseUrl { text, source })
+    }
+}
+
+impl FromStr for MotisBaseUrl {
+    type Err = NotAMotisBaseUrl;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::new(text)
+    }
+}
+
+impl TryFrom<String> for MotisBaseUrl {
+    type Error = NotAMotisBaseUrl;
+
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        Self::new(text)
+    }
+}
+
+impl From<Url> for MotisBaseUrl {
+    fn from(url: Url) -> Self {
+        Self(url)
+    }
+}
+
+impl Serialize for MotisBaseUrl {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_newtype_struct("MotisBaseUrl", self.0.as_str())
+    }
+}
+
+impl Display for MotisBaseUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -356,6 +415,51 @@ impl Row for MotisSourceRowV2 {
             feed: Feed::Transitous,
             country: Some("DE".to_string()),
             overture_region_id: Some(Uuid::nil().to_string()),
+            overture_region_name: Some("Thüringen".to_string()),
+            overture_release: Some(
+                OvertureRelease::new("2026-09-23.1").expect("a constant Overture release parses"),
+            ),
+            label: Some(Label("example".to_string())),
+            registered_at: DateTime::UNIX_EPOCH,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MotisSourceRowV3 {
+    pub source_id: MotisSourceId,
+    pub base_url: MotisBaseUrl,
+    pub motis_version: MotisVersion,
+    pub feed: Feed,
+    /// The ISO 3166-1 alpha-2 code of the area's country, as text rather than a [`Country`].
+    ///
+    /// A source naming a country the store has no zone for still reads. See
+    /// [docs/motis.md](../../../docs/motis.md#a-capture-names-the-server-that-answered-it).
+    pub country: Option<String>,
+    pub overture_region_id: Option<GersId>,
+    pub overture_region_name: Option<String>,
+    pub overture_release: Option<OvertureRelease>,
+    pub label: Option<Label>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub registered_at: DateTime<Utc>,
+}
+
+impl Row for MotisSourceRowV3 {
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = MOTIS_SOURCE_V3;
+    const INSTANTS: &'static [&'static str] = &["registered_at"];
+
+    fn example() -> Self {
+        Self {
+            source_id: MotisSourceId::new(Uuid::nil().to_string()),
+            base_url: MotisBaseUrl::new("https://api.transitous.org/")
+                .expect("a constant URL parses"),
+            motis_version: MotisVersion(Version::new(2, 11, 3)),
+            feed: Feed::Transitous,
+            country: Some("DE".to_string()),
+            overture_region_id: Some(
+                GersId::new(Uuid::nil().to_string()).expect("a constant UUID is a GERS id"),
+            ),
             overture_region_name: Some("Thüringen".to_string()),
             overture_release: Some(
                 OvertureRelease::new("2026-09-23.1").expect("a constant Overture release parses"),

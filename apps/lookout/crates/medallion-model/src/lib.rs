@@ -26,8 +26,9 @@ pub use motis::{
     TripId,
 };
 pub use motis_source::{
-    Area, Feed, Label, MOTIS_SOURCE_V2, MotisSource, MotisSourceId, MotisSourceRowV2, MotisVersion,
-    NotALabel, NotAMotisSource, NotAMotisVersion, UnknownFeed,
+    Area, Feed, Label, MOTIS_SOURCE_V2, MOTIS_SOURCE_V3, MotisBaseUrl, MotisSource, MotisSourceId,
+    MotisSourceRowV2, MotisSourceRowV3, MotisVersion, NotALabel, NotAMotisBaseUrl, NotAMotisSource,
+    NotAMotisVersion, UnknownFeed,
 };
 pub use overture::{
     DIVISION_ID, EXTRACT_MANIFEST_V3, ExtractManifestRowV3, OVERTURE_EXTRACT, OvertureRegion,
@@ -45,7 +46,7 @@ pub use train_session::{
     train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 16] = [
+pub const ALL: [DatasetInfo; 17] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
@@ -53,6 +54,7 @@ pub const ALL: [DatasetInfo; 16] = [
     MOTIS_SEGMENT.info(),
     MOTIS_SEGMENT_V2.info(),
     MOTIS_SOURCE_V2.info(),
+    MOTIS_SOURCE_V3.info(),
     TRAIN_SEGMENT_V2.info(),
     SESSION_V2.info(),
     SESSION_SAMPLE_V2.info(),
@@ -180,6 +182,7 @@ mod tests {
         check_rows_of::<MotisSegmentRow>();
         check_rows_of::<MotisCaptureRow>();
         check_rows_of::<MotisSourceRowV2>();
+        check_rows_of::<MotisSourceRowV3>();
         check_rows_of::<TrainSegmentRowV2>();
         check_rows_of::<SessionRowV2>();
         check_rows_of::<SessionSampleRowV2>();
