@@ -3,10 +3,10 @@ use std::str::FromStr;
 
 use geo_types::Geometry;
 use medallion::{Country, GEOMETRY, Query, Root};
-use medallion_model::{
-    DIVISION_ID, ExtractManifestRowV3, NotAGersId, OvertureRegion, OvertureRelease,
-};
+use medallion_model::{DIVISION_ID, NotAGersId, OvertureRegion};
 use serde::Deserialize;
+
+use crate::extract::ExtractId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RegionCode(String);
@@ -61,7 +61,6 @@ impl Display for RegionCode {
 pub struct OvertureRegionArea {
     pub region: OvertureRegion,
     pub shapes: Vec<Geometry<f64>>,
-    pub release: OvertureRelease,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -72,14 +71,18 @@ pub enum RegionError {
     Geo(#[from] medallion::GeoError),
     #[error("partitioning the extract: {0}")]
     Path(#[from] medallion::PathError),
-    #[error("the store holds no extract of {country}")]
-    NoExtract { country: Country },
     #[error("region {code} is not in {country}")]
     OtherCountry { code: RegionCode, country: Country },
-    #[error("the newest extract of {country} holds no region {code}")]
-    NoSuchRegion { code: RegionCode, country: Country },
-    #[error("the newest extract of {country} names region {code} with several divisions")]
-    SeveralDivisions { code: RegionCode, country: Country },
+    #[error("extract {extract} holds no region {code}")]
+    NoSuchRegion {
+        code: RegionCode,
+        extract: ExtractId,
+    },
+    #[error("extract {extract} names region {code} with several divisions")]
+    SeveralDivisions {
+        code: RegionCode,
+        extract: ExtractId,
+    },
     #[error(transparent)]
     Division(#[from] NotAGersId),
 }
@@ -92,6 +95,7 @@ struct Division {
 
 pub async fn region_area(
     root: &Root,
+    extract: &ExtractId,
     country: Country,
     code: &RegionCode,
 ) -> Result<OvertureRegionArea, RegionError> {
@@ -102,20 +106,9 @@ pub async fn region_area(
         });
     }
     let query = Query::new(root.clone());
-    query
-        .register_by_name(medallion_model::EXTRACT_MANIFEST_V3)
-        .await?;
-    let extracts: Vec<ExtractManifestRowV3> = query.rows(crate::extract::RECORDED).await?;
-    let extract = extracts
-        .iter()
-        .find(|extract| extract.country == country.code())
-        .ok_or(RegionError::NoExtract { country })?;
-    let extract_id = extract.extract_id.clone();
-    let release = extract.overture_release;
-
     let division_area = root
         .dataset(medallion_model::OVERTURE_EXTRACT)
-        .for_id(&extract_id)?
+        .for_id(extract)?
         .partition("theme", "divisions")?
         .partition("type", "division_area")?;
     query
@@ -134,13 +127,13 @@ pub async fn region_area(
         [] => {
             return Err(RegionError::NoSuchRegion {
                 code: code.clone(),
-                country,
+                extract: extract.clone(),
             });
         }
         _ => {
             return Err(RegionError::SeveralDivisions {
                 code: code.clone(),
-                country,
+                extract: extract.clone(),
             });
         }
     };
@@ -161,7 +154,6 @@ pub async fn region_area(
             name: division.name.clone(),
         },
         shapes,
-        release,
     })
 }
 
@@ -172,22 +164,13 @@ mod tests {
     use arrow::array::{ArrayRef, RecordBatch, StringArray, StructArray};
     use arrow::datatypes::{DataType, Field, Fields, Schema};
     use chrono::{DateTime, TimeZone, Utc};
-    use datafusion::execution::SendableRecordBatchStream;
-    use geo_types::polygon;
 
     use super::*;
+    use crate::testing::{record_extract, square_from};
 
     const THURINGIA: &str = "e0ff5492-5758-4335-aabd-af1747925cd1";
     const SAXONY: &str = "3e1aa55a-1b9b-4d9b-8072-38ba413f6d2b";
-
-    fn square_from(corner: f64, size: f64) -> Geometry<f64> {
-        Geometry::Polygon(polygon![
-            (x: corner, y: corner),
-            (x: corner + size, y: corner),
-            (x: corner + size, y: corner + size),
-            (x: corner, y: corner + size),
-        ])
-    }
+    const EXTRACT_ID: &str = "20261008T090000Z";
 
     fn at() -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 10, 8, 9, 0, 0).unwrap()
@@ -237,43 +220,20 @@ mod tests {
         .expect("a division_area batch")
     }
 
-    async fn stream_of(batch: RecordBatch) -> SendableRecordBatchStream {
-        datafusion::prelude::SessionContext::new()
-            .read_batch(batch)
-            .expect("read the batch")
-            .execute_stream()
-            .await
-            .expect("stream the batch")
+    async fn extracted(root: &Root, areas: &[Area<'_>]) {
+        record_extract(
+            root,
+            EXTRACT_ID,
+            Country::Germany,
+            "2026-09-17.0",
+            at(),
+            division_area(areas),
+        )
+        .await;
     }
 
-    async fn extracted(root: &Root, areas: &[Area<'_>]) {
-        let id = "20261008T090000Z";
-        root.rows_of::<ExtractManifestRowV3>()
-            .append_rows(
-                at(),
-                &[ExtractManifestRowV3 {
-                    extract_id: id.to_string(),
-                    extracted_at: at(),
-                    overture_release: "2026-09-17.0".parse().expect("a release"),
-                    country: Country::Germany.code().to_string(),
-                    min_lon: 0.0,
-                    min_lat: 0.0,
-                    max_lon: 0.0,
-                    max_lat: 0.0,
-                }],
-            )
-            .await
-            .expect("record the extract");
-        root.dataset(medallion_model::OVERTURE_EXTRACT)
-            .for_id(id)
-            .expect("an extract id")
-            .partition("theme", "divisions")
-            .expect("the divisions theme")
-            .partition("type", "division_area")
-            .expect("the division_area type")
-            .append_geo_stream(at(), stream_of(division_area(areas)).await)
-            .await
-            .expect("write the areas");
+    fn extract() -> ExtractId {
+        EXTRACT_ID.parse().expect("an extract id")
     }
 
     fn thuringia_and_saxony() -> Vec<Area<'static>> {
@@ -318,14 +278,13 @@ mod tests {
         let root = Root::new(tmp.path());
         extracted(&root, &thuringia_and_saxony()).await;
 
-        let area = region_area(&root, Country::Germany, &code("DE-TH"))
+        let area = region_area(&root, &extract(), Country::Germany, &code("DE-TH"))
             .await
             .expect("Thuringia");
 
         assert_eq!(area.region.id.to_string(), THURINGIA);
         assert_eq!(area.region.name, "Thüringen");
         assert_eq!(area.shapes, vec![square_from(0.0, 10.0)]);
-        assert_eq!(area.release.to_string(), "2026-09-17.0");
     }
 
     #[tokio::test]
@@ -334,7 +293,7 @@ mod tests {
         let root = Root::new(tmp.path());
         extracted(&root, &thuringia_and_saxony()).await;
 
-        let err = region_area(&root, Country::Germany, &code("DE-BY")).await;
+        let err = region_area(&root, &extract(), Country::Germany, &code("DE-BY")).await;
 
         assert!(
             matches!(err, Err(RegionError::NoSuchRegion { .. })),
@@ -346,7 +305,13 @@ mod tests {
     async fn a_region_of_another_country_is_refused() {
         let tmp = tempfile::tempdir().expect("tempdir");
 
-        let err = region_area(&Root::new(tmp.path()), Country::Germany, &code("GB-ENG")).await;
+        let err = region_area(
+            &Root::new(tmp.path()),
+            &extract(),
+            Country::Germany,
+            &code("GB-ENG"),
+        )
+        .await;
 
         assert!(
             matches!(err, Err(RegionError::OtherCountry { .. })),

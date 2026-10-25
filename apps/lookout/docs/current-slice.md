@@ -671,12 +671,15 @@ At the end of the slice, once its features are in.
       [docs/motis.md](motis.md#a-capture-names-the-server-that-answered-it) states. The base URL
       is a `MotisBaseUrl` rather than a bare `Url`: `url`'s serde writes a plain string, which
       hides the check from the declaration snapshot.
-- [ ] Find a country's newest extract once, in `CountryAreas` in
+- [x] Find a country's newest extract once, in `CountryAreas` in
       `crates/transport/src/countries.rs`. Pass its id to `region_area` in `regions.rs`, which
       repeats the lookup today. Then remove `OvertureRegionArea::release`, `RegionError::NoExtract`,
       and `RegionError::Release`, and let `fixed_area` in `motis_track_area` read the manifest once.
       Share the test helpers `regions.rs` copies from `countries.rs`, such as `square_from` and
       `division_area`.
+      `RegionError::Release` went with the release's parse, in the `OvertureRelease` task. Each
+      test module keeps its own `division_area`, since the two build different columns. Recording
+      an extract is shared instead.
 - [ ] Give `captures`, in `crates/motis/src/ingest.rs`, one leg identity that survives a delay:
       source, trip, departure stop, and scheduled departure. It replaces the `keyed_by` SQL each
       caller passes. `ingest` keys `train_segment_v2` on the realtime departure today, so it keeps a
