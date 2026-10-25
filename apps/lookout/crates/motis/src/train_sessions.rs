@@ -79,14 +79,8 @@ pub async fn derive_train_sessions(
         .flatten()
     {
         for leg in captured.legs {
-            let source_id = leg
-                .source_id
-                .clone()
-                .ok_or_else(|| IngestError::Unsourced {
-                    trip_id: leg.trip_id.clone(),
-                })?;
             by_trip
-                .entry((source_id, leg.trip_id.clone()))
+                .entry((leg.source_id.clone(), leg.trip_id.clone()))
                 .or_default()
                 .push(leg);
         }

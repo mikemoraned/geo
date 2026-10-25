@@ -634,7 +634,7 @@ At the end of the slice, once its features are in.
       instant of the copy, since `Query` does not show which batch wrote a row.
 - [x] Give `accel_reading` a new version, `accel_reading_v2`, as for `gps_reading_v2`.
 - [x] Give `device_session` a new version, `device_session_v2`, as for `gps_reading_v2`.
-- [ ] Make `Leg::source_id`, in `crates/motis/src/ingest.rs`, a `MotisSourceId` rather than an
+- [x] Make `Leg::source_id`, in `crates/motis/src/ingest.rs`, a `MotisSourceId` rather than an
       `Option`. Both datasets `captures` reads give every leg a source: `motis_segment_v2` stores
       one in every row, and `legacy_source_id_sql` gives every `motis_segment` row one. Remove
       `IngestError::Unsourced` and its checks in `ingest.rs` and `train_sessions.rs`. Nothing else
