@@ -604,7 +604,7 @@ def _(bronze):
     EXTRACT = (
         """
     extract AS (
-        SELECT extract_id, overture_release FROM extract_manifest_v2
+        SELECT extract_id, overture_release FROM extract_manifest_v3
         WHERE country = $country
         QUALIFY row_number() OVER (ORDER BY extracted_at DESC) = 1
     )""",

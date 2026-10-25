@@ -9,12 +9,11 @@ use serde::{Deserialize, Serialize};
 use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, TracerConfig};
 
 use crate::{
-    ALL, AccelReadingRowV2, AgencyId, DeviceSessionRowV2, ExtractManifestRowV2,
-    ExtractManifestRowV3, Feed, GeometrySource, GpsReadingRowV2, Label, MotisCaptureRow,
-    MotisSegmentRow, MotisSourceId, MotisSourceRowV2, MotisVersion, OVERTURE_EXTRACT, OverlapKind,
-    OvertureRelease, RailMode, RawSampleRow, SessionCrossingRowV2, SessionRowV2,
-    SessionSampleRowV2, StopId, TrainSegmentRowV2, TrainSessionRow, TrainSessionSampleRow, TripId,
-    WaterCrossingRowV2,
+    ALL, AccelReadingRowV2, AgencyId, DeviceSessionRowV2, ExtractManifestRowV3, Feed,
+    GeometrySource, GpsReadingRowV2, Label, MotisCaptureRow, MotisSegmentRow, MotisSourceId,
+    MotisSourceRowV2, MotisVersion, OVERTURE_EXTRACT, OverlapKind, OvertureRelease, RailMode,
+    RawSampleRow, SessionCrossingRowV2, SessionRowV2, SessionSampleRowV2, StopId,
+    TrainSegmentRowV2, TrainSessionRow, TrainSessionSampleRow, TripId, WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -283,7 +282,6 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<TrainSessionSampleRow>(&known),
         declaration::<WaterCrossingRowV2>(&known),
         declaration::<SessionCrossingRowV2>(&known),
-        declaration::<ExtractManifestRowV2>(&known),
         declaration::<ExtractManifestRowV3>(&known),
         rowless(OVERTURE_EXTRACT.info()),
     ];

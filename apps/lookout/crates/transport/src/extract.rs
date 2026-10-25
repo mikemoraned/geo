@@ -5,7 +5,7 @@ use arrow::array::{Array, Float64Array};
 use chrono::{DateTime, Utc};
 use geo_types::{Coord, Rect};
 use medallion::{Country, PartitionValue, Query, Root};
-use medallion_model::{DIVISION_ID, ExtractManifestRowV2};
+use medallion_model::{DIVISION_ID, ExtractManifestRowV3, OvertureRelease};
 
 use crate::overture::{Overture, OvertureError, OvertureType};
 
@@ -13,7 +13,7 @@ const EXCLUDED_CLASSES: &[&str] = &["tram"];
 
 const COMPACT_UTC: &str = "%Y%m%dT%H%M%SZ";
 
-pub(crate) const RECORDED: &str = "SELECT * FROM extract_manifest_v2 ORDER BY extracted_at DESC";
+pub(crate) const RECORDED: &str = "SELECT * FROM extract_manifest_v3 ORDER BY extracted_at DESC";
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtractId(String);
@@ -44,10 +44,10 @@ impl Display for ExtractId {
     }
 }
 
-pub async fn recorded(root: &Root) -> Result<Vec<ExtractManifestRowV2>, ExtractError> {
+pub async fn recorded(root: &Root) -> Result<Vec<ExtractManifestRowV3>, ExtractError> {
     let query = Query::new(root.clone());
     query
-        .register_by_name(medallion_model::EXTRACT_MANIFEST_V2)
+        .register_by_name(medallion_model::EXTRACT_MANIFEST_V3)
         .await?;
     Ok(query.rows(RECORDED).await?)
 }
@@ -62,7 +62,7 @@ pub fn is_filled(root: &Root, id: &ExtractId) -> Result<bool, ExtractError> {
 pub async fn recorded_as(
     root: &Root,
     id: &ExtractId,
-) -> Result<ExtractManifestRowV2, ExtractError> {
+) -> Result<ExtractManifestRowV3, ExtractError> {
     recorded(root)
         .await?
         .into_iter()
@@ -83,7 +83,10 @@ pub enum ExtractError {
     #[error("writing the manifest: {0}")]
     Append(#[from] medallion::AppendError),
     #[error("{country} has no boundary in release {release}, so its bbox is unknown")]
-    NoCountryBoundary { country: Country, release: String },
+    NoCountryBoundary {
+        country: Country,
+        release: OvertureRelease,
+    },
     #[error("no extract has been recorded, so there is none to take again")]
     NoExtract,
     #[error("no extract {id} in the manifest")]
@@ -99,8 +102,8 @@ pub enum ExtractError {
     )]
     WrongRelease {
         id: ExtractId,
-        recorded: String,
-        opened: String,
+        recorded: OvertureRelease,
+        opened: OvertureRelease,
     },
 }
 
@@ -138,7 +141,7 @@ impl<'a> Extractor<'a> {
 
     pub async fn backfill(
         &self,
-        recorded: &ExtractManifestRowV2,
+        recorded: &ExtractManifestRowV3,
         at: DateTime<Utc>,
     ) -> Result<Extraction, ExtractError> {
         let id = ExtractId::new(recorded.extract_id.clone())?;
@@ -148,8 +151,8 @@ impl<'a> Extractor<'a> {
         if opened != recorded.overture_release {
             return Err(ExtractError::WrongRelease {
                 id,
-                recorded: recorded.overture_release.clone(),
-                opened: opened.to_string(),
+                recorded: recorded.overture_release,
+                opened,
             });
         }
         if is_filled(self.root, &id)? {
@@ -256,7 +259,7 @@ impl<'a> Extractor<'a> {
             .await?;
         let missing = || ExtractError::NoCountryBoundary {
             country,
-            release: self.overture.release().id().to_string(),
+            release: self.overture.release().id(),
         };
 
         let batch = batches.first().ok_or_else(missing)?;
@@ -285,10 +288,10 @@ impl<'a> Extractor<'a> {
         at: DateTime<Utc>,
         bbox: &Rect<f64>,
     ) -> Result<(), ExtractError> {
-        let row = ExtractManifestRowV2 {
+        let row = ExtractManifestRowV3 {
             extract_id: id.to_string(),
             extracted_at: at,
-            overture_release: self.overture.release().id().to_string(),
+            overture_release: self.overture.release().id(),
             country: country.code().to_string(),
             min_lon: bbox.min().x,
             min_lat: bbox.min().y,
@@ -296,7 +299,7 @@ impl<'a> Extractor<'a> {
             max_lat: bbox.max().y,
         };
         self.root
-            .rows_of::<ExtractManifestRowV2>()
+            .rows_of::<ExtractManifestRowV3>()
             .append_rows(at, &[row])
             .await?;
         Ok(())
@@ -356,11 +359,13 @@ mod tests {
         Rect::new(Coord { x: 5.8, y: 47.2 }, Coord { x: 15.1, y: 55.1 })
     }
 
-    fn manifest_row(id: &str, hour: u32, release: &str) -> ExtractManifestRowV2 {
-        ExtractManifestRowV2 {
+    fn manifest_row(id: &str, hour: u32, release: &str) -> ExtractManifestRowV3 {
+        ExtractManifestRowV3 {
             extract_id: id.to_string(),
             extracted_at: Utc.with_ymd_and_hms(2026, 7, 27, hour, 0, 0).unwrap(),
-            overture_release: release.to_string(),
+            overture_release: release
+                .parse()
+                .expect("a test names a release Overture would"),
             country: Country::Germany.code().to_string(),
             min_lon: bbox().min().x,
             min_lat: bbox().min().y,
@@ -369,11 +374,11 @@ mod tests {
         }
     }
 
-    async fn store_recording(rows: &[ExtractManifestRowV2]) -> (tempfile::TempDir, Root) {
+    async fn store_recording(rows: &[ExtractManifestRowV3]) -> (tempfile::TempDir, Root) {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         for row in rows {
-            root.rows_of::<ExtractManifestRowV2>()
+            root.rows_of::<ExtractManifestRowV3>()
                 .append_rows(row.extracted_at, std::slice::from_ref(row))
                 .await
                 .expect("record the extraction");
@@ -411,7 +416,7 @@ mod tests {
 
         let recorded = recorded_as(&root, &wanted).await.expect("the extraction");
 
-        assert_eq!(recorded.overture_release, "2026-05-21.0");
+        assert_eq!(recorded.overture_release.to_string(), "2026-05-21.0");
     }
 
     #[tokio::test]
@@ -451,7 +456,7 @@ mod tests {
             .unwrap();
         std::fs::create_dir_all(extract.dir()).unwrap();
         std::fs::write(extract.dir().join("already.parquet"), b"rows").unwrap();
-        let overture = Overture::open(Release::published(&recorded.overture_release));
+        let overture = Overture::open(Release::at(recorded.overture_release, None));
 
         let err = Extractor::new(&overture, &root)
             .backfill(&recorded, Utc::now())
@@ -515,9 +520,13 @@ mod tests {
         let mirror = tempfile::tempdir().expect("tempdir");
         let mut recorded = manifest_row("20260727T193628Z", 19, "2026-06-17.0");
         recorded.country = UNPLACEABLE.to_string();
-        mirror_holding_one_row_of_each_type(mirror.path(), &recorded.overture_release).await;
+        mirror_holding_one_row_of_each_type(mirror.path(), &recorded.overture_release.to_string())
+            .await;
         let (_tmp, root) = store_recording(std::slice::from_ref(&recorded)).await;
-        let overture = Overture::open(Release::mirrored(&recorded.overture_release, mirror.path()));
+        let overture = Overture::open(Release::at(
+            recorded.overture_release,
+            Some(mirror.path().into()),
+        ));
 
         let extraction = Extractor::new(&overture, &root)
             .backfill(&recorded, Utc::now())

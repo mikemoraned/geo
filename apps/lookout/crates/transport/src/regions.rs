@@ -4,8 +4,7 @@ use std::str::FromStr;
 use geo_types::Geometry;
 use medallion::{Country, GEOMETRY, Query, Root};
 use medallion_model::{
-    DIVISION_ID, ExtractManifestRowV2, NotAGersId, NotAnOvertureRelease, OvertureRegion,
-    OvertureRelease,
+    DIVISION_ID, ExtractManifestRowV3, NotAGersId, OvertureRegion, OvertureRelease,
 };
 use serde::Deserialize;
 
@@ -83,8 +82,6 @@ pub enum RegionError {
     SeveralDivisions { code: RegionCode, country: Country },
     #[error(transparent)]
     Division(#[from] NotAGersId),
-    #[error("reading the extract's release: {0}")]
-    Release(#[from] NotAnOvertureRelease),
 }
 
 #[derive(Debug, Deserialize)]
@@ -106,15 +103,15 @@ pub async fn region_area(
     }
     let query = Query::new(root.clone());
     query
-        .register_by_name(medallion_model::EXTRACT_MANIFEST_V2)
+        .register_by_name(medallion_model::EXTRACT_MANIFEST_V3)
         .await?;
-    let extracts: Vec<ExtractManifestRowV2> = query.rows(crate::extract::RECORDED).await?;
+    let extracts: Vec<ExtractManifestRowV3> = query.rows(crate::extract::RECORDED).await?;
     let extract = extracts
         .iter()
         .find(|extract| extract.country == country.code())
         .ok_or(RegionError::NoExtract { country })?;
     let extract_id = extract.extract_id.clone();
-    let release = extract.overture_release.parse()?;
+    let release = extract.overture_release;
 
     let division_area = root
         .dataset(medallion_model::OVERTURE_EXTRACT)
@@ -251,13 +248,13 @@ mod tests {
 
     async fn extracted(root: &Root, areas: &[Area<'_>]) {
         let id = "20261008T090000Z";
-        root.rows_of::<ExtractManifestRowV2>()
+        root.rows_of::<ExtractManifestRowV3>()
             .append_rows(
                 at(),
-                &[ExtractManifestRowV2 {
+                &[ExtractManifestRowV3 {
                     extract_id: id.to_string(),
                     extracted_at: at(),
-                    overture_release: "2026-09-17.0".to_string(),
+                    overture_release: "2026-09-17.0".parse().expect("a release"),
                     country: Country::Germany.code().to_string(),
                     min_lon: 0.0,
                     min_lat: 0.0,

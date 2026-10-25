@@ -30,8 +30,8 @@ pub use motis_source::{
     NotALabel, NotAMotisSource, NotAMotisVersion, UnknownFeed,
 };
 pub use overture::{
-    DIVISION_ID, EXTRACT_MANIFEST_V2, EXTRACT_MANIFEST_V3, ExtractManifestRowV2,
-    ExtractManifestRowV3, OVERTURE_EXTRACT, OvertureRegion, division_id,
+    DIVISION_ID, EXTRACT_MANIFEST_V3, ExtractManifestRowV3, OVERTURE_EXTRACT, OvertureRegion,
+    division_id,
 };
 pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
 pub use session::{SESSION_SAMPLE_V2, SESSION_V2, SessionRowV2, SessionSampleRowV2};
@@ -45,7 +45,7 @@ pub use train_session::{
     train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 17] = [
+pub const ALL: [DatasetInfo; 16] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
@@ -61,7 +61,6 @@ pub const ALL: [DatasetInfo; 17] = [
     WATER_CROSSING_V2.info(),
     SESSION_CROSSING_V2.info(),
     OVERTURE_EXTRACT.info(),
-    EXTRACT_MANIFEST_V2.info(),
     EXTRACT_MANIFEST_V3.info(),
 ];
 
@@ -188,7 +187,6 @@ mod tests {
         check_rows_of::<TrainSessionSampleRow>();
         check_rows_of::<WaterCrossingRowV2>();
         check_rows_of::<SessionCrossingRowV2>();
-        check_rows_of::<ExtractManifestRowV2>();
         check_rows_of::<ExtractManifestRowV3>();
     }
 }
