@@ -162,7 +162,7 @@ async fn store_with_crossings(root: &Root, at_metres: &[f64]) {
 async fn passes_in(root: &Root) -> Vec<Pass> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(medallion_model::SESSION_CROSSING, "session_crossing")
+        .register_if_present(medallion_model::SESSION_CROSSING_V2, "session_crossing_v2")
         .await
         .expect("register")
     {
@@ -171,7 +171,7 @@ async fn passes_in(root: &Root) -> Vec<Pass> {
     query
         .rows(
             "SELECT crossing_id, crossed_at, distance_m, samples_within
-             FROM session_crossing ORDER BY crossed_at, crossing_id",
+             FROM session_crossing_v2 ORDER BY crossed_at, crossing_id",
         )
         .await
         .expect("read the passes")
@@ -282,7 +282,7 @@ async fn passes_are_partitioned_by_the_date_they_happened_on() {
 
     assert!(
         tmp.path()
-            .join("silver/session_crossing/crossed_date=2026-07-22/part-0.parquet")
+            .join("silver/session_crossing_v2/crossed_date=2026-07-22/part-0.parquet")
             .exists()
     );
 }

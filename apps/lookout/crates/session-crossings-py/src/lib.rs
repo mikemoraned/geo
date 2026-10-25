@@ -18,7 +18,7 @@ use session_crossings::matching::{self, Crossing, DEFAULT_RADIUS, Near, Sample};
 /// The steps the session crossings matching takes for one session, as two tables.
 ///
 /// `samples` holds the session's samples, with `t` and `geometry_projected`, as silver
-/// `session_sample` stores them. `crossings` holds the crossings to match against, with
+/// `session_sample_v2` stores them. `crossings` holds the crossings to match against, with
 /// `crossing_id`, `geometry`, and `geometry_projected`, as silver `water_crossing_v2` stores them.
 /// Either is anything exposing the Arrow PyCapsule interface.
 ///

@@ -127,7 +127,7 @@ async fn contents(root: &Root) -> String {
         .await
         .expect("register sessions");
     query
-        .register(medallion_model::SESSION_SAMPLE, "samples")
+        .register(medallion_model::SESSION_SAMPLE_V2, "samples")
         .await
         .expect("register samples");
 

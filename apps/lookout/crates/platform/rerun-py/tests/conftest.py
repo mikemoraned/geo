@@ -133,7 +133,7 @@ def _samples_of_every_country():
 @pytest.fixture
 def store(tmp_path):
     lookout_medallion.write_silver(
-        "session_sample", _samples_of_every_country(), root=str(tmp_path)
+        "session_sample_v2", _samples_of_every_country(), root=str(tmp_path)
     )
     lookout_medallion.write_silver("water_crossing_v2", _crossing_table(), root=str(tmp_path))
     return tmp_path

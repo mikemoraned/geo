@@ -8,8 +8,8 @@ use crate::SessionRowV2;
 pub const WATER_CROSSING_V2: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("water_crossing_v2", COUNTRY);
 
-pub const SESSION_CROSSING: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("session_crossing", "crossed_date");
+pub const SESSION_CROSSING_V2: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("session_crossing_v2", "crossed_date");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -67,7 +67,7 @@ impl Row for WaterCrossingRowV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SessionCrossingRow {
+pub struct SessionCrossingRowV2 {
     pub session_id: SessionId,
     pub crossing_id: CrossingId,
     pub device_id: DeviceId,
@@ -78,9 +78,9 @@ pub struct SessionCrossingRow {
     pub match_radius_m: f64,
 }
 
-impl Row for SessionCrossingRow {
+impl Row for SessionCrossingRowV2 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = SESSION_CROSSING;
+    const DATASET: DatasetSpec<Self::Layer> = SESSION_CROSSING_V2;
     const INSTANTS: &'static [&'static str] = &["crossed_at"];
 
     fn example() -> Self {
@@ -97,7 +97,7 @@ impl Row for SessionCrossingRow {
     }
 }
 
-impl Dated for SessionCrossingRow {
+impl Dated for SessionCrossingRowV2 {
     fn partition_date(&self) -> NaiveDate {
         self.crossed_at.date_naive()
     }
@@ -125,7 +125,7 @@ mod tests {
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionCrossingRow>("crossing_id").data_type(),
+            column::<SessionCrossingRowV2>("crossing_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
@@ -154,7 +154,7 @@ mod tests {
             );
         }
         assert_eq!(
-            column::<SessionCrossingRow>("match_radius_m").data_type(),
+            column::<SessionCrossingRowV2>("match_radius_m").data_type(),
             &DataType::Float64
         );
     }

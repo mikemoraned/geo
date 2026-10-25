@@ -94,7 +94,7 @@ def _(case_picker, cases, lookout_medallion, pa):
     case = cases.set_index("name").loc[case_picker.value]
     samples = pa.table(
         lookout_medallion.query_silver(
-            "SELECT t, acc, geometry, geometry_projected FROM session_sample "
+            "SELECT t, acc, geometry, geometry_projected FROM session_sample_v2 "
             "WHERE session_id = $session ORDER BY t",
             country=case.country,
             params={"session": case.session_id},

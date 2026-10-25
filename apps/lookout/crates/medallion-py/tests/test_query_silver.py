@@ -139,8 +139,8 @@ class TestWhatIsRefused:
             query(written, "SELECT * FROM crossing_candidates")
 
     def test_a_dataset_that_has_never_been_written(self, store):
-        with pytest.raises(ValueError, match="session_sample"):
-            query(store, "SELECT * FROM session_sample")
+        with pytest.raises(ValueError, match="session_sample_v2"):
+            query(store, "SELECT * FROM session_sample_v2")
 
     def test_sql_that_does_not_parse(self, written):
         with pytest.raises(ValueError):

@@ -31,13 +31,13 @@ Silver is derived from bronze, and gold from silver. Each derivation replaces wh
 produces, so any of them can be re-run over unchanged input to the same result.
 
 ```
-bronze telemetry       ──sessionise──────▶ session_v2, session_sample
+bronze telemetry       ──sessionise──────▶ session_v2, session_sample_v2
 bronze motis log       ──motis_ingest────▶ train_segment_v2
 bronze overture        ──notebook────────▶ water_crossing_v2
-session_v2 + crossings ──match_crossings─▶ session_crossing
+session_v2 + crossings ──match_crossings─▶ session_crossing_v2
 water_crossing_v2      ──pack_crossings──▶ gold crossings.pointset, crossings.json
-session_crossing +
-  session_sample       ──pack_sessions───▶ gold sessions.json
+session_crossing_v2 +
+  session_sample_v2    ──pack_sessions───▶ gold sessions.json
 ```
 
 Two properties of that graph matter more than the order:

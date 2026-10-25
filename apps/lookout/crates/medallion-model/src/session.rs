@@ -10,8 +10,8 @@ use crate::GpsReadingRow;
 pub const SESSION_V2: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("session_v2", "start_date");
 
-pub const SESSION_SAMPLE: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("session_sample", "sample_date");
+pub const SESSION_SAMPLE_V2: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("session_sample_v2", "sample_date");
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionRowV2 {
@@ -57,7 +57,7 @@ impl Dated for SessionRowV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SessionSampleRow {
+pub struct SessionSampleRowV2 {
     pub session_id: SessionId,
     pub device_id: DeviceId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
@@ -72,9 +72,9 @@ pub struct SessionSampleRow {
     pub implied_speed_mps: Option<f64>,
 }
 
-impl Row for SessionSampleRow {
+impl Row for SessionSampleRowV2 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = SESSION_SAMPLE;
+    const DATASET: DatasetSpec<Self::Layer> = SESSION_SAMPLE_V2;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["t"];
 
@@ -96,7 +96,7 @@ impl Row for SessionSampleRow {
     }
 }
 
-impl Dated for SessionSampleRow {
+impl Dated for SessionSampleRowV2 {
     fn partition_date(&self) -> NaiveDate {
         self.t.date_naive()
     }
@@ -116,7 +116,7 @@ mod tests {
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionSampleRow>("session_id").data_type(),
+            column::<SessionSampleRowV2>("session_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
@@ -124,7 +124,7 @@ mod tests {
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionSampleRow>("device_id").data_type(),
+            column::<SessionSampleRowV2>("device_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }

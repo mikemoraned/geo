@@ -623,8 +623,10 @@ At the end of the slice, once its features are in.
 - [x] Give `session` a new version, `session_v2`. Point its writer and readers at it, re-derive
       it, and delete the old version's files.
       `notebooks/sessions` is deleted rather than moved to `session_v2`.
-- [ ] Give `session_sample` a new version, `session_sample_v2`, as for `session_v2`.
-- [ ] Give `session_crossing` a new version, `session_crossing_v2`, as for `session_v2`.
+- [x] Give `session_sample` a new version, `session_sample_v2`, as for `session_v2`.
+- [x] Give `session_crossing` a new version, `session_crossing_v2`, as for `session_v2`.
+      Two passes named a crossing that the water crossings run of 24 October renamed.
+      Re-deriving gives them its new id.
 - [ ] Give `gps_reading` a new version, `gps_reading_v2`. Copy its rows into the new version with
       a one-off binary, committed with the data it writes and then removed. Point its writer and
       readers at it, and delete the old version's files.

@@ -73,7 +73,7 @@ def _(lookout_medallion, mo, pa):
             "  ) WHERE rank <= 20"
             "), pairs AS ("
             "  SELECT c.recorded, c.train, c.train_samples, s.seq AS recorded_seq, ts.seq AS train_seq"
-            "  FROM candidates c JOIN session_sample s ON s.session_id = c.recorded"
+            "  FROM candidates c JOIN session_sample_v2 s ON s.session_id = c.recorded"
             "  JOIN train_session_sample ts ON ts.session_id = c.train"
             "    AND ST_DWithin(s.geometry_projected, ts.geometry_projected, 300)"
             "), scored AS ("
@@ -149,7 +149,7 @@ def _(COUNTRY, lookout_medallion, mo, pa, session_picker):
 def _(COUNTRY, lookout_medallion, mo, pa, picked):
     recorded = pa.table(
         lookout_medallion.query_silver(
-            "SELECT seq, t, acc, geometry FROM session_sample "
+            "SELECT seq, t, acc, geometry FROM session_sample_v2 "
             "WHERE session_id = $session ORDER BY seq",
             country=COUNTRY,
             params={"session": picked.recorded},

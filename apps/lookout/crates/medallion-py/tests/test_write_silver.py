@@ -140,12 +140,12 @@ class TestCountryOnlyAndGeometrylessLayouts:
         )
 
         written = lookout_medallion.write_silver(
-            "session_crossing", table, root=str(store)
+            "session_crossing_v2", table, root=str(store)
         )
 
         assert written.rows == 1
         assert (
-            store / "silver/session_crossing/crossed_date=2026-07-21/part-0.parquet"
+            store / "silver/session_crossing_v2/crossed_date=2026-07-21/part-0.parquet"
         ).exists()
 
 

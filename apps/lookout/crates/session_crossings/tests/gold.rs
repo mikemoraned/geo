@@ -2,7 +2,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use domain::{Bbox, CrossingId, DeviceId, SessionId, StartedBy};
 use geo_types::{LineString, Point};
 use medallion::{Country, GeoRow, Root, write_geo_rows, write_rows};
-use medallion_model::{SessionCrossingRow, SessionRowV2, SessionSampleRow};
+use medallion_model::{SessionCrossingRowV2, SessionRowV2, SessionSampleRowV2};
 use session_crossings::gold::{Choosing, choose};
 
 const BERLIN: (f64, f64) = (13.404954, 52.520008);
@@ -55,7 +55,7 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
                 country: *country,
             });
             sample_rows.push(GeoRow {
-                row: SessionSampleRow {
+                row: SessionSampleRowV2 {
                     session_id: session_id.clone(),
                     device_id: device_id.clone(),
                     t: at(1),
@@ -72,7 +72,7 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
                 country: *country,
             });
             for n in 0..*crossings {
-                crossed.push(SessionCrossingRow {
+                crossed.push(SessionCrossingRowV2 {
                     session_id: session_id.clone(),
                     crossing_id: CrossingId::new(format!("water:track:rail@{named}-{n}"))
                         .expect("a crossing id"),
