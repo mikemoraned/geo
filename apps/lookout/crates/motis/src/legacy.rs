@@ -4,14 +4,6 @@ use url::Url;
 
 use crate::client::DEFAULT_BASE_URL;
 
-pub fn legacy_source(captured_at: DateTime<Utc>) -> MotisSource {
-    if captured_at < delfi_from() {
-        local("gtfs.de")
-    } else {
-        local("delfi")
-    }
-}
-
 pub fn legacy_sources() -> [MotisSource; 2] {
     [local("gtfs.de"), local("delfi")]
 }
@@ -43,34 +35,6 @@ fn local(label: &str) -> MotisSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn label_of(source: &MotisSource) -> String {
-        source.label.as_ref().expect("a label").to_string()
-    }
-
-    #[test]
-    fn a_capture_before_the_move_to_delfi_comes_from_the_gtfs_de_source() {
-        let captured_at = Utc.with_ymd_and_hms(2026, 7, 22, 23, 59, 59).unwrap();
-
-        assert_eq!(label_of(&legacy_source(captured_at)), "gtfs.de");
-    }
-
-    #[test]
-    fn a_capture_from_the_move_to_delfi_on_comes_from_the_delfi_source() {
-        assert_eq!(label_of(&legacy_source(delfi_from())), "delfi");
-    }
-
-    #[test]
-    fn each_capture_comes_from_one_of_the_legacy_sources() {
-        let ids: Vec<_> = legacy_sources().iter().map(MotisSource::id).collect();
-        for day in [19, 21, 22, 25] {
-            let captured_at = Utc.with_ymd_and_hms(2026, 7, day, 12, 0, 0).unwrap();
-            assert!(
-                ids.contains(&legacy_source(captured_at).id()),
-                "{captured_at}"
-            );
-        }
-    }
 
     #[test]
     fn the_legacy_sources_are_the_local_server_at_v2_10_2_with_no_area() {

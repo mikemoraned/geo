@@ -1,5 +1,3 @@
-use std::ops::Add;
-
 use crate::legacy::legacy_source_id_sql;
 use crate::segment::{NotAPolyline, decode_polyline};
 use chrono::{DateTime, Utc};
@@ -27,22 +25,6 @@ pub struct IngestOutcome {
     pub shape_corrected: usize,
 }
 
-impl Add for IngestOutcome {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Self {
-        Self {
-            read: self.read + other.read,
-            deduped: self.deduped + other.deduped,
-            partitions: self.partitions + other.partitions,
-            not_rail: self.not_rail + other.not_rail,
-            unplaceable: self.unplaceable + other.unplaceable,
-            shapeless: self.shapeless + other.shapeless,
-            shape_corrected: self.shape_corrected + other.shape_corrected,
-        }
-    }
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum IngestError {
     #[error("querying the capture log: {0}")]
@@ -51,8 +33,6 @@ pub enum IngestError {
     Polyline(#[from] NotAPolyline),
     #[error("writing the dataset: {0}")]
     Write(#[from] medallion::TableError),
-    #[error("a capture of trip `{trip_id}` names no source")]
-    Unsourced { trip_id: TripId },
     #[error("a capture names the source `{source_id}`, which was never registered")]
     UnregisteredSource { source_id: MotisSourceId },
     #[error("reading the registered sources: {0}")]
@@ -81,7 +61,7 @@ pub enum IngestError {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Leg {
-    pub(crate) source_id: Option<MotisSourceId>,
+    pub(crate) source_id: MotisSourceId,
     pub(crate) trip_id: TripId,
     pub(crate) route_name: Option<String>,
     pub(crate) train_number: Option<TrainNumber>,
@@ -101,18 +81,10 @@ pub(crate) struct Leg {
     pub(crate) polyline: String,
 }
 
-impl TryFrom<&Leg> for TrainSegmentRowV2 {
-    type Error = IngestError;
-
-    fn try_from(leg: &Leg) -> Result<Self, Self::Error> {
-        let source_id = leg
-            .source_id
-            .clone()
-            .ok_or_else(|| IngestError::Unsourced {
-                trip_id: leg.trip_id.clone(),
-            })?;
-        Ok(Self {
-            source_id,
+impl From<&Leg> for TrainSegmentRowV2 {
+    fn from(leg: &Leg) -> Self {
+        Self {
+            source_id: leg.source_id.clone(),
             trip_id: leg.trip_id.clone(),
             route_name: leg.route_name.clone(),
             train_number: leg.train_number,
@@ -123,7 +95,7 @@ impl TryFrom<&Leg> for TrainSegmentRowV2 {
             from_stop_id: leg.from_stop_id.clone(),
             departure: leg.departure,
             arrival: leg.arrival,
-        })
+        }
     }
 }
 
@@ -144,23 +116,25 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
         outcome.deduped += captured.legs.len() + captured.not_rail;
         for leg in &captured.legs {
             let line = match shape_of(leg)? {
-                Shape::Captured(line) => line,
+                Shape::Captured(line) => Some(line),
                 Shape::Corrected(line) => {
                     outcome.shape_corrected += 1;
-                    line
+                    Some(line)
                 }
                 Shape::Missing => {
                     outcome.shapeless += 1;
-                    continue;
+                    None
                 }
             };
-            match countries.containing(starts_from(&line)) {
-                Some(country) => placed.push(GeoRow {
-                    row: TrainSegmentRowV2::try_from(leg)?,
-                    geometry: line,
-                    country,
-                }),
-                None => outcome.unplaceable += 1,
+            if let Some(line) = line {
+                match countries.containing(starts_from(&line)) {
+                    Some(country) => placed.push(GeoRow {
+                        row: TrainSegmentRowV2::from(leg),
+                        geometry: line,
+                        country,
+                    }),
+                    None => outcome.unplaceable += 1,
+                }
             }
         }
     }
@@ -296,7 +270,7 @@ mod tests {
     use url::Url;
 
     use super::*;
-    use crate::legacy::legacy_source;
+    use crate::legacy::legacy_sources;
 
     struct Everywhere(Country);
 
@@ -783,23 +757,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_capture_from_before_sources_were_recorded_is_derived_under_its_legacy_source() {
+    async fn a_legacy_capture_before_the_move_to_delfi_is_derived_under_gtfs_de() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let before_delfi = Utc.with_ymd_and_hms(2026, 7, 21, 14, 0, 0).unwrap();
-        let after_delfi = Utc.with_ymd_and_hms(2026, 7, 25, 14, 0, 0).unwrap();
-        append_legacy(&root, before_delfi).await;
-        append_legacy(&root, after_delfi).await;
+        append_legacy(
+            &root,
+            Utc.with_ymd_and_hms(2026, 7, 22, 23, 59, 59).unwrap(),
+        )
+        .await;
 
-        let outcome = ingest(&root, &germany()).await.expect("ingest");
+        ingest(&root, &germany()).await.expect("ingest");
 
-        assert_eq!(outcome.deduped, fixture().len() * 2);
-        let mut expected = vec![
-            legacy_source(before_delfi).id().to_string(),
-            legacy_source(after_delfi).id().to_string(),
-        ];
-        expected.sort();
-        assert_eq!(sources_derived(&root).await, expected);
+        let [gtfs_de, _] = legacy_sources().map(|source| source.id().to_string());
+        assert_eq!(sources_derived(&root).await, [gtfs_de]);
+    }
+
+    #[tokio::test]
+    async fn a_legacy_capture_from_the_move_to_delfi_is_derived_under_delfi() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        append_legacy(&root, Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap()).await;
+
+        ingest(&root, &germany()).await.expect("ingest");
+
+        let [_, delfi] = legacy_sources().map(|source| source.id().to_string());
+        assert_eq!(sources_derived(&root).await, [delfi]);
     }
 
     #[tokio::test]
