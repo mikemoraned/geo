@@ -620,8 +620,9 @@ At the end of the slice, once its features are in.
       every value, so a check added to one later is caught. The table writer takes its geometry
       columns from `geometry_fields`, as the Rust writers do, and a test holds its layout to
       `file_schema`.
-- [ ] Give `session` a new version, `session_v2`. Point its writer and readers at it, re-derive
+- [x] Give `session` a new version, `session_v2`. Point its writer and readers at it, re-derive
       it, and delete the old version's files.
+      `notebooks/sessions` is deleted rather than moved to `session_v2`.
 - [ ] Give `session_sample` a new version, `session_sample_v2`, as for `session_v2`.
 - [ ] Give `session_crossing` a new version, `session_crossing_v2`, as for `session_v2`.
 - [ ] Give `gps_reading` a new version, `gps_reading_v2`. Copy its rows into the new version with

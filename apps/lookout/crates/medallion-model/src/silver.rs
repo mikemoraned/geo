@@ -1,9 +1,9 @@
 use medallion::{RowError, SilverTarget};
 
 use crate::{
-    SESSION, SESSION_CROSSING, SESSION_SAMPLE, SessionCrossingRow, SessionRow, SessionSampleRow,
-    TRAIN_SEGMENT_V2, TRAIN_SESSION, TRAIN_SESSION_SAMPLE, TrainSegmentRowV2, TrainSessionRow,
-    TrainSessionSampleRow, WATER_CROSSING_V2, WaterCrossingRowV2,
+    SESSION_CROSSING, SESSION_SAMPLE, SESSION_V2, SessionCrossingRow, SessionRowV2,
+    SessionSampleRow, TRAIN_SEGMENT_V2, TRAIN_SESSION, TRAIN_SESSION_SAMPLE, TrainSegmentRowV2,
+    TrainSessionRow, TrainSessionSampleRow, WATER_CROSSING_V2, WaterCrossingRowV2,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -17,7 +17,7 @@ pub enum TargetError {
 type Definition = fn() -> Result<SilverTarget, RowError>;
 
 const TARGETS: [(&str, Definition); 7] = [
-    (SESSION.name, SilverTarget::of::<SessionRow>),
+    (SESSION_V2.name, SilverTarget::of::<SessionRowV2>),
     (SESSION_SAMPLE.name, SilverTarget::of::<SessionSampleRow>),
     (TRAIN_SEGMENT_V2.name, SilverTarget::of::<TrainSegmentRowV2>),
     (TRAIN_SESSION.name, SilverTarget::of::<TrainSessionRow>),
@@ -94,6 +94,6 @@ mod tests {
         let err = silver_target("crossings").unwrap_err();
 
         assert!(err.to_string().contains("crossings"), "{err}");
-        assert!(err.to_string().contains(SESSION.name), "{err}");
+        assert!(err.to_string().contains(SESSION_V2.name), "{err}");
     }
 }

@@ -36,7 +36,7 @@ pub async fn choose(root: &Root, choosing: Choosing) -> Result<Vec<Replay>, Choo
     }
 
     let mut replays = Vec::new();
-    for country in medallion::countries_of(root, medallion_model::SESSION).await? {
+    for country in medallion::countries_of(root, medallion_model::SESSION_V2).await? {
         replays.extend(chosen_in(root, country, choosing).await?);
     }
     Ok(replays)
@@ -52,7 +52,7 @@ async fn chosen_in(
         .register_if_present(medallion_model::SESSION_CROSSING, "session_crossing")
         .await?;
     for (dataset, table) in [
-        (medallion_model::SESSION, "session"),
+        (medallion_model::SESSION_V2, "session_v2"),
         (medallion_model::SESSION_SAMPLE, "session_sample"),
     ] {
         if !query.register_of_country(dataset, table, country).await? {
@@ -63,7 +63,7 @@ async fn chosen_in(
     let counted: Vec<Counted> = query
         .rows(&format!(
             "SELECT c.session_id, COUNT(*) AS crossings
-             FROM session_crossing c JOIN session s USING (session_id)
+             FROM session_crossing c JOIN session_v2 s USING (session_id)
              GROUP BY c.session_id
              HAVING COUNT(*) >= {min}
              ORDER BY crossings DESC, c.session_id

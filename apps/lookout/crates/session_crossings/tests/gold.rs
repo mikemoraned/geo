@@ -2,7 +2,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use domain::{Bbox, CrossingId, DeviceId, SessionId, StartedBy};
 use geo_types::{LineString, Point};
 use medallion::{Country, GeoRow, Root, write_geo_rows, write_rows};
-use medallion_model::{SessionCrossingRow, SessionRow, SessionSampleRow};
+use medallion_model::{SessionCrossingRow, SessionRowV2, SessionSampleRow};
 use session_crossings::gold::{Choosing, choose};
 
 const BERLIN: (f64, f64) = (13.404954, 52.520008);
@@ -12,9 +12,9 @@ fn at(minute: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 7, 22, 9, minute, 0).unwrap()
 }
 
-fn session_of(named: &str, at_lon_lat: (f64, f64)) -> (SessionRow, Point<f64>) {
+fn session_of(named: &str, at_lon_lat: (f64, f64)) -> (SessionRowV2, Point<f64>) {
     let (lon, lat) = at_lon_lat;
-    let session = SessionRow {
+    let session = SessionRowV2 {
         session_id: SessionId::new(named).expect("a session id"),
         device_id: DeviceId::new(format!("device-{named}")).expect("a device id"),
         started_at: at(0),

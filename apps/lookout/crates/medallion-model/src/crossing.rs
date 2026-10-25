@@ -3,7 +3,7 @@ use domain::{CrossingCompactId, CrossingId, DeviceId, SessionId};
 use medallion::{COUNTRY, DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
-use crate::SessionRow;
+use crate::SessionRowV2;
 
 pub const WATER_CROSSING_V2: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("water_crossing_v2", COUNTRY);
@@ -84,7 +84,7 @@ impl Row for SessionCrossingRow {
     const INSTANTS: &'static [&'static str] = &["crossed_at"];
 
     fn example() -> Self {
-        let session = SessionRow::example();
+        let session = SessionRowV2::example();
         Self {
             session_id: session.session_id,
             crossing_id: WaterCrossingRowV2::example().crossing_id,
