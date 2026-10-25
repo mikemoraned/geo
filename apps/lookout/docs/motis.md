@@ -174,7 +174,7 @@ The id is a UUID v5 of those fields, so one source always gets the same id. A ch
 such as a Motis upgrade or a new Overture release, makes a new source. A label adds to the hash
 only when present.
 
-Bronze `motis_source_v2` holds one row per source, unpartitioned, and recording a source already
+Bronze `motis_source_v3` holds one row per source, unpartitioned, and recording a source already
 present writes nothing. Bronze `motis_segment_v2` holds the captured legs, partitioned by
 `polled_date`, with one file per poll. A row is one leg seen in one poll: the trip, its train
 number and agency, the mode, both stops, the scheduled and realtime times, and the polyline.

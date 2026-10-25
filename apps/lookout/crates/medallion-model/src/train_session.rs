@@ -5,7 +5,7 @@ use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Label, MotisSourceId, MotisSourceRowV2, TrainSegmentRowV2, TripId};
+use crate::{Label, MotisSourceId, MotisSourceRowV3, TrainSegmentRowV2, TripId};
 
 pub const TRAIN_SESSION: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("train_session", "start_date");
@@ -49,7 +49,7 @@ impl Row for TrainSessionRow {
     const UNIQUE: &'static [&'static str] = &["session_id"];
 
     fn example() -> Self {
-        let source = MotisSourceRowV2::example();
+        let source = MotisSourceRowV3::example();
         let trip_id = TrainSegmentRowV2::example().trip_id;
         Self {
             session_id: train_session_id(&source.source_id, &trip_id),
