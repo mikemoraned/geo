@@ -627,11 +627,13 @@ At the end of the slice, once its features are in.
 - [x] Give `session_crossing` a new version, `session_crossing_v2`, as for `session_v2`.
       Two passes named a crossing that the water crossings run of 24 October renamed.
       Re-deriving gives them its new id.
-- [ ] Give `gps_reading` a new version, `gps_reading_v2`. Copy its rows into the new version with
+- [x] Give `gps_reading` a new version, `gps_reading_v2`. Copy its rows into the new version with
       a one-off binary, committed with the data it writes and then removed. Point its writer and
       readers at it, and delete the old version's files.
-- [ ] Give `accel_reading` a new version, `accel_reading_v2`, as for `gps_reading_v2`.
-- [ ] Give `device_session` a new version, `device_session_v2`, as for `gps_reading_v2`.
+      The copy keeps each row's ingestion date. Each date's rows sit in one file named for the
+      instant of the copy, since `Query` does not show which batch wrote a row.
+- [x] Give `accel_reading` a new version, `accel_reading_v2`, as for `gps_reading_v2`.
+- [x] Give `device_session` a new version, `device_session_v2`, as for `gps_reading_v2`.
 - [ ] Make `Leg::source_id`, in `crates/motis/src/ingest.rs`, a `MotisSourceId` rather than an
       `Option`. Both datasets `captures` reads give every leg a source: `motis_segment_v2` stores
       one in every row, and `legacy_source_id_sql` gives every `motis_segment` row one. Remove
@@ -724,7 +726,7 @@ At the end of the slice, once its features are in.
       `From<_> for String`, and an `Empty*` error by hand.
 - [ ] Register each dataset under its own name, as the "Dataset versions" section of
       `docs/medallion.md` states. In production, `crates/recorder/src/sessions.rs` registers
-      `gps_reading` as `samples` and `device_session` as `session_starts`. In tests,
+      `gps_reading_v2` as `samples` and `device_session_v2` as `session_starts`. In tests,
       `crates/motis/src/ingest.rs` registers `train_segment_v2` as `derived`, and
       `crates/motis/src/train_sessions.rs` and the `recorder` crate use `sessions`, `samples`,
       and `d`. Leave the test setup in `crates/motis/tests/common/mod.rs`, which registers

@@ -24,7 +24,7 @@ derivation may replace.
 ## The bronze datasets: what arrived
 
 Every telemetry payload lands verbatim in `raw_sample`, keyed on its md5, and the readings
-interpreted from it go to one dataset per sensor. `device_session` holds what a device said about
+interpreted from it go to one dataset per sensor. `device_session_v2` holds what a device said about
 itself as recording began.
 
 `motis_segment` holds trip segments as polled, duplication allowed, with the times as instants and

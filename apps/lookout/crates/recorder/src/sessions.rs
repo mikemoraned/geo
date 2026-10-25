@@ -136,7 +136,7 @@ impl Session {
 pub async fn sessions(root: &Root, gap: Gap, lead: Lead) -> Result<Vec<Session>, SessionError> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(medallion_model::GPS_READING, SAMPLES)
+        .register_if_present(medallion_model::GPS_READING_V2, SAMPLES)
         .await?
     {
         return Ok(Vec::new());
@@ -144,7 +144,7 @@ pub async fn sessions(root: &Root, gap: Gap, lead: Lead) -> Result<Vec<Session>,
     let samples: Vec<Sample> = query.rows(DISTINCT_SAMPLES).await?;
 
     let started = if query
-        .register_if_present(medallion_model::DEVICE_SESSION, SESSION_STARTS)
+        .register_if_present(medallion_model::DEVICE_SESSION_V2, SESSION_STARTS)
         .await?
     {
         started_by_device(query.rows(DISTINCT_SESSION_STARTS).await?)

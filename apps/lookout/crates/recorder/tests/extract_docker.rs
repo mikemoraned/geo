@@ -115,8 +115,8 @@ async fn extract_queue_to_store_docker() {
     let query = Query::new(Root::new(dir.path()));
     for dataset in [
         medallion_model::RAW_SAMPLE,
-        medallion_model::GPS_READING,
-        medallion_model::ACCEL_READING,
+        medallion_model::GPS_READING_V2,
+        medallion_model::ACCEL_READING_V2,
     ] {
         query
             .register(dataset, dataset.name)
@@ -126,8 +126,8 @@ async fn extract_queue_to_store_docker() {
     let mut counts = Vec::new();
     for dataset in [
         medallion_model::RAW_SAMPLE,
-        medallion_model::ACCEL_READING,
-        medallion_model::GPS_READING,
+        medallion_model::ACCEL_READING_V2,
+        medallion_model::GPS_READING_V2,
     ] {
         counts.push(
             query
@@ -145,7 +145,7 @@ async fn extract_queue_to_store_docker() {
     let fixes: Vec<Fix> = query
         .rows(&format!(
             "SELECT lat FROM {} ORDER BY t",
-            medallion_model::GPS_READING.name
+            medallion_model::GPS_READING_V2.name
         ))
         .await
         .expect("gps fixes");

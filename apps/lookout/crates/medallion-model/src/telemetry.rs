@@ -6,15 +6,6 @@ use domain::{DeviceId, DeviceType};
 pub const RAW_SAMPLE: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("raw_sample", "ingested_date");
 
-pub const GPS_READING: DatasetSpec<layers::Bronze> =
-    DatasetSpec::partitioned("gps_reading", "ingested_date");
-
-pub const ACCEL_READING: DatasetSpec<layers::Bronze> =
-    DatasetSpec::partitioned("accel_reading", "ingested_date");
-
-pub const DEVICE_SESSION: DatasetSpec<layers::Bronze> =
-    DatasetSpec::partitioned("device_session", "ingested_date");
-
 pub const GPS_READING_V2: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("gps_reading_v2", "ingested_date");
 
@@ -41,97 +32,6 @@ impl Row for RawSampleRow {
             md5: "example".to_string(),
             received_at: Some(0),
             json: "{}".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct GpsReadingRow {
-    pub device_id: DeviceId,
-    pub t: i64,
-    pub lat: f64,
-    pub lon: f64,
-    pub alt: Option<f64>,
-    pub acc: f64,
-    pub speed: Option<f64>,
-    pub heading: Option<f64>,
-}
-
-impl Row for GpsReadingRow {
-    type Layer = layers::Bronze;
-    const DATASET: DatasetSpec<Self::Layer> = GPS_READING;
-    const INSTANTS: &'static [&'static str] = &["t"];
-
-    fn example() -> Self {
-        Self {
-            device_id: DeviceId::new("example").expect("a constant device id is not empty"),
-            t: 0,
-            lat: 0.0,
-            lon: 0.0,
-            alt: Some(0.0),
-            acc: 0.0,
-            speed: Some(0.0),
-            heading: Some(0.0),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct AccelReadingRow {
-    pub device_id: DeviceId,
-    pub t: i64,
-    pub rms: f64,
-    pub peak: f64,
-    pub n: u32,
-    pub x: Option<f64>,
-    pub y: Option<f64>,
-    pub z: Option<f64>,
-}
-
-impl Row for AccelReadingRow {
-    type Layer = layers::Bronze;
-    const DATASET: DatasetSpec<Self::Layer> = ACCEL_READING;
-    const INSTANTS: &'static [&'static str] = &["t"];
-
-    fn example() -> Self {
-        Self {
-            device_id: GpsReadingRow::example().device_id,
-            t: 0,
-            rms: 0.0,
-            peak: 0.0,
-            n: 1,
-            x: Some(0.0),
-            y: Some(0.0),
-            z: Some(0.0),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DeviceSessionRow {
-    pub device_id: DeviceId,
-    pub t: i64,
-    pub device_type: DeviceType,
-    pub platform: String,
-    pub user_agent: String,
-    pub os: Option<String>,
-    pub os_version: Option<String>,
-}
-
-impl Row for DeviceSessionRow {
-    type Layer = layers::Bronze;
-    const DATASET: DatasetSpec<Self::Layer> = DEVICE_SESSION;
-    const INSTANTS: &'static [&'static str] = &["t"];
-
-    fn example() -> Self {
-        Self {
-            device_id: GpsReadingRow::example().device_id,
-            t: 0,
-            device_type: DeviceType::Iphone,
-            platform: "example".to_string(),
-            user_agent: "example".to_string(),
-            os: Some("example".to_string()),
-            os_version: Some("example".to_string()),
         }
     }
 }
@@ -237,7 +137,7 @@ mod tests {
     #[test]
     fn the_class_of_device_is_a_string_column() {
         assert!(matches!(
-            column::<DeviceSessionRow>("device_type").data_type(),
+            column::<DeviceSessionRowV2>("device_type").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
