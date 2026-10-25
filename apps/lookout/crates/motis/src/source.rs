@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use medallion::{Query, Root};
-use medallion_model::{MOTIS_SOURCE_V2, MotisSource, MotisSourceRowV2};
+use medallion_model::{MOTIS_SOURCE_V3, MotisSource, MotisSourceRowV3};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Registration {
@@ -28,22 +28,22 @@ pub async fn register(
     {
         return Ok(Registration::AlreadyRecorded);
     }
-    root.rows_of::<MotisSourceRowV2>()
+    root.rows_of::<MotisSourceRowV3>()
         .append_rows(at, &[source.row(at)])
         .await?;
     Ok(Registration::Written)
 }
 
-pub async fn recorded(root: &Root) -> Result<Vec<MotisSourceRowV2>, SourceError> {
+pub async fn recorded(root: &Root) -> Result<Vec<MotisSourceRowV3>, SourceError> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(MOTIS_SOURCE_V2, MOTIS_SOURCE_V2.name)
+        .register_if_present(MOTIS_SOURCE_V3, MOTIS_SOURCE_V3.name)
         .await?
     {
         return Ok(Vec::new());
     }
     Ok(query
-        .rows(&format!("SELECT * FROM {}", MOTIS_SOURCE_V2.name))
+        .rows(&format!("SELECT * FROM {}", MOTIS_SOURCE_V3.name))
         .await?)
 }
 
@@ -113,21 +113,5 @@ mod tests {
 
         assert_eq!(registration, Registration::Written);
         assert_eq!(recorded(&root).await.expect("read back").len(), 2);
-    }
-
-    #[tokio::test]
-    async fn a_recorded_row_reads_back_as_the_source_written() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let root = Root::new(tmp.path());
-        register(&root, &source(Feed::Transitous), at(0))
-            .await
-            .expect("register");
-
-        let row = recorded(&root).await.expect("read back").remove(0);
-
-        assert_eq!(
-            MotisSource::try_from(row).expect("a valid source"),
-            source(Feed::Transitous)
-        );
     }
 }

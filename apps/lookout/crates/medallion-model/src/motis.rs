@@ -8,7 +8,7 @@ use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumIter, EnumString};
 
-use crate::motis_source::{MotisSourceId, MotisSourceRowV2};
+use crate::motis_source::{MotisSourceId, MotisSourceRowV3};
 
 pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment", "polled_date");
@@ -312,7 +312,7 @@ impl Row for MotisCaptureRow {
 
     fn example() -> Self {
         Self::of(
-            MotisSourceRowV2::example().source_id,
+            MotisSourceRowV3::example().source_id,
             MotisSegmentRow::example(),
         )
     }
@@ -343,7 +343,7 @@ impl Row for TrainSegmentRowV2 {
 
     fn example() -> Self {
         Self {
-            source_id: MotisSourceRowV2::example().source_id,
+            source_id: MotisSourceRowV3::example().source_id,
             trip_id: TripId("example".to_string()),
             route_name: Some("example".to_string()),
             train_number: TrainNumber::from_gtfs("1"),

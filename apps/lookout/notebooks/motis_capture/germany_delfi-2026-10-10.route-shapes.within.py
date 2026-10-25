@@ -133,14 +133,14 @@ def _(bronze):
     SOURCE = (
         """
     source AS (
-        SELECT source_id FROM motis_source_v2
+        SELECT source_id FROM motis_source_v3
         WHERE feed = 'local' AND label = $label AND country = $country AND overture_region_id IS NULL
     )""",
     )
     bronze(
         """
         SELECT source_id, base_url, motis_version, overture_release, registered_at
-        FROM source JOIN motis_source_v2 USING (source_id)
+        FROM source JOIN motis_source_v3 USING (source_id)
         """,
         SOURCE,
     )

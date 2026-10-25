@@ -74,7 +74,7 @@ def _(MEDALLION_ROOT, duckdb):
     con.execute(
         f"""
         CREATE VIEW source AS
-        SELECT * FROM read_parquet('{MEDALLION_ROOT}/bronze/motis_source_v2/*.parquet')
+        SELECT * FROM read_parquet('{MEDALLION_ROOT}/bronze/motis_source_v3/*.parquet')
         """
     )
     con.execute(

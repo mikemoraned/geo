@@ -661,11 +661,16 @@ At the end of the slice, once its features are in.
       `extract_manifest_v3`, copied by a one-off binary. The country stays text, as
       [docs/overture.md](overture.md#taking-an-extract-reads-the-country-division-filling-one-in-reads-the-manifest)
       requires: a row naming a country the store has no zone for still fills in.
-- [ ] Hold `base_url`, `country`, and `overture_region_id` in `MotisSourceRowV2` as `Url`,
+- [x] Hold `base_url`, `country`, and `overture_region_id` in `MotisSourceRowV2` as `Url`,
       `Country`, and `GersId`. Reading a row then checks each, as it checks the version, release,
       and label. `Country` and `GersId` need the `try_from = "String"` serde the ids have, and `url`
       its `serde` feature. If nothing outside tests then converts a row back into a `MotisSource`,
       remove `TryFrom<MotisSourceRowV2> for MotisSource`, `NotAMotisSource`, and their tests.
+      The checked columns changed the source's declaration, so it moved to `motis_source_v3`,
+      copied by a one-off binary. The country stays text, as
+      [docs/motis.md](motis.md#a-capture-names-the-server-that-answered-it) states. The base URL
+      is a `MotisBaseUrl` rather than a bare `Url`: `url`'s serde writes a plain string, which
+      hides the check from the declaration snapshot.
 - [ ] Find a country's newest extract once, in `CountryAreas` in
       `crates/transport/src/countries.rs`. Pass its id to `region_area` in `regions.rs`, which
       repeats the lookup today. Then remove `OvertureRegionArea::release`, `RegionError::NoExtract`,
