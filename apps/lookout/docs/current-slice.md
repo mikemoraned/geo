@@ -691,10 +691,12 @@ At the end of the slice, once its features are in.
       legs once rather than once per departure, and splits 25 trip and stop pairs that have two
       scheduled departures. The new grain made the segments `train_segment_v3`, with its semantics
       tag set. `motis_ingest` wrote 1,702,978 rows to it, and 165,606 train sessions.
-- [ ] Let `Sorted::Kept`, in `crates/motis/src/capture.rs`, carry the trip id, line, and segment
+- [x] Let `Sorted::Kept`, in `crates/motis/src/capture.rs`, carry the trip id, line, and segment
       that `sorted` has checked. `SegmentLog::append` in `bronze.rs` then cannot fail on them. The
       same check runs twice today, and its second copy, `BronzeError::Segment`, loses a whole poll
       where the first skips one segment and reports it.
+      `Sorted::Kept` carries a `SingleTripSegment`: the segment, its one trip, and that trip's id.
+      It leaves out the decoded line, since nothing after the coverage test reads it.
 - [ ] Fold the two side-by-side notebooks in `notebooks/motis_capture` into one that takes its
       pass's label. It can read the label from `mo.cli_args()` or a dropdown of `motis_source_v2`
       labels. They differ in 44 of about 920 lines. First move each pass's findings into the slice

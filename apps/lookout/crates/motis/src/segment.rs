@@ -60,6 +60,37 @@ impl TripSegment {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SingleTripSegment {
+    trip_id: TripId,
+    trip: TripInfo,
+    segment: TripSegment,
+}
+
+impl SingleTripSegment {
+    pub fn new(segment: TripSegment) -> Result<Self, NoTripOfItsOwn> {
+        let trip = segment.trip()?.clone();
+        let trip_id = segment.trip_id()?;
+        Ok(Self {
+            trip_id,
+            trip,
+            segment,
+        })
+    }
+
+    pub fn trip_id(&self) -> &TripId {
+        &self.trip_id
+    }
+
+    pub fn trip(&self) -> &TripInfo {
+        &self.trip
+    }
+
+    pub fn segment(&self) -> &TripSegment {
+        &self.segment
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

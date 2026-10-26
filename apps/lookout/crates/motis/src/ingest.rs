@@ -260,6 +260,7 @@ mod tests {
     use std::collections::HashMap as Map;
 
     use crate::bronze::{SegmentLog, segment_row};
+    use crate::segment::SingleTripSegment;
 
     use crate::api::types::{Mode, TripSegment};
     use arrow::array::RecordBatch;
@@ -306,11 +307,9 @@ mod tests {
     }
 
     async fn append_legacy(root: &Root, captured_at: DateTime<Utc>) {
-        let rows: Vec<MotisSegmentRow> = fixture()
+        let rows: Vec<MotisSegmentRow> = one_trip_each(fixture())
             .iter()
-            .map(|segment| {
-                segment_row(captured_at, segment, &Map::new()).expect("a segment with one trip")
-            })
+            .map(|segment| segment_row(captured_at, segment, &Map::new()))
             .collect();
         root.rows_of::<MotisSegmentRow>()
             .on_date(captured_at.date_naive())
@@ -348,10 +347,18 @@ mod tests {
             .collect()
     }
 
+    fn one_trip(segment: TripSegment) -> SingleTripSegment {
+        SingleTripSegment::new(segment).expect("a segment with one trip")
+    }
+
+    fn one_trip_each(segments: Vec<TripSegment>) -> Vec<SingleTripSegment> {
+        segments.into_iter().map(one_trip).collect()
+    }
+
     async fn ingest_polls(root: &Root, polls: &[DateTime<Utc>]) -> IngestOutcome {
         let log = log(root);
         for captured_at in polls {
-            log.append(*captured_at, &fixture(), &Map::new())
+            log.append(*captured_at, &one_trip_each(fixture()), &Map::new())
                 .await
                 .expect("append poll");
         }
@@ -418,14 +425,14 @@ mod tests {
 
         log.append(
             Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
-            &fixture(),
+            &one_trip_each(fixture()),
             &Map::new(),
         )
         .await
         .expect("first poll");
         log.append(
             Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 30).unwrap(),
-            &later,
+            &one_trip_each(later.clone()),
             &Map::new(),
         )
         .await
@@ -461,14 +468,14 @@ mod tests {
 
         log.append(
             Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
-            &fixture(),
+            &one_trip_each(fixture()),
             &Map::new(),
         )
         .await
         .expect("first poll");
         log.append(
             Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 30).unwrap(),
-            &delayed,
+            &one_trip_each(delayed),
             &Map::new(),
         )
         .await
@@ -520,7 +527,7 @@ mod tests {
         log(root)
             .append(
                 Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
-                std::slice::from_ref(segment),
+                &[one_trip(segment.clone())],
                 &Map::new(),
             )
             .await
@@ -695,7 +702,7 @@ mod tests {
         log(&root)
             .append(
                 Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
-                &segments,
+                &one_trip_each(segments.clone()),
                 &Map::new(),
             )
             .await
@@ -719,8 +726,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
-        let mut row =
-            segment_row(captured_at, &fixture()[0], &Map::new()).expect("a segment with one trip");
+        let mut row = segment_row(captured_at, &one_trip(fixture().remove(0)), &Map::new());
         blank(&mut row);
         root.rows_of::<MotisSegmentRow>()
             .on_date(captured_at.date_naive())
@@ -756,7 +762,7 @@ mod tests {
         let log = log(&root);
         log.append(
             Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
-            &fixture(),
+            &one_trip_each(fixture()),
             &Map::new(),
         )
         .await
@@ -820,11 +826,15 @@ mod tests {
         let root = Root::new(tmp.path());
         let at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
         log(&root)
-            .append(at, &fixture(), &Map::new())
+            .append(at, &one_trip_each(fixture()), &Map::new())
             .await
             .expect("append poll");
         SegmentLog::new(root.clone(), source(Feed::Transitous).id())
-            .append(at + chrono::Duration::seconds(1), &fixture(), &Map::new())
+            .append(
+                at + chrono::Duration::seconds(1),
+                &one_trip_each(fixture()),
+                &Map::new(),
+            )
             .await
             .expect("append poll");
 

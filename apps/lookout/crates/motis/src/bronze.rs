@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 
-use crate::api::types::TripSegment;
 use chrono::{DateTime, Utc};
 use medallion::Root;
 use medallion_model::{MotisCaptureRow, MotisSegmentRow, MotisSourceId, TripId};
 
 use crate::client::TripDetails;
-use crate::segment::NoTripOfItsOwn;
+use crate::segment::SingleTripSegment;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BronzeError {
@@ -14,23 +13,21 @@ pub enum BronzeError {
     Path(#[from] medallion::PathError),
     #[error("writing the capture log: {0}")]
     Write(#[from] medallion::AppendError),
-    #[error("capturing a segment: {0}")]
-    Segment(#[from] NoTripOfItsOwn),
 }
 
 pub(crate) fn segment_row(
     captured_at: DateTime<Utc>,
-    segment: &TripSegment,
+    kept: &SingleTripSegment,
     details: &HashMap<TripId, TripDetails>,
-) -> Result<MotisSegmentRow, NoTripOfItsOwn> {
-    let trip = segment.trip()?;
-    let trip_id = segment.trip_id()?;
-    let details = details.get(&trip_id);
+) -> MotisSegmentRow {
+    let trip = kept.trip();
+    let segment = kept.segment();
+    let details = details.get(kept.trip_id());
     let agency = details.map(|d| &d.agency);
 
-    Ok(MotisSegmentRow {
+    MotisSegmentRow {
         captured_at,
-        trip_id: trip_id.to_string(),
+        trip_id: kept.trip_id().to_string(),
         route_name: trip
             .display_name
             .clone()
@@ -52,7 +49,7 @@ pub(crate) fn segment_row(
         scheduled_arrival: segment.scheduled_arrival,
         realtime: segment.real_time,
         polyline: segment.polyline.clone(),
-    })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -83,18 +80,18 @@ impl SegmentLog {
     pub async fn append(
         &self,
         captured_at: DateTime<Utc>,
-        segments: &[TripSegment],
+        segments: &[SingleTripSegment],
         details: &HashMap<TripId, TripDetails>,
     ) -> Result<usize, BronzeError> {
-        let rows = segments
+        let rows: Vec<MotisCaptureRow> = segments
             .iter()
             .map(|segment| {
-                Ok(MotisCaptureRow::of(
+                MotisCaptureRow::of(
                     self.source_id.clone(),
-                    segment_row(captured_at, segment, details)?,
-                ))
+                    segment_row(captured_at, segment, details),
+                )
             })
-            .collect::<Result<Vec<_>, NoTripOfItsOwn>>()?;
+            .collect();
 
         Ok(self
             .partition(captured_at)?
@@ -112,6 +109,7 @@ mod tests {
     use url::Url;
 
     use super::*;
+    use crate::api::types::TripSegment;
 
     fn source() -> MotisSource {
         MotisSource {
@@ -127,9 +125,14 @@ mod tests {
         SegmentLog::new(Root::new(path), source().id())
     }
 
-    fn fixture_segments() -> Vec<TripSegment> {
-        serde_json::from_str(include_str!("../tests/fixtures/trips.json"))
-            .expect("parse trips fixture")
+    fn fixture_segments() -> Vec<SingleTripSegment> {
+        let segments: Vec<TripSegment> =
+            serde_json::from_str(include_str!("../tests/fixtures/trips.json"))
+                .expect("parse trips fixture");
+        segments
+            .into_iter()
+            .map(|segment| SingleTripSegment::new(segment).expect("a segment with one trip"))
+            .collect()
     }
 
     fn read_back(path: &std::path::Path) -> arrow::array::RecordBatch {
@@ -175,7 +178,10 @@ mod tests {
         let rows: Vec<MotisCaptureRow> = serde_arrow::from_record_batch(&batch).expect("read rows");
         assert_eq!(
             rows.iter().map(|r| &r.polyline).collect::<Vec<_>>(),
-            segments.iter().map(|s| &s.polyline).collect::<Vec<_>>(),
+            segments
+                .iter()
+                .map(|s| &s.segment().polyline)
+                .collect::<Vec<_>>(),
             "the encoded polylines should survive unchanged"
         );
         assert_eq!(
