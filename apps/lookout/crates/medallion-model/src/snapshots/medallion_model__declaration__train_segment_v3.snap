@@ -4,7 +4,7 @@ expression: declaration
 ---
 layer: silver
 partition_key: departure_date
-semantics: ""
+semantics: one row per scheduled leg
 unique: []
 columns:
   - name: geometry

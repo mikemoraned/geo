@@ -140,11 +140,16 @@ fills that array with exactly one trip: v2.11.3 builds each segment in `src/rail
 single `TripInfo`. Of 2,432 rail segments in one country-wide response, every one carried one
 trip. A segment carrying none, or several, is therefore an error rather than a choice.
 
-## A leg's identity is `(trip_id, from_stop_id, departure)`
+## A leg's identity is its source, trip, departure stop, and scheduled departure
 
-Timetables are minute-resolution, and two legs of one trip can depart *different* stops
-within the same minute. Keying on `(trip_id, departure)` therefore drops legs silently, with
-nothing to indicate it.
+A leg is identified by the source that captured it, its trip id, the stop it departs, and its
+scheduled departure. A delay moves the realtime departure and leaves the scheduled one, so the
+polls that see a delayed leg see one leg, and the newest capture of it is kept.
+
+Timetables are minute-resolution, and two legs of one trip can depart *different* stops within
+the same minute. A trip and a departure time alone therefore drop legs silently, with nothing to
+indicate it. A trip that departs one stop twice keeps both legs, since their scheduled departures
+differ.
 
 ## The server reports its version, not its feed
 
@@ -182,7 +187,7 @@ number and agency, the mode, both stops, the scheduled and realtime times, and t
 The earlier captures in `motis_segment` carry no source. Two sources stand for them, both the
 local server at Motis v2.10.2 with no area: one labelled `gtfs.de`, for the captures before the
 server moved to DELFI on 23 July 2026, and one labelled `delfi`, for those from then on. Silver
-`train_segment_v2` derives from both capture datasets, and gives each earlier capture the source
+`train_segment_v3` derives from both capture datasets, and gives each earlier capture the source
 its capture date falls under.
 
 Silver derived from either capture dataset holds only the rail modes a capture keeps. Deriving the

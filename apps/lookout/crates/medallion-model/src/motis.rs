@@ -16,8 +16,8 @@ pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
 pub const MOTIS_SEGMENT_V2: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment_v2", "polled_date");
 
-pub const TRAIN_SEGMENT_V2: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("train_segment_v2", "departure_date");
+pub const TRAIN_SEGMENT_V3: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("train_segment_v3", "departure_date");
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String")]
@@ -319,7 +319,7 @@ impl Row for MotisCaptureRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TrainSegmentRowV2 {
+pub struct TrainSegmentRowV3 {
     pub source_id: MotisSourceId,
     pub trip_id: TripId,
     pub route_name: Option<String>,
@@ -335,11 +335,12 @@ pub struct TrainSegmentRowV2 {
     pub arrival: DateTime<Utc>,
 }
 
-impl Row for TrainSegmentRowV2 {
+impl Row for TrainSegmentRowV3 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT_V2;
+    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT_V3;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
+    const SEMANTICS: &'static str = "one row per scheduled leg";
 
     fn example() -> Self {
         Self {
@@ -358,7 +359,7 @@ impl Row for TrainSegmentRowV2 {
     }
 }
 
-impl Dated for TrainSegmentRowV2 {
+impl Dated for TrainSegmentRowV3 {
     fn partition_date(&self) -> NaiveDate {
         self.departure.date_naive()
     }
@@ -432,7 +433,7 @@ mod tests {
     #[test]
     fn a_rail_mode_is_stored_as_text() {
         assert_eq!(
-            column::<TrainSegmentRowV2>("mode").data_type(),
+            column::<TrainSegmentRowV3>("mode").data_type(),
             &DataType::LargeUtf8
         );
     }
@@ -453,7 +454,7 @@ mod tests {
     fn a_train_number_is_a_four_byte_column_in_both_datasets() {
         for train_number in [
             column::<MotisSegmentRow>("train_number"),
-            column::<TrainSegmentRowV2>("train_number"),
+            column::<TrainSegmentRowV3>("train_number"),
         ] {
             assert_eq!(train_number.data_type(), &DataType::UInt32);
         }

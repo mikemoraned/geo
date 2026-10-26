@@ -73,11 +73,7 @@ pub async fn derive_train_sessions(
         .map(|source| (source.source_id, source.label))
         .collect();
     let mut by_trip: HashMap<(MotisSourceId, TripId), Vec<ingest::Leg>> = HashMap::new();
-    for captured in captures(root, "trip_id, from_stop_id")
-        .await?
-        .into_iter()
-        .flatten()
-    {
+    for captured in captures(root).await?.into_iter().flatten() {
         for leg in captured.legs {
             by_trip
                 .entry((leg.source_id.clone(), leg.trip_id.clone()))

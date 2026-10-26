@@ -192,7 +192,7 @@ def _(
 
     legs = pa.table(
         lookout_medallion.query_silver(
-            "SELECT from_stop_id, departure, arrival, geometry FROM train_segment_v2 "
+            "SELECT from_stop_id, departure, arrival, geometry FROM train_segment_v3 "
             "WHERE trip_id = $trip AND source_id = "
             "(SELECT source_id FROM train_session WHERE session_id = $session) "
             "ORDER BY departure",

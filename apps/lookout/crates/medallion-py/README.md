@@ -11,11 +11,11 @@ Each function's own documentation is [its docstring](../../README.md#the-python-
 ```python
 import lookout_medallion
 
-written = lookout_medallion.write_silver("train_segment_v2", table)
-written = lookout_medallion.write_silver("train_segment_v2", table, root="/some/store")
+written = lookout_medallion.write_silver("train_segment_v3", table)
+written = lookout_medallion.write_silver("train_segment_v3", table, root="/some/store")
 
 table = lookout_medallion.query_silver(
-    "SELECT trip_id, ST_X(geometry) AS lon FROM train_segment_v2 WHERE country = $country",
+    "SELECT trip_id, ST_X(geometry) AS lon FROM train_segment_v3 WHERE country = $country",
     params={"country": "DE"},
 )
 ```
