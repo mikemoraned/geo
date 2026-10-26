@@ -10,7 +10,7 @@ from conftest import BERLIN, BERLIN_UTM32N, water_crossing_table, train_segment_
 @pytest.fixture
 def written(store):
     lookout_medallion.write_silver(
-        "train_segment_v2",
+        "train_segment_v3",
         train_segment_table(["a", "b"], ["2026-07-21", "2026-07-22"], ["DE", "DE"]),
         root=str(store),
     )
@@ -33,7 +33,7 @@ def query(written, sql, country="DE", **kwargs):
 def test_a_dataset_is_read_by_name_across_every_partition_it_holds(written):
     table = query(
         written,
-        "SELECT trip_id, departure FROM train_segment_v2 ORDER BY trip_id",
+        "SELECT trip_id, departure FROM train_segment_v3 ORDER BY trip_id",
     )
 
     assert table.column("trip_id").to_pylist() == ["a", "b"]
@@ -45,7 +45,7 @@ def test_a_dataset_is_read_by_name_across_every_partition_it_holds(written):
 def test_a_partition_value_below_the_country_comes_back_as_a_column(written):
     table = query(
         written,
-        "SELECT DISTINCT departure_date FROM train_segment_v2 ORDER BY departure_date",
+        "SELECT DISTINCT departure_date FROM train_segment_v3 ORDER BY departure_date",
     )
 
     assert table.column("departure_date").to_pylist() == ["2026-07-21", "2026-07-22"]
@@ -54,7 +54,7 @@ def test_a_partition_value_below_the_country_comes_back_as_a_column(written):
 def test_a_parameter_binds_as_a_value(written):
     table = query(
         written,
-        "SELECT trip_id FROM train_segment_v2 WHERE trip_id = $trip",
+        "SELECT trip_id FROM train_segment_v3 WHERE trip_id = $trip",
         params={"trip": "b"},
     )
 
@@ -64,7 +64,7 @@ def test_a_parameter_binds_as_a_value(written):
 def test_a_boolean_parameter_binds_as_a_boolean_and_not_as_a_number(written):
     table = query(
         written,
-        "SELECT trip_id FROM train_segment_v2 WHERE realtime = $realtime ORDER BY trip_id",
+        "SELECT trip_id FROM train_segment_v3 WHERE realtime = $realtime ORDER BY trip_id",
         params={"realtime": True},
     )
 
@@ -74,7 +74,7 @@ def test_a_boolean_parameter_binds_as_a_boolean_and_not_as_a_number(written):
 def test_a_parameter_carrying_a_quote_matches_nothing(written):
     table = query(
         written,
-        "SELECT trip_id FROM train_segment_v2 WHERE trip_id = $trip",
+        "SELECT trip_id FROM train_segment_v3 WHERE trip_id = $trip",
         params={"trip": "b' OR '1' = '1"},
     )
 
@@ -93,7 +93,7 @@ def test_geometry_reads_back_as_geometry_rather_than_as_bytes(written):
 def test_two_datasets_can_be_read_in_one_query(written):
     table = query(
         written,
-        "SELECT c.crossing_compact_id, s.trip_id FROM water_crossing_v2 c, train_segment_v2 s "
+        "SELECT c.crossing_compact_id, s.trip_id FROM water_crossing_v2 c, train_segment_v3 s "
         "WHERE s.trip_id = 'a'",
     )
 
@@ -103,7 +103,7 @@ def test_two_datasets_can_be_read_in_one_query(written):
 def test_a_query_matching_nothing_still_names_its_columns(written):
     table = query(
         written,
-        "SELECT trip_id FROM train_segment_v2 WHERE trip_id = 'none'",
+        "SELECT trip_id FROM train_segment_v3 WHERE trip_id = 'none'",
     )
 
     assert table.num_rows == 0
@@ -112,16 +112,16 @@ def test_a_query_matching_nothing_still_names_its_columns(written):
 
 def test_a_read_answers_with_the_named_country_and_no_other(store):
     lookout_medallion.write_silver(
-        "train_segment_v2",
+        "train_segment_v3",
         train_segment_table(["de", "gb"], ["2026-07-21", "2026-07-21"], ["DE", "GB"]),
         root=str(store),
     )
 
-    assert query(store, "SELECT trip_id FROM train_segment_v2").column(
+    assert query(store, "SELECT trip_id FROM train_segment_v3").column(
         "trip_id"
     ).to_pylist() == ["de"]
     assert query(
-        store, "SELECT trip_id FROM train_segment_v2", country="GB"
+        store, "SELECT trip_id FROM train_segment_v3", country="GB"
     ).column("trip_id").to_pylist() == ["gb"]
 
 
@@ -150,7 +150,7 @@ class TestWhatIsRefused:
         with pytest.raises(TypeError):
             query(
                 written,
-                "SELECT trip_id FROM train_segment_v2 WHERE trip_id = $trip",
+                "SELECT trip_id FROM train_segment_v3 WHERE trip_id = $trip",
                 params={"trip": {"not": "a value"}},
             )
 

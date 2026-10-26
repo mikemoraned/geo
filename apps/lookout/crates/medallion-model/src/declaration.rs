@@ -13,7 +13,7 @@ use crate::{
     GeometrySource, GersId, GpsReadingRowV2, Label, MotisBaseUrl, MotisCaptureRow, MotisSegmentRow,
     MotisSourceId, MotisSourceRowV3, MotisVersion, OVERTURE_EXTRACT, OverlapKind, OvertureRelease,
     RailMode, RawSampleRow, SessionCrossingRowV2, SessionRowV2, SessionSampleRowV2, StopId,
-    TrainSegmentRowV2, TrainSessionRow, TrainSessionSampleRow, TripId, WaterCrossingRowV2,
+    TrainSegmentRowV3, TrainSessionRow, TrainSessionSampleRow, TripId, WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -280,7 +280,7 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<MotisSegmentRow>(&known),
         declaration::<MotisCaptureRow>(&known),
         declaration::<MotisSourceRowV3>(&known),
-        declaration::<TrainSegmentRowV2>(&known),
+        declaration::<TrainSegmentRowV3>(&known),
         declaration::<SessionRowV2>(&known),
         declaration::<SessionSampleRowV2>(&known),
         declaration::<TrainSessionRow>(&known),

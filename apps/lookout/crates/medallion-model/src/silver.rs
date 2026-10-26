@@ -2,7 +2,7 @@ use medallion::{RowError, SilverTarget};
 
 use crate::{
     SESSION_CROSSING_V2, SESSION_SAMPLE_V2, SESSION_V2, SessionCrossingRowV2, SessionRowV2,
-    SessionSampleRowV2, TRAIN_SEGMENT_V2, TRAIN_SESSION, TRAIN_SESSION_SAMPLE, TrainSegmentRowV2,
+    SessionSampleRowV2, TRAIN_SEGMENT_V3, TRAIN_SESSION, TRAIN_SESSION_SAMPLE, TrainSegmentRowV3,
     TrainSessionRow, TrainSessionSampleRow, WATER_CROSSING_V2, WaterCrossingRowV2,
 };
 
@@ -22,7 +22,7 @@ const TARGETS: [(&str, Definition); 7] = [
         SESSION_SAMPLE_V2.name,
         SilverTarget::of::<SessionSampleRowV2>,
     ),
-    (TRAIN_SEGMENT_V2.name, SilverTarget::of::<TrainSegmentRowV2>),
+    (TRAIN_SEGMENT_V3.name, SilverTarget::of::<TrainSegmentRowV3>),
     (TRAIN_SESSION.name, SilverTarget::of::<TrainSessionRow>),
     (
         TRAIN_SESSION_SAMPLE.name,

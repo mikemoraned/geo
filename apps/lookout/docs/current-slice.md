@@ -680,12 +680,17 @@ At the end of the slice, once its features are in.
       `RegionError::Release` went with the release's parse, in the `OvertureRelease` task. Each
       test module keeps its own `division_area`, since the two build different columns. Recording
       an extract is shared instead.
-- [ ] Give `captures`, in `crates/motis/src/ingest.rs`, one leg identity that survives a delay:
+- [x] Give `captures`, in `crates/motis/src/ingest.rs`, one leg identity that survives a delay:
       source, trip, departure stop, and scheduled departure. It replaces the `keyed_by` SQL each
       caller passes. `ingest` keys `train_segment_v2` on the realtime departure today, so it keeps a
       delayed leg once for each departure it saw. `train_session` keys on the departure stop alone,
       merging them, and counts nothing. Count each dataset's legs before and after, and update "A
       leg's identity" in `docs/motis.md`.
+      Over the captures to 25 October, the old keys kept 1,808,403 rail legs for the segments and
+      1,702,958 for train sessions. The new key keeps 1,702,983 for both. It keeps 97,685 delayed
+      legs once rather than once per departure, and splits 25 trip and stop pairs that have two
+      scheduled departures. The new grain made the segments `train_segment_v3`, with its semantics
+      tag set. `motis_ingest` wrote 1,702,978 rows to it, and 165,606 train sessions.
 - [ ] Let `Sorted::Kept`, in `crates/motis/src/capture.rs`, carry the trip id, line, and segment
       that `sorted` has checked. `SegmentLog::append` in `bronze.rs` then cannot fail on them. The
       same check runs twice today, and its second copy, `BronzeError::Segment`, loses a whole poll
@@ -877,6 +882,13 @@ space in images, is a research task in the slice "Evaluation framework with asso
 predictor improvement".
 
 ### Observations
+
+#### `motis_ingest` on the captures to 25 October
+
+On 26 October, `motis_ingest` read 2,742,313 captured rows, which collapse to 1,703,003 legs.
+
+- A run that started with about 13 GiB of disk free ran out of space while writing
+  `train_segment_v3`. With 28 GiB free, the next run finished.
 
 #### `motis_ingest` on the captures to 22 October
 

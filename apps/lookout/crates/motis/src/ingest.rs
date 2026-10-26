@@ -5,11 +5,13 @@ use domain::TrainNumber;
 use geo_types::{Coord, LineString, Point};
 use medallion::{Countries, DatasetSpec, GeoRow, Query, Root, layers};
 use medallion_model::{
-    AgencyId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, RailMode, StopId, TrainSegmentRowV2,
+    AgencyId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, RailMode, StopId, TrainSegmentRowV3,
     TripId,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
+
+const LEG_IDENTITY: &str = "trip_id, from_stop_id, scheduled_departure";
 
 const LEG_COLUMNS: &str = "trip_id, route_name, train_number, agency_id, agency_name, mode,
     realtime, from_stop_id, from_lat, from_lon, to_lat, to_lon, departure, arrival, polyline";
@@ -81,7 +83,7 @@ pub(crate) struct Leg {
     pub(crate) polyline: String,
 }
 
-impl From<&Leg> for TrainSegmentRowV2 {
+impl From<&Leg> for TrainSegmentRowV3 {
     fn from(leg: &Leg) -> Self {
         Self {
             source_id: leg.source_id.clone(),
@@ -106,10 +108,10 @@ pub(crate) struct Captured {
 }
 
 pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOutcome, IngestError> {
-    let captures = captures(root, "trip_id, from_stop_id, departure").await?;
+    let captures = captures(root).await?;
 
     let mut outcome = IngestOutcome::default();
-    let mut placed: Vec<GeoRow<TrainSegmentRowV2, LineString<f64>>> = Vec::new();
+    let mut placed: Vec<GeoRow<TrainSegmentRowV3, LineString<f64>>> = Vec::new();
     for captured in captures.into_iter().flatten() {
         outcome.read += captured.read;
         outcome.not_rail += captured.not_rail;
@@ -129,7 +131,7 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
             if let Some(line) = line {
                 match countries.containing(starts_from(&line)) {
                     Some(country) => placed.push(GeoRow {
-                        row: TrainSegmentRowV2::from(leg),
+                        row: TrainSegmentRowV3::from(leg),
                         geometry: line,
                         country,
                     }),
@@ -146,10 +148,7 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
     Ok(outcome)
 }
 
-pub(crate) async fn captures(
-    root: &Root,
-    keyed_by: &str,
-) -> Result<[Option<Captured>; 2], IngestError> {
+pub(crate) async fn captures(root: &Root) -> Result<[Option<Captured>; 2], IngestError> {
     let query = Query::new(root.clone());
     let legacy_source_id = legacy_source_id_sql("captured_at");
     Ok([
@@ -157,14 +156,14 @@ pub(crate) async fn captures(
             &query,
             MOTIS_SEGMENT,
             &format!("{legacy_source_id} AS source_id"),
-            &format!("{legacy_source_id}, {keyed_by}"),
+            &format!("{legacy_source_id}, {LEG_IDENTITY}"),
         )
         .await?,
         captured(
             &query,
             MOTIS_SEGMENT_V2,
             "source_id",
-            &format!("source_id, {keyed_by}"),
+            &format!("source_id, {LEG_IDENTITY}"),
         )
         .await?,
     ])
@@ -360,7 +359,7 @@ mod tests {
     }
 
     async fn derived(root: &Root) -> Query {
-        derived_from(root, medallion_model::TRAIN_SEGMENT_V2).await
+        derived_from(root, medallion_model::TRAIN_SEGMENT_V3).await
     }
 
     async fn derived_from(root: &Root, dataset: DatasetSpec<layers::Silver>) -> Query {
@@ -446,6 +445,37 @@ mod tests {
             fixture().len() as i64,
             "every leg should carry the later capture's realtime flag"
         );
+    }
+
+    #[tokio::test]
+    async fn a_delayed_leg_is_kept_once() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let log = log(&root);
+        let delay = chrono::Duration::minutes(3);
+        let mut delayed = fixture();
+        for segment in &mut delayed {
+            segment.departure += delay;
+            segment.arrival += delay;
+        }
+
+        log.append(
+            Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
+            &fixture(),
+            &Map::new(),
+        )
+        .await
+        .expect("first poll");
+        log.append(
+            Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 30).unwrap(),
+            &delayed,
+            &Map::new(),
+        )
+        .await
+        .expect("second poll");
+        let outcome = ingest(&root, &germany()).await.expect("ingest");
+
+        assert_eq!(outcome.deduped, fixture().len());
     }
 
     #[tokio::test]
@@ -643,7 +673,7 @@ mod tests {
         )
         .await;
 
-        let partitions: Vec<_> = std::fs::read_dir(root.path().join("silver/train_segment_v2"))
+        let partitions: Vec<_> = std::fs::read_dir(root.path().join("silver/train_segment_v3"))
             .expect("dataset dir")
             .map(|entry| {
                 entry

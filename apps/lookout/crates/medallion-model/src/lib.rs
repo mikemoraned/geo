@@ -22,7 +22,7 @@ pub use crossing::{
 pub use gers::{GersId, NotAGersId};
 pub use motis::{
     AgencyId, EmptyAgencyId, EmptyStopId, EmptyTripId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2,
-    MotisCaptureRow, MotisSegmentRow, RailMode, StopId, TRAIN_SEGMENT_V2, TrainSegmentRowV2,
+    MotisCaptureRow, MotisSegmentRow, RailMode, StopId, TRAIN_SEGMENT_V3, TrainSegmentRowV3,
     TripId,
 };
 pub use motis_source::{
@@ -53,7 +53,7 @@ pub const ALL: [DatasetInfo; 16] = [
     MOTIS_SEGMENT.info(),
     MOTIS_SEGMENT_V2.info(),
     MOTIS_SOURCE_V3.info(),
-    TRAIN_SEGMENT_V2.info(),
+    TRAIN_SEGMENT_V3.info(),
     SESSION_V2.info(),
     SESSION_SAMPLE_V2.info(),
     TRAIN_SESSION.info(),
@@ -101,7 +101,7 @@ mod tests {
                 "session_crossing_v2",
                 "session_sample_v2",
                 "session_v2",
-                "train_segment_v2",
+                "train_segment_v3",
                 "train_session",
                 "train_session_sample",
                 "water_crossing_v2"
@@ -180,7 +180,7 @@ mod tests {
         check_rows_of::<MotisSegmentRow>();
         check_rows_of::<MotisCaptureRow>();
         check_rows_of::<MotisSourceRowV3>();
-        check_rows_of::<TrainSegmentRowV2>();
+        check_rows_of::<TrainSegmentRowV3>();
         check_rows_of::<SessionRowV2>();
         check_rows_of::<SessionSampleRowV2>();
         check_rows_of::<TrainSessionRow>();
