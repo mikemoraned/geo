@@ -12,6 +12,7 @@ use crate::api::types::{Mode, TripSegment};
 use crate::bronze::{BronzeError, SegmentLog};
 use crate::client::{MotisClient, MotisError};
 use crate::details::TripDetailsCache;
+use crate::segment::SingleTripSegment;
 use crate::tally::Tally;
 use crate::zoom::Zoom;
 
@@ -120,7 +121,7 @@ impl Capture {
         let half = self.poll_interval.time_delta() / 2;
         let window = now - half..now + half;
         let mut unresolved = Vec::new();
-        let mut captured: Vec<TripSegment> = Vec::new();
+        let mut captured: Vec<SingleTripSegment> = Vec::new();
         let mut trip_ids: HashSet<TripId> = HashSet::new();
         let mut outside = 0;
         let mut map_trips = Tally::default();
@@ -132,10 +133,10 @@ impl Capture {
             .await?;
         let filtering = Instant::now();
         for segment in in_bbox.into_iter().filter(|segment| is_rail(&segment.mode)) {
-            match sorted(coverage, &segment) {
-                Sorted::Kept(trip_id) => {
-                    trip_ids.insert(trip_id);
-                    captured.push(segment);
+            match sorted(coverage, segment) {
+                Sorted::Kept(kept) => {
+                    trip_ids.insert(kept.trip_id().clone());
+                    captured.push(*kept);
                 }
                 Sorted::Outside => outside += 1,
                 Sorted::Unresolved(reason) => unresolved.push(Unresolved::Segment { reason }),
@@ -170,17 +171,17 @@ impl Capture {
 }
 
 enum Sorted {
-    Kept(TripId),
+    Kept(Box<SingleTripSegment>),
     Outside,
     Unresolved(String),
 }
 
-fn sorted(coverage: &Coverage, segment: &TripSegment) -> Sorted {
+fn sorted(coverage: &Coverage, segment: TripSegment) -> Sorted {
     match segment.line() {
         Err(err) => Sorted::Unresolved(err.to_string()),
         Ok(line) if !coverage.keeps(&line) => Sorted::Outside,
-        Ok(_) => match segment.trip_id() {
-            Ok(trip_id) => Sorted::Kept(trip_id),
+        Ok(_) => match SingleTripSegment::new(segment) {
+            Ok(kept) => Sorted::Kept(Box::new(kept)),
             Err(err) => Sorted::Unresolved(err.to_string()),
         },
     }
@@ -206,8 +207,12 @@ mod tests {
     const TRIP: &str = include_str!("../tests/fixtures/trip.json");
 
     async fn motis() -> MockServer {
+        motis_serving(TRIPS).await
+    }
+
+    async fn motis_serving(trips: &str) -> MockServer {
         let server = MockServer::start().await;
-        for (route, body) in [("/api/v6/map/trips", TRIPS), ("/api/v6/trip", TRIP)] {
+        for (route, body) in [("/api/v6/map/trips", trips), ("/api/v6/trip", TRIP)] {
             Mock::given(method("GET"))
                 .and(path(route))
                 .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
@@ -280,6 +285,34 @@ mod tests {
         assert_eq!(
             sorted_by(&whole_country(vec![square(8.0, 49.5, 2.0)])).await,
             (1, 0)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_segment_without_a_trip_of_its_own_is_reported_and_the_rest_of_the_poll_kept() {
+        let rail = serde_json::from_str::<Vec<serde_json::Value>>(TRIPS)
+            .expect("parse fixture")
+            .into_iter()
+            .find(|segment| segment["mode"] == "REGIONAL_RAIL")
+            .expect("a rail segment");
+        let mut tripless = rail.clone();
+        tripless["trips"] = serde_json::json!([]);
+        let server = motis_serving(&serde_json::json!([tripless, rail]).to_string()).await;
+        let store = tempfile::tempdir().expect("tempdir");
+
+        let captured = capture(&server, store.path())
+            .capture(
+                chrono::Utc::now(),
+                &whole_country(vec![square(8.0, 49.5, 2.0)]),
+            )
+            .await
+            .expect("capture");
+
+        assert_eq!(captured.segments, 1);
+        assert!(
+            matches!(captured.unresolved.as_slice(), [Unresolved::Segment { .. }]),
+            "{:?}",
+            captured.unresolved
         );
     }
 

@@ -270,6 +270,7 @@ mod tests {
 
     use crate::api::types::{Mode, TripSegment};
     use crate::bronze::SegmentLog;
+    use crate::segment::SingleTripSegment;
 
     use super::*;
 
@@ -332,8 +333,13 @@ mod tests {
     }
 
     async fn poll_unregistered(root: &Root, captured_at: DateTime<Utc>, segments: &[TripSegment]) {
+        let segments: Vec<SingleTripSegment> = segments
+            .iter()
+            .cloned()
+            .map(|segment| SingleTripSegment::new(segment).expect("a segment with one trip"))
+            .collect();
         SegmentLog::new(root.clone(), source().id())
-            .append(captured_at, segments, &Map::new())
+            .append(captured_at, &segments, &Map::new())
             .await
             .expect("append poll");
     }
