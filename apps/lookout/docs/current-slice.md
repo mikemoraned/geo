@@ -697,24 +697,27 @@ At the end of the slice, once its features are in.
       where the first skips one segment and reports it.
       `Sorted::Kept` carries a `SingleTripSegment`: the segment, its one trip, and that trip's id.
       It leaves out the decoded line, since nothing after the coverage test reads it.
-- [ ] Fold the two side-by-side notebooks in `notebooks/motis_capture` into one that takes its
+- [-] Fold the two side-by-side notebooks in `notebooks/motis_capture` into one that takes its
       pass's label. It can read the label from `mo.cli_args()` or a dropdown of `motis_source_v2`
       labels. They differ in 44 of about 920 lines. First move each pass's findings into the slice
       record, since each notebook records its own. Then move the steps
       `compare_delfi-2026-10-10.plain_route-shapes.py` repeats into a module of the `motis_capture`
       project. Move there the `bronze()` and `shape_of()` helpers four notebooks define. Do this
       before the Six-day capture points the notebooks at `motis_segment_v3`.
-- [ ] In `notebooks/motis_capture/germany_delfi-2026-10-10.route-shapes.within.py`, build the
+      Moot on 2026-10-27: the analysis is done, and `notebooks/motis_capture` is deleted.
+      Observations holds the baseline pass's findings and the comparison's.
+- [-] In `notebooks/motis_capture/germany_delfi-2026-10-10.route-shapes.within.py`, build the
       segment table and its metric shapes in one cell, and the bar charts' styling in one helper.
       Two cells run the same query and filter today, and the same polylines are decoded and
       projected three times. Decode only distinct polylines: about 22,000 of the 260,000 rows'
       polylines differ.
-- [ ] Read the store through `lookout_medallion` in `notebooks/motis_capture/v1.py`, as its
+      Moot on 2026-10-27: the notebook is deleted, with the rest of `notebooks/motis_capture`.
+- [-] Read the store through `lookout_medallion` in `notebooks/motis_capture/v1.py`, as its
       siblings do and `.claude/rules/lookout-notebooks.md` requires. Use `default_root()` in place
       of `medallion_root()`, and `query_bronze` in place of `read_parquet` over hand-written paths.
+      Moot on 2026-10-27: the notebook is deleted, with the rest of `notebooks/motis_capture`.
 - [ ] If lonboard 0.16.0 takes hex colours in `get_color` and `apply_categorical_cmap`, pass them
-      through unparsed. Four notebooks parse them by hand: the `motis_capture` side-by-side and
-      compare notebooks, and `session_crossings/passes.py`.
+      through unparsed. `session_crossings/passes.py` parses them by hand.
 - [ ] Derive `Feed`'s names, parsing, and list with strum, as `RailMode` does, in
       `crates/medallion-model/src/motis_source.rs`. They replace its hand-written `ALL`, `as_str`,
       `names`, and `FromStr`. Keep `UnknownFeed`, listing the names from `Feed::iter()`.
@@ -785,12 +788,9 @@ polyline table changes what `motis_ingest` reads.
       DuckDB figures.
 - [ ] Check `just silver-motis-ingest` derives the same `train_segment_v2` and `train_session`
       rows from `motis_segment_v3` alone as from `motis_segment_v2` alone.
-- [ ] Point the other readers of `motis_segment_v2` at `motis_segment_v3`, joining
-      `motis_polyline`. These are the `motis_capture` notebooks
-      `compare_delfi-2026-10-10.plain_route-shapes.py`,
-      `germany_delfi-2026-10-10.route-shapes.within.py`, both `side_by_side_delfi-2026-10-10`
-      notebooks, and `v1.py`, and the shared test setup in `crates/motis/tests/common/mod.rs`.
-      In the test setup, register `motis_segment_v3` under its own name, in place of `captured`.
+- [ ] Point the shared test setup in `crates/motis/tests/common/mod.rs` at `motis_segment_v3`,
+      joining `motis_polyline`. It is the other reader of `motis_segment_v2`. Register
+      `motis_segment_v3` there under its own name, in place of `captured`.
 - [ ] Delete `motis_segment_v2`'s files, `MOTIS_SEGMENT_V2`, its entry in
       `crates/medallion-model/src/bronze.rs`, and its reading in `captures`. Its rows live on in
       `motis_segment_v3`.
@@ -904,3 +904,66 @@ On 22 October, `motis_ingest` read 1,975,310 captured rows, which collapse to 1,
 - A run needs disk room for swap as well as for what it writes. That earlier run started with
   about 4 GB of disk free, and its swap growth filled the disk. The capture then lost its polls at
   19:10 UTC and from 19:30 to 21:50 UTC.
+
+#### The baseline side-by-side pass, `delfi-2026-10-10.plain`
+
+The pass of 13 October 2026 ran from 21:51 to 23:51 UTC, at night, so it holds few trains: 160
+joined legs, 145 of them regional.
+
+**Joining.** Every regional leg joined. Of 30 long-distance and high-speed legs, 15 joined, 9
+came from the local server alone, and 4 from Transitous alone. Most of the unjoined legs belong
+to `12N`, which DELFI carries as several trips with identical times. The two servers return
+different ones, and split them at different stops. Transitous returns 4 more legs from feeds
+other than DELFI, all night trains.
+
+**Shapes.** Every local shape is a straight line between its stops. The distance to Transitous's
+track shape measures that straight line, not disagreement between two track shapes: a median
+of 519 m on regional legs, 8 km on high-speed legs, and 36 km on long-distance legs. This pass
+cannot set a shape threshold. The pass after `route_shapes` can.
+
+**Arrivals.** Where both servers had realtime, all 145 regional legs agree within 1 minute, 143
+of them exactly. The local server had no realtime for any high-speed leg, and Transitous had it
+for 5 of the 10, which differ by up to 71 minutes. One long-distance leg had realtime on both,
+yet Transitous forecast a delay of 7–11 minutes that the local server never showed.
+
+**Threshold.** Two arrivals agree when they differ by at most 1 minute.
+
+#### Two passes compared: `delfi-2026-10-10.plain` and `delfi-2026-10-10.route-shapes`
+
+The baseline ran at night, from 21:51 to 23:51 UTC on 13 October. The route-shapes pass ran at
+midday, from 10:53 to 12:43 UTC on 17 October, and holds 1,139 joined legs against the baseline's
+160.
+
+**Shapes.** In the route-shapes pass, every joined leg lies within 12.6 m of Transitous's shape.
+The baseline's medians were 519 m on regional legs, 8 km on high-speed legs, and 36 km on
+long-distance legs. On the 119 segments both passes compared, the regional median falls from
+520 m to 0 m, and the high-speed median from 8 km to 1.3 m. The two servers' shapes are identical
+on 84% of regional legs and 65% of high-speed legs.
+
+**Joining.** Every regional leg joined in both passes. The route-shapes pass leaves 10 high-speed
+and long-distance legs unjoined, against 13 in the baseline. Five of its six local-only legs depart
+from 12:22 UTC on, in the pass's last half hour. All four Transitous-only legs departed between
+09:49 and 10:31 UTC, before the pass began. One of them, FLX10, carries stop ids with a `_G`
+suffix the local server does not use.
+
+**Arrivals.** Regional arrivals agree in both passes, with a 95th percentile of 0 minutes in each.
+The widest regional difference is −6 to +4 minutes, in the route-shapes pass. Transitous had
+realtime for all 40 high-speed legs in the route-shapes pass, and the local server for 9. Without
+local realtime, high-speed arrivals differ by at most 13 minutes, against 71 in the baseline. With
+it, they differ by a median of 7 minutes. The three largest differences, 19 to 38 minutes, are all
+on ICE 599, whose delay Transitous carried and the local DELFI GTFS-RT feed did not.
+
+**For a shape threshold.** The largest shape distance in the route-shapes pass is 12.6 m, on both
+regional and high-speed legs.
+
+#### The captures under `delfi-2026-10-10.route-shapes`
+
+The label covers the pass and a Germany-wide local capture, with no region, from 23:03 to 23:53
+UTC on 17 October. Transitous's capture that day ended at 12:53 UTC. The comparison joins only
+polls both servers answered, so its findings leave out the Germany-wide capture's 3,823 rows.
+
+#### The tolerance in `off_track_share`
+
+`off_track_share` takes its 20 m tolerance from Bast and Brosi's evaluation of pfaedle. That
+evaluation counts a stretch between stations as matched below a Fréchet distance of 20 m from the
+true course.
