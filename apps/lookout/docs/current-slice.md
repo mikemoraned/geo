@@ -716,7 +716,7 @@ At the end of the slice, once its features are in.
       siblings do and `.claude/rules/lookout-notebooks.md` requires. Use `default_root()` in place
       of `medallion_root()`, and `query_bronze` in place of `read_parquet` over hand-written paths.
       Moot on 2026-10-27: the notebook is deleted, with the rest of `notebooks/motis_capture`.
-- [ ] If lonboard 0.16.0 takes hex colours in `get_color` and `apply_categorical_cmap`, pass them
+- [x] If lonboard 0.16.0 takes hex colours in `get_color` and `apply_categorical_cmap`, pass them
       through unparsed. `session_crossings/passes.py` parses them by hand.
 - [ ] Derive `Feed`'s names, parsing, and list with strum, as `RailMode` does, in
       `crates/medallion-model/src/motis_source.rs`. They replace its hand-written `ALL`, `as_str`,

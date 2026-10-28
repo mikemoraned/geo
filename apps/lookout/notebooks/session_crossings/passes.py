@@ -182,16 +182,12 @@ def _(VISIT_COLOURS, crossing, gpd, lonboard, near, samples):
     _crossing = gpd.GeoDataFrame.from_arrow(
         crossing.drop_columns("geometry_projected")
     )
-    _colours = {
-        visit: [int(colour[i : i + 2], 16) for i in (1, 3, 5)]
-        for visit, colour in enumerate(VISIT_COLOURS)
-    }
     lonboard.Map(
         [
             lonboard.ScatterplotLayer.from_geopandas(
                 _near,
                 get_fill_color=lonboard.colormap.apply_categorical_cmap(
-                    _near["visit"], _colours
+                    _near["visit"], dict(enumerate(VISIT_COLOURS))
                 ),
                 radius_units="pixels",
                 get_radius=5,
