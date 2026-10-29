@@ -718,7 +718,7 @@ At the end of the slice, once its features are in.
       Moot on 2026-10-27: the notebook is deleted, with the rest of `notebooks/motis_capture`.
 - [x] If lonboard 0.16.0 takes hex colours in `get_color` and `apply_categorical_cmap`, pass them
       through unparsed. `session_crossings/passes.py` parses them by hand.
-- [ ] Derive `Feed`'s names, parsing, and list with strum, as `RailMode` does, in
+- [x] Derive `Feed`'s names, parsing, and list with strum, as `RailMode` does, in
       `crates/medallion-model/src/motis_source.rs`. They replace its hand-written `ALL`, `as_str`,
       `names`, and `FromStr`. Keep `UnknownFeed`, listing the names from `Feed::iter()`.
 - [ ] Move the fixtures `crates/motis`'s unit tests each define into one `#[cfg(test)]` module, as
