@@ -6,6 +6,7 @@ use hashfn::hashfn;
 use medallion::{Country, DatasetSpec, Row, layers};
 use semver::Version;
 use serde::{Deserialize, Serialize, Serializer};
+use strum::{AsRefStr, EnumIter, EnumString, IntoEnumIterator};
 use url::Url;
 use uuid::Uuid;
 
@@ -215,48 +216,38 @@ impl Display for Label {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter, EnumString, AsRefStr,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(
+    serialize_all = "snake_case",
+    parse_err_ty = UnknownFeed,
+    parse_err_fn = UnknownFeed::new
+)]
 pub enum Feed {
     Transitous,
     Local,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("unknown feed `{text}`; known: {known}", known = Feed::names())]
+#[error("unknown feed `{text}`; known: {known}", known = UnknownFeed::known())]
 pub struct UnknownFeed {
     text: String,
 }
 
-impl Feed {
-    pub const ALL: [Feed; 2] = [Feed::Transitous, Feed::Local];
-
-    pub fn names() -> String {
-        Feed::ALL
-            .iter()
-            .map(|feed| feed.as_str())
-            .collect::<Vec<_>>()
-            .join(", ")
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Feed::Transitous => "transitous",
-            Feed::Local => "local",
+impl UnknownFeed {
+    fn new(text: &str) -> Self {
+        UnknownFeed {
+            text: text.to_string(),
         }
     }
-}
 
-impl FromStr for Feed {
-    type Err = UnknownFeed;
-
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        Feed::ALL
-            .into_iter()
-            .find(|feed| feed.as_str() == text)
-            .ok_or_else(|| UnknownFeed {
-                text: text.to_string(),
-            })
+    fn known() -> String {
+        Feed::iter()
+            .map(|feed| feed.as_ref().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 }
 
@@ -293,7 +284,7 @@ impl MotisSource {
         let name = [
             self.base_url.as_str(),
             version.as_str(),
-            self.feed.as_str(),
+            self.feed.as_ref(),
             country,
             region.as_str(),
         ]
@@ -487,11 +478,11 @@ mod tests {
 
     #[test]
     fn a_feed_parses_from_the_name_it_is_written_as() {
-        for feed in Feed::ALL {
-            assert_eq!(feed.as_str().parse(), Ok(feed));
+        for feed in Feed::iter() {
+            assert_eq!(feed.as_ref().parse(), Ok(feed));
             assert_eq!(
                 serde_json::to_string(&feed).expect("a feed serialises"),
-                format!("\"{}\"", feed.as_str())
+                format!("\"{}\"", feed.as_ref())
             );
         }
     }
@@ -501,8 +492,8 @@ mod tests {
         let err = "delfi".parse::<Feed>().expect_err("no such feed");
 
         assert!(err.to_string().contains("delfi"), "{err}");
-        for feed in Feed::ALL {
-            assert!(err.to_string().contains(feed.as_str()), "{err}");
+        for feed in Feed::iter() {
+            assert!(err.to_string().contains(feed.as_ref()), "{err}");
         }
     }
 
