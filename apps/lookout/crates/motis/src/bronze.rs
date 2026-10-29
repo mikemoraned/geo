@@ -105,31 +105,17 @@ mod tests {
     use chrono::TimeZone;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
-    use medallion_model::{Feed, MotisSource};
-    use url::Url;
+    use medallion_model::Feed;
 
     use super::*;
-    use crate::api::types::TripSegment;
-
-    fn source() -> MotisSource {
-        MotisSource {
-            base_url: Url::parse("http://127.0.0.1:8080").expect("a URL"),
-            motis_version: "v2.11.3".parse().expect("a version"),
-            feed: Feed::Local,
-            area: None,
-            label: None,
-        }
-    }
+    use crate::testing::{source, trips};
 
     fn log_under(path: &std::path::Path) -> SegmentLog {
-        SegmentLog::new(Root::new(path), source().id())
+        SegmentLog::new(Root::new(path), source(Feed::Local).id())
     }
 
     fn fixture_segments() -> Vec<SingleTripSegment> {
-        let segments: Vec<TripSegment> =
-            serde_json::from_str(include_str!("../tests/fixtures/trips.json"))
-                .expect("parse trips fixture");
-        segments
+        trips()
             .into_iter()
             .map(|segment| SingleTripSegment::new(segment).expect("a segment with one trip"))
             .collect()
@@ -202,7 +188,8 @@ mod tests {
 
         let batch = read_back(&log.poll_file(captured_at).expect("path"));
         let rows: Vec<MotisCaptureRow> = serde_arrow::from_record_batch(&batch).expect("read rows");
-        assert!(rows.iter().all(|row| row.source_id == source().id()));
+        let id = source(Feed::Local).id();
+        assert!(rows.iter().all(|row| row.source_id == id));
     }
 
     #[tokio::test]

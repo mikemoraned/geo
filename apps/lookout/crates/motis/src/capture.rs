@@ -202,8 +202,8 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
+    use crate::testing::{self, TRIPS};
 
-    const TRIPS: &str = include_str!("../tests/fixtures/trips.json");
     const TRIP: &str = include_str!("../tests/fixtures/trip.json");
 
     async fn motis() -> MockServer {
@@ -225,10 +225,7 @@ mod tests {
     fn capture(server: &MockServer, store: &std::path::Path) -> Capture {
         let source = MotisSource {
             base_url: Url::parse(&server.uri()).expect("a URL"),
-            motis_version: "v2.11.3".parse().expect("a version"),
-            feed: Feed::Local,
-            area: None,
-            label: None,
+            ..testing::source(Feed::Local)
         };
         Capture::new(
             MotisClient::new(&source.base_url),

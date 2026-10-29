@@ -260,65 +260,28 @@ mod tests {
     use std::collections::HashMap as Map;
 
     use chrono::{DateTime, Duration, TimeZone, Utc};
-    use geo_types::Point;
-    use medallion::{Country, Query};
+    use medallion::Query;
     use medallion_model::{
         Feed, MotisSource, TRAIN_SESSION, TRAIN_SESSION_SAMPLE, TripId, train_session_id,
     };
     use serde::Deserialize;
-    use url::Url;
 
-    use crate::api::types::{Mode, TripSegment};
+    use crate::api::types::TripSegment;
     use crate::bronze::SegmentLog;
     use crate::segment::SingleTripSegment;
+    use crate::testing::{self, Nowhere, germany, regional_trips};
 
     use super::*;
 
-    struct Everywhere(Country);
-
-    impl Countries for Everywhere {
-        fn containing(&self, _point: Point<f64>) -> Option<Country> {
-            Some(self.0)
-        }
-    }
-
-    struct Nowhere;
-
-    impl Countries for Nowhere {
-        fn containing(&self, _point: Point<f64>) -> Option<Country> {
-            None
-        }
-    }
-
-    fn germany() -> Everywhere {
-        Everywhere(Country::Germany)
-    }
-
     fn source() -> MotisSource {
         MotisSource {
-            base_url: Url::parse("http://127.0.0.1:8080").expect("a URL"),
-            motis_version: "v2.11.3".parse().expect("a version"),
-            feed: Feed::Local,
-            area: None,
             label: Some("delfi-2026-10-10.route-shapes".parse().expect("a label")),
+            ..testing::source(Feed::Local)
         }
     }
 
     fn every_10s() -> Span {
         "10s".parse().expect("a span")
-    }
-
-    fn fixture() -> Vec<TripSegment> {
-        let captured: Vec<TripSegment> =
-            serde_json::from_str(include_str!("../tests/fixtures/trips.json"))
-                .expect("parse fixture");
-        captured
-            .into_iter()
-            .map(|segment| TripSegment {
-                mode: Mode::RegionalRail,
-                ..segment
-            })
-            .collect()
     }
 
     fn polled_at(minute: u32) -> DateTime<Utc> {
@@ -398,7 +361,7 @@ mod tests {
     async fn each_trip_is_one_session() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        poll(&root, polled_at(0), &fixture()).await;
+        poll(&root, polled_at(0), &regional_trips()).await;
 
         let outcome = derive(&root, &germany()).await;
 
@@ -413,7 +376,7 @@ mod tests {
     async fn a_session_is_named_by_its_source_and_trip() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let segment = fixture().remove(0);
+        let segment = regional_trips().remove(0);
         poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
 
         derive(&root, &germany()).await;
@@ -435,7 +398,7 @@ mod tests {
         }
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        poll(&root, polled_at(0), &fixture()[..1]).await;
+        poll(&root, polled_at(0), &regional_trips()[..1]).await;
 
         derive(&root, &germany()).await;
 
@@ -458,7 +421,7 @@ mod tests {
     async fn a_capture_from_a_source_never_registered_fails_the_ingest() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        poll_unregistered(&root, polled_at(0), &fixture()[..1]).await;
+        poll_unregistered(&root, polled_at(0), &regional_trips()[..1]).await;
 
         let err = derive_train_sessions(&root, &germany(), every_10s())
             .await
@@ -479,7 +442,7 @@ mod tests {
         }
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let segment = fixture().remove(0);
+        let segment = regional_trips().remove(0);
         poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
 
         let outcome = derive(&root, &germany()).await;
@@ -507,7 +470,7 @@ mod tests {
     async fn a_leg_recaptured_with_a_later_departure_is_kept_once() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let segment = fixture().remove(0);
+        let segment = regional_trips().remove(0);
         let mut delayed = segment.clone();
         delayed.departure += Duration::minutes(1);
         delayed.arrival += Duration::minutes(1);
@@ -529,7 +492,7 @@ mod tests {
     async fn a_trip_whose_legs_overlap_is_left_out_and_counted() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let segment = fixture().remove(0);
+        let segment = regional_trips().remove(0);
         let early = onward_from(&segment, segment.arrival - Duration::minutes(30));
         poll(&root, polled_at(0), &[segment, early]).await;
 
@@ -549,7 +512,7 @@ mod tests {
     async fn a_trip_with_a_leg_arriving_before_it_departs_is_left_out_and_counted() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let mut segment = fixture().remove(0);
+        let mut segment = regional_trips().remove(0);
         segment.arrival = segment.departure - Duration::minutes(1);
         poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
 
@@ -569,7 +532,7 @@ mod tests {
     async fn a_trip_of_several_legs_waits_at_the_stops_between_them() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let segment = fixture().remove(0);
+        let segment = regional_trips().remove(0);
         let onward = onward_from(&segment, segment.arrival + Duration::minutes(2));
         poll(&root, polled_at(0), &[segment.clone(), onward.clone()]).await;
 
@@ -584,7 +547,7 @@ mod tests {
     async fn a_trip_with_a_shapeless_leg_is_left_out_and_counted() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let mut segment = fixture().remove(0);
+        let mut segment = regional_trips().remove(0);
         segment.polyline = String::new();
         segment.to = segment.from.clone();
         poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
@@ -605,7 +568,7 @@ mod tests {
     async fn a_trip_outside_every_known_country_is_not_written() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        poll(&root, polled_at(0), &fixture()).await;
+        poll(&root, polled_at(0), &regional_trips()).await;
 
         let outcome = derive(&root, &Nowhere).await;
 
@@ -624,7 +587,7 @@ mod tests {
     async fn samples_are_written_under_the_country_their_trip_starts_in() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        poll(&root, polled_at(0), &fixture()).await;
+        poll(&root, polled_at(0), &regional_trips()).await;
 
         derive(&root, &germany()).await;
 
@@ -646,7 +609,7 @@ mod tests {
     async fn re_deriving_is_idempotent() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        poll(&root, polled_at(0), &fixture()).await;
+        poll(&root, polled_at(0), &regional_trips()).await;
         let first = derive(&root, &germany()).await;
         let samples_before = count(&root, "SELECT COUNT(*) AS count FROM samples").await;
 

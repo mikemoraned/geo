@@ -58,15 +58,14 @@ mod tests {
 
     use url::Url;
 
-    use crate::api::types::TripSegment;
+    use crate::testing::trips;
 
     use super::*;
 
     const TRIP: &str = include_str!("../tests/fixtures/trip.json");
 
     fn trip_ids() -> HashSet<TripId> {
-        serde_json::from_str::<Vec<TripSegment>>(include_str!("../tests/fixtures/trips.json"))
-            .expect("parse fixture")
+        trips()
             .iter()
             .map(|segment| segment.trip_id().expect("a segment with one trip"))
             .collect()

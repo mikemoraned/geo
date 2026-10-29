@@ -50,20 +50,10 @@ pub async fn recorded(root: &Root) -> Result<Vec<MotisSourceRowV3>, SourceError>
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
-    use medallion_model::{Feed, MotisVersion};
-    use url::Url;
+    use medallion_model::Feed;
 
     use super::*;
-
-    fn source(feed: Feed) -> MotisSource {
-        MotisSource {
-            base_url: Url::parse("http://127.0.0.1:8080").expect("a URL"),
-            motis_version: "v2.11.3".parse::<MotisVersion>().expect("a version"),
-            feed,
-            area: None,
-            label: None,
-        }
-    }
+    use crate::testing::source;
 
     fn at(minute: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 10, 7, 9, minute, 0).unwrap()
