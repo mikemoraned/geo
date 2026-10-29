@@ -94,14 +94,11 @@ impl SingleTripSegment {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn segments() -> Vec<TripSegment> {
-        serde_json::from_str(include_str!("../tests/fixtures/trips.json")).expect("parse fixture")
-    }
+    use crate::testing::trips;
 
     #[test]
     fn a_segment_with_one_trip_names_it() {
-        let segment = segments().remove(0);
+        let segment = trips().remove(0);
 
         assert_eq!(
             segment.trip_id().expect("one trip").as_str(),
@@ -111,7 +108,7 @@ mod tests {
 
     #[test]
     fn a_segment_with_no_trip_is_refused() {
-        let mut segment = segments().remove(0);
+        let mut segment = trips().remove(0);
         segment.trips.clear();
 
         assert!(matches!(
@@ -122,7 +119,7 @@ mod tests {
 
     #[test]
     fn a_segment_with_two_trips_is_refused() {
-        let mut segment = segments().remove(0);
+        let mut segment = trips().remove(0);
         segment.trips.push(segment.trips[0].clone());
 
         assert!(matches!(
@@ -133,7 +130,7 @@ mod tests {
 
     #[test]
     fn a_segment_whose_trip_has_an_empty_id_is_refused() {
-        let mut segment = segments().remove(0);
+        let mut segment = trips().remove(0);
         segment.trips[0].trip_id.clear();
 
         assert!(matches!(

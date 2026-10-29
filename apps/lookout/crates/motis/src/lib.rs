@@ -14,6 +14,7 @@ pub mod sampling;
 pub mod segment;
 pub mod source;
 pub mod tally;
+mod testing;
 pub mod train_sessions;
 pub mod window;
 pub mod zoom;

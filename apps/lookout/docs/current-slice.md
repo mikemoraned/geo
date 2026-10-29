@@ -721,7 +721,7 @@ At the end of the slice, once its features are in.
 - [x] Derive `Feed`'s names, parsing, and list with strum, as `RailMode` does, in
       `crates/medallion-model/src/motis_source.rs`. They replace its hand-written `ALL`, `as_str`,
       `names`, and `FromStr`. Keep `UnknownFeed`, listing the names from `Feed::iter()`.
-- [ ] Move the fixtures `crates/motis`'s unit tests each define into one `#[cfg(test)]` module, as
+- [x] Move the fixtures `crates/motis`'s unit tests each define into one `#[cfg(test)]` module, as
       `medallion-model`'s `testing.rs` holds its column helpers. These are the local `MotisSource`,
       the `trips.json` loader, `Everywhere`, `Nowhere`, and `germany()`, defined in up to six
       modules each. `tests/common/mod.rs` keeps its own, since an integration test cannot reach a

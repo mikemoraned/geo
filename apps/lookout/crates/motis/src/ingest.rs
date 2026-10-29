@@ -265,49 +265,19 @@ mod tests {
     use crate::api::types::{Mode, TripSegment};
     use arrow::array::RecordBatch;
     use chrono::TimeZone;
-    use medallion::{Country, GEOMETRY, PROJECTED_GEOMETRY};
-    use medallion_model::{Feed, MotisSegmentRow, MotisSource};
-    use url::Url;
+    use medallion::{GEOMETRY, PROJECTED_GEOMETRY};
+    use medallion_model::{Feed, MotisSegmentRow};
 
     use super::*;
     use crate::legacy::legacy_sources;
-
-    struct Everywhere(Country);
-
-    impl Countries for Everywhere {
-        fn containing(&self, _point: Point<f64>) -> Option<Country> {
-            Some(self.0)
-        }
-    }
-
-    struct Nowhere;
-
-    impl Countries for Nowhere {
-        fn containing(&self, _point: Point<f64>) -> Option<Country> {
-            None
-        }
-    }
-
-    fn germany() -> Everywhere {
-        Everywhere(Country::Germany)
-    }
-
-    fn source(feed: Feed) -> MotisSource {
-        MotisSource {
-            base_url: Url::parse("http://127.0.0.1:8080").expect("a URL"),
-            motis_version: "v2.11.3".parse().expect("a version"),
-            feed,
-            area: None,
-            label: None,
-        }
-    }
+    use crate::testing::{Nowhere, germany, regional_trips, source};
 
     fn log(root: &Root) -> SegmentLog {
         SegmentLog::new(root.clone(), source(Feed::Local).id())
     }
 
     async fn append_legacy(root: &Root, captured_at: DateTime<Utc>) {
-        let rows: Vec<MotisSegmentRow> = one_trip_each(fixture())
+        let rows: Vec<MotisSegmentRow> = one_trip_each(regional_trips())
             .iter()
             .map(|segment| segment_row(captured_at, segment, &Map::new()))
             .collect();
@@ -334,19 +304,6 @@ mod tests {
             .collect()
     }
 
-    fn fixture() -> Vec<TripSegment> {
-        let captured: Vec<TripSegment> =
-            serde_json::from_str(include_str!("../tests/fixtures/trips.json"))
-                .expect("parse fixture");
-        captured
-            .into_iter()
-            .map(|segment| TripSegment {
-                mode: Mode::RegionalRail,
-                ..segment
-            })
-            .collect()
-    }
-
     fn one_trip(segment: TripSegment) -> SingleTripSegment {
         SingleTripSegment::new(segment).expect("a segment with one trip")
     }
@@ -358,7 +315,7 @@ mod tests {
     async fn ingest_polls(root: &Root, polls: &[DateTime<Utc>]) -> IngestOutcome {
         let log = log(root);
         for captured_at in polls {
-            log.append(*captured_at, &one_trip_each(fixture()), &Map::new())
+            log.append(*captured_at, &one_trip_each(regional_trips()), &Map::new())
                 .await
                 .expect("append poll");
         }
@@ -409,8 +366,8 @@ mod tests {
 
         let outcome = ingest_polls(&root, &polls).await;
 
-        assert_eq!(outcome.read, fixture().len() * polls.len());
-        assert_eq!(outcome.deduped, fixture().len());
+        assert_eq!(outcome.read, regional_trips().len() * polls.len());
+        assert_eq!(outcome.deduped, regional_trips().len());
     }
 
     #[tokio::test]
@@ -418,14 +375,14 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         let log = log(&root);
-        let mut later = fixture();
+        let mut later = regional_trips();
         for segment in &mut later {
             segment.real_time = !segment.real_time;
         }
 
         log.append(
             Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
-            &one_trip_each(fixture()),
+            &one_trip_each(regional_trips()),
             &Map::new(),
         )
         .await
@@ -449,7 +406,7 @@ mod tests {
             .expect("count");
         assert_eq!(
             kept,
-            fixture().len() as i64,
+            regional_trips().len() as i64,
             "every leg should carry the later capture's realtime flag"
         );
     }
@@ -460,7 +417,7 @@ mod tests {
         let root = Root::new(tmp.path());
         let log = log(&root);
         let delay = chrono::Duration::minutes(3);
-        let mut delayed = fixture();
+        let mut delayed = regional_trips();
         for segment in &mut delayed {
             segment.departure += delay;
             segment.arrival += delay;
@@ -468,7 +425,7 @@ mod tests {
 
         log.append(
             Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
-            &one_trip_each(fixture()),
+            &one_trip_each(regional_trips()),
             &Map::new(),
         )
         .await
@@ -482,18 +439,20 @@ mod tests {
         .expect("second poll");
         let outcome = ingest(&root, &germany()).await.expect("ingest");
 
-        assert_eq!(outcome.deduped, fixture().len());
+        assert_eq!(outcome.deduped, regional_trips().len());
     }
 
     #[tokio::test]
     async fn each_leg_keeps_its_polyline_as_a_line_string() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let expected =
-            polyline::decode_polyline(&fixture()[0].polyline, crate::segment::POLYLINE_PRECISION)
-                .expect("decode")
-                .0
-                .len();
+        let expected = polyline::decode_polyline(
+            &regional_trips()[0].polyline,
+            crate::segment::POLYLINE_PRECISION,
+        )
+        .expect("decode")
+        .0
+        .len();
 
         ingest_polls(
             &root,
@@ -507,7 +466,7 @@ mod tests {
     }
 
     fn shaped(points: &[(f64, f64)]) -> TripSegment {
-        let mut segment = fixture().remove(0);
+        let mut segment = regional_trips().remove(0);
         segment.polyline = polyline::encode_coordinates(
             points.iter().map(|&(x, y)| geo_types::Coord { x, y }),
             crate::segment::POLYLINE_PRECISION,
@@ -555,7 +514,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_leg_whose_shape_is_one_point_runs_straight_between_its_stops() {
-        let start = fixture()[0].from.clone();
+        let start = regional_trips()[0].from.clone();
         let segment = shaped(&[(start.lon, start.lat)]);
 
         let (line, corrected) = line_of_one(&segment).await;
@@ -576,7 +535,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_leg_whose_shape_repeats_one_point_runs_straight_between_its_stops() {
-        let start = fixture()[0].from.clone();
+        let start = regional_trips()[0].from.clone();
         let segment = shaped(&[(start.lon, start.lat), (start.lon, start.lat)]);
 
         let (line, corrected) = line_of_one(&segment).await;
@@ -587,7 +546,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_leg_with_a_shape_keeps_it_uncorrected() {
-        let segment = fixture().remove(0);
+        let segment = regional_trips().remove(0);
         let captured: Vec<(f64, f64)> =
             polyline::decode_polyline(&segment.polyline, crate::segment::POLYLINE_PRECISION)
                 .expect("decode")
@@ -697,7 +656,7 @@ mod tests {
     async fn a_leg_of_a_mode_the_capture_drops_is_left_out_and_counted() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let mut segments = fixture();
+        let mut segments = regional_trips();
         segments[0].mode = Mode::Ferry;
         log(&root)
             .append(
@@ -726,7 +685,11 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
-        let mut row = segment_row(captured_at, &one_trip(fixture().remove(0)), &Map::new());
+        let mut row = segment_row(
+            captured_at,
+            &one_trip(regional_trips().remove(0)),
+            &Map::new(),
+        );
         blank(&mut row);
         root.rows_of::<MotisSegmentRow>()
             .on_date(captured_at.date_naive())
@@ -762,7 +725,7 @@ mod tests {
         let log = log(&root);
         log.append(
             Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
-            &one_trip_each(fixture()),
+            &one_trip_each(regional_trips()),
             &Map::new(),
         )
         .await
@@ -770,7 +733,7 @@ mod tests {
 
         let outcome = ingest(&root, &Nowhere).await.expect("ingest");
 
-        assert_eq!(outcome.unplaceable, fixture().len());
+        assert_eq!(outcome.unplaceable, regional_trips().len());
         assert_eq!(outcome.partitions, 0);
         assert!(!root.path().join("silver").exists());
     }
@@ -826,13 +789,13 @@ mod tests {
         let root = Root::new(tmp.path());
         let at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
         log(&root)
-            .append(at, &one_trip_each(fixture()), &Map::new())
+            .append(at, &one_trip_each(regional_trips()), &Map::new())
             .await
             .expect("append poll");
         SegmentLog::new(root.clone(), source(Feed::Transitous).id())
             .append(
                 at + chrono::Duration::seconds(1),
-                &one_trip_each(fixture()),
+                &one_trip_each(regional_trips()),
                 &Map::new(),
             )
             .await
@@ -840,8 +803,8 @@ mod tests {
 
         let outcome = ingest(&root, &germany()).await.expect("ingest");
 
-        assert_eq!(outcome.read, fixture().len() * 2);
-        assert_eq!(outcome.deduped, fixture().len() * 2);
+        assert_eq!(outcome.read, regional_trips().len() * 2);
+        assert_eq!(outcome.deduped, regional_trips().len() * 2);
     }
 
     #[tokio::test]
