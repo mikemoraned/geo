@@ -31,11 +31,10 @@ the value is in the slice record.
 
 A distance is only a distance inside one projected zone, and the store chooses a zone per country,
 so both inputs are read a country at a time and subtracted in that country's metres. A session is
-matched only against the crossings inside its own bbox grown by the radius, so the distance is
-computed for the pairs that could be within it rather than for every pair. The bbox is grown
-on the sphere rather than by treating a degree as a fixed distance, since a degree of longitude is
-a different length at every latitude. Its edges count as inside: a crossing on the grown edge is
-one at exactly the radius, which the distance test counts.
+matched only against the crossings within the radius of the rectangle bounding its samples. The
+distance is then computed only for the pairs that could be within it, not for every pair. The
+rectangle and the distance share the same metres. A crossing exactly the radius from the
+rectangle's edge is therefore kept, and the distance test decides it.
 
 A match is a session, a crossing and an instant, with no geometry of its own, so the rows are
 partitioned by the date it happened and nothing else. A run derives the whole dataset from the

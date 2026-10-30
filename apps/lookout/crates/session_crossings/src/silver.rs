@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
-use domain::Bbox;
 use domain::{DeviceId, Pass, Radius, SessionId};
 use geo_types::Point;
 use medallion::{COUNTRY, Country, DatasetSpec, Query, Replaced, Root, layers};
@@ -39,7 +38,6 @@ pub enum CrossingError {
 struct StoredSession {
     session_id: SessionId,
     device_id: DeviceId,
-    bbox: Bbox,
     samples: Option<Vec<StoredSample>>,
 }
 
@@ -192,7 +190,7 @@ const READ: [(DatasetSpec<layers::Silver>, &str); 3] = [
 async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
     let stored: Vec<StoredSession> = query
         .rows(
-            "SELECT s.session_id, s.device_id, s.bbox, p.samples
+            "SELECT s.session_id, s.device_id, p.samples
              FROM session_v2 s
              LEFT JOIN (
                  SELECT session_id,
@@ -215,7 +213,6 @@ async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
         .map(|session| Session {
             session_id: session.session_id,
             device_id: session.device_id,
-            bbox: session.bbox.rect(),
             samples: session
                 .samples
                 .unwrap_or_default()

@@ -2,8 +2,8 @@ use std::num::NonZeroU32;
 
 use chrono::{DateTime, Utc};
 use domain::{CrossingId, DeviceId, Pass, Radius, SessionId, TooManySamples};
-use geo::{Distance, Euclidean, Intersects};
-use geo_types::{Point, Rect};
+use geo::{BoundingRect, Distance, Euclidean};
+use geo_types::{MultiPoint, Point};
 
 pub const DEFAULT_RADIUS: Radius =
     Radius::metres(NonZeroU32::new(250).expect("two hundred and fifty is not zero"));
@@ -12,7 +12,6 @@ pub const DEFAULT_RADIUS: Radius =
 pub struct Session {
     pub session_id: SessionId,
     pub device_id: DeviceId,
-    pub bbox: Rect<f64>,
     pub samples: Vec<Sample>,
 }
 
@@ -105,10 +104,15 @@ fn passes_of(
     crossings: &[Crossing],
     radius: Radius,
 ) -> Result<Vec<Pass>, NoPass> {
-    let reachable = grown(session.bbox, radius);
+    let Some(extent) = MultiPoint::from_iter(session.samples.iter().map(|sample| sample.projected))
+        .bounding_rect()
+    else {
+        return Ok(Vec::new());
+    };
+    let extent = extent.to_polygon();
     let passed = crossings
         .iter()
-        .filter(|crossing| reachable.intersects(&crossing.crossing.position))
+        .filter(|crossing| Euclidean.distance(&extent, &crossing.projected) <= radius.as_metres())
         .map(|crossing| steps(&session.session_id, &session.samples, crossing, radius))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(passed.into_iter().flat_map(|steps| steps.passes).collect())
@@ -135,18 +139,6 @@ fn distance(sample: &Sample, crossing: &Crossing) -> f64 {
     Euclidean.distance(sample.projected, crossing.projected)
 }
 
-fn grown(bbox: Rect<f64>, radius: Radius) -> Rect<f64> {
-    use geo::{Destination, Haversine};
-
-    let metres = radius.as_metres();
-    let south_west = Haversine.destination(bbox.min().into(), 180.0, metres);
-    let south_west = Haversine.destination(south_west, 270.0, metres);
-    let north_east = Haversine.destination(bbox.max().into(), 0.0, metres);
-    let north_east = Haversine.destination(north_east, 90.0, metres);
-
-    Rect::new(south_west.0, north_east.0)
-}
-
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
@@ -165,21 +157,11 @@ mod tests {
     }
 
     fn session(samples: Vec<Sample>) -> Session {
-        let bbox = bbox_of(&samples);
         Session {
             session_id: SessionId::new("session-a").unwrap(),
             device_id: DeviceId::new("device-a").unwrap(),
-            bbox,
             samples,
         }
-    }
-
-    fn bbox_of(samples: &[Sample]) -> Rect<f64> {
-        let degrees = |metres: f64| metres / 111_320.0 / f64::cos(BERLIN.1.to_radians());
-        let east = |sample: &Sample| BERLIN.0 + degrees(sample.projected.x() - BERLIN_METRES.0);
-        let min = samples.iter().map(east).fold(f64::MAX, f64::min);
-        let max = samples.iter().map(east).fold(f64::MIN, f64::max);
-        Rect::new((min, BERLIN.1), (max, BERLIN.1))
     }
 
     fn sample(minute: u32, east: f64) -> Sample {
