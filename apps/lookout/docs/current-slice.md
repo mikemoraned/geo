@@ -799,7 +799,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       run `just silver-motis-ingest`, so the train sessions cover the whole week.
 - [x] Give `writer_at`, in `crates/medallion/src/write.rs`, zstd compression, for bronze and
       silver alike.
-- [ ] Derive `SESSION_NAMESPACE` and `MOTIS_SOURCE_NAMESPACE` from their names with UUID v5, as
+- [x] Derive `SESSION_NAMESPACE` and `MOTIS_SOURCE_NAMESPACE` from their names with UUID v5, as
       `train_session_id` derives its namespace. Every session id, source id, and train session id
       then changes.
 - [ ] Give each existing dataset holding one of those ids a new version. These are bronze

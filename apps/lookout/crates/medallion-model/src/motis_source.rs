@@ -14,7 +14,9 @@ use crate::gers::GersId;
 use crate::overture::OvertureRegion;
 use crate::overture_release::OvertureRelease;
 
-const MOTIS_SOURCE_NAMESPACE: Uuid = Uuid::from_u128(0x3c41_9e2d_7a58_4b06_8f13_d2e6_5a90_c71b);
+fn motis_source_namespace() -> Uuid {
+    Uuid::new_v5(&Uuid::nil(), b"MOTIS_SOURCE_NAMESPACE")
+}
 
 pub const MOTIS_SOURCE_V3: DatasetSpec<layers::Bronze> =
     DatasetSpec::unpartitioned("motis_source_v3");
@@ -293,7 +295,7 @@ impl MotisSource {
         .chain(self.label.as_ref().map(Label::as_str))
         .collect::<Vec<_>>()
         .join("\n");
-        MotisSourceId::new(Uuid::new_v5(&MOTIS_SOURCE_NAMESPACE, name.as_bytes()).to_string())
+        MotisSourceId::new(Uuid::new_v5(&motis_source_namespace(), name.as_bytes()).to_string())
     }
 
     pub fn row(&self, registered_at: DateTime<Utc>) -> MotisSourceRowV3 {
@@ -564,7 +566,7 @@ mod tests {
 
         assert_eq!(
             thuringia.id().to_string(),
-            "dbc79993-2a04-51e0-a6f4-245ab1dfe468"
+            "70045828-c168-5bb0-ba31-0a273498bf80"
         );
     }
 
@@ -623,7 +625,7 @@ mod tests {
         assert_eq!(
             local.id().to_string(),
             Uuid::new_v5(
-                &MOTIS_SOURCE_NAMESPACE,
+                &motis_source_namespace(),
                 "http://127.0.0.1:8080/\nv2.11.3\nlocal\n\n".as_bytes()
             )
             .to_string()

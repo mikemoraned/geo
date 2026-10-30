@@ -9,8 +9,6 @@ use uuid::Uuid;
 use crate::device::DeviceId;
 use crate::name::{NameError, checked};
 
-const SESSION_NAMESPACE: Uuid = Uuid::from_u128(0x8f9c_1d3a_6b47_4e21_9a05_c7d8_e2f4_1b60);
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StartedBy {
@@ -30,8 +28,9 @@ impl SessionId {
     }
 
     pub fn of(device: &DeviceId, started_at: DateTime<Utc>) -> Self {
+        let namespace = Uuid::new_v5(&Uuid::nil(), b"SESSION_NAMESPACE");
         let name = format!("{device}/{}", started_at.timestamp_millis());
-        Self::from(Uuid::new_v5(&SESSION_NAMESPACE, name.as_bytes()))
+        Self::from(Uuid::new_v5(&namespace, name.as_bytes()))
     }
 }
 
@@ -110,7 +109,7 @@ mod tests {
 
         assert_eq!(
             SessionId::of(&device, started_at).to_string(),
-            "aab6af04-e435-5d49-8faa-d4cc8c999a05"
+            "577c2fa4-3d37-5e83-ae8b-1c72a9ed46bf"
         );
     }
 
