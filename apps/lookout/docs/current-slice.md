@@ -726,7 +726,7 @@ At the end of the slice, once its features are in.
       the `trips.json` loader, `Everywhere`, `Nowhere`, and `germany()`, defined in up to six
       modules each. `tests/common/mod.rs` keeps its own, since an integration test cannot reach a
       unit test module.
-- [ ] Simplify `crates/motis/src/sampling.rs`. Have `position_at` return a point, since nothing
+- [x] Simplify `crates/motis/src/sampling.rs`. Have `position_at` return a point, since nothing
       outside tests tells `Travelling` from `WaitingAtStation`. Build each `Placed` directly, in
       place of `(t, position, source)` tuples. Drop `Leg::duration`, which `arrival` minus
       `departure` gives, and have `Leg::new` check the arrival against the departure directly.
