@@ -16,8 +16,7 @@ pub const TRAIN_SESSION_SAMPLE: DatasetSpec<layers::Silver> =
 pub fn train_session_id(source_id: &MotisSourceId, trip_id: &TripId) -> SessionId {
     let namespace = Uuid::new_v5(&Uuid::nil(), b"TRAIN_SESSION_NAMESPACE");
     let name = format!("{source_id}\n{trip_id}");
-    let id = Uuid::new_v5(&namespace, name.as_bytes()).to_string();
-    SessionId::new(id).expect("a UUID names a partition")
+    SessionId::from(Uuid::new_v5(&namespace, name.as_bytes()))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

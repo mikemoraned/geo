@@ -31,7 +31,13 @@ impl SessionId {
 
     pub fn of(device: &DeviceId, started_at: DateTime<Utc>) -> Self {
         let name = format!("{device}/{}", started_at.timestamp_millis());
-        Self(Uuid::new_v5(&SESSION_NAMESPACE, name.as_bytes()).to_string())
+        Self::from(Uuid::new_v5(&SESSION_NAMESPACE, name.as_bytes()))
+    }
+}
+
+impl From<Uuid> for SessionId {
+    fn from(id: Uuid) -> Self {
+        Self(id.to_string())
     }
 }
 

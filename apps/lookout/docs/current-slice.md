@@ -739,9 +739,11 @@ At the end of the slice, once its features are in.
 - [x] Build `session-crossings-py`'s output tables with `serde_arrow::to_record_batch` on row
       structs, as `medallion::batch` does. They replace its `batch` helper and the column lists
       `src/lib.rs` keeps by hand.
-- [ ] Give `SessionId` a `From<Uuid>`, as `DeviceId` has, and make the train session namespace a
+- [x] Give `SessionId` a `From<Uuid>`, as `DeviceId` has, and make the train session namespace a
       constant, as `SESSION_NAMESPACE` is. `train_session_id` then needs no `expect`, and hashes no
       namespace per call.
+      Changed on 2026-10-30: the namespace stays derived from its name in `train_session_id`, since
+      the derivation says where it comes from and a UUID literal does not. Only the `expect` goes.
 - [ ] Derive `sessionise`'s `--gap` and `--lead` defaults from `DEFAULT_GAP` and `DEFAULT_LEAD` with
       `default_value_t`, as `match_crossings` does from `DEFAULT_RADIUS`. They replace the literals
       `"10m"` and `"1m"`, and the test keeping them in step. This needs a way to turn an `Age` into

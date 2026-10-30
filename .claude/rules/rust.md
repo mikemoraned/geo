@@ -105,3 +105,8 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
 - Prefer simple, readable techniques over clever ones until profiling identifies a real hotspot.
   - When the borrow checker pushes back, reach for `.clone()` first. Only escalate to tricks like `std::mem::take`, manual index loops, `RefCell`, or restructuring fields once a benchmark or trace shows the clone matters.
   - Example: in a per-tick loop that needs `&mut self` access while iterating one field, `let xs = self.xs.clone(); for x in xs { self.do_something(&x); }` beats `for x in std::mem::take(&mut self.xs) { ... }`. Both work; the clone is one line, obvious to read, and ~free for small Vecs of small values. Save the cleverness for when it's earned.
+- **Derive a magic value from its name rather than embedding it.** A UUID namespace, or any other
+  number or string whose value means nothing by itself, is computed from a name that says what it
+  is. `Uuid::new_v5(&Uuid::nil(), b"TRAIN_SESSION_NAMESPACE")` shows what the namespace is and
+  where it comes from. `Uuid::from_u128(0x1066_8aee_…)` shows neither. The derivation can cost a
+  `const` and a computation per call. Pay that unless profiling shows the computation matters.
