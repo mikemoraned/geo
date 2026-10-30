@@ -766,13 +766,24 @@ At the end of the slice, once its features are in.
 #### Six-day capture
 
 Before the branch merges, so `main` never holds a poll file. Before Optimisation, since the
-polyline table changes what `motis_ingest` reads.
+polyline table changes what `motis_ingest` reads. The namespaces are derived before
+`motis_segment_v3` exists, so its rows hold the new source ids from the start.
 
-- [ ] Finish the six-day capture of Germany, which started on 19 October and ends around 25
+- [x] Finish the six-day capture of Germany, which started on 19 October and ends around 25
       October. Commit its polls as they accumulate, and its last ones once the poller stops. Then
       run `just silver-motis-ingest`, so the train sessions cover the whole week.
 - [ ] Give `writer_at`, in `crates/medallion/src/write.rs`, zstd compression, for bronze and
       silver alike.
+- [ ] Derive `SESSION_NAMESPACE` and `MOTIS_SOURCE_NAMESPACE` from their names with UUID v5, as
+      `train_session_id` derives its namespace. Every session id, source id, and train session id
+      then changes.
+- [ ] Give each existing dataset holding one of those ids a semantics tag, so it takes a new
+      version. These are bronze `motis_source_v4`, and silver `session_v3`, `session_sample_v3`,
+      `session_crossing_v3`, `train_segment_v4`, `train_session_v2`, and `train_session_sample_v2`.
+- [ ] Migrate bronze `motis_source_v3` into `motis_source_v4` with a one-off binary. Compute each
+      new source id from its row's fields. Refuse a row whose old id differs from those fields
+      under the old namespace. Read and write through medallion's `Query` and writers. Commit the
+      binary with the data it writes, and remove it in a later commit.
 - [ ] Add bronze `motis_polyline` and `motis_segment_v3` to `crates/medallion-model`, with a
       `PolylineId` newtype holding the UUID v5 of a polyline's text. If serde_arrow traces a
       flattened row, compose the new row from shared parts with `#[serde(flatten)]`. That avoids
@@ -787,22 +798,34 @@ polyline table changes what `motis_ingest` reads.
 - [ ] Read `motis_segment_v3` in `captures`, in `crates/motis/src/ingest.rs`, joining
       `motis_polyline` after picking each leg's newest capture.
 - [ ] Migrate `motis_segment_v2` into `motis_segment_v3` and `motis_polyline` with a one-off binary,
-      writing through the drain's code. Commit it with the data it writes, and remove it in a later
-      commit. Only after the capture ends.
+      writing through the drain's code. Give each segment its source's id in `motis_source_v4`, and
+      refuse a segment whose source is missing from `motis_source_v3`. Commit the binary with the
+      data it writes, and remove it in a later commit.
+- [ ] Check both migrations are lossless. `motis_source_v4` and `motis_segment_v3` must hold every
+      observation in the datasets they replace, with only the source id changed. Each old source id
+      must map to exactly one new one. Record the row counts under Observations.
 - [ ] Record, under Observations, the sizes of the migrated files against the research doc's
       DuckDB figures.
 - [ ] Check `just silver-motis-ingest` derives the same `train_segment_v2` and `train_session`
-      rows from `motis_segment_v3` alone as from `motis_segment_v2` alone.
+      rows from `motis_segment_v3` alone as from `motis_segment_v2` alone, but for the source ids
+      and the train session ids derived from them.
+- [ ] Rederive the recorded sessions into their new versions with `just silver-sessionise` and
+      `just silver-session-crossings`. Check each holds its old version's rows, with only the
+      session ids changed. Then run `just gold-pack-sessions`.
+- [ ] Update the session ids held outside the store: in
+      `crates/session_crossings/tests/passes.geojson`, and in any test or notebook that names one.
 - [ ] Point the shared test setup in `crates/motis/tests/common/mod.rs` at `motis_segment_v3`,
       joining `motis_polyline`. It is the other reader of `motis_segment_v2`. Register
       `motis_segment_v3` there under its own name, in place of `captured`.
 - [ ] Delete `motis_segment_v2`'s files, `MOTIS_SEGMENT_V2`, its entry in
       `crates/medallion-model/src/bronze.rs`, and its reading in `captures`. Its rows live on in
       `motis_segment_v3`.
+- [ ] Once the user has inspected the migrations, delete the files and declarations of
+      `motis_source_v3` and of the silver versions the new ones replace.
 - [ ] Describe landing, the drain, `motis_polyline`, and `motis_segment_v3` in `docs/medallion.md`
-      and `docs/motis.md`, in place of `motis_segment_v2`. A third-party service's samples take one
-      bronze file per drain. Then fold what holds of `2026-10-23-compact-bronze.md` into them, and
-      delete it.
+      and `docs/motis.md`, in place of `motis_segment_v2`, and name the other new versions there. A
+      third-party service's samples take one bronze file per drain. Then fold what holds of
+      `2026-10-23-compact-bronze.md` into them, and delete it.
 - [ ] Rewrite this branch's commits since it left `main` without the `motis_segment_v2` files,
       using `git filter-repo` in a fresh clone. Before opening the PR, force-push the result.
 
