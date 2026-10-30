@@ -1,11 +1,12 @@
 # What makes a change to a dataset breaking
 
-*Research of 2026-10-24. It draws on how six systems classify a change to a schema: the Avro
-specification, Confluent Schema Registry, Apache Iceberg, Delta Lake, dbt model contracts, and buf.
-Google's AIP-180 adds how a change of meaning is judged, and Rust crates how a check is
-fingerprinted. It applies them to the store [medallion.md](medallion.md) describes, and to the row
-types that declare its datasets. Whatever holds of it belongs in `medallion.md`, and the rest goes
-stale.*
+*Research of 2026-10-24, corrected on 2026-10-30. It draws on how six systems classify a change to a
+schema: the Avro specification, Confluent Schema Registry, Apache Iceberg, Delta Lake, dbt model
+contracts, and buf. Google's AIP-180 adds how a change of meaning is judged, and Rust crates how a
+check is fingerprinted. SQLMesh and Dagster add how a marker set by hand relates to a version a
+machine assigns. It applies them to the store [medallion.md](medallion.md) describes, and to the
+row types that declare its datasets. Whatever holds of it belongs in `medallion.md`, and the rest
+goes stale.*
 
 Which changes to a dataset break its readers, and so make a new version of it. It is for whoever
 writes the rules into `medallion.md`, and for whoever builds a test that a dataset's declaration
@@ -161,8 +162,8 @@ position, and the partitioning is the directory names.
 ### Changes no declaration shows
 
 A change to what no declaration states, such as a column's meaning, leaves the declaration as it
-was, and can still break a reader. No system finds such a change for itself. Each leaves the
-judgement to a person:
+was, and can still break a reader. AIP-180, dbt, and Confluent Schema Registry leave the judgement
+to a person:
 
 - Google's AIP-180 sets semantic compatibility beside source and wire compatibility. Code written
   against an earlier version has to keep receiving what a reasonable developer would expect, and
@@ -174,6 +175,28 @@ judgement to a person:
   such as `major_version`, splits a subject's history into compatibility groups, and the registry
   checks a new schema only within its group. A schema registered with a new value starts a new
   group.
+
+SQLMesh finds a change to a model's logic for itself. It derives a fingerprint from each model.
+Reformatting a query leaves the fingerprint as it was, and changing the query makes a new one. Its
+docs call a changed `WHERE` clause breaking, since downstream models then contain rows it would
+filter out. By default, a change to a SQL model that it cannot categorise counts as breaking.
+
+### A marker set by hand
+
+Three systems let a person set a string that the system then acts on:
+
+- SQLMesh computes each model's fingerprint, and offers `stamp`, "used to create a new model version
+  without changing the functional components of the definition".
+- Dagster has `code_version`. It hashes that string with the data versions of an asset's inputs to
+  compute a data version, and labels an asset "Unsynced" once its code version changes.
+- Confluent Schema Registry numbers a subject's schemas itself, in sequence. A person sets
+  `major_version` to mark a break, and the registry uses it to choose which schemas to compare.
+
+dbt and Google's APIs have no such marker. The author names each version, such as `v2`, and the new
+version is the signal.
+
+In each system with a marker, a machine assigns the version and acts on the marker. None of these
+sources states that pattern. It is a reading of them.
 
 ## The store's choice
 
@@ -187,9 +210,16 @@ declaration simple. Two things follow:
 - A test needs no rules to classify a change: any difference in a declaration means a new version.
 
 A change of meaning stays a judgement call, as AIP-180 and dbt treat it. Where a person judges one
-significant, they set a semantics tag in the declaration. The tag is empty by default, and a hash of
-the declaration covers it. Setting it therefore forces a new version, as a new `major_version` does
-in Confluent's registry.
+significant, they give the dataset a new version.
+
+The declaration holds no marker for a change of meaning. A semantics tag, chosen on 24 October, was
+rejected on 30 October. A person names each version, so no machine needs a tag to assign one. The
+tag's only input was the person's decision, so it found no change the person had not already
+noticed.
+
+A new `major_version` in Confluent's registry corresponds to the version in a dataset's name, not to
+such a tag. The registry compares a schema only within its group, and a test compares a declaration
+only with the stored copy under its own name.
 
 ## Testing a declaration against a stored one
 
@@ -252,12 +282,18 @@ the change in its failure, as a snapshot test does. A short hash can still come 
   Resolution"
 - [Confluent Schema Registry, "Schema Evolution and Compatibility"](https://docs.confluent.io/platform/7.2/schema-registry/avro.html),
   and ["Data Contracts for Schema Registry"](https://docs.confluent.io/platform/7.8/schema-registry/fundamentals/data-contracts.html)
-- [Google, AIP-180, "Backwards compatibility"](https://google.aip.dev/180)
+- [Google, AIP-180, "Backwards compatibility"](https://google.aip.dev/180), and
+  [AIP-185, "API Versioning"](https://google.aip.dev/185)
 - [Apache Iceberg, "Evolution"](https://iceberg.apache.org/docs/latest/evolution/)
 - [Delta Lake, "Constraints and Checks"](https://delta.io/blog/2022-11-21-delta-lake-contraints-check),
   and [Databricks, "Type widening"](https://docs.databricks.com/aws/en/ingestion/cloud-object-storage/auto-loader/type-widening)
-- [dbt, "Model contracts"](https://docs.getdbt.com/docs/mesh/govern/model-contracts), and
-  ["Model versions"](https://docs.getdbt.com/docs/mesh/govern/model-versions)
+- [dbt, "Model contracts"](https://docs.getdbt.com/docs/mesh/govern/model-contracts),
+  ["Model versions"](https://docs.getdbt.com/docs/mesh/govern/model-versions), and
+  ["Coordinating model versions"](https://docs.getdbt.com/best-practices/how-we-mesh/mesh-6-coordinate-versions)
+- [SQLMesh, model overview](https://sqlmesh.readthedocs.io/en/stable/concepts/models/overview/),
+  [plans](https://sqlmesh.readthedocs.io/en/stable/concepts/plans/), and
+  [snapshots](https://sqlmesh.readthedocs.io/en/stable/concepts/architecture/snapshots/)
+- [Dagster, "Asset versioning and caching"](https://dagster.io/docs/guides/dagster/asset-versioning-and-caching)
 - [buf, "Detecting breaking changes"](https://buf.build/docs/breaking/)
 - Rust crates: [serde-reflection](https://docs.rs/serde-reflection),
   [type_hash](https://docs.rs/type_hash), [hashfn](https://docs.rs/hashfn),

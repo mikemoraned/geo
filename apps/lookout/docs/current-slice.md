@@ -762,6 +762,27 @@ At the end of the slice, once its features are in.
       `crates/motis/src/train_sessions.rs` and the `recorder` crate use `sessions`, `samples`,
       and `d`. Leave the test setup in `crates/motis/tests/common/mod.rs`, which registers
       `motis_segment_v2` as `captured`, to the Six-day capture's move to `motis_segment_v3`.
+- [ ] Remove the semantics tag from the code. A significant change of meaning still makes a new
+      version, and the version in a dataset's name already marks that change. The tag's only input
+      is the decision it reports, and only the declaration test reads it.
+      1. Remove `Row::SEMANTICS` from `crates/medallion/src/rows.rs`, its one value on
+         `TrainSegmentRowV3` in `crates/medallion-model/src/motis.rs`, and the `semantics` field of
+         `Declaration` in `crates/medallion-model/src/declaration.rs`.
+      2. Accept the 16 declaration snapshots, which each lose one line, with no new versions. No
+         reader can see the change.
+      3. In the "Dataset versions" section of `docs/medallion.md`, remove the semantics tag from
+         what a declaration covers. Replace the paragraph on a change of meaning with:
+
+         > A change of meaning leaves the declaration as it was. Such changes include a new unit,
+         > another value standing for "none applies", a new grain, and a row identity that varies
+         > between runs. The declaration test cannot find one. Where a person judges one
+         > significant, they give the dataset a new version, as for a change to its declaration.
+
+      4. In "Each dataset's declaration is snapshotted", in `crates/medallion/README.md`, remove
+         the semantics tag from what a snapshot holds. Rewrite the paragraph on a change of meaning
+         to match.
+      5. Reword the Six-day capture task that sets a semantics tag, so it gives each dataset a new
+         version directly. Notes on completed tasks stay as history.
 - [ ] Check that everything of value in
       [2026-10-24-breaking-dataset-changes.md](2026-10-24-breaking-dataset-changes.md) has been
       applied or recorded. Record what has not, in `docs/medallion.md` or
