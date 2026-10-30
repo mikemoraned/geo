@@ -736,7 +736,7 @@ At the end of the slice, once its features are in.
       Extended on 2026-10-30: `domain`'s `Pass::new` now builds each pass and refuses a sample
       count too big for a `u32`, which the old code clamped. An empty visit, which `pass_of`
       dropped, is now an error. `steps` and `passes` return both errors.
-- [ ] Build `session-crossings-py`'s output tables with `serde_arrow::to_record_batch` on row
+- [x] Build `session-crossings-py`'s output tables with `serde_arrow::to_record_batch` on row
       structs, as `medallion::batch` does. They replace its `batch` helper and the column lists
       `src/lib.rs` keeps by hand.
 - [ ] Give `SessionId` a `From<Uuid>`, as `DeviceId` has, and make the train session namespace a

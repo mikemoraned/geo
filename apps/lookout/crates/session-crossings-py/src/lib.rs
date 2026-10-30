@@ -1,18 +1,17 @@
 use std::sync::Arc;
 
-use arrow::array::{
-    Array, ArrayRef, Float64Array, Int64Array, RecordBatch, StringArray, TimestampMillisecondArray,
-    UInt32Array,
-};
+use arrow::array::{Array, ArrayRef, Int64Array, RecordBatch, StringArray};
 use arrow::compute::{cast, concat_batches};
-use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
+use arrow::datatypes::{DataType, Field, FieldRef, TimeUnit};
 use chrono::{DateTime, Utc};
-use domain::{CrossingId, Radius, SessionId};
+use domain::{CrossingId, Pass, Radius, SessionId};
 use geo_types::{Geometry, Point};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_arrow::PyTable;
+use serde::{Deserialize, Serialize};
+use serde_arrow::schema::{SchemaLike, TracingOptions};
 use session_crossings::matching::{self, Crossing, DEFAULT_RADIUS, Near, Sample};
 
 /// The steps the session crossings matching takes for one session, as two tables.
@@ -43,8 +42,8 @@ fn steps<'py>(
     let mut near: Vec<(CrossingId, Near)> = Vec::new();
     let mut passes = Vec::new();
     for crossing in &crossings {
-        let steps = matching::steps(&session_id, &samples, crossing, radius)
-            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+        let steps =
+            matching::steps(&session_id, &samples, crossing, radius).map_err(runtime_error)?;
         near.extend(
             steps
                 .near
@@ -150,83 +149,82 @@ fn points(batch: &RecordBatch, name: &str) -> PyResult<Vec<Point<f64>>> {
         .collect()
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct NearRow {
+    crossing_id: String,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    t: DateTime<Utc>,
+    distance_m: f64,
+    visit: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PassRow {
+    crossing_id: String,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    crossed_at: DateTime<Utc>,
+    distance_m: f64,
+    samples_within: u32,
+}
+
 fn near_batch(near: &[(CrossingId, Near)]) -> PyResult<RecordBatch> {
-    batch(vec![
-        (
-            "crossing_id",
-            Arc::new(StringArray::from_iter_values(
-                near.iter().map(|(id, _)| id.as_str()),
-            )) as ArrayRef,
-        ),
-        (
-            "t",
-            Arc::new(instant_array(near.iter().map(|(_, one)| one.sample.t))),
-        ),
-        (
-            "distance_m",
-            Arc::new(Float64Array::from_iter_values(
-                near.iter().map(|(_, one)| one.distance_metres),
-            )),
-        ),
-        (
-            "visit",
-            Arc::new(UInt32Array::from_iter_values(
-                near.iter()
-                    .map(|(_, one)| one.visit.try_into().unwrap_or(u32::MAX)),
-            )),
-        ),
-    ])
+    let rows = near
+        .iter()
+        .map(|(crossing_id, one)| {
+            Ok(NearRow {
+                crossing_id: crossing_id.to_string(),
+                t: one.sample.t,
+                distance_m: one.distance_metres,
+                visit: one.visit.try_into().map_err(|_| {
+                    PyRuntimeError::new_err(format!(
+                        "visit {} is more than the `visit` column can number",
+                        one.visit
+                    ))
+                })?,
+            })
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    batch(&rows, "t")
 }
 
-fn passes_batch(passes: &[domain::Pass]) -> PyResult<RecordBatch> {
-    batch(vec![
-        (
-            "crossing_id",
-            Arc::new(StringArray::from_iter_values(
-                passes.iter().map(|pass| pass.crossing_id.as_str()),
-            )) as ArrayRef,
-        ),
-        (
-            "crossed_at",
-            Arc::new(instant_array(passes.iter().map(|pass| pass.crossed_at))),
-        ),
-        (
-            "distance_m",
-            Arc::new(Float64Array::from_iter_values(
-                passes.iter().map(|pass| pass.distance_metres),
-            )),
-        ),
-        (
-            "samples_within",
-            Arc::new(UInt32Array::from_iter_values(
-                passes.iter().map(|pass| pass.samples_within),
-            )),
-        ),
-    ])
+fn passes_batch(passes: &[Pass]) -> PyResult<RecordBatch> {
+    let rows: Vec<PassRow> = passes
+        .iter()
+        .map(|pass| PassRow {
+            crossing_id: pass.crossing_id.to_string(),
+            crossed_at: pass.crossed_at,
+            distance_m: pass.distance_metres,
+            samples_within: pass.samples_within,
+        })
+        .collect();
+    batch(&rows, "crossed_at")
 }
 
-fn instant_array(instants: impl Iterator<Item = DateTime<Utc>>) -> TimestampMillisecondArray {
-    TimestampMillisecondArray::from_iter_values(instants.map(|t| t.timestamp_millis()))
-        .with_timezone("UTC")
-}
-
-fn batch(columns: Vec<(&str, ArrayRef)>) -> PyResult<RecordBatch> {
-    let schema = Schema::new(
-        columns
-            .iter()
-            .map(|(name, array)| Field::new(*name, array.data_type().clone(), false))
-            .collect::<Vec<_>>(),
-    );
-    RecordBatch::try_new(
-        Arc::new(schema),
-        columns.into_iter().map(|(_, array)| array).collect(),
-    )
-    .map_err(|err| PyRuntimeError::new_err(err.to_string()))
+fn batch<T: Serialize + for<'de> Deserialize<'de>>(
+    rows: &[T],
+    instant: &str,
+) -> PyResult<RecordBatch> {
+    let fields: Vec<FieldRef> = Vec::<FieldRef>::from_type::<T>(TracingOptions::default())
+        .map_err(runtime_error)?
+        .into_iter()
+        .map(|field| {
+            if field.name() == instant {
+                Arc::new(Field::new(
+                    instant,
+                    DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
+                    false,
+                ))
+            } else {
+                field
+            }
+        })
+        .collect();
+    serde_arrow::to_record_batch(&fields, &rows).map_err(runtime_error)
 }
 
 fn table(batch: RecordBatch) -> PyResult<PyTable> {
     let schema = batch.schema();
-    PyTable::try_new(vec![batch], schema).map_err(|err| PyRuntimeError::new_err(err.to_string()))
+    PyTable::try_new(vec![batch], schema).map_err(runtime_error)
 }
 
 fn unreadable(name: &str, reason: impl std::fmt::Display) -> PyErr {
@@ -235,6 +233,10 @@ fn unreadable(name: &str, reason: impl std::fmt::Display) -> PyErr {
 
 fn value_error(err: impl std::fmt::Display) -> PyErr {
     PyValueError::new_err(err.to_string())
+}
+
+fn runtime_error(err: impl std::fmt::Display) -> PyErr {
+    PyRuntimeError::new_err(err.to_string())
 }
 
 #[pymodule]

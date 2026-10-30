@@ -7241,6 +7241,8 @@ dependencies = [
  "medallion",
  "pyo3",
  "pyo3-arrow",
+ "serde",
+ "serde_arrow",
  "session_crossings",
 ]
 
