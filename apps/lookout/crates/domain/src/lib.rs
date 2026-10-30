@@ -20,7 +20,7 @@ pub use crossing::{Crossing, CrossingCompact, CrossingCompactId, CrossingId};
 pub use device::{DeviceId, DeviceInfo, DeviceType, EmptyDeviceId};
 pub use gps::Gps;
 pub use name::NameError;
-pub use pass::Pass;
+pub use pass::{Pass, TooManySamples};
 pub use position::{CoordinateError, position};
 pub use precision::Precision;
 pub use radius::{NotARadius, Radius};

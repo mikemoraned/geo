@@ -8,7 +8,7 @@ use medallion::{COUNTRY, Country, DatasetSpec, Query, Replaced, Root, layers};
 use medallion_model::{SessionCrossingRowV2, WaterCrossingRowV2};
 use serde::Deserialize;
 
-use crate::matching::{Crossing, Sample, Session, passes};
+use crate::matching::{Crossing, NoPass, Sample, Session, passes};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MatchOutcome {
@@ -31,6 +31,8 @@ pub enum CrossingError {
     OffTheGlobe(#[from] domain::CoordinateError),
     #[error("partitioning by country: {0}")]
     Path(#[from] medallion::PathError),
+    #[error("matching sessions to crossings: {0}")]
+    Matching(#[from] NoPass),
 }
 
 #[derive(Debug, Deserialize)]
@@ -138,7 +140,7 @@ async fn matched_in(
         sessions,
         crossings,
     } = inputs(root, country).await?;
-    let matched = passes(&sessions, &crossings, radius);
+    let matched = passes(&sessions, &crossings, radius)?;
 
     let devices: HashMap<&SessionId, &DeviceId> = sessions
         .iter()

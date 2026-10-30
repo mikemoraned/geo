@@ -43,7 +43,8 @@ fn steps<'py>(
     let mut near: Vec<(CrossingId, Near)> = Vec::new();
     let mut passes = Vec::new();
     for crossing in &crossings {
-        let steps = matching::steps(&session_id, &samples, crossing, radius);
+        let steps = matching::steps(&session_id, &samples, crossing, radius)
+            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
         near.extend(
             steps
                 .near
