@@ -1,12 +1,15 @@
-use std::fmt::{self, Display};
-use std::str::FromStr;
-
 use hashfn::hashfn;
+use nutype::nutype;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String")]
+#[nutype(
+    validate(with = device_id_present, error = EmptyDeviceId),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into,
+        Serialize, Deserialize
+    )
+)]
 pub struct DeviceId(String);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -32,54 +35,39 @@ pub struct DeviceInfo {
 #[error("a device id cannot be empty")]
 pub struct EmptyDeviceId;
 
+#[hashfn]
+pub fn device_id_present(id: &str) -> Result<(), EmptyDeviceId> {
+    if id.is_empty() {
+        Err(EmptyDeviceId)
+    } else {
+        Ok(())
+    }
+}
+
 impl DeviceId {
-    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, EmptyDeviceId> {
-        let id = id.into();
-        if id.is_empty() {
-            return Err(EmptyDeviceId);
-        }
-        Ok(Self(id))
+        Self::try_new(id)
     }
 }
 
 impl From<Uuid> for DeviceId {
     fn from(id: Uuid) -> Self {
-        Self(id.to_string())
-    }
-}
-
-impl FromStr for DeviceId {
-    type Err = EmptyDeviceId;
-
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        Self::new(id)
-    }
-}
-
-impl TryFrom<String> for DeviceId {
-    type Error = EmptyDeviceId;
-
-    fn try_from(id: String) -> Result<Self, Self::Error> {
-        Self::new(id)
-    }
-}
-
-impl From<DeviceId> for String {
-    fn from(id: DeviceId) -> Self {
-        id.0
-    }
-}
-
-impl Display for DeviceId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        Self::new(id.to_string()).expect("a UUID's text is never empty")
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
+
+    proptest! {
+        #[test]
+        fn an_id_is_accepted_exactly_when_it_is_not_empty(text in ".{0,8}") {
+            prop_assert_eq!(DeviceId::new(text.clone()).is_ok(), !text.is_empty());
+        }
+    }
 
     #[test]
     fn an_id_reads_back_as_what_it_was_made_from() {

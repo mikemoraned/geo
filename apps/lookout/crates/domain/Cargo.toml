@@ -13,6 +13,7 @@ geo = { version = "0.32", default-features = false }
 geo-types = { workspace = true }
 hashfn = { workspace = true }
 humantime = "2"
+nutype = { workspace = true }
 num-traits = { version = "0.2", default-features = false }
 # `v5` alone: a session id is a name-based UUID, and `v4` would pull in a random source
 # this crate has no use for and a board may not have. See docs/device.md.

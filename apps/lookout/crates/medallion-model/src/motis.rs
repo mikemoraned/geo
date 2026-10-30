@@ -1,10 +1,8 @@
-use std::fmt::{self, Display};
-use std::str::FromStr;
-
 use chrono::{DateTime, NaiveDate, Utc};
 use domain::TrainNumber;
 use hashfn::hashfn;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
+use nutype::nutype;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumIter, EnumString};
 
@@ -19,139 +17,91 @@ pub const MOTIS_SEGMENT_V2: DatasetSpec<layers::Bronze> =
 pub const TRAIN_SEGMENT_V3: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("train_segment_v3", "departure_date");
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String")]
+#[nutype(
+    validate(with = trip_id_present, error = EmptyTripId),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
 pub struct TripId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a trip id cannot be empty")]
 pub struct EmptyTripId;
 
+#[hashfn]
+pub fn trip_id_present(id: &str) -> Result<(), EmptyTripId> {
+    if id.is_empty() {
+        Err(EmptyTripId)
+    } else {
+        Ok(())
+    }
+}
+
 impl TripId {
-    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, EmptyTripId> {
-        let id = id.into();
-        if id.is_empty() {
-            Err(EmptyTripId)
-        } else {
-            Ok(Self(id))
-        }
+        Self::try_new(id)
     }
 
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.as_ref()
     }
 }
 
-impl FromStr for TripId {
-    type Err = EmptyTripId;
-
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        Self::new(id)
-    }
-}
-
-impl TryFrom<String> for TripId {
-    type Error = EmptyTripId;
-
-    fn try_from(id: String) -> Result<Self, Self::Error> {
-        Self::new(id)
-    }
-}
-
-impl From<TripId> for String {
-    fn from(id: TripId) -> Self {
-        id.0
-    }
-}
-
-impl Display for TripId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String")]
+#[nutype(
+    validate(with = stop_id_present, error = EmptyStopId),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
 pub struct StopId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a stop id cannot be empty")]
 pub struct EmptyStopId;
 
+#[hashfn]
+pub fn stop_id_present(id: &str) -> Result<(), EmptyStopId> {
+    if id.is_empty() {
+        Err(EmptyStopId)
+    } else {
+        Ok(())
+    }
+}
+
 impl StopId {
-    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, EmptyStopId> {
-        let id = id.into();
-        if id.is_empty() {
-            Err(EmptyStopId)
-        } else {
-            Ok(Self(id))
-        }
+        Self::try_new(id)
     }
 }
 
-impl FromStr for StopId {
-    type Err = EmptyStopId;
-
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        Self::new(id)
-    }
-}
-
-impl TryFrom<String> for StopId {
-    type Error = EmptyStopId;
-
-    fn try_from(id: String) -> Result<Self, Self::Error> {
-        Self::new(id)
-    }
-}
-
-impl From<StopId> for String {
-    fn from(id: StopId) -> Self {
-        id.0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String")]
+#[nutype(
+    validate(with = agency_id_present, error = EmptyAgencyId),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
 pub struct AgencyId(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("an agency id cannot be empty")]
 pub struct EmptyAgencyId;
 
+#[hashfn]
+pub fn agency_id_present(id: &str) -> Result<(), EmptyAgencyId> {
+    if id.is_empty() {
+        Err(EmptyAgencyId)
+    } else {
+        Ok(())
+    }
+}
+
 impl AgencyId {
-    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, EmptyAgencyId> {
-        let id = id.into();
-        if id.is_empty() {
-            Err(EmptyAgencyId)
-        } else {
-            Ok(Self(id))
-        }
-    }
-}
-
-impl FromStr for AgencyId {
-    type Err = EmptyAgencyId;
-
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        Self::new(id)
-    }
-}
-
-impl TryFrom<String> for AgencyId {
-    type Error = EmptyAgencyId;
-
-    fn try_from(id: String) -> Result<Self, Self::Error> {
-        Self::new(id)
-    }
-}
-
-impl From<AgencyId> for String {
-    fn from(id: AgencyId) -> Self {
-        id.0
+        Self::try_new(id)
     }
 }
 
@@ -345,14 +295,14 @@ impl Row for TrainSegmentRowV3 {
     fn example() -> Self {
         Self {
             source_id: MotisSourceRowV3::example().source_id,
-            trip_id: TripId("example".to_string()),
+            trip_id: TripId::new("example").expect("a trip id"),
             route_name: Some("example".to_string()),
             train_number: TrainNumber::from_gtfs("1"),
-            agency_id: Some(AgencyId("example".to_string())),
+            agency_id: Some(AgencyId::new("example").expect("an agency id")),
             agency_name: Some("example".to_string()),
             mode: RailMode::HighspeedRail,
             realtime: false,
-            from_stop_id: Some(StopId("example".to_string())),
+            from_stop_id: Some(StopId::new("example").expect("a stop id")),
             departure: DateTime::UNIX_EPOCH,
             arrival: DateTime::UNIX_EPOCH,
         }
@@ -368,10 +318,20 @@ impl Dated for TrainSegmentRowV3 {
 #[cfg(test)]
 mod tests {
     use arrow::datatypes::DataType;
+    use proptest::prelude::*;
     use strum::IntoEnumIterator;
 
     use super::*;
     use crate::testing::{column, column_names};
+
+    proptest! {
+        #[test]
+        fn an_id_is_accepted_exactly_when_it_is_not_empty(text in ".{0,8}") {
+            prop_assert_eq!(TripId::new(text.clone()).is_ok(), !text.is_empty());
+            prop_assert_eq!(StopId::new(text.clone()).is_ok(), !text.is_empty());
+            prop_assert_eq!(AgencyId::new(text.clone()).is_ok(), !text.is_empty());
+        }
+    }
 
     #[test]
     fn a_trip_id_is_written_back_as_given() {

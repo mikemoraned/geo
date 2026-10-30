@@ -748,9 +748,13 @@ At the end of the slice, once its features are in.
       `default_value_t`, as `match_crossings` does from `DEFAULT_RADIUS`. They replace the literals
       `"10m"` and `"1m"`, and the test keeping them in step. This needs a way to turn an `Age` into
       a `Span`.
-- [ ] If `nutype` builds for Xtensa and wasm, generate the non-empty id newtypes with it: `TripId`,
+- [x] If `nutype` builds for Xtensa and wasm, generate the non-empty id newtypes with it: `TripId`,
       `StopId`, `AgencyId`, and `DeviceId`. Each writes out `new`, `FromStr`, `TryFrom<String>`,
       `From<_> for String`, and an `Empty*` error by hand.
+      Extended on 2026-10-30: each check is a `#[hashfn]` validator `nutype` calls, so the
+      declarations still fingerprint it. The declaration snapshots changed only in those hashes. A
+      property test shows each check still accepts exactly the non-empty texts, so the change is
+      not breaking, and the snapshots are accepted.
 - [ ] Register each dataset under its own name, as the "Dataset versions" section of
       `docs/medallion.md` states. In production, `crates/recorder/src/sessions.rs` registers
       `gps_reading_v2` as `samples` and `device_session_v2` as `session_starts`. In tests,

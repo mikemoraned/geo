@@ -1,5 +1,6 @@
 ---
 source: crates/medallion-model/src/declaration.rs
+assertion_line: 308
 expression: declaration
 ---
 layer: silver
@@ -30,7 +31,7 @@ columns:
     data_type: LargeUtf8
     nullable: false
     checks:
-      "TripId::new": 95faaf93fd74d90a7b1410e34146122c52444c25b436b91882c5fa432d422269
+      trip_id_present: bcde5cbcef613a8d10e777a2db57dad7ce6b70c8ed86fc8ee284bd33d9d8c217
   - name: route_name
     data_type: LargeUtf8
     nullable: true
@@ -43,7 +44,7 @@ columns:
     data_type: LargeUtf8
     nullable: true
     checks:
-      "AgencyId::new": 1b6a7ca1bd170dee52076b18f6b6124468e9a3435c8447cfebdaa6e6be098d4e
+      agency_id_present: a9ccf5427ebd686924139c22ce152d16784c55f1870cadc6011749ae1065c746
   - name: agency_name
     data_type: LargeUtf8
     nullable: true
@@ -64,7 +65,7 @@ columns:
     data_type: LargeUtf8
     nullable: true
     checks:
-      "StopId::new": 87b2a5b393d9f3de120a35ca49a1d2dae54e20f74cafc7d539aded0eafb5937f
+      stop_id_present: 39ebe1dfb996e1b3fdc1481f189697e01cb77abfda5e02ae18e2a7e2fd7ea7dc
   - name: departure
     data_type: "Timestamp(ms, \"UTC\")"
     nullable: true

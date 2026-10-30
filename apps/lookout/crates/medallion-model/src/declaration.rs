@@ -1,19 +1,17 @@
 use std::collections::BTreeMap;
 
 use arrow::datatypes::{Field, SchemaRef};
-use domain::{
-    CrossingCompactId, CrossingId, DeviceId, DeviceType, SessionId, StartedBy, TrainNumber,
-};
+use domain::{CrossingCompactId, CrossingId, DeviceType, SessionId, StartedBy, TrainNumber};
 use medallion::{Country, DatasetInfo, Row, file_schema};
 use serde::{Deserialize, Serialize};
 use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, TracerConfig};
 
 use crate::{
-    ALL, AccelReadingRowV2, AgencyId, DeviceSessionRowV2, ExtractManifestRowV3, Feed,
-    GeometrySource, GersId, GpsReadingRowV2, Label, MotisBaseUrl, MotisCaptureRow, MotisSegmentRow,
-    MotisSourceId, MotisSourceRowV3, MotisVersion, OVERTURE_EXTRACT, OverlapKind, OvertureRelease,
-    RailMode, RawSampleRow, SessionCrossingRowV2, SessionRowV2, SessionSampleRowV2, StopId,
-    TrainSegmentRowV3, TrainSessionRow, TrainSessionSampleRow, TripId, WaterCrossingRowV2,
+    ALL, AccelReadingRowV2, DeviceSessionRowV2, ExtractManifestRowV3, Feed, GeometrySource, GersId,
+    GpsReadingRowV2, Label, MotisBaseUrl, MotisCaptureRow, MotisSegmentRow, MotisSourceId,
+    MotisSourceRowV3, MotisVersion, OVERTURE_EXTRACT, OverlapKind, OvertureRelease, RailMode,
+    RawSampleRow, SessionCrossingRowV2, SessionRowV2, SessionSampleRowV2, TrainSegmentRowV3,
+    TrainSessionRow, TrainSessionSampleRow, WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -221,7 +219,7 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
     BTreeMap::from([
         (
             "AgencyId",
-            Checks::from([("AgencyId::new", AgencyId::NEW_HASH)]),
+            Checks::from([("agency_id_present", crate::motis::AGENCY_ID_PRESENT_HASH)]),
         ),
         (
             "CrossingCompactId",
@@ -233,7 +231,7 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
         ),
         (
             "DeviceId",
-            Checks::from([("DeviceId::new", DeviceId::NEW_HASH)]),
+            Checks::from([("device_id_present", domain::device::DEVICE_ID_PRESENT_HASH)]),
         ),
         ("GersId", Checks::from([("GersId::new", GersId::NEW_HASH)])),
         ("Label", Checks::from([("Label::new", Label::NEW_HASH)])),
@@ -257,12 +255,18 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
             "SessionId",
             Checks::from([("SessionId::new", SessionId::NEW_HASH), name]),
         ),
-        ("StopId", Checks::from([("StopId::new", StopId::NEW_HASH)])),
+        (
+            "StopId",
+            Checks::from([("stop_id_present", crate::motis::STOP_ID_PRESENT_HASH)]),
+        ),
         (
             "TrainNumber",
             Checks::from([("TrainNumber::new", TrainNumber::NEW_HASH)]),
         ),
-        ("TripId", Checks::from([("TripId::new", TripId::NEW_HASH)])),
+        (
+            "TripId",
+            Checks::from([("trip_id_present", crate::motis::TRIP_ID_PRESENT_HASH)]),
+        ),
     ])
 }
 

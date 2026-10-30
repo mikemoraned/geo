@@ -1,5 +1,6 @@
 ---
 source: crates/medallion-model/src/declaration.rs
+assertion_line: 308
 expression: declaration
 ---
 layer: silver
@@ -31,7 +32,7 @@ columns:
     data_type: LargeUtf8
     nullable: false
     checks:
-      "DeviceId::new": cc686f40e802c726b1e8a33c950237add568971c0f06d030a2f07b7064e0a525
+      device_id_present: fed047f0f3ef93b493d7b4d19c13ef35ec41e4568eea51aa73cc394a38a655ce
   - name: t
     data_type: "Timestamp(ms, \"UTC\")"
     nullable: true
