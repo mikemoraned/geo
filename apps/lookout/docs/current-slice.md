@@ -584,7 +584,7 @@ At the end of the slice, once its features are in.
 - [x] In the "Dataset versions" section of `docs/medallion.md`, record that every change to a
       dataset's declaration makes a new version. That includes an added optional column and a
       widened type. Draw on
-      [2026-10-24-breaking-dataset-changes.md](2026-10-24-breaking-dataset-changes.md). State what
+      `2026-10-24-breaking-dataset-changes.md`. State what
       a declaration covers: column order, types, nullability, the constraints a row type adds, and
       the spec. Include the changes no declaration shows, such as a column's meaning. A person
       judges whether one is significant, and sets a semantics tag that forces a new version.
@@ -783,8 +783,8 @@ At the end of the slice, once its features are in.
          to match.
       5. Reword the Six-day capture task that sets a semantics tag, so it gives each dataset a new
          version directly. Notes on completed tasks stay as history.
-- [ ] Check that everything of value in
-      [2026-10-24-breaking-dataset-changes.md](2026-10-24-breaking-dataset-changes.md) has been
+- [x] Check that everything of value in
+      `2026-10-24-breaking-dataset-changes.md` has been
       applied or recorded. Record what has not, in `docs/medallion.md` or
       `crates/medallion/README.md`. Then delete the research doc.
 

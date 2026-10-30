@@ -99,6 +99,12 @@ test, and goes to review, by a person or an agent:
 A change of meaning leaves the declaration as it was, so the test cannot find one. Where a person
 judges one significant, they give the dataset a new version under a new name.
 
+A snapshot stores the declaration as text, so a failure shows how it changed, where a hash would
+show only that it did. Tracing a type shows its structure but not what a check does, which is why
+each check carries a hash of its code. That hash changes on any edit to the function, a refactor
+included, which is why review can accept a change. A snapshot of a check's results over fixed inputs
+would change only with its behaviour, but only for the inputs listed.
+
 ## Appending never overwrites; deriving always replaces
 
 The immutable layers append. A batch lands in a file named for the instant of the write, at

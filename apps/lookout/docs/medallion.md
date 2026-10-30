@@ -264,9 +264,16 @@ finds columns by name, and a widened type. A version's files therefore share one
 test records every declaration, and fails on any change to one.
 
 A change of meaning leaves the declaration as it was. Such changes include a new unit, another
-value standing for "none applies", a new grain, and a row identity that varies between runs. The
-declaration test cannot find one. Where a person judges one significant, they give the dataset a
-new version, as for a change to its declaration.
+value standing for "none applies", a new grain, a row identity that varies between runs, and a new
+spelling of a partition value. The declaration test cannot find one. Where a person judges one
+significant, they give the dataset a new version, as for a change to its declaration.
+
+A new partition key makes a new version like any other change to a declaration, and that version's
+files are all written afresh. A dataset reads under one layout, so files laid out under another key
+do not read as part of it.
+
+A reader at an earlier commit needs no support from a later version. That commit holds its own
+bronze, and its own code can rederive the silver it reads.
 
 Each version after the first carries its number as a suffix of the dataset's name, as in
 `_v2`. Readers register a dataset under its name, suffix included, and query it by that name. A
@@ -484,6 +491,8 @@ statistics as metadata beside the data. It would add atomic replacement of many 
 once, schema evolution, time travel, and pruning from statistics rather than from paths. Not
 adopted: it costs a metadata layer to understand and an engine support matrix to track,
 against a store where a partition is one file and a rewrite is therefore already atomic.
+One format, Iceberg, finds a column by an id that renames and reorders keep, and partitions on
+transforms of stored columns, so those changes break none of its readers.
 Revisit when partition-level atomicity or schema evolution starts to cost debugging time.
 Judge a candidate first on breadth of engine support, since multi-engine readability is the
 rule this store is built around, and then on write maturity against its own status reporting,
@@ -499,3 +508,18 @@ Deferred, and a per-dataset decision to settle explicitly rather than by acciden
 needed when something downstream has to know what a dataset said at an earlier time, and
 unnecessary when only the current view is ever read. Whichever is chosen, apply it
 consistently across silver rather than varying it dataset by dataset.
+
+**Classifying each change to a declaration by which readers it breaks.** A change can break a new
+reader on old data, or an old reader on new data. Avro, Confluent Schema Registry, Iceberg, and
+Delta Lake allow the changes that avoid a chosen direction, such as an added optional column or a
+widened type. Where a version's declaration can change, its files span every declaration it has had,
+and a reader meets them all. A change then has to keep every earlier declaration's files readable,
+not only the last one's. Not adopted: with every change making a new version, the test needs no
+rules, and no such chain forms. Revisit when new versions for changes no reader can notice cost more
+than those rules would.
+
+**A marker for a change of meaning**, a string in the declaration that a person sets to force a new
+version. SQLMesh's `stamp`, Dagster's `code_version`, and Confluent Schema Registry's
+`major_version` work this way: each system assigns a version itself, and acts on the marker. Not
+adopted: here a person names each version, so a marker's only input is a decision already taken.
+Revisit if a machine comes to assign versions.
