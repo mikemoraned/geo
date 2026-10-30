@@ -755,7 +755,7 @@ At the end of the slice, once its features are in.
       declarations still fingerprint it. The declaration snapshots changed only in those hashes. A
       property test shows each check still accepts exactly the non-empty texts, so the change is
       not breaking, and the snapshots are accepted.
-- [ ] Register each dataset under its own name, as the "Dataset versions" section of
+- [x] Register each dataset under its own name, as the "Dataset versions" section of
       `docs/medallion.md` states. In production, `crates/recorder/src/sessions.rs` registers
       `gps_reading_v2` as `samples` and `device_session_v2` as `session_starts`. In tests,
       `crates/motis/src/ingest.rs` registers `train_segment_v2` as `derived`, and

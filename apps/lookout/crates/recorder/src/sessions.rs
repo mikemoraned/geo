@@ -5,11 +5,8 @@ use chrono::{DateTime, Duration, Utc};
 use domain::{Age, DeviceId, SessionId, StartedBy, TooManySeconds};
 use geo_types::Point;
 use medallion::{Query, Root};
+use medallion_model::{DEVICE_SESSION_V2, GPS_READING_V2};
 use serde::{Deserialize, Serialize};
-
-const SAMPLES: &str = "samples";
-
-const SESSION_STARTS: &str = "session_starts";
 
 const DISTINCT_SAMPLES: &str = "
     SELECT device_id, t, lat, lon, alt, acc, speed, heading
@@ -17,14 +14,14 @@ const DISTINCT_SAMPLES: &str = "
       SELECT *, ROW_NUMBER() OVER (
         PARTITION BY device_id, t ORDER BY lat, lon, alt, acc, speed, heading
       ) AS rank
-      FROM samples
+      FROM gps_reading_v2
     )
     WHERE rank = 1
     ORDER BY device_id, t
 ";
 
 const DISTINCT_SESSION_STARTS: &str = "
-    SELECT DISTINCT device_id, t FROM session_starts ORDER BY device_id, t
+    SELECT DISTINCT device_id, t FROM device_session_v2 ORDER BY device_id, t
 ";
 
 pub const DEFAULT_GAP: Age = Age::minutes(NonZeroU32::new(10).expect("ten is not zero"));
@@ -142,7 +139,7 @@ impl Session {
 pub async fn sessions(root: &Root, gap: Gap, lead: Lead) -> Result<Vec<Session>, SessionError> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(medallion_model::GPS_READING_V2, SAMPLES)
+        .register_if_present(GPS_READING_V2, GPS_READING_V2.name)
         .await?
     {
         return Ok(Vec::new());
@@ -150,7 +147,7 @@ pub async fn sessions(root: &Root, gap: Gap, lead: Lead) -> Result<Vec<Session>,
     let samples: Vec<Sample> = query.rows(DISTINCT_SAMPLES).await?;
 
     let started = if query
-        .register_if_present(medallion_model::DEVICE_SESSION_V2, SESSION_STARTS)
+        .register_if_present(DEVICE_SESSION_V2, DEVICE_SESSION_V2.name)
         .await?
     {
         started_by_device(query.rows(DISTINCT_SESSION_STARTS).await?)

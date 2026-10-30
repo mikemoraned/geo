@@ -296,7 +296,7 @@ mod tests {
         }
         derived(root)
             .await
-            .rows::<Named>("SELECT DISTINCT source_id FROM derived ORDER BY source_id")
+            .rows::<Named>("SELECT DISTINCT source_id FROM train_segment_v3 ORDER BY source_id")
             .await
             .expect("sources")
             .into_iter()
@@ -323,15 +323,11 @@ mod tests {
     }
 
     async fn derived(root: &Root) -> Query {
-        derived_from(root, medallion_model::TRAIN_SEGMENT_V3).await
-    }
-
-    async fn derived_from(root: &Root, dataset: DatasetSpec<layers::Silver>) -> Query {
         let query = Query::new(root.clone());
         query
-            .register(dataset, "derived")
+            .register_by_name(medallion_model::TRAIN_SEGMENT_V3)
             .await
-            .expect("register derived dataset");
+            .expect("register the train segments");
         query
     }
 
@@ -341,7 +337,7 @@ mod tests {
             .sql(&format!(
                 "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY},
                         ST_AsBinary({PROJECTED_GEOMETRY}) AS {PROJECTED_GEOMETRY}
-                 FROM derived ORDER BY trip_id"
+                 FROM train_segment_v3 ORDER BY trip_id"
             ))
             .await
             .expect("query geometries")
@@ -399,7 +395,7 @@ mod tests {
         let kept = derived(&root)
             .await
             .count(&format!(
-                "SELECT COUNT(*) AS count FROM derived WHERE realtime = {}",
+                "SELECT COUNT(*) AS count FROM train_segment_v3 WHERE realtime = {}",
                 later[0].real_time
             ))
             .await
@@ -611,7 +607,7 @@ mod tests {
         .await;
         let rows_before = derived(&root)
             .await
-            .count("SELECT COUNT(*) AS count FROM derived")
+            .count("SELECT COUNT(*) AS count FROM train_segment_v3")
             .await
             .expect("count");
         let second = ingest(&root, &germany()).await.expect("re-ingest");
@@ -620,7 +616,7 @@ mod tests {
         assert_eq!(
             derived(&root)
                 .await
-                .count("SELECT COUNT(*) AS count FROM derived")
+                .count("SELECT COUNT(*) AS count FROM train_segment_v3")
                 .await
                 .expect("count"),
             rows_before,
@@ -673,7 +669,7 @@ mod tests {
         let ferries = derived(&root)
             .await
             .count(&format!(
-                "SELECT COUNT(*) AS count FROM derived WHERE trip_id = '{}'",
+                "SELECT COUNT(*) AS count FROM train_segment_v3 WHERE trip_id = '{}'",
                 segments[0].trip_id().expect("a segment with one trip")
             ))
             .await

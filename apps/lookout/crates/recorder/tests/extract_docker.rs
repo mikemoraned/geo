@@ -119,7 +119,7 @@ async fn extract_queue_to_store_docker() {
         medallion_model::ACCEL_READING_V2,
     ] {
         query
-            .register(dataset, dataset.name)
+            .register_by_name(dataset)
             .await
             .expect("register dataset");
     }

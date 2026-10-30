@@ -264,11 +264,11 @@ mod tests {
     async fn rows_in<L: medallion::LayerKind>(root: &Root, dataset: DatasetSpec<L>) -> i64 {
         let query = Query::new(root.clone());
         query
-            .register(dataset, "d")
+            .register_by_name(dataset)
             .await
             .expect("register dataset");
         query
-            .count("SELECT COUNT(*) AS count FROM d")
+            .count(&format!("SELECT COUNT(*) AS count FROM {}", dataset.name))
             .await
             .expect("count")
     }
@@ -369,12 +369,12 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(medallion_model::RAW_SAMPLE, "d")
+            .register_by_name(medallion_model::RAW_SAMPLE)
             .await
             .expect("register");
         assert_eq!(
             query
-                .count("SELECT COUNT(*) AS count FROM d WHERE received_at IS NULL")
+                .count("SELECT COUNT(*) AS count FROM raw_sample WHERE received_at IS NULL")
                 .await
                 .expect("count"),
             1

@@ -231,7 +231,7 @@ mod tests {
     async fn dataset(root: &Root) -> Query {
         let query = Query::new(root.clone());
         query
-            .register(medallion_model::SESSION_SAMPLE_V2, "samples")
+            .register_by_name(medallion_model::SESSION_SAMPLE_V2)
             .await
             .expect("register");
         query
@@ -240,7 +240,7 @@ mod tests {
     async fn rows(root: &Root) -> Vec<Written> {
         dataset(root)
             .await
-            .rows("SELECT session_id, device_id, seq, implied_speed_mps FROM samples ORDER BY t")
+            .rows("SELECT session_id, device_id, seq, implied_speed_mps FROM session_sample_v2 ORDER BY t")
             .await
             .expect("query samples")
     }
@@ -370,7 +370,7 @@ mod tests {
             .sql(&format!(
                 "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY},
                         ST_AsBinary({PROJECTED_GEOMETRY}) AS {PROJECTED_GEOMETRY}
-                 FROM samples"
+                 FROM session_sample_v2"
             ))
             .await
             .expect("query geometries");
@@ -421,14 +421,14 @@ mod tests {
     async fn session_rows(root: &Root) -> Vec<WrittenSession> {
         let query = Query::new(root.clone());
         query
-            .register(medallion_model::SESSION_V2, "sessions")
+            .register_by_name(medallion_model::SESSION_V2)
             .await
             .expect("register");
         query
             .rows(
                 "SELECT session_id, device_id, started_at, ended_at, sample_count, started_by,
                         gap_seconds, bbox
-                 FROM sessions ORDER BY started_at",
+                 FROM session_v2 ORDER BY started_at",
             )
             .await
             .expect("query sessions")
@@ -526,14 +526,14 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(medallion_model::SESSION_V2, "sessions")
+            .register_by_name(medallion_model::SESSION_V2)
             .await
             .expect("register");
         let batches = query
             .sql(&format!(
                 "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY},
                         ST_AsBinary({PROJECTED_GEOMETRY}) AS {PROJECTED_GEOMETRY}
-                 FROM sessions"
+                 FROM session_v2"
             ))
             .await
             .expect("query geometries");
@@ -558,12 +558,12 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(medallion_model::SESSION_V2, "sessions")
+            .register_by_name(medallion_model::SESSION_V2)
             .await
             .expect("register");
         let batches = query
             .sql(&format!(
-                "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY} FROM sessions"
+                "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY} FROM session_v2"
             ))
             .await
             .expect("query geometries");

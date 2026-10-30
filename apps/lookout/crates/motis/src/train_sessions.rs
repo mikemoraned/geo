@@ -316,11 +316,11 @@ mod tests {
     async fn count(root: &Root, sql: &str) -> i64 {
         let query = Query::new(root.clone());
         query
-            .register(TRAIN_SESSION, "sessions")
+            .register_by_name(TRAIN_SESSION)
             .await
             .expect("register sessions");
         query
-            .register(TRAIN_SESSION_SAMPLE, "samples")
+            .register_by_name(TRAIN_SESSION_SAMPLE)
             .await
             .expect("register samples");
         query.count(sql).await.expect("count")
@@ -335,11 +335,11 @@ mod tests {
     async fn sessions_named(root: &Root) -> Vec<Named> {
         let query = Query::new(root.clone());
         query
-            .register(TRAIN_SESSION, "sessions")
+            .register_by_name(TRAIN_SESSION)
             .await
             .expect("register sessions");
         query
-            .rows("SELECT session_id, started_at FROM sessions")
+            .rows("SELECT session_id, started_at FROM train_session")
             .await
             .expect("sessions")
     }
@@ -367,7 +367,7 @@ mod tests {
 
         assert_eq!((outcome.trips, outcome.sessions), (4, 4));
         assert_eq!(
-            count(&root, "SELECT COUNT(*) AS count FROM sessions").await,
+            count(&root, "SELECT COUNT(*) AS count FROM train_session").await,
             4
         );
     }
@@ -404,11 +404,11 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(TRAIN_SESSION, "sessions")
+            .register_by_name(TRAIN_SESSION)
             .await
             .expect("register sessions");
         let labels: Vec<Option<String>> = query
-            .rows::<Labelled>("SELECT source_label FROM sessions")
+            .rows::<Labelled>("SELECT source_label FROM train_session")
             .await
             .expect("labels")
             .into_iter()
@@ -449,11 +449,11 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(TRAIN_SESSION_SAMPLE, "samples")
+            .register_by_name(TRAIN_SESSION_SAMPLE)
             .await
             .expect("register samples");
         let samples: Vec<Numbered> = query
-            .rows("SELECT seq, implied_speed_mps FROM samples ORDER BY t")
+            .rows("SELECT seq, implied_speed_mps FROM train_session_sample ORDER BY t")
             .await
             .expect("samples");
         let seqs: Vec<u32> = samples.iter().map(|sample| sample.seq).collect();
@@ -611,13 +611,14 @@ mod tests {
         let root = Root::new(tmp.path());
         poll(&root, polled_at(0), &regional_trips()).await;
         let first = derive(&root, &germany()).await;
-        let samples_before = count(&root, "SELECT COUNT(*) AS count FROM samples").await;
+        let samples_before =
+            count(&root, "SELECT COUNT(*) AS count FROM train_session_sample").await;
 
         let second = derive(&root, &germany()).await;
 
         assert_eq!(first.samples, second.samples);
         assert_eq!(
-            count(&root, "SELECT COUNT(*) AS count FROM samples").await,
+            count(&root, "SELECT COUNT(*) AS count FROM train_session_sample").await,
             samples_before
         );
     }
