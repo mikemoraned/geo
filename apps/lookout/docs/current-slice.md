@@ -797,7 +797,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 - [x] Finish the six-day capture of Germany, which started on 19 October and ends around 25
       October. Commit its polls as they accumulate, and its last ones once the poller stops. Then
       run `just silver-motis-ingest`, so the train sessions cover the whole week.
-- [ ] Give `writer_at`, in `crates/medallion/src/write.rs`, zstd compression, for bronze and
+- [x] Give `writer_at`, in `crates/medallion/src/write.rs`, zstd compression, for bronze and
       silver alike.
 - [ ] Derive `SESSION_NAMESPACE` and `MOTIS_SOURCE_NAMESPACE` from their names with UUID v5, as
       `train_session_id` derives its namespace. Every session id, source id, and train session id

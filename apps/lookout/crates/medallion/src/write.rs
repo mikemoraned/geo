@@ -5,6 +5,10 @@ use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use parquet::arrow::AsyncArrowWriter;
 use parquet::arrow::async_writer::ParquetObjectWriter;
+use parquet::basic::{Compression, ZstdLevel};
+use parquet::file::properties::WriterProperties;
+
+const ZSTD_LEVEL: i32 = 3;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WriteError {
@@ -47,7 +51,14 @@ pub(crate) fn writer_at(
     })?;
     let object_writer =
         ParquetObjectWriter::new(std::sync::Arc::new(LocalFileSystem::new()), location);
-    Ok(AsyncArrowWriter::try_new(object_writer, schema, None)?)
+    let properties = WriterProperties::builder()
+        .set_compression(Compression::ZSTD(ZstdLevel::try_new(ZSTD_LEVEL)?))
+        .build();
+    Ok(AsyncArrowWriter::try_new(
+        object_writer,
+        schema,
+        Some(properties),
+    )?)
 }
 
 #[cfg(test)]
@@ -107,6 +118,36 @@ mod tests {
 
         assert!(path.exists(), "{} should exist", path.display());
         assert_eq!(rows_in(&path), 2);
+    }
+
+    #[tokio::test]
+    async fn every_column_of_every_row_group_is_compressed_with_zstd() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = Root::new(tmp.path())
+            .dataset(SENSOR_READING)
+            .partition_file();
+
+        write_batches(&path, &[batch(vec![1, 2], vec!["a", "b"])])
+            .await
+            .unwrap();
+
+        let file = std::fs::File::open(&path).unwrap();
+        let reader = ParquetRecordBatchReaderBuilder::try_new(file).unwrap();
+        let columns: Vec<_> = reader
+            .metadata()
+            .row_groups()
+            .iter()
+            .flat_map(|group| group.columns())
+            .collect();
+        assert!(!columns.is_empty());
+        for column in columns {
+            assert!(
+                matches!(column.compression(), Compression::ZSTD(_)),
+                "{} is {}",
+                column.column_path(),
+                column.compression()
+            );
+        }
     }
 
     #[tokio::test]
