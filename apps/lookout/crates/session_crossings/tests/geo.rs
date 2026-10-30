@@ -62,6 +62,7 @@ fn passes_found(case: &Case, inputs: &Inputs) -> Result<usize, String> {
         crossing,
         DEFAULT_RADIUS,
     )
+    .map_err(|err| err.to_string())?
     .passes
     .len())
 }

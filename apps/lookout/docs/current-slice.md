@@ -730,9 +730,12 @@ At the end of the slice, once its features are in.
       outside tests tells `Travelling` from `WaitingAtStation`. Build each `Placed` directly, in
       place of `(t, position, source)` tuples. Drop `Leg::duration`, which `arrival` minus
       `departure` gives, and have `Leg::new` check the arrival against the departure directly.
-- [ ] In `steps`, in `crates/session_crossings/src/matching.rs`, pair each sample with its distance
+- [x] In `steps`, in `crates/session_crossings/src/matching.rs`, pair each sample with its distance
       once and group the pairs into visits once. `steps` groups, flattens, and groups again by visit
       index today, and computes each distance three times.
+      Extended on 2026-10-30: `domain`'s `Pass::new` now builds each pass and refuses a sample
+      count too big for a `u32`, which the old code clamped. An empty visit, which `pass_of`
+      dropped, is now an error. `steps` and `passes` return both errors.
 - [ ] Build `session-crossings-py`'s output tables with `serde_arrow::to_record_batch` on row
       structs, as `medallion::batch` does. They replace its `batch` helper and the column lists
       `src/lib.rs` keeps by hand.
