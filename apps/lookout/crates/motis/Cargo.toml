@@ -29,6 +29,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = "2"
+uuid = { workspace = true }
 wkb = { workspace = true }
 
 [build-dependencies]
@@ -44,7 +45,6 @@ parquet = { workspace = true }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
-uuid = { workspace = true }
 wiremock = "0.6"
 testcontainers = "0.27"
 testcontainers-modules = { version = "0.15", features = ["redis"] }

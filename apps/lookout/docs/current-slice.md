@@ -807,7 +807,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       `train_segment_v4`, `train_session_v2`, and `train_session_sample_v2`.
       Each silver version replaces its declaration in place, since no code reads the old one.
       `motis_source_v3` keeps its declaration for the migration that reads it.
-- [ ] Migrate bronze `motis_source_v3` into `motis_source_v4` with a one-off binary. Compute each
+- [x] Migrate bronze `motis_source_v3` into `motis_source_v4` with a one-off binary. Compute each
       new source id from its row's fields. Refuse a row whose old id differs from those fields
       under the old namespace. Read and write through medallion's `Query` and writers. Commit the
       binary with the data it writes, and remove it in a later commit.
