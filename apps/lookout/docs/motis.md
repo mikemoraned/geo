@@ -179,7 +179,7 @@ The id is a UUID v5 of those fields, so one source always gets the same id. A ch
 such as a Motis upgrade or a new Overture release, makes a new source. A label adds to the hash
 only when present.
 
-Bronze `motis_source_v3` holds one row per source, unpartitioned, and recording a source already
+Bronze `motis_source_v4` holds one row per source, unpartitioned, and recording a source already
 present writes nothing. Bronze `motis_segment_v2` holds the captured legs, partitioned by
 `polled_date`, with one file per poll. A row is one leg seen in one poll: the trip, its train
 number and agency, the mode, both stops, the scheduled and realtime times, and the polyline.
@@ -187,7 +187,7 @@ number and agency, the mode, both stops, the scheduled and realtime times, and t
 The earlier captures in `motis_segment` carry no source. Two sources stand for them, both the
 local server at Motis v2.10.2 with no area: one labelled `gtfs.de`, for the captures before the
 server moved to DELFI on 23 July 2026, and one labelled `delfi`, for those from then on. Silver
-`train_segment_v3` derives from both capture datasets, and gives each earlier capture the source
+`train_segment_v4` derives from both capture datasets, and gives each earlier capture the source
 its capture date falls under.
 
 Silver derived from either capture dataset holds only the rail modes a capture keeps. Deriving the

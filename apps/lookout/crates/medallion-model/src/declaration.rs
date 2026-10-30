@@ -9,9 +9,10 @@ use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, Trace
 use crate::{
     ALL, AccelReadingRowV2, DeviceSessionRowV2, ExtractManifestRowV3, Feed, GeometrySource, GersId,
     GpsReadingRowV2, Label, MotisBaseUrl, MotisCaptureRow, MotisSegmentRow, MotisSourceId,
-    MotisSourceRowV3, MotisVersion, OVERTURE_EXTRACT, OverlapKind, OvertureRelease, RailMode,
-    RawSampleRow, SessionCrossingRowV2, SessionRowV2, SessionSampleRowV2, TrainSegmentRowV3,
-    TrainSessionRow, TrainSessionSampleRow, WaterCrossingRowV2,
+    MotisSourceRowV3, MotisSourceRowV4, MotisVersion, OVERTURE_EXTRACT, OverlapKind,
+    OvertureRelease, RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3,
+    SessionSampleRowV3, TrainSegmentRowV4, TrainSessionRowV2, TrainSessionSampleRowV2,
+    WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -281,13 +282,14 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<MotisSegmentRow>(&known),
         declaration::<MotisCaptureRow>(&known),
         declaration::<MotisSourceRowV3>(&known),
-        declaration::<TrainSegmentRowV3>(&known),
-        declaration::<SessionRowV2>(&known),
-        declaration::<SessionSampleRowV2>(&known),
-        declaration::<TrainSessionRow>(&known),
-        declaration::<TrainSessionSampleRow>(&known),
+        declaration::<MotisSourceRowV4>(&known),
+        declaration::<TrainSegmentRowV4>(&known),
+        declaration::<SessionRowV3>(&known),
+        declaration::<SessionSampleRowV3>(&known),
+        declaration::<TrainSessionRowV2>(&known),
+        declaration::<TrainSessionSampleRowV2>(&known),
         declaration::<WaterCrossingRowV2>(&known),
-        declaration::<SessionCrossingRowV2>(&known),
+        declaration::<SessionCrossingRowV3>(&known),
         declaration::<ExtractManifestRowV3>(&known),
         rowless(OVERTURE_EXTRACT.info()),
     ];

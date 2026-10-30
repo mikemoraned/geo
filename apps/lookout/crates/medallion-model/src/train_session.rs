@@ -5,13 +5,13 @@ use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Label, MotisSourceId, MotisSourceRowV3, TrainSegmentRowV3, TripId};
+use crate::{Label, MotisSourceId, MotisSourceRowV4, TrainSegmentRowV4, TripId};
 
-pub const TRAIN_SESSION: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("train_session", "start_date");
+pub const TRAIN_SESSION_V2: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("train_session_v2", "start_date");
 
-pub const TRAIN_SESSION_SAMPLE: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("train_session_sample", "sample_date");
+pub const TRAIN_SESSION_SAMPLE_V2: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("train_session_sample_v2", "sample_date");
 
 pub fn train_session_id(source_id: &MotisSourceId, trip_id: &TripId) -> SessionId {
     let namespace = Uuid::new_v5(&Uuid::nil(), b"TRAIN_SESSION_NAMESPACE");
@@ -27,7 +27,7 @@ pub enum GeometrySource {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TrainSessionRow {
+pub struct TrainSessionRowV2 {
     pub session_id: SessionId,
     pub source_id: MotisSourceId,
     pub source_label: Option<Label>,
@@ -40,16 +40,16 @@ pub struct TrainSessionRow {
     pub bbox: Bbox,
 }
 
-impl Row for TrainSessionRow {
+impl Row for TrainSessionRowV2 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SESSION;
+    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SESSION_V2;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
     const UNIQUE: &'static [&'static str] = &["session_id"];
 
     fn example() -> Self {
-        let source = MotisSourceRowV3::example();
-        let trip_id = TrainSegmentRowV3::example().trip_id;
+        let source = MotisSourceRowV4::example();
+        let trip_id = TrainSegmentRowV4::example().trip_id;
         Self {
             session_id: train_session_id(&source.source_id, &trip_id),
             source_id: source.source_id,
@@ -63,14 +63,14 @@ impl Row for TrainSessionRow {
     }
 }
 
-impl Dated for TrainSessionRow {
+impl Dated for TrainSessionRowV2 {
     fn partition_date(&self) -> NaiveDate {
         self.started_at.date_naive()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TrainSessionSampleRow {
+pub struct TrainSessionSampleRowV2 {
     pub session_id: SessionId,
     pub source_id: MotisSourceId,
     pub trip_id: TripId,
@@ -83,14 +83,14 @@ pub struct TrainSessionSampleRow {
     pub geometry_source: GeometrySource,
 }
 
-impl Row for TrainSessionSampleRow {
+impl Row for TrainSessionSampleRowV2 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SESSION_SAMPLE;
+    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SESSION_SAMPLE_V2;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["t"];
 
     fn example() -> Self {
-        let session = TrainSessionRow::example();
+        let session = TrainSessionRowV2::example();
         Self {
             session_id: session.session_id,
             source_id: session.source_id,
@@ -105,7 +105,7 @@ impl Row for TrainSessionSampleRow {
     }
 }
 
-impl Dated for TrainSessionSampleRow {
+impl Dated for TrainSessionSampleRowV2 {
     fn partition_date(&self) -> NaiveDate {
         self.t.date_naive()
     }
@@ -120,7 +120,7 @@ mod tests {
 
     use super::*;
     use crate::testing::{column, column_names};
-    use crate::{SessionRowV2, SessionSampleRowV2};
+    use crate::{SessionRowV3, SessionSampleRowV3};
 
     fn source(id: &str) -> MotisSourceId {
         serde_json::from_value(serde_json::json!(id)).expect("a source id")
@@ -183,7 +183,7 @@ mod tests {
     #[test]
     fn where_a_samples_geometry_came_from_is_stored_as_its_name() {
         assert!(matches!(
-            column::<TrainSessionSampleRow>("geometry_source").data_type(),
+            column::<TrainSessionSampleRowV2>("geometry_source").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert_eq!(
@@ -196,8 +196,8 @@ mod tests {
     #[test]
     fn a_train_session_has_a_recorded_sessions_columns_but_what_only_a_device_reports() {
         assert_eq!(
-            column_names::<TrainSessionRow>(),
-            swapped::<SessionRowV2>(
+            column_names::<TrainSessionRowV2>(),
+            swapped::<SessionRowV3>(
                 &["device_id", "started_by", "gap_seconds", "lead_seconds"],
                 &["source_id", "source_label", "trip_id"]
             )
@@ -210,7 +210,7 @@ mod tests {
         let bound = |name| Field::new(name, DataType::Float64, false);
 
         assert_eq!(
-            medallion::fields::<TrainSessionRow>().expect("describe the rows"),
+            medallion::fields::<TrainSessionRowV2>().expect("describe the rows"),
             [
                 Field::new("session_id", DataType::LargeUtf8, false),
                 Field::new("source_id", DataType::LargeUtf8, false),
@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn a_source_without_a_label_is_stored_as_null() {
-        let field = column::<TrainSessionRow>("source_label");
+        let field = column::<TrainSessionRowV2>("source_label");
 
         assert!(
             matches!(field.data_type(), DataType::Utf8 | DataType::LargeUtf8),
@@ -248,8 +248,8 @@ mod tests {
     #[test]
     fn a_train_sample_has_a_recorded_samples_columns_but_what_only_a_device_reports() {
         assert_eq!(
-            column_names::<TrainSessionSampleRow>(),
-            swapped::<SessionSampleRowV2>(
+            column_names::<TrainSessionSampleRowV2>(),
+            swapped::<SessionSampleRowV3>(
                 &["device_id", "alt", "acc", "speed", "heading"],
                 &["source_id", "trip_id", "geometry_source"]
             )

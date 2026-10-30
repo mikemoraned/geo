@@ -76,13 +76,13 @@ async fn sessionise(root: &Root) -> silver::WriteOutcome {
 async fn stored_sessions(root: &Root) -> Vec<Session> {
     let query = Query::new(root.clone());
     query
-        .register_by_name(medallion_model::SESSION_V2)
+        .register_by_name(medallion_model::SESSION_V3)
         .await
         .expect("register");
     query
         .rows(
             "SELECT session_id, device_id, started_at, ended_at, sample_count
-             FROM session_v2 ORDER BY started_at",
+             FROM session_v3 ORDER BY started_at",
         )
         .await
         .expect("query sessions")
@@ -123,18 +123,18 @@ fn partitions(root: &Root) -> Vec<(String, u64)> {
 async fn contents(root: &Root) -> String {
     let query = Query::new(root.clone());
     query
-        .register_by_name(medallion_model::SESSION_V2)
+        .register_by_name(medallion_model::SESSION_V3)
         .await
         .expect("register sessions");
     query
-        .register_by_name(medallion_model::SESSION_SAMPLE_V2)
+        .register_by_name(medallion_model::SESSION_SAMPLE_V3)
         .await
         .expect("register samples");
 
     let mut rendered = String::new();
     for sql in [
-        "SELECT * FROM session_v2 ORDER BY session_id",
-        "SELECT * FROM session_sample_v2 ORDER BY session_id, seq",
+        "SELECT * FROM session_v3 ORDER BY session_id",
+        "SELECT * FROM session_sample_v3 ORDER BY session_id, seq",
     ] {
         let batches = query.sql(sql).await.expect("query");
         rendered.push_str(

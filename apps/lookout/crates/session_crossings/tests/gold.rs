@@ -2,7 +2,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use domain::{Bbox, CrossingId, DeviceId, SessionId, StartedBy};
 use geo_types::{LineString, Point};
 use medallion::{Country, GeoRow, Root, write_geo_rows, write_rows};
-use medallion_model::{SessionCrossingRowV2, SessionRowV2, SessionSampleRowV2};
+use medallion_model::{SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3};
 use session_crossings::gold::{Choosing, choose};
 
 const BERLIN: (f64, f64) = (13.404954, 52.520008);
@@ -12,9 +12,9 @@ fn at(minute: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 7, 22, 9, minute, 0).unwrap()
 }
 
-fn session_of(named: &str, at_lon_lat: (f64, f64)) -> (SessionRowV2, Point<f64>) {
+fn session_of(named: &str, at_lon_lat: (f64, f64)) -> (SessionRowV3, Point<f64>) {
     let (lon, lat) = at_lon_lat;
-    let session = SessionRowV2 {
+    let session = SessionRowV3 {
         session_id: SessionId::new(named).expect("a session id"),
         device_id: DeviceId::new(format!("device-{named}")).expect("a device id"),
         started_at: at(0),
@@ -55,7 +55,7 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
                 country: *country,
             });
             sample_rows.push(GeoRow {
-                row: SessionSampleRowV2 {
+                row: SessionSampleRowV3 {
                     session_id: session_id.clone(),
                     device_id: device_id.clone(),
                     t: at(1),
@@ -72,7 +72,7 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
                 country: *country,
             });
             for n in 0..*crossings {
-                crossed.push(SessionCrossingRowV2 {
+                crossed.push(SessionCrossingRowV3 {
                     session_id: session_id.clone(),
                     crossing_id: CrossingId::new(format!("water:track:rail@{named}-{n}"))
                         .expect("a crossing id"),

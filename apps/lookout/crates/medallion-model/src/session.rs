@@ -7,14 +7,14 @@ use domain::{Bbox, DeviceId, SessionId, StartedBy};
 
 use crate::GpsReadingRowV2;
 
-pub const SESSION_V2: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("session_v2", "start_date");
+pub const SESSION_V3: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("session_v3", "start_date");
 
-pub const SESSION_SAMPLE_V2: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("session_sample_v2", "sample_date");
+pub const SESSION_SAMPLE_V3: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("session_sample_v3", "sample_date");
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SessionRowV2 {
+pub struct SessionRowV3 {
     pub session_id: SessionId,
     pub device_id: DeviceId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
@@ -28,9 +28,9 @@ pub struct SessionRowV2 {
     pub bbox: Bbox,
 }
 
-impl Row for SessionRowV2 {
+impl Row for SessionRowV3 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = SESSION_V2;
+    const DATASET: DatasetSpec<Self::Layer> = SESSION_V3;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
 
@@ -50,14 +50,14 @@ impl Row for SessionRowV2 {
     }
 }
 
-impl Dated for SessionRowV2 {
+impl Dated for SessionRowV3 {
     fn partition_date(&self) -> NaiveDate {
         self.started_at.date_naive()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SessionSampleRowV2 {
+pub struct SessionSampleRowV3 {
     pub session_id: SessionId,
     pub device_id: DeviceId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
@@ -72,14 +72,14 @@ pub struct SessionSampleRowV2 {
     pub implied_speed_mps: Option<f64>,
 }
 
-impl Row for SessionSampleRowV2 {
+impl Row for SessionSampleRowV3 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = SESSION_SAMPLE_V2;
+    const DATASET: DatasetSpec<Self::Layer> = SESSION_SAMPLE_V3;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["t"];
 
     fn example() -> Self {
-        let session = SessionRowV2::example();
+        let session = SessionRowV3::example();
         Self {
             session_id: session.session_id,
             device_id: session.device_id,
@@ -96,7 +96,7 @@ impl Row for SessionSampleRowV2 {
     }
 }
 
-impl Dated for SessionSampleRowV2 {
+impl Dated for SessionSampleRowV3 {
     fn partition_date(&self) -> NaiveDate {
         self.t.date_naive()
     }
@@ -112,19 +112,19 @@ mod tests {
     #[test]
     fn an_id_is_a_string_column() {
         assert!(matches!(
-            column::<SessionRowV2>("session_id").data_type(),
+            column::<SessionRowV3>("session_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionSampleRowV2>("session_id").data_type(),
+            column::<SessionSampleRowV3>("session_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionRowV2>("device_id").data_type(),
+            column::<SessionRowV3>("device_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionSampleRowV2>("device_id").data_type(),
+            column::<SessionSampleRowV3>("device_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
@@ -132,14 +132,14 @@ mod tests {
     #[test]
     fn what_started_a_session_is_a_string_column() {
         assert!(matches!(
-            column::<SessionRowV2>("started_by").data_type(),
+            column::<SessionRowV3>("started_by").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
 
     #[test]
     fn the_bbox_is_a_struct_of_its_four_bounds() {
-        let bbox = column::<SessionRowV2>("bbox");
+        let bbox = column::<SessionRowV3>("bbox");
         let DataType::Struct(bounds) = bbox.data_type() else {
             panic!("bbox should be a struct");
         };

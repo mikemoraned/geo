@@ -3,13 +3,13 @@ use domain::{CrossingCompactId, CrossingId, DeviceId, SessionId};
 use medallion::{COUNTRY, DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
-use crate::SessionRowV2;
+use crate::SessionRowV3;
 
 pub const WATER_CROSSING_V2: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("water_crossing_v2", COUNTRY);
 
-pub const SESSION_CROSSING_V2: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("session_crossing_v2", "crossed_date");
+pub const SESSION_CROSSING_V3: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("session_crossing_v3", "crossed_date");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -67,7 +67,7 @@ impl Row for WaterCrossingRowV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SessionCrossingRowV2 {
+pub struct SessionCrossingRowV3 {
     pub session_id: SessionId,
     pub crossing_id: CrossingId,
     pub device_id: DeviceId,
@@ -78,13 +78,13 @@ pub struct SessionCrossingRowV2 {
     pub match_radius_m: f64,
 }
 
-impl Row for SessionCrossingRowV2 {
+impl Row for SessionCrossingRowV3 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = SESSION_CROSSING_V2;
+    const DATASET: DatasetSpec<Self::Layer> = SESSION_CROSSING_V3;
     const INSTANTS: &'static [&'static str] = &["crossed_at"];
 
     fn example() -> Self {
-        let session = SessionRowV2::example();
+        let session = SessionRowV3::example();
         Self {
             session_id: session.session_id,
             crossing_id: WaterCrossingRowV2::example().crossing_id,
@@ -97,7 +97,7 @@ impl Row for SessionCrossingRowV2 {
     }
 }
 
-impl Dated for SessionCrossingRowV2 {
+impl Dated for SessionCrossingRowV3 {
     fn partition_date(&self) -> NaiveDate {
         self.crossed_at.date_naive()
     }
@@ -125,7 +125,7 @@ mod tests {
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionCrossingRowV2>("crossing_id").data_type(),
+            column::<SessionCrossingRowV3>("crossing_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
@@ -154,7 +154,7 @@ mod tests {
             );
         }
         assert_eq!(
-            column::<SessionCrossingRowV2>("match_radius_m").data_type(),
+            column::<SessionCrossingRowV3>("match_radius_m").data_type(),
             &DataType::Float64
         );
     }

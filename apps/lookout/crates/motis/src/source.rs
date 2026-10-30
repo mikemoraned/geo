@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use medallion::{Query, Root};
-use medallion_model::{MOTIS_SOURCE_V3, MotisSource, MotisSourceRowV3};
+use medallion_model::{MOTIS_SOURCE_V4, MotisSource, MotisSourceRowV4};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Registration {
@@ -28,22 +28,22 @@ pub async fn register(
     {
         return Ok(Registration::AlreadyRecorded);
     }
-    root.rows_of::<MotisSourceRowV3>()
+    root.rows_of::<MotisSourceRowV4>()
         .append_rows(at, &[source.row(at)])
         .await?;
     Ok(Registration::Written)
 }
 
-pub async fn recorded(root: &Root) -> Result<Vec<MotisSourceRowV3>, SourceError> {
+pub async fn recorded(root: &Root) -> Result<Vec<MotisSourceRowV4>, SourceError> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(MOTIS_SOURCE_V3, MOTIS_SOURCE_V3.name)
+        .register_if_present(MOTIS_SOURCE_V4, MOTIS_SOURCE_V4.name)
         .await?
     {
         return Ok(Vec::new());
     }
     Ok(query
-        .rows(&format!("SELECT * FROM {}", MOTIS_SOURCE_V3.name))
+        .rows(&format!("SELECT * FROM {}", MOTIS_SOURCE_V4.name))
         .await?)
 }
 

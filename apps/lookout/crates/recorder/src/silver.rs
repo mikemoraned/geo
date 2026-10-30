@@ -3,7 +3,7 @@ use domain::{Bbox, implied_speed, path_through};
 use geo::BoundingRect;
 use geo_types::{LineString, Point};
 use medallion::{Countries, GeoRow, Projector, Replaced, Root};
-use medallion_model::{SessionRowV2, SessionSampleRowV2};
+use medallion_model::{SessionRowV3, SessionSampleRowV3};
 
 use crate::sessions::Session;
 
@@ -25,13 +25,13 @@ pub enum SilverError {
 }
 
 struct Placed {
-    row: SessionRowV2,
+    row: SessionRowV3,
     path: LineString<f64>,
     samples: Vec<Located>,
 }
 
 struct Located {
-    row: SessionSampleRowV2,
+    row: SessionSampleRowV3,
     point: Point<f64>,
 }
 
@@ -41,8 +41,8 @@ pub async fn write(
     countries: &impl Countries,
 ) -> Result<WriteOutcome, SilverError> {
     let mut outcome = WriteOutcome::default();
-    let mut session_rows: Vec<GeoRow<SessionRowV2, LineString<f64>>> = Vec::new();
-    let mut sample_rows: Vec<GeoRow<SessionSampleRowV2, Point<f64>>> = Vec::new();
+    let mut session_rows: Vec<GeoRow<SessionRowV3, LineString<f64>>> = Vec::new();
+    let mut sample_rows: Vec<GeoRow<SessionSampleRowV3, Point<f64>>> = Vec::new();
 
     for session in sessions {
         match countries.containing(session.started_from()) {
@@ -78,7 +78,7 @@ fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::
     let samples = locate(session, projector)?;
     let path = path_through(samples.iter().map(|sample| sample.point));
 
-    let row = SessionRowV2 {
+    let row = SessionRowV3 {
         session_id: session.id(),
         device_id: session.device_id.clone(),
         started_at: session.started_at(),
@@ -112,7 +112,7 @@ fn locate(session: &Session, projector: &Projector) -> Result<Vec<Located>, meda
     for (seq, sample) in session.samples.iter().enumerate() {
         let point = Point::new(sample.lon, sample.lat);
         let projected = projector.project(&point)?;
-        let row = SessionSampleRowV2 {
+        let row = SessionSampleRowV3 {
             session_id: session_id.clone(),
             device_id: session.device_id.clone(),
             t: sample.t,
@@ -231,7 +231,7 @@ mod tests {
     async fn dataset(root: &Root) -> Query {
         let query = Query::new(root.clone());
         query
-            .register_by_name(medallion_model::SESSION_SAMPLE_V2)
+            .register_by_name(medallion_model::SESSION_SAMPLE_V3)
             .await
             .expect("register");
         query
@@ -240,7 +240,7 @@ mod tests {
     async fn rows(root: &Root) -> Vec<Written> {
         dataset(root)
             .await
-            .rows("SELECT session_id, device_id, seq, implied_speed_mps FROM session_sample_v2 ORDER BY t")
+            .rows("SELECT session_id, device_id, seq, implied_speed_mps FROM session_sample_v3 ORDER BY t")
             .await
             .expect("query samples")
     }
@@ -370,7 +370,7 @@ mod tests {
             .sql(&format!(
                 "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY},
                         ST_AsBinary({PROJECTED_GEOMETRY}) AS {PROJECTED_GEOMETRY}
-                 FROM session_sample_v2"
+                 FROM session_sample_v3"
             ))
             .await
             .expect("query geometries");
@@ -421,14 +421,14 @@ mod tests {
     async fn session_rows(root: &Root) -> Vec<WrittenSession> {
         let query = Query::new(root.clone());
         query
-            .register_by_name(medallion_model::SESSION_V2)
+            .register_by_name(medallion_model::SESSION_V3)
             .await
             .expect("register");
         query
             .rows(
                 "SELECT session_id, device_id, started_at, ended_at, sample_count, started_by,
                         gap_seconds, bbox
-                 FROM session_v2 ORDER BY started_at",
+                 FROM session_v3 ORDER BY started_at",
             )
             .await
             .expect("query sessions")
@@ -505,7 +505,7 @@ mod tests {
         assert_eq!(outcome.sample_partitions.written, 2);
         assert!(
             root.path()
-                .join("silver/session_v2/country=DE/start_date=2026-07-26")
+                .join("silver/session_v3/country=DE/start_date=2026-07-26")
                 .exists()
         );
     }
@@ -526,14 +526,14 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register_by_name(medallion_model::SESSION_V2)
+            .register_by_name(medallion_model::SESSION_V3)
             .await
             .expect("register");
         let batches = query
             .sql(&format!(
                 "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY},
                         ST_AsBinary({PROJECTED_GEOMETRY}) AS {PROJECTED_GEOMETRY}
-                 FROM session_v2"
+                 FROM session_v3"
             ))
             .await
             .expect("query geometries");
@@ -558,12 +558,12 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register_by_name(medallion_model::SESSION_V2)
+            .register_by_name(medallion_model::SESSION_V3)
             .await
             .expect("register");
         let batches = query
             .sql(&format!(
-                "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY} FROM session_v2"
+                "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY} FROM session_v3"
             ))
             .await
             .expect("query geometries");
@@ -605,7 +605,7 @@ mod tests {
         assert!(
             !root
                 .path()
-                .join("silver/session_v2/country=DE/start_date=2026-07-27")
+                .join("silver/session_v3/country=DE/start_date=2026-07-27")
                 .exists()
         );
         assert_eq!(session_rows(&root).await.len(), 1);
@@ -642,12 +642,12 @@ mod tests {
 
         assert!(
             root.path()
-                .join("silver/session_v2/country=DE/start_date=2026-07-26")
+                .join("silver/session_v3/country=DE/start_date=2026-07-26")
                 .exists()
         );
         assert!(
             root.path()
-                .join("silver/session_sample_v2/country=DE/sample_date=2026-07-26")
+                .join("silver/session_sample_v3/country=DE/sample_date=2026-07-26")
                 .exists()
         );
     }
@@ -658,7 +658,7 @@ mod tests {
         let id = Uuid::from_u128(1);
         let (root, first) = written(&tmp, &[gps(id, at(9, 0, 0), 52.5, 13.4)]).await;
         assert_eq!(first.sessions, 1);
-        assert!(root.path().join("silver/session_v2/country=DE").exists());
+        assert!(root.path().join("silver/session_v3/country=DE").exists());
 
         let derived = sessions(&root, Gap::default(), Lead::default())
             .await
@@ -668,11 +668,11 @@ mod tests {
         assert_eq!(outcome.unplaceable, 1);
         assert_eq!(outcome.session_partitions.removed, 1);
         assert_eq!(outcome.sample_partitions.removed, 1);
-        assert!(!root.path().join("silver/session_v2/country=DE").exists());
+        assert!(!root.path().join("silver/session_v3/country=DE").exists());
         assert!(
             !root
                 .path()
-                .join("silver/session_sample_v2/country=DE")
+                .join("silver/session_sample_v3/country=DE")
                 .exists()
         );
     }

@@ -5,7 +5,7 @@ use domain::TrainNumber;
 use geo_types::{Coord, LineString, Point};
 use medallion::{Countries, DatasetSpec, GeoRow, Query, Root, layers};
 use medallion_model::{
-    AgencyId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, RailMode, StopId, TrainSegmentRowV3,
+    AgencyId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, RailMode, StopId, TrainSegmentRowV4,
     TripId,
 };
 use serde::{Deserialize, Serialize};
@@ -83,7 +83,7 @@ pub(crate) struct Leg {
     pub(crate) polyline: String,
 }
 
-impl From<&Leg> for TrainSegmentRowV3 {
+impl From<&Leg> for TrainSegmentRowV4 {
     fn from(leg: &Leg) -> Self {
         Self {
             source_id: leg.source_id.clone(),
@@ -111,7 +111,7 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
     let captures = captures(root).await?;
 
     let mut outcome = IngestOutcome::default();
-    let mut placed: Vec<GeoRow<TrainSegmentRowV3, LineString<f64>>> = Vec::new();
+    let mut placed: Vec<GeoRow<TrainSegmentRowV4, LineString<f64>>> = Vec::new();
     for captured in captures.into_iter().flatten() {
         outcome.read += captured.read;
         outcome.not_rail += captured.not_rail;
@@ -131,7 +131,7 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
             if let Some(line) = line {
                 match countries.containing(starts_from(&line)) {
                     Some(country) => placed.push(GeoRow {
-                        row: TrainSegmentRowV3::from(leg),
+                        row: TrainSegmentRowV4::from(leg),
                         geometry: line,
                         country,
                     }),
@@ -296,7 +296,7 @@ mod tests {
         }
         derived(root)
             .await
-            .rows::<Named>("SELECT DISTINCT source_id FROM train_segment_v3 ORDER BY source_id")
+            .rows::<Named>("SELECT DISTINCT source_id FROM train_segment_v4 ORDER BY source_id")
             .await
             .expect("sources")
             .into_iter()
@@ -325,7 +325,7 @@ mod tests {
     async fn derived(root: &Root) -> Query {
         let query = Query::new(root.clone());
         query
-            .register_by_name(medallion_model::TRAIN_SEGMENT_V3)
+            .register_by_name(medallion_model::TRAIN_SEGMENT_V4)
             .await
             .expect("register the train segments");
         query
@@ -337,7 +337,7 @@ mod tests {
             .sql(&format!(
                 "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY},
                         ST_AsBinary({PROJECTED_GEOMETRY}) AS {PROJECTED_GEOMETRY}
-                 FROM train_segment_v3 ORDER BY trip_id"
+                 FROM train_segment_v4 ORDER BY trip_id"
             ))
             .await
             .expect("query geometries")
@@ -395,7 +395,7 @@ mod tests {
         let kept = derived(&root)
             .await
             .count(&format!(
-                "SELECT COUNT(*) AS count FROM train_segment_v3 WHERE realtime = {}",
+                "SELECT COUNT(*) AS count FROM train_segment_v4 WHERE realtime = {}",
                 later[0].real_time
             ))
             .await
@@ -607,7 +607,7 @@ mod tests {
         .await;
         let rows_before = derived(&root)
             .await
-            .count("SELECT COUNT(*) AS count FROM train_segment_v3")
+            .count("SELECT COUNT(*) AS count FROM train_segment_v4")
             .await
             .expect("count");
         let second = ingest(&root, &germany()).await.expect("re-ingest");
@@ -616,7 +616,7 @@ mod tests {
         assert_eq!(
             derived(&root)
                 .await
-                .count("SELECT COUNT(*) AS count FROM train_segment_v3")
+                .count("SELECT COUNT(*) AS count FROM train_segment_v4")
                 .await
                 .expect("count"),
             rows_before,
@@ -635,7 +635,7 @@ mod tests {
         )
         .await;
 
-        let partitions: Vec<_> = std::fs::read_dir(root.path().join("silver/train_segment_v3"))
+        let partitions: Vec<_> = std::fs::read_dir(root.path().join("silver/train_segment_v4"))
             .expect("dataset dir")
             .map(|entry| {
                 entry
@@ -669,7 +669,7 @@ mod tests {
         let ferries = derived(&root)
             .await
             .count(&format!(
-                "SELECT COUNT(*) AS count FROM train_segment_v3 WHERE trip_id = '{}'",
+                "SELECT COUNT(*) AS count FROM train_segment_v4 WHERE trip_id = '{}'",
                 segments[0].trip_id().expect("a segment with one trip")
             ))
             .await

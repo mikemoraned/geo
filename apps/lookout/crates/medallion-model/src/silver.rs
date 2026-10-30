@@ -1,9 +1,10 @@
 use medallion::{RowError, SilverTarget};
 
 use crate::{
-    SESSION_CROSSING_V2, SESSION_SAMPLE_V2, SESSION_V2, SessionCrossingRowV2, SessionRowV2,
-    SessionSampleRowV2, TRAIN_SEGMENT_V3, TRAIN_SESSION, TRAIN_SESSION_SAMPLE, TrainSegmentRowV3,
-    TrainSessionRow, TrainSessionSampleRow, WATER_CROSSING_V2, WaterCrossingRowV2,
+    SESSION_CROSSING_V3, SESSION_SAMPLE_V3, SESSION_V3, SessionCrossingRowV3, SessionRowV3,
+    SessionSampleRowV3, TRAIN_SEGMENT_V4, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2,
+    TrainSegmentRowV4, TrainSessionRowV2, TrainSessionSampleRowV2, WATER_CROSSING_V2,
+    WaterCrossingRowV2,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -17,24 +18,24 @@ pub enum TargetError {
 type Definition = fn() -> Result<SilverTarget, RowError>;
 
 const TARGETS: [(&str, Definition); 7] = [
-    (SESSION_V2.name, SilverTarget::of::<SessionRowV2>),
+    (SESSION_V3.name, SilverTarget::of::<SessionRowV3>),
     (
-        SESSION_SAMPLE_V2.name,
-        SilverTarget::of::<SessionSampleRowV2>,
+        SESSION_SAMPLE_V3.name,
+        SilverTarget::of::<SessionSampleRowV3>,
     ),
-    (TRAIN_SEGMENT_V3.name, SilverTarget::of::<TrainSegmentRowV3>),
-    (TRAIN_SESSION.name, SilverTarget::of::<TrainSessionRow>),
+    (TRAIN_SEGMENT_V4.name, SilverTarget::of::<TrainSegmentRowV4>),
+    (TRAIN_SESSION_V2.name, SilverTarget::of::<TrainSessionRowV2>),
     (
-        TRAIN_SESSION_SAMPLE.name,
-        SilverTarget::of::<TrainSessionSampleRow>,
+        TRAIN_SESSION_SAMPLE_V2.name,
+        SilverTarget::of::<TrainSessionSampleRowV2>,
     ),
     (
         WATER_CROSSING_V2.name,
         SilverTarget::of::<WaterCrossingRowV2>,
     ),
     (
-        SESSION_CROSSING_V2.name,
-        SilverTarget::of::<SessionCrossingRowV2>,
+        SESSION_CROSSING_V3.name,
+        SilverTarget::of::<SessionCrossingRowV3>,
     ),
 ];
 
@@ -87,7 +88,7 @@ mod tests {
 
     #[test]
     fn the_train_sessions_can_be_named() {
-        for name in [TRAIN_SESSION.name, TRAIN_SESSION_SAMPLE.name] {
+        for name in [TRAIN_SESSION_V2.name, TRAIN_SESSION_SAMPLE_V2.name] {
             assert!(silver_target(name).is_ok(), "{name} cannot be named");
         }
     }
@@ -97,6 +98,6 @@ mod tests {
         let err = silver_target("crossings").unwrap_err();
 
         assert!(err.to_string().contains("crossings"), "{err}");
-        assert!(err.to_string().contains(SESSION_V2.name), "{err}");
+        assert!(err.to_string().contains(SESSION_V3.name), "{err}");
     }
 }

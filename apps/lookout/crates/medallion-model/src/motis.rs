@@ -6,7 +6,7 @@ use nutype::nutype;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumIter, EnumString};
 
-use crate::motis_source::{MotisSourceId, MotisSourceRowV3};
+use crate::motis_source::{MotisSourceId, MotisSourceRowV4};
 
 pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment", "polled_date");
@@ -14,8 +14,8 @@ pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
 pub const MOTIS_SEGMENT_V2: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment_v2", "polled_date");
 
-pub const TRAIN_SEGMENT_V3: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("train_segment_v3", "departure_date");
+pub const TRAIN_SEGMENT_V4: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("train_segment_v4", "departure_date");
 
 #[nutype(
     validate(with = trip_id_present, error = EmptyTripId),
@@ -262,14 +262,14 @@ impl Row for MotisCaptureRow {
 
     fn example() -> Self {
         Self::of(
-            MotisSourceRowV3::example().source_id,
+            MotisSourceRowV4::example().source_id,
             MotisSegmentRow::example(),
         )
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TrainSegmentRowV3 {
+pub struct TrainSegmentRowV4 {
     pub source_id: MotisSourceId,
     pub trip_id: TripId,
     pub route_name: Option<String>,
@@ -285,15 +285,15 @@ pub struct TrainSegmentRowV3 {
     pub arrival: DateTime<Utc>,
 }
 
-impl Row for TrainSegmentRowV3 {
+impl Row for TrainSegmentRowV4 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT_V3;
+    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT_V4;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
 
     fn example() -> Self {
         Self {
-            source_id: MotisSourceRowV3::example().source_id,
+            source_id: MotisSourceRowV4::example().source_id,
             trip_id: TripId::new("example").expect("a trip id"),
             route_name: Some("example".to_string()),
             train_number: TrainNumber::from_gtfs("1"),
@@ -308,7 +308,7 @@ impl Row for TrainSegmentRowV3 {
     }
 }
 
-impl Dated for TrainSegmentRowV3 {
+impl Dated for TrainSegmentRowV4 {
     fn partition_date(&self) -> NaiveDate {
         self.departure.date_naive()
     }
@@ -392,7 +392,7 @@ mod tests {
     #[test]
     fn a_rail_mode_is_stored_as_text() {
         assert_eq!(
-            column::<TrainSegmentRowV3>("mode").data_type(),
+            column::<TrainSegmentRowV4>("mode").data_type(),
             &DataType::LargeUtf8
         );
     }
@@ -413,7 +413,7 @@ mod tests {
     fn a_train_number_is_a_four_byte_column_in_both_datasets() {
         for train_number in [
             column::<MotisSegmentRow>("train_number"),
-            column::<TrainSegmentRowV3>("train_number"),
+            column::<TrainSegmentRowV4>("train_number"),
         ] {
             assert_eq!(train_number.data_type(), &DataType::UInt32);
         }

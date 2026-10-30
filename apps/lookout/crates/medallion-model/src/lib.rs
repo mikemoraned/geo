@@ -17,35 +17,36 @@ use medallion::DatasetInfo;
 
 pub use bronze::{NoSuchBronzeDataset, bronze_dataset};
 pub use crossing::{
-    OverlapKind, SESSION_CROSSING_V2, SessionCrossingRowV2, WATER_CROSSING_V2, WaterCrossingRowV2,
+    OverlapKind, SESSION_CROSSING_V3, SessionCrossingRowV3, WATER_CROSSING_V2, WaterCrossingRowV2,
 };
 pub use gers::{GersId, NotAGersId};
 pub use motis::{
     AgencyId, EmptyAgencyId, EmptyStopId, EmptyTripId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2,
-    MotisCaptureRow, MotisSegmentRow, RailMode, StopId, TRAIN_SEGMENT_V3, TrainSegmentRowV3,
+    MotisCaptureRow, MotisSegmentRow, RailMode, StopId, TRAIN_SEGMENT_V4, TrainSegmentRowV4,
     TripId,
 };
 pub use motis_source::{
-    Area, Feed, Label, MOTIS_SOURCE_V3, MotisBaseUrl, MotisSource, MotisSourceId, MotisSourceRowV3,
-    MotisVersion, NotALabel, NotAMotisBaseUrl, NotAMotisVersion, UnknownFeed,
+    Area, Feed, Label, MOTIS_SOURCE_V3, MOTIS_SOURCE_V4, MotisBaseUrl, MotisSource, MotisSourceId,
+    MotisSourceRowV3, MotisSourceRowV4, MotisVersion, NotALabel, NotAMotisBaseUrl,
+    NotAMotisVersion, UnknownFeed,
 };
 pub use overture::{
     DIVISION_ID, EXTRACT_MANIFEST_V3, ExtractManifestRowV3, OVERTURE_EXTRACT, OvertureRegion,
     division_id,
 };
 pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
-pub use session::{SESSION_SAMPLE_V2, SESSION_V2, SessionRowV2, SessionSampleRowV2};
+pub use session::{SESSION_SAMPLE_V3, SESSION_V3, SessionRowV3, SessionSampleRowV3};
 pub use silver::{TargetError, silver_target};
 pub use telemetry::{
     ACCEL_READING_V2, AccelReadingRowV2, DEVICE_SESSION_V2, DeviceSessionRowV2, GPS_READING_V2,
     GpsReadingRowV2, RAW_SAMPLE, RawSampleRow,
 };
 pub use train_session::{
-    GeometrySource, TRAIN_SESSION, TRAIN_SESSION_SAMPLE, TrainSessionRow, TrainSessionSampleRow,
-    train_session_id,
+    GeometrySource, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2, TrainSessionRowV2,
+    TrainSessionSampleRowV2, train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 16] = [
+pub const ALL: [DatasetInfo; 17] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
@@ -53,13 +54,14 @@ pub const ALL: [DatasetInfo; 16] = [
     MOTIS_SEGMENT.info(),
     MOTIS_SEGMENT_V2.info(),
     MOTIS_SOURCE_V3.info(),
-    TRAIN_SEGMENT_V3.info(),
-    SESSION_V2.info(),
-    SESSION_SAMPLE_V2.info(),
-    TRAIN_SESSION.info(),
-    TRAIN_SESSION_SAMPLE.info(),
+    MOTIS_SOURCE_V4.info(),
+    TRAIN_SEGMENT_V4.info(),
+    SESSION_V3.info(),
+    SESSION_SAMPLE_V3.info(),
+    TRAIN_SESSION_V2.info(),
+    TRAIN_SESSION_SAMPLE_V2.info(),
     WATER_CROSSING_V2.info(),
-    SESSION_CROSSING_V2.info(),
+    SESSION_CROSSING_V3.info(),
     OVERTURE_EXTRACT.info(),
     EXTRACT_MANIFEST_V3.info(),
 ];
@@ -98,12 +100,12 @@ mod tests {
         assert_eq!(
             replaceable,
             [
-                "session_crossing_v2",
-                "session_sample_v2",
-                "session_v2",
-                "train_segment_v3",
-                "train_session",
-                "train_session_sample",
+                "session_crossing_v3",
+                "session_sample_v3",
+                "session_v3",
+                "train_segment_v4",
+                "train_session_sample_v2",
+                "train_session_v2",
                 "water_crossing_v2"
             ]
         );
@@ -180,13 +182,14 @@ mod tests {
         check_rows_of::<MotisSegmentRow>();
         check_rows_of::<MotisCaptureRow>();
         check_rows_of::<MotisSourceRowV3>();
-        check_rows_of::<TrainSegmentRowV3>();
-        check_rows_of::<SessionRowV2>();
-        check_rows_of::<SessionSampleRowV2>();
-        check_rows_of::<TrainSessionRow>();
-        check_rows_of::<TrainSessionSampleRow>();
+        check_rows_of::<MotisSourceRowV4>();
+        check_rows_of::<TrainSegmentRowV4>();
+        check_rows_of::<SessionRowV3>();
+        check_rows_of::<SessionSampleRowV3>();
+        check_rows_of::<TrainSessionRowV2>();
+        check_rows_of::<TrainSessionSampleRowV2>();
         check_rows_of::<WaterCrossingRowV2>();
-        check_rows_of::<SessionCrossingRowV2>();
+        check_rows_of::<SessionCrossingRowV3>();
         check_rows_of::<ExtractManifestRowV3>();
     }
 }

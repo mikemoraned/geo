@@ -802,9 +802,11 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 - [x] Derive `SESSION_NAMESPACE` and `MOTIS_SOURCE_NAMESPACE` from their names with UUID v5, as
       `train_session_id` derives its namespace. Every session id, source id, and train session id
       then changes.
-- [ ] Give each existing dataset holding one of those ids a new version. These are bronze
+- [x] Give each existing dataset holding one of those ids a new version. These are bronze
       `motis_source_v4`, and silver `session_v3`, `session_sample_v3`, `session_crossing_v3`,
       `train_segment_v4`, `train_session_v2`, and `train_session_sample_v2`.
+      Each silver version replaces its declaration in place, since no code reads the old one.
+      `motis_source_v3` keeps its declaration for the migration that reads it.
 - [ ] Migrate bronze `motis_source_v3` into `motis_source_v4` with a one-off binary. Compute each
       new source id from its row's fields. Refuse a row whose old id differs from those fields
       under the old namespace. Read and write through medallion's `Query` and writers. Commit the

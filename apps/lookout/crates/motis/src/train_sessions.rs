@@ -6,7 +6,7 @@ use geo::BoundingRect;
 use geo_types::{LineString, Point};
 use medallion::{Countries, Country, GeoRow, GeoRowWriter, Projector, Replaced, Root};
 use medallion_model::{
-    Label, MotisSourceId, TrainSessionRow, TrainSessionSampleRow, TripId, train_session_id,
+    Label, MotisSourceId, TrainSessionRowV2, TrainSessionSampleRowV2, TripId, train_session_id,
 };
 
 use crate::ingest::{self, IngestError, Shape, captures, shape_of};
@@ -57,9 +57,9 @@ enum Drop {
 }
 
 struct Session {
-    row: TrainSessionRow,
+    row: TrainSessionRowV2,
     path: LineString<f64>,
-    samples: Vec<(TrainSessionSampleRow, Point<f64>)>,
+    samples: Vec<(TrainSessionSampleRowV2, Point<f64>)>,
 }
 
 pub async fn derive_train_sessions(
@@ -107,9 +107,9 @@ pub async fn derive_train_sessions(
     trips.sort_by_key(|trip| trip.legs.departure());
 
     let mut projectors: HashMap<Country, Projector> = HashMap::new();
-    let mut sample_writer = GeoRowWriter::<TrainSessionSampleRow>::new(root)?;
-    let mut pending: Vec<GeoRow<TrainSessionSampleRow, Point<f64>>> = Vec::new();
-    let mut sessions: Vec<GeoRow<TrainSessionRow, LineString<f64>>> = Vec::new();
+    let mut sample_writer = GeoRowWriter::<TrainSessionSampleRowV2>::new(root)?;
+    let mut pending: Vec<GeoRow<TrainSessionSampleRowV2, Point<f64>>> = Vec::new();
+    let mut sessions: Vec<GeoRow<TrainSessionRowV2, LineString<f64>>> = Vec::new();
     for trip in &trips {
         let placed = trip.legs.sampled(interval)?;
         let start = placed.first().ok_or_else(|| IngestError::NoSamples {
@@ -223,7 +223,7 @@ fn session_of(
         .zip(speeds)
         .enumerate()
         .map(|(seq, (sample, implied_speed_mps))| {
-            let row = TrainSessionSampleRow {
+            let row = TrainSessionSampleRowV2 {
                 session_id: session_id.clone(),
                 source_id: trip.source_id.clone(),
                 trip_id: trip.trip_id.clone(),
@@ -242,7 +242,7 @@ fn session_of(
         return Err(no_samples());
     };
     let path = path_through(placed.iter().map(|sample| sample.position));
-    let row = TrainSessionRow {
+    let row = TrainSessionRowV2 {
         session_id,
         source_id: trip.source_id.clone(),
         source_label: trip.source_label.clone(),
@@ -262,7 +262,7 @@ mod tests {
     use chrono::{DateTime, Duration, TimeZone, Utc};
     use medallion::Query;
     use medallion_model::{
-        Feed, MotisSource, TRAIN_SESSION, TRAIN_SESSION_SAMPLE, TripId, train_session_id,
+        Feed, MotisSource, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2, TripId, train_session_id,
     };
     use serde::Deserialize;
 
@@ -316,11 +316,11 @@ mod tests {
     async fn count(root: &Root, sql: &str) -> i64 {
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION)
+            .register_by_name(TRAIN_SESSION_V2)
             .await
             .expect("register sessions");
         query
-            .register_by_name(TRAIN_SESSION_SAMPLE)
+            .register_by_name(TRAIN_SESSION_SAMPLE_V2)
             .await
             .expect("register samples");
         query.count(sql).await.expect("count")
@@ -335,11 +335,11 @@ mod tests {
     async fn sessions_named(root: &Root) -> Vec<Named> {
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION)
+            .register_by_name(TRAIN_SESSION_V2)
             .await
             .expect("register sessions");
         query
-            .rows("SELECT session_id, started_at FROM train_session")
+            .rows("SELECT session_id, started_at FROM train_session_v2")
             .await
             .expect("sessions")
     }
@@ -367,7 +367,7 @@ mod tests {
 
         assert_eq!((outcome.trips, outcome.sessions), (4, 4));
         assert_eq!(
-            count(&root, "SELECT COUNT(*) AS count FROM train_session").await,
+            count(&root, "SELECT COUNT(*) AS count FROM train_session_v2").await,
             4
         );
     }
@@ -404,11 +404,11 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION)
+            .register_by_name(TRAIN_SESSION_V2)
             .await
             .expect("register sessions");
         let labels: Vec<Option<String>> = query
-            .rows::<Labelled>("SELECT source_label FROM train_session")
+            .rows::<Labelled>("SELECT source_label FROM train_session_v2")
             .await
             .expect("labels")
             .into_iter()
@@ -449,11 +449,11 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION_SAMPLE)
+            .register_by_name(TRAIN_SESSION_SAMPLE_V2)
             .await
             .expect("register samples");
         let samples: Vec<Numbered> = query
-            .rows("SELECT seq, implied_speed_mps FROM train_session_sample ORDER BY t")
+            .rows("SELECT seq, implied_speed_mps FROM train_session_sample_v2 ORDER BY t")
             .await
             .expect("samples");
         let seqs: Vec<u32> = samples.iter().map(|sample| sample.seq).collect();
@@ -592,7 +592,7 @@ mod tests {
         derive(&root, &germany()).await;
 
         let countries: Vec<String> =
-            std::fs::read_dir(root.path().join("silver/train_session_sample"))
+            std::fs::read_dir(root.path().join("silver/train_session_sample_v2"))
                 .expect("dataset dir")
                 .map(|entry| {
                     entry
@@ -611,14 +611,21 @@ mod tests {
         let root = Root::new(tmp.path());
         poll(&root, polled_at(0), &regional_trips()).await;
         let first = derive(&root, &germany()).await;
-        let samples_before =
-            count(&root, "SELECT COUNT(*) AS count FROM train_session_sample").await;
+        let samples_before = count(
+            &root,
+            "SELECT COUNT(*) AS count FROM train_session_sample_v2",
+        )
+        .await;
 
         let second = derive(&root, &germany()).await;
 
         assert_eq!(first.samples, second.samples);
         assert_eq!(
-            count(&root, "SELECT COUNT(*) AS count FROM train_session_sample").await,
+            count(
+                &root,
+                "SELECT COUNT(*) AS count FROM train_session_sample_v2"
+            )
+            .await,
             samples_before
         );
     }
