@@ -9,6 +9,10 @@ pub struct Age(TimeDelta);
 #[error("an age is longer than zero, and {0} is not")]
 pub struct NotAnAge(TimeDelta);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("{0} is more seconds than a u32 counts")]
+pub struct TooManySeconds(TimeDelta);
+
 impl Age {
     pub fn new(span: TimeDelta) -> Result<Self, NotAnAge> {
         if span > TimeDelta::zero() {
@@ -24,6 +28,13 @@ impl Age {
 
     pub fn span(self) -> TimeDelta {
         self.0
+    }
+
+    pub fn seconds(self) -> Result<u32, TooManySeconds> {
+        self.0
+            .num_seconds()
+            .try_into()
+            .map_err(|_| TooManySeconds(self.0))
     }
 
     pub fn before<Tz: TimeZone>(self, now: DateTime<Tz>) -> DateTime<Tz> {
@@ -70,6 +81,24 @@ mod tests {
         assert_eq!(
             Age::minutes(minutes(5)).before(now),
             now - TimeDelta::minutes(5)
+        );
+    }
+
+    #[test]
+    fn an_age_counts_its_whole_seconds() {
+        assert_eq!(
+            Age::new(TimeDelta::milliseconds(90_500)).map(Age::seconds),
+            Ok(Ok(90))
+        );
+    }
+
+    #[test]
+    fn an_age_of_more_seconds_than_a_u32_counts_is_refused() {
+        let span = TimeDelta::seconds(i64::from(u32::MAX) + 1);
+
+        assert_eq!(
+            Age::new(span).map(Age::seconds),
+            Ok(Err(TooManySeconds(span)))
         );
     }
 }

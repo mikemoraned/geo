@@ -591,7 +591,7 @@ mod tests {
         assert_eq!(first.session_partitions.written, 2);
 
         let longer_than_the_silence =
-            Gap::new(Age::new(Duration::hours(2)).expect("a positive span"));
+            Gap::new(Age::new(Duration::hours(2)).expect("a positive span")).expect("a gap");
         let derived = sessions(&root, longer_than_the_silence, Lead::default())
             .await
             .expect("derive sessions");

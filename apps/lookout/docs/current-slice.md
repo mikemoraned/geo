@@ -744,7 +744,7 @@ At the end of the slice, once its features are in.
       namespace per call.
       Changed on 2026-10-30: the namespace stays derived from its name in `train_session_id`, since
       the derivation says where it comes from and a UUID literal does not. Only the `expect` goes.
-- [ ] Derive `sessionise`'s `--gap` and `--lead` defaults from `DEFAULT_GAP` and `DEFAULT_LEAD` with
+- [x] Derive `sessionise`'s `--gap` and `--lead` defaults from `DEFAULT_GAP` and `DEFAULT_LEAD` with
       `default_value_t`, as `match_crossings` does from `DEFAULT_RADIUS`. They replace the literals
       `"10m"` and `"1m"`, and the test keeping them in step. This needs a way to turn an `Age` into
       a `Span`.

@@ -14,7 +14,7 @@ pub mod span;
 pub mod train;
 pub mod travel;
 
-pub use age::{Age, NotAnAge};
+pub use age::{Age, NotAnAge, TooManySeconds};
 pub use bbox::{Bbox, BboxError};
 pub use crossing::{Crossing, CrossingCompact, CrossingCompactId, CrossingId};
 pub use device::{DeviceId, DeviceInfo, DeviceType, EmptyDeviceId};

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 use chrono::{DateTime, Duration, Utc};
-use domain::{Age, DeviceId, SessionId, StartedBy};
+use domain::{Age, DeviceId, SessionId, StartedBy, TooManySeconds};
 use geo_types::Point;
 use medallion::{Query, Root};
 use serde::{Deserialize, Serialize};
@@ -27,9 +27,9 @@ const DISTINCT_SESSION_STARTS: &str = "
     SELECT DISTINCT device_id, t FROM session_starts ORDER BY device_id, t
 ";
 
-const DEFAULT_GAP: Age = Age::minutes(NonZeroU32::new(10).expect("ten is not zero"));
+pub const DEFAULT_GAP: Age = Age::minutes(NonZeroU32::new(10).expect("ten is not zero"));
 
-const DEFAULT_LEAD: Age = Age::minutes(NonZeroU32::new(1).expect("one is not zero"));
+pub const DEFAULT_LEAD: Age = Age::minutes(NonZeroU32::new(1).expect("one is not zero"));
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
@@ -41,12 +41,15 @@ pub enum SessionError {
 pub struct Gap(Age);
 
 impl Gap {
-    pub fn new(silence: Age) -> Self {
-        Self(silence)
+    pub fn new(silence: Age) -> Result<Self, TooManySeconds> {
+        silence.seconds()?;
+        Ok(Self(silence))
     }
 
     pub fn as_seconds(self) -> u32 {
-        self.0.span().num_seconds().try_into().unwrap_or(u32::MAX)
+        self.0
+            .seconds()
+            .expect("a gap fits in a u32 of seconds, as Gap::new checked")
     }
 
     fn separates(self, interval: Duration) -> bool {
@@ -64,12 +67,15 @@ impl Default for Gap {
 pub struct Lead(Age);
 
 impl Lead {
-    pub fn new(before: Age) -> Self {
-        Self(before)
+    pub fn new(before: Age) -> Result<Self, TooManySeconds> {
+        before.seconds()?;
+        Ok(Self(before))
     }
 
     pub fn as_seconds(self) -> u32 {
-        self.0.span().num_seconds().try_into().unwrap_or(u32::MAX)
+        self.0
+            .seconds()
+            .expect("a lead fits in a u32 of seconds, as Lead::new checked")
     }
 
     fn reaches(self, announced_at: DateTime<Utc>, started_at: DateTime<Utc>) -> bool {
@@ -355,7 +361,7 @@ mod tests {
                 gps(id, start() + minutes(9), 52.6),
                 gps(id, start() + minutes(30), 52.7),
             ],
-            Gap::new(age(minutes(10))),
+            Gap::new(age(minutes(10))).expect("a gap"),
         )
         .await;
 
@@ -376,7 +382,7 @@ mod tests {
         let sessions = derived_at(
             &tmp,
             &[gps(id, start(), 52.5), gps(id, start() + minutes(10), 52.6)],
-            Gap::new(age(minutes(10))),
+            Gap::new(age(minutes(10))).expect("a gap"),
         )
         .await;
 
@@ -575,5 +581,19 @@ mod tests {
             .expect("derive sessions");
 
         assert!(derived.is_empty());
+    }
+
+    #[test]
+    fn a_gap_or_a_lead_too_long_to_record_in_seconds_is_refused() {
+        let too_long = age(Duration::seconds(i64::from(u32::MAX) + 1));
+
+        assert_eq!(Gap::new(too_long), Err(too_long.seconds().unwrap_err()));
+        assert_eq!(Lead::new(too_long), Err(too_long.seconds().unwrap_err()));
+    }
+
+    #[test]
+    fn the_default_gap_and_lead_are_recorded_in_seconds() {
+        assert_eq!(Gap::default().as_seconds(), 600);
+        assert_eq!(Lead::default().as_seconds(), 60);
     }
 }

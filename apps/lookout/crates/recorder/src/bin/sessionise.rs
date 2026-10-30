@@ -3,7 +3,7 @@ use tracing_subscriber::EnvFilter;
 
 use domain::Span;
 use medallion::MedallionArgs;
-use recorder::sessions::{Gap, Lead, sessions};
+use recorder::sessions::{DEFAULT_GAP, DEFAULT_LEAD, Gap, Lead, sessions};
 use recorder::silver;
 use transport::countries::CountryAreas;
 
@@ -11,11 +11,11 @@ use transport::countries::CountryAreas;
 #[command(about = "Derive the silver session datasets from the bronze telemetry")]
 struct Args {
     /// How long a device may go unheard before the silence separates two sessions, such as 10m.
-    #[arg(long, default_value = "10m")]
+    #[arg(long, default_value_t = Span::from(DEFAULT_GAP))]
     gap: Span,
     /// How long before reporting a session a device may already have been fixing its
     /// position, such as 1m. Samples this close ahead of a report open the session it reports.
-    #[arg(long, default_value = "1m")]
+    #[arg(long, default_value_t = Span::from(DEFAULT_LEAD))]
     lead: Span,
     #[command(flatten)]
     medallion: MedallionArgs,
@@ -31,8 +31,8 @@ async fn main() {
 
     let args = Args::parse();
     let root = args.medallion.root().expect("locate the medallion store");
-    let gap = Gap::new(args.gap.age());
-    let lead = Lead::new(args.lead.age());
+    let gap = Gap::new(args.gap.age()).expect("a gap a session can record");
+    let lead = Lead::new(args.lead.age()).expect("a lead a session can record");
 
     let countries = CountryAreas::newest_per_country(&root)
         .await
@@ -60,14 +60,6 @@ async fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_flags_default_to_the_default_gap_and_lead() {
-        let args = Args::parse_from(["sessionise"]);
-
-        assert_eq!(Gap::new(args.gap.age()), Gap::default());
-        assert_eq!(Lead::new(args.lead.age()), Lead::default());
-    }
 
     #[test]
     fn a_gap_and_a_lead_are_written_as_spans() {

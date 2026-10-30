@@ -51,6 +51,16 @@ impl Span {
     }
 }
 
+impl From<Age> for Span {
+    fn from(age: Age) -> Self {
+        Self(
+            age.span()
+                .to_std()
+                .expect("an age is longer than zero, so it is a std duration"),
+        )
+    }
+}
+
 impl FromStr for Span {
     type Err = NotASpan;
 
@@ -125,5 +135,10 @@ mod tests {
     #[test]
     fn a_span_becomes_an_age_of_the_same_length() {
         assert_eq!(span("30m").age().span(), TimeDelta::minutes(30));
+    }
+
+    #[test]
+    fn an_age_becomes_a_span_of_the_same_length() {
+        assert_eq!(Span::from(span("30m").age()), span("30m"));
     }
 }
