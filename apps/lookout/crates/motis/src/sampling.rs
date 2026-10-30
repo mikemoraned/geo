@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 use std::iter::successors;
-use std::time::Duration;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use domain::Span;
 use geo::{Haversine, InterpolatableLine};
 use geo_types::{LineString, Point};
@@ -12,7 +11,6 @@ use medallion_model::GeometrySource;
 pub struct Leg {
     departure: DateTime<Utc>,
     arrival: DateTime<Utc>,
-    duration: Duration,
     shape: LineString<f64>,
     origin: Point<f64>,
     destination: Point<f64>,
@@ -38,9 +36,9 @@ impl Leg {
         arrival: DateTime<Utc>,
         shape: LineString<f64>,
     ) -> Result<Self, InvalidLeg> {
-        let duration = (arrival - departure)
-            .to_std()
-            .map_err(|_| InvalidLeg::ArrivesBeforeDeparting { departure, arrival })?;
+        if arrival < departure {
+            return Err(InvalidLeg::ArrivesBeforeDeparting { departure, arrival });
+        }
         let (origin, destination) = match shape.0.as_slice() {
             [origin, .., destination] => (Point::from(*origin), Point::from(*destination)),
             points => {
@@ -53,11 +51,14 @@ impl Leg {
         Ok(Self {
             departure,
             arrival,
-            duration,
             shape,
             origin,
             destination,
         })
+    }
+
+    fn duration(&self) -> TimeDelta {
+        self.arrival - self.departure
     }
 }
 
@@ -77,12 +78,6 @@ pub enum InvalidLegs {
         arrival: DateTime<Utc>,
         next_departure: DateTime<Utc>,
     },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Whereabouts {
-    Travelling { position: Point<f64> },
-    WaitingAtStation { position: Point<f64> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -136,7 +131,7 @@ impl NormalisedLegs {
         self.departure
     }
 
-    pub fn position_at(&self, t: DateTime<Utc>) -> Result<Whereabouts, NoWhereabouts> {
+    pub fn position_at(&self, t: DateTime<Utc>) -> Result<Point<f64>, NoWhereabouts> {
         if self.arrival < t {
             return Err(NoWhereabouts::AfterAllLegs {
                 t,
@@ -151,16 +146,12 @@ impl NormalisedLegs {
                 departure: self.departure,
             })?;
         if t < leg.arrival {
-            let ratio = (t - leg.departure).as_seconds_f64() / leg.duration.as_secs_f64();
-            let position = leg
-                .shape
+            let ratio = (t - leg.departure).as_seconds_f64() / leg.duration().as_seconds_f64();
+            leg.shape
                 .point_at_ratio_from_start(&Haversine, ratio)
-                .ok_or(NoWhereabouts::NoPointAlongShape { t })?;
-            Ok(Whereabouts::Travelling { position })
+                .ok_or(NoWhereabouts::NoPointAlongShape { t })
         } else {
-            Ok(Whereabouts::WaitingAtStation {
-                position: leg.destination,
-            })
+            Ok(leg.destination)
         }
     }
 
@@ -169,29 +160,27 @@ impl NormalisedLegs {
         let interpolated = successors(Some(self.departure), |t| Some(*t + step))
             .take_while(|t| *t < self.arrival)
             .map(|t| {
-                let (Whereabouts::Travelling { position }
-                | Whereabouts::WaitingAtStation { position }) = self.position_at(t)?;
-                Ok((t, position, GeometrySource::Interpolated))
+                Ok(Placed {
+                    t,
+                    position: self.position_at(t)?,
+                    geometry_source: GeometrySource::Interpolated,
+                })
             })
             .collect::<Result<Vec<_>, NoWhereabouts>>()?;
         let stops = self.legs.iter().flat_map(|leg| {
-            [(leg.departure, leg.origin), (leg.arrival, leg.destination)]
-                .map(|(t, position)| (t, position, GeometrySource::Stop))
+            [(leg.departure, leg.origin), (leg.arrival, leg.destination)].map(|(t, position)| {
+                Placed {
+                    t,
+                    position,
+                    geometry_source: GeometrySource::Stop,
+                }
+            })
         });
 
         let by_instant: BTreeMap<DateTime<Utc>, Placed> = interpolated
             .into_iter()
             .chain(stops)
-            .map(|(t, position, geometry_source)| {
-                (
-                    t,
-                    Placed {
-                        t,
-                        position,
-                        geometry_source,
-                    },
-                )
-            })
+            .map(|placed| (placed.t, placed))
             .collect();
         Ok(by_instant.into_values().collect())
     }
@@ -199,7 +188,6 @@ impl NormalisedLegs {
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeDelta;
     use geo_types::line_string;
 
     use super::*;
@@ -310,36 +298,32 @@ mod tests {
     }
 
     #[test]
-    fn during_a_leg_the_train_is_travelling_along_its_shape() {
-        let whereabouts = normalised(&[leg(0, 60, north(50.1))]).position_at(at(30));
+    fn during_a_leg_the_train_is_along_its_shape() {
+        let position = normalised(&[leg(0, 60, north(50.1))])
+            .position_at(at(30))
+            .expect("a position");
 
-        assert!(
-            matches!(whereabouts, Ok(Whereabouts::Travelling { position }) if near(position, (8.0, 50.05))),
-            "{whereabouts:?}"
-        );
+        assert!(near(position, (8.0, 50.05)), "{position:?}");
     }
 
     #[test]
-    fn between_legs_the_train_is_waiting_at_the_station() {
+    fn between_legs_the_train_is_at_the_station() {
         let onward = line_string![(x: 8.0, y: 50.1), (x: 8.1, y: 50.1)];
 
-        let whereabouts =
-            normalised(&[leg(0, 60, north(50.1)), leg(120, 180, onward)]).position_at(at(90));
+        let position = normalised(&[leg(0, 60, north(50.1)), leg(120, 180, onward)])
+            .position_at(at(90))
+            .expect("a position");
 
-        assert!(
-            matches!(whereabouts, Ok(Whereabouts::WaitingAtStation { position }) if near(position, (8.0, 50.1))),
-            "{whereabouts:?}"
-        );
+        assert!(near(position, (8.0, 50.1)), "{position:?}");
     }
 
     #[test]
-    fn on_arriving_the_train_is_waiting_at_the_station() {
-        let whereabouts = normalised(&[leg(0, 60, north(50.1))]).position_at(at(60));
+    fn on_arriving_the_train_is_at_the_station() {
+        let position = normalised(&[leg(0, 60, north(50.1))])
+            .position_at(at(60))
+            .expect("a position");
 
-        assert!(
-            matches!(whereabouts, Ok(Whereabouts::WaitingAtStation { position }) if near(position, (8.0, 50.1))),
-            "{whereabouts:?}"
-        );
+        assert!(near(position, (8.0, 50.1)), "{position:?}");
     }
 
     #[test]
