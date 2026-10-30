@@ -762,7 +762,7 @@ At the end of the slice, once its features are in.
       `crates/motis/src/train_sessions.rs` and the `recorder` crate use `sessions`, `samples`,
       and `d`. Leave the test setup in `crates/motis/tests/common/mod.rs`, which registers
       `motis_segment_v2` as `captured`, to the Six-day capture's move to `motis_segment_v3`.
-- [ ] Remove the semantics tag from the code. A significant change of meaning still makes a new
+- [x] Remove the semantics tag from the code. A significant change of meaning still makes a new
       version, and the version in a dataset's name already marks that change. The tag's only input
       is the decision it reports, and only the declaration test reads it.
       1. Remove `Row::SEMANTICS` from `crates/medallion/src/rows.rs`, its one value on
@@ -802,9 +802,9 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 - [ ] Derive `SESSION_NAMESPACE` and `MOTIS_SOURCE_NAMESPACE` from their names with UUID v5, as
       `train_session_id` derives its namespace. Every session id, source id, and train session id
       then changes.
-- [ ] Give each existing dataset holding one of those ids a semantics tag, so it takes a new
-      version. These are bronze `motis_source_v4`, and silver `session_v3`, `session_sample_v3`,
-      `session_crossing_v3`, `train_segment_v4`, `train_session_v2`, and `train_session_sample_v2`.
+- [ ] Give each existing dataset holding one of those ids a new version. These are bronze
+      `motis_source_v4`, and silver `session_v3`, `session_sample_v3`, `session_crossing_v3`,
+      `train_segment_v4`, `train_session_v2`, and `train_session_sample_v2`.
 - [ ] Migrate bronze `motis_source_v3` into `motis_source_v4` with a one-off binary. Compute each
       new source id from its row's fields. Refuse a row whose old id differs from those fields
       under the old namespace. Read and write through medallion's `Query` and writers. Commit the

@@ -290,7 +290,6 @@ impl Row for TrainSegmentRowV3 {
     const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT_V3;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
-    const SEMANTICS: &'static str = "one row per scheduled leg";
 
     fn example() -> Self {
         Self {

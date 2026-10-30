@@ -4,6 +4,5 @@ expression: declaration
 ---
 layer: bronze
 partition_key: extract_id
-semantics: ""
 unique: []
 columns: []

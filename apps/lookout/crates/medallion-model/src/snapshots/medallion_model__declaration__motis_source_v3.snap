@@ -4,7 +4,6 @@ expression: declaration
 ---
 layer: bronze
 partition_key: ~
-semantics: ""
 unique: []
 columns:
   - name: source_id

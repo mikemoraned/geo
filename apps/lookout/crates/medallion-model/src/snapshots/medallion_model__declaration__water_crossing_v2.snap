@@ -4,7 +4,6 @@ expression: declaration
 ---
 layer: silver
 partition_key: country
-semantics: ""
 unique:
   - crossing_id
   - crossing_compact_id

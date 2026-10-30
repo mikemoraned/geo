@@ -23,7 +23,6 @@ type Checks = BTreeMap<&'static str, &'static str>;
 struct Declaration {
     layer: &'static str,
     partition_key: Option<&'static str>,
-    semantics: &'static str,
     unique: &'static [&'static str],
     columns: Vec<Column>,
 }
@@ -123,7 +122,6 @@ fn declaration<T: Row>(known: &Known) -> (&'static str, Declaration) {
         Declaration {
             layer: info.layer.as_str(),
             partition_key: info.partition_key,
-            semantics: T::SEMANTICS,
             unique: T::UNIQUE,
             columns,
         },
@@ -136,7 +134,6 @@ fn rowless(info: DatasetInfo) -> (&'static str, Declaration) {
         Declaration {
             layer: info.layer.as_str(),
             partition_key: info.partition_key,
-            semantics: "",
             unique: &[],
             columns: Vec::new(),
         },

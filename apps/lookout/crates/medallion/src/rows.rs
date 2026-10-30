@@ -35,8 +35,6 @@ pub trait Row: Serialize + for<'de> Deserialize<'de> {
 
     const UNIQUE: &'static [&'static str] = &[];
 
-    const SEMANTICS: &'static str = "";
-
     fn example() -> Self;
 }
 

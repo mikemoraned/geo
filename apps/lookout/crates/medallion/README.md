@@ -68,9 +68,9 @@ example, with `enum Colour { Red, Green, Blue }`:
 
 A dataset's declaration is what its code states about it, as
 [medallion.md](../../docs/medallion.md#dataset-versions) defines it. A test in `medallion-model`
-records each declaration as an `insta` snapshot. It holds the dataset's layer, partition key,
-semantics tag, and unique columns. It also holds the columns its files store, in order, with the
-variants of each enum column. `file_schema` lays the columns out with the functions the writers use.
+records each declaration as an `insta` snapshot. It holds the dataset's layer, partition key, and
+unique columns. It also holds the columns its files store, in order, with the variants of each enum
+column. `file_schema` lays the columns out with the functions the writers use.
 
 A column holding a newtype lists the hash of each check the newtype runs. `#[hashfn]` on the
 check's function computes the hash from its code. The hash covers that function alone, not the
@@ -96,9 +96,8 @@ test, and goes to review, by a person or an agent:
 2. Accept a change no reader can see, such as a check refactored without changing what it accepts.
 3. Reject any other change, and give the dataset a new version under a new name.
 
-A change of meaning leaves the declaration as it was. Where a person judges one significant enough
-for a new version, they set the row type's `SEMANTICS`, empty by default. The snapshot records it,
-so the change fails the test like any other.
+A change of meaning leaves the declaration as it was, so the test cannot find one. Where a person
+judges one significant, they give the dataset a new version under a new name.
 
 ## Appending never overwrites; deriving always replaces
 

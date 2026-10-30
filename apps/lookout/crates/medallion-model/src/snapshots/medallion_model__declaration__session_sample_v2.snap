@@ -1,11 +1,9 @@
 ---
 source: crates/medallion-model/src/declaration.rs
-assertion_line: 308
 expression: declaration
 ---
 layer: silver
 partition_key: sample_date
-semantics: ""
 unique: []
 columns:
   - name: geometry
