@@ -842,9 +842,12 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       must map to exactly one new one. Record the row counts under Observations.
 - [x] Record, under Observations, the sizes of the migrated files against the research doc's
       DuckDB figures.
-- [ ] Check `just silver-motis-ingest` derives the same `train_segment_v4` and `train_session_v2`
+- [x] Check `just silver-motis-ingest` derives the same `train_segment_v4` and `train_session_v2`
       rows from `motis_segment_v3` alone as from `motis_segment_v2` alone, but for the source ids
-      and the train session ids derived from them.
+      and the train session ids derived from them. The `motis_segment_v2` side is the silver of the
+      30 October rebuild, since current code cannot read its old source ids. 34 sessions differ
+      through legs tied on departure, as Observations records. The slice "replay the trains whose
+      legs overlap" now holds that fix.
 - [ ] Rederive the recorded sessions into their new versions with `just silver-sessionise` and
       `just silver-session-crossings`. Check each holds its old version's rows, with only the
       session ids changed. Then run `just gold-pack-sessions`.
@@ -961,6 +964,31 @@ both directions. Each comparison found no row on either side alone.
   source id is replaced by its new one. Each date holds the same row count in both datasets.
 - `motis_polyline_v1` holds 25,464 rows, each with a distinct id and distinct text. Every id is
   the UUID v5 of its text, and every segment's polyline id is present.
+
+#### `motis_ingest` from `motis_segment_v3` against `motis_segment_v2`
+
+On 31 October, `motis_ingest` ran in a scratch store holding `motis_segment` and `motis_segment_v3`,
+without `motis_segment_v2`. Its output was compared, per partition and with source ids mapped, with
+the silver the 30 October rebuild derived from `motis_segment` and `motis_segment_v2`.
+
+| Dataset | Rows, each side | Partitions differing |
+| --- | --- | --- |
+| `train_segment_v4` | 1,702,978 | 0 of 16 |
+| `train_session_v2` | 165,606 | 3 of 16 |
+| `train_session_sample_v2` | 64,232,436 | 3 of 17 |
+
+- Every train session id is the UUID v5 of its new source id and trip id.
+- 34 sessions differ, all from one source, on 18–20 October. Their geometry differs, and 19 also
+  differ in `bbox`. Every other session column matches. 1,566 of their 16,156 samples moved, by up
+  to about 68 km. Their timestamps and row counts match.
+- Each of those 34 trips has legs sharing a departure, such as two zero-duration legs at one
+  instant. `Legs::new` sorts by departure and arrival, so such legs keep the order the query
+  returned them in, and `captures` orders only by departure. The train segments match, so the
+  difference comes from that order rather than from the migrated rows. Over those dates, 2,649
+  departures of a trip are shared by two or more of its legs.
+- The run read 2,742,313 rows and took 896 s, with a peak memory footprint of 15.6 GB, a peak
+  resident set of 9.4 GB, and no swaps. The 12.7 GB under the captures to 22 October covers
+  1,975,310 rows, so the two do not show what the polyline table saves.
 
 #### The sizes of the migrated files
 

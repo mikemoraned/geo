@@ -240,6 +240,18 @@ after the leg before it, and departs before that leg's older arrival. Trusting t
 where two legs overlap would keep those trips. `motis_ingest` logs each reason it drops a trip, so
 the counts show what a change gains.
 
+Also order a trip's legs that share a departure and an arrival, so that unchanged bronze gives the
+same train sessions. `docs/architecture.md` claims this of every derivation, and these legs break
+the claim. `Legs::new` sorts by departure and arrival, so such legs keep the order the query
+returned them in, and `captures` orders only by departure. They pass the overlap check, since
+neither departs before the other arrives.
+
+On 31 October, deriving from `motis_segment_v3` rather than `motis_segment_v2` changed 34 of
+165,606 sessions, from identical train segments. Each of the 34 trips has legs sharing a departure.
+1,566 samples moved, by up to about 68 km, a distance that suggests a wrong order rather than two
+valid ones. A stable tie-break alone would then repeat the wrong route. The order may need to follow
+the stops, each leg starting where the last one ended.
+
 ## Slice: derive the water crossings in Rust
 
 ### Target
