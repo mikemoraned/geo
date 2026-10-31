@@ -176,21 +176,6 @@ fn started_by_device(starts: Vec<SessionStart>) -> HashMap<DeviceId, Vec<DateTim
         })
 }
 
-fn absorbed(sessions: &mut Vec<Session>, announced_at: DateTime<Utc>, lead: Lead) -> Vec<Sample> {
-    let precedes_report = sessions
-        .last()
-        .is_some_and(|previous| lead.reaches(announced_at, previous.started_at()));
-
-    if precedes_report {
-        sessions
-            .pop()
-            .expect("a session was just read from the end")
-            .samples
-    } else {
-        Vec::new()
-    }
-}
-
 fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap, lead: Lead) -> Vec<Session> {
     let mut sessions: Vec<Session> = Vec::new();
     let mut unclaimed = started;
@@ -212,7 +197,11 @@ fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap, lead: Lead) ->
         match started_by {
             Some(started_by) => {
                 let mut samples = announced_at
-                    .map(|announced_at| absorbed(&mut sessions, announced_at, lead))
+                    .and_then(|announced_at| {
+                        sessions
+                            .pop_if(|previous| lead.reaches(announced_at, previous.started_at()))
+                    })
+                    .map(|previous| previous.samples)
                     .unwrap_or_default();
                 samples.push(sample.clone());
                 sessions.push(Session {

@@ -63,6 +63,12 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
   - `FromStr + .parse()` is the Rust community standard for "string → validated domain type" conversions.
 - Use typed representations instead of untyped arrays (e.g. `DynamicImage` not `Vec<u8>` for images)
 - Arguments convey meaning through types (`C-CUSTOM-TYPE`) — don't take a bare `bool` or `Option` parameter whose meaning is opaque at the call site (`f(true, false)`); use a two-variant enum (`Overwrite::Yes`/`No`). This is the argument-side mirror of "never return `bool` for success" below.
+- **A function hands back what it produces through its return type (`C-NO-OUT`).** A function that
+  fills a `&mut Vec` its caller passes hides its output among its arguments, and its result depends
+  on what the collection already held. A recursive helper is the usual offender: have each call
+  return its own `Vec`, and `extend` the caller's with it. The exception is data the caller already
+  owns and means to modify, such as a buffer reused as in `Read::read`, or an allocation that
+  profiling shows matters.
 - Eagerly derive common traits (`C-COMMON-TRAITS`, `C-DEBUG`) — `Debug, Clone, PartialEq, Eq, Hash, Default` wherever they apply, and every public type implements `Debug`.
 - **An age is an `Age`, never a bare number or duration.** A maximum age, a lookback, or any
   other measure of how old something may be is a positive span held in the `Age` newtype, whose

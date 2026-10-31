@@ -89,22 +89,23 @@ async fn stored_sessions(root: &Root) -> Vec<Session> {
 }
 
 fn partitions(root: &Root) -> Vec<(String, u64)> {
-    fn walk(dir: &std::path::Path, into: &mut Vec<std::path::PathBuf>) {
+    fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
         let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
+            return Vec::new();
         };
-        for entry in entries {
-            let path = entry.expect("entry").path();
-            if path.is_dir() {
-                walk(&path, into);
-            } else {
-                into.push(path);
-            }
-        }
+        entries
+            .flat_map(|entry| {
+                let path = entry.expect("entry").path();
+                if path.is_dir() {
+                    walk(&path)
+                } else {
+                    vec![path]
+                }
+            })
+            .collect()
     }
 
-    let mut paths = Vec::new();
-    walk(&root.path().join("silver"), &mut paths);
+    let mut paths = walk(&root.path().join("silver"));
     paths.sort();
     paths
         .iter()
