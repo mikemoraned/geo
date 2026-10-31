@@ -837,7 +837,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       binary, writing through the drain's code. Give each segment its source's id in
       `motis_source_v4`, and refuse a segment whose source is missing from `motis_source_v3`. Commit
       the binary with the data it writes, and remove it in a later commit.
-- [ ] Check both migrations are lossless. `motis_source_v4` and `motis_segment_v3` must hold every
+- [x] Check both migrations are lossless. `motis_source_v4` and `motis_segment_v3` must hold every
       observation in the datasets they replace, with only the source id changed. Each old source id
       must map to exactly one new one. Record the row counts under Observations.
 - [ ] Record, under Observations, the sizes of the migrated files against the research doc's
@@ -945,6 +945,22 @@ space in images, is a research task in the slice "Evaluation framework with asso
 predictor improvement".
 
 ### Observations
+
+#### The migrations of `motis_source_v3` and `motis_segment_v2`
+
+On 31 October, DuckDB compared each migrated dataset with the one it replaces, using `EXCEPT ALL` in
+both directions. Each comparison found no row on either side alone.
+
+| Old | Rows | New | Rows |
+| --- | --- | --- | --- |
+| `motis_source_v3` | 8 | `motis_source_v4` | 8 |
+| `motis_segment_v2` | 2,682,070 | `motis_segment_v3` joined to `motis_polyline_v1` | 2,682,070 |
+
+- Source rows match on every column but `source_id`. The 8 old ids map to 8 new ids, one to one.
+- Segment rows match on every column, including `polled_date` and the polyline text, once each old
+  source id is replaced by its new one. Each date holds the same row count in both datasets.
+- `motis_polyline_v1` holds 25,464 rows, each with a distinct id and distinct text. Every id is
+  the UUID v5 of its text, and every segment's polyline id is present.
 
 #### `motis_ingest` on the captures to 25 October
 
