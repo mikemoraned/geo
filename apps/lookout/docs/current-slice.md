@@ -851,7 +851,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 - [x] Rederive the recorded sessions into their new versions with `just silver-sessionise` and
       `just silver-session-crossings`. Check each holds its old version's rows, with only the
       session ids changed. Then run `just gold-pack-sessions`.
-- [ ] Update the session ids held outside the store: in
+- [x] Update the session ids held outside the store: in
       `crates/session_crossings/tests/passes.geojson`, and in any test or notebook that names one.
 - [ ] Delete `motis_segment_v2`'s files, `MOTIS_SEGMENT_V2`, its entry in
       `crates/medallion-model/src/bronze.rs`, and its reading in `captures`. Its rows live on in
@@ -932,11 +932,11 @@ After Refactoring, once the slice works end to end.
 #### A pass split by imprecise samples
 
 Re-deriving `session_crossing` with a pass per visit, on 2026-10-18, gave two sessions passing one
-crossing twice. Session `d4d6e062` reverses at Frankfurt (Main) Hbf, a terminus, and crosses the
+crossing twice. Session `a489b094` reverses at Frankfurt (Main) Hbf, a terminus, and crosses the
 Main out and back, 13 minutes apart. Its samples report 2–5 m of accuracy, and it is the first geo
 test case.
 
-Session `43fffff4`, on 26 July near (50.355, 11.023), passes four crossings twice each, 22 s apart.
+Session `71b9c047`, on 26 July near (50.355, 11.023), passes four crossings twice each, 22 s apart.
 Its samples report about 1,450 m of accuracy. Their distance from one crossing runs 6,682 m, 234 m,
 588 m, 155 m, and 2,873 m. The middle sample falls outside the 250 m radius, so one approach splits
 into two visits. Samples that imprecise cannot show whether the train passed the crossing at all.

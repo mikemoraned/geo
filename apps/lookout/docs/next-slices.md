@@ -63,7 +63,7 @@ The evaluation scores the first alert before each pass. A train reversing out of
 the same crossings twice, so the unit is (session, crossing, pass), not the (session, crossing)
 pair of [2026-08-01-evaluation.md](2026-08-01-evaluation.md).
 
-Imprecise samples can split one pass into two. Session `43fffff4`, on 26 July, reports about
+Imprecise samples can split one pass into two. Session `71b9c047`, on 26 July, reports about
 1,450 m of accuracy, and passes four crossings twice each, 22 s apart. The rule that splits a
 session's samples into visits cannot tell such jitter from a real revisit. A real revisit needs
 the train to leave and return, which takes a span of space and time. Where a session's

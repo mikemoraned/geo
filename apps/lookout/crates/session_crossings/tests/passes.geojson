@@ -6,7 +6,7 @@
       "properties": {
         "name": "frankfurt_hbf_reversal",
         "country": "DE",
-        "session_id": "d4d6e062-3aa7-533d-887a-ae7791340ef4",
+        "session_id": "a489b094-ff85-5c4d-8de7-8cf7cf753ec1",
         "crossing_id": "b06af5f0-9406-324b-8dba-a828af921f59:7aca5231-205f-429f-8f6a-c5e4b3203640:7aca5231-205f-429f-8f6a-c5e4b3203640@0.094596",
         "expected_passes": 2,
         "notes": "The train reverses at Frankfurt (Main) Hbf, a terminus, so it crosses the Main out and back, 13 minutes apart."
