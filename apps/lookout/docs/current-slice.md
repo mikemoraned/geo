@@ -840,7 +840,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 - [x] Check both migrations are lossless. `motis_source_v4` and `motis_segment_v3` must hold every
       observation in the datasets they replace, with only the source id changed. Each old source id
       must map to exactly one new one. Record the row counts under Observations.
-- [ ] Record, under Observations, the sizes of the migrated files against the research doc's
+- [x] Record, under Observations, the sizes of the migrated files against the research doc's
       DuckDB figures.
 - [ ] Check `just silver-motis-ingest` derives the same `train_segment_v4` and `train_session_v2`
       rows from `motis_segment_v3` alone as from `motis_segment_v2` alone, but for the source ids
@@ -961,6 +961,27 @@ both directions. Each comparison found no row on either side alone.
   source id is replaced by its new one. Each date holds the same row count in both datasets.
 - `motis_polyline_v1` holds 25,464 rows, each with a distinct id and distinct text. Every id is
   the UUID v5 of its text, and every segment's polyline id is present.
+
+#### The sizes of the migrated files
+
+parquet-rs writes about what the research doc measured with DuckDB, which settles that doc's open
+question about the sizes. Every size sums file lengths. The research doc's figures cover
+20–22 October, so this table does too.
+
+| Over 20–22 October | Research doc, DuckDB | Migrated, parquet-rs 57.3.1 |
+| --- | --- | --- |
+| A file per day, polyline stored once | 5.4 MB a day | 5.65 MB a day |
+| Polyline table, each day's growth | 0.1–0.4 MB of text | 0.10–0.27 MB of parquet |
+
+- `motis_segment_v3` holds 39.1 MB and `motis_polyline_v1` 10.2 MB, 49.3 MB in all, against
+  2,135.8 MB for `motis_segment_v2`. Those totals cover all 12 dates.
+- `motis_segment_v2` takes 304.6 MB a day over 20–22 October on disk, so `motis_segment_v3` is
+  about 54 times smaller there. The research doc's 58–70 MB a day measures those files in git,
+  which finds deltas between them.
+- The polyline table's first full day, 18 October, takes 6.46 MB of its 10.2 MB. The research doc's
+  table takes 10.4 MB for the polylines 20–22 October saw. The migrated table holds 25,464 polylines
+  from all 12 dates, against the research doc's 24,790 from its shorter span.
+- The migration wrote a polyline file per date. A promotion writes one a run.
 
 #### `motis_ingest` on the captures to 25 October
 
