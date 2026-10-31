@@ -68,8 +68,7 @@ async fn main() {
         .install_default()
         .expect("install rustls crypto provider");
 
-    let url = std::env::var("LOOKOUT_REDIS_URL")
-        .expect("LOOKOUT_REDIS_URL must be set — run via `just bronze-poll-motis`");
+    let url = std::env::var("LOOKOUT_REDIS_URL").expect("LOOKOUT_REDIS_URL must be set");
     let conn = telemetry::connect(&url)
         .await
         .expect("connect to telemetry redis");

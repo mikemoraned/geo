@@ -10,8 +10,7 @@ async fn redis_round_trip_end_to_end() {
         .install_default()
         .ok();
 
-    let url = std::env::var("LOOKOUT_REDIS_URL")
-        .expect("LOOKOUT_REDIS_URL must be set — run via `just end_to_end_test`");
+    let url = std::env::var("LOOKOUT_REDIS_URL").expect("LOOKOUT_REDIS_URL must be set");
 
     let sink = RedisSink::connect(&url)
         .await

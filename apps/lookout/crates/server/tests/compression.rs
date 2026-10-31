@@ -49,7 +49,7 @@ async fn a_client_that_asks_for_nothing_is_served_as_it_is() {
 async fn the_crossings_are_worth_compressing() {
     let (status, _, plain) = fetch("/crossings.json", None).await;
     if status == StatusCode::NOT_FOUND {
-        eprintln!("no crossings.json in static; run `just crossings`");
+        eprintln!("no crossings.json in static");
         return;
     }
 

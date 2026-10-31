@@ -55,8 +55,7 @@ async fn main() {
 
     let archive = Archive::new(root.clone());
 
-    let url = std::env::var("LOOKOUT_REDIS_URL")
-        .expect("LOOKOUT_REDIS_URL must be set — run via `just bronze-record`");
+    let url = std::env::var("LOOKOUT_REDIS_URL").expect("LOOKOUT_REDIS_URL must be set");
     let mut conn = telemetry::connect(&url)
         .await
         .expect("connect to telemetry redis");
