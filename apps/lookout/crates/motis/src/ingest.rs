@@ -5,8 +5,8 @@ use domain::TrainNumber;
 use geo_types::{Coord, LineString, Point};
 use medallion::{Countries, DatasetSpec, GeoRow, Query, Root, layers};
 use medallion_model::{
-    AgencyId, MOTIS_POLYLINE_V1, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MOTIS_SEGMENT_V3, MotisSourceId,
-    PolylineId, RailMode, StopId, TrainSegmentRowV4, TripId,
+    AgencyId, MOTIS_POLYLINE_V1, MOTIS_SEGMENT, MOTIS_SEGMENT_V3, MotisSourceId, PolylineId,
+    RailMode, StopId, TrainSegmentRowV4, TripId,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -116,19 +116,14 @@ pub(crate) struct Captured {
 
 pub(crate) struct Captures {
     motis_segment: Option<Captured>,
-    motis_segment_v2: Option<Captured>,
     motis_segment_v3: Option<Captured>,
 }
 
 impl Captures {
     pub(crate) fn each(self) -> impl Iterator<Item = Captured> {
-        [
-            self.motis_segment,
-            self.motis_segment_v2,
-            self.motis_segment_v3,
-        ]
-        .into_iter()
-        .flatten()
+        [self.motis_segment, self.motis_segment_v3]
+            .into_iter()
+            .flatten()
     }
 }
 
@@ -182,14 +177,6 @@ pub(crate) async fn captures(root: &Root) -> Result<Captures, IngestError> {
             MOTIS_SEGMENT,
             &format!("{legacy_source_id} AS source_id"),
             &format!("{legacy_source_id}, {LEG_IDENTITY}"),
-            POLYLINE_IN_THE_ROW,
-        )
-        .await?,
-        motis_segment_v2: captured(
-            &query,
-            MOTIS_SEGMENT_V2,
-            "source_id",
-            &format!("source_id, {LEG_IDENTITY}"),
             POLYLINE_IN_THE_ROW,
         )
         .await?,
@@ -433,36 +420,6 @@ mod tests {
             .expect("promote");
     }
 
-    async fn lines(root: &Root) -> Vec<String> {
-        let mut lines: Vec<String> = geometry_batches(root)
-            .await
-            .iter()
-            .flat_map(|batch| medallion::geometries(batch, GEOMETRY).expect("geometries"))
-            .map(|geometry| format!("{geometry:?}"))
-            .collect();
-        lines.sort();
-        lines
-    }
-
-    #[tokio::test]
-    async fn segments_apart_from_their_polylines_derive_what_whole_captures_derive() {
-        let polls = [
-            Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
-            Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 30).unwrap(),
-        ];
-        let whole = tempfile::tempdir().expect("tempdir");
-        let whole = Root::new(whole.path());
-        let apart = tempfile::tempdir().expect("tempdir");
-        let apart = Root::new(apart.path());
-
-        let from_whole = ingest_polls(&whole, &polls).await;
-        promote_polls(&apart, &polls, regional_trips()).await;
-        let from_apart = ingest(&apart, &germany()).await.expect("ingest");
-
-        assert_eq!(from_apart, from_whole);
-        assert_eq!(lines(&apart).await, lines(&whole).await);
-    }
-
     #[tokio::test]
     async fn a_poll_promoted_twice_derives_each_leg_once() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -675,12 +632,28 @@ mod tests {
         ingest(root, &germany()).await.expect("ingest")
     }
 
+    async fn ingest_legacy_one(root: &Root, segment: &TripSegment) -> IngestOutcome {
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
+        let row = segment_row(captured_at, &one_trip(segment.clone()), &Map::new());
+        root.rows_of::<MotisSegmentRow>()
+            .on_date(captured_at.date_naive())
+            .expect("partition")
+            .append_rows(captured_at, &[row])
+            .await
+            .expect("append legacy poll");
+        ingest(root, &germany()).await.expect("ingest")
+    }
+
     async fn line_of_one(segment: &TripSegment) -> (Vec<(f64, f64)>, usize) {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         let outcome = ingest_one(&root, segment).await;
+        line_derived(&root, outcome).await
+    }
+
+    async fn line_derived(root: &Root, outcome: IngestOutcome) -> (Vec<(f64, f64)>, usize) {
         (
-            first_line(&geometry_batches(&root).await[0], GEOMETRY),
+            first_line(&geometry_batches(root).await[0], GEOMETRY),
             outcome.shape_corrected,
         )
     }
@@ -705,10 +678,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_leg_whose_shape_is_empty_runs_straight_between_its_stops() {
+    async fn a_legacy_leg_whose_shape_is_empty_runs_straight_between_its_stops() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
         let segment = shaped(&[]);
 
-        let (line, corrected) = line_of_one(&segment).await;
+        let outcome = ingest_legacy_one(&root, &segment).await;
+        let (line, corrected) = line_derived(&root, outcome).await;
 
         assert!(close(&line, &between_stops(&segment)), "{line:?}");
         assert_eq!(corrected, 1);
@@ -742,14 +718,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_shapeless_leg_between_stops_in_one_place_is_left_out_and_counted() {
+    async fn a_legacy_shapeless_leg_between_stops_in_one_place_is_left_out_and_counted() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         let mut segment = shaped(&[]);
         segment.to.lat = segment.from.lat;
         segment.to.lon = segment.from.lon;
 
-        let outcome = ingest_one(&root, &segment).await;
+        let outcome = ingest_legacy_one(&root, &segment).await;
 
         assert_eq!((outcome.deduped, outcome.shapeless), (1, 1));
         assert_eq!(outcome.partitions, 0);

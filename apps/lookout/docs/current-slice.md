@@ -853,9 +853,20 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       session ids changed. Then run `just gold-pack-sessions`.
 - [x] Update the session ids held outside the store: in
       `crates/session_crossings/tests/passes.geojson`, and in any test or notebook that names one.
-- [ ] Delete `motis_segment_v2`'s files, `MOTIS_SEGMENT_V2`, its entry in
+- [x] Delete `motis_segment_v2`'s files, `MOTIS_SEGMENT_V2`, its entry in
       `crates/medallion-model/src/bronze.rs`, and its reading in `captures`. Its rows live on in
       `motis_segment_v3`.
+- [ ] Tell a leg with no polyline from a leg with an invalid polyline, in `sorted`, in
+      `crates/motis/src/capture.rs`, and give each case its own count and log line.
+      - No polyline: Motis sends empty text. Decide whether to keep such a leg. `sorted` decodes it
+        to an empty line and counts it as outside the coverage, so it lands nowhere today. If the
+        leg stays, `motis_poll_v1` and `motis_polyline_v1` must hold it, since `Polyline` refuses
+        empty text.
+      - Invalid polyline: text the decoder refuses, or with a character outside ASCII 63–126. Ignore
+        that leg's row, and land the poll's other rows. `sorted` does this today for a leg the
+        decoder refuses, but counts it with the other unresolved legs. A character above 126 can
+        pass the decoder, and `SegmentLog::append` then fails the capture and loses the poll's other
+        rows.
 - [ ] Once the user has inspected the migrations, delete the files and declarations of
       `motis_source_v3` and of the silver versions the new ones replace.
 - [ ] Describe landing, the drain, `motis_polyline_v1`, and `motis_segment_v3` in

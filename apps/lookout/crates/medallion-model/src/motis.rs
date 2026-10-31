@@ -15,9 +15,6 @@ pub const MOTIS_POLL_V1: DatasetSpec<layers::Landing> =
 pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment", "polled_date");
 
-pub const MOTIS_SEGMENT_V2: DatasetSpec<layers::Bronze> =
-    DatasetSpec::partitioned("motis_segment_v2", "polled_date");
-
 pub const MOTIS_SEGMENT_V3: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment_v3", "polled_date");
 
@@ -263,77 +260,6 @@ impl Row for MotisSegmentRow {
             realtime: false,
             polyline: "example".to_string(),
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MotisCaptureRow {
-    pub source_id: MotisSourceId,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub captured_at: DateTime<Utc>,
-    pub trip_id: String,
-    pub route_name: Option<String>,
-    pub train_number: Option<TrainNumber>,
-    pub agency_id: Option<String>,
-    pub agency_name: Option<String>,
-    pub mode: String,
-    pub route_color: Option<String>,
-    pub from_stop_id: Option<String>,
-    pub from_lat: f64,
-    pub from_lon: f64,
-    pub to_stop_id: Option<String>,
-    pub to_lat: f64,
-    pub to_lon: f64,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub departure: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub arrival: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub scheduled_departure: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub scheduled_arrival: DateTime<Utc>,
-    pub realtime: bool,
-    pub polyline: String,
-}
-
-impl MotisCaptureRow {
-    pub fn of(source_id: MotisSourceId, segment: MotisSegmentRow) -> Self {
-        Self {
-            source_id,
-            captured_at: segment.captured_at,
-            trip_id: segment.trip_id,
-            route_name: segment.route_name,
-            train_number: segment.train_number,
-            agency_id: segment.agency_id,
-            agency_name: segment.agency_name,
-            mode: segment.mode,
-            route_color: segment.route_color,
-            from_stop_id: segment.from_stop_id,
-            from_lat: segment.from_lat,
-            from_lon: segment.from_lon,
-            to_stop_id: segment.to_stop_id,
-            to_lat: segment.to_lat,
-            to_lon: segment.to_lon,
-            departure: segment.departure,
-            arrival: segment.arrival,
-            scheduled_departure: segment.scheduled_departure,
-            scheduled_arrival: segment.scheduled_arrival,
-            realtime: segment.realtime,
-            polyline: segment.polyline,
-        }
-    }
-}
-
-impl Row for MotisCaptureRow {
-    type Layer = layers::Bronze;
-    const DATASET: DatasetSpec<Self::Layer> = MOTIS_SEGMENT_V2;
-    const INSTANTS: &'static [&'static str] = MotisSegmentRow::INSTANTS;
-
-    fn example() -> Self {
-        Self::of(
-            MotisSourceRowV4::example().source_id,
-            MotisSegmentRow::example(),
-        )
     }
 }
 
@@ -613,11 +539,6 @@ mod tests {
     }
 
     #[test]
-    fn a_poll_holds_a_captures_columns() {
-        assert_eq!(names::<MotisPollRowV1>(), names::<MotisCaptureRow>());
-    }
-
-    #[test]
     fn a_poll_whose_polyline_is_not_encoded_is_refused() {
         let mut segment = MotisSegmentRow::example();
         segment.polyline = String::new();
@@ -628,8 +549,8 @@ mod tests {
     }
 
     #[test]
-    fn a_segment_holds_a_captures_columns_with_a_polyline_id_for_its_polyline() {
-        let expected: Vec<String> = names::<MotisCaptureRow>()
+    fn a_segment_holds_a_polls_columns_with_a_polyline_id_for_its_polyline() {
+        let expected: Vec<String> = names::<MotisPollRowV1>()
             .into_iter()
             .map(|name| {
                 if name == "polyline" {
@@ -718,15 +639,15 @@ mod tests {
     }
 
     #[test]
-    fn a_capture_carries_every_segment_column_and_its_source() {
+    fn a_poll_carries_every_segment_column_and_its_source() {
         let segment = column_names::<MotisSegmentRow>();
-        let capture = column_names::<MotisCaptureRow>();
+        let poll = column_names::<MotisPollRowV1>();
 
-        assert!(capture.contains("source_id"), "{capture:?}");
+        assert!(poll.contains("source_id"), "{poll:?}");
         for name in &segment {
-            assert!(capture.contains(name), "{name} is missing from {capture:?}");
+            assert!(poll.contains(name), "{name} is missing from {poll:?}");
         }
-        assert_eq!(capture.len(), segment.len() + 1);
+        assert_eq!(poll.len(), segment.len() + 1);
     }
 
     #[test]

@@ -8,10 +8,10 @@ use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, Trace
 
 use crate::{
     ALL, AccelReadingRowV2, DeviceSessionRowV2, ExtractManifestRowV3, Feed, GeometrySource, GersId,
-    GpsReadingRowV2, Label, MotisBaseUrl, MotisCaptureRow, MotisPollRowV1, MotisPolylineRowV1,
-    MotisSegmentRow, MotisSegmentRowV3, MotisSourceId, MotisSourceRowV3, MotisSourceRowV4,
-    MotisVersion, OVERTURE_EXTRACT, OverlapKind, OvertureRelease, RailMode, RawSampleRow,
-    SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3, TrainSegmentRowV4, TrainSessionRowV2,
+    GpsReadingRowV2, Label, MotisBaseUrl, MotisPollRowV1, MotisPolylineRowV1, MotisSegmentRow,
+    MotisSegmentRowV3, MotisSourceId, MotisSourceRowV3, MotisSourceRowV4, MotisVersion,
+    OVERTURE_EXTRACT, OverlapKind, OvertureRelease, RailMode, RawSampleRow, SessionCrossingRowV3,
+    SessionRowV3, SessionSampleRowV3, TrainSegmentRowV4, TrainSessionRowV2,
     TrainSessionSampleRowV2, WaterCrossingRowV2,
 };
 
@@ -294,7 +294,6 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<AccelReadingRowV2>(&known),
         declaration::<DeviceSessionRowV2>(&known),
         declaration::<MotisSegmentRow>(&known),
-        declaration::<MotisCaptureRow>(&known),
         declaration::<MotisSegmentRowV3>(&known),
         declaration::<MotisPollRowV1>(&known),
         declaration::<MotisPolylineRowV1>(&known),

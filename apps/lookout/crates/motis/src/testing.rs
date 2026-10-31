@@ -1,19 +1,23 @@
 #![cfg(test)]
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 use chrono::{DateTime, Utc};
 use geo_types::Point;
-use medallion::{AppendError, Countries, Country, Root};
-use medallion_model::{Feed, MotisCaptureRow, MotisSource, MotisSourceId, TripId};
+use medallion::{Countries, Country, Root};
+use medallion_model::{Feed, MotisPollRowV1, MotisSource, MotisSourceId, TripId};
 use url::Url;
 
 use crate::api::types::{Mode, TripSegment};
 use crate::client::TripDetails;
 use crate::landing::segment_row;
+use crate::landing_to_bronze_promotion::{PromotionError, write_polls};
 use crate::segment::SingleTripSegment;
 
 pub(crate) const TRIPS: &str = include_str!("../tests/fixtures/trips.json");
+
+static NEXT_WRITE: AtomicI64 = AtomicI64::new(0);
 
 pub(crate) struct CaptureLog {
     root: Root,
@@ -30,22 +34,22 @@ impl CaptureLog {
         captured_at: DateTime<Utc>,
         segments: &[SingleTripSegment],
         details: &HashMap<TripId, TripDetails>,
-    ) -> Result<usize, AppendError> {
-        let rows: Vec<MotisCaptureRow> = segments
+    ) -> Result<usize, PromotionError> {
+        let polls: Vec<MotisPollRowV1> = segments
             .iter()
             .map(|segment| {
-                MotisCaptureRow::of(
+                MotisPollRowV1::of(
                     self.source_id.clone(),
                     segment_row(captured_at, segment, details),
                 )
+                .expect("a fixture's polyline has valid characters")
             })
             .collect();
-        self.root
-            .rows_of::<MotisCaptureRow>()
-            .on_date(captured_at.date_naive())
-            .expect("a date partition")
-            .append_rows(captured_at, &rows)
-            .await
+        let written_at =
+            DateTime::from_timestamp_millis(NEXT_WRITE.fetch_add(1, Ordering::Relaxed))
+                .expect("a small count of milliseconds is an instant");
+        write_polls(&self.root, written_at, &polls).await?;
+        Ok(polls.len())
     }
 }
 

@@ -548,7 +548,14 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         let mut segment = regional_trips().remove(0);
-        segment.polyline = String::new();
+        segment.polyline = polyline::encode_coordinates(
+            [geo_types::Coord {
+                x: segment.from.lon,
+                y: segment.from.lat,
+            }],
+            crate::segment::POLYLINE_PRECISION,
+        )
+        .expect("encode");
         segment.to = segment.from.clone();
         poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
 
