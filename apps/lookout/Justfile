@@ -130,20 +130,20 @@ summarise *args:
 bronze-record *args:
     op run --env-file=deploy/lookout.env -- cargo run --release -p recorder --bin recorder -- {{args}}
 
-# Poll Motis for trips near recent GPS into bronze for a duration such as 1h, redis URL from 1Password.
-bronze-poll-motis duration *args:
+# Poll Motis for trips near recent GPS into landing for a duration such as 1h, redis URL from 1Password.
+landing-poll-motis duration *args:
     BUILD_GIT_HASH={{git_hash}} op run --env-file=deploy/lookout.env -- cargo run --release -p motis --bin motis_follow_gps -- --feed local --poll-duration {{duration}} {{args}}
 
-# Capture every train in Thuringia from Transitous into bronze, every 10 minutes for a duration such as 1h.
-bronze-poll-transitous duration *args:
+# Capture every train in Thuringia from Transitous into landing, every 10 minutes for a duration such as 1h.
+landing-poll-transitous duration *args:
     BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --motis-url https://api.transitous.org --feed transitous --country DE --region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
 
-# Capture every train in Thuringia from the local Motis server into bronze, every 10 minutes for a duration such as 2h. The label names the DELFI build and the setup, such as delfi-2026-10-12.plain.
-bronze-poll-local-area label duration *args:
+# Capture every train in Thuringia from the local Motis server into landing, every 10 minutes for a duration such as 2h. The label names the DELFI build and the setup, such as delfi-2026-10-12.plain.
+landing-poll-local-area label duration *args:
     BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --country DE --region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
 
-# Capture every train in Germany from the local Motis server into bronze, every 10 minutes for a duration such as 1d. The label names the DELFI build and the setup, such as delfi-2026-10-10.route-shapes.within.
-bronze-poll-local-de label duration *args:
+# Capture every train in Germany from the local Motis server into landing, every 10 minutes for a duration such as 1d. The label names the DELFI build and the setup, such as delfi-2026-10-10.route-shapes.within.
+landing-poll-local-de label duration *args:
     BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --country DE --poll-interval 10m --poll-duration {{duration}} {{args}}
 
 # Fetch the API spec of the Motis version tools/motis-server pins; the motis client is generated from it.

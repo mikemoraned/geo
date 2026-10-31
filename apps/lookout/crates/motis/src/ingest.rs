@@ -259,7 +259,7 @@ fn starts_from(line: &LineString<f64>) -> Point<f64> {
 mod tests {
     use std::collections::HashMap as Map;
 
-    use crate::bronze::{SegmentLog, segment_row};
+    use crate::landing::segment_row;
     use crate::segment::SingleTripSegment;
 
     use crate::api::types::{Mode, TripSegment};
@@ -270,10 +270,10 @@ mod tests {
 
     use super::*;
     use crate::legacy::legacy_sources;
-    use crate::testing::{Nowhere, germany, regional_trips, source};
+    use crate::testing::{CaptureLog, Nowhere, germany, regional_trips, source};
 
-    fn log(root: &Root) -> SegmentLog {
-        SegmentLog::new(root.clone(), source(Feed::Local).id())
+    fn log(root: &Root) -> CaptureLog {
+        CaptureLog::new(root.clone(), source(Feed::Local).id())
     }
 
     async fn append_legacy(root: &Root, captured_at: DateTime<Utc>) {
@@ -788,7 +788,7 @@ mod tests {
             .append(at, &one_trip_each(regional_trips()), &Map::new())
             .await
             .expect("append poll");
-        SegmentLog::new(root.clone(), source(Feed::Transitous).id())
+        CaptureLog::new(root.clone(), source(Feed::Transitous).id())
             .append(
                 at + chrono::Duration::seconds(1),
                 &one_trip_each(regional_trips()),

@@ -9,9 +9,9 @@ use medallion_model::{RailMode, TripId};
 use tokio::time::Instant;
 
 use crate::api::types::{Mode, TripSegment};
-use crate::bronze::{BronzeError, SegmentLog};
 use crate::client::{MotisClient, MotisError};
 use crate::details::TripDetailsCache;
+use crate::landing::{SegmentLog, SegmentLogError};
 use crate::segment::SingleTripSegment;
 use crate::tally::Tally;
 use crate::zoom::Zoom;
@@ -99,7 +99,7 @@ pub enum CaptureError {
     #[error("querying motis: {0}")]
     Motis(#[from] MotisError),
     #[error("writing capture log: {0}")]
-    Log(#[from] BronzeError),
+    Log(#[from] SegmentLogError),
 }
 
 impl Capture {

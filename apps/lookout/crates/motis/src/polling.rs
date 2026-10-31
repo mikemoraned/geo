@@ -8,9 +8,9 @@ use domain::Span;
 use medallion::{MedallionArgs, Root};
 use medallion_model::{Area, Feed, Label, MotisSource};
 
-use crate::bronze::SegmentLog;
 use crate::capture::{Capture, Captured, Coverage, Unresolved};
 use crate::client::{DEFAULT_BASE_URL, MotisClient, MotisError};
+use crate::landing::SegmentLog;
 use crate::source::{SourceError, register};
 use crate::zoom::Zoom;
 

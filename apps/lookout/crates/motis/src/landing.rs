@@ -2,17 +2,21 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use medallion::Root;
-use medallion_model::{MotisCaptureRow, MotisSegmentRow, MotisSourceId, TripId};
+use medallion_model::{
+    MotisPollRowV1, MotisSegmentRow, MotisSourceId, NotAnEncodedPolyline, TripId,
+};
 
 use crate::client::TripDetails;
 use crate::segment::SingleTripSegment;
 
 #[derive(Debug, thiserror::Error)]
-pub enum BronzeError {
+pub enum SegmentLogError {
     #[error("partitioning the capture log: {0}")]
     Path(#[from] medallion::PathError),
     #[error("writing the capture log: {0}")]
     Write(#[from] medallion::AppendError),
+    #[error("building a poll's rows: {0}")]
+    Polyline(#[from] NotAnEncodedPolyline),
 }
 
 pub(crate) fn segment_row(
@@ -66,14 +70,17 @@ impl SegmentLog {
     fn partition(
         &self,
         captured_at: DateTime<Utc>,
-    ) -> Result<medallion::Dataset<medallion::layers::Bronze>, BronzeError> {
+    ) -> Result<medallion::Dataset<medallion::layers::Landing>, SegmentLogError> {
         Ok(self
             .root
-            .rows_of::<MotisCaptureRow>()
+            .rows_of::<MotisPollRowV1>()
             .on_date(captured_at.date_naive())?)
     }
 
-    pub fn poll_file(&self, captured_at: DateTime<Utc>) -> Result<std::path::PathBuf, BronzeError> {
+    pub fn poll_file(
+        &self,
+        captured_at: DateTime<Utc>,
+    ) -> Result<std::path::PathBuf, SegmentLogError> {
         Ok(self.partition(captured_at)?.batch_file(captured_at))
     }
 
@@ -82,16 +89,16 @@ impl SegmentLog {
         captured_at: DateTime<Utc>,
         segments: &[SingleTripSegment],
         details: &HashMap<TripId, TripDetails>,
-    ) -> Result<usize, BronzeError> {
-        let rows: Vec<MotisCaptureRow> = segments
+    ) -> Result<usize, SegmentLogError> {
+        let rows = segments
             .iter()
             .map(|segment| {
-                MotisCaptureRow::of(
+                MotisPollRowV1::of(
                     self.source_id.clone(),
                     segment_row(captured_at, segment, details),
                 )
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(self
             .partition(captured_at)?
@@ -143,9 +150,11 @@ mod tests {
 
         assert_eq!(written, fixture_segments().len());
         let path = log.poll_file(captured_at).expect("path");
-        assert!(path.ends_with(
-            "bronze/motis_segment_v2/polled_date=2026-07-26/20260726T140530000Z.parquet"
-        ));
+        assert!(
+            path.ends_with(
+                "landing/motis_poll_v1/polled_date=2026-07-26/20260726T140530000Z.parquet"
+            )
+        );
         assert_eq!(read_back(&path).num_rows(), fixture_segments().len());
     }
 
@@ -161,12 +170,14 @@ mod tests {
             .expect("append");
 
         let batch = read_back(&log.poll_file(captured_at).expect("path"));
-        let rows: Vec<MotisCaptureRow> = serde_arrow::from_record_batch(&batch).expect("read rows");
+        let rows: Vec<MotisPollRowV1> = serde_arrow::from_record_batch(&batch).expect("read rows");
         assert_eq!(
-            rows.iter().map(|r| &r.polyline).collect::<Vec<_>>(),
+            rows.iter()
+                .map(|r| r.polyline.to_string())
+                .collect::<Vec<_>>(),
             segments
                 .iter()
-                .map(|s| &s.segment().polyline)
+                .map(|s| s.segment().polyline.clone())
                 .collect::<Vec<_>>(),
             "the encoded polylines should survive unchanged"
         );
@@ -187,7 +198,7 @@ mod tests {
             .expect("append");
 
         let batch = read_back(&log.poll_file(captured_at).expect("path"));
-        let rows: Vec<MotisCaptureRow> = serde_arrow::from_record_batch(&batch).expect("read rows");
+        let rows: Vec<MotisPollRowV1> = serde_arrow::from_record_batch(&batch).expect("read rows");
         let id = source(Feed::Local).id();
         assert!(rows.iter().all(|row| row.source_id == id));
     }
@@ -211,6 +222,24 @@ mod tests {
             .expect("read dir")
             .count();
         assert_eq!(files, 2);
+    }
+
+    #[tokio::test]
+    async fn a_poll_holding_a_polyline_that_is_not_encoded_writes_nothing() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let log = log_under(tmp.path());
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
+        let mut segment = trips().remove(0);
+        segment.polyline = String::new();
+        let segments = [SingleTripSegment::new(segment).expect("a segment with one trip")];
+
+        let err = log
+            .append(captured_at, &segments, &HashMap::new())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, SegmentLogError::Polyline(_)), "{err}");
+        assert!(!log.poll_file(captured_at).expect("path").exists());
     }
 
     #[tokio::test]

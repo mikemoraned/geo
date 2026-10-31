@@ -823,8 +823,11 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 - [x] Add a landing dataset for the capture's polls, on `layers::Landing`, which no dataset uses
       yet. Give `medallion` a way to list its files and delete one once drained. Ignore
       `/landing/` in `data/medallion/.gitignore`.
-- [ ] Point `SegmentLog`, in `crates/motis/src/bronze.rs`, at the landing dataset, and rename the
-      `bronze-poll-*` recipes `landing-poll-*`.
+- [x] Point `SegmentLog`, in `crates/motis/src/bronze.rs`, at the landing dataset, and rename the
+      `bronze-poll-*` recipes `landing-poll-*`. The module is now `crates/motis/src/landing.rs`.
+      `common/mod.rs` reads `motis_poll_v1`, since the poll tests read what a capture wrote and
+      nothing drains there. Tests seeding `captures` write `motis_segment_v2` through a test-only
+      `CaptureLog`.
 - [ ] Add `motis_drain` to `crates/motis/src/bin/`, and a recipe `bronze-drain-motis`, draining
       landing into `motis_polyline_v1` and `motis_segment_v3`.
 - [ ] Read `motis_segment_v3` in `captures`, in `crates/motis/src/ingest.rs`, joining
@@ -846,9 +849,6 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       session ids changed. Then run `just gold-pack-sessions`.
 - [ ] Update the session ids held outside the store: in
       `crates/session_crossings/tests/passes.geojson`, and in any test or notebook that names one.
-- [ ] Point the shared test setup in `crates/motis/tests/common/mod.rs` at `motis_segment_v3`,
-      joining `motis_polyline_v1`. It is the other reader of `motis_segment_v2`. Register
-      `motis_segment_v3` there under its own name, in place of `captured`.
 - [ ] Delete `motis_segment_v2`'s files, `MOTIS_SEGMENT_V2`, its entry in
       `crates/medallion-model/src/bronze.rs`, and its reading in `captures`. Its rows live on in
       `motis_segment_v3`.

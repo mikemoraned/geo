@@ -1,13 +1,53 @@
 #![cfg(test)]
 
+use std::collections::HashMap;
+
+use chrono::{DateTime, Utc};
 use geo_types::Point;
-use medallion::{Countries, Country};
-use medallion_model::{Feed, MotisSource};
+use medallion::{AppendError, Countries, Country, Root};
+use medallion_model::{Feed, MotisCaptureRow, MotisSource, MotisSourceId, TripId};
 use url::Url;
 
 use crate::api::types::{Mode, TripSegment};
+use crate::client::TripDetails;
+use crate::landing::segment_row;
+use crate::segment::SingleTripSegment;
 
 pub(crate) const TRIPS: &str = include_str!("../tests/fixtures/trips.json");
+
+pub(crate) struct CaptureLog {
+    root: Root,
+    source_id: MotisSourceId,
+}
+
+impl CaptureLog {
+    pub(crate) fn new(root: Root, source_id: MotisSourceId) -> Self {
+        Self { root, source_id }
+    }
+
+    pub(crate) async fn append(
+        &self,
+        captured_at: DateTime<Utc>,
+        segments: &[SingleTripSegment],
+        details: &HashMap<TripId, TripDetails>,
+    ) -> Result<usize, AppendError> {
+        let rows: Vec<MotisCaptureRow> = segments
+            .iter()
+            .map(|segment| {
+                MotisCaptureRow::of(
+                    self.source_id.clone(),
+                    segment_row(captured_at, segment, details),
+                )
+            })
+            .collect();
+        self.root
+            .rows_of::<MotisCaptureRow>()
+            .on_date(captured_at.date_naive())
+            .expect("a date partition")
+            .append_rows(captured_at, &rows)
+            .await
+    }
+}
 
 pub(crate) struct Everywhere(Country);
 

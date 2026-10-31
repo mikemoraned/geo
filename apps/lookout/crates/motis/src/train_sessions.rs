@@ -267,8 +267,8 @@ mod tests {
     use serde::Deserialize;
 
     use crate::api::types::TripSegment;
-    use crate::bronze::SegmentLog;
     use crate::segment::SingleTripSegment;
+    use crate::testing::CaptureLog;
     use crate::testing::{self, Nowhere, germany, regional_trips};
 
     use super::*;
@@ -301,7 +301,7 @@ mod tests {
             .cloned()
             .map(|segment| SingleTripSegment::new(segment).expect("a segment with one trip"))
             .collect();
-        SegmentLog::new(root.clone(), source().id())
+        CaptureLog::new(root.clone(), source().id())
             .append(captured_at, &segments, &Map::new())
             .await
             .expect("append poll");

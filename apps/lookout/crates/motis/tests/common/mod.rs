@@ -85,7 +85,7 @@ pub struct CapturedSegment {
 pub async fn captured_segments(root: &medallion::Root) -> Vec<CapturedSegment> {
     let query = medallion::Query::new(root.clone());
     query
-        .register(medallion_model::MOTIS_SEGMENT_V2, "captured")
+        .register(medallion_model::MOTIS_POLL_V1, "captured")
         .await
         .expect("register capture log");
     query
