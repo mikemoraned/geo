@@ -5,6 +5,7 @@ use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use nutype::nutype;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumIter, EnumString};
+use uuid::Uuid;
 
 use crate::motis_source::{MotisSourceId, MotisSourceRowV4};
 
@@ -13,6 +14,12 @@ pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
 
 pub const MOTIS_SEGMENT_V2: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment_v2", "polled_date");
+
+pub const MOTIS_SEGMENT_V3: DatasetSpec<layers::Bronze> =
+    DatasetSpec::partitioned("motis_segment_v3", "polled_date");
+
+pub const MOTIS_POLYLINE_V1: DatasetSpec<layers::Bronze> =
+    DatasetSpec::unpartitioned("motis_polyline_v1");
 
 pub const TRAIN_SEGMENT_V4: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("train_segment_v4", "departure_date");
@@ -102,6 +109,36 @@ pub fn agency_id_present(id: &str) -> Result<(), EmptyAgencyId> {
 impl AgencyId {
     pub fn new(id: impl Into<String>) -> Result<Self, EmptyAgencyId> {
         Self::try_new(id)
+    }
+}
+
+#[nutype(
+    validate(with = polyline_id_is_a_uuid, error = NotAPolylineId),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
+pub struct PolylineId(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("a polyline id is a UUID")]
+pub struct NotAPolylineId;
+
+#[hashfn]
+pub fn polyline_id_is_a_uuid(id: &str) -> Result<(), NotAPolylineId> {
+    Uuid::parse_str(id).map(|_| ()).map_err(|_| NotAPolylineId)
+}
+
+impl PolylineId {
+    pub fn new(id: impl Into<String>) -> Result<Self, NotAPolylineId> {
+        Self::try_new(id)
+    }
+
+    pub fn of(polyline: &str) -> Self {
+        let namespace = Uuid::new_v5(&Uuid::nil(), b"MOTIS_POLYLINE_NAMESPACE");
+        Self::try_new(Uuid::new_v5(&namespace, polyline.as_bytes()).to_string())
+            .expect("a formatted UUID parses as a UUID")
     }
 }
 
@@ -269,6 +306,101 @@ impl Row for MotisCaptureRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MotisSegmentRowV3 {
+    pub source_id: MotisSourceId,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub captured_at: DateTime<Utc>,
+    pub trip_id: String,
+    pub route_name: Option<String>,
+    pub train_number: Option<TrainNumber>,
+    pub agency_id: Option<String>,
+    pub agency_name: Option<String>,
+    pub mode: String,
+    pub route_color: Option<String>,
+    pub from_stop_id: Option<String>,
+    pub from_lat: f64,
+    pub from_lon: f64,
+    pub to_stop_id: Option<String>,
+    pub to_lat: f64,
+    pub to_lon: f64,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub departure: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub arrival: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub scheduled_departure: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub scheduled_arrival: DateTime<Utc>,
+    pub realtime: bool,
+    pub polyline_id: PolylineId,
+}
+
+impl MotisSegmentRowV3 {
+    pub fn of(source_id: MotisSourceId, segment: MotisSegmentRow) -> Self {
+        Self {
+            source_id,
+            polyline_id: PolylineId::of(&segment.polyline),
+            captured_at: segment.captured_at,
+            trip_id: segment.trip_id,
+            route_name: segment.route_name,
+            train_number: segment.train_number,
+            agency_id: segment.agency_id,
+            agency_name: segment.agency_name,
+            mode: segment.mode,
+            route_color: segment.route_color,
+            from_stop_id: segment.from_stop_id,
+            from_lat: segment.from_lat,
+            from_lon: segment.from_lon,
+            to_stop_id: segment.to_stop_id,
+            to_lat: segment.to_lat,
+            to_lon: segment.to_lon,
+            departure: segment.departure,
+            arrival: segment.arrival,
+            scheduled_departure: segment.scheduled_departure,
+            scheduled_arrival: segment.scheduled_arrival,
+            realtime: segment.realtime,
+        }
+    }
+}
+
+impl Row for MotisSegmentRowV3 {
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = MOTIS_SEGMENT_V3;
+    const INSTANTS: &'static [&'static str] = MotisSegmentRow::INSTANTS;
+
+    fn example() -> Self {
+        Self::of(
+            MotisSourceRowV4::example().source_id,
+            MotisSegmentRow::example(),
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MotisPolylineRowV1 {
+    pub polyline_id: PolylineId,
+    pub polyline: String,
+}
+
+impl MotisPolylineRowV1 {
+    pub fn of(polyline: String) -> Self {
+        Self {
+            polyline_id: PolylineId::of(&polyline),
+            polyline,
+        }
+    }
+}
+
+impl Row for MotisPolylineRowV1 {
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = MOTIS_POLYLINE_V1;
+
+    fn example() -> Self {
+        Self::of(MotisSegmentRow::example().polyline)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TrainSegmentRowV4 {
     pub source_id: MotisSourceId,
     pub trip_id: TripId,
@@ -322,6 +454,56 @@ mod tests {
 
     use super::*;
     use crate::testing::{column, column_names};
+
+    #[test]
+    fn a_polyline_id_is_derived_from_the_polylines_text() {
+        let polyline = "_p~iF~ps|U_ulLnnqC_mqNvxq`@";
+
+        assert_eq!(
+            PolylineId::of(polyline).to_string(),
+            "934b0d5d-609c-5e6f-b6ee-0b3ad2b4cd82"
+        );
+        assert_ne!(PolylineId::of(polyline), PolylineId::of("other"));
+    }
+
+    #[test]
+    fn a_polyline_id_that_is_not_a_uuid_is_refused() {
+        assert_eq!(PolylineId::new("not a uuid"), Err(NotAPolylineId));
+    }
+
+    #[test]
+    fn a_segment_names_the_polyline_row_holding_its_text() {
+        let segment = MotisSegmentRow::example();
+        let polyline = MotisPolylineRowV1::of(segment.polyline.clone());
+
+        let row = MotisSegmentRowV3::of(MotisSourceRowV4::example().source_id, segment);
+
+        assert_eq!(row.polyline_id, polyline.polyline_id);
+    }
+
+    #[test]
+    fn a_segment_holds_a_captures_columns_with_a_polyline_id_for_its_polyline() {
+        fn names<T: Row>() -> Vec<String> {
+            medallion::fields::<T>()
+                .expect("describe the rows")
+                .iter()
+                .map(|field| field.name().clone())
+                .collect()
+        }
+
+        let expected: Vec<String> = names::<MotisCaptureRow>()
+            .into_iter()
+            .map(|name| {
+                if name == "polyline" {
+                    "polyline_id".to_string()
+                } else {
+                    name
+                }
+            })
+            .collect();
+
+        assert_eq!(names::<MotisSegmentRowV3>(), expected);
+    }
 
     proptest! {
         #[test]

@@ -275,10 +275,11 @@ do not read as part of it.
 A reader at an earlier commit needs no support from a later version. That commit holds its own
 bronze, and its own code can rederive the silver it reads.
 
-Each version after the first carries its number as a suffix of the dataset's name, as in
-`_v2`. Readers register a dataset under its name, suffix included, and query it by that name. A
-reader written against one version reads only that version, and moving it to the next takes an
-edit to its queries. Under an alias without the suffix, a reader moves to the next version
+Every version carries its number as a suffix of the dataset's name, from the first version on, as
+in `_v1` and `_v2`. A first version that predates this rule has no suffix, as `raw_sample` does,
+since a new name would make a new version. Readers register a dataset under its name, suffix
+included, and query it by that name. A reader written against one version reads only that version,
+and moving it to the next takes an edit to its queries. Under an alias without the suffix, a reader moves to the next version
 unedited, and fails once a query reaches a dropped column.
 
 ## Rederivability

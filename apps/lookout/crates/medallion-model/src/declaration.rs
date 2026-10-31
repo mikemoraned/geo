@@ -8,11 +8,11 @@ use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, Trace
 
 use crate::{
     ALL, AccelReadingRowV2, DeviceSessionRowV2, ExtractManifestRowV3, Feed, GeometrySource, GersId,
-    GpsReadingRowV2, Label, MotisBaseUrl, MotisCaptureRow, MotisSegmentRow, MotisSourceId,
-    MotisSourceRowV3, MotisSourceRowV4, MotisVersion, OVERTURE_EXTRACT, OverlapKind,
-    OvertureRelease, RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3,
-    SessionSampleRowV3, TrainSegmentRowV4, TrainSessionRowV2, TrainSessionSampleRowV2,
-    WaterCrossingRowV2,
+    GpsReadingRowV2, Label, MotisBaseUrl, MotisCaptureRow, MotisPolylineRowV1, MotisSegmentRow,
+    MotisSegmentRowV3, MotisSourceId, MotisSourceRowV3, MotisSourceRowV4, MotisVersion,
+    OVERTURE_EXTRACT, OverlapKind, OvertureRelease, RailMode, RawSampleRow, SessionCrossingRowV3,
+    SessionRowV3, SessionSampleRowV3, TrainSegmentRowV4, TrainSessionRowV2,
+    TrainSessionSampleRowV2, WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -250,6 +250,13 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
             Checks::from([("OvertureRelease::new", OvertureRelease::NEW_HASH)]),
         ),
         (
+            "PolylineId",
+            Checks::from([(
+                "polyline_id_is_a_uuid",
+                crate::motis::POLYLINE_ID_IS_A_UUID_HASH,
+            )]),
+        ),
+        (
             "SessionId",
             Checks::from([("SessionId::new", SessionId::NEW_HASH), name]),
         ),
@@ -281,6 +288,8 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<DeviceSessionRowV2>(&known),
         declaration::<MotisSegmentRow>(&known),
         declaration::<MotisCaptureRow>(&known),
+        declaration::<MotisSegmentRowV3>(&known),
+        declaration::<MotisPolylineRowV1>(&known),
         declaration::<MotisSourceRowV3>(&known),
         declaration::<MotisSourceRowV4>(&known),
         declaration::<TrainSegmentRowV4>(&known),

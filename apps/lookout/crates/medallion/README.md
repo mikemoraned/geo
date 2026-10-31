@@ -51,7 +51,8 @@ example, with `enum Colour { Red, Green, Blue }`:
 
 ### Adding a dataset
 
-1. Define the dataset as a `DatasetSpec` constant, naming it and any partition key.
+1. Define the dataset as a `DatasetSpec` constant, with a name ending in `_v1` and any partition
+   key.
 2. Define its row type beside it, with one field per column, deriving `Serialize` and `Deserialize`.
 3. Implement `Row` for the row type, setting `DATASET` to the dataset.
 4. Set `GEOMETRY` for rows written with a geometry, `INSTANTS` for fields holding instants, and

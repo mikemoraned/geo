@@ -123,12 +123,12 @@ The measurements behind the Compact capture decisions are in
   `docs/medallion.md` already describes landing as the capture log a polling process appends to,
   drained into bronze. Confirmed 2026-10-23.
 - **A drain writes the polylines bronze lacks, then the polls.** It appends the polylines
-  `motis_polyline` lacks as one new file, each keyed by a UUID v5 of its text, as a source's id is.
-  It then writes the polls to `motis_segment_v3`, one zstd file per `polled_date`, each row carrying
-  a polyline id in place of its polyline. Rows sort by stop pair, polyline id, trip, and capture
-  time. Draining every 10–24 hours, a day then takes 5.4–7 MB in git, against 58–70 MB as poll
-  files. Appending every polyline a drain sees, rather than the missing ones, adds at least 7 MB a
-  day. Confirmed 2026-10-23.
+  `motis_polyline_v1` lacks as one new file, each keyed by a UUID v5 of its text, as a source's id
+  is. It then writes the polls to `motis_segment_v3`, one zstd file per `polled_date`, each row
+  carrying a polyline id in place of its polyline. Rows sort by stop pair, polyline id, trip, and
+  capture time. Draining every 10–24 hours, a day then takes 5.4–7 MB in git, against 58–70 MB as
+  poll files. Appending every polyline a drain sees, rather than the missing ones, adds at least 7
+  MB a day. Confirmed 2026-10-23.
 - **A drain is safe to re-run.** It writes polylines before polls, reads both back, and only then
   deletes the landing files. A re-run skips any poll whose source and capture instant bronze
   already holds. A crash then leaves at worst an unused polyline, never a lost or doubled poll.
@@ -139,8 +139,8 @@ The measurements behind the Compact capture decisions are in
 - **The running capture finishes as it started.** The poller keeps writing `motis_segment_v2` until
   about 25 October, committed and pushed as now, as a backup the rewrite later drops. Stopping it
   mid-capture risks a gap. Confirmed 2026-10-23.
-- **A one-off binary migrates `motis_segment_v2` into `motis_segment_v3` and `motis_polyline`.** It
-  is committed with the data it writes, then removed, as earlier migrations were. The drain then
+- **A one-off binary migrates `motis_segment_v2` into `motis_segment_v3` and `motis_polyline_v1`.**
+  It is committed with the data it writes, then removed, as earlier migrations were. The drain then
   handles landing alone, rather than reading `motis_segment_v2` as it reads landing. Once nothing
   reads `motis_segment_v2`, its files and code support go. Confirmed 2026-10-23.
 - **This branch drops its poll files from history before it merges.** A merge keeps a branch's
@@ -811,23 +811,26 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       new source id from its row's fields. Refuse a row whose old id differs from those fields
       under the old namespace. Read and write through medallion's `Query` and writers. Commit the
       binary with the data it writes, and remove it in a later commit.
-- [ ] Add bronze `motis_polyline` and `motis_segment_v3` to `crates/medallion-model`, with a
+- [x] Add bronze `motis_polyline_v1` and `motis_segment_v3` to `crates/medallion-model`, with a
       `PolylineId` newtype holding the UUID v5 of a polyline's text. If serde_arrow traces a
       flattened row, compose the new row from shared parts with `#[serde(flatten)]`. That avoids
       restating every field, as `MotisCaptureRow` restates `MotisSegmentRow`'s.
+      serde_arrow traces a flattened row, but the declaration test cannot. serde-reflection sees a
+      flattened row as a map, and refuses a map whose values differ in type. `MotisSegmentRowV3`
+      therefore restates the fields.
 - [ ] Add a landing dataset for the capture's polls, on `layers::Landing`, which no dataset uses
       yet. Give `medallion` a way to list its files and delete one once drained. Ignore
       `/landing/` in `data/medallion/.gitignore`.
 - [ ] Point `SegmentLog`, in `crates/motis/src/bronze.rs`, at the landing dataset, and rename the
       `bronze-poll-*` recipes `landing-poll-*`.
 - [ ] Add `motis_drain` to `crates/motis/src/bin/`, and a recipe `bronze-drain-motis`, draining
-      landing into `motis_polyline` and `motis_segment_v3`.
+      landing into `motis_polyline_v1` and `motis_segment_v3`.
 - [ ] Read `motis_segment_v3` in `captures`, in `crates/motis/src/ingest.rs`, joining
-      `motis_polyline` after picking each leg's newest capture.
-- [ ] Migrate `motis_segment_v2` into `motis_segment_v3` and `motis_polyline` with a one-off binary,
-      writing through the drain's code. Give each segment its source's id in `motis_source_v4`, and
-      refuse a segment whose source is missing from `motis_source_v3`. Commit the binary with the
-      data it writes, and remove it in a later commit.
+      `motis_polyline_v1` after picking each leg's newest capture.
+- [ ] Migrate `motis_segment_v2` into `motis_segment_v3` and `motis_polyline_v1` with a one-off
+      binary, writing through the drain's code. Give each segment its source's id in
+      `motis_source_v4`, and refuse a segment whose source is missing from `motis_source_v3`. Commit
+      the binary with the data it writes, and remove it in a later commit.
 - [ ] Check both migrations are lossless. `motis_source_v4` and `motis_segment_v3` must hold every
       observation in the datasets they replace, with only the source id changed. Each old source id
       must map to exactly one new one. Record the row counts under Observations.
@@ -842,17 +845,17 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 - [ ] Update the session ids held outside the store: in
       `crates/session_crossings/tests/passes.geojson`, and in any test or notebook that names one.
 - [ ] Point the shared test setup in `crates/motis/tests/common/mod.rs` at `motis_segment_v3`,
-      joining `motis_polyline`. It is the other reader of `motis_segment_v2`. Register
+      joining `motis_polyline_v1`. It is the other reader of `motis_segment_v2`. Register
       `motis_segment_v3` there under its own name, in place of `captured`.
 - [ ] Delete `motis_segment_v2`'s files, `MOTIS_SEGMENT_V2`, its entry in
       `crates/medallion-model/src/bronze.rs`, and its reading in `captures`. Its rows live on in
       `motis_segment_v3`.
 - [ ] Once the user has inspected the migrations, delete the files and declarations of
       `motis_source_v3` and of the silver versions the new ones replace.
-- [ ] Describe landing, the drain, `motis_polyline`, and `motis_segment_v3` in `docs/medallion.md`
-      and `docs/motis.md`, in place of `motis_segment_v2`, and name the other new versions there. A
-      third-party service's samples take one bronze file per drain. Then fold what holds of
-      `2026-10-23-compact-bronze.md` into them, and delete it.
+- [ ] Describe landing, the drain, `motis_polyline_v1`, and `motis_segment_v3` in
+      `docs/medallion.md` and `docs/motis.md`, in place of `motis_segment_v2`, and name the other
+      new versions there. A third-party service's samples take one bronze file per drain. Then fold
+      what holds of `2026-10-23-compact-bronze.md` into them, and delete it.
 - [ ] Rewrite this branch's commits since it left `main` without the `motis_segment_v2` files,
       using `git filter-repo` in a fresh clone. Before opening the PR, force-push the result.
 
@@ -903,8 +906,8 @@ After Refactoring, once the slice works end to end.
       again is copied.
 - [ ] Let `captures` skip what `derive_train_sessions` discards: both count queries and the final
       `ORDER BY departure`. The session phase reruns the whole capture read today, sorting every
-      row's polyline text, 1.33 GB of it. The planned `motis_polyline` table takes the text out of
-      both sorts.
+      row's polyline text, 1.33 GB of it. The planned `motis_polyline_v1` table takes the text out
+      of both sorts.
 - [ ] When `motis_track_area` captures a whole country, test each leg once, with `covers`, against
       one prepared outline. Share the coverage, rather than cloning it each poll. It now passes the
       same shapes as area and as country, so it unions and prepares them twice and tests each leg
