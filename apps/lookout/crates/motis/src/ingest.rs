@@ -5,7 +5,7 @@ use domain::TrainNumber;
 use geo_types::{Coord, LineString, Point};
 use medallion::{Countries, DatasetSpec, GeoRow, Query, Root, layers};
 use medallion_model::{
-    AgencyId, MOTIS_POLYLINE_V1, MOTIS_SEGMENT, MOTIS_SEGMENT_V3, MotisSourceId, PolylineId,
+    AgencyId, MOTIS_POLYLINE_V2, MOTIS_SEGMENT, MOTIS_SEGMENT_V3, MotisSourceId, PolylineId,
     RailMode, StopId, TrainSegmentRowV4, TripId,
 };
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ const LEG_COLUMNS: &str = "trip_id, route_name, train_number, agency_id, agency_
 const POLYLINE_IN_THE_ROW: &str = "";
 
 const POLYLINE_BY_ID: &str =
-    "JOIN (SELECT DISTINCT polyline_id, polyline FROM motis_polyline_v1) USING (polyline_id)";
+    "JOIN (SELECT DISTINCT polyline_id, polyline FROM motis_polyline_v2) USING (polyline_id)";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct IngestOutcome {
@@ -197,7 +197,7 @@ async fn captured_apart_from_polylines(
         return Ok(None);
     }
     query
-        .register(MOTIS_POLYLINE_V1, MOTIS_POLYLINE_V1.name)
+        .register(MOTIS_POLYLINE_V2, MOTIS_POLYLINE_V2.name)
         .await?;
     let captured = captured(
         query,
@@ -210,7 +210,7 @@ async fn captured_apart_from_polylines(
     let lacking: Vec<Lacking> = query
         .rows(
             "SELECT polyline_id FROM motis_segment_v3
-             EXCEPT SELECT polyline_id FROM motis_polyline_v1
+             EXCEPT SELECT polyline_id FROM motis_polyline_v2
              LIMIT 1",
         )
         .await?;
@@ -321,7 +321,7 @@ mod tests {
     use arrow::array::RecordBatch;
     use chrono::TimeZone;
     use medallion::{GEOMETRY, PROJECTED_GEOMETRY, Row};
-    use medallion_model::{Feed, MotisPolylineRowV1, MotisSegmentRow, MotisSegmentRowV3, Polyline};
+    use medallion_model::{Feed, MotisPolylineRowV2, MotisSegmentRow, MotisSegmentRowV3, Polyline};
 
     use super::*;
     use crate::landing::SegmentLog;
@@ -446,13 +446,13 @@ mod tests {
         let root = Root::new(tmp.path());
         let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
         promote_polls(&root, &[captured_at], regional_trips()).await;
-        let repeated: Vec<MotisPolylineRowV1> = regional_trips()
+        let repeated: Vec<MotisPolylineRowV2> = regional_trips()
             .into_iter()
             .map(|segment| {
-                MotisPolylineRowV1::of(Polyline::new(segment.polyline).expect("a polyline"))
+                MotisPolylineRowV2::of(Polyline::new(segment.polyline).expect("a polyline"))
             })
             .collect();
-        root.rows_of::<MotisPolylineRowV1>()
+        root.rows_of::<MotisPolylineRowV2>()
             .append_rows(captured_at, &repeated)
             .await
             .expect("write the polylines again");
@@ -478,10 +478,10 @@ mod tests {
             .append_rows(segment.captured_at, std::slice::from_ref(&segment))
             .await
             .expect("write a segment");
-        root.rows_of::<MotisPolylineRowV1>()
+        root.rows_of::<MotisPolylineRowV2>()
             .append_rows(
                 segment.captured_at,
-                &[MotisPolylineRowV1::of(Polyline::new("other").unwrap())],
+                &[MotisPolylineRowV2::of(Polyline::new("_seK_ibE").unwrap())],
             )
             .await
             .expect("write another polyline");
@@ -586,7 +586,7 @@ mod tests {
         let root = Root::new(tmp.path());
         let expected = polyline::decode_polyline(
             &regional_trips()[0].polyline,
-            crate::segment::POLYLINE_PRECISION,
+            medallion_model::POLYLINE_PRECISION,
         )
         .expect("decode")
         .0
@@ -607,7 +607,7 @@ mod tests {
         let mut segment = regional_trips().remove(0);
         segment.polyline = polyline::encode_coordinates(
             points.iter().map(|&(x, y)| geo_types::Coord { x, y }),
-            crate::segment::POLYLINE_PRECISION,
+            medallion_model::POLYLINE_PRECISION,
         )
         .expect("encode");
         segment
@@ -705,7 +705,7 @@ mod tests {
     async fn a_leg_with_a_shape_keeps_it_uncorrected() {
         let segment = regional_trips().remove(0);
         let captured: Vec<(f64, f64)> =
-            polyline::decode_polyline(&segment.polyline, crate::segment::POLYLINE_PRECISION)
+            polyline::decode_polyline(&segment.polyline, medallion_model::POLYLINE_PRECISION)
                 .expect("decode")
                 .coords()
                 .map(|c| (c.x, c.y))

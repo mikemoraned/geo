@@ -856,20 +856,28 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 - [x] Delete `motis_segment_v2`'s files, `MOTIS_SEGMENT_V2`, its entry in
       `crates/medallion-model/src/bronze.rs`, and its reading in `captures`. Its rows live on in
       `motis_segment_v3`.
-- [ ] Tell a leg with no polyline from a leg with an invalid polyline, in `sorted`, in
+- [x] Tell a leg with no polyline from a leg with an invalid polyline, in `categorise`, in
       `crates/motis/src/capture.rs`, and give each case its own count and log line.
-      - No polyline: Motis sends empty text. Decide whether to keep such a leg. `sorted` decodes it
-        to an empty line and counts it as outside the coverage, so it lands nowhere today. If the
+      - No polyline: Motis sends empty text. Decide whether to keep such a leg. `categorise` decodes
+        it to an empty line and counts it as outside the coverage, so it lands nowhere today. If the
         leg stays, `motis_poll_v1` and `motis_polyline_v1` must hold it, since `Polyline` refuses
         empty text.
       - Invalid polyline: text the decoder refuses, or with a character outside ASCII 63–126. Ignore
-        that leg's row, and land the poll's other rows. `sorted` does this today for a leg the
+        that leg's row, and land the poll's other rows. `categorise` does this today for a leg the
         decoder refuses, but counts it with the other unresolved legs. A character above 126 can
         pass the decoder, and `SegmentLog::append` then fails the capture and loses the poll's other
         rows.
+
+      Decided on 2026-10-31: a leg with no polyline stays out of landing. The coverage test needs
+      its line, and no capture has held such a leg. `SegmentLog::append` still refuses an invalid
+      polyline, for a caller other than `capture`.
+      Extended on 2026-10-31: building a `Polyline` now decodes it as well as checking its
+      characters, so `TripSegment::line` needs no check of its own. That changes the declarations of
+      `motis_poll_v1` and `motis_polyline_v1`, which become `motis_poll_v2` and `motis_polyline_v2`.
+      `motis_ingest` had already decoded every polyline the store holds.
 - [ ] Once the user has inspected the migrations, delete the files and declarations of
       `motis_source_v3` and of the silver versions the new ones replace.
-- [ ] Describe landing, the drain, `motis_polyline_v1`, and `motis_segment_v3` in
+- [ ] Describe landing, the drain, `motis_polyline_v2`, and `motis_segment_v3` in
       `docs/medallion.md` and `docs/motis.md`, in place of `motis_segment_v2`, and name the other
       new versions there. A third-party service's samples take one bronze file per drain. Then fold
       what holds of `2026-10-23-compact-bronze.md` into them, and delete it.

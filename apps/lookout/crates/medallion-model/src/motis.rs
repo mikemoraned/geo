@@ -1,5 +1,6 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use domain::TrainNumber;
+use geo_types::LineString;
 use hashfn::hashfn;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use nutype::nutype;
@@ -9,8 +10,10 @@ use uuid::Uuid;
 
 use crate::motis_source::{MotisSourceId, MotisSourceRowV4};
 
-pub const MOTIS_POLL_V1: DatasetSpec<layers::Landing> =
-    DatasetSpec::partitioned("motis_poll_v1", "polled_date");
+pub const POLYLINE_PRECISION: u32 = 5;
+
+pub const MOTIS_POLL_V2: DatasetSpec<layers::Landing> =
+    DatasetSpec::partitioned("motis_poll_v2", "polled_date");
 
 pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment", "polled_date");
@@ -18,8 +21,8 @@ pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
 pub const MOTIS_SEGMENT_V3: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment_v3", "polled_date");
 
-pub const MOTIS_POLYLINE_V1: DatasetSpec<layers::Bronze> =
-    DatasetSpec::unpartitioned("motis_polyline_v1");
+pub const MOTIS_POLYLINE_V2: DatasetSpec<layers::Bronze> =
+    DatasetSpec::unpartitioned("motis_polyline_v2");
 
 pub const TRAIN_SEGMENT_V4: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("train_segment_v4", "departure_date");
@@ -113,7 +116,7 @@ impl AgencyId {
 }
 
 #[nutype(
-    validate(with = polyline_has_valid_character_range, error = NotAnEncodedPolyline),
+    validate(with = polyline_is_valid, error = NotAnEncodedPolyline),
     derive(
         Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
         Serialize, Deserialize
@@ -122,12 +125,15 @@ impl AgencyId {
 pub struct Polyline(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("an encoded polyline is non-empty text of ASCII characters 63 to 126")]
+#[error("an encoded polyline is non-empty text of ASCII characters 63 to 126 that decodes")]
 pub struct NotAnEncodedPolyline;
 
 #[hashfn]
-pub fn polyline_has_valid_character_range(text: &str) -> Result<(), NotAnEncodedPolyline> {
-    if !text.is_empty() && text.bytes().all(|byte| (63..=126).contains(&byte)) {
+pub fn polyline_is_valid(text: &str) -> Result<(), NotAnEncodedPolyline> {
+    if !text.is_empty()
+        && text.bytes().all(|byte| (63..=126).contains(&byte))
+        && polyline::decode_polyline(text, POLYLINE_PRECISION).is_ok()
+    {
         Ok(())
     } else {
         Err(NotAnEncodedPolyline)
@@ -137,6 +143,11 @@ pub fn polyline_has_valid_character_range(text: &str) -> Result<(), NotAnEncoded
 impl Polyline {
     pub fn new(text: impl Into<String>) -> Result<Self, NotAnEncodedPolyline> {
         Self::try_new(text)
+    }
+
+    pub fn line(&self) -> LineString<f64> {
+        let text: &str = self.as_ref();
+        polyline::decode_polyline(text, POLYLINE_PRECISION).expect("a polyline decodes")
     }
 }
 
@@ -258,7 +269,7 @@ impl Row for MotisSegmentRow {
             scheduled_departure: DateTime::UNIX_EPOCH,
             scheduled_arrival: DateTime::UNIX_EPOCH,
             realtime: false,
-            polyline: "example".to_string(),
+            polyline: "_ibE_seK".to_string(),
         }
     }
 }
@@ -294,7 +305,7 @@ pub struct MotisSegmentRowV3 {
 }
 
 impl MotisSegmentRowV3 {
-    pub fn of(poll: MotisPollRowV1) -> Self {
+    pub fn of(poll: MotisPollRowV2) -> Self {
         Self {
             polyline_id: PolylineId::of(&poll.polyline),
             source_id: poll.source_id,
@@ -327,12 +338,12 @@ impl Row for MotisSegmentRowV3 {
     const INSTANTS: &'static [&'static str] = MotisSegmentRow::INSTANTS;
 
     fn example() -> Self {
-        Self::of(MotisPollRowV1::example())
+        Self::of(MotisPollRowV2::example())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MotisPollRowV1 {
+pub struct MotisPollRowV2 {
     pub source_id: MotisSourceId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub captured_at: DateTime<Utc>,
@@ -361,7 +372,7 @@ pub struct MotisPollRowV1 {
     pub polyline: Polyline,
 }
 
-impl MotisPollRowV1 {
+impl MotisPollRowV2 {
     pub fn of(
         source_id: MotisSourceId,
         segment: MotisSegmentRow,
@@ -392,9 +403,9 @@ impl MotisPollRowV1 {
     }
 }
 
-impl Row for MotisPollRowV1 {
+impl Row for MotisPollRowV2 {
     type Layer = layers::Landing;
-    const DATASET: DatasetSpec<Self::Layer> = MOTIS_POLL_V1;
+    const DATASET: DatasetSpec<Self::Layer> = MOTIS_POLL_V2;
     const INSTANTS: &'static [&'static str] = MotisSegmentRow::INSTANTS;
 
     fn example() -> Self {
@@ -402,17 +413,17 @@ impl Row for MotisPollRowV1 {
             MotisSourceRowV4::example().source_id,
             MotisSegmentRow::example(),
         )
-        .expect("the example polyline has valid characters")
+        .expect("the example polyline is valid")
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MotisPolylineRowV1 {
+pub struct MotisPolylineRowV2 {
     pub polyline_id: PolylineId,
     pub polyline: Polyline,
 }
 
-impl MotisPolylineRowV1 {
+impl MotisPolylineRowV2 {
     pub fn of(polyline: Polyline) -> Self {
         Self {
             polyline_id: PolylineId::of(&polyline),
@@ -421,14 +432,14 @@ impl MotisPolylineRowV1 {
     }
 }
 
-impl Row for MotisPolylineRowV1 {
+impl Row for MotisPolylineRowV2 {
     type Layer = layers::Bronze;
-    const DATASET: DatasetSpec<Self::Layer> = MOTIS_POLYLINE_V1;
+    const DATASET: DatasetSpec<Self::Layer> = MOTIS_POLYLINE_V2;
 
     fn example() -> Self {
         Self::of(
             Polyline::new(MotisSegmentRow::example().polyline)
-                .expect("the example polyline has valid characters"),
+                .expect("the example polyline is valid"),
         )
     }
 }
@@ -491,7 +502,7 @@ mod tests {
     #[test]
     fn a_polyline_id_is_derived_from_the_polylines_text() {
         let polyline = Polyline::new("_p~iF~ps|U_ulLnnqC_mqNvxq`@").unwrap();
-        let other = Polyline::new("other").unwrap();
+        let other = Polyline::new("_seK_ibE").unwrap();
 
         assert_eq!(
             PolylineId::of(&polyline).to_string(),
@@ -509,8 +520,25 @@ mod tests {
     }
 
     #[test]
+    fn a_polyline_that_does_not_decode_is_refused() {
+        assert_eq!(Polyline::new("other"), Err(NotAnEncodedPolyline));
+    }
+
+    #[test]
+    fn a_polyline_with_a_character_the_decoder_lets_through_is_refused() {
+        assert_eq!(Polyline::new("\u{7f}??"), Err(NotAnEncodedPolyline));
+    }
+
+    #[test]
+    fn a_polyline_gives_the_line_it_encodes() {
+        let line = Polyline::new("_ibE_seK").unwrap().line();
+
+        assert_eq!(line, LineString::from(vec![(2.0, 1.0)]));
+    }
+
+    #[test]
     fn a_polyline_id_is_refused_as_a_polyline() {
-        let id = PolylineId::of(&Polyline::new("other").unwrap());
+        let id = PolylineId::of(&Polyline::new("_seK_ibE").unwrap());
 
         assert_eq!(Polyline::new(id.to_string()), Err(NotAnEncodedPolyline));
     }
@@ -522,8 +550,8 @@ mod tests {
 
     #[test]
     fn a_segment_names_the_polyline_row_holding_its_text() {
-        let poll = MotisPollRowV1::example();
-        let polyline = MotisPolylineRowV1::of(poll.polyline.clone());
+        let poll = MotisPollRowV2::example();
+        let polyline = MotisPolylineRowV2::of(poll.polyline.clone());
 
         let row = MotisSegmentRowV3::of(poll);
 
@@ -543,14 +571,14 @@ mod tests {
         let mut segment = MotisSegmentRow::example();
         segment.polyline = String::new();
 
-        let err = MotisPollRowV1::of(MotisSourceRowV4::example().source_id, segment);
+        let err = MotisPollRowV2::of(MotisSourceRowV4::example().source_id, segment);
 
         assert_eq!(err, Err(NotAnEncodedPolyline));
     }
 
     #[test]
     fn a_segment_holds_a_polls_columns_with_a_polyline_id_for_its_polyline() {
-        let expected: Vec<String> = names::<MotisPollRowV1>()
+        let expected: Vec<String> = names::<MotisPollRowV2>()
             .into_iter()
             .map(|name| {
                 if name == "polyline" {
@@ -641,7 +669,7 @@ mod tests {
     #[test]
     fn a_poll_carries_every_segment_column_and_its_source() {
         let segment = column_names::<MotisSegmentRow>();
-        let poll = column_names::<MotisPollRowV1>();
+        let poll = column_names::<MotisPollRowV2>();
 
         assert!(poll.contains("source_id"), "{poll:?}");
         for name in &segment {

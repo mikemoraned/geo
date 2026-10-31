@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use chrono::{DateTime, NaiveDate, Utc};
 use medallion::{AppendError, LandingError, PathError, Query, QueryError, Root};
 use medallion_model::{
-    MOTIS_POLL_V1, MOTIS_POLYLINE_V1, MOTIS_SEGMENT_V3, MotisPollRowV1, MotisPolylineRowV1,
+    MOTIS_POLL_V2, MOTIS_POLYLINE_V2, MOTIS_SEGMENT_V3, MotisPollRowV2, MotisPolylineRowV2,
     MotisSegmentRowV3, MotisSourceId, PolylineId,
 };
 use serde::Deserialize;
@@ -46,12 +46,12 @@ pub(crate) struct PollsWritten {
 
 type Poll = (MotisSourceId, DateTime<Utc>);
 
-fn poll_of(row: &MotisPollRowV1) -> Poll {
+fn poll_of(row: &MotisPollRowV2) -> Poll {
     (row.source_id.clone(), row.captured_at)
 }
 
 pub async fn promote(root: &Root, at: DateTime<Utc>) -> Result<Promoted, PromotionError> {
-    let files = root.rows_of::<MotisPollRowV1>().landed_files()?;
+    let files = root.rows_of::<MotisPollRowV2>().landed_files()?;
     if files.is_empty() {
         return Ok(Promoted::default());
     }
@@ -73,7 +73,7 @@ pub async fn promote(root: &Root, at: DateTime<Utc>) -> Result<Promoted, Promoti
 pub(crate) async fn write_polls(
     root: &Root,
     at: DateTime<Utc>,
-    polls: &[MotisPollRowV1],
+    polls: &[MotisPollRowV2],
 ) -> Result<PollsWritten, PromotionError> {
     let polylines = append_polylines(root, at, polls).await?;
     let segments = append_segments(root, at, polls).await?;
@@ -84,11 +84,11 @@ pub(crate) async fn write_polls(
     })
 }
 
-async fn landed_rows(root: &Root) -> Result<Vec<MotisPollRowV1>, QueryError> {
+async fn landed_rows(root: &Root) -> Result<Vec<MotisPollRowV2>, QueryError> {
     let query = Query::new(root.clone());
-    query.register_by_name(MOTIS_POLL_V1).await?;
+    query.register_by_name(MOTIS_POLL_V2).await?;
     query
-        .rows(&format!("SELECT * FROM {}", MOTIS_POLL_V1.name))
+        .rows(&format!("SELECT * FROM {}", MOTIS_POLL_V2.name))
         .await
 }
 
@@ -134,7 +134,7 @@ async fn polylines_held(root: &Root) -> Result<BTreeSet<PolylineId>, QueryError>
 
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(MOTIS_POLYLINE_V1, MOTIS_POLYLINE_V1.name)
+        .register_if_present(MOTIS_POLYLINE_V2, MOTIS_POLYLINE_V2.name)
         .await?
     {
         return Ok(BTreeSet::new());
@@ -142,7 +142,7 @@ async fn polylines_held(root: &Root) -> Result<BTreeSet<PolylineId>, QueryError>
     let held: Vec<Held> = query
         .rows(&format!(
             "SELECT polyline_id FROM {}",
-            MOTIS_POLYLINE_V1.name
+            MOTIS_POLYLINE_V2.name
         ))
         .await?;
     Ok(held.into_iter().map(|held| held.polyline_id).collect())
@@ -151,18 +151,18 @@ async fn polylines_held(root: &Root) -> Result<BTreeSet<PolylineId>, QueryError>
 async fn append_polylines(
     root: &Root,
     at: DateTime<Utc>,
-    landed: &[MotisPollRowV1],
+    landed: &[MotisPollRowV2],
 ) -> Result<usize, PromotionError> {
     let held = polylines_held(root).await?;
-    let lacking: BTreeMap<PolylineId, MotisPolylineRowV1> = landed
+    let lacking: BTreeMap<PolylineId, MotisPolylineRowV2> = landed
         .iter()
-        .map(|row| MotisPolylineRowV1::of(row.polyline.clone()))
+        .map(|row| MotisPolylineRowV2::of(row.polyline.clone()))
         .filter(|row| !held.contains(&row.polyline_id))
         .map(|row| (row.polyline_id.clone(), row))
         .collect();
-    let rows: Vec<MotisPolylineRowV1> = lacking.into_values().collect();
+    let rows: Vec<MotisPolylineRowV2> = lacking.into_values().collect();
     Ok(root
-        .rows_of::<MotisPolylineRowV1>()
+        .rows_of::<MotisPolylineRowV2>()
         .append_rows(at, &rows)
         .await?)
 }
@@ -170,7 +170,7 @@ async fn append_polylines(
 async fn append_segments(
     root: &Root,
     at: DateTime<Utc>,
-    landed: &[MotisPollRowV1],
+    landed: &[MotisPollRowV2],
 ) -> Result<usize, PromotionError> {
     let mut by_date: BTreeMap<NaiveDate, Vec<MotisSegmentRowV3>> = BTreeMap::new();
     for row in landed {
@@ -210,7 +210,7 @@ fn storage_order(
     )
 }
 
-async fn check_bronze_holds(root: &Root, landed: &[MotisPollRowV1]) -> Result<(), PromotionError> {
+async fn check_bronze_holds(root: &Root, landed: &[MotisPollRowV2]) -> Result<(), PromotionError> {
     let held = polls_held(root).await?;
     let mut landed_counts: HashMap<Poll, usize> = HashMap::new();
     for row in landed {
@@ -285,20 +285,20 @@ mod tests {
             .expect("read the segments")
     }
 
-    async fn polylines(root: &Root) -> Vec<MotisPolylineRowV1> {
+    async fn polylines(root: &Root) -> Vec<MotisPolylineRowV2> {
         let query = Query::new(root.clone());
         query
-            .register_by_name(MOTIS_POLYLINE_V1)
+            .register_by_name(MOTIS_POLYLINE_V2)
             .await
             .expect("register");
         query
-            .rows("SELECT * FROM motis_polyline_v1")
+            .rows("SELECT * FROM motis_polyline_v2")
             .await
             .expect("read the polylines")
     }
 
     fn landed_files(root: &Root) -> usize {
-        root.rows_of::<MotisPollRowV1>()
+        root.rows_of::<MotisPollRowV2>()
             .landed_files()
             .expect("list landing")
             .len()

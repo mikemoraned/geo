@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use chrono::{DateTime, Utc};
 use geo_types::Point;
 use medallion::{Countries, Country, Root};
-use medallion_model::{Feed, MotisPollRowV1, MotisSource, MotisSourceId, TripId};
+use medallion_model::{Feed, MotisPollRowV2, MotisSource, MotisSourceId, TripId};
 use url::Url;
 
 use crate::api::types::{Mode, TripSegment};
@@ -35,10 +35,10 @@ impl CaptureLog {
         segments: &[SingleTripSegment],
         details: &HashMap<TripId, TripDetails>,
     ) -> Result<usize, PromotionError> {
-        let polls: Vec<MotisPollRowV1> = segments
+        let polls: Vec<MotisPollRowV2> = segments
             .iter()
             .map(|segment| {
-                MotisPollRowV1::of(
+                MotisPollRowV2::of(
                     self.source_id.clone(),
                     segment_row(captured_at, segment, details),
                 )

@@ -134,6 +134,8 @@ async fn poll(now: DateTime<Utc>, look: &mut impl Look, capture: &mut Capture) {
         Ok(Captured {
             segments,
             outside,
+            no_polyline,
+            invalid_polylines,
             unresolved,
             requests,
             filter_took,
@@ -142,6 +144,8 @@ async fn poll(now: DateTime<Utc>, look: &mut impl Look, capture: &mut Capture) {
             tracing::info!(
                 segments,
                 outside,
+                no_polyline,
+                invalid_polylines = invalid_polylines.len(),
                 unresolved = unresolved.len(),
                 ?took,
                 map_trips_requests = requests.map_trips.requests,
@@ -152,6 +156,12 @@ async fn poll(now: DateTime<Utc>, look: &mut impl Look, capture: &mut Capture) {
                 ?log_took,
                 "polled motis"
             );
+            if no_polyline > 0 {
+                tracing::warn!(no_polyline, "legs without a polyline were not captured");
+            }
+            for reason in &invalid_polylines {
+                tracing::error!(%reason, "a leg with an invalid polyline was ignored");
+            }
             for failure in &unresolved {
                 match failure {
                     Unresolved::Segment { reason } => {

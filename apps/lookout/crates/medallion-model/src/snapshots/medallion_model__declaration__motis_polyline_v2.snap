@@ -15,4 +15,4 @@ columns:
     data_type: LargeUtf8
     nullable: false
     checks:
-      polyline_has_valid_character_range: 34faf9c6cbad6d10cc1720ca484cce2286f9ffbb7b42302ffb362398d755501c
+      polyline_is_valid: 41c780d49a25337a33bdf12dc12c8a477bbfff24917709cb56faa8311d21646a

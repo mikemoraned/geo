@@ -8,7 +8,7 @@ use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, Trace
 
 use crate::{
     ALL, AccelReadingRowV2, DeviceSessionRowV2, ExtractManifestRowV3, Feed, GeometrySource, GersId,
-    GpsReadingRowV2, Label, MotisBaseUrl, MotisPollRowV1, MotisPolylineRowV1, MotisSegmentRow,
+    GpsReadingRowV2, Label, MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRow,
     MotisSegmentRowV3, MotisSourceId, MotisSourceRowV3, MotisSourceRowV4, MotisVersion,
     OVERTURE_EXTRACT, OverlapKind, OvertureRelease, RailMode, RawSampleRow, SessionCrossingRowV3,
     SessionRowV3, SessionSampleRowV3, TrainSegmentRowV4, TrainSessionRowV2,
@@ -252,8 +252,8 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
         (
             "Polyline",
             Checks::from([(
-                "polyline_has_valid_character_range",
-                crate::motis::POLYLINE_HAS_VALID_CHARACTER_RANGE_HASH,
+                "polyline_is_valid",
+                crate::motis::POLYLINE_IS_VALID_HASH,
             )]),
         ),
         (
@@ -295,8 +295,8 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<DeviceSessionRowV2>(&known),
         declaration::<MotisSegmentRow>(&known),
         declaration::<MotisSegmentRowV3>(&known),
-        declaration::<MotisPollRowV1>(&known),
-        declaration::<MotisPolylineRowV1>(&known),
+        declaration::<MotisPollRowV2>(&known),
+        declaration::<MotisPolylineRowV2>(&known),
         declaration::<MotisSourceRowV3>(&known),
         declaration::<MotisSourceRowV4>(&known),
         declaration::<TrainSegmentRowV4>(&known),

@@ -4762,6 +4762,7 @@ dependencies = [
  "insta",
  "medallion",
  "nutype",
+ "polyline",
  "proptest",
  "semver",
  "serde",

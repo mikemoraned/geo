@@ -553,7 +553,7 @@ mod tests {
                 x: segment.from.lon,
                 y: segment.from.lat,
             }],
-            crate::segment::POLYLINE_PRECISION,
+            medallion_model::POLYLINE_PRECISION,
         )
         .expect("encode");
         segment.to = segment.from.clone();

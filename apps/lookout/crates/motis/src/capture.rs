@@ -72,10 +72,12 @@ fn polygonal(shape: Geometry<f64>) -> Option<MultiPolygon<f64>> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Captured {
     pub segments: usize,
     pub outside: usize,
+    pub no_polyline: usize,
+    pub invalid_polylines: Vec<String>,
     pub unresolved: Vec<Unresolved>,
     pub requests: Requests,
     pub filter_took: Duration,
@@ -120,12 +122,12 @@ impl Capture {
     ) -> Result<Captured, CaptureError> {
         let half = self.poll_interval.time_delta() / 2;
         let window = now - half..now + half;
-        let mut unresolved = Vec::new();
-        let mut captured: Vec<SingleTripSegment> = Vec::new();
+        let mut captured = Captured::default();
+        let mut kept_segments: Vec<SingleTripSegment> = Vec::new();
         let mut trip_ids: HashSet<TripId> = HashSet::new();
-        let mut outside = 0;
-        let mut map_trips = Tally::default();
-        let in_bbox = map_trips
+        let in_bbox = captured
+            .requests
+            .map_trips
             .time(
                 self.client
                     .trips_in_bbox(&coverage.bbox, &window, self.zoom),
@@ -133,56 +135,63 @@ impl Capture {
             .await?;
         let filtering = Instant::now();
         for segment in in_bbox.into_iter().filter(|segment| is_rail(&segment.mode)) {
-            match sorted(coverage, segment) {
-                Sorted::Kept(kept) => {
+            match categorise(coverage, segment) {
+                Category::Kept(kept) => {
                     trip_ids.insert(kept.trip_id().clone());
-                    captured.push(*kept);
+                    kept_segments.push(*kept);
                 }
-                Sorted::Outside => outside += 1,
-                Sorted::Unresolved(reason) => unresolved.push(Unresolved::Segment { reason }),
+                Category::Outside => captured.outside += 1,
+                Category::NoPolyline => captured.no_polyline += 1,
+                Category::InvalidPolyline(reason) => captured.invalid_polylines.push(reason),
+                Category::Unresolved(reason) => {
+                    captured.unresolved.push(Unresolved::Segment { reason });
+                }
             }
         }
-        let filter_took = filtering.elapsed();
+        captured.filter_took = filtering.elapsed();
 
         let resolution = self.details.resolve(&self.client, &trip_ids).await;
-        let requests = Requests {
-            map_trips,
-            trip: resolution.lookups,
-        };
-        unresolved.extend(resolution.failed.into_iter().map(|(trip_id, err)| {
-            Unresolved::Details {
-                trip_id,
-                reason: err.to_string(),
-            }
-        }));
+        captured.requests.trip = resolution.lookups;
+        captured
+            .unresolved
+            .extend(
+                resolution
+                    .failed
+                    .into_iter()
+                    .map(|(trip_id, err)| Unresolved::Details {
+                        trip_id,
+                        reason: err.to_string(),
+                    }),
+            );
         let writing = Instant::now();
-        let segments = self.log.append(now, &captured, &resolution.details).await?;
-        let log_took = writing.elapsed();
+        captured.segments = self
+            .log
+            .append(now, &kept_segments, &resolution.details)
+            .await?;
+        captured.log_took = writing.elapsed();
 
-        Ok(Captured {
-            segments,
-            outside,
-            unresolved,
-            requests,
-            filter_took,
-            log_took,
-        })
+        Ok(captured)
     }
 }
 
-enum Sorted {
+enum Category {
     Kept(Box<SingleTripSegment>),
     Outside,
+    NoPolyline,
+    InvalidPolyline(String),
     Unresolved(String),
 }
 
-fn sorted(coverage: &Coverage, segment: TripSegment) -> Sorted {
+fn categorise(coverage: &Coverage, segment: TripSegment) -> Category {
+    if segment.polyline.is_empty() {
+        return Category::NoPolyline;
+    }
     match segment.line() {
-        Err(err) => Sorted::Unresolved(err.to_string()),
-        Ok(line) if !coverage.keeps(&line) => Sorted::Outside,
+        Err(err) => Category::InvalidPolyline(err.to_string()),
+        Ok(line) if !coverage.keeps(&line) => Category::Outside,
         Ok(_) => match SingleTripSegment::new(segment) {
-            Ok(kept) => Sorted::Kept(Box::new(kept)),
-            Err(err) => Sorted::Unresolved(err.to_string()),
+            Ok(kept) => Category::Kept(Box::new(kept)),
+            Err(err) => Category::Unresolved(err.to_string()),
         },
     }
 }
@@ -248,7 +257,7 @@ mod tests {
         Coverage::area(shapes.clone(), shapes).expect("shapes")
     }
 
-    async fn sorted_by(coverage: &Coverage) -> (usize, usize) {
+    async fn categorised_by(coverage: &Coverage) -> (usize, usize) {
         let server = motis().await;
         let store = tempfile::tempdir().expect("tempdir");
         let captured = capture(&server, store.path())
@@ -280,18 +289,69 @@ mod tests {
     #[tokio::test]
     async fn a_leg_within_the_country_is_captured() {
         assert_eq!(
-            sorted_by(&whole_country(vec![square(8.0, 49.5, 2.0)])).await,
+            categorised_by(&whole_country(vec![square(8.0, 49.5, 2.0)])).await,
             (1, 0)
         );
     }
 
-    #[tokio::test]
-    async fn a_segment_without_a_trip_of_its_own_is_reported_and_the_rest_of_the_poll_kept() {
-        let rail = serde_json::from_str::<Vec<serde_json::Value>>(TRIPS)
+    fn rail_leg() -> serde_json::Value {
+        serde_json::from_str::<Vec<serde_json::Value>>(TRIPS)
             .expect("parse fixture")
             .into_iter()
             .find(|segment| segment["mode"] == "REGIONAL_RAIL")
-            .expect("a rail segment");
+            .expect("a rail segment")
+    }
+
+    async fn captured_with_one_leg_holding(polyline: &str) -> Captured {
+        let rail = rail_leg();
+        let mut other = rail.clone();
+        other["polyline"] = serde_json::json!(polyline);
+        let server = motis_serving(&serde_json::json!([other, rail]).to_string()).await;
+        let store = tempfile::tempdir().expect("tempdir");
+
+        capture(&server, store.path())
+            .capture(
+                chrono::Utc::now(),
+                &whole_country(vec![square(8.0, 49.5, 2.0)]),
+            )
+            .await
+            .expect("capture")
+    }
+
+    #[tokio::test]
+    async fn a_leg_with_no_polyline_is_counted_as_that_and_the_other_rows_land() {
+        let captured = captured_with_one_leg_holding("").await;
+
+        assert_eq!(captured.segments, 1);
+        assert_eq!(captured.no_polyline, 1);
+        assert_eq!(captured.outside, 0);
+        assert!(captured.invalid_polylines.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_leg_whose_polyline_the_decoder_refuses_is_ignored_and_the_other_rows_land() {
+        let captured = captured_with_one_leg_holding("!!!").await;
+
+        assert_eq!(captured.segments, 1);
+        assert_eq!(captured.invalid_polylines.len(), 1);
+        assert_eq!(captured.no_polyline, 0);
+        assert!(captured.unresolved.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_leg_whose_polyline_holds_a_character_above_126_is_ignored_and_the_other_rows_land() {
+        let rail = rail_leg();
+        let polyline = rail["polyline"].as_str().expect("a polyline");
+
+        let captured = captured_with_one_leg_holding(&format!("{polyline}\u{7f}??")).await;
+
+        assert_eq!(captured.segments, 1);
+        assert_eq!(captured.invalid_polylines.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_segment_without_a_trip_of_its_own_is_reported_and_the_rest_of_the_poll_kept() {
+        let rail = rail_leg();
         let mut tripless = rail.clone();
         tripless["trips"] = serde_json::json!([]);
         let server = motis_serving(&serde_json::json!([tripless, rail]).to_string()).await;
@@ -316,7 +376,7 @@ mod tests {
     #[tokio::test]
     async fn a_leg_leaving_the_country_is_outside() {
         assert_eq!(
-            sorted_by(&whole_country(vec![square(8.0, 49.5, 1.0)])).await,
+            categorised_by(&whole_country(vec![square(8.0, 49.5, 1.0)])).await,
             (0, 1)
         );
     }
@@ -327,14 +387,14 @@ mod tests {
             Coverage::area(vec![square(8.0, 49.5, 1.0)], vec![square(5.0, 47.0, 10.0)])
                 .expect("shapes");
 
-        assert_eq!(sorted_by(&frankfurt_in_germany).await, (1, 0));
+        assert_eq!(categorised_by(&frankfurt_in_germany).await, (1, 0));
     }
 
     #[tokio::test]
     async fn a_leg_across_two_adjoining_shapes_of_the_country_is_captured() {
         let two_halves = whole_country(vec![square(8.0, 49.5, 1.0), square(8.0, 50.5, 2.0)]);
 
-        assert_eq!(sorted_by(&two_halves).await, (1, 0));
+        assert_eq!(categorised_by(&two_halves).await, (1, 0));
     }
 
     #[tokio::test]
@@ -345,7 +405,7 @@ mod tests {
         )
         .expect("shapes");
 
-        assert_eq!(sorted_by(&elsewhere_in_the_country).await, (0, 1));
+        assert_eq!(categorised_by(&elsewhere_in_the_country).await, (0, 1));
     }
 
     #[tokio::test]

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use medallion::Root;
 use medallion_model::{
-    MotisPollRowV1, MotisSegmentRow, MotisSourceId, NotAnEncodedPolyline, TripId,
+    MotisPollRowV2, MotisSegmentRow, MotisSourceId, NotAnEncodedPolyline, TripId,
 };
 
 use crate::client::TripDetails;
@@ -73,7 +73,7 @@ impl SegmentLog {
     ) -> Result<medallion::Dataset<medallion::layers::Landing>, SegmentLogError> {
         Ok(self
             .root
-            .rows_of::<MotisPollRowV1>()
+            .rows_of::<MotisPollRowV2>()
             .on_date(captured_at.date_naive())?)
     }
 
@@ -93,7 +93,7 @@ impl SegmentLog {
         let rows = segments
             .iter()
             .map(|segment| {
-                MotisPollRowV1::of(
+                MotisPollRowV2::of(
                     self.source_id.clone(),
                     segment_row(captured_at, segment, details),
                 )
@@ -152,7 +152,7 @@ mod tests {
         let path = log.poll_file(captured_at).expect("path");
         assert!(
             path.ends_with(
-                "landing/motis_poll_v1/polled_date=2026-07-26/20260726T140530000Z.parquet"
+                "landing/motis_poll_v2/polled_date=2026-07-26/20260726T140530000Z.parquet"
             )
         );
         assert_eq!(read_back(&path).num_rows(), fixture_segments().len());
@@ -170,7 +170,7 @@ mod tests {
             .expect("append");
 
         let batch = read_back(&log.poll_file(captured_at).expect("path"));
-        let rows: Vec<MotisPollRowV1> = serde_arrow::from_record_batch(&batch).expect("read rows");
+        let rows: Vec<MotisPollRowV2> = serde_arrow::from_record_batch(&batch).expect("read rows");
         assert_eq!(
             rows.iter()
                 .map(|r| r.polyline.to_string())
@@ -198,7 +198,7 @@ mod tests {
             .expect("append");
 
         let batch = read_back(&log.poll_file(captured_at).expect("path"));
-        let rows: Vec<MotisPollRowV1> = serde_arrow::from_record_batch(&batch).expect("read rows");
+        let rows: Vec<MotisPollRowV2> = serde_arrow::from_record_batch(&batch).expect("read rows");
         let id = source(Feed::Local).id();
         assert!(rows.iter().all(|row| row.source_id == id));
     }
