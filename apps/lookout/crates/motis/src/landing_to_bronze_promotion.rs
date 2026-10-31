@@ -39,6 +39,12 @@ pub struct Promoted {
     pub polylines: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PollsWritten {
+    pub segments: usize,
+    pub polylines: usize,
+}
+
 type Poll = (MotisSourceId, DateTime<Utc>);
 
 fn poll_of(row: &MotisPollRowV1) -> Poll {
@@ -52,19 +58,31 @@ pub async fn promote(root: &Root, at: DateTime<Utc>) -> Result<Promoted, Promoti
     }
 
     let landed = landed_rows(root).await?;
-    let polylines = append_polylines(root, at, &landed).await?;
-    let segments = append_segments(root, at, &landed).await?;
-    check_bronze_holds(root, &landed).await?;
+    let written = write_polls(root, at, &landed).await?;
 
     let promoted = Promoted {
         files: files.len(),
-        segments,
-        polylines,
+        segments: written.segments,
+        polylines: written.polylines,
     };
     for file in files {
         file.delete()?;
     }
     Ok(promoted)
+}
+
+pub async fn write_polls(
+    root: &Root,
+    at: DateTime<Utc>,
+    polls: &[MotisPollRowV1],
+) -> Result<PollsWritten, PromotionError> {
+    let polylines = append_polylines(root, at, polls).await?;
+    let segments = append_segments(root, at, polls).await?;
+    check_bronze_holds(root, polls).await?;
+    Ok(PollsWritten {
+        segments,
+        polylines,
+    })
 }
 
 async fn landed_rows(root: &Root) -> Result<Vec<MotisPollRowV1>, QueryError> {

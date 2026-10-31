@@ -833,7 +833,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       `motis_segment_v3`.
 - [x] Read `motis_segment_v3` in `captures`, in `crates/motis/src/ingest.rs`, joining
       `motis_polyline_v1` after picking each leg's newest capture.
-- [ ] Migrate `motis_segment_v2` into `motis_segment_v3` and `motis_polyline_v1` with a one-off
+- [x] Migrate `motis_segment_v2` into `motis_segment_v3` and `motis_polyline_v1` with a one-off
       binary, writing through the drain's code. Give each segment its source's id in
       `motis_source_v4`, and refuse a segment whose source is missing from `motis_source_v3`. Commit
       the binary with the data it writes, and remove it in a later commit.
