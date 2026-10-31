@@ -814,10 +814,12 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 - [x] Add bronze `motis_polyline_v1` and `motis_segment_v3` to `crates/medallion-model`, with a
       `PolylineId` newtype holding the UUID v5 of a polyline's text. If serde_arrow traces a
       flattened row, compose the new row from shared parts with `#[serde(flatten)]`. That avoids
-      restating every field, as `MotisCaptureRow` restates `MotisSegmentRow`'s.
-      serde_arrow traces a flattened row, but the declaration test cannot. serde-reflection sees a
-      flattened row as a map, and refuses a map whose values differ in type. `MotisSegmentRowV3`
-      therefore restates the fields.
+      restating every field, as `MotisCaptureRow` restates `MotisSegmentRow`'s. serde_arrow traces a
+      flattened row, but the declaration test cannot. serde-reflection sees a flattened row as a
+      map, and refuses a map whose values differ in type. `MotisSegmentRowV3` therefore restates the
+      fields. A `Polyline` newtype holds the encoded text, and `PolylineId::of` takes one. It
+      refuses empty text and any character outside ASCII 63–126, without decoding, since reading a
+      row runs the check.
 - [ ] Add a landing dataset for the capture's polls, on `layers::Landing`, which no dataset uses
       yet. Give `medallion` a way to list its files and delete one once drained. Ignore
       `/landing/` in `data/medallion/.gitignore`.

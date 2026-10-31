@@ -23,8 +23,8 @@ pub use gers::{GersId, NotAGersId};
 pub use motis::{
     AgencyId, EmptyAgencyId, EmptyStopId, EmptyTripId, MOTIS_POLYLINE_V1, MOTIS_SEGMENT,
     MOTIS_SEGMENT_V2, MOTIS_SEGMENT_V3, MotisCaptureRow, MotisPolylineRowV1, MotisSegmentRow,
-    MotisSegmentRowV3, NotAPolylineId, PolylineId, RailMode, StopId, TRAIN_SEGMENT_V4,
-    TrainSegmentRowV4, TripId,
+    MotisSegmentRowV3, NotAPolylineId, NotAnEncodedPolyline, Polyline, PolylineId, RailMode,
+    StopId, TRAIN_SEGMENT_V4, TrainSegmentRowV4, TripId,
 };
 pub use motis_source::{
     Area, Feed, Label, MOTIS_SOURCE_V3, MOTIS_SOURCE_V4, MotisBaseUrl, MotisSource, MotisSourceId,

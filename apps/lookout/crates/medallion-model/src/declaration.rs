@@ -250,6 +250,13 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
             Checks::from([("OvertureRelease::new", OvertureRelease::NEW_HASH)]),
         ),
         (
+            "Polyline",
+            Checks::from([(
+                "polyline_has_valid_character_range",
+                crate::motis::POLYLINE_HAS_VALID_CHARACTER_RANGE_HASH,
+            )]),
+        ),
+        (
             "PolylineId",
             Checks::from([(
                 "polyline_id_is_a_uuid",

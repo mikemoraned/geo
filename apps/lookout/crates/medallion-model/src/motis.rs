@@ -113,6 +113,34 @@ impl AgencyId {
 }
 
 #[nutype(
+    validate(with = polyline_has_valid_character_range, error = NotAnEncodedPolyline),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
+pub struct Polyline(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("an encoded polyline is non-empty text of ASCII characters 63 to 126")]
+pub struct NotAnEncodedPolyline;
+
+#[hashfn]
+pub fn polyline_has_valid_character_range(text: &str) -> Result<(), NotAnEncodedPolyline> {
+    if !text.is_empty() && text.bytes().all(|byte| (63..=126).contains(&byte)) {
+        Ok(())
+    } else {
+        Err(NotAnEncodedPolyline)
+    }
+}
+
+impl Polyline {
+    pub fn new(text: impl Into<String>) -> Result<Self, NotAnEncodedPolyline> {
+        Self::try_new(text)
+    }
+}
+
+#[nutype(
     validate(with = polyline_id_is_a_uuid, error = NotAPolylineId),
     derive(
         Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
@@ -135,9 +163,10 @@ impl PolylineId {
         Self::try_new(id)
     }
 
-    pub fn of(polyline: &str) -> Self {
+    pub fn of(polyline: &Polyline) -> Self {
         let namespace = Uuid::new_v5(&Uuid::nil(), b"MOTIS_POLYLINE_NAMESPACE");
-        Self::try_new(Uuid::new_v5(&namespace, polyline.as_bytes()).to_string())
+        let text: &str = polyline.as_ref();
+        Self::try_new(Uuid::new_v5(&namespace, text.as_bytes()).to_string())
             .expect("a formatted UUID parses as a UUID")
     }
 }
@@ -336,10 +365,13 @@ pub struct MotisSegmentRowV3 {
 }
 
 impl MotisSegmentRowV3 {
-    pub fn of(source_id: MotisSourceId, segment: MotisSegmentRow) -> Self {
-        Self {
+    pub fn of(
+        source_id: MotisSourceId,
+        segment: MotisSegmentRow,
+    ) -> Result<Self, NotAnEncodedPolyline> {
+        Ok(Self {
             source_id,
-            polyline_id: PolylineId::of(&segment.polyline),
+            polyline_id: PolylineId::of(&Polyline::new(segment.polyline)?),
             captured_at: segment.captured_at,
             trip_id: segment.trip_id,
             route_name: segment.route_name,
@@ -359,7 +391,7 @@ impl MotisSegmentRowV3 {
             scheduled_departure: segment.scheduled_departure,
             scheduled_arrival: segment.scheduled_arrival,
             realtime: segment.realtime,
-        }
+        })
     }
 }
 
@@ -373,17 +405,18 @@ impl Row for MotisSegmentRowV3 {
             MotisSourceRowV4::example().source_id,
             MotisSegmentRow::example(),
         )
+        .expect("the example polyline has valid characters")
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MotisPolylineRowV1 {
     pub polyline_id: PolylineId,
-    pub polyline: String,
+    pub polyline: Polyline,
 }
 
 impl MotisPolylineRowV1 {
-    pub fn of(polyline: String) -> Self {
+    pub fn of(polyline: Polyline) -> Self {
         Self {
             polyline_id: PolylineId::of(&polyline),
             polyline,
@@ -396,7 +429,10 @@ impl Row for MotisPolylineRowV1 {
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_POLYLINE_V1;
 
     fn example() -> Self {
-        Self::of(MotisSegmentRow::example().polyline)
+        Self::of(
+            Polyline::new(MotisSegmentRow::example().polyline)
+                .expect("the example polyline has valid characters"),
+        )
     }
 }
 
@@ -457,13 +493,29 @@ mod tests {
 
     #[test]
     fn a_polyline_id_is_derived_from_the_polylines_text() {
-        let polyline = "_p~iF~ps|U_ulLnnqC_mqNvxq`@";
+        let polyline = Polyline::new("_p~iF~ps|U_ulLnnqC_mqNvxq`@").unwrap();
+        let other = Polyline::new("other").unwrap();
 
         assert_eq!(
-            PolylineId::of(polyline).to_string(),
+            PolylineId::of(&polyline).to_string(),
             "934b0d5d-609c-5e6f-b6ee-0b3ad2b4cd82"
         );
-        assert_ne!(PolylineId::of(polyline), PolylineId::of("other"));
+        assert_ne!(PolylineId::of(&polyline), PolylineId::of(&other));
+    }
+
+    #[test]
+    fn a_polyline_holds_only_characters_the_encoding_produces() {
+        assert!(Polyline::new("?~").is_ok());
+        for text in ["", ">", "\u{7f}", "é", "a b"] {
+            assert_eq!(Polyline::new(text), Err(NotAnEncodedPolyline), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_polyline_id_is_refused_as_a_polyline() {
+        let id = PolylineId::of(&Polyline::new("other").unwrap());
+
+        assert_eq!(Polyline::new(id.to_string()), Err(NotAnEncodedPolyline));
     }
 
     #[test]
@@ -474,11 +526,21 @@ mod tests {
     #[test]
     fn a_segment_names_the_polyline_row_holding_its_text() {
         let segment = MotisSegmentRow::example();
-        let polyline = MotisPolylineRowV1::of(segment.polyline.clone());
+        let polyline = MotisPolylineRowV1::of(Polyline::new(segment.polyline.clone()).unwrap());
 
-        let row = MotisSegmentRowV3::of(MotisSourceRowV4::example().source_id, segment);
+        let row = MotisSegmentRowV3::of(MotisSourceRowV4::example().source_id, segment).unwrap();
 
         assert_eq!(row.polyline_id, polyline.polyline_id);
+    }
+
+    #[test]
+    fn a_segment_whose_polyline_is_not_encoded_is_refused() {
+        let mut segment = MotisSegmentRow::example();
+        segment.polyline = String::new();
+
+        let err = MotisSegmentRowV3::of(MotisSourceRowV4::example().source_id, segment);
+
+        assert_eq!(err, Err(NotAnEncodedPolyline));
     }
 
     #[test]
