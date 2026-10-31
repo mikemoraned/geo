@@ -13,9 +13,11 @@ repeating a string. Whoever owns the data defines the datasets themselves, so th
 list of them.
 
 The layer is the spec's type rather than a field. `DatasetSpec<layers::Bronze>` and
-`DatasetSpec<layers::Silver>` are different types, and the operations that rewrite or delete are
-implemented for the replaceable layers alone. Code that replaces a bronze partition does not
-compile: the method is not there to call.
+`DatasetSpec<layers::Silver>` are different types, and the operations that rewrite or delete
+partitions are implemented for the replaceable layers alone. Code that replaces a bronze partition
+does not compile: the method is not there to call. Landing alone lists its files and deletes one, so
+a drain can remove a file once bronze holds its rows. Deleting a file takes a value the listing
+returned rather than a path, so it reaches nothing outside the dataset.
 
 A dataset's columns are the row type declared beside it. A writer therefore states a schema by
 naming its rows, and a reader of a dataset it did not write reads it back through the same type.

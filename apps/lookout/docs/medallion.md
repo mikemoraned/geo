@@ -17,11 +17,15 @@ the store as it is. That last section holds what was weighed and set aside.
 Hive format (`key=value` directory names) throughout, so a glob queries a layer and the
 partition keys come back as columns.
 
-**The store lives in the repo, at `data/medallion`.** The layers holding observations cannot
-be re-derived, so they are versioned alongside the code that wrote them. A deletion is then
-recoverable from history rather than only from a backup. That directory's own `.gitignore`
-states what is versioned. It ignores the derived layers, and the upstream reference extracts,
-which are large and re-derivable from the manifest recording what each one took.
+**The store lives in the repo, at `data/medallion`.** Bronze cannot be re-derived, so it is
+versioned alongside the code that wrote it. A deletion is then recoverable from history rather
+than only from a backup. Git ignores the rest of the store, but for the artefacts
+[gold](#gold) names:
+
+- **landing**, which a drain empties into bronze
+- **silver and gold**, which are derived
+- **bronze's upstream reference extracts**, which are large and re-derivable from the manifest
+  recording what each one took
 
 The root is found by walking up from the working directory for the manifest declaring the
 workspace, as cargo does. Resolving it as a path relative to wherever a binary was started
@@ -216,10 +220,10 @@ Laid out by what was produced and which run produced it, rather than by a partit
 
 **Gold is derived, and so is not versioned in git — with one exception.** An artefact a build
 reads is an input to something outside the store, and cannot be re-derived by whoever builds
-it: a checkout has no silver to pack from. The crossings are the case today, embedded in the
-device's firmware and served to the browser, so every version packed is committed and
-`apps/lookout/crossings.version` names the one being built against.
-`data/medallion/.gitignore` states which datasets this covers.
+it: a checkout has no silver to pack from. The crossings and the sessions are the cases today.
+The device's firmware embeds the crossings and the browser fetches them, and a kiosk replays the
+sessions. Every version packed is committed, and `apps/lookout/crossings.version` and
+`apps/lookout/sessions.version` name the ones being built against.
 
 ## Reading from another language
 

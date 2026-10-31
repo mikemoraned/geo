@@ -820,7 +820,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       fields. A `Polyline` newtype holds the encoded text, and `PolylineId::of` takes one. It
       refuses empty text and any character outside ASCII 63–126, without decoding, since reading a
       row runs the check.
-- [ ] Add a landing dataset for the capture's polls, on `layers::Landing`, which no dataset uses
+- [x] Add a landing dataset for the capture's polls, on `layers::Landing`, which no dataset uses
       yet. Give `medallion` a way to list its files and delete one once drained. Ignore
       `/landing/` in `data/medallion/.gitignore`.
 - [ ] Point `SegmentLog`, in `crates/motis/src/bronze.rs`, at the landing dataset, and rename the

@@ -9,6 +9,9 @@ use uuid::Uuid;
 
 use crate::motis_source::{MotisSourceId, MotisSourceRowV4};
 
+pub const MOTIS_POLL_V1: DatasetSpec<layers::Landing> =
+    DatasetSpec::partitioned("motis_poll_v1", "polled_date");
+
 pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment", "polled_date");
 
@@ -410,6 +413,81 @@ impl Row for MotisSegmentRowV3 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MotisPollRowV1 {
+    pub source_id: MotisSourceId,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub captured_at: DateTime<Utc>,
+    pub trip_id: String,
+    pub route_name: Option<String>,
+    pub train_number: Option<TrainNumber>,
+    pub agency_id: Option<String>,
+    pub agency_name: Option<String>,
+    pub mode: String,
+    pub route_color: Option<String>,
+    pub from_stop_id: Option<String>,
+    pub from_lat: f64,
+    pub from_lon: f64,
+    pub to_stop_id: Option<String>,
+    pub to_lat: f64,
+    pub to_lon: f64,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub departure: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub arrival: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub scheduled_departure: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub scheduled_arrival: DateTime<Utc>,
+    pub realtime: bool,
+    pub polyline: Polyline,
+}
+
+impl MotisPollRowV1 {
+    pub fn of(
+        source_id: MotisSourceId,
+        segment: MotisSegmentRow,
+    ) -> Result<Self, NotAnEncodedPolyline> {
+        Ok(Self {
+            source_id,
+            polyline: Polyline::new(segment.polyline)?,
+            captured_at: segment.captured_at,
+            trip_id: segment.trip_id,
+            route_name: segment.route_name,
+            train_number: segment.train_number,
+            agency_id: segment.agency_id,
+            agency_name: segment.agency_name,
+            mode: segment.mode,
+            route_color: segment.route_color,
+            from_stop_id: segment.from_stop_id,
+            from_lat: segment.from_lat,
+            from_lon: segment.from_lon,
+            to_stop_id: segment.to_stop_id,
+            to_lat: segment.to_lat,
+            to_lon: segment.to_lon,
+            departure: segment.departure,
+            arrival: segment.arrival,
+            scheduled_departure: segment.scheduled_departure,
+            scheduled_arrival: segment.scheduled_arrival,
+            realtime: segment.realtime,
+        })
+    }
+}
+
+impl Row for MotisPollRowV1 {
+    type Layer = layers::Landing;
+    const DATASET: DatasetSpec<Self::Layer> = MOTIS_POLL_V1;
+    const INSTANTS: &'static [&'static str] = MotisSegmentRow::INSTANTS;
+
+    fn example() -> Self {
+        Self::of(
+            MotisSourceRowV4::example().source_id,
+            MotisSegmentRow::example(),
+        )
+        .expect("the example polyline has valid characters")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MotisPolylineRowV1 {
     pub polyline_id: PolylineId,
     pub polyline: Polyline,
@@ -543,16 +621,31 @@ mod tests {
         assert_eq!(err, Err(NotAnEncodedPolyline));
     }
 
+    fn names<T: Row>() -> Vec<String> {
+        medallion::fields::<T>()
+            .expect("describe the rows")
+            .iter()
+            .map(|field| field.name().clone())
+            .collect()
+    }
+
+    #[test]
+    fn a_poll_holds_a_captures_columns() {
+        assert_eq!(names::<MotisPollRowV1>(), names::<MotisCaptureRow>());
+    }
+
+    #[test]
+    fn a_poll_whose_polyline_is_not_encoded_is_refused() {
+        let mut segment = MotisSegmentRow::example();
+        segment.polyline = String::new();
+
+        let err = MotisPollRowV1::of(MotisSourceRowV4::example().source_id, segment);
+
+        assert_eq!(err, Err(NotAnEncodedPolyline));
+    }
+
     #[test]
     fn a_segment_holds_a_captures_columns_with_a_polyline_id_for_its_polyline() {
-        fn names<T: Row>() -> Vec<String> {
-            medallion::fields::<T>()
-                .expect("describe the rows")
-                .iter()
-                .map(|field| field.name().clone())
-                .collect()
-        }
-
         let expected: Vec<String> = names::<MotisCaptureRow>()
             .into_iter()
             .map(|name| {

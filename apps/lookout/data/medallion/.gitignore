@@ -1,21 +1,8 @@
-# The medallion store. `docs/medallion.md` describes the layout; what is versioned here and
-# what is not follows from which layers can be re-derived.
-#
-# Landing and bronze are the record of what was observed: nothing derives them, so they are
-# kept, and git is what makes a deletion recoverable.
+# See ../../docs/medallion.md#root.
 
-# Derived wholesale from bronze, in seconds, by `just sessionise` and `just ingest-motis`.
+/landing/
 /silver/
-
-# Gold is derived too, and ignored but for what a build reads rather than a query: the
-# crossings a device carries in flash and a browser fetches, and the sessions a kiosk replays.
-# Neither can be re-derived by whoever builds — a checkout has no silver to derive them from —
-# so they are versioned alongside the code. Every version packed is kept, and
-# `crossings.version` and `sessions.version` name the ones in use.
 /gold/*
 !/gold/artifact=crossings/
 !/gold/artifact=sessions/
-
-# Point-in-time extracts of Overture: 1.5 GB, and re-derivable — `bronze/extract_manifest_v2`
-# records the release and window each one took, and an Overture release never changes.
 /bronze/overture_extract/
