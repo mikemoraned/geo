@@ -130,9 +130,9 @@ The measurements behind the Compact capture decisions are in
   poll files. Appending every polyline a drain sees, rather than the missing ones, adds at least 7
   MB a day. Confirmed 2026-10-23.
 - **A drain is safe to re-run.** It writes polylines before polls, reads both back, and only then
-  deletes the landing files. A re-run skips any poll whose source and capture instant bronze
-  already holds. A crash then leaves at worst an unused polyline, never a lost or doubled poll.
-  Confirmed 2026-10-23.
+  deletes the landing files. A re-run writes whatever a crash left in landing again, so bronze can
+  hold a poll twice, and the derivation to silver collapses the repeat. A crash then leaves at worst
+  an unused polyline or a doubled poll, never a lost one. Confirmed 2026-10-23, revised 2026-10-31.
 - **`writer_at` compresses with zstd, for bronze and silver alike.** It writes both layers, so
   compressing both needs no writer properties per layer, as compressing bronze alone would. It also
   shrinks silver on disk, which an ingest run needs room for. Confirmed 2026-10-23.
@@ -828,8 +828,9 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       `common/mod.rs` reads `motis_poll_v1`, since the poll tests read what a capture wrote and
       nothing drains there. Tests seeding `captures` write `motis_segment_v2` through a test-only
       `CaptureLog`.
-- [ ] Add `motis_drain` to `crates/motis/src/bin/`, and a recipe `bronze-drain-motis`, draining
-      landing into `motis_polyline_v1` and `motis_segment_v3`.
+- [x] Add `motis_promote_landing_to_bronze` to `crates/motis/src/bin/`, and a recipe
+      `bronze-promote-motis-landing`, draining landing into `motis_polyline_v1` and
+      `motis_segment_v3`.
 - [ ] Read `motis_segment_v3` in `captures`, in `crates/motis/src/ingest.rs`, joining
       `motis_polyline_v1` after picking each leg's newest capture.
 - [ ] Migrate `motis_segment_v2` into `motis_segment_v3` and `motis_polyline_v1` with a one-off

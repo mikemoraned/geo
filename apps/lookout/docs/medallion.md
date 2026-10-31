@@ -89,6 +89,7 @@ reader's job.** Nothing here rejects a repeat:
 - an ingestion cannot rewrite an earlier file to merge into it
 - a payload can reach the store by more than one route
 - a re-run or a later backfill of the same source can land it again
+- a drain interrupted before it deletes its landing files moves them again
 
 Overlapping samples of a live service are duplicated deliberately. Every row therefore
 carries what identifies the observation it holds — a content hash, or the natural key of the

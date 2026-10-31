@@ -368,33 +368,30 @@ pub struct MotisSegmentRowV3 {
 }
 
 impl MotisSegmentRowV3 {
-    pub fn of(
-        source_id: MotisSourceId,
-        segment: MotisSegmentRow,
-    ) -> Result<Self, NotAnEncodedPolyline> {
-        Ok(Self {
-            source_id,
-            polyline_id: PolylineId::of(&Polyline::new(segment.polyline)?),
-            captured_at: segment.captured_at,
-            trip_id: segment.trip_id,
-            route_name: segment.route_name,
-            train_number: segment.train_number,
-            agency_id: segment.agency_id,
-            agency_name: segment.agency_name,
-            mode: segment.mode,
-            route_color: segment.route_color,
-            from_stop_id: segment.from_stop_id,
-            from_lat: segment.from_lat,
-            from_lon: segment.from_lon,
-            to_stop_id: segment.to_stop_id,
-            to_lat: segment.to_lat,
-            to_lon: segment.to_lon,
-            departure: segment.departure,
-            arrival: segment.arrival,
-            scheduled_departure: segment.scheduled_departure,
-            scheduled_arrival: segment.scheduled_arrival,
-            realtime: segment.realtime,
-        })
+    pub fn of(poll: MotisPollRowV1) -> Self {
+        Self {
+            polyline_id: PolylineId::of(&poll.polyline),
+            source_id: poll.source_id,
+            captured_at: poll.captured_at,
+            trip_id: poll.trip_id,
+            route_name: poll.route_name,
+            train_number: poll.train_number,
+            agency_id: poll.agency_id,
+            agency_name: poll.agency_name,
+            mode: poll.mode,
+            route_color: poll.route_color,
+            from_stop_id: poll.from_stop_id,
+            from_lat: poll.from_lat,
+            from_lon: poll.from_lon,
+            to_stop_id: poll.to_stop_id,
+            to_lat: poll.to_lat,
+            to_lon: poll.to_lon,
+            departure: poll.departure,
+            arrival: poll.arrival,
+            scheduled_departure: poll.scheduled_departure,
+            scheduled_arrival: poll.scheduled_arrival,
+            realtime: poll.realtime,
+        }
     }
 }
 
@@ -404,11 +401,7 @@ impl Row for MotisSegmentRowV3 {
     const INSTANTS: &'static [&'static str] = MotisSegmentRow::INSTANTS;
 
     fn example() -> Self {
-        Self::of(
-            MotisSourceRowV4::example().source_id,
-            MotisSegmentRow::example(),
-        )
-        .expect("the example polyline has valid characters")
+        Self::of(MotisPollRowV1::example())
     }
 }
 
@@ -603,22 +596,12 @@ mod tests {
 
     #[test]
     fn a_segment_names_the_polyline_row_holding_its_text() {
-        let segment = MotisSegmentRow::example();
-        let polyline = MotisPolylineRowV1::of(Polyline::new(segment.polyline.clone()).unwrap());
+        let poll = MotisPollRowV1::example();
+        let polyline = MotisPolylineRowV1::of(poll.polyline.clone());
 
-        let row = MotisSegmentRowV3::of(MotisSourceRowV4::example().source_id, segment).unwrap();
+        let row = MotisSegmentRowV3::of(poll);
 
         assert_eq!(row.polyline_id, polyline.polyline_id);
-    }
-
-    #[test]
-    fn a_segment_whose_polyline_is_not_encoded_is_refused() {
-        let mut segment = MotisSegmentRow::example();
-        segment.polyline = String::new();
-
-        let err = MotisSegmentRowV3::of(MotisSourceRowV4::example().source_id, segment);
-
-        assert_eq!(err, Err(NotAnEncodedPolyline));
     }
 
     fn names<T: Row>() -> Vec<String> {

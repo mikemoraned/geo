@@ -146,6 +146,10 @@ landing-poll-local-area label duration *args:
 landing-poll-local-de label duration *args:
     BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --country DE --poll-interval 10m --poll-duration {{duration}} {{args}}
 
+# Move Motis polls from landing into bronze.
+bronze-promote-motis-landing *args:
+    cargo run --release -p motis --bin motis_promote_landing_to_bronze -- {{args}}
+
 # Fetch the API spec of the Motis version tools/motis-server pins; the motis client is generated from it.
 motis-openapi:
     version=$(just --justfile ../../tools/motis-server/Justfile --evaluate VERSION) && curl -fsSL "https://raw.githubusercontent.com/motis-project/motis/$version/openapi.yaml" | yq -o=json '.' > crates/motis/openapi.json
