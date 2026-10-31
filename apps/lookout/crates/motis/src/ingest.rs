@@ -5,8 +5,8 @@ use domain::TrainNumber;
 use geo_types::{Coord, LineString, Point};
 use medallion::{Countries, DatasetSpec, GeoRow, Query, Root, layers};
 use medallion_model::{
-    AgencyId, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MotisSourceId, RailMode, StopId, TrainSegmentRowV4,
-    TripId,
+    AgencyId, MOTIS_POLYLINE_V1, MOTIS_SEGMENT, MOTIS_SEGMENT_V2, MOTIS_SEGMENT_V3, MotisSourceId,
+    PolylineId, RailMode, StopId, TrainSegmentRowV4, TripId,
 };
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -15,6 +15,11 @@ const LEG_IDENTITY: &str = "trip_id, from_stop_id, scheduled_departure";
 
 const LEG_COLUMNS: &str = "trip_id, route_name, train_number, agency_id, agency_name, mode,
     realtime, from_stop_id, from_lat, from_lon, to_lat, to_lon, departure, arrival, polyline";
+
+const POLYLINE_IN_THE_ROW: &str = "";
+
+const POLYLINE_BY_ID: &str =
+    "JOIN (SELECT DISTINCT polyline_id, polyline FROM motis_polyline_v1) USING (polyline_id)";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct IngestOutcome {
@@ -35,6 +40,8 @@ pub enum IngestError {
     Polyline(#[from] NotAPolyline),
     #[error("writing the dataset: {0}")]
     Write(#[from] medallion::TableError),
+    #[error("a capture names the polyline `{polyline_id}`, which bronze lacks")]
+    PolylineLacking { polyline_id: PolylineId },
     #[error("a capture names the source `{source_id}`, which was never registered")]
     UnregisteredSource { source_id: MotisSourceId },
     #[error("reading the registered sources: {0}")]
@@ -107,12 +114,30 @@ pub(crate) struct Captured {
     pub(crate) legs: Vec<Leg>,
 }
 
+pub(crate) struct Captures {
+    motis_segment: Option<Captured>,
+    motis_segment_v2: Option<Captured>,
+    motis_segment_v3: Option<Captured>,
+}
+
+impl Captures {
+    pub(crate) fn each(self) -> impl Iterator<Item = Captured> {
+        [
+            self.motis_segment,
+            self.motis_segment_v2,
+            self.motis_segment_v3,
+        ]
+        .into_iter()
+        .flatten()
+    }
+}
+
 pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOutcome, IngestError> {
     let captures = captures(root).await?;
 
     let mut outcome = IngestOutcome::default();
     let mut placed: Vec<GeoRow<TrainSegmentRowV4, LineString<f64>>> = Vec::new();
-    for captured in captures.into_iter().flatten() {
+    for captured in captures.each() {
         outcome.read += captured.read;
         outcome.not_rail += captured.not_rail;
         outcome.deduped += captured.legs.len() + captured.not_rail;
@@ -148,25 +173,64 @@ pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOut
     Ok(outcome)
 }
 
-pub(crate) async fn captures(root: &Root) -> Result<[Option<Captured>; 2], IngestError> {
+pub(crate) async fn captures(root: &Root) -> Result<Captures, IngestError> {
     let query = Query::new(root.clone());
     let legacy_source_id = legacy_source_id_sql("captured_at");
-    Ok([
-        captured(
+    Ok(Captures {
+        motis_segment: captured(
             &query,
             MOTIS_SEGMENT,
             &format!("{legacy_source_id} AS source_id"),
             &format!("{legacy_source_id}, {LEG_IDENTITY}"),
+            POLYLINE_IN_THE_ROW,
         )
         .await?,
-        captured(
+        motis_segment_v2: captured(
             &query,
             MOTIS_SEGMENT_V2,
             "source_id",
             &format!("source_id, {LEG_IDENTITY}"),
+            POLYLINE_IN_THE_ROW,
         )
         .await?,
-    ])
+        motis_segment_v3: captured_apart_from_polylines(root, &query).await?,
+    })
+}
+
+async fn captured_apart_from_polylines(
+    root: &Root,
+    query: &Query,
+) -> Result<Option<Captured>, IngestError> {
+    #[derive(Deserialize)]
+    struct Lacking {
+        polyline_id: PolylineId,
+    }
+
+    if !root.dataset(MOTIS_SEGMENT_V3).is_filled() {
+        return Ok(None);
+    }
+    query
+        .register(MOTIS_POLYLINE_V1, MOTIS_POLYLINE_V1.name)
+        .await?;
+    let captured = captured(
+        query,
+        MOTIS_SEGMENT_V3,
+        "source_id",
+        &format!("source_id, {LEG_IDENTITY}"),
+        POLYLINE_BY_ID,
+    )
+    .await?;
+    let lacking: Vec<Lacking> = query
+        .rows(
+            "SELECT polyline_id FROM motis_segment_v3
+             EXCEPT SELECT polyline_id FROM motis_polyline_v1
+             LIMIT 1",
+        )
+        .await?;
+    match lacking.into_iter().next() {
+        Some(Lacking { polyline_id }) => Err(IngestError::PolylineLacking { polyline_id }),
+        None => Ok(captured),
+    }
 }
 
 async fn captured(
@@ -174,6 +238,7 @@ async fn captured(
     dataset: DatasetSpec<layers::Bronze>,
     source: &str,
     one_leg: &str,
+    polyline: &str,
 ) -> Result<Option<Captured>, IngestError> {
     if !query.register_if_present(dataset, dataset.name).await? {
         return Ok(None);
@@ -194,13 +259,16 @@ async fn captured(
         .rows(&format!(
             "SELECT {source}, {LEG_COLUMNS}
              FROM (
-               SELECT *, ROW_NUMBER() OVER (
-                 PARTITION BY {one_leg} ORDER BY captured_at DESC
-               ) AS rank
-               FROM {table}
-               WHERE mode IN ({rail_modes})
+               SELECT * FROM (
+                 SELECT *, ROW_NUMBER() OVER (
+                   PARTITION BY {one_leg} ORDER BY captured_at DESC
+                 ) AS rank
+                 FROM {table}
+                 WHERE mode IN ({rail_modes})
+               )
+               WHERE rank = 1
              )
-             WHERE rank = 1
+             {polyline}
              ORDER BY departure"
         ))
         .await?;
@@ -265,10 +333,12 @@ mod tests {
     use crate::api::types::{Mode, TripSegment};
     use arrow::array::RecordBatch;
     use chrono::TimeZone;
-    use medallion::{GEOMETRY, PROJECTED_GEOMETRY};
-    use medallion_model::{Feed, MotisSegmentRow};
+    use medallion::{GEOMETRY, PROJECTED_GEOMETRY, Row};
+    use medallion_model::{Feed, MotisPolylineRowV1, MotisSegmentRow, MotisSegmentRowV3, Polyline};
 
     use super::*;
+    use crate::landing::SegmentLog;
+    use crate::landing_to_bronze_promotion::promote;
     use crate::legacy::legacy_sources;
     use crate::testing::{CaptureLog, Nowhere, germany, regional_trips, source};
 
@@ -349,6 +419,121 @@ mod tests {
             panic!("{column} should hold a LineString");
         };
         line.coords().map(|c| (c.x, c.y)).collect()
+    }
+
+    async fn promote_polls(root: &Root, polls: &[DateTime<Utc>], segments: Vec<TripSegment>) {
+        let log = SegmentLog::new(root.clone(), source(Feed::Local).id());
+        for captured_at in polls {
+            log.append(*captured_at, &one_trip_each(segments.clone()), &Map::new())
+                .await
+                .expect("land a poll");
+        }
+        promote(root, Utc.with_ymd_and_hms(2026, 7, 27, 0, 0, 0).unwrap())
+            .await
+            .expect("promote");
+    }
+
+    async fn lines(root: &Root) -> Vec<String> {
+        let mut lines: Vec<String> = geometry_batches(root)
+            .await
+            .iter()
+            .flat_map(|batch| medallion::geometries(batch, GEOMETRY).expect("geometries"))
+            .map(|geometry| format!("{geometry:?}"))
+            .collect();
+        lines.sort();
+        lines
+    }
+
+    #[tokio::test]
+    async fn segments_apart_from_their_polylines_derive_what_whole_captures_derive() {
+        let polls = [
+            Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 30).unwrap(),
+        ];
+        let whole = tempfile::tempdir().expect("tempdir");
+        let whole = Root::new(whole.path());
+        let apart = tempfile::tempdir().expect("tempdir");
+        let apart = Root::new(apart.path());
+
+        let from_whole = ingest_polls(&whole, &polls).await;
+        promote_polls(&apart, &polls, regional_trips()).await;
+        let from_apart = ingest(&apart, &germany()).await.expect("ingest");
+
+        assert_eq!(from_apart, from_whole);
+        assert_eq!(lines(&apart).await, lines(&whole).await);
+    }
+
+    #[tokio::test]
+    async fn a_poll_promoted_twice_derives_each_leg_once() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
+        promote_polls(&root, &[captured_at], regional_trips()).await;
+        SegmentLog::new(root.clone(), source(Feed::Local).id())
+            .append(captured_at, &one_trip_each(regional_trips()), &Map::new())
+            .await
+            .expect("land the poll again");
+        promote(&root, Utc.with_ymd_and_hms(2026, 7, 28, 0, 0, 0).unwrap())
+            .await
+            .expect("promote again");
+
+        let outcome = ingest(&root, &germany()).await.expect("ingest");
+
+        assert_eq!(outcome.read, regional_trips().len() * 2);
+        assert_eq!(outcome.deduped, regional_trips().len());
+    }
+
+    #[tokio::test]
+    async fn a_polyline_bronze_holds_twice_derives_each_leg_once() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
+        promote_polls(&root, &[captured_at], regional_trips()).await;
+        let repeated: Vec<MotisPolylineRowV1> = regional_trips()
+            .into_iter()
+            .map(|segment| {
+                MotisPolylineRowV1::of(Polyline::new(segment.polyline).expect("a polyline"))
+            })
+            .collect();
+        root.rows_of::<MotisPolylineRowV1>()
+            .append_rows(captured_at, &repeated)
+            .await
+            .expect("write the polylines again");
+
+        ingest(&root, &germany()).await.expect("ingest");
+
+        let rows = derived(&root)
+            .await
+            .count("SELECT COUNT(*) AS count FROM train_segment_v4")
+            .await
+            .expect("count");
+        assert_eq!(rows, regional_trips().len() as i64);
+    }
+
+    #[tokio::test]
+    async fn a_segment_whose_polyline_bronze_lacks_is_refused() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = MotisSegmentRowV3::example();
+        root.rows_of::<MotisSegmentRowV3>()
+            .on_date(segment.captured_at.date_naive())
+            .expect("partition")
+            .append_rows(segment.captured_at, std::slice::from_ref(&segment))
+            .await
+            .expect("write a segment");
+        root.rows_of::<MotisPolylineRowV1>()
+            .append_rows(
+                segment.captured_at,
+                &[MotisPolylineRowV1::of(Polyline::new("other").unwrap())],
+            )
+            .await
+            .expect("write another polyline");
+
+        let err = ingest(&root, &germany()).await.expect_err("a refusal");
+
+        assert!(
+            matches!(err, IngestError::PolylineLacking { polyline_id } if polyline_id == segment.polyline_id)
+        );
     }
 
     #[tokio::test]

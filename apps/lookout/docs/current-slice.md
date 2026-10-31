@@ -831,7 +831,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 - [x] Add `motis_promote_landing_to_bronze` to `crates/motis/src/bin/`, and a recipe
       `bronze-promote-motis-landing`, draining landing into `motis_polyline_v1` and
       `motis_segment_v3`.
-- [ ] Read `motis_segment_v3` in `captures`, in `crates/motis/src/ingest.rs`, joining
+- [x] Read `motis_segment_v3` in `captures`, in `crates/motis/src/ingest.rs`, joining
       `motis_polyline_v1` after picking each leg's newest capture.
 - [ ] Migrate `motis_segment_v2` into `motis_segment_v3` and `motis_polyline_v1` with a one-off
       binary, writing through the drain's code. Give each segment its source's id in
@@ -842,7 +842,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       must map to exactly one new one. Record the row counts under Observations.
 - [ ] Record, under Observations, the sizes of the migrated files against the research doc's
       DuckDB figures.
-- [ ] Check `just silver-motis-ingest` derives the same `train_segment_v2` and `train_session`
+- [ ] Check `just silver-motis-ingest` derives the same `train_segment_v4` and `train_session_v2`
       rows from `motis_segment_v3` alone as from `motis_segment_v2` alone, but for the source ids
       and the train session ids derived from them.
 - [ ] Rederive the recorded sessions into their new versions with `just silver-sessionise` and
