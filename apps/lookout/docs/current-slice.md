@@ -848,7 +848,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       30 October rebuild, since current code cannot read its old source ids. 34 sessions differ
       through legs tied on departure, as Observations records. The slice "replay the trains whose
       legs overlap" now holds that fix.
-- [ ] Rederive the recorded sessions into their new versions with `just silver-sessionise` and
+- [x] Rederive the recorded sessions into their new versions with `just silver-sessionise` and
       `just silver-session-crossings`. Check each holds its old version's rows, with only the
       session ids changed. Then run `just gold-pack-sessions`.
 - [ ] Update the session ids held outside the store: in
