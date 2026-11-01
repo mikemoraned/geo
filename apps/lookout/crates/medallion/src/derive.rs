@@ -153,14 +153,19 @@ where
         Ok(())
     }
 
-    pub async fn finish(mut self) -> Result<TableWritten, TableError> {
-        for (partition, file) in self.open {
+    pub async fn finish(self) -> Result<TableWritten, TableError> {
+        let written: Vec<Partition> = self
+            .closed
+            .iter()
+            .chain(self.open.keys())
+            .copied()
+            .collect();
+        for file in self.open.into_values() {
             file.close().await?;
-            self.closed.push(partition);
         }
 
         let mut dates_by_country: HashMap<Country, Vec<String>> = HashMap::new();
-        for (country, date) in self.closed {
+        for (country, date) in written {
             dates_by_country
                 .entry(country)
                 .or_default()
