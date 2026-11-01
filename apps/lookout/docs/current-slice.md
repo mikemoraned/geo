@@ -935,13 +935,13 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 After Refactoring, once the slice works end to end.
 
 - [ ] Cut the memory `motis_ingest` takes. On the captures to 25 October, it peaks at a footprint
-      of 4.76 GB and writes 64.2 million train session samples in 935 s. `motis_ingest` on the
+      of 4.68 GB and writes 64.2 million train session samples in 372 s. `motis_ingest` on the
       captures to 25 October, under Observations, profiles it by phase. Three costs are suspected.
       Every collapsed leg is held twice, once for segments and once for sessions. Each session's
       path runs through every sample, held in degrees and projected. Each open partition file
       buffers a row group of up to a million rows. A path from the legs' shapes would also shrink
       `train_session_v2`, at 1.52 GB on disk.
-      The peak now falls partway through sampling, while most trips' shapes are still held. The
+      The peak now falls early in sampling, while most trips' shapes are still held. The
       segment phase stays under 3 GB, since its legs go in batches and each day's file closes once
       written. The third suspect holds only for the sample files, which stay open until sampling
       ends, and closing them frees 0.65 GB. The first costs time rather than memory, since nothing
@@ -971,10 +971,14 @@ After Refactoring, once the slice works end to end.
       geometry at a time into a `BinaryBuilder`. A day's geometry exists about five times over at
       once today, 0.83 GB for the largest day of `train_session_v2`. Batches already bound
       `train_segment_v4`'s copies.
-- [ ] Compute each leg's cumulative distances once in `sampled`, in `crates/motis/src/sampling.rs`,
+- [x] Compute each leg's cumulative distances once in `sampled`, in `crates/motis/src/sampling.rs`,
       and interpolate within the one segment `partition_point` finds. `point_at_ratio_from_start`
       measures and walks the whole shape again for every sample: about 30 billion Haversine
       evaluations for 54 million travelling samples.
+      Decided on 2026-11-01: `sampled` holds the distances only while it samples a trip, since
+      keeping one per vertex would add about 1.65 GB. This cuts the run from 935 s to 372 s.
+      Positions now differ from the whole-shape walk by rounding, at most 1.1e-13 degrees, in 0.6%
+      of samples.
 - [ ] Memoise `CountryAreas::containing`, in `crates/transport/src/countries.rs`, by point, or test
       a bounding box first. Each call walks all 160,000 vertices of Germany's outline, for 1.70
       million legs that start from 11,266 distinct points.
@@ -1135,7 +1139,7 @@ On 26 October, `motis_ingest` read 2,742,313 captured rows, which collapse to 1,
 - Swap grew by 7.4 GB from 8.2 GB, on a machine with 24 GB. `time -l` printed 0 swaps, so that
   field does not show swap here. The swap files took 6 GiB of disk and kept it after the run.
 
-Five changes were measured on the same capture. The flush and the legs passed by value were dropped,
+Six changes were measured on the same capture. The flush and the legs passed by value were dropped,
 and each other change builds on those before it:
 
 | Code | Peak footprint | Peak resident set | Time | Swap growth | Sample files |
@@ -1146,9 +1150,10 @@ and each other change builds on those before it:
 | Legs written in batches as well | 7.31 GB | 4.87 GB | 869 s | None | 2.66 GB, 74 row groups |
 | Trips released, legs passed by value | 5.91 GB | 4.46 GB | 886 s | 1.8 GB | 2.66 GB, 74 row groups |
 | Trips released, each shape copied | 4.76 GB | 4.47 GB | 935 s | None | 2.66 GB, 74 row groups |
+| Each leg's distances computed once | 4.68 GB | 4.17 GB | 372 s | None | 2.66 GB, 74 row groups |
 
-- All six runs wrote the same rows. Fingerprints of each trip's segments, each session, and each
-  session's samples match.
+- The first six runs wrote the same rows. Fingerprints of each trip's segments, each session, and
+  each session's samples match.
 - A flush leaves each day's compressed bytes in memory, about 0.7 GB per large day. `object_store`
   buffers the last partial chunk of a write as a slice of the row group's whole allocation, and
   uploads it on the file's next write or its close.
@@ -1166,15 +1171,24 @@ and each other change builds on those before it:
   `polyline::decode_polyline` pushes each point onto a `Vec`, so the `Vec` ends with spare capacity.
   A test grew 1.5 million vectors to hold 3.11 GB of points. Its peak footprint was 4.32 GB as
   grown, 4.32 GB after `shrink_to_fit`, and 3.55 GB after a clone. The clone cost 0.19 s.
-- `/usr/bin/sample` took two 10 s stack samples during the session phase of the last run. They put
-  82% of the main thread's time in `position_at`, 2% in `containing`, 2% in `session_of`, and 6% in
-  writing samples. The other threads sat idle.
-- The segment phase of the last run took 274 s, against 223 s for the same code in the run before.
-  Its total time therefore shows no slowdown from the copy.
-- `footprint` labels binary gigabytes GB, so its figures read 7% below those of `time -l`. The last
+- `/usr/bin/sample` took two 10 s stack samples during the session phase of the run with each shape
+  copied. They put 82% of the main thread's time in `position_at`, 2% in `containing`, 2% in
+  `session_of`, and 6% in writing samples. The other threads sat idle.
+- The segment phase of that run took 274 s, against 223 s for the same code in the run before. Its
+  total time therefore shows no slowdown from the copy.
+- `footprint` labels binary gigabytes GB, so its figures read 7% below those of `time -l`. That
   run's peak reads 4.43 in the first and 4.76 in the second.
-- The runs started with 8.2 GB, 10.5 GB, 13.3 GB, 12.0 GB, 9.3 GB, and 10.6 GB of swap in use, so
-  their resident sets and swap growth do not compare directly.
+- With each leg's distances computed once, the session phase takes 150 s, against 661 s. The peak
+  stays early in sampling, since each trip holds its shapes until it is sampled.
+- Those distances move 364,763 of the 64.2 million samples, by at most 1.1e-13 degrees, under 13 nm.
+  Implied speeds change by at most 1e-9 m/s. Times, sources, trips, sessions' sample counts, and
+  `train_segment_v4` all match. The comparison leaves out `geometry`, `geometry_projected`, and
+  `bbox`, which derive from the positions.
+- Stack samples of that run put `containing` at 61% of the segment phase and `geo_day` at 23%, most
+  of it projection. In the session phase, they put `GeoRowWriter::write` at 30%, `session_of` at
+  12%, `containing` at 12%, and `sampled` at 9%.
+- The runs started with 8.2 GB, 10.5 GB, 13.3 GB, 12.0 GB, 9.3 GB, 10.6 GB, and 10.4 GB of swap in
+  use, so their resident sets and swap growth do not compare directly.
 
 #### `motis_ingest` on the captures to 22 October
 

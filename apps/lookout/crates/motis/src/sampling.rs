@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
-use std::iter::successors;
+use std::iter::{once, successors};
 
 use chrono::{DateTime, TimeDelta, Utc};
 use domain::Span;
-use geo::{Haversine, InterpolatableLine};
+use geo::{Haversine, InterpolatePoint, Length};
 use geo_types::{LineString, Point};
 use medallion_model::GeometrySource;
 
@@ -103,6 +103,73 @@ pub struct Placed {
     pub geometry_source: GeometrySource,
 }
 
+struct MeasuredLeg<'a> {
+    leg: &'a Leg,
+    distances_from_origin: Vec<f64>,
+}
+
+impl<'a> MeasuredLeg<'a> {
+    fn of(leg: &'a Leg) -> Self {
+        let beyond_origin = leg.shape.lines().scan(0.0, |travelled, segment| {
+            *travelled += Haversine.length(&segment);
+            Some(*travelled)
+        });
+        Self {
+            leg,
+            distances_from_origin: once(0.0).chain(beyond_origin).collect(),
+        }
+    }
+
+    fn point_at_ratio(&self, ratio: f64) -> Option<Point<f64>> {
+        let distance = ratio * self.distances_from_origin.last()?;
+        let end = self
+            .distances_from_origin
+            .partition_point(|from_origin| *from_origin < distance);
+        let Some(start) = end.checked_sub(1) else {
+            return Some(self.leg.origin);
+        };
+        Some(Haversine.point_at_distance_between(
+            Point::from(*self.leg.shape.0.get(start)?),
+            Point::from(*self.leg.shape.0.get(end)?),
+            distance - self.distances_from_origin.get(start)?,
+        ))
+    }
+}
+
+struct MeasuredLegs<'a> {
+    normalised: &'a NormalisedLegs,
+    legs: Vec<MeasuredLeg<'a>>,
+}
+
+impl MeasuredLegs<'_> {
+    fn position_at(&self, t: DateTime<Utc>) -> Result<Point<f64>, NoWhereabouts> {
+        if self.normalised.arrival < t {
+            return Err(NoWhereabouts::AfterAllLegs {
+                t,
+                arrival: self.normalised.arrival,
+            });
+        }
+        let departed = self
+            .legs
+            .partition_point(|measured| measured.leg.departure <= t);
+        let measured = self.legs[..departed]
+            .last()
+            .ok_or(NoWhereabouts::BeforeAllLegs {
+                t,
+                departure: self.normalised.departure,
+            })?;
+        let leg = measured.leg;
+        if t < leg.arrival {
+            let ratio = (t - leg.departure).as_seconds_f64() / leg.duration().as_seconds_f64();
+            measured
+                .point_at_ratio(ratio)
+                .ok_or(NoWhereabouts::NoPointAlongShape { t })
+        } else {
+            Ok(leg.destination)
+        }
+    }
+}
+
 impl NormalisedLegs {
     pub fn new(legs: &[Leg]) -> Result<Self, InvalidLegs> {
         let mut legs = legs.to_vec();
@@ -131,38 +198,22 @@ impl NormalisedLegs {
         self.departure
     }
 
-    pub fn position_at(&self, t: DateTime<Utc>) -> Result<Point<f64>, NoWhereabouts> {
-        if self.arrival < t {
-            return Err(NoWhereabouts::AfterAllLegs {
-                t,
-                arrival: self.arrival,
-            });
-        }
-        let departed = self.legs.partition_point(|leg| leg.departure <= t);
-        let leg = self.legs[..departed]
-            .last()
-            .ok_or(NoWhereabouts::BeforeAllLegs {
-                t,
-                departure: self.departure,
-            })?;
-        if t < leg.arrival {
-            let ratio = (t - leg.departure).as_seconds_f64() / leg.duration().as_seconds_f64();
-            leg.shape
-                .point_at_ratio_from_start(&Haversine, ratio)
-                .ok_or(NoWhereabouts::NoPointAlongShape { t })
-        } else {
-            Ok(leg.destination)
+    fn measured(&self) -> MeasuredLegs<'_> {
+        MeasuredLegs {
+            normalised: self,
+            legs: self.legs.iter().map(MeasuredLeg::of).collect(),
         }
     }
 
     pub fn sampled(&self, interval: Span) -> Result<Vec<Placed>, NoWhereabouts> {
         let step = interval.time_delta();
+        let measured = self.measured();
         let interpolated = successors(Some(self.departure), |t| Some(*t + step))
             .take_while(|t| *t < self.arrival)
             .map(|t| {
                 Ok(Placed {
                     t,
-                    position: self.position_at(t)?,
+                    position: measured.position_at(t)?,
                     geometry_source: GeometrySource::Interpolated,
                 })
             })
@@ -188,7 +239,9 @@ impl NormalisedLegs {
 
 #[cfg(test)]
 mod tests {
+    use geo::InterpolatableLine;
     use geo_types::line_string;
+    use proptest::prelude::*;
 
     use super::*;
 
@@ -214,6 +267,16 @@ mod tests {
 
     fn near(actual: Point<f64>, expected: (f64, f64)) -> bool {
         (actual.x() - expected.0).abs() < 1e-6 && (actual.y() - expected.1).abs() < 1e-6
+    }
+
+    fn shapes() -> impl Strategy<Value = LineString<f64>> {
+        prop::collection::vec((0..6u8, 0..6u8), 2..40).prop_map(|steps| {
+            let points: Vec<(f64, f64)> = steps
+                .into_iter()
+                .map(|(east, up)| (8.0 + f64::from(east) * 0.01, 50.0 + f64::from(up) * 0.01))
+                .collect();
+            LineString::from(points)
+        })
     }
 
     fn sample_at(samples: &[Placed], seconds: i64) -> Placed {
@@ -278,7 +341,9 @@ mod tests {
     #[test]
     fn no_whereabouts_are_known_before_the_first_leg_departs() {
         assert_eq!(
-            normalised(&[leg(60, 120, north(50.1))]).position_at(at(0)),
+            normalised(&[leg(60, 120, north(50.1))])
+                .measured()
+                .position_at(at(0)),
             Err(NoWhereabouts::BeforeAllLegs {
                 t: at(0),
                 departure: at(60),
@@ -289,7 +354,9 @@ mod tests {
     #[test]
     fn no_whereabouts_are_known_after_the_last_leg_arrives() {
         assert_eq!(
-            normalised(&[leg(60, 120, north(50.1))]).position_at(at(180)),
+            normalised(&[leg(60, 120, north(50.1))])
+                .measured()
+                .position_at(at(180)),
             Err(NoWhereabouts::AfterAllLegs {
                 t: at(180),
                 arrival: at(120),
@@ -300,6 +367,7 @@ mod tests {
     #[test]
     fn during_a_leg_the_train_is_along_its_shape() {
         let position = normalised(&[leg(0, 60, north(50.1))])
+            .measured()
             .position_at(at(30))
             .expect("a position");
 
@@ -307,10 +375,41 @@ mod tests {
     }
 
     #[test]
+    fn as_a_leg_departs_the_train_is_at_its_origin() {
+        let position = normalised(&[leg(0, 60, north(50.1))])
+            .measured()
+            .position_at(at(0))
+            .expect("a position");
+
+        assert!(near(position, (8.0, 50.0)), "{position:?}");
+    }
+
+    proptest! {
+        #[test]
+        fn a_point_along_a_leg_is_where_walking_its_whole_shape_reaches(
+            shape in shapes(),
+            ratio in 0.0..1.0f64,
+        ) {
+            let walked = shape
+                .point_at_ratio_from_start(&Haversine, ratio)
+                .expect("a point");
+            let leg = leg(0, 60, shape);
+
+            let found = MeasuredLeg::of(&leg).point_at_ratio(ratio).expect("a point");
+
+            prop_assert!(
+                (found.x() - walked.x()).abs() < 1e-9 && (found.y() - walked.y()).abs() < 1e-9,
+                "{found:?} against {walked:?}"
+            );
+        }
+    }
+
+    #[test]
     fn between_legs_the_train_is_at_the_station() {
         let onward = line_string![(x: 8.0, y: 50.1), (x: 8.1, y: 50.1)];
 
         let position = normalised(&[leg(0, 60, north(50.1)), leg(120, 180, onward)])
+            .measured()
             .position_at(at(90))
             .expect("a position");
 
@@ -320,6 +419,7 @@ mod tests {
     #[test]
     fn on_arriving_the_train_is_at_the_station() {
         let position = normalised(&[leg(0, 60, north(50.1))])
+            .measured()
             .position_at(at(60))
             .expect("a position");
 
