@@ -1,5 +1,6 @@
 use chrono::{DateTime, TimeZone, Utc};
-use medallion_model::{Feed, MotisSource};
+use medallion_model::{Feed, MotisSource, NotAnEncodedPolyline, Polyline, PolylineId};
+use serde::{Deserialize, Deserializer, de};
 use url::Url;
 
 use crate::client::DEFAULT_BASE_URL;
@@ -14,6 +15,16 @@ pub fn legacy_source_id_sql(captured_at: &str) -> String {
         "CASE WHEN {captured_at} < TIMESTAMP '{}' THEN '{gtfs_de}' ELSE '{delfi}' END",
         delfi_from().format("%Y-%m-%dT%H:%M:%SZ")
     )
+}
+
+pub(crate) fn polyline_id_or_its_polyline<'de, D: Deserializer<'de>>(
+    column: D,
+) -> Result<PolylineId, D::Error> {
+    let text = String::deserialize(column)?;
+    match Polyline::new(text.clone()) {
+        Ok(polyline) => Ok(PolylineId::of(&polyline)),
+        Err(NotAnEncodedPolyline) => PolylineId::new(text).map_err(de::Error::custom),
+    }
 }
 
 fn delfi_from() -> DateTime<Utc> {

@@ -817,11 +817,10 @@ At the end of the slice, once its features are in.
          `crates/motis/src/landing.rs`, then builds a `MotisPollRowV2` directly. The two sources
          stay in `motis_source_v4`, since the migrated rows name them.
       6. Reduce `captures`, in `crates/motis/src/ingest.rs`, to one dataset. `Captures`,
-         `POLYLINE_IN_THE_ROW`, and `captured`'s parameters go. `ingest` then needs only one of its
+         `CapturedPolylines`, and `captured`'s parameters go. `ingest` then needs only one of its
          two sorts by departure: the query's `ORDER BY` and `legs.sort_by_key`.
-      7. Make `Leg::polyline` a `Polyline`, since `motis_polyline_v2` holds only checked text.
-         `shape_of` then cannot fail, so `decode_polyline`, `NotAPolyline`, and
-         `IngestError::Polyline` go.
+      7. Remove `deserialize_with` from `Leg::polyline_id`, since every leg then names its polyline
+         by id. Read `motis_polyline_v2` as `MotisPolylineRowV2`, in place of `CapturedPolyline`.
       8. Rewrite the tests that write `MotisSegmentRow` so they write polls. Delete those that need
          an empty or unreadable polyline, the rule for the sources, or both datasets. Keep the
          `Shape::Missing` case, with a polyline that repeats one point.
@@ -935,7 +934,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 After Refactoring, once the slice works end to end.
 
 - [ ] Cut the memory `motis_ingest` takes. On the captures to 25 October, it peaks at a footprint
-      of 4.26 GB and writes 64.2 million train session samples in 216 s. `motis_ingest` on the
+      of 4.41 GB and writes 64.2 million train session samples in 219 s. `motis_ingest` on the
       captures to 25 October, under Observations, profiles it by phase. Three costs are suspected.
       Every collapsed leg is held twice, once for segments and once for sessions. Each session's
       path runs through every sample, held in degrees and projected. Each open partition file
@@ -985,11 +984,26 @@ After Refactoring, once the slice works end to end.
       Decided on 2026-11-01: `MemoisedCountries`, in `crates/motis/src/placement.rs`, holds the memo
       for one derivation, so `CountryAreas` stays plain data. A bounding box does not help, since
       nearly every point lies in Germany. This cuts the run from 372 s to 216 s.
+      Replaced on 2026-11-01 by placing each polyline once, the next task.
+- [x] Replace `MemoisedCountries` by placing each polyline once. A memo that saves this much shows
+      that the derivations repeat work. The repeats start in `captured`, which joins each polyline's
+      text onto every leg, although `motis_polyline_v2` holds each polyline once. Read that table
+      once per derivation, and hold each polyline's decoded line and country. Let each leg name its
+      polyline by `PolylineId`. A leg whose polyline has no shape takes the country of its own first
+      stop. A trip takes the country of where its first leg departs.
+      Decided on 2026-11-01: `Shapes`, in `crates/motis/src/ingest.rs`, holds that table. The run
+      takes 219 s against the memo's 216 s, and every row matches. `motis_segment` holds no polyline
+      ids, so `legacy::polyline_id_or_its_polyline` derives each from its text until that dataset
+      is migrated. Every polyline read is now a checked `Polyline`, so text `Polyline` refuses fails
+      the read, and `decode_polyline`, `NotAPolyline`, and `IngestError::Polyline` go.
+      `IngestError::PolylineLacking` now comes from the leg naming the polyline. A polyline that
+      only a superseded capture names therefore no longer refuses.
 - [ ] Project each geometry once. Let a `GeoRow` carry a projected geometry its caller already has.
       The writer then reuses `session_of`'s projection of every sample, and `ingest` projects each
       distinct polyline once. Of the segment projections, 98% repeat a shape already projected.
-      Share one per-country projector cache between `GeoRowWriter::write` and
-      `derive_train_sessions`, which copies it.
+      `Shapes` holds each polyline once, so it can hold that polyline's projection too. Share one
+      per-country projector cache between `GeoRowWriter::write` and `derive_train_sessions`, which
+      copies it.
 - [x] Release each trip's shapes once it is sampled. Iterate `trips` by value in
       `derive_train_sessions`, and pass `NormalisedLegs::new` its legs by value, in place of a deep
       copy of every shape. About 3.3 GB stays held through the session write today, and as much
@@ -999,13 +1013,16 @@ After Refactoring, once the slice works end to end.
       reached only 5.91 GB, because each decoded shape keeps the spare capacity of its growing
       `Vec`. The copy allocates the exact size and takes about 0.2 s in all. `shrink_to_fit` leaves
       the footprint unchanged on macOS.
+- [ ] Share each decoded shape among the legs that use it. `Leg::shape`, in
+      `crates/motis/src/sampling.rs`, holds its own copy of a line `Shapes` already holds. The
+      165,606 sessions' legs hold 3.31 GB of coordinates, against 0.085 GB in all 26,965 distinct
+      shapes. An `Arc<LineString<f64>>` handed out by `PlacedLine` removes the copies, and these
+      copies set the peak.
 - [ ] Let `captures` skip what `derive_train_sessions` discards: both count queries and the final
-      `ORDER BY departure`. The session phase reruns the whole capture read today, carrying every
-      leg's polyline text, 0.73 GB of it. `motis_polyline_v2` takes the text out of the
-      `ROW_NUMBER` sort over `motis_segment_v3`. The query joins the text in before
-      `ORDER BY departure`. `ingest` now sorts its own legs, so neither caller needs that sort for
-      its order by day. Legs sharing a departure and arrival keep the query's order in
-      `NormalisedLegs::new`, so removing it needs a tie-break there.
+      `ORDER BY departure`. The session phase reruns the whole capture read today. `ingest` now
+      sorts its own legs, so neither caller needs that sort for its order by day. Legs sharing a
+      departure and arrival keep the query's order in `NormalisedLegs::new`, so removing it needs a
+      tie-break there.
 - [ ] When `motis_track_area` captures a whole country, test each leg once, with `covers`, against
       one prepared outline. Share the coverage, rather than cloning it each poll. It now passes the
       same shapes as area and as country, so it unions and prepares them twice and tests each leg
@@ -1142,8 +1159,9 @@ On 26 October, `motis_ingest` read 2,742,313 captured rows, which collapse to 1,
 - Swap grew by 7.4 GB from 8.2 GB, on a machine with 24 GB. `time -l` printed 0 swaps, so that
   field does not show swap here. The swap files took 6 GiB of disk and kept it after the run.
 
-Seven changes were measured on the same capture. The flush and the legs passed by value were
-dropped, and each other change builds on those before it:
+Eight changes were measured on the same capture. The flush and the legs passed by value were
+dropped, and placing each polyline once replaced the memo. Each other change builds on those before
+it:
 
 | Code | Peak footprint | Peak resident set | Time | Swap growth | Sample files |
 | --- | --- | --- | --- | --- | --- |
@@ -1155,6 +1173,7 @@ dropped, and each other change builds on those before it:
 | Trips released, each shape copied | 4.76 GB | 4.47 GB | 935 s | None | 2.66 GB, 74 row groups |
 | Each leg's distances computed once | 4.68 GB | 4.17 GB | 372 s | None | 2.66 GB, 74 row groups |
 | Country lookups memoised by point | 4.26 GB | 5.81 GB | 216 s | None | 2.66 GB, 74 row groups |
+| Each polyline placed once, no memo | 4.41 GB | 6.20 GB | 219 s | None | 2.66 GB, 74 row groups |
 
 - The first six runs wrote the same rows. Fingerprints of each trip's segments, each session, and
   each session's samples match.
@@ -1188,7 +1207,7 @@ dropped, and each other change builds on those before it:
   Implied speeds change by at most 1e-9 m/s. Times, sources, trips, sessions' sample counts, and
   `train_segment_v4` all match. The comparison leaves out `geometry`, `geometry_projected`, and
   `bbox`, which derive from the positions.
-- Stack samples of that run put `containing` at 61% of the segment phase and `geo_day` at 23%, most
+- Stack samples of that run put `containing` at 62% of the segment phase and `geo_day` at 23%, most
   of it projection. In the session phase, they put `GeoRowWriter::write` at 30%, `session_of` at
   12%, `containing` at 12%, and `sampled` at 9%.
 - With lookups memoised, the segment phase takes 86 s, against 222 s, and the session phase 130 s,
@@ -1197,8 +1216,21 @@ dropped, and each other change builds on those before it:
 - Stack samples of that run put `geo_day` at 58% of the segment phase, with projection at 35%, and
   writing the file at 24%, with zstd at 18%. In the session phase, they put `GeoRowWriter::write` at
   35%, `session_of` at 14%, and `sampled` at 10%. `containing` no longer shows in either phase.
-- The runs started with 8.2 GB, 10.5 GB, 13.3 GB, 12.0 GB, 9.3 GB, 10.6 GB, 10.4 GB, and 13.1 GB of
-  swap in use, so their resident sets and swap growth do not compare directly.
+- Lookups repeat because each one asks where a train departs, and the timetable repeats its hops.
+  The segment phase asks once for each of 1,702,983 legs, which use 26,965 shapes from 11,266 start
+  points. The session phase asks once for each of 165,611 trips, whose first legs use 7,260 shapes
+  from 4,179 start points. Each lookup walks about 160,000 vertices of Germany's land outline.
+- Stack samples before the memo put lookups at about 155 s of the run, at 81 µs each in the segment
+  phase and 106 µs in the session phase. The memo saved 156 s.
+- With each polyline placed once, the segment phase takes 87 s and the session phase 132 s.
+  Fingerprints match the memo's run exactly, and `containing` no longer shows in stack samples of
+  either phase. Trips still copy each line from the table, so the peak stays. All legs hold 3.52 GB
+  of decoded points, against 0.085 GB in the distinct shapes.
+- That run places a trip by where its first leg departs, rather than by its first sample. The two
+  differ for the 477 trips whose first leg takes no time, since the first sample then sits at that
+  leg's destination. No row changed.
+- The runs started with 8.2 GB, 10.5 GB, 13.3 GB, 12.0 GB, 9.3 GB, 10.6 GB, 10.4 GB, 13.1 GB, and
+  13.2 GB of swap in use, so their resident sets and swap growth do not compare directly.
 
 #### `motis_ingest` on the captures to 22 October
 

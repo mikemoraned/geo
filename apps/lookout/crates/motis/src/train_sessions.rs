@@ -9,8 +9,7 @@ use medallion_model::{
     Label, MotisSourceId, TrainSessionRowV2, TrainSessionSampleRowV2, TripId, train_session_id,
 };
 
-use crate::ingest::{self, IngestError, Shape, captures, shape_of};
-use crate::placement::MemoisedCountries;
+use crate::ingest::{self, IngestError, PlacedLine, Shape, Shapes, captures};
 use crate::sampling::{InvalidLeg, InvalidLegs, Leg, NormalisedLegs, Placed};
 
 const SAMPLES_PER_WRITE: usize = 100_000;
@@ -44,6 +43,7 @@ struct Trip {
     source_label: Option<Label>,
     trip_id: TripId,
     legs: NormalisedLegs,
+    country: Option<Country>,
 }
 
 enum Normalised {
@@ -74,7 +74,9 @@ pub async fn derive_train_sessions(
         .map(|source| (source.source_id, source.label))
         .collect();
     let mut by_trip: HashMap<(MotisSourceId, TripId), Vec<ingest::Leg>> = HashMap::new();
+    let mut polylines = Vec::new();
     for captured in captures(root).await?.each() {
+        polylines.extend(captured.polylines);
         for leg in captured.legs {
             by_trip
                 .entry((leg.source_id.clone(), leg.trip_id.clone()))
@@ -82,6 +84,8 @@ pub async fn derive_train_sessions(
                 .push(leg);
         }
     }
+
+    let shapes = Shapes::placed_in(countries, polylines);
 
     let mut outcome = TrainSessionsOutcome {
         trips: by_trip.len(),
@@ -96,7 +100,7 @@ pub async fn derive_train_sessions(
                 .ok_or_else(|| IngestError::UnregisteredSource {
                     source_id: source_id.clone(),
                 })?;
-        match normalised(source_id, source_label, trip_id, &legs)? {
+        match normalised(source_id, source_label, trip_id, &legs, &shapes)? {
             Normalised::Trip(trip) => trips.push(trip),
             Normalised::Dropped(Drop::Shapeless) => outcome.dropped.shapeless += 1,
             Normalised::Dropped(Drop::ArrivesBeforeDeparting) => {
@@ -107,19 +111,15 @@ pub async fn derive_train_sessions(
     }
     trips.sort_by_key(|trip| trip.legs.departure());
 
-    let mut countries = MemoisedCountries::of(countries);
     let mut projectors: HashMap<Country, Projector> = HashMap::new();
     let mut sample_writer = GeoRowWriter::<TrainSessionSampleRowV2>::new(root)?;
     let mut pending: Vec<GeoRow<TrainSessionSampleRowV2, Point<f64>>> = Vec::new();
     let mut sessions: Vec<GeoRow<TrainSessionRowV2, LineString<f64>>> = Vec::new();
     for trip in trips {
-        let placed = trip.legs.sampled(interval)?;
-        let start = placed.first().ok_or_else(|| IngestError::NoSamples {
-            trip_id: trip.trip_id.clone(),
-        })?;
-        match countries.containing(start.position) {
+        match trip.country {
             None => outcome.dropped.unplaceable += 1,
             Some(country) => {
+                let placed = trip.legs.sampled(interval)?;
                 let projector = match projectors.entry(country) {
                     Entry::Occupied(entry) => entry.into_mut(),
                     Entry::Vacant(entry) => entry.insert(Projector::for_country(country)?),
@@ -158,25 +158,31 @@ fn normalised(
     source_label: Option<Label>,
     trip_id: TripId,
     captured: &[ingest::Leg],
+    shapes: &Shapes<'_, impl Countries>,
 ) -> Result<Normalised, IngestError> {
-    let shapes = captured
+    let placed_shapes = captured
         .iter()
-        .map(shape_of)
+        .map(|leg| shapes.of(leg))
         .collect::<Result<Vec<Shape>, _>>()?;
-    let lines: Option<Vec<LineString<f64>>> = shapes
+    let placed_lines: Option<Vec<PlacedLine>> = placed_shapes
         .into_iter()
         .map(|shape| match shape {
-            Shape::Captured(line) | Shape::Corrected(line) => Some(line),
+            Shape::Captured(placed) | Shape::Corrected(placed) => Some(placed),
             Shape::Missing => None,
         })
         .collect();
-    let Some(lines) = lines else {
+    let Some(placed_lines) = placed_lines else {
         return Ok(Normalised::Dropped(Drop::Shapeless));
     };
+    let country = captured
+        .iter()
+        .zip(&placed_lines)
+        .min_by_key(|(leg, _)| (leg.departure, leg.arrival))
+        .and_then(|(_, placed)| placed.country);
     let legs = match captured
         .iter()
-        .zip(lines)
-        .map(|(leg, line)| Leg::new(leg.departure, leg.arrival, line))
+        .zip(placed_lines)
+        .map(|(leg, placed)| Leg::new(leg.departure, leg.arrival, placed.line))
         .collect::<Result<Vec<Leg>, InvalidLeg>>()
     {
         Ok(legs) => legs,
@@ -193,6 +199,7 @@ fn normalised(
             source_label,
             trip_id,
             legs,
+            country,
         })),
         Err(InvalidLegs::Overlapping { .. }) => Ok(Normalised::Dropped(Drop::Overlapping)),
         Err(source) => Err(IngestError::InvalidLegs { trip_id, source }),
@@ -271,7 +278,7 @@ mod tests {
     use crate::api::types::TripSegment;
     use crate::segment::SingleTripSegment;
     use crate::testing::CaptureLog;
-    use crate::testing::{self, Nowhere, germany, regional_trips};
+    use crate::testing::{self, EastIsGermany, Nowhere, germany, regional_trips};
 
     use super::*;
 
@@ -590,6 +597,97 @@ mod tests {
             }
         );
         assert!(!root.path().join("silver").exists());
+    }
+
+    fn starting_at_longitude(mut segment: TripSegment, longitude: f64) -> TripSegment {
+        segment.polyline = polyline::encode_coordinates(
+            [longitude, longitude + 1.0].map(|x| geo_types::Coord { x, y: 50.0 }),
+            medallion_model::POLYLINE_PRECISION,
+        )
+        .expect("encode");
+        segment
+    }
+
+    #[tokio::test]
+    async fn trips_sharing_a_polyline_are_placed_once() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let countries = EastIsGermany::default();
+        let trips = ["first", "second", "third"].map(|trip_id| {
+            let mut segment = regional_trips().remove(0);
+            segment.trips[0].trip_id = trip_id.to_string();
+            segment
+        });
+        poll(&root, polled_at(0), &trips).await;
+
+        let outcome = derive(&root, &countries).await;
+
+        assert_eq!(outcome.sessions, 3);
+        assert_eq!(countries.lookups(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_trip_starting_outside_every_known_country_is_not_written() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        let onward = onward_from(&segment, segment.arrival + Duration::minutes(2));
+        poll(
+            &root,
+            polled_at(0),
+            &[
+                starting_at_longitude(onward, 8.0),
+                starting_at_longitude(segment, -8.0),
+            ],
+        )
+        .await;
+
+        let outcome = derive(&root, &EastIsGermany::default()).await;
+
+        assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (0, 1));
+    }
+
+    #[tokio::test]
+    async fn a_trip_leaving_every_known_country_is_written_under_the_one_it_starts_in() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        let onward = onward_from(&segment, segment.arrival + Duration::minutes(2));
+        poll(
+            &root,
+            polled_at(0),
+            &[
+                starting_at_longitude(onward, -8.0),
+                starting_at_longitude(segment, 8.0),
+            ],
+        )
+        .await;
+
+        let outcome = derive(&root, &EastIsGermany::default()).await;
+
+        assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (1, 0));
+    }
+
+    #[tokio::test]
+    async fn a_trip_whose_first_leg_takes_no_time_starts_where_that_leg_departs() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let mut instant = regional_trips().remove(0);
+        instant.arrival = instant.departure;
+        let onward = onward_from(&instant, instant.departure + Duration::minutes(2));
+        poll(
+            &root,
+            polled_at(0),
+            &[
+                starting_at_longitude(instant, -0.5),
+                starting_at_longitude(onward, 8.0),
+            ],
+        )
+        .await;
+
+        let outcome = derive(&root, &EastIsGermany::default()).await;
+
+        assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (0, 1));
     }
 
     #[tokio::test]

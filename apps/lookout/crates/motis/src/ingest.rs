@@ -1,26 +1,37 @@
-use crate::legacy::legacy_source_id_sql;
-use crate::placement::MemoisedCountries;
-use crate::segment::{NotAPolyline, decode_polyline};
+use crate::legacy::{legacy_source_id_sql, polyline_id_or_its_polyline};
 use chrono::{DateTime, Utc};
 use domain::TrainNumber;
 use geo_types::{Coord, LineString, Point};
-use medallion::{Countries, DatasetSpec, Dated, GeoRow, GeoRowWriter, Query, Root, layers};
+use medallion::{
+    Countries, Country, DatasetSpec, Dated, GeoRow, GeoRowWriter, Query, Root, layers,
+};
 use medallion_model::{
-    AgencyId, MOTIS_POLYLINE_V2, MOTIS_SEGMENT, MOTIS_SEGMENT_V3, MotisSourceId, PolylineId,
-    RailMode, StopId, TrainSegmentRowV4, TripId,
+    AgencyId, MOTIS_POLYLINE_V2, MOTIS_SEGMENT, MOTIS_SEGMENT_V3, MotisSourceId, Polyline,
+    PolylineId, RailMode, StopId, TrainSegmentRowV4, TripId,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use strum::IntoEnumIterator;
 
 const LEG_IDENTITY: &str = "trip_id, from_stop_id, scheduled_departure";
 
 const LEG_COLUMNS: &str = "trip_id, route_name, train_number, agency_id, agency_name, mode,
-    realtime, from_stop_id, from_lat, from_lon, to_lat, to_lon, departure, arrival, polyline";
+    realtime, from_stop_id, from_lat, from_lon, to_lat, to_lon, departure, arrival";
 
-const POLYLINE_IN_THE_ROW: &str = "";
+struct CapturedPolylines {
+    id_on_each_leg: &'static str,
+    table: &'static str,
+}
 
-const POLYLINE_BY_ID: &str =
-    "JOIN (SELECT DISTINCT polyline_id, polyline FROM motis_polyline_v2) USING (polyline_id)";
+const POLYLINE_IN_THE_ROW: CapturedPolylines = CapturedPolylines {
+    id_on_each_leg: "polyline",
+    table: MOTIS_SEGMENT.name,
+};
+
+const POLYLINE_BY_ID: CapturedPolylines = CapturedPolylines {
+    id_on_each_leg: "polyline_id",
+    table: MOTIS_POLYLINE_V2.name,
+};
 
 const LEGS_PER_WRITE: usize = 10_000;
 
@@ -39,8 +50,6 @@ pub struct IngestOutcome {
 pub enum IngestError {
     #[error("querying the capture log: {0}")]
     Query(#[from] medallion::QueryError),
-    #[error(transparent)]
-    Polyline(#[from] NotAPolyline),
     #[error("writing the dataset: {0}")]
     Write(#[from] medallion::TableError),
     #[error("a capture names the polyline `{polyline_id}`, which bronze lacks")]
@@ -90,7 +99,8 @@ pub(crate) struct Leg {
     pub(crate) departure: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub(crate) arrival: DateTime<Utc>,
-    pub(crate) polyline: String,
+    #[serde(deserialize_with = "polyline_id_or_its_polyline")]
+    pub(crate) polyline_id: PolylineId,
 }
 
 impl From<Leg> for TrainSegmentRowV4 {
@@ -115,6 +125,7 @@ pub(crate) struct Captured {
     pub(crate) read: usize,
     pub(crate) not_rail: usize,
     pub(crate) legs: Vec<Leg>,
+    pub(crate) polylines: Vec<CapturedPolyline>,
 }
 
 pub(crate) struct Captures {
@@ -141,31 +152,33 @@ async fn ingest_in_writes_of(
 ) -> Result<IngestOutcome, IngestError> {
     let mut outcome = IngestOutcome::default();
     let mut legs = Vec::new();
+    let mut polylines = Vec::new();
     for captured in captures(root).await?.each() {
         outcome.read += captured.read;
         outcome.not_rail += captured.not_rail;
         outcome.deduped += captured.legs.len() + captured.not_rail;
         legs.extend(captured.legs);
+        polylines.extend(captured.polylines);
     }
     legs.sort_by_key(|leg| leg.departure);
 
-    let mut countries = MemoisedCountries::of(countries);
+    let shapes = Shapes::placed_in(countries, polylines);
     let mut writer = GeoRowWriter::<TrainSegmentRowV4>::new(root)?;
     let mut pending = Vec::new();
     for leg in legs {
-        let line = match shape_of(&leg)? {
-            Shape::Captured(line) => Some(line),
-            Shape::Corrected(line) => {
+        let placed = match shapes.of(&leg)? {
+            Shape::Captured(placed) => Some(placed),
+            Shape::Corrected(placed) => {
                 outcome.shape_corrected += 1;
-                Some(line)
+                Some(placed)
             }
             Shape::Missing => {
                 outcome.shapeless += 1;
                 None
             }
         };
-        if let Some(line) = line {
-            match countries.containing(starts_from(&line)) {
+        if let Some(PlacedLine { line, country }) = placed {
+            match country {
                 Some(country) => pending.push(GeoRow {
                     row: TrainSegmentRowV4::from(leg),
                     geometry: line,
@@ -208,36 +221,20 @@ async fn captured_apart_from_polylines(
     root: &Root,
     query: &Query,
 ) -> Result<Option<Captured>, IngestError> {
-    #[derive(Deserialize)]
-    struct Lacking {
-        polyline_id: PolylineId,
-    }
-
     if !root.dataset(MOTIS_SEGMENT_V3).is_filled() {
         return Ok(None);
     }
     query
         .register(MOTIS_POLYLINE_V2, MOTIS_POLYLINE_V2.name)
         .await?;
-    let captured = captured(
+    captured(
         query,
         MOTIS_SEGMENT_V3,
         "source_id",
         &format!("source_id, {LEG_IDENTITY}"),
         POLYLINE_BY_ID,
     )
-    .await?;
-    let lacking: Vec<Lacking> = query
-        .rows(
-            "SELECT polyline_id FROM motis_segment_v3
-             EXCEPT SELECT polyline_id FROM motis_polyline_v2
-             LIMIT 1",
-        )
-        .await?;
-    match lacking.into_iter().next() {
-        Some(Lacking { polyline_id }) => Err(IngestError::PolylineLacking { polyline_id }),
-        None => Ok(captured),
-    }
+    .await
 }
 
 async fn captured(
@@ -245,7 +242,10 @@ async fn captured(
     dataset: DatasetSpec<layers::Bronze>,
     source: &str,
     one_leg: &str,
-    polyline: &str,
+    CapturedPolylines {
+        id_on_each_leg,
+        table: polylines_table,
+    }: CapturedPolylines,
 ) -> Result<Option<Captured>, IngestError> {
     if !query.register_if_present(dataset, dataset.name).await? {
         return Ok(None);
@@ -262,9 +262,12 @@ async fn captured(
              )"
         ))
         .await? as usize;
+    let polylines = query
+        .rows(&format!("SELECT DISTINCT polyline FROM {polylines_table}"))
+        .await?;
     let legs = query
         .rows(&format!(
-            "SELECT {source}, {LEG_COLUMNS}
+            "SELECT {source}, {LEG_COLUMNS}, {id_on_each_leg} AS polyline_id
              FROM (
                SELECT * FROM (
                  SELECT *, ROW_NUMBER() OVER (
@@ -275,7 +278,6 @@ async fn captured(
                )
                WHERE rank = 1
              )
-             {polyline}
              ORDER BY departure"
         ))
         .await?;
@@ -283,6 +285,7 @@ async fn captured(
         read,
         not_rail,
         legs,
+        polylines,
     }))
 }
 
@@ -293,29 +296,82 @@ fn rail_modes() -> String {
         .join(", ")
 }
 
+#[derive(Debug, Deserialize)]
+pub(crate) struct CapturedPolyline {
+    polyline: Polyline,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PlacedLine {
+    pub(crate) line: LineString<f64>,
+    pub(crate) country: Option<Country>,
+}
+
+impl PlacedLine {
+    fn of(line: LineString<f64>, countries: &impl Countries) -> Self {
+        let country = countries.containing(starts_from(&line));
+        Self { line, country }
+    }
+}
+
 pub(crate) enum Shape {
-    Captured(LineString<f64>),
-    Corrected(LineString<f64>),
+    Captured(PlacedLine),
+    Corrected(PlacedLine),
     Missing,
 }
 
-pub(crate) fn shape_of(leg: &Leg) -> Result<Shape, NotAPolyline> {
-    let line = decode_polyline(&leg.polyline)?;
-    if has_two_distinct_points(&line) {
-        return Ok(Shape::Captured(line));
+pub(crate) struct Shapes<'a, C> {
+    countries: &'a C,
+    by_polyline: HashMap<PolylineId, Option<PlacedLine>>,
+}
+
+impl<'a, C: Countries> Shapes<'a, C> {
+    pub(crate) fn placed_in(countries: &'a C, polylines: Vec<CapturedPolyline>) -> Self {
+        let distinct: HashSet<Polyline> = polylines
+            .into_iter()
+            .map(|captured| captured.polyline)
+            .collect();
+        let by_polyline = distinct
+            .into_iter()
+            .map(|polyline| {
+                let line = polyline.line();
+                let placed =
+                    has_two_distinct_points(&line).then(|| PlacedLine::of(line, countries));
+                (PolylineId::of(&polyline), placed)
+            })
+            .collect();
+        Self {
+            countries,
+            by_polyline,
+        }
     }
-    let from = Coord {
-        x: leg.from_lon,
-        y: leg.from_lat,
-    };
-    let to = Coord {
-        x: leg.to_lon,
-        y: leg.to_lat,
-    };
-    Ok(match from != to {
-        true => Shape::Corrected(LineString::new(vec![from, to])),
-        false => Shape::Missing,
-    })
+
+    pub(crate) fn of(&self, leg: &Leg) -> Result<Shape, IngestError> {
+        let placed =
+            self.by_polyline
+                .get(&leg.polyline_id)
+                .ok_or_else(|| IngestError::PolylineLacking {
+                    polyline_id: leg.polyline_id.clone(),
+                })?;
+        if let Some(placed) = placed {
+            return Ok(Shape::Captured(placed.clone()));
+        }
+        let from = Coord {
+            x: leg.from_lon,
+            y: leg.from_lat,
+        };
+        let to = Coord {
+            x: leg.to_lon,
+            y: leg.to_lat,
+        };
+        Ok(match from != to {
+            true => Shape::Corrected(PlacedLine::of(
+                LineString::new(vec![from, to]),
+                self.countries,
+            )),
+            false => Shape::Missing,
+        })
+    }
 }
 
 fn has_two_distinct_points(line: &LineString<f64>) -> bool {
@@ -347,7 +403,7 @@ mod tests {
     use crate::landing::SegmentLog;
     use crate::landing_to_bronze_promotion::promote;
     use crate::legacy::legacy_sources;
-    use crate::testing::{CaptureLog, Nowhere, germany, regional_trips, source};
+    use crate::testing::{CaptureLog, EastIsGermany, Nowhere, germany, regional_trips, source};
 
     fn log(root: &Root) -> CaptureLog {
         CaptureLog::new(root.clone(), source(Feed::Local).id())
@@ -696,19 +752,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_legacy_leg_whose_shape_is_empty_runs_straight_between_its_stops() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let root = Root::new(tmp.path());
-        let segment = shaped(&[]);
-
-        let outcome = ingest_legacy_one(&root, &segment).await;
-        let (line, corrected) = line_derived(&root, outcome).await;
-
-        assert!(close(&line, &between_stops(&segment)), "{line:?}");
-        assert_eq!(corrected, 1);
-    }
-
-    #[tokio::test]
     async fn a_leg_whose_shape_repeats_one_point_runs_straight_between_its_stops() {
         let start = regional_trips()[0].from.clone();
         let segment = shaped(&[(start.lon, start.lat), (start.lon, start.lat)]);
@@ -739,7 +782,7 @@ mod tests {
     async fn a_legacy_shapeless_leg_between_stops_in_one_place_is_left_out_and_counted() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let mut segment = shaped(&[]);
+        let mut segment = shaped(&[(8.0, 50.0)]);
         segment.to.lat = segment.from.lat;
         segment.to.lon = segment.from.lon;
 
@@ -769,15 +812,30 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
-        let mut unreadable = leg_on(23);
-        unreadable.polyline = "not a polyline".to_string();
-        append_legacy(&root, captured_at, vec![leg_on(21), leg_on(22), unreadable]).await;
+        log(&root)
+            .append(
+                captured_at,
+                &one_trip_each(vec![leg_on(21), leg_on(22)]),
+                &Map::new(),
+            )
+            .await
+            .expect("append poll");
+        let lacking_its_polyline = MotisSegmentRowV3 {
+            departure: leg_on(23).departure,
+            ..MotisSegmentRowV3::example()
+        };
+        root.rows_of::<MotisSegmentRowV3>()
+            .on_date(captured_at.date_naive())
+            .expect("partition")
+            .append_rows(captured_at, &[lacking_its_polyline])
+            .await
+            .expect("write a segment");
 
         let err = ingest_in_writes_of(&root, &germany(), 1)
             .await
             .expect_err("a refusal");
 
-        assert!(matches!(err, IngestError::Polyline(_)), "{err}");
+        assert!(matches!(err, IngestError::PolylineLacking { .. }), "{err}");
         assert!(segments_landed_on(&root, 21));
         assert!(!segments_landed_on(&root, 22));
     }
@@ -949,6 +1007,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_polyline_in_the_capture_log_that_does_not_decode_is_refused() {
+        let refusal = refusal_of(|row| row.polyline = "not a polyline".to_string()).await;
+
+        assert!(refusal.contains("an encoded polyline is"), "{refusal}");
+    }
+
+    #[tokio::test]
+    async fn an_empty_polyline_in_the_capture_log_is_refused() {
+        let refusal = refusal_of(|row| row.polyline = String::new()).await;
+
+        assert!(refusal.contains("an encoded polyline is"), "{refusal}");
+    }
+
+    #[tokio::test]
     async fn an_empty_stop_id_in_the_capture_log_is_refused() {
         let refusal = refusal_of(|row| row.from_stop_id = Some(String::new())).await;
 
@@ -973,6 +1045,88 @@ mod tests {
         assert_eq!(outcome.unplaceable, regional_trips().len());
         assert_eq!(outcome.partitions, 0);
         assert!(!root.path().join("silver").exists());
+    }
+
+    #[tokio::test]
+    async fn legs_sharing_a_polyline_are_placed_once() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let countries = EastIsGermany::default();
+        log(&root)
+            .append(
+                Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
+                &one_trip_each(vec![leg_on(21), leg_on(22), leg_on(23)]),
+                &Map::new(),
+            )
+            .await
+            .expect("append poll");
+
+        let outcome = ingest(&root, &countries).await.expect("ingest");
+
+        assert_eq!(outcome.deduped, 3);
+        assert_eq!(countries.lookups(), 1);
+    }
+
+    #[tokio::test]
+    async fn legacy_legs_sharing_a_polyline_are_placed_once() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let countries = EastIsGermany::default();
+        append_legacy(
+            &root,
+            Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
+            vec![leg_on(21), leg_on(22), leg_on(23)],
+        )
+        .await;
+
+        let outcome = ingest(&root, &countries).await.expect("ingest");
+
+        assert_eq!(outcome.deduped, 3);
+        assert_eq!(countries.lookups(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_polyline_both_captures_hold_is_placed_once() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let countries = EastIsGermany::default();
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
+        append_legacy(&root, captured_at, vec![leg_on(21)]).await;
+        log(&root)
+            .append(captured_at, &[one_trip(leg_on(22))], &Map::new())
+            .await
+            .expect("append poll");
+
+        let outcome = ingest(&root, &countries).await.expect("ingest");
+
+        assert_eq!(outcome.deduped, 2);
+        assert_eq!(countries.lookups(), 1);
+    }
+
+    #[tokio::test]
+    async fn legs_sharing_a_polyline_with_no_shape_are_placed_by_their_own_stops() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let one_point = shaped(&[(8.0, 50.0)]).polyline;
+        let mut in_germany = leg_on(21);
+        in_germany.polyline = one_point.clone();
+        let mut elsewhere = leg_on(22);
+        elsewhere.polyline = one_point;
+        elsewhere.from.lon = -8.0;
+        log(&root)
+            .append(
+                Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
+                &one_trip_each(vec![in_germany, elsewhere]),
+                &Map::new(),
+            )
+            .await
+            .expect("append poll");
+
+        let outcome = ingest(&root, &EastIsGermany::default())
+            .await
+            .expect("ingest");
+
+        assert_eq!((outcome.shape_corrected, outcome.unplaceable), (2, 1));
     }
 
     #[tokio::test]

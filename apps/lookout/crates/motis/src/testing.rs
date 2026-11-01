@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
 
@@ -66,6 +67,24 @@ pub(crate) struct Nowhere;
 impl Countries for Nowhere {
     fn containing(&self, _point: Point<f64>) -> Option<Country> {
         None
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct EastIsGermany {
+    lookups: Cell<usize>,
+}
+
+impl EastIsGermany {
+    pub(crate) fn lookups(&self) -> usize {
+        self.lookups.get()
+    }
+}
+
+impl Countries for EastIsGermany {
+    fn containing(&self, point: Point<f64>) -> Option<Country> {
+        self.lookups.set(self.lookups.get() + 1);
+        (point.x() > 0.0).then_some(Country::Germany)
     }
 }
 
