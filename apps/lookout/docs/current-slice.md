@@ -875,7 +875,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       characters, so `TripSegment::line` needs no check of its own. That changes the declarations of
       `motis_poll_v1` and `motis_polyline_v1`, which become `motis_poll_v2` and `motis_polyline_v2`.
       `motis_ingest` had already decoded every polyline the store holds.
-- [ ] Once the user has inspected the migrations, delete the files and declarations of
+- [x] Once the user has inspected the migrations, delete the files and declarations of
       `motis_source_v3` and of the silver versions the new ones replace.
 - [ ] Describe landing, the drain, `motis_polyline_v2`, and `motis_segment_v3` in
       `docs/medallion.md` and `docs/motis.md`, in place of `motis_segment_v2`, and name the other

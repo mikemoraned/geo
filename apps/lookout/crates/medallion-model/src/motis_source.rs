@@ -18,9 +18,6 @@ fn motis_source_namespace() -> Uuid {
     Uuid::new_v5(&Uuid::nil(), b"MOTIS_SOURCE_NAMESPACE")
 }
 
-pub const MOTIS_SOURCE_V3: DatasetSpec<layers::Bronze> =
-    DatasetSpec::unpartitioned("motis_source_v3");
-
 pub const MOTIS_SOURCE_V4: DatasetSpec<layers::Bronze> =
     DatasetSpec::unpartitioned("motis_source_v4");
 
@@ -365,54 +362,6 @@ impl Row for MotisSourceRowV4 {
             ),
             label: Some(Label("example".to_string())),
             registered_at: DateTime::UNIX_EPOCH,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MotisSourceRowV3 {
-    pub source_id: MotisSourceId,
-    pub base_url: MotisBaseUrl,
-    pub motis_version: MotisVersion,
-    pub feed: Feed,
-    pub country: Option<String>,
-    pub overture_region_id: Option<GersId>,
-    pub overture_region_name: Option<String>,
-    pub overture_release: Option<OvertureRelease>,
-    pub label: Option<Label>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub registered_at: DateTime<Utc>,
-}
-
-impl Row for MotisSourceRowV3 {
-    type Layer = layers::Bronze;
-    const DATASET: DatasetSpec<Self::Layer> = MOTIS_SOURCE_V3;
-    const INSTANTS: &'static [&'static str] = &["registered_at"];
-
-    fn example() -> Self {
-        let MotisSourceRowV4 {
-            source_id,
-            base_url,
-            motis_version,
-            feed,
-            country,
-            overture_region_id,
-            overture_region_name,
-            overture_release,
-            label,
-            registered_at,
-        } = MotisSourceRowV4::example();
-        Self {
-            source_id,
-            base_url,
-            motis_version,
-            feed,
-            country,
-            overture_region_id,
-            overture_region_name,
-            overture_release,
-            label,
-            registered_at,
         }
     }
 }

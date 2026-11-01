@@ -29,7 +29,6 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = "2"
-uuid = { workspace = true }
 wkb = { workspace = true }
 
 [build-dependencies]
@@ -48,6 +47,7 @@ tokio = { workspace = true, features = ["test-util"] }
 wiremock = "0.6"
 testcontainers = "0.27"
 testcontainers-modules = { version = "0.15", features = ["redis"] }
+uuid = { workspace = true }
 
 [lints]
 workspace = true
