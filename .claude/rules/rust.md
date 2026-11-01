@@ -69,6 +69,9 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
   return its own `Vec`, and `extend` the caller's with it. The exception is data the caller already
   owns and means to modify, such as a buffer reused as in `Read::read`, or an allocation that
   profiling shows matters.
+- **A constructor leaves its arguments unchanged.** Write `new(legs: Vec<Leg>)`, never
+  `new(mut legs: Vec<Leg>)`. Build what the value holds through an iterator, such as
+  `legs.into_iter().sorted_by_key(...)` from `itertools`, rather than changing the argument.
 - Eagerly derive common traits (`C-COMMON-TRAITS`, `C-DEBUG`) — `Debug, Clone, PartialEq, Eq, Hash, Default` wherever they apply, and every public type implements `Debug`.
 - **An age is an `Age`, never a bare number or duration.** A maximum age, a lookback, or any
   other measure of how old something may be is a positive span held in the `Age` newtype, whose
