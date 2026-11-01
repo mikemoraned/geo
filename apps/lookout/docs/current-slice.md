@@ -935,7 +935,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 After Refactoring, once the slice works end to end.
 
 - [ ] Cut the memory `motis_ingest` takes. On the captures to 25 October, it peaks at a footprint
-      of 4.68 GB and writes 64.2 million train session samples in 372 s. `motis_ingest` on the
+      of 4.26 GB and writes 64.2 million train session samples in 216 s. `motis_ingest` on the
       captures to 25 October, under Observations, profiles it by phase. Three costs are suspected.
       Every collapsed leg is held twice, once for segments and once for sessions. Each session's
       path runs through every sample, held in degrees and projected. Each open partition file
@@ -979,9 +979,12 @@ After Refactoring, once the slice works end to end.
       keeping one per vertex would add about 1.65 GB. This cuts the run from 935 s to 372 s.
       Positions now differ from the whole-shape walk by rounding, at most 1.1e-13 degrees, in 0.6%
       of samples.
-- [ ] Memoise `CountryAreas::containing`, in `crates/transport/src/countries.rs`, by point, or test
+- [x] Memoise `CountryAreas::containing`, in `crates/transport/src/countries.rs`, by point, or test
       a bounding box first. Each call walks all 160,000 vertices of Germany's outline, for 1.70
       million legs that start from 11,266 distinct points.
+      Decided on 2026-11-01: `MemoisedCountries`, in `crates/motis/src/placement.rs`, holds the memo
+      for one derivation, so `CountryAreas` stays plain data. A bounding box does not help, since
+      nearly every point lies in Germany. This cuts the run from 372 s to 216 s.
 - [ ] Project each geometry once. Let a `GeoRow` carry a projected geometry its caller already has.
       The writer then reuses `session_of`'s projection of every sample, and `ingest` projects each
       distinct polyline once. Of the segment projections, 98% repeat a shape already projected.
@@ -1139,8 +1142,8 @@ On 26 October, `motis_ingest` read 2,742,313 captured rows, which collapse to 1,
 - Swap grew by 7.4 GB from 8.2 GB, on a machine with 24 GB. `time -l` printed 0 swaps, so that
   field does not show swap here. The swap files took 6 GiB of disk and kept it after the run.
 
-Six changes were measured on the same capture. The flush and the legs passed by value were dropped,
-and each other change builds on those before it:
+Seven changes were measured on the same capture. The flush and the legs passed by value were
+dropped, and each other change builds on those before it:
 
 | Code | Peak footprint | Peak resident set | Time | Swap growth | Sample files |
 | --- | --- | --- | --- | --- | --- |
@@ -1151,6 +1154,7 @@ and each other change builds on those before it:
 | Trips released, legs passed by value | 5.91 GB | 4.46 GB | 886 s | 1.8 GB | 2.66 GB, 74 row groups |
 | Trips released, each shape copied | 4.76 GB | 4.47 GB | 935 s | None | 2.66 GB, 74 row groups |
 | Each leg's distances computed once | 4.68 GB | 4.17 GB | 372 s | None | 2.66 GB, 74 row groups |
+| Country lookups memoised by point | 4.26 GB | 5.81 GB | 216 s | None | 2.66 GB, 74 row groups |
 
 - The first six runs wrote the same rows. Fingerprints of each trip's segments, each session, and
   each session's samples match.
@@ -1187,8 +1191,14 @@ and each other change builds on those before it:
 - Stack samples of that run put `containing` at 61% of the segment phase and `geo_day` at 23%, most
   of it projection. In the session phase, they put `GeoRowWriter::write` at 30%, `session_of` at
   12%, `containing` at 12%, and `sampled` at 9%.
-- The runs started with 8.2 GB, 10.5 GB, 13.3 GB, 12.0 GB, 9.3 GB, 10.6 GB, and 10.4 GB of swap in
-  use, so their resident sets and swap growth do not compare directly.
+- With lookups memoised, the segment phase takes 86 s, against 222 s, and the session phase 130 s,
+  against 150 s. Fingerprints match the run before exactly. The memo frees no memory, so the peak's
+  0.42 GB fall has another cause, such as variation between runs.
+- Stack samples of that run put `geo_day` at 58% of the segment phase, with projection at 35%, and
+  writing the file at 24%, with zstd at 18%. In the session phase, they put `GeoRowWriter::write` at
+  35%, `session_of` at 14%, and `sampled` at 10%. `containing` no longer shows in either phase.
+- The runs started with 8.2 GB, 10.5 GB, 13.3 GB, 12.0 GB, 9.3 GB, 10.6 GB, 10.4 GB, and 13.1 GB of
+  swap in use, so their resident sets and swap growth do not compare directly.
 
 #### `motis_ingest` on the captures to 22 October
 

@@ -10,6 +10,7 @@ use medallion_model::{
 };
 
 use crate::ingest::{self, IngestError, Shape, captures, shape_of};
+use crate::placement::MemoisedCountries;
 use crate::sampling::{InvalidLeg, InvalidLegs, Leg, NormalisedLegs, Placed};
 
 const SAMPLES_PER_WRITE: usize = 100_000;
@@ -106,6 +107,7 @@ pub async fn derive_train_sessions(
     }
     trips.sort_by_key(|trip| trip.legs.departure());
 
+    let mut countries = MemoisedCountries::of(countries);
     let mut projectors: HashMap<Country, Projector> = HashMap::new();
     let mut sample_writer = GeoRowWriter::<TrainSessionSampleRowV2>::new(root)?;
     let mut pending: Vec<GeoRow<TrainSessionSampleRowV2, Point<f64>>> = Vec::new();

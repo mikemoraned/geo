@@ -1,4 +1,5 @@
 use crate::legacy::legacy_source_id_sql;
+use crate::placement::MemoisedCountries;
 use crate::segment::{NotAPolyline, decode_polyline};
 use chrono::{DateTime, Utc};
 use domain::TrainNumber;
@@ -148,6 +149,7 @@ async fn ingest_in_writes_of(
     }
     legs.sort_by_key(|leg| leg.departure);
 
+    let mut countries = MemoisedCountries::of(countries);
     let mut writer = GeoRowWriter::<TrainSegmentRowV4>::new(root)?;
     let mut pending = Vec::new();
     for leg in legs {
