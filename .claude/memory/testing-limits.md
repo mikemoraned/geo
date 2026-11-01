@@ -49,4 +49,10 @@ What a passing test run does and doesn't prove when Claude runs it.
   outside the sandbox makes the upgrade, and builds here succeed again until pip's next release.
   `cargo build --release -p m5-core`, run in the device shell's directory, compiles `m5-core` and
   the crates it depends on for Xtensa without ESP-IDF, so it still works here.
+- **`ps` and `pgrep` cannot list processes here**, so a run must write its own pid.
+  `/usr/bin/time -l sh -c 'echo $$ > "$0"; exec "$@"' <pid file> <command>` does that and still
+  reports the command's resource usage, since `exec` keeps the process.
+- **`footprint` prints only `phys_footprint` and `phys_footprint_peak` here**, under an empty
+  category table. Its text rounds to a whole GiB from 10 GiB up, so `/usr/bin/time -l` gives the
+  exact peak. Point it at the pid with `footprint -p <pid> --sample 5`.
 - Say plainly, when reporting, which tests could not be run.

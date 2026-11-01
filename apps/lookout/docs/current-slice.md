@@ -889,38 +889,39 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 
 After Refactoring, once the slice works end to end.
 
-- [ ] Cut the memory `motis_ingest` takes. On the capture to 19 October, it peaked at 7.6 GB
-      and wrote 15 million train session samples in 302 s. Profile it by phase before changing
-      it. Three costs are suspected. Every collapsed leg is held twice, once for segments and
-      once for sessions. Each session's path runs through every sample, held in degrees and
-      projected. Each open partition file buffers a row group of up to a million rows. A path
-      from the legs' shapes would also shrink `train_session`, at 460 MB on disk.
-      A reading of the code on 23 October puts the peak at about 11 GB, while `train_segment_v2` is
-      written. That is 4–5 GB of open files' buffers, 3.3 GB of placed legs, and 2.5–3.3 GB of
-      `geo_day`'s copies of a day. It confirms the third suspect as the largest. The first costs
-      time rather than memory, since nothing survives between the two derivations. The second holds
-      in the session phase, which does not set the peak.
+- [ ] Cut the memory `motis_ingest` takes. On the captures to 25 October, it peaks at a footprint
+      of 15.55 GB and writes 64.2 million train session samples in 880 s. `motis_ingest` on the
+      captures to 25 October, under Observations, profiles it by phase. Three costs are suspected.
+      Every collapsed leg is held twice, once for segments and once for sessions. Each session's
+      path runs through every sample, held in degrees and projected. Each open partition file
+      buffers a row group of up to a million rows. A path from the legs' shapes would also shrink
+      `train_session_v2`, at 1.52 GB on disk.
+      The peak falls while `train_segment_v4` is written. That is 5.6 GB of placed legs, 1.5 GB of
+      bronze legs, 1.8 GB of `geo_day`'s copies of the last large day, and 6.6 GB left over. At
+      least 4.25 GB of what is left over is the open files' buffers, the third suspect. The first
+      costs time rather than memory, since nothing survives between the two derivations. The second
+      holds in the session phase, which does not set the peak.
 - [ ] Flush each open partition file's row group as `GeoRowWriter` writes it, in
       `crates/medallion/src/derive.rs`, or close each file once its rows are written. Set
-      `max_row_group_size` in `writer_at` too. Every (country, date) file buffers its encoded rows,
-      uncompressed, until `finish` today. A day of segments, at about 250,000 rows, never fills the
-      default row group of 1,048,576 rows.
-- [ ] Write `ingest`'s legs to `train_segment_v2` in batches, through `GeoRowWriter::new`, as
-      `derive_train_sessions` writes its samples. Today it collects all 1.32 million placed legs
+      `max_row_group_size` in `writer_at` too. Every (country, date) file buffers its compressed
+      pages until `finish` today. A day of segments, at up to 263,917 rows, never fills the default
+      row group of 1,048,576 rows.
+- [ ] Write `ingest`'s legs to `train_segment_v4` in batches, through `GeoRowWriter::new`, as
+      `derive_train_sessions` writes its samples. Today it collects all 1.70 million placed legs
       first. Iterate the captured legs by value, with a `From<Leg>` that moves their strings.
-      Batching helps only once the writer flushes. About 3.3 GB of placed legs and 1.6 GB of bronze
-      legs stay resident through the write today.
+      Batching helps only once the writer flushes. About 5.6 GB of placed legs and 1.5 GB of bronze
+      legs stay held through the write today.
 - [ ] Write a day's rows without copying them, in `geo_day` in `crates/medallion/src/derive.rs` and
       `wkb_column` in `geo.rs`. Serialise `&R`, encode WKB from `&G`, and project and encode one
       geometry at a time into a `BinaryBuilder`. A day's geometry exists about five times over at
-      once today, 2.5–3.3 GB for the largest day.
+      once today, 2.7 GB for the largest day.
 - [ ] Compute each leg's cumulative distances once in `sampled`, in `crates/motis/src/sampling.rs`,
       and interpolate within the one segment `partition_point` finds. `point_at_ratio_from_start`
-      measures and walks the whole shape again for every sample: about 6 billion Haversine
-      evaluations for 31 million travelling samples.
+      measures and walks the whole shape again for every sample: about 30 billion Haversine
+      evaluations for 54 million travelling samples.
 - [ ] Memoise `CountryAreas::containing`, in `crates/transport/src/countries.rs`, by point, or test
-      a bounding box first. Each call walks all 160,000 vertices of Germany's outline, for 1.32
-      million legs that start from about 25,000 distinct points.
+      a bounding box first. Each call walks all 160,000 vertices of Germany's outline, for 1.70
+      million legs that start from 11,266 distinct points.
 - [ ] Project each geometry once. Let a `GeoRow` carry a projected geometry its caller already has.
       The writer then reuses `session_of`'s projection of every sample, and `ingest` projects each
       distinct polyline once. Of the segment projections, 98% repeat a shape already projected.
@@ -928,12 +929,13 @@ After Refactoring, once the slice works end to end.
       `derive_train_sessions`, which copies it.
 - [ ] Release each trip's shapes once it is sampled. Iterate `trips` by value in
       `derive_train_sessions`, and pass `NormalisedLegs::new` its legs by value, in place of a deep
-      copy of every shape. About 2.7 GB stays held through the session write today, and as much
+      copy of every shape. About 3.3 GB stays held through the session write today, and as much
       again is copied.
 - [ ] Let `captures` skip what `derive_train_sessions` discards: both count queries and the final
-      `ORDER BY departure`. The session phase reruns the whole capture read today, sorting every
-      row's polyline text, 1.33 GB of it. The planned `motis_polyline_v1` table takes the text out
-      of both sorts.
+      `ORDER BY departure`. The session phase reruns the whole capture read today, carrying every
+      leg's polyline text, 0.73 GB of it. `motis_polyline_v2` takes the text out of the
+      `ROW_NUMBER` sort over `motis_segment_v3`. The query joins the text in before
+      `ORDER BY departure`.
 - [ ] When `motis_track_area` captures a whole country, test each leg once, with `covers`, against
       one prepared outline. Share the coverage, rather than cloning it each poll. It now passes the
       same shapes as area and as country, so it unions and prepares them twice and tests each leg
@@ -1006,9 +1008,9 @@ the silver the 30 October rebuild derived from `motis_segment` and `motis_segmen
   returned them in, and `captures` orders only by departure. The train segments match, so the
   difference comes from that order rather than from the migrated rows. Over those dates, 2,649
   departures of a trip are shared by two or more of its legs.
-- The run read 2,742,313 rows and took 896 s, with a peak memory footprint of 15.6 GB, a peak
-  resident set of 9.4 GB, and no swaps. The 12.7 GB under the captures to 22 October covers
-  1,975,310 rows, so the two do not show what the polyline table saves.
+- The run read 2,742,313 rows and took 896 s, with a peak memory footprint of 15.6 GB and a peak
+  resident set of 9.4 GB. The 12.7 GB under the captures to 22 October covers 1,975,310 rows, so
+  the two do not show what the polyline table saves.
 
 #### The sizes of the migrated files
 
@@ -1037,6 +1039,38 @@ On 26 October, `motis_ingest` read 2,742,313 captured rows, which collapse to 1,
 
 - A run that started with about 13 GiB of disk free ran out of space while writing
   `train_segment_v3`. With 28 GiB free, the next run finished.
+- A run on 1 November took 880 s and wrote 64.2 million train session samples. `/usr/bin/time -l`
+  reported a peak memory footprint of 15.55 GB and a peak resident set of 10.28 GB. The run used
+  927 s of CPU, about one core on average.
+
+`footprint --sample 5` recorded how that run's footprint moved:
+
+| Elapsed | Work | Footprint |
+| --- | --- | --- |
+| 0–10 s | Read the country areas and the captures | Up to 2.06 GB, then 1.48 GB |
+| 10–144 s | Decode and place the legs | 1.48 GB to 7.10 GB |
+| 144–221 s | Encode each day into its open file | 7.10 GB to 15.55 GB |
+| 221–229 s | Close the 16 `train_segment_v4` files | Down to 1.14 GB |
+| 229–240 s | Read the captures again | 3.51 GB |
+| 240–856 s | Normalise and sample the trips, and write the samples | 3.51 GB to 6.05 GB |
+| 856–880 s | Write `train_session_v2` | 6.05 GB to at least 8.60 GB |
+
+- The log and the files' timestamps fix 221 s, 229 s, 856 s, and 880 s. The curve's shape and the
+  code place 10 s, 144 s, and 240 s.
+- No `train_segment_v4` file reached the disk before 221 s, and all 16 appeared within 8 s as the
+  footprint fell. The open files hold their pages in memory until `finish`.
+- The write's 8.45 GB holds 1.84 GB of `geo_day`'s copies of 24 October, the last large day, and
+  6.61 GB left over. The files before that day take 4.25 GB compressed and 6.17 GB uncompressed.
+  parquet-rs buffers compressed pages, so the other 2.36 GB is unexplained.
+- These legs hold 219.9 million vertices in 26,965 distinct shapes, and start from 11,266 distinct
+  points. Their polyline text takes 0.73 GB, against 1.86 GB before the rows of `motis_segment_v3`
+  collapse.
+- The 165,606 sessions' legs hold 206.7 million vertices, 3.31 GB of coordinates. The footprint
+  sits at 3.51 GB as sampling starts.
+- Each of the 54.4 million travelling samples measures its leg's whole shape and walks half of it
+  on average. That comes to about 30 billion Haversine evaluations.
+- Swap grew by 7.4 GB from 8.2 GB, on a machine with 24 GB. `time -l` printed 0 swaps, so that
+  field does not show swap here. The swap files took 6 GiB of disk and kept it after the run.
 
 #### `motis_ingest` on the captures to 22 October
 
