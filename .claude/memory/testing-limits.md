@@ -17,10 +17,8 @@ What a passing test run does and doesn't prove when Claude runs it.
 - **DuckDB's `INSTALL spatial` fails under the sandbox**: it stages the extension into
   `~/.duckdb/extensions/…` and that write is refused, so anything running
   `INSTALL spatial; LOAD spatial;` dies with an `IOException` naming a `.tmp-…` file. That
-  covers the `visualise` Python tests (22 of them error, the other 23 pass) and every
-  water-crossings notebook run, so `just test-python` — and therefore `just test-no-docker`
-  as a whole — cannot complete here. Run the three Python suites separately to see which
-  half is real, and have the user run the notebook recipes.
+  covers every water-crossings notebook run, so have the user run the notebook recipes. The
+  four suites in `just test-python` pass here, and so does the rest of `just test-no-docker`.
 - **`wasm-pack` writes to `~/Library/Caches` and is refused**, so `just wasm` dies before it
   compiles anything. wasm-pack 0.15 reports it as a bare "File exists (os error 17)", and older
   releases as "Operation not permitted". It caches the `wasm-bindgen` and `wasm-opt` it downloads

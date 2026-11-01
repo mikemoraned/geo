@@ -32,16 +32,22 @@ where
 {
     let mut writer = GeoRowWriter::<R>::for_any_rows(root)?;
     check_named(&writer.target, rows.iter().map(|placed| &placed.row))?;
-    writer.write(rows).await?;
+    for (partition, day) in days_of(rows) {
+        writer.write_day(partition, &day).await?;
+        writer.close_day(partition).await?;
+    }
     writer.finish().await
 }
+
+type Partition = (Country, NaiveDate);
 
 pub struct GeoRowWriter<R> {
     root: Root,
     target: SilverTarget,
     date_key: &'static str,
     projectors: HashMap<Country, Projector>,
-    open: HashMap<(Country, NaiveDate), GeoParquetFile>,
+    open: HashMap<Partition, GeoParquetFile>,
+    closed: Vec<Partition>,
     rows: usize,
     row: PhantomData<R>,
 }
@@ -73,6 +79,7 @@ where
             date_key,
             projectors: HashMap::new(),
             open: HashMap::new(),
+            closed: Vec::new(),
             rows: 0,
             row: PhantomData,
         })
@@ -82,40 +89,58 @@ where
     where
         G: geo_traits::GeometryTrait<T = f64> + geo::MapCoords<f64, f64, Output = G> + Clone,
     {
-        let partition_of_each_row: Vec<(Country, NaiveDate)> = rows
-            .iter()
-            .map(|placed| (placed.country, placed.row.partition_date()))
-            .collect();
-
-        for ((country, date), indices) in group(&partition_of_each_row) {
-            let projector = match self.projectors.entry(country) {
-                Entry::Occupied(entry) => entry.into_mut(),
-                Entry::Vacant(entry) => entry.insert(Projector::for_country(country)?),
-            };
-            let day: Vec<&GeoRow<R, G>> = indices.iter().map(|row| &rows[*row as usize]).collect();
-            let batch = geo_day(&day, projector, country)?;
-            let file = match self.open.entry((country, date)) {
-                Entry::Occupied(entry) => entry.into_mut(),
-                Entry::Vacant(entry) => {
-                    let partition = self
-                        .root
-                        .dataset(self.target.spec())
-                        .partition(COUNTRY, country)?
-                        .on_date(date)?;
-                    entry.insert(partition.create_geo_partition(batch.schema().as_ref())?)
-                }
-            };
-            file.write(&batch).await?;
+        for (partition, day) in days_of(rows) {
+            self.write_day(partition, &day).await?;
         }
-
-        self.rows += rows.len();
         Ok(())
     }
 
-    pub async fn finish(self) -> Result<TableWritten, TableError> {
-        let mut dates_by_country: HashMap<Country, Vec<String>> = HashMap::new();
-        for ((country, date), file) in self.open {
+    async fn write_day<G>(
+        &mut self,
+        (country, date): Partition,
+        day: &[&GeoRow<R, G>],
+    ) -> Result<(), TableError>
+    where
+        G: geo_traits::GeometryTrait<T = f64> + geo::MapCoords<f64, f64, Output = G> + Clone,
+    {
+        let projector = match self.projectors.entry(country) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(Projector::for_country(country)?),
+        };
+        let batch = geo_day(day, projector, country)?;
+        let file = match self.open.entry((country, date)) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let partition = self
+                    .root
+                    .dataset(self.target.spec())
+                    .partition(COUNTRY, country)?
+                    .on_date(date)?;
+                entry.insert(partition.create_geo_partition(batch.schema().as_ref())?)
+            }
+        };
+        file.write(&batch).await?;
+
+        self.rows += day.len();
+        Ok(())
+    }
+
+    async fn close_day(&mut self, partition: Partition) -> Result<(), TableError> {
+        if let Some(file) = self.open.remove(&partition) {
             file.close().await?;
+            self.closed.push(partition);
+        }
+        Ok(())
+    }
+
+    pub async fn finish(mut self) -> Result<TableWritten, TableError> {
+        for (partition, file) in self.open {
+            file.close().await?;
+            self.closed.push(partition);
+        }
+
+        let mut dates_by_country: HashMap<Country, Vec<String>> = HashMap::new();
+        for (country, date) in self.closed {
             dates_by_country
                 .entry(country)
                 .or_default()
@@ -175,6 +200,21 @@ where
     })
 }
 
+fn days_of<R: Dated, G>(rows: &[GeoRow<R, G>]) -> Vec<(Partition, Vec<&GeoRow<R, G>>)> {
+    let partition_of_each_row: Vec<Partition> = rows
+        .iter()
+        .map(|placed| (placed.country, placed.row.partition_date()))
+        .collect();
+
+    group(&partition_of_each_row)
+        .into_iter()
+        .map(|(partition, indices)| {
+            let day = indices.iter().map(|row| &rows[*row as usize]).collect();
+            (partition, day)
+        })
+        .collect()
+}
+
 fn geo_day<R, G>(
     day: &[&GeoRow<R, G>],
     projector: &Projector,
@@ -220,7 +260,7 @@ mod tests {
 
     use super::*;
     use crate::dataset::DatasetSpec;
-    use crate::geo::PROJECTED_GEOMETRY;
+    use crate::geo::{GeoError, PROJECTED_GEOMETRY};
     use crate::query::Query;
     use crate::rows::Geometry;
 
@@ -512,6 +552,34 @@ mod tests {
                 .unwrap(),
             2
         );
+    }
+
+    #[tokio::test]
+    async fn a_failed_day_leaves_the_days_before_it_on_disk() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = Root::new(tmp.path());
+        let nowhere = Point::new(f64::NAN, f64::NAN);
+        let unprojectable = GeoRow {
+            geometry: LineString::from(vec![nowhere, nowhere]),
+            ..track("b", 22, Country::Germany)
+        };
+
+        let err = write_geo_rows(&root, &[track("a", 21, Country::Germany), unprojectable])
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(err, TableError::Geo(GeoError::Projection(_))),
+            "{err}"
+        );
+        let first_day = root
+            .dataset(TrackRow::DATASET)
+            .partition(COUNTRY, Country::Germany)
+            .unwrap()
+            .on_date(at(21).date_naive())
+            .unwrap()
+            .partition_file();
+        assert!(first_day.exists());
     }
 
     #[tokio::test]

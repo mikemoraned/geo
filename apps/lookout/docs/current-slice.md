@@ -890,27 +890,33 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 After Refactoring, once the slice works end to end.
 
 - [ ] Cut the memory `motis_ingest` takes. On the captures to 25 October, it peaks at a footprint
-      of 15.55 GB and writes 64.2 million train session samples in 880 s. `motis_ingest` on the
+      of 9.91 GB and writes 64.2 million train session samples in 871 s. `motis_ingest` on the
       captures to 25 October, under Observations, profiles it by phase. Three costs are suspected.
       Every collapsed leg is held twice, once for segments and once for sessions. Each session's
       path runs through every sample, held in degrees and projected. Each open partition file
       buffers a row group of up to a million rows. A path from the legs' shapes would also shrink
       `train_session_v2`, at 1.52 GB on disk.
       The peak falls while `train_segment_v4` is written. That is 5.6 GB of placed legs, 1.5 GB of
-      bronze legs, 1.8 GB of `geo_day`'s copies of the last large day, and 6.6 GB left over. At
-      least 4.25 GB of what is left over is the open files' buffers, the third suspect. The first
-      costs time rather than memory, since nothing survives between the two derivations. The second
-      holds in the session phase, which does not set the peak.
-- [ ] Flush each open partition file's row group as `GeoRowWriter` writes it, in
+      bronze legs, and 2.8 GB for the day being written. Closing each day's file removed the third
+      suspect from that peak. The first costs time rather than memory, since nothing survives
+      between the two derivations. The second holds in the session phase, which does not set the
+      peak.
+- [x] Flush each open partition file's row group as `GeoRowWriter` writes it, in
       `crates/medallion/src/derive.rs`, or close each file once its rows are written. Set
       `max_row_group_size` in `writer_at` too. Every (country, date) file buffers its compressed
       pages until `finish` today. A day of segments, at up to 263,917 rows, never fills the default
       row group of 1,048,576 rows.
+      Decided on 2026-11-01: `write_geo_rows` closes each day's file once the day is written, which
+      cuts the peak from 15.55 GB to 9.91 GB. A flush after each write reached only 13.46 GB and
+      grew the sample files by 14%, so `GeoRowWriter::write` does not flush. `max_row_group_size`
+      keeps its default. A smaller row group grows the files in the same way, and the writer
+      encodes a whole batch before it drains any of it.
 - [ ] Write `ingest`'s legs to `train_segment_v4` in batches, through `GeoRowWriter::new`, as
       `derive_train_sessions` writes its samples. Today it collects all 1.70 million placed legs
       first. Iterate the captured legs by value, with a `From<Leg>` that moves their strings.
-      Batching helps only once the writer flushes. About 5.6 GB of placed legs and 1.5 GB of bronze
-      legs stay held through the write today.
+      `GeoRowWriter::write` keeps each file open until `finish`, so batching must also close each
+      day's file once its legs end. About 5.6 GB of placed legs and 1.5 GB of bronze legs stay held
+      through the write today.
 - [ ] Write a day's rows without copying them, in `geo_day` in `crates/medallion/src/derive.rs` and
       `wkb_column` in `geo.rs`. Serialise `&R`, encode WKB from `&G`, and project and encode one
       geometry at a time into a `BinaryBuilder`. A day's geometry exists about five times over at
@@ -1071,6 +1077,25 @@ On 26 October, `motis_ingest` read 2,742,313 captured rows, which collapse to 1,
   on average. That comes to about 30 billion Haversine evaluations.
 - Swap grew by 7.4 GB from 8.2 GB, on a machine with 24 GB. `time -l` printed 0 swaps, so that
   field does not show swap here. The swap files took 6 GiB of disk and kept it after the run.
+
+Two changes to the writer were measured on the same capture:
+
+| Writer | Peak footprint | Peak resident set | Time | Swap growth | Sample files |
+| --- | --- | --- | --- | --- | --- |
+| Each file open until `finish` | 15.55 GB | 10.28 GB | 880 s | 7.4 GB | 2.66 GB, 74 row groups |
+| A flush after each write | 13.46 GB | 8.50 GB | 893 s | 3.5 GB | 3.04 GB, 735 row groups |
+| Each day's file closed once written | 9.91 GB | 8.53 GB | 871 s | None | 2.66 GB, 74 row groups |
+
+- All three runs wrote the same rows. Fingerprints of each trip's segments, each session, and each
+  session's samples match.
+- A flush leaves each day's compressed bytes in memory, about 0.7 GB per large day. `object_store`
+  buffers the last partial chunk of a write as a slice of the row group's whole allocation, and
+  uploads it on the file's next write or its close.
+- With each day's file closed, the footprint returns to about 7.3 GB after each day. The peak is
+  7.10 GB of legs and 2.81 GB for the day being written. The session phase's highest sample is
+  7.01 GB, down from 8.60 GB.
+- The runs started with 8.2 GB, 10.5 GB, and 13.3 GB of swap in use, so their resident sets and
+  swap growth do not compare directly.
 
 #### `motis_ingest` on the captures to 22 October
 

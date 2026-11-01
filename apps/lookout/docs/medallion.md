@@ -195,6 +195,13 @@ alongside it. The country whose zone it is written in is stated per row rather t
 Which entity a row belongs to is what decides where it is measured, so the rows making up one
 entity are measured in one zone, wherever they individually fall.
 
+An open file keeps its latest row group in memory, even after a flush. The object store's writer
+buffers the group's last chunk as a slice of the group's whole allocation. A derivation that hands
+the store all its rows at once therefore closes each partition's file as soon as that partition is
+written. If a later partition then fails, the earlier ones stay replaced until the derivation
+reruns. A derivation that hands over its rows in several calls keeps each file open until it
+finishes, since the store cannot tell when a partition is complete.
+
 #### Writing silver from another language
 
 A derivation prototyped outside the language the store's writers are written in — a notebook,
