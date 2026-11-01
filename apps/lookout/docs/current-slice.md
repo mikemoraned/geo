@@ -787,6 +787,46 @@ At the end of the slice, once its features are in.
       `2026-10-24-breaking-dataset-changes.md` has been
       applied or recorded. Record what has not, in `docs/medallion.md` or
       `crates/medallion/README.md`. Then delete the research doc.
+- [ ] Replace `legacy` in `crates/motis` with the name of the dataset it stands for,
+      `motis_segment`. `append_legacy` becomes `append_to_motis_segment`, `ingest_legacy_one`
+      becomes `ingest_one_from_motis_segment`, `legacy_sources` becomes `motis_segment_sources`,
+      and `legacy_source_id_sql` becomes `motis_segment_source_id_sql`. `legacy.rs` becomes
+      `motis_segment_sources.rs`. Apply the same change to five test names, two `.expect` messages,
+      and a local variable in `captures`. If the next task runs first, this one is moot, since that
+      task deletes all of these names.
+- [ ] Migrate `motis_segment` into `motis_segment_v3` and `motis_polyline_v2`, then delete
+      `motis_segment` and the code only it needs. This reverses One train_segment version's choice
+      that `motis_segment` keeps its rows. The dataset holds 60,243 rows in 1,307 files, captured on
+      four days from 19 to 25 July 2026, and 236 of those rows are ferries. No polyline is empty or
+      holds a character outside 63 to 126, so only a failure to decode can refuse one.
+      `motis_source_v4` already holds both of its sources.
+      1. Write a one-off binary that reads the rows through `Query` and writes them through the
+         drain's `write_polls`. Map each row with `MotisPollRowV2::of`. Its source follows its
+         capture date: `gtfs.de` before 23 July, and `delfi` from then on. If `MotisPollRowV2::of`
+         refuses a polyline, stop and report the row. Commit the binary with the data it writes.
+      2. Check the migration is lossless. `motis_segment_v3` joined to `motis_polyline_v2` must hold
+         every `motis_segment` row, with only the source id added. Record the row counts under
+         Observations.
+      3. Check `just silver-motis-ingest` reports the same counts and derives the same
+         `train_segment_v4` and `train_session_v2` rows as before the migration. A session whose
+         legs share a departure can still differ in geometry, because such legs keep the query's
+         order. Observations records this for `motis_segment_v2`.
+      4. Pause so the user can inspect the result.
+      5. Delete the binary, `motis_segment`'s files, `MOTIS_SEGMENT`, `MotisSegmentRow`, its
+         declaration snapshot, and the module holding the rule for its sources. `segment_row`, in
+         `crates/motis/src/landing.rs`, then builds a `MotisPollRowV2` directly. The two sources
+         stay in `motis_source_v4`, since the migrated rows name them.
+      6. Reduce `captures`, in `crates/motis/src/ingest.rs`, to one dataset. `Captures`,
+         `POLYLINE_IN_THE_ROW`, and `captured`'s parameters go. `ingest` then needs only one of its
+         two sorts by departure: the query's `ORDER BY` and `legs.sort_by_key`.
+      7. Make `Leg::polyline` a `Polyline`, since `motis_polyline_v2` holds only checked text.
+         `shape_of` then cannot fail, so `decode_polyline`, `NotAPolyline`, and
+         `IngestError::Polyline` go.
+      8. Rewrite the tests that write `MotisSegmentRow` so they write polls. Delete those that need
+         an empty or unreadable polyline, the rule for the sources, or both datasets. Keep the
+         `Shape::Missing` case, with a polyline that repeats one point.
+      9. Update `docs/motis.md`, `crates/medallion-model/README.md`, and the Evaluation framework
+         slice in `docs/next-slices.md`, which all name `motis_segment`.
 
 #### Six-day capture
 
