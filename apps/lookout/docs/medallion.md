@@ -199,8 +199,9 @@ An open file keeps its latest row group in memory, even after a flush. The objec
 buffers the group's last chunk as a slice of the group's whole allocation. A derivation that hands
 the store all its rows at once therefore closes each partition's file as soon as that partition is
 written. If a later partition then fails, the earlier ones stay replaced until the derivation
-reruns. A derivation that hands over its rows in several calls keeps each file open until it
-finishes, since the store cannot tell when a partition is complete.
+reruns. A derivation that hands over its rows in several calls tells the store which dates are
+complete, since the store cannot infer that. The store closes those dates' files and refuses any
+later row for them, because a new file would replace a closed one.
 
 #### Writing silver from another language
 

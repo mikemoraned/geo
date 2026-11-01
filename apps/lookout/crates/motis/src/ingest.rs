@@ -3,7 +3,7 @@ use crate::segment::{NotAPolyline, decode_polyline};
 use chrono::{DateTime, Utc};
 use domain::TrainNumber;
 use geo_types::{Coord, LineString, Point};
-use medallion::{Countries, DatasetSpec, GeoRow, Query, Root, layers};
+use medallion::{Countries, DatasetSpec, Dated, GeoRow, GeoRowWriter, Query, Root, layers};
 use medallion_model::{
     AgencyId, MOTIS_POLYLINE_V2, MOTIS_SEGMENT, MOTIS_SEGMENT_V3, MotisSourceId, PolylineId,
     RailMode, StopId, TrainSegmentRowV4, TripId,
@@ -20,6 +20,8 @@ const POLYLINE_IN_THE_ROW: &str = "";
 
 const POLYLINE_BY_ID: &str =
     "JOIN (SELECT DISTINCT polyline_id, polyline FROM motis_polyline_v2) USING (polyline_id)";
+
+const LEGS_PER_WRITE: usize = 10_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct IngestOutcome {
@@ -90,18 +92,18 @@ pub(crate) struct Leg {
     pub(crate) polyline: String,
 }
 
-impl From<&Leg> for TrainSegmentRowV4 {
-    fn from(leg: &Leg) -> Self {
+impl From<Leg> for TrainSegmentRowV4 {
+    fn from(leg: Leg) -> Self {
         Self {
-            source_id: leg.source_id.clone(),
-            trip_id: leg.trip_id.clone(),
-            route_name: leg.route_name.clone(),
+            source_id: leg.source_id,
+            trip_id: leg.trip_id,
+            route_name: leg.route_name,
             train_number: leg.train_number,
-            agency_id: leg.agency_id.clone(),
-            agency_name: leg.agency_name.clone(),
+            agency_id: leg.agency_id,
+            agency_name: leg.agency_name,
             mode: leg.mode,
             realtime: leg.realtime,
-            from_stop_id: leg.from_stop_id.clone(),
+            from_stop_id: leg.from_stop_id,
             departure: leg.departure,
             arrival: leg.arrival,
         }
@@ -128,43 +130,59 @@ impl Captures {
 }
 
 pub async fn ingest(root: &Root, countries: &impl Countries) -> Result<IngestOutcome, IngestError> {
-    let captures = captures(root).await?;
+    ingest_in_writes_of(root, countries, LEGS_PER_WRITE).await
+}
 
+async fn ingest_in_writes_of(
+    root: &Root,
+    countries: &impl Countries,
+    legs_per_write: usize,
+) -> Result<IngestOutcome, IngestError> {
     let mut outcome = IngestOutcome::default();
-    let mut placed: Vec<GeoRow<TrainSegmentRowV4, LineString<f64>>> = Vec::new();
-    for captured in captures.each() {
+    let mut legs = Vec::new();
+    for captured in captures(root).await?.each() {
         outcome.read += captured.read;
         outcome.not_rail += captured.not_rail;
         outcome.deduped += captured.legs.len() + captured.not_rail;
-        for leg in &captured.legs {
-            let line = match shape_of(leg)? {
-                Shape::Captured(line) => Some(line),
-                Shape::Corrected(line) => {
-                    outcome.shape_corrected += 1;
-                    Some(line)
-                }
-                Shape::Missing => {
-                    outcome.shapeless += 1;
-                    None
-                }
-            };
-            if let Some(line) = line {
-                match countries.containing(starts_from(&line)) {
-                    Some(country) => placed.push(GeoRow {
-                        row: TrainSegmentRowV4::from(leg),
-                        geometry: line,
-                        country,
-                    }),
-                    None => outcome.unplaceable += 1,
-                }
+        legs.extend(captured.legs);
+    }
+    legs.sort_by_key(|leg| leg.departure);
+
+    let mut writer = GeoRowWriter::<TrainSegmentRowV4>::new(root)?;
+    let mut pending = Vec::new();
+    for leg in legs {
+        let line = match shape_of(&leg)? {
+            Shape::Captured(line) => Some(line),
+            Shape::Corrected(line) => {
+                outcome.shape_corrected += 1;
+                Some(line)
+            }
+            Shape::Missing => {
+                outcome.shapeless += 1;
+                None
+            }
+        };
+        if let Some(line) = line {
+            match countries.containing(starts_from(&line)) {
+                Some(country) => pending.push(GeoRow {
+                    row: TrainSegmentRowV4::from(leg),
+                    geometry: line,
+                    country,
+                }),
+                None => outcome.unplaceable += 1,
             }
         }
+        if pending.len() >= legs_per_write {
+            writer.write(&pending).await?;
+            if let Some(last) = pending.last() {
+                writer.close_days_before(last.row.partition_date()).await?;
+            }
+            pending.clear();
+        }
     }
+    writer.write(&pending).await?;
 
-    outcome.partitions = medallion::write_geo_rows(root, &placed)
-        .await?
-        .partitions
-        .written;
+    outcome.partitions = writer.finish().await?.partitions.written;
     Ok(outcome)
 }
 
@@ -333,8 +351,8 @@ mod tests {
         CaptureLog::new(root.clone(), source(Feed::Local).id())
     }
 
-    async fn append_legacy(root: &Root, captured_at: DateTime<Utc>) {
-        let rows: Vec<MotisSegmentRow> = one_trip_each(regional_trips())
+    async fn append_legacy(root: &Root, captured_at: DateTime<Utc>, legs: Vec<TripSegment>) {
+        let rows: Vec<MotisSegmentRow> = one_trip_each(legs)
             .iter()
             .map(|segment| segment_row(captured_at, segment, &Map::new()))
             .collect();
@@ -633,14 +651,12 @@ mod tests {
     }
 
     async fn ingest_legacy_one(root: &Root, segment: &TripSegment) -> IngestOutcome {
-        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
-        let row = segment_row(captured_at, &one_trip(segment.clone()), &Map::new());
-        root.rows_of::<MotisSegmentRow>()
-            .on_date(captured_at.date_naive())
-            .expect("partition")
-            .append_rows(captured_at, &[row])
-            .await
-            .expect("append legacy poll");
+        append_legacy(
+            root,
+            Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
+            vec![segment.clone()],
+        )
+        .await;
         ingest(root, &germany()).await.expect("ingest")
     }
 
@@ -729,6 +745,68 @@ mod tests {
 
         assert_eq!((outcome.deduped, outcome.shapeless), (1, 1));
         assert_eq!(outcome.partitions, 0);
+    }
+
+    fn leg_on(day: u32) -> TripSegment {
+        let mut segment = regional_trips().remove(0);
+        segment.departure = Utc.with_ymd_and_hms(2026, 7, day, 14, 0, 0).unwrap();
+        segment.scheduled_departure = segment.departure;
+        segment
+    }
+
+    fn segments_landed_on(root: &Root, day: u32) -> bool {
+        root.path()
+            .join(format!(
+                "silver/train_segment_v4/country=DE/departure_date=2026-07-{day}"
+            ))
+            .exists()
+    }
+
+    #[tokio::test]
+    async fn a_leg_that_fails_leaves_the_days_before_it_on_disk() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
+        let mut unreadable = leg_on(23);
+        unreadable.polyline = "not a polyline".to_string();
+        append_legacy(&root, captured_at, vec![leg_on(21), leg_on(22), unreadable]).await;
+
+        let err = ingest_in_writes_of(&root, &germany(), 1)
+            .await
+            .expect_err("a refusal");
+
+        assert!(matches!(err, IngestError::Polyline(_)), "{err}");
+        assert!(segments_landed_on(&root, 21));
+        assert!(!segments_landed_on(&root, 22));
+    }
+
+    #[tokio::test]
+    async fn the_two_captures_may_share_a_day_however_small_each_write() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
+        append_legacy(&root, captured_at, vec![leg_on(21), leg_on(23)]).await;
+        log(&root)
+            .append(captured_at, &[one_trip(leg_on(21))], &Map::new())
+            .await
+            .expect("append poll");
+
+        let outcome = ingest_in_writes_of(&root, &germany(), 1)
+            .await
+            .expect("ingest");
+
+        assert_eq!(outcome.partitions, 2);
+        assert_eq!(
+            derived(&root)
+                .await
+                .count(
+                    "SELECT COUNT(*) AS count FROM train_segment_v4
+                     WHERE departure_date = '2026-07-21'"
+                )
+                .await
+                .expect("count"),
+            2
+        );
     }
 
     #[tokio::test]
@@ -919,6 +997,7 @@ mod tests {
         append_legacy(
             &root,
             Utc.with_ymd_and_hms(2026, 7, 22, 23, 59, 59).unwrap(),
+            regional_trips(),
         )
         .await;
 
@@ -932,7 +1011,12 @@ mod tests {
     async fn a_legacy_capture_from_the_move_to_delfi_is_derived_under_delfi() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        append_legacy(&root, Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap()).await;
+        append_legacy(
+            &root,
+            Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap(),
+            regional_trips(),
+        )
+        .await;
 
         ingest(&root, &germany()).await.expect("ingest");
 

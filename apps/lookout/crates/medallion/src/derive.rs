@@ -103,6 +103,13 @@ where
     where
         G: geo_traits::GeometryTrait<T = f64> + geo::MapCoords<f64, f64, Output = G> + Clone,
     {
+        if self.closed.contains(&(country, date)) {
+            return Err(TableError::DayClosed {
+                dataset: self.target.name(),
+                country,
+                date,
+            });
+        }
         let projector = match self.projectors.entry(country) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => entry.insert(Projector::for_country(country)?),
@@ -122,6 +129,19 @@ where
         file.write(&batch).await?;
 
         self.rows += day.len();
+        Ok(())
+    }
+
+    pub async fn close_days_before(&mut self, date: NaiveDate) -> Result<(), TableError> {
+        let finished: Vec<Partition> = self
+            .open
+            .keys()
+            .filter(|(_, day)| *day < date)
+            .copied()
+            .collect();
+        for partition in finished {
+            self.close_day(partition).await?;
+        }
         Ok(())
     }
 
@@ -260,7 +280,7 @@ mod tests {
 
     use super::*;
     use crate::dataset::DatasetSpec;
-    use crate::geo::{GeoError, PROJECTED_GEOMETRY};
+    use crate::geo::PROJECTED_GEOMETRY;
     use crate::query::Query;
     use crate::rows::Geometry;
 
@@ -463,6 +483,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn closing_the_days_before_a_date_lands_their_files_and_keeps_the_rest_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = Root::new(tmp.path());
+        let mut writer = GeoRowWriter::<SightingRow>::new(&root).unwrap();
+        writer
+            .write(&[
+                sighting("a", 21, Country::Germany),
+                sighting("b", 22, Country::Germany),
+            ])
+            .await
+            .unwrap();
+
+        writer.close_days_before(at(22).date_naive()).await.unwrap();
+
+        assert!(sighting_partition(&tmp, "DE", 21));
+        assert!(!sighting_partition(&tmp, "DE", 22));
+        assert_eq!(writer.finish().await.unwrap().partitions.written, 2);
+    }
+
+    #[tokio::test]
+    async fn a_row_for_a_closed_day_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = Root::new(tmp.path());
+        let mut writer = GeoRowWriter::<SightingRow>::new(&root).unwrap();
+        writer
+            .write(&[sighting("a", 21, Country::Germany)])
+            .await
+            .unwrap();
+        writer.close_days_before(at(22).date_naive()).await.unwrap();
+
+        let err = writer
+            .write(&[sighting("b", 21, Country::Germany)])
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, TableError::DayClosed { .. }), "{err}");
+    }
+
+    #[tokio::test]
     async fn rows_named_uniquely_cannot_be_written_over_several_calls() {
         let tmp = tempfile::tempdir().unwrap();
 
@@ -568,18 +627,12 @@ mod tests {
             .await
             .unwrap_err();
 
+        assert!(matches!(err, TableError::Geo(_)), "{err}");
         assert!(
-            matches!(err, TableError::Geo(GeoError::Projection(_))),
-            "{err}"
+            tmp.path()
+                .join("silver/track/country=DE/seen_date=2026-07-21")
+                .exists()
         );
-        let first_day = root
-            .dataset(TrackRow::DATASET)
-            .partition(COUNTRY, Country::Germany)
-            .unwrap()
-            .on_date(at(21).date_naive())
-            .unwrap()
-            .partition_file();
-        assert!(first_day.exists());
     }
 
     #[tokio::test]

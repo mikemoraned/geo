@@ -89,6 +89,14 @@ pub enum TableError {
     GeometryUnexpected { dataset: &'static str },
     #[error("{dataset} names each row uniquely, so its rows are written in one call")]
     UniqueAcrossWrites { dataset: &'static str },
+    #[error(
+        "{dataset} has closed its file for {country} on {date}, so it takes no more rows for it"
+    )]
+    DayClosed {
+        dataset: &'static str,
+        country: Country,
+        date: NaiveDate,
+    },
     #[error("reading the table: {0}")]
     Arrow(#[from] arrow::error::ArrowError),
     #[error("reading the geometry: {0}")]
