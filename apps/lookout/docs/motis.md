@@ -122,6 +122,18 @@ polyline as it arrived. Deriving silver, a leg whose shape has fewer than two di
 the straight line between its two stops. A leg whose stops share one position has no line at all,
 and is counted rather than written.
 
+## A leg's polyline can be empty or invalid
+
+The API requires a leg's `polyline` field, so a leg with no polyline arrives with empty text. The
+area test needs a line, so a capture leaves such a leg out. It counts these legs and logs a warning.
+
+An invalid polyline is text the decoder refuses, or text with a character outside ASCII 63–126. A
+capture ignores that leg's row, logs an error, and counts it. The poll's other legs still land.
+
+The `polyline` 0.11 decoder checks only a character's lower bound. It reads a byte of 127 or above
+as part of a coordinate, and can return a line with wrong coordinates. A polyline's character check
+therefore runs alongside decoding.
+
 ## Train number and agency need a second call
 
 `map/trips` carries neither. Its `TripInfo` exposes `routeShortName` — the bare line, `"55"`
@@ -180,9 +192,22 @@ such as a Motis upgrade or a new Overture release, makes a new source. A label a
 only when present.
 
 Bronze `motis_source_v4` holds one row per source, unpartitioned, and recording a source already
-present writes nothing. Bronze `motis_segment_v2` holds the captured legs, partitioned by
-`polled_date`, with one file per poll. A row is one leg seen in one poll: the trip, its train
-number and agency, the mode, both stops, the scheduled and realtime times, and the polyline.
+present writes nothing.
+
+A poll lands in `motis_poll_v2`, partitioned by `polled_date`, with one file per poll. A row is one
+leg seen in one poll: the trip, its train number and agency, the mode, both stops, the scheduled
+and realtime times, and the polyline.
+
+`just bronze-promote-motis-landing` drains landing into two bronze datasets:
+
+- `motis_polyline_v2`, unpartitioned, holds each polyline once, under a UUID v5 of its text. A drain
+  adds one file holding the polylines bronze lacks.
+- `motis_segment_v3`, partitioned by `polled_date`, holds a row for each leg in each poll, with a
+  polyline id in place of the polyline. A drain adds one zstd file per date. Rows sort by stop pair,
+  polyline id, trip, and capture time.
+
+A drain interrupted before it deletes its landing files writes those polls again on the next run,
+and deriving silver collapses the repeat.
 
 The earlier captures in `motis_segment` carry no source. Two sources stand for them, both the
 local server at Motis v2.10.2 with no area: one labelled `gtfs.de`, for the captures before the
@@ -192,6 +217,32 @@ its capture date falls under.
 
 Silver derived from either capture dataset holds only the rail modes a capture keeps. Deriving the
 segments leaves out a leg of any other mode, such as a ferry in the earlier captures, and counts it.
+
+## Polyline text dominates a capture
+
+Polling Germany every 10 minutes repeats each polyline about 80 times. A leg appears in every poll
+whose window it overlaps, and many trips share the polyline between two stops. In 1,919,542 rows,
+polyline text takes 1,334.5 MB, 87% of a dataset holding it in every row. Only 24,790 polylines are
+distinct, 16.7 MB in all. Few are new after the first full day: 161 and 117 on the fourth and fifth.
+
+Sizes over three days of about 1.17 million rows, per day:
+
+| Layout | On disk | In git |
+| --- | --- | --- |
+| A file per poll, uncompressed, polyline in every row | 304.6 MB | 58–70 MB |
+| A file per poll, zstd, polyline in every row | 160 MB | 160 MB |
+| A file per date, zstd, polyline stored once | 5.65 MB | 5.4 MB |
+
+These sizes leave out the polyline table, which grows by 0.10–0.27 MB a day after its first full
+day. DuckDB wrote the files behind the second row, which covers one day, and behind the third row's
+size in git. Git shrinks a zstd file by 4% at most.
+
+Sort order sets the size of a merged file. In a file per day sorted by stop pair, each coordinate
+column takes 0.09–0.14 MB. Sorted by trip, each takes 0.73–0.75 MB.
+
+Storing only a leg's changes gains little. Over the same days, 35% of rows repeat another capture of
+the same leg, and a sorted file already stores those cheaply. A row would also change meaning, from
+one leg in one poll to one leg over a span of polls.
 
 ## Two server quirks a caller has to absorb
 

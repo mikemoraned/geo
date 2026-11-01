@@ -50,10 +50,12 @@ single explicit argument recorded in the command.
 Where raw recordings are made, in whatever native live format the source uses — a queue a
 device posts into, or the capture log a polling process appends to.
 
-Formats here are optimised for **fast in-place update by a single writer**. A queue or an
-sqlite db is permitted. This is the one layer where non-parquet formats are the norm.
+Formats here are optimised for **fast writes by a single writer**. A queue, an sqlite db, or a
+parquet file per poll is permitted. This is the one layer where non-parquet formats are the norm.
 
-Landing is not a durable archive: it is drained into bronze.
+Landing is not a durable archive: it is drained into bronze. A drain writes bronze, checks that
+bronze holds every row it read, and only then deletes the landing files. Until a drain runs, a
+recording exists only on the local disk.
 
 ### bronze
 
@@ -81,7 +83,9 @@ of restating it, and there is no call to review or error to handle.
 **A lossless transformation is the one way bronze files change.** It runs once, outside the
 operations a writer has, and keeps every observation. It rewrites files in place, or copies a
 version's rows into the next version and then deletes the old version's files. Git history
-keeps every file it replaces.
+keeps every file it replaces, with one exception. A branch that has not merged may drop from its
+own history the files of a version it both added and migrated, so the main branch never holds
+them. Code at that branch's earlier commits then finds those files missing.
 
 **Bronze tolerates the same observation arriving more than once, so deduplication is the
 reader's job.** Nothing here rejects a repeat:
@@ -104,6 +108,15 @@ Format: parquet, shaped for **quick, safe appends**.
 - One file per ingestion run, not per data point — an ingestion extracts many readings and
   writes them as a single batch. Small files are therefore acceptable at this layer, since
   querying is done against silver.
+- **Samples merge before they reach git.** Bronze never rewrites a file, and git keeps every
+  committed blob, so merging committed files frees nothing. A polling process therefore writes to
+  landing, and each drain writes bronze files holding many polls.
+- **A compressed file pays only when it holds many polls.** Git finds no deltas between compressed
+  files, so compressing a file per poll takes more room in git than leaving it uncompressed. Sorting
+  a merged file puts repeated values next to each other, where its encodings remove them.
+- **A value that samples repeat may move to a dataset of its own**, stored once under a hash of its
+  text and still verbatim. A sample's row then carries the hash. Writing that dataset before the
+  samples means a crash leaves an unused value, and never a missing one.
 - **Compact third-party geo formats are retained as received.** An encoded
   [polyline](https://developers.google.com/maps/documentation/utilities/polylinealgorithm)
   arriving from a live service is stored verbatim as a polyline. Such formats are not the
@@ -401,7 +414,8 @@ existing directory.
 | dataset | partitioning | file |
 | --- | --- | --- |
 | sensor readings, one dataset per sensor | `ingested_date=<date>` | one per ingestion, named for its instant |
-| third-party service samples | `polled_date=<date>` | one per poll, named for its poll timestamp |
+| third-party service samples | `polled_date=<date>` | one per drain, named for its instant |
+| values those samples repeat | none | one per drain, named for its instant |
 | upstream reference extracts | `extract_id=<id>/` then the upstream's own layout, verbatim | as produced by the extraction |
 | extract manifest | none | one row per extract: id, date, upstream release, ISO 3166-1 alpha-2 country, bbox |
 

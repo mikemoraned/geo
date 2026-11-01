@@ -115,7 +115,7 @@ Decisions taken before starting, as each changes what gets built.
 #### Compact capture
 
 The measurements behind the Compact capture decisions are in
-[2026-10-23-compact-bronze.md](2026-10-23-compact-bronze.md).
+`2026-10-23-compact-bronze.md`, since deleted.
 
 - **Polls land in landing, and a drain moves them into bronze.** Bronze never rewrites a file, and
   git keeps every committed blob, so polls merge before they reach git. Merging poll files after
@@ -868,16 +868,17 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
         pass the decoder, and `SegmentLog::append` then fails the capture and loses the poll's other
         rows.
 
-      Decided on 2026-10-31: a leg with no polyline stays out of landing. The coverage test needs
-      its line, and no capture has held such a leg. `SegmentLog::append` still refuses an invalid
-      polyline, for a caller other than `capture`.
+      Decided on 2026-10-31: a leg with no polyline stays out of landing, since the coverage test
+      needs its line. The store cannot show how often Motis sends one, because captures have always
+      left these legs out, counted as outside. The new count will show it. `SegmentLog::append`
+      still refuses an invalid polyline, for a caller other than `capture`.
       Extended on 2026-10-31: building a `Polyline` now decodes it as well as checking its
       characters, so `TripSegment::line` needs no check of its own. That changes the declarations of
       `motis_poll_v1` and `motis_polyline_v1`, which become `motis_poll_v2` and `motis_polyline_v2`.
       `motis_ingest` had already decoded every polyline the store holds.
 - [x] Once the user has inspected the migrations, delete the files and declarations of
       `motis_source_v3` and of the silver versions the new ones replace.
-- [ ] Describe landing, the drain, `motis_polyline_v2`, and `motis_segment_v3` in
+- [x] Describe landing, the drain, `motis_polyline_v2`, and `motis_segment_v3` in
       `docs/medallion.md` and `docs/motis.md`, in place of `motis_segment_v2`, and name the other
       new versions there. A third-party service's samples take one bronze file per drain. Then fold
       what holds of `2026-10-23-compact-bronze.md` into them, and delete it.
