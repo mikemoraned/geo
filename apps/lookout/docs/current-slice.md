@@ -882,7 +882,7 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
       `docs/medallion.md` and `docs/motis.md`, in place of `motis_segment_v2`, and name the other
       new versions there. A third-party service's samples take one bronze file per drain. Then fold
       what holds of `2026-10-23-compact-bronze.md` into them, and delete it.
-- [ ] Rewrite this branch's commits since it left `main` without the `motis_segment_v2` files,
+- [x] Rewrite this branch's commits since it left `main` without the `motis_segment_v2` files,
       using `git filter-repo` in a fresh clone. Before opening the PR, force-push the result.
 
 #### Optimisation
