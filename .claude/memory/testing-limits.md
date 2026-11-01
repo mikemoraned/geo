@@ -53,4 +53,6 @@ What a passing test run does and doesn't prove when Claude runs it.
 - **`footprint` prints only `phys_footprint` and `phys_footprint_peak` here**, under an empty
   category table. Its text rounds to a whole GiB from 10 GiB up, so `/usr/bin/time -l` gives the
   exact peak. Point it at the pid with `footprint -p <pid> --sample 5`.
+- **`/usr/bin/sample <pid> 10 -mayDie -file <path>` profiles a running process here**, with no code
+  change or rebuild. Its call tree gives each function's share of each thread's samples.
 - Say plainly, when reporting, which tests could not be run.

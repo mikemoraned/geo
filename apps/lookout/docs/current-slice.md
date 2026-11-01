@@ -935,17 +935,18 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 After Refactoring, once the slice works end to end.
 
 - [ ] Cut the memory `motis_ingest` takes. On the captures to 25 October, it peaks at a footprint
-      of 7.31 GB and writes 64.2 million train session samples in 869 s. `motis_ingest` on the
+      of 4.76 GB and writes 64.2 million train session samples in 935 s. `motis_ingest` on the
       captures to 25 October, under Observations, profiles it by phase. Three costs are suspected.
       Every collapsed leg is held twice, once for segments and once for sessions. Each session's
       path runs through every sample, held in degrees and projected. Each open partition file
       buffers a row group of up to a million rows. A path from the legs' shapes would also shrink
       `train_session_v2`, at 1.52 GB on disk.
-      The peak now falls at the end of the session phase, while `train_session_v2` is written. The
-      segment phase reaches only 2.25 GB, since its legs go in batches and each day's file closes
-      once written. That removes the third suspect from the peak. The first costs time rather than
-      memory, since nothing survives between the two derivations. The second holds in the session
-      phase, which now sets the peak.
+      The peak now falls partway through sampling, while most trips' shapes are still held. The
+      segment phase stays under 3 GB, since its legs go in batches and each day's file closes once
+      written. The third suspect holds only for the sample files, which stay open until sampling
+      ends, and closing them frees 0.65 GB. The first costs time rather than memory, since nothing
+      survives between the two derivations. The second holds in the session phase, which now sets
+      the peak.
 - [x] Flush each open partition file's row group as `GeoRowWriter` writes it, in
       `crates/medallion/src/derive.rs`, or close each file once its rows are written. Set
       `max_row_group_size` in `writer_at` too. Every (country, date) file buffers its compressed
@@ -982,10 +983,15 @@ After Refactoring, once the slice works end to end.
       distinct polyline once. Of the segment projections, 98% repeat a shape already projected.
       Share one per-country projector cache between `GeoRowWriter::write` and
       `derive_train_sessions`, which copies it.
-- [ ] Release each trip's shapes once it is sampled. Iterate `trips` by value in
+- [x] Release each trip's shapes once it is sampled. Iterate `trips` by value in
       `derive_train_sessions`, and pass `NormalisedLegs::new` its legs by value, in place of a deep
       copy of every shape. About 3.3 GB stays held through the session write today, and as much
       again is copied.
+      Decided on 2026-11-01: `derive_train_sessions` iterates `trips` by value, which cuts the peak
+      from 7.31 GB to 4.76 GB. `NormalisedLegs::new` keeps its copy. Passing the legs by value
+      reached only 5.91 GB, because each decoded shape keeps the spare capacity of its growing
+      `Vec`. The copy allocates the exact size and takes about 0.2 s in all. `shrink_to_fit` leaves
+      the footprint unchanged on macOS.
 - [ ] Let `captures` skip what `derive_train_sessions` discards: both count queries and the final
       `ORDER BY departure`. The session phase reruns the whole capture read today, carrying every
       leg's polyline text, 0.73 GB of it. `motis_polyline_v2` takes the text out of the
@@ -1129,17 +1135,19 @@ On 26 October, `motis_ingest` read 2,742,313 captured rows, which collapse to 1,
 - Swap grew by 7.4 GB from 8.2 GB, on a machine with 24 GB. `time -l` printed 0 swaps, so that
   field does not show swap here. The swap files took 6 GiB of disk and kept it after the run.
 
-Three changes to the writing were measured on the same capture. The flush was dropped, and the
-batches build on the closed files:
+Five changes were measured on the same capture. The flush and the legs passed by value were dropped,
+and each other change builds on those before it:
 
-| Writer | Peak footprint | Peak resident set | Time | Swap growth | Sample files |
+| Code | Peak footprint | Peak resident set | Time | Swap growth | Sample files |
 | --- | --- | --- | --- | --- | --- |
 | Each file open until `finish` | 15.55 GB | 10.28 GB | 880 s | 7.4 GB | 2.66 GB, 74 row groups |
 | A flush after each write | 13.46 GB | 8.50 GB | 893 s | 3.5 GB | 3.04 GB, 735 row groups |
 | Each day's file closed once written | 9.91 GB | 8.53 GB | 871 s | None | 2.66 GB, 74 row groups |
 | Legs written in batches as well | 7.31 GB | 4.87 GB | 869 s | None | 2.66 GB, 74 row groups |
+| Trips released, legs passed by value | 5.91 GB | 4.46 GB | 886 s | 1.8 GB | 2.66 GB, 74 row groups |
+| Trips released, each shape copied | 4.76 GB | 4.47 GB | 935 s | None | 2.66 GB, 74 row groups |
 
-- All four runs wrote the same rows. Fingerprints of each trip's segments, each session, and each
+- All six runs wrote the same rows. Fingerprints of each trip's segments, each session, and each
   session's samples match.
 - A flush leaves each day's compressed bytes in memory, about 0.7 GB per large day. `object_store`
   buffers the last partial chunk of a write as a slice of the row group's whole allocation, and
@@ -1150,8 +1158,23 @@ batches build on the closed files:
 - With legs in batches, the segment phase peaks at 2.25 GB. Its footprint falls from about 1.7 GB
   to 0.6 GB as the legs' strings are released. The whole run's peak moves to the write of
   `train_session_v2`. `train_segment_v4` keeps its 16 row groups and grows by 0.06%.
-- The runs started with 8.2 GB, 10.5 GB, 13.3 GB, and 12.0 GB of swap in use, so their resident
-  sets and swap growth do not compare directly.
+- With trips released and each shape copied, the footprint starts sampling at 3.70 GB and reaches
+  4.41 GB 215 s later. Session paths and sample buffers grow over the same time. It falls to 2.89 GB
+  as sampling ends. Closing the sample files then frees 0.65 GB, and the write of `train_session_v2`
+  reaches about 2.6 GB.
+- With legs passed by value, the footprint starts sampling at 4.96 GB, 1.26 GB higher.
+  `polyline::decode_polyline` pushes each point onto a `Vec`, so the `Vec` ends with spare capacity.
+  A test grew 1.5 million vectors to hold 3.11 GB of points. Its peak footprint was 4.32 GB as
+  grown, 4.32 GB after `shrink_to_fit`, and 3.55 GB after a clone. The clone cost 0.19 s.
+- `/usr/bin/sample` took two 10 s stack samples during the session phase of the last run. They put
+  82% of the main thread's time in `position_at`, 2% in `containing`, 2% in `session_of`, and 6% in
+  writing samples. The other threads sat idle.
+- The segment phase of the last run took 274 s, against 223 s for the same code in the run before.
+  Its total time therefore shows no slowdown from the copy.
+- `footprint` labels binary gigabytes GB, so its figures read 7% below those of `time -l`. The last
+  run's peak reads 4.43 in the first and 4.76 in the second.
+- The runs started with 8.2 GB, 10.5 GB, 13.3 GB, 12.0 GB, 9.3 GB, and 10.6 GB of swap in use, so
+  their resident sets and swap growth do not compare directly.
 
 #### `motis_ingest` on the captures to 22 October
 

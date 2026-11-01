@@ -107,3 +107,7 @@ When a build would relink the workspace:
    third-party crate.
 3. Watch free disk until the build ends. The capture's poller writes to the same disk, and a full
    disk loses its polls.
+
+Clearing can free far less than it removes. On 1 November 2026, removing 24.9 GiB of `target/debug`
+freed about 4 GiB, and the sandbox did not show why. Check free disk after clearing, and keep the
+third-party builds unless the space is needed.

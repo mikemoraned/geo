@@ -110,7 +110,7 @@ pub async fn derive_train_sessions(
     let mut sample_writer = GeoRowWriter::<TrainSessionSampleRowV2>::new(root)?;
     let mut pending: Vec<GeoRow<TrainSessionSampleRowV2, Point<f64>>> = Vec::new();
     let mut sessions: Vec<GeoRow<TrainSessionRowV2, LineString<f64>>> = Vec::new();
-    for trip in &trips {
+    for trip in trips {
         let placed = trip.legs.sampled(interval)?;
         let start = placed.first().ok_or_else(|| IngestError::NoSamples {
             trip_id: trip.trip_id.clone(),
@@ -122,7 +122,7 @@ pub async fn derive_train_sessions(
                     Entry::Occupied(entry) => entry.into_mut(),
                     Entry::Vacant(entry) => entry.insert(Projector::for_country(country)?),
                 };
-                let session = session_of(trip, &placed, projector)?;
+                let session = session_of(&trip, &placed, projector)?;
                 pending.extend(session.samples.into_iter().map(|(row, geometry)| GeoRow {
                     row,
                     geometry,
