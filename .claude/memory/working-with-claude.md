@@ -33,6 +33,13 @@ The last command prints the tree's hash. Once the user approves the commits, `gi
 it, so commit the steps in order. If `HEAD` moves first, as when another session commits
 polls, rebuild each tree on the new `HEAD`.
 
+## Memos and caches
+
+A memo that saves much time shows that something upstream repeats work. Find why the same input
+comes back, and remove the repeat there. Keep a memo only where no upstream change removes the
+repeat. On 1 November 2026, a memo of country lookups saved 156 s, and its repeats came from a read
+that joined each polyline's text onto every leg.
+
 ## Flashing the M5 device
 
 Claude cannot open the serial port: every `/dev/cu.*` open returns `EPERM` from its process
