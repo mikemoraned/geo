@@ -827,6 +827,11 @@ At the end of the slice, once its features are in.
          `Shape::Missing` case, with a polyline that repeats one point.
       9. Update `docs/motis.md`, `crates/medallion-model/README.md`, and the Evaluation framework
          slice in `docs/next-slices.md`, which all name `motis_segment`.
+- [ ] Make `Panel::new`, in `crates/platform/m5/m5plus/src/panel.rs`, leave its display unchanged,
+      as `.claude/rules/rust.md` asks. It takes `mut display` today to clear the screen. Move the
+      clearing into a `Panel::clear`, which `src/bin/m5plus.rs` calls straight after `new`. That
+      keeps the screen black when the backlight comes on. `new` then returns a `Panel` rather than
+      a `Result`. The user flashes the device to check the screen comes up black.
 
 #### Six-day capture
 
