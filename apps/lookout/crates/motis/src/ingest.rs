@@ -8,6 +8,7 @@ use medallion_model::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use strum::IntoEnumIterator;
 
 const LEG_IDENTITY: &str = "source_id, trip_id, from_stop_id, scheduled_departure";
@@ -147,7 +148,7 @@ async fn ingest_in_writes_of(
             match country {
                 Some(country) => pending.push(GeoRow {
                     row: TrainSegmentRowV4::from(leg),
-                    geometry: line,
+                    geometry: LineString::clone(&line),
                     country,
                 }),
                 None => outcome.unplaceable += 1,
@@ -227,14 +228,17 @@ fn rail_modes() -> String {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PlacedLine {
-    pub(crate) line: LineString<f64>,
+    pub(crate) line: Arc<LineString<f64>>,
     pub(crate) country: Option<Country>,
 }
 
 impl PlacedLine {
     fn of(line: LineString<f64>, countries: &impl Countries) -> Self {
         let country = countries.containing(starts_from(&line));
-        Self { line, country }
+        Self {
+            line: Arc::new(line),
+            country,
+        }
     }
 }
 
@@ -959,6 +963,43 @@ mod tests {
 
         assert_eq!(outcome.deduped, 1);
         assert_eq!(countries.lookups(), 1);
+    }
+
+    fn leg_naming(polyline: &Polyline) -> Leg {
+        Leg {
+            source_id: source(Feed::Local).id(),
+            trip_id: TripId::new("a trip").expect("a trip id"),
+            route_name: None,
+            train_number: None,
+            agency_id: None,
+            agency_name: None,
+            mode: RailMode::RegionalRail,
+            realtime: false,
+            from_stop_id: None,
+            from_lat: 0.0,
+            from_lon: 0.0,
+            to_lat: 0.0,
+            to_lon: 0.0,
+            departure: DateTime::UNIX_EPOCH,
+            arrival: DateTime::UNIX_EPOCH,
+            polyline_id: PolylineId::of(polyline),
+        }
+    }
+
+    #[test]
+    fn legs_sharing_a_polyline_share_its_line() {
+        let polyline = Polyline::new(shaped(&[(8.0, 50.0), (8.1, 50.1)]).polyline).unwrap();
+        let countries = germany();
+        let shapes = Shapes::placed_in(&countries, vec![MotisPolylineRowV2::of(polyline.clone())]);
+        let line_of = |leg: Leg| match shapes.of(&leg).expect("a shape") {
+            Shape::Captured(placed) => placed.line,
+            Shape::Corrected(_) | Shape::Missing => panic!("the leg's own polyline has a shape"),
+        };
+
+        let first = line_of(leg_naming(&polyline));
+        let second = line_of(leg_naming(&polyline));
+
+        assert!(Arc::ptr_eq(&first, &second));
     }
 
     #[tokio::test]

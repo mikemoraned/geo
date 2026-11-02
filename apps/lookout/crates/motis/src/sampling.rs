@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::iter::{once, successors};
+use std::sync::Arc;
 
 use chrono::{DateTime, TimeDelta, Utc};
 use domain::Span;
@@ -11,7 +12,7 @@ use medallion_model::GeometrySource;
 pub struct Leg {
     departure: DateTime<Utc>,
     arrival: DateTime<Utc>,
-    shape: LineString<f64>,
+    shape: Arc<LineString<f64>>,
     origin: Point<f64>,
     destination: Point<f64>,
 }
@@ -34,7 +35,7 @@ impl Leg {
     pub fn new(
         departure: DateTime<Utc>,
         arrival: DateTime<Utc>,
-        shape: LineString<f64>,
+        shape: Arc<LineString<f64>>,
     ) -> Result<Self, InvalidLeg> {
         if arrival < departure {
             return Err(InvalidLeg::ArrivesBeforeDeparting { departure, arrival });
@@ -250,7 +251,7 @@ mod tests {
     }
 
     fn leg(departure: i64, arrival: i64, shape: LineString<f64>) -> Leg {
-        Leg::new(at(departure), at(arrival), shape).expect("a leg")
+        Leg::new(at(departure), at(arrival), Arc::new(shape)).expect("a leg")
     }
 
     fn normalised(legs: &[Leg]) -> NormalisedLegs {
@@ -289,7 +290,7 @@ mod tests {
     #[test]
     fn a_leg_cannot_arrive_before_it_departs() {
         assert_eq!(
-            Leg::new(at(60), at(0), north(50.1)),
+            Leg::new(at(60), at(0), Arc::new(north(50.1))),
             Err(InvalidLeg::ArrivesBeforeDeparting {
                 departure: at(60),
                 arrival: at(0),
@@ -300,7 +301,7 @@ mod tests {
     #[test]
     fn a_leg_cannot_have_a_shape_of_one_point() {
         assert_eq!(
-            Leg::new(at(0), at(60), line_string![(x: 8.0, y: 50.0)]),
+            Leg::new(at(0), at(60), Arc::new(line_string![(x: 8.0, y: 50.0)])),
             Err(InvalidLeg::TooFewPoints {
                 departure: at(0),
                 points: 1,
@@ -310,7 +311,7 @@ mod tests {
 
     #[test]
     fn a_leg_can_arrive_as_it_departs() {
-        assert!(Leg::new(at(60), at(60), north(50.1)).is_ok());
+        assert!(Leg::new(at(60), at(60), Arc::new(north(50.1))).is_ok());
     }
 
     #[test]

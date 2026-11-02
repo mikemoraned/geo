@@ -1027,11 +1027,14 @@ After Refactoring, once the slice works end to end.
       reached only 5.91 GB, because each decoded shape keeps the spare capacity of its growing
       `Vec`. The copy allocates the exact size and takes about 0.2 s in all. `shrink_to_fit` leaves
       the footprint unchanged on macOS.
-- [ ] Share each decoded shape among the legs that use it. `Leg::shape`, in
+- [x] Share each decoded shape among the legs that use it. `Leg::shape`, in
       `crates/motis/src/sampling.rs`, holds its own copy of a line `Shapes` already holds. The
       165,606 sessions' legs hold 3.31 GB of coordinates, against 0.085 GB in all 26,965 distinct
       shapes. An `Arc<LineString<f64>>` handed out by `PlacedLine` removes the copies, and these
       copies set the peak.
+      Decided on 2026-11-02: `PlacedLine` holds that `Arc`, and `Leg::new` takes one. This cuts the
+      peak from 4.77 GB to 2.88 GB, and every row matches. The peak now falls while `write_geo_rows`
+      writes `train_session_v2`.
 - [ ] Let `captured` skip what `derive_train_sessions` discards: both count queries and the final
       `ORDER BY departure`. The session phase reruns the whole capture read today. `ingest` writes
       its legs in the query's order, so only `derive_train_sessions` can skip that sort. Legs
@@ -1201,7 +1204,7 @@ On 26 October, `motis_ingest` read 2,742,313 captured rows, which collapse to 1,
 - Swap grew by 7.4 GB from 8.2 GB, on a machine with 24 GB. `time -l` printed 0 swaps, so that
   field does not show swap here. The swap files took 6 GiB of disk and kept it after the run.
 
-Nine changes were measured on the same capture. The flush and the legs passed by value were
+Ten changes were measured on the same capture. The flush and the legs passed by value were
 dropped, and placing each polyline once replaced the memo. Each other change builds on those before
 it:
 
@@ -1217,6 +1220,7 @@ it:
 | Country lookups memoised by point | 4.26 GB | 5.81 GB | 216 s | None | 2.66 GB, 74 row groups |
 | Each polyline placed once, no memo | 4.41 GB | 6.20 GB | 219 s | None | 2.66 GB, 74 row groups |
 | `motis_segment` deleted | 4.77 GB | 3.19 GB | 355 s | 1.1 GB | 2.66 GB, 74 row groups |
+| Each decoded shape shared | 2.88 GB | 3.32 GB | 302 s | None | 2.66 GB, 74 row groups |
 
 - The first six runs wrote the same rows. Fingerprints of each trip's segments, each session, and
   each session's samples match.
