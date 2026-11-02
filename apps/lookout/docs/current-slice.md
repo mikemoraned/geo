@@ -172,8 +172,8 @@ None remain.
   realtime, for a reason never found. Motis's `route_shapes` import step computes shapes and leaves
   the feed alone. Its line-relation penalty only matters for placing a train on the right one of
   two parallel lines, which lookout does not need. Rejected on 2026-10-17.
-  [2026-10-12-track-shapes-and-realtime.md](2026-10-12-track-shapes-and-realtime.md) keeps what the
-  attempt established.
+  [motis.md](motis.md#shapes-spliced-into-a-feed-break-its-realtime) keeps what the attempt
+  established.
 - **Snapping Motis legs to rail in lookout's own code.** It repeats what `route_shapes` does, and
   meets the same wrong-parallel-line problem.
 
@@ -1073,9 +1073,12 @@ After Refactoring, once the slice works end to end.
 - [x] Add the Motis source to the derivation graph in `docs/architecture.md`.
       Decided on 2026-11-02: the graph already held the source and `train_segment_v4`, so this adds
       `train_session_v2` and `train_session_sample_v2`, the other datasets `motis_ingest` writes.
-- [ ] Fold what holds of `2026-10-12-track-shapes-and-realtime.md` into `docs/motis.md`: the
+- [x] Fold what holds of `2026-10-12-track-shapes-and-realtime.md` into `docs/motis.md`: the
       `route_shapes` setup, the train-name script, realtime resolution, and the measured import.
       Correct the `displayName` claim there. Then delete the research doc.
+      Extended on 2026-11-02: what the pfaedle attempt established moved as well, since the slice
+      and `2026-10-03-observational-predictor.md` link to it. `docs/motis.md` also stops saying the
+      local server lacks computed shapes and train names.
 - [ ] Run `just test-no-docker` before every commit. The user runs `just test`.
 
 ### Investigation

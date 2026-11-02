@@ -39,26 +39,31 @@ What it still does not give:
   a bare integer.
 - **Rail geometry is straight lines.** Every trip in the feed carries a shape, but rail shapes
   run straight from stop to stop. A rail leg comes back as a polyline of four points or fewer,
-  where a coach leg has a thousand. Motis's `route_shapes` import step can compute rail shapes
-  instead, by matching each route's stops to OpenStreetMap rail.
+  where a coach leg has a thousand. The server can
+  [compute rail shapes during import](#rail-shapes-are-computed-during-import) instead.
 
 **An RT feed must match its static feed's ID namespace.** Pairing gtfs.de RT with a DELFI
 static timetable makes around 99.9% of trip updates fail to resolve, because the trip and
 stop ids differ. DELFI static with DELFI RT resolves 99.96%, and around 80% of segments in a
-city-sized box come back realtime-corrected.
+city-sized box come back realtime-corrected. Computed rail shapes leave this intact: eight updates
+in a row resolve 99.977–99.979% of 143,996 to 144,152 entities.
+
+The trip updates come from `https://germany.motis-project.org/gtfsrt`, a Motis server re-publishing
+DELFI's GTFS-RT, which Mobilithek publishes under CC-BY-SA. One snapshot holds 41,696 trip updates:
+40,651 scheduled, 899 cancelled, and 146 added.
 
 ## Transitous also answers Germany from DELFI
 
 [Transitous](https://transitous.org) runs Motis as a public service, at
 `https://api.transitous.org`, on volunteers' servers. For Germany it answers from DELFI, with
 DELFI's realtime feed, as the local server in
-[`tools/motis-server`](../../../tools/motis-server/Justfile) does. It differs from the local
-server, set up from DELFI alone, in three ways:
+[`tools/motis-server`](../../../tools/motis-server/Justfile) does. Both servers compute rail shapes
+and load the same train-name script. Transitous differs from the local server in two ways:
 
-- **Rail legs follow the track.** Transitous drops the feed's shapes and computes each route's
-  shape from OpenStreetMap rail with `route_shapes`.
-- **Trains have names.** Its DELFI script formats a train's name, such as `ICE 123`.
-- **Realtime adds forecasts.** It adds DELFI's SIRI ET forecasts to the trip updates.
+- **Realtime adds forecasts.** It adds DELFI's SIRI ET forecasts to the trip updates. Motis accepts
+  such a feed as `protocol: siri`.
+- **Some operators come from their own feeds.** It swaps some of DELFI's operators for the
+  operators' own feeds. The swaps are mostly urban transit, plus SNCF, SNCB, and Eurostar.
 
 Its usage policy asks two things of a caller:
 
@@ -69,6 +74,80 @@ Its usage policy asks two things of a caller:
 
 A poll of Thuringia costs one `map/trips` request, plus one `trip` request per train not yet looked
 up in the run. The first poll of a run made 52 `trip` requests.
+
+## Rail shapes are computed during import
+
+The `route_shapes` import step draws rail along the track, by matching each route's stops to
+OpenStreetMap rail. The step needs `timetable.with_shapes`, an OSM file, and `street_routing`. It
+writes only to Motis's shape storage. Trips, stops, and their ids stay as the feed has them, so
+realtime updates still resolve, and `map/trips` returns the computed shapes.
+
+The step works per route: the set of trips sharing one stop sequence and one class.
+
+- The class picks a routing profile. Every rail class takes the railway profile, which follows OSM
+  rail ways, and uses yard, spur, and crossover tracks only at a penalty.
+- Each stop matches to track within 200 metres. Where nothing lies that close, the radius widens to
+  500 metres.
+- Between consecutive stops, the shape follows the cheapest path through the track graph. Where no
+  path joins two stops, the shape runs straight between them, and the import log counts a beelined
+  segment.
+
+Three settings in the `route_shapes` block decide what is computed:
+
+| Setting | Effect |
+| --- | --- |
+| `mode` | `all` replaces every shape the feed ships. `missing` computes shapes for routes without one. |
+| `clasz` | Turns classes off. A class turned off keeps the shapes its feed ships. |
+| `cache_reuse_old_osm_data` | Keeps cached shapes after the OSM file changes. |
+
+Mode `missing` skips every DELFI rail route, since each already carries a shape. The local server
+therefore runs mode `all`, with every class but high-speed, long-distance, night, and regional
+turned off. Transitous instead drops the feed's shapes before the import, and runs `missing`. Motis
+accepts an unknown class name without error, so a misspelt class goes on being computed. The block
+goes into `config.yml` between `motis config` and `motis import`, since the import reads it.
+
+A cache keyed by profile and stop coordinates carries shapes from one import to the next, so a new
+timetable computes only new routes. A changed OSM file empties the cache, unless
+`cache_reuse_old_osm_data` is set. The computed shape files grow with every import that adds routes.
+
+One import of Germany, reusing its street graph, geocoding, and tiles, measures:
+
+| Measure | Value |
+| --- | --- |
+| Whole import | 6 minutes 8 seconds, peak resident set 5.1 GB |
+| `route_shapes` step | 3 minutes 17 seconds |
+| Timetable step | 1 minute 44 seconds with the train-name script, 39–43 seconds without |
+| Computed shapes and their cache | 1.46 GB and 26 MB |
+| Routes matched | 24,029 |
+| Segments routed | 261,025 |
+| Segments beelined | 16,385, 5.9% of the segments |
+
+Over Thuringia, a regional leg then holds a median of 140 points and a high-speed leg 1,812.
+
+A computed shape is a model of the track, built from stop positions and OSM, rather than a record of
+where the train ran. Two of its errors change which crossings a leg passes:
+
+- **A wrong parallel line** swaps the crossings of one line for those of the other. The cheapest
+  path can follow the wrong one of two parallel lines. [Motis issue
+  #1596](https://github.com/motis-project/motis/issues/1596) reports a case, and is open.
+- **A straight line between two stops** misses the crossings between them, and can add false ones.
+  The import log's count of beelined segments bounds this error.
+
+## Shapes spliced into a feed break its realtime
+
+A feed with rail shapes from [pfaedle](https://github.com/ad-freiburg/pfaedle) spliced into
+`shapes.txt` draws rail along the track. Under Motis v2.10.2, realtime resolution then falls to
+about 0.4% of trip updates, in each of three imports. The cause is unknown.
+
+In one import, `trips.txt` matches the raw feed byte for byte, apart from the rail `shape_id`
+values. The trips that fail to resolve are bus trips, whose `shape_id` is untouched. The other
+difference is `shapes.txt`, at 2.3 GB against 308 MB. A same-day realtime fetch overlaps the static
+feed's trip ids by 99.6%, which rules out an outdated feed. The untested hypothesis is that a feed
+that size hits a limit in `motis import`.
+
+pfaedle prefers track belonging to an OSM route relation that carries the train's line, and
+multiplies the cost of other track by 1.2. That penalty addresses the wrong-parallel-line error. Its
+GTFS parser aborts on the dangling references in DELFI's `transfers.txt` and `pathways.txt`.
 
 ## Zoom selects modes, not detail
 
@@ -137,8 +216,14 @@ therefore runs alongside decoding.
 ## Train number and agency need a second call
 
 `map/trips` carries neither. Its `TripInfo` exposes `routeShortName` — the bare line, `"55"`
-— and a `displayName` that is null on raw DELFI, since the formatted `IC 2569` is a
-downstream Lua fixup rather than feed content.
+— and a `displayName`. The feed holds no formatted name, so `displayName` is null on raw DELFI.
+
+An import script fills `displayName`, with names such as `ICE 1007`, `IC 2065`, `FLX10`, and
+`RB1 (20814)`. Transitous's `de-DELFI.lua` is that script, loaded as the dataset's `script`. Its
+licence is AGPL-3.0, so a recipe fetches it at a pinned commit rather than keeping a copy. It loads
+`de-delfi-colors.lua` with `require`, which Lua resolves against the directory the import runs from.
+A capture prefers `displayName` to `routeShortName`, so the captured line name changes with the
+script.
 
 `GET /api/v6/trip` answers both, as an itinerary of legs carrying agency and
 `trip_short_name`. Query it with interlined legs unjoined: a stay-seated trip otherwise
