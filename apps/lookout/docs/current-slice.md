@@ -834,7 +834,7 @@ At the end of the slice, once its features are in.
       `captures` and `captured` become one `captured`, which returns an empty `Captured` when bronze
       holds no capture. `ingest` keeps the query's `ORDER BY` and drops `legs.sort_by_key`.
       `legs_captured_out_of_day_order_are_written_however_small_each_write` covers that order.
-- [ ] Make `Panel::new`, in `crates/platform/m5/m5plus/src/panel.rs`, leave its display unchanged,
+- [x] Make `Panel::new`, in `crates/platform/m5/m5plus/src/panel.rs`, leave its display unchanged,
       as `.claude/rules/rust.md` asks. It takes `mut display` today to clear the screen. Move the
       clearing into a `Panel::clear`, which `src/bin/m5plus.rs` calls straight after `new`. That
       keeps the screen black when the backlight comes on. `new` then returns a `Panel` rather than
