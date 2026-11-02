@@ -811,11 +811,14 @@ At the end of the slice, once its features are in.
          `train_segment_v4` and `train_session_v2` rows as before the migration. A session whose
          legs share a departure can still differ in geometry, because such legs keep the query's
          order. Observations records this for `motis_segment_v2`.
+         Decided on 2026-11-01: `motis_ingest` ran in a scratch store without `motis_segment`, since
+         a store holding both datasets derives each of its legs twice. Every row matches.
       4. Pause so the user can inspect the result.
       5. Delete the binary, `motis_segment`'s files, `MOTIS_SEGMENT`, `MotisSegmentRow`, its
-         declaration snapshot, and the module holding the rule for its sources. `segment_row`, in
-         `crates/motis/src/landing.rs`, then builds a `MotisPollRowV2` directly. The two sources
-         stay in `motis_source_v4`, since the migrated rows name them.
+         declaration snapshot, and the module holding the rule for its sources. `write_polls` and
+         `PollsWritten` return to `pub(crate)`. `segment_row`, in `crates/motis/src/landing.rs`,
+         then builds a `MotisPollRowV2` directly. The two sources stay in `motis_source_v4`, since
+         the migrated rows name them.
       6. Reduce `captures`, in `crates/motis/src/ingest.rs`, to one dataset. `Captures`,
          `CapturedPolylines`, and `captured`'s parameters go. `ingest` then needs only one of its
          two sorts by departure: the query's `ORDER BY` and `legs.sort_by_key`.
@@ -1063,6 +1066,30 @@ space in images, is a research task in the slice "Evaluation framework with asso
 predictor improvement".
 
 ### Observations
+
+#### The migration of `motis_segment`
+
+On 1 November, `motis_migrate_segment` copied `motis_segment` into `motis_segment_v3` and
+`motis_polyline_v2`. DuckDB compared the copy with the original using `EXCEPT ALL` in both
+directions, and found no row on either side alone.
+
+| Date | Source | `motis_segment` rows | Copied rows |
+| --- | --- | --- | --- |
+| 19 July | `gtfs.de` | 16,081 | 16,081 |
+| 21 July | `gtfs.de` | 11,896 | 11,896 |
+| 22 July | `gtfs.de` | 23,288 | 23,288 |
+| 25 July | `delfi` | 8,978 | 8,978 |
+
+- Rows match on every column, including `polled_date` and the polyline text, once each takes the
+  source its capture date names.
+- `motis_polyline_v2` grows by 1,531 rows to 26,995, each with a distinct id and distinct text. It
+  already held the other 54 of the 1,585 polylines. Every segment's polyline id is present.
+- `motis_segment_v3` now holds 2,742,313 rows on 16 dates, as many as `motis_ingest` read from both
+  datasets.
+- The copy adds 5 files of 0.36 MB in all, against 1,307 files of 17 MB.
+- `motis_ingest` then ran in a scratch store without `motis_segment`. It reports the same counts as
+  the run before, and the fingerprints of all three silver datasets match exactly. It took 219 s
+  and peaked at 4.59 GB.
 
 #### The migrations of `motis_source_v3` and `motis_segment_v2`
 

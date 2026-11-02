@@ -39,9 +39,10 @@ pub struct Promoted {
     pub polylines: usize,
 }
 
-pub(crate) struct PollsWritten {
-    segments: usize,
-    polylines: usize,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PollsWritten {
+    pub segments: usize,
+    pub polylines: usize,
 }
 
 type Poll = (MotisSourceId, DateTime<Utc>);
@@ -70,7 +71,7 @@ pub async fn promote(root: &Root, at: DateTime<Utc>) -> Result<Promoted, Promoti
     Ok(promoted)
 }
 
-pub(crate) async fn write_polls(
+pub async fn write_polls(
     root: &Root,
     at: DateTime<Utc>,
     polls: &[MotisPollRowV2],
