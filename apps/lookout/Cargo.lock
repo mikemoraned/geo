@@ -4849,7 +4849,6 @@ dependencies = [
  "medallion-model",
  "openapiv3",
  "parquet",
- "polyline",
  "prettyplease",
  "progenitor",
  "progenitor-client",

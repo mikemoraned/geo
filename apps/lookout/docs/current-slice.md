@@ -839,12 +839,14 @@ At the end of the slice, once its features are in.
       clearing into a `Panel::clear`, which `src/bin/m5plus.rs` calls straight after `new`. That
       keeps the screen black when the backlight comes on. `new` then returns a `Panel` rather than
       a `Result`. The user flashes the device to check the screen comes up black.
-- [ ] Replace encoded polylines written as text, such as `_ibE_seK`, with calls to a function
+- [x] Replace encoded polylines written as text, such as `_ibE_seK`, with calls to a function
       returning a `Polyline`. Its arguments are the points, so each call shows what the polyline
       holds. A caller that needs text turns the `Polyline` into a string. The
       `polyline::encode_coordinates` calls in `crates/motis/src/ingest.rs` and
       `crates/motis/src/train_sessions.rs` move into it. Tests of what `Polyline::new` accepts or
       refuses keep their text.
+      Decided on 2026-11-02: the function is `Polyline::from_points`. One test of it keeps the text
+      of the format's published example, since that text pins what points encode to.
 
 #### Six-day capture
 

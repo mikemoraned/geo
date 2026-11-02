@@ -499,7 +499,9 @@ mod tests {
         root.rows_of::<MotisPolylineRowV2>()
             .append_rows(
                 segment.captured_at,
-                &[MotisPolylineRowV2::of(Polyline::new("_seK_ibE").unwrap())],
+                &[MotisPolylineRowV2::of(
+                    Polyline::from_points([(1.0, 2.0)]).unwrap(),
+                )],
             )
             .await
             .expect("write another polyline");
@@ -602,13 +604,7 @@ mod tests {
     async fn each_leg_keeps_its_polyline_as_a_line_string() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let expected = polyline::decode_polyline(
-            &regional_trips()[0].polyline,
-            medallion_model::POLYLINE_PRECISION,
-        )
-        .expect("decode")
-        .0
-        .len();
+        let expected = regional_trips()[0].line().expect("a line").0.len();
 
         ingest_polls(
             &root,
@@ -623,11 +619,9 @@ mod tests {
 
     fn shaped(points: &[(f64, f64)]) -> TripSegment {
         let mut segment = regional_trips().remove(0);
-        segment.polyline = polyline::encode_coordinates(
-            points.iter().map(|&(x, y)| geo_types::Coord { x, y }),
-            medallion_model::POLYLINE_PRECISION,
-        )
-        .expect("encode");
+        segment.polyline = Polyline::from_points(points.iter().copied())
+            .expect("points on the globe")
+            .to_string();
         segment
     }
 
@@ -715,12 +709,12 @@ mod tests {
     #[tokio::test]
     async fn a_leg_with_a_shape_keeps_it_uncorrected() {
         let segment = regional_trips().remove(0);
-        let captured: Vec<(f64, f64)> =
-            polyline::decode_polyline(&segment.polyline, medallion_model::POLYLINE_PRECISION)
-                .expect("decode")
-                .coords()
-                .map(|c| (c.x, c.y))
-                .collect();
+        let captured: Vec<(f64, f64)> = segment
+            .line()
+            .expect("a line")
+            .coords()
+            .map(|c| (c.x, c.y))
+            .collect();
 
         let (line, corrected) = line_of_one(&segment).await;
 
@@ -1038,7 +1032,7 @@ mod tests {
 
     #[test]
     fn legs_sharing_a_polyline_share_its_line() {
-        let polyline = Polyline::new(shaped(&[(8.0, 50.0), (8.1, 50.1)]).polyline).unwrap();
+        let polyline = Polyline::from_points([(8.0, 50.0), (8.1, 50.1)]).unwrap();
         let countries = germany();
         let shapes = Shapes::placed_in(&countries, vec![MotisPolylineRowV2::of(polyline.clone())]);
         let line_of = |leg: Leg| match shapes.of(&leg).expect("a shape") {

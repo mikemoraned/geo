@@ -1,16 +1,17 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use domain::TrainNumber;
-use geo_types::LineString;
+use geo_types::{Coord, LineString};
 use hashfn::hashfn;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use nutype::nutype;
+use polyline::errors::PolylineError;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumIter, EnumString};
 use uuid::Uuid;
 
 use crate::motis_source::{MotisSourceId, MotisSourceRowV4};
 
-pub const POLYLINE_PRECISION: u32 = 5;
+const POLYLINE_PRECISION: u32 = 5;
 
 pub const MOTIS_POLL_V2: DatasetSpec<layers::Landing> =
     DatasetSpec::partitioned("motis_poll_v2", "polled_date");
@@ -125,6 +126,14 @@ pub struct Polyline(String);
 #[error("an encoded polyline is non-empty text of ASCII characters 63 to 126 that decodes")]
 pub struct NotAnEncodedPolyline;
 
+#[derive(Debug, PartialEq, thiserror::Error)]
+pub enum UnencodablePoints {
+    #[error("encoding the points: {0}")]
+    Encoding(#[from] PolylineError),
+    #[error(transparent)]
+    NotAPolyline(#[from] NotAnEncodedPolyline),
+}
+
 #[hashfn]
 pub fn polyline_is_valid(text: &str) -> Result<(), NotAnEncodedPolyline> {
     if !text.is_empty()
@@ -140,6 +149,14 @@ pub fn polyline_is_valid(text: &str) -> Result<(), NotAnEncodedPolyline> {
 impl Polyline {
     pub fn new(text: impl Into<String>) -> Result<Self, NotAnEncodedPolyline> {
         Self::try_new(text)
+    }
+
+    pub fn from_points(
+        points: impl IntoIterator<Item = impl Into<Coord<f64>>>,
+    ) -> Result<Self, UnencodablePoints> {
+        let text =
+            polyline::encode_coordinates(points.into_iter().map(Into::into), POLYLINE_PRECISION)?;
+        Ok(Self::new(text)?)
     }
 
     pub fn line(&self) -> LineString<f64> {
@@ -336,7 +353,8 @@ impl Row for MotisPollRowV2 {
             scheduled_departure: DateTime::UNIX_EPOCH,
             scheduled_arrival: DateTime::UNIX_EPOCH,
             realtime: false,
-            polyline: Polyline::new("_ibE_seK").expect("the example polyline is valid"),
+            polyline: Polyline::from_points([(2.0, 1.0)])
+                .expect("a constant point is on the globe"),
         }
     }
 }
@@ -422,8 +440,9 @@ mod tests {
 
     #[test]
     fn a_polyline_id_is_derived_from_the_polylines_text() {
-        let polyline = Polyline::new("_p~iF~ps|U_ulLnnqC_mqNvxq`@").unwrap();
-        let other = Polyline::new("_seK_ibE").unwrap();
+        let polyline =
+            Polyline::from_points([(-120.2, 38.5), (-120.95, 40.7), (-126.453, 43.252)]).unwrap();
+        let other = Polyline::from_points([(1.0, 2.0)]).unwrap();
 
         assert_eq!(
             PolylineId::of(&polyline).to_string(),
@@ -451,15 +470,44 @@ mod tests {
     }
 
     #[test]
+    fn points_encode_as_the_polyline_formats_published_example() {
+        let polyline =
+            Polyline::from_points([(-120.2, 38.5), (-120.95, 40.7), (-126.453, 43.252)]).unwrap();
+
+        assert_eq!(polyline.to_string(), "_p~iF~ps|U_ulLnnqC_mqNvxq`@");
+    }
+
+    #[test]
     fn a_polyline_gives_the_line_it_encodes() {
-        let line = Polyline::new("_ibE_seK").unwrap().line();
+        let line = Polyline::from_points([(2.0, 1.0)]).unwrap().line();
 
         assert_eq!(line, LineString::from(vec![(2.0, 1.0)]));
     }
 
     #[test]
+    fn no_points_make_no_polyline() {
+        assert_eq!(
+            Polyline::from_points(Vec::<(f64, f64)>::new()),
+            Err(UnencodablePoints::NotAPolyline(NotAnEncodedPolyline))
+        );
+    }
+
+    #[test]
+    fn a_point_off_the_globe_makes_no_polyline() {
+        assert_eq!(
+            Polyline::from_points([(0.0, 91.0)]),
+            Err(UnencodablePoints::Encoding(
+                PolylineError::LatitudeCoordError {
+                    coord: 91.0,
+                    idx: 0
+                }
+            ))
+        );
+    }
+
+    #[test]
     fn a_polyline_id_is_refused_as_a_polyline() {
-        let id = PolylineId::of(&Polyline::new("_seK_ibE").unwrap());
+        let id = PolylineId::of(&Polyline::from_points([(1.0, 2.0)]).unwrap());
 
         assert_eq!(Polyline::new(id.to_string()), Err(NotAnEncodedPolyline));
     }

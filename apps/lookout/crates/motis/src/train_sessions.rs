@@ -271,7 +271,8 @@ mod tests {
     use chrono::{DateTime, Duration, TimeZone, Utc};
     use medallion::Query;
     use medallion_model::{
-        Feed, MotisSource, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2, TripId, train_session_id,
+        Feed, MotisSource, Polyline, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2, TripId,
+        train_session_id,
     };
     use serde::Deserialize;
 
@@ -557,14 +558,9 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         let mut segment = regional_trips().remove(0);
-        segment.polyline = polyline::encode_coordinates(
-            [geo_types::Coord {
-                x: segment.from.lon,
-                y: segment.from.lat,
-            }],
-            medallion_model::POLYLINE_PRECISION,
-        )
-        .expect("encode");
+        segment.polyline = Polyline::from_points([(segment.from.lon, segment.from.lat)])
+            .expect("a stop on the globe")
+            .to_string();
         segment.to = segment.from.clone();
         poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
 
@@ -600,11 +596,9 @@ mod tests {
     }
 
     fn starting_at_longitude(mut segment: TripSegment, longitude: f64) -> TripSegment {
-        segment.polyline = polyline::encode_coordinates(
-            [longitude, longitude + 1.0].map(|x| geo_types::Coord { x, y: 50.0 }),
-            medallion_model::POLYLINE_PRECISION,
-        )
-        .expect("encode");
+        segment.polyline = Polyline::from_points([(longitude, 50.0), (longitude + 1.0, 50.0)])
+            .expect("points on the globe")
+            .to_string();
         segment
     }
 
