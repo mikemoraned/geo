@@ -9,7 +9,7 @@ use medallion_model::{
     Label, MotisSourceId, TrainSessionRowV2, TrainSessionSampleRowV2, TripId, train_session_id,
 };
 
-use crate::ingest::{self, IngestError, PlacedLine, Shape, Shapes, captures};
+use crate::ingest::{self, IngestError, PlacedLine, Shape, Shapes, captured};
 use crate::sampling::{InvalidLeg, InvalidLegs, Leg, NormalisedLegs, Placed};
 
 const SAMPLES_PER_WRITE: usize = 100_000;
@@ -73,19 +73,16 @@ pub async fn derive_train_sessions(
         .into_iter()
         .map(|source| (source.source_id, source.label))
         .collect();
+    let captured = captured(root).await?;
     let mut by_trip: HashMap<(MotisSourceId, TripId), Vec<ingest::Leg>> = HashMap::new();
-    let mut polylines = Vec::new();
-    for captured in captures(root).await?.each() {
-        polylines.extend(captured.polylines);
-        for leg in captured.legs {
-            by_trip
-                .entry((leg.source_id.clone(), leg.trip_id.clone()))
-                .or_default()
-                .push(leg);
-        }
+    for leg in captured.legs {
+        by_trip
+            .entry((leg.source_id.clone(), leg.trip_id.clone()))
+            .or_default()
+            .push(leg);
     }
 
-    let shapes = Shapes::placed_in(countries, polylines);
+    let shapes = Shapes::placed_in(countries, captured.polylines);
 
     let mut outcome = TrainSessionsOutcome {
         trips: by_trip.len(),

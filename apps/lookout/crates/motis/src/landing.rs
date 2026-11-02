@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use medallion::Root;
-use medallion_model::{
-    MotisPollRowV2, MotisSegmentRow, MotisSourceId, NotAnEncodedPolyline, TripId,
-};
+use medallion_model::{MotisPollRowV2, MotisSourceId, NotAnEncodedPolyline, Polyline, TripId};
 
 use crate::client::TripDetails;
 use crate::segment::SingleTripSegment;
@@ -19,17 +17,19 @@ pub enum SegmentLogError {
     Polyline(#[from] NotAnEncodedPolyline),
 }
 
-pub(crate) fn segment_row(
+pub(crate) fn poll_row(
+    source_id: MotisSourceId,
     captured_at: DateTime<Utc>,
     kept: &SingleTripSegment,
     details: &HashMap<TripId, TripDetails>,
-) -> MotisSegmentRow {
+) -> Result<MotisPollRowV2, NotAnEncodedPolyline> {
     let trip = kept.trip();
     let segment = kept.segment();
     let details = details.get(kept.trip_id());
     let agency = details.map(|d| &d.agency);
 
-    MotisSegmentRow {
+    Ok(MotisPollRowV2 {
+        source_id,
         captured_at,
         trip_id: kept.trip_id().to_string(),
         route_name: trip
@@ -52,8 +52,8 @@ pub(crate) fn segment_row(
         scheduled_departure: segment.scheduled_departure,
         scheduled_arrival: segment.scheduled_arrival,
         realtime: segment.real_time,
-        polyline: segment.polyline.clone(),
-    }
+        polyline: Polyline::new(segment.polyline.clone())?,
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -92,12 +92,7 @@ impl SegmentLog {
     ) -> Result<usize, SegmentLogError> {
         let rows = segments
             .iter()
-            .map(|segment| {
-                MotisPollRowV2::of(
-                    self.source_id.clone(),
-                    segment_row(captured_at, segment, details),
-                )
-            })
+            .map(|segment| poll_row(self.source_id.clone(), captured_at, segment, details))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(self

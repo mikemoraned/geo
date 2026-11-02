@@ -209,14 +209,12 @@ and realtime times, and the polyline.
 A drain interrupted before it deletes its landing files writes those polls again on the next run,
 and deriving silver collapses the repeat.
 
-The earlier captures in `motis_segment` carry no source. Two sources stand for them, both the
-local server at Motis v2.10.2 with no area: one labelled `gtfs.de`, for the captures before the
-server moved to DELFI on 23 July 2026, and one labelled `delfi`, for those from then on. Silver
-`train_segment_v4` derives from both capture datasets, and gives each earlier capture the source
-its capture date falls under.
+The captures from 19 to 25 July 2026 predate sources. Two sources stand for them, both the local
+server at Motis v2.10.2 with no area. `gtfs.de` labels the captures before the server moved to DELFI
+on 23 July 2026, and `delfi` labels those from then on.
 
-Silver derived from either capture dataset holds only the rail modes a capture keeps. Deriving the
-segments leaves out a leg of any other mode, such as a ferry in the earlier captures, and counts it.
+Silver derived from the capture log holds only the rail modes a capture keeps. Deriving the segments
+leaves out a leg of any other mode, such as a ferry in the July captures, and counts it.
 
 ## Polyline text dominates a capture
 

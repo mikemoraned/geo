@@ -8,7 +8,6 @@ pub mod details;
 pub mod ingest;
 pub mod landing;
 pub mod landing_to_bronze_promotion;
-pub mod legacy;
 pub mod near_gps;
 pub mod polling;
 pub mod sampling;

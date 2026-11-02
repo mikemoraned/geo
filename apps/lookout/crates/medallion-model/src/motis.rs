@@ -15,9 +15,6 @@ pub const POLYLINE_PRECISION: u32 = 5;
 pub const MOTIS_POLL_V2: DatasetSpec<layers::Landing> =
     DatasetSpec::partitioned("motis_poll_v2", "polled_date");
 
-pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
-    DatasetSpec::partitioned("motis_segment", "polled_date");
-
 pub const MOTIS_SEGMENT_V3: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("motis_segment_v3", "polled_date");
 
@@ -209,72 +206,6 @@ pub enum RailMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MotisSegmentRow {
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub captured_at: DateTime<Utc>,
-    pub trip_id: String,
-    pub route_name: Option<String>,
-    pub train_number: Option<TrainNumber>,
-    pub agency_id: Option<String>,
-    pub agency_name: Option<String>,
-    pub mode: String,
-    pub route_color: Option<String>,
-    pub from_stop_id: Option<String>,
-    pub from_lat: f64,
-    pub from_lon: f64,
-    pub to_stop_id: Option<String>,
-    pub to_lat: f64,
-    pub to_lon: f64,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub departure: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub arrival: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub scheduled_departure: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub scheduled_arrival: DateTime<Utc>,
-    pub realtime: bool,
-    pub polyline: String,
-}
-
-impl Row for MotisSegmentRow {
-    type Layer = layers::Bronze;
-    const DATASET: DatasetSpec<Self::Layer> = MOTIS_SEGMENT;
-    const INSTANTS: &'static [&'static str] = &[
-        "captured_at",
-        "departure",
-        "arrival",
-        "scheduled_departure",
-        "scheduled_arrival",
-    ];
-
-    fn example() -> Self {
-        Self {
-            captured_at: DateTime::UNIX_EPOCH,
-            trip_id: "example".to_string(),
-            route_name: Some("example".to_string()),
-            train_number: TrainNumber::from_gtfs("1"),
-            agency_id: Some("example".to_string()),
-            agency_name: Some("example".to_string()),
-            mode: "RAIL".to_string(),
-            route_color: Some("example".to_string()),
-            from_stop_id: Some("example".to_string()),
-            from_lat: 0.0,
-            from_lon: 0.0,
-            to_stop_id: Some("example".to_string()),
-            to_lat: 0.0,
-            to_lon: 0.0,
-            departure: DateTime::UNIX_EPOCH,
-            arrival: DateTime::UNIX_EPOCH,
-            scheduled_departure: DateTime::UNIX_EPOCH,
-            scheduled_arrival: DateTime::UNIX_EPOCH,
-            realtime: false,
-            polyline: "_ibE_seK".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MotisSegmentRowV3 {
     pub source_id: MotisSourceId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
@@ -335,7 +266,7 @@ impl MotisSegmentRowV3 {
 impl Row for MotisSegmentRowV3 {
     type Layer = layers::Bronze;
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_SEGMENT_V3;
-    const INSTANTS: &'static [&'static str] = MotisSegmentRow::INSTANTS;
+    const INSTANTS: &'static [&'static str] = MotisPollRowV2::INSTANTS;
 
     fn example() -> Self {
         Self::of(MotisPollRowV2::example())
@@ -372,48 +303,41 @@ pub struct MotisPollRowV2 {
     pub polyline: Polyline,
 }
 
-impl MotisPollRowV2 {
-    pub fn of(
-        source_id: MotisSourceId,
-        segment: MotisSegmentRow,
-    ) -> Result<Self, NotAnEncodedPolyline> {
-        Ok(Self {
-            source_id,
-            polyline: Polyline::new(segment.polyline)?,
-            captured_at: segment.captured_at,
-            trip_id: segment.trip_id,
-            route_name: segment.route_name,
-            train_number: segment.train_number,
-            agency_id: segment.agency_id,
-            agency_name: segment.agency_name,
-            mode: segment.mode,
-            route_color: segment.route_color,
-            from_stop_id: segment.from_stop_id,
-            from_lat: segment.from_lat,
-            from_lon: segment.from_lon,
-            to_stop_id: segment.to_stop_id,
-            to_lat: segment.to_lat,
-            to_lon: segment.to_lon,
-            departure: segment.departure,
-            arrival: segment.arrival,
-            scheduled_departure: segment.scheduled_departure,
-            scheduled_arrival: segment.scheduled_arrival,
-            realtime: segment.realtime,
-        })
-    }
-}
-
 impl Row for MotisPollRowV2 {
     type Layer = layers::Landing;
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_POLL_V2;
-    const INSTANTS: &'static [&'static str] = MotisSegmentRow::INSTANTS;
+    const INSTANTS: &'static [&'static str] = &[
+        "captured_at",
+        "departure",
+        "arrival",
+        "scheduled_departure",
+        "scheduled_arrival",
+    ];
 
     fn example() -> Self {
-        Self::of(
-            MotisSourceRowV4::example().source_id,
-            MotisSegmentRow::example(),
-        )
-        .expect("the example polyline is valid")
+        Self {
+            source_id: MotisSourceRowV4::example().source_id,
+            captured_at: DateTime::UNIX_EPOCH,
+            trip_id: "example".to_string(),
+            route_name: Some("example".to_string()),
+            train_number: TrainNumber::from_gtfs("1"),
+            agency_id: Some("example".to_string()),
+            agency_name: Some("example".to_string()),
+            mode: "RAIL".to_string(),
+            route_color: Some("example".to_string()),
+            from_stop_id: Some("example".to_string()),
+            from_lat: 0.0,
+            from_lon: 0.0,
+            to_stop_id: Some("example".to_string()),
+            to_lat: 0.0,
+            to_lon: 0.0,
+            departure: DateTime::UNIX_EPOCH,
+            arrival: DateTime::UNIX_EPOCH,
+            scheduled_departure: DateTime::UNIX_EPOCH,
+            scheduled_arrival: DateTime::UNIX_EPOCH,
+            realtime: false,
+            polyline: Polyline::new("_ibE_seK").expect("the example polyline is valid"),
+        }
     }
 }
 
@@ -437,10 +361,7 @@ impl Row for MotisPolylineRowV2 {
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_POLYLINE_V2;
 
     fn example() -> Self {
-        Self::of(
-            Polyline::new(MotisSegmentRow::example().polyline)
-                .expect("the example polyline is valid"),
-        )
+        Self::of(MotisPollRowV2::example().polyline)
     }
 }
 
@@ -497,7 +418,7 @@ mod tests {
     use strum::IntoEnumIterator;
 
     use super::*;
-    use crate::testing::{column, column_names};
+    use crate::testing::column;
 
     #[test]
     fn a_polyline_id_is_derived_from_the_polylines_text() {
@@ -564,16 +485,6 @@ mod tests {
             .iter()
             .map(|field| field.name().clone())
             .collect()
-    }
-
-    #[test]
-    fn a_poll_whose_polyline_is_not_encoded_is_refused() {
-        let mut segment = MotisSegmentRow::example();
-        segment.polyline = String::new();
-
-        let err = MotisPollRowV2::of(MotisSourceRowV4::example().source_id, segment);
-
-        assert_eq!(err, Err(NotAnEncodedPolyline));
     }
 
     #[test]
@@ -667,21 +578,9 @@ mod tests {
     }
 
     #[test]
-    fn a_poll_carries_every_segment_column_and_its_source() {
-        let segment = column_names::<MotisSegmentRow>();
-        let poll = column_names::<MotisPollRowV2>();
-
-        assert!(poll.contains("source_id"), "{poll:?}");
-        for name in &segment {
-            assert!(poll.contains(name), "{name} is missing from {poll:?}");
-        }
-        assert_eq!(poll.len(), segment.len() + 1);
-    }
-
-    #[test]
     fn a_train_number_is_a_four_byte_column_in_both_datasets() {
         for train_number in [
-            column::<MotisSegmentRow>("train_number"),
+            column::<MotisSegmentRowV3>("train_number"),
             column::<TrainSegmentRowV4>("train_number"),
         ] {
             assert_eq!(train_number.data_type(), &DataType::UInt32);

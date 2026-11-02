@@ -12,7 +12,7 @@ use url::Url;
 
 use crate::api::types::{Mode, TripSegment};
 use crate::client::TripDetails;
-use crate::landing::segment_row;
+use crate::landing::poll_row;
 use crate::landing_to_bronze_promotion::{PromotionError, write_polls};
 use crate::segment::SingleTripSegment;
 
@@ -39,11 +39,8 @@ impl CaptureLog {
         let polls: Vec<MotisPollRowV2> = segments
             .iter()
             .map(|segment| {
-                MotisPollRowV2::of(
-                    self.source_id.clone(),
-                    segment_row(captured_at, segment, details),
-                )
-                .expect("a fixture's polyline has valid characters")
+                poll_row(self.source_id.clone(), captured_at, segment, details)
+                    .expect("a fixture's polyline is valid")
             })
             .collect();
         let written_at =

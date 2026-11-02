@@ -164,7 +164,7 @@ silver-init *args:
     just silver-motis-ingest {{args}}
     just silver-crossings {{args}}
 
-# Derive silver `train_segment_v4` from the bronze motis capture logs.
+# Derive silver `train_segment_v4` from the bronze motis capture log.
 silver-motis-ingest *args:
     cargo run --release -p motis --bin motis_ingest -- {{args}}
 

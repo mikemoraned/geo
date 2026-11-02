@@ -787,14 +787,15 @@ At the end of the slice, once its features are in.
       `2026-10-24-breaking-dataset-changes.md` has been
       applied or recorded. Record what has not, in `docs/medallion.md` or
       `crates/medallion/README.md`. Then delete the research doc.
-- [ ] Replace `legacy` in `crates/motis` with the name of the dataset it stands for,
+- [-] Replace `legacy` in `crates/motis` with the name of the dataset it stands for,
       `motis_segment`. `append_legacy` becomes `append_to_motis_segment`, `ingest_legacy_one`
       becomes `ingest_one_from_motis_segment`, `legacy_sources` becomes `motis_segment_sources`,
       and `legacy_source_id_sql` becomes `motis_segment_source_id_sql`. `legacy.rs` becomes
       `motis_segment_sources.rs`. Apply the same change to five test names, two `.expect` messages,
       and a local variable in `captures`. If the next task runs first, this one is moot, since that
       task deletes all of these names.
-- [ ] Migrate `motis_segment` into `motis_segment_v3` and `motis_polyline_v2`, then delete
+      Moot on 2026-11-02: the next task deleted all of these names.
+- [x] Migrate `motis_segment` into `motis_segment_v3` and `motis_polyline_v2`, then delete
       `motis_segment` and the code only it needs. This reverses One train_segment version's choice
       that `motis_segment` keeps its rows. The dataset holds 60,243 rows in 1,307 files, captured on
       four days from 19 to 25 July 2026, and 236 of those rows are ferries. No polyline is empty or
@@ -829,6 +830,10 @@ At the end of the slice, once its features are in.
          `Shape::Missing` case, with a polyline that repeats one point.
       9. Update `docs/motis.md`, `crates/medallion-model/README.md`, and the Evaluation framework
          slice in `docs/next-slices.md`, which all name `motis_segment`.
+      Decided on 2026-11-02: `segment_row` becomes `poll_row`, since it now returns a poll row.
+      `captures` and `captured` become one `captured`, which returns an empty `Captured` when bronze
+      holds no capture. `ingest` keeps the query's `ORDER BY` and drops `legs.sort_by_key`.
+      `legs_captured_out_of_day_order_are_written_however_small_each_write` covers that order.
 - [ ] Make `Panel::new`, in `crates/platform/m5/m5plus/src/panel.rs`, leave its display unchanged,
       as `.claude/rules/rust.md` asks. It takes `mut display` today to clear the screen. Move the
       clearing into a `Panel::clear`, which `src/bin/m5plus.rs` calls straight after `new`. That
@@ -1027,11 +1032,11 @@ After Refactoring, once the slice works end to end.
       165,606 sessions' legs hold 3.31 GB of coordinates, against 0.085 GB in all 26,965 distinct
       shapes. An `Arc<LineString<f64>>` handed out by `PlacedLine` removes the copies, and these
       copies set the peak.
-- [ ] Let `captures` skip what `derive_train_sessions` discards: both count queries and the final
-      `ORDER BY departure`. The session phase reruns the whole capture read today. `ingest` now
-      sorts its own legs, so neither caller needs that sort for its order by day. Legs sharing a
-      departure and arrival keep the query's order in `NormalisedLegs::new`, so removing it needs a
-      tie-break there.
+- [ ] Let `captured` skip what `derive_train_sessions` discards: both count queries and the final
+      `ORDER BY departure`. The session phase reruns the whole capture read today. `ingest` writes
+      its legs in the query's order, so only `derive_train_sessions` can skip that sort. Legs
+      sharing a departure and arrival keep the query's order in `NormalisedLegs::new`, so skipping
+      it needs a tie-break there.
 - [ ] When `motis_track_area` captures a whole country, test each leg once, with `covers`, against
       one prepared outline. Share the coverage, rather than cloning it each poll. It now passes the
       same shapes as area and as country, so it unions and prepares them twice and tests each leg
@@ -1090,6 +1095,10 @@ directions, and found no row on either side alone.
 - `motis_ingest` then ran in a scratch store without `motis_segment`. It reports the same counts as
   the run before, and the fingerprints of all three silver datasets match exactly. It took 219 s
   and peaked at 4.59 GB.
+- On 2 November, `motis_segment`'s files and code went. `motis_ingest` on the bronze that remains
+  reports the same counts, and the fingerprints still match exactly. It peaked at 4.77 GB and took
+  355 s against 219 s. Other work on the machine slowed the run, with 16 GiB in swap and a load near
+  18.
 
 #### The migrations of `motis_source_v3` and `motis_segment_v2`
 
@@ -1192,7 +1201,7 @@ On 26 October, `motis_ingest` read 2,742,313 captured rows, which collapse to 1,
 - Swap grew by 7.4 GB from 8.2 GB, on a machine with 24 GB. `time -l` printed 0 swaps, so that
   field does not show swap here. The swap files took 6 GiB of disk and kept it after the run.
 
-Eight changes were measured on the same capture. The flush and the legs passed by value were
+Nine changes were measured on the same capture. The flush and the legs passed by value were
 dropped, and placing each polyline once replaced the memo. Each other change builds on those before
 it:
 
@@ -1207,9 +1216,12 @@ it:
 | Each leg's distances computed once | 4.68 GB | 4.17 GB | 372 s | None | 2.66 GB, 74 row groups |
 | Country lookups memoised by point | 4.26 GB | 5.81 GB | 216 s | None | 2.66 GB, 74 row groups |
 | Each polyline placed once, no memo | 4.41 GB | 6.20 GB | 219 s | None | 2.66 GB, 74 row groups |
+| `motis_segment` deleted | 4.77 GB | 3.19 GB | 355 s | 1.1 GB | 2.66 GB, 74 row groups |
 
 - The first six runs wrote the same rows. Fingerprints of each trip's segments, each session, and
   each session's samples match.
+- From the row for `motis_segment` deleted on, the runs shared the machine with other work, at a
+  load near 18 and with 16 GiB in swap. Their times and swap growth overstate what the code takes.
 - A flush leaves each day's compressed bytes in memory, about 0.7 GB per large day. `object_store`
   buffers the last partial chunk of a write as a slice of the row group's whole allocation, and
   uploads it on the file's next write or its close.

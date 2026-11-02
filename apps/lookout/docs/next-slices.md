@@ -46,7 +46,7 @@ However, the cleverness of the predictor we do in this slice should be limited t
 
 I suspect on Web we could benefit from the cleverness of the GPS baked into the phone, as it's probably doing something clever, but I'd prefer not to use that and instead do it ourselves, as then we have consistent performance across platforms. I am thinking here of some sort of Kalman-filter or similar.
 
-We should implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session_v3 table) and from motis (bronze/motis_segment). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing_v3 for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
+We should implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session_v3 table) and from motis (bronze/motis_segment_v3). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing_v3 for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
 
 ### What a prediction is
 

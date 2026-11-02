@@ -22,9 +22,9 @@ pub use crossing::{
 pub use gers::{GersId, NotAGersId};
 pub use motis::{
     AgencyId, EmptyAgencyId, EmptyStopId, EmptyTripId, MOTIS_POLL_V2, MOTIS_POLYLINE_V2,
-    MOTIS_SEGMENT, MOTIS_SEGMENT_V3, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRow,
-    MotisSegmentRowV3, NotAPolylineId, NotAnEncodedPolyline, POLYLINE_PRECISION, Polyline,
-    PolylineId, RailMode, StopId, TRAIN_SEGMENT_V4, TrainSegmentRowV4, TripId,
+    MOTIS_SEGMENT_V3, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, NotAPolylineId,
+    NotAnEncodedPolyline, POLYLINE_PRECISION, Polyline, PolylineId, RailMode, StopId,
+    TRAIN_SEGMENT_V4, TrainSegmentRowV4, TripId,
 };
 pub use motis_source::{
     Area, Feed, Label, MOTIS_SOURCE_V4, MotisBaseUrl, MotisSource, MotisSourceId, MotisSourceRowV4,
@@ -46,13 +46,12 @@ pub use train_session::{
     TrainSessionSampleRowV2, train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 18] = [
+pub const ALL: [DatasetInfo; 17] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
     DEVICE_SESSION_V2.info(),
     MOTIS_POLL_V2.info(),
-    MOTIS_SEGMENT.info(),
     MOTIS_SEGMENT_V3.info(),
     MOTIS_POLYLINE_V2.info(),
     MOTIS_SOURCE_V4.info(),
@@ -180,7 +179,6 @@ mod tests {
         check_rows_of::<GpsReadingRowV2>();
         check_rows_of::<AccelReadingRowV2>();
         check_rows_of::<DeviceSessionRowV2>();
-        check_rows_of::<MotisSegmentRow>();
         check_rows_of::<MotisSegmentRowV3>();
         check_rows_of::<MotisPollRowV2>();
         check_rows_of::<MotisPolylineRowV2>();

@@ -29,9 +29,8 @@ itself as recording began.
 
 `motis_segment_v3` holds trip segments as polled, duplication allowed, with the times as instants
 and the path as a polyline id. `motis_polyline_v2` holds each id's encoded polyline as the service
-sent it — bronze records what arrived rather than a normalised form of it. `motis_segment` holds
-the earlier captures, with the polyline in every row. A capture reaches bronze through the landing
-dataset `motis_poll_v2`.
+sent it — bronze records what arrived rather than a normalised form of it. A capture reaches bronze
+through the landing dataset `motis_poll_v2`.
 
 `overture_extract` holds upstream reference rows in the upstream's own shape and layout, so those
 rows have no row type here: they keep whatever columns the release gives them, plus the
