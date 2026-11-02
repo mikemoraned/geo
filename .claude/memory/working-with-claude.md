@@ -107,14 +107,20 @@ builds swap reached 17 GB, and swap files take space on the same disk.
 
 When a build would relink the workspace:
 
-1. Clear the workspace crates' dev artefacts first. `cargo clean --profile dev`, with a `-p` for
-   each package `cargo metadata --no-deps` lists, keeps the third-party builds.
-2. If less than 25 GB is free, build with `CARGO_PROFILE_DEV_DEBUG=line-tables-only`,
+1. Ask the user whether a build or test run of theirs is using the target directory. `cargo clean`
+   does not wait for a running build, and the sandbox shows no other process.
+2. Clear the workspace crates' dev artefacts. `cargo clean --profile dev`, with a `-p` for each
+   package `cargo metadata --no-deps` lists, keeps the third-party builds.
+3. If less than 25 GB is free, build with `CARGO_PROFILE_DEV_DEBUG=line-tables-only`,
    `CARGO_INCREMENTAL=0`, and two build jobs. The first build after the switch recompiles every
    third-party crate.
-3. Watch free disk until the build ends. The capture's poller writes to the same disk, and a full
+4. Watch free disk until the build ends. The capture's poller writes to the same disk, and a full
    disk loses its polls.
 
-Clearing can free far less than it removes. On 1 November 2026, removing 24.9 GiB of `target/debug`
-freed about 4 GiB, and the sandbox did not show why. Check free disk after clearing, and keep the
-third-party builds unless the space is needed.
+Clearing can free far less than it removes, because a Time Machine local snapshot keeps every file
+that existed when it was taken. On 2 November 2026, about 195 GiB deleted after one snapshot freed
+under 3 GiB. Free disk rose from 11 GiB to 185 GiB once `tmutil deletelocalsnapshots <date>` ran.
+The command printed a failure all the same, so judge it by free disk. The sandbox hides all this:
+`tmutil listlocalsnapshots /` lists nothing there, and `diskutil` cannot reach its daemon, so the
+user runs both `tmutil` commands. Check free disk after clearing, and keep the third-party builds
+unless the space is needed.

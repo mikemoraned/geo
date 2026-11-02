@@ -1059,14 +1059,18 @@ After Refactoring, once the slice works end to end.
       sharing a departure and arrival keep the query's order in `NormalisedLegs::new`, so skipping
       it needs a tie-break there.
       Moot on 2026-11-02: `motis_ingest` is small and fast enough at 2.90 GB and 188 s.
-- [ ] When `motis_track_area` captures a whole country, test each leg once, with `covers`, against
+- [-] When `motis_track_area` captures a whole country, test each leg once, with `covers`, against
       one prepared outline. Share the coverage, rather than cloning it each poll. It now passes the
       same shapes as area and as country, so it unions and prepares them twice and tests each leg
       twice.
+      Moot on 2026-11-02: DE polls every 10 minutes, and no measurement shows this repeat matters at
+      that interval.
 
 #### Wrap-up
 
-- [ ] Add the Motis source to the derivation graph in `docs/architecture.md`.
+- [x] Add the Motis source to the derivation graph in `docs/architecture.md`.
+      Decided on 2026-11-02: the graph already held the source and `train_segment_v4`, so this adds
+      `train_session_v2` and `train_session_sample_v2`, the other datasets `motis_ingest` writes.
 - [ ] Fold what holds of `2026-10-12-track-shapes-and-realtime.md` into `docs/motis.md`: the
       `route_shapes` setup, the train-name script, realtime resolution, and the measured import.
       Correct the `displayName` claim there. Then delete the research doc.
