@@ -492,3 +492,66 @@ beside `tools/motis-server`.
 
 - **Each python extension rebuilds only when a crate it wraps changes**, by uv's cache keys, in
   place of a forced reinstall on every run.
+
+## Slice: Motis as ground truth
+
+Brought the local Motis server up to Transitous's standard, and captured six days of every German
+train from it, as the ground truth the evaluation framework scores against. The crate
+`session-crossings-py` is new.
+
+### Caveat: realtime stops partway through the capture
+
+**Most of the capture has no realtime, and this came to light only as the slice closed.** Realtime
+fell from above 90% to 0% during 20 October 2026, between 04:00 and 05:00 UTC, and never recovered.
+Polling carried on normally, so nothing reported the fall. About 73% of silver's legs date from 20
+October onwards, and their arrival times are almost all the timetable's. Shapes and scheduled times
+are unaffected.
+
+Share of captured rows marked realtime, by the day they were polled:
+
+| Day | All rail | Regional | Long-distance | High-speed |
+| --- | --- | --- | --- | --- |
+| 18 October | 85.0% | 92.3% | 5.3% | 10.0% |
+| 19 October | 90.4% | 96.2% | 9.3% | 15.9% |
+| 20 October | 6.3% | 6.7% | 1.4% | 0.2% |
+| 21 October | 0.0% | 0.0% | 0.2% | 0.0% |
+| 22 October | 0.0% | 0.0% | 1.3% | 0.0% |
+| 23 October | 0.0% | 0.0% | 1.2% | 0.0% |
+| 24 October | 0.1% | 0.0% | 1.3% | 0.0% |
+| 25 October, 6 polls | 0.0% | 0.0% | 0.0% | 0.0% |
+
+The cause is unknown. One server log entry on 25 October shows 19.2% of 109,572 realtime entries
+resolving, against 99.98% on 17 October. High-speed realtime stays low even before the fall.
+
+### The local server
+
+- **Rail follows the track.** The import computes shapes with `route_shapes`, and loads Transitous's
+  train-name script. pfaedle's shapes are rejected, since importing a feed carrying them broke
+  realtime.
+- **A side-by-side pass checked it against Transitous.** Every joined leg lies within 12.6 m of
+  Transitous's shape, and regional arrivals agree. SIRI ET forecasts are deferred.
+
+### The capture
+
+- **A source names each capture**: its server, feed, Motis version, area, and an optional label.
+- **An area keeps a leg lying wholly within its country**, since the server draws a leg straight
+  beyond its OSM extract.
+- **Polls land in landing, and a drain moves them into bronze.** Each polyline is stored once, which
+  makes a day about 54 times smaller on disk.
+- **An invalid polyline costs only its own row**, and is logged and counted.
+
+### Silver
+
+- **Train segments and train sessions derive from the whole capture**, across every source, with one
+  `train_segment` version.
+- **A session's pass is now one per visit**, at the visit's nearest sample, so a session reversing
+  over a crossing passes it twice.
+- **The UUID namespaces behind session and source ids are derived from their names**, with UUID v5,
+  so each shows what it is, rather than being a bare number.
+
+### Rows
+
+- **Deriving silver holds each leg and shape once, and projects each geometry once.**
+- **Rows name geography and geometry.** A `GeographyRow` holds lat/lon, and a `GeometryRow` holds a
+  projection only `Projector` builds. The stored columns keep their names, which a later slice
+  addresses.

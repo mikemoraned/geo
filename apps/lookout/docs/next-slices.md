@@ -74,7 +74,9 @@ uncertainty exceeds that span, two visits are no longer discernible.
 Decisions taken before starting, as each changes what gets built. Confirmed 2026-10-03.
 
 The evaluation scores predictions against the ground truth the slice "Motis as ground truth"
-establishes.
+establishes. Most of that capture has no realtime, as
+[its caveat](completed-slices.md#caveat-realtime-stops-partway-through-the-capture) sets out. If
+that proves an issue, limit the evaluation data to legs with realtime.
 
 #### Prediction
 
@@ -190,6 +192,14 @@ Take [2026-10-23-great-britain-capture.md](2026-10-23-great-britain-capture.md) 
 The German setup moves from the top level of `tools/motis-server` into a subdirectory, so the
 UK's setup can sit beside it. The Justfile, `motis_server`, and `geo_data` at that top level serve
 Germany alone.
+
+### Tasks
+
+- [ ] Make the poller log a warning when a poll's share of realtime legs falls. The German capture
+      lost its realtime on 20 October 2026, and nothing reported it, as
+      [its caveat](completed-slices.md#caveat-realtime-stops-partway-through-the-capture) sets out.
+- [ ] If the warning fires during a capture, investigate the cause before the capture ends. Compare
+      the realtime feed's trip ids with the imported timetable's.
 
 # Milestone: V2
 
