@@ -417,3 +417,23 @@ tool, puts the self-check in front of Claude before its next step.
       refused.
 - [ ] Invoke both skills, edit the file, and confirm the self-check arrives before the next step.
 - [ ] Change the file through Bash, and confirm the self-check arrives there as well.
+
+## Slice: geography and geometry columns
+
+### Target
+
+Make silver's files say what its two geometry columns hold. The column named `geometry` holds the
+geography, in lat/lon, and `geometry_projected` holds the geometry, in a country's metres. The code
+measures the first on the round Earth and the second on a plane, but a file declares both as planar.
+[2026-11-02-geography-and-geometry-columns.md](2026-11-02-geography-and-geometry-columns.md) holds
+the assessment.
+
+### Tasks
+
+- [ ] Check each reader of the lat/lon column against a file with spherical edges. SedonaDB treats
+      such a column as a separate type, with its own set of functions.
+- [ ] If the readers allow it, declare the lat/lon column's edges as spherical. Compare every
+      derived dataset before and after.
+- [ ] Rename the columns to `geography` and `geometry`, as new versions of the six datasets that
+      hold them.
+- [ ] Measure a dictionary over the WKB, then GeoArrow-native encoding once SedonaDB reads it.
