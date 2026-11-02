@@ -7,7 +7,7 @@ binds any UI element to a top-level global (marimo reactivity needs that). Given
 
   * water (blue), rail (grey)
   * every raw rail∩water centroid (small grey) — the pre-filter candidates
-  * the surviving V7 crossing reps (red, hover shows water_class / overlap_kind / frac)
+  * the surviving V7 crossing reps (red, hover shows overture_water_class / overlap_kind / frac)
   * the bbox outline (orange)
 
 plus a summary line (expected vs found) with a link to explore.overturemaps.org centred on the
@@ -117,7 +117,7 @@ def case_map(
     reps_c = _clip(reps_gdf, bounds)
     if len(reps_c):
         layers.append(
-            _scatter(reps_c, [220, 30, 30], 6, ["water_class", "overlap_kind", "frac"])
+            _scatter(reps_c, [220, 30, 30], 6, ["overture_water_class", "overlap_kind", "frac"])
         )
     outline = gpd.GeoDataFrame(geometry=[LineString(box(*bounds).exterior.coords)], crs="EPSG:4326")
     layers.append(

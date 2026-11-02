@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use medallion::{Dataset, DatasetSpec, Root, Row};
-use medallion_model::{AccelReadingRow, DeviceSessionRow, GpsReadingRow, RawSampleRow};
+use medallion_model::{AccelReadingRowV2, DeviceSessionRowV2, GpsReadingRowV2, RawSampleRow};
 use shared::{AccelReading, GpsReading, Message, SessionStart, V0Message, V1Message};
 use telemetry::RawSample;
 
@@ -53,9 +53,9 @@ impl std::ops::Add for Written {
 #[derive(Debug, Default)]
 struct Rows {
     raw: Vec<RawSampleRow>,
-    gps: Vec<GpsReadingRow>,
-    accel: Vec<AccelReadingRow>,
-    devices: Vec<DeviceSessionRow>,
+    gps: Vec<GpsReadingRowV2>,
+    accel: Vec<AccelReadingRowV2>,
+    devices: Vec<DeviceSessionRowV2>,
     unparseable: usize,
 }
 
@@ -155,8 +155,8 @@ fn raw_row(payload: &Payload<'_>) -> RawSampleRow {
     }
 }
 
-fn gps_row(reading: &GpsReading) -> Option<GpsReadingRow> {
-    Some(GpsReadingRow {
+fn gps_row(reading: &GpsReading) -> Option<GpsReadingRowV2> {
+    Some(GpsReadingRowV2 {
         device_id: reading.id.into(),
         t: reading.t,
         lat: reading.gps.latitude(),
@@ -168,8 +168,8 @@ fn gps_row(reading: &GpsReading) -> Option<GpsReadingRow> {
     })
 }
 
-fn accel_row(reading: &AccelReading) -> AccelReadingRow {
-    AccelReadingRow {
+fn accel_row(reading: &AccelReading) -> AccelReadingRowV2 {
+    AccelReadingRowV2 {
         device_id: reading.id.into(),
         t: reading.t,
         rms: reading.accel.rms,
@@ -181,8 +181,8 @@ fn accel_row(reading: &AccelReading) -> AccelReadingRow {
     }
 }
 
-fn device_session_row(start: &SessionStart) -> DeviceSessionRow {
-    DeviceSessionRow {
+fn device_session_row(start: &SessionStart) -> DeviceSessionRowV2 {
+    DeviceSessionRowV2 {
         device_id: start.id.into(),
         t: start.t,
         device_type: start.device.device_type,
@@ -264,11 +264,11 @@ mod tests {
     async fn rows_in<L: medallion::LayerKind>(root: &Root, dataset: DatasetSpec<L>) -> i64 {
         let query = Query::new(root.clone());
         query
-            .register(dataset, "d")
+            .register_by_name(dataset)
             .await
             .expect("register dataset");
         query
-            .count("SELECT COUNT(*) AS count FROM d")
+            .count(&format!("SELECT COUNT(*) AS count FROM {}", dataset.name))
             .await
             .expect("count")
     }
@@ -300,9 +300,9 @@ mod tests {
             }
         );
         assert_eq!(rows_in(&root, medallion_model::RAW_SAMPLE).await, 4);
-        assert_eq!(rows_in(&root, medallion_model::GPS_READING).await, 2);
-        assert_eq!(rows_in(&root, medallion_model::ACCEL_READING).await, 1);
-        assert_eq!(rows_in(&root, medallion_model::DEVICE_SESSION).await, 1);
+        assert_eq!(rows_in(&root, medallion_model::GPS_READING_V2).await, 2);
+        assert_eq!(rows_in(&root, medallion_model::ACCEL_READING_V2).await, 1);
+        assert_eq!(rows_in(&root, medallion_model::DEVICE_SESSION_V2).await, 1);
     }
 
     #[tokio::test]
@@ -319,11 +319,11 @@ mod tests {
             .expect("write");
 
         let path = archive
-            .ingestion_file(medallion_model::GPS_READING, ingested_at())
+            .ingestion_file(medallion_model::GPS_READING_V2, ingested_at())
             .expect("path");
         assert!(
             path.ends_with(
-                "bronze/gps_reading/ingested_date=2026-07-26/20260726T140530000Z.parquet"
+                "bronze/gps_reading_v2/ingested_date=2026-07-26/20260726T140530000Z.parquet"
             ),
             "unexpected path: {}",
             path.display()
@@ -369,12 +369,12 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register(medallion_model::RAW_SAMPLE, "d")
+            .register_by_name(medallion_model::RAW_SAMPLE)
             .await
             .expect("register");
         assert_eq!(
             query
-                .count("SELECT COUNT(*) AS count FROM d WHERE received_at IS NULL")
+                .count("SELECT COUNT(*) AS count FROM raw_sample WHERE received_at IS NULL")
                 .await
                 .expect("count"),
             1
@@ -396,7 +396,7 @@ mod tests {
 
         assert!(
             !archive
-                .ingestion_file(medallion_model::ACCEL_READING, ingested_at())
+                .ingestion_file(medallion_model::ACCEL_READING_V2, ingested_at())
                 .expect("path")
                 .exists()
         );
@@ -423,7 +423,7 @@ mod tests {
             .await
             .expect("second batch");
 
-        assert_eq!(rows_in(&root, medallion_model::GPS_READING).await, 2);
+        assert_eq!(rows_in(&root, medallion_model::GPS_READING_V2).await, 2);
     }
 
     #[tokio::test]

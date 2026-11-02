@@ -3,12 +3,13 @@ use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
 use arrow::array::RecordBatch;
+use arrow::datatypes::Schema;
 use chrono::{DateTime, NaiveDate, Utc};
 use datafusion::execution::SendableRecordBatchStream;
 
 use crate::dataset::DatasetSpec;
-use crate::geo::{GeoError, write_geo_batches, write_geo_stream};
-use crate::layer::{Layer, LayerKind, Replaceable};
+use crate::geo::{GeoError, GeoParquetFile, write_geo_batches, write_geo_stream};
+use crate::layer::{Layer, LayerKind, Replaceable, layers};
 use crate::partition::{DATE_FORMAT, Partition, PathError};
 use crate::rows::{Row, RowError, batch};
 use crate::write::{WriteError, write_batches};
@@ -45,6 +46,63 @@ pub enum ReplaceError {
         #[source]
         source: std::io::Error,
     },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum LandingError {
+    #[error("listing the files of {path}: {source}")]
+    List {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("deleting {path}: {source}")]
+    Delete {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LandedFile(PathBuf);
+
+impl LandedFile {
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+
+    pub fn delete(self) -> Result<(), LandingError> {
+        std::fs::remove_file(&self.0).map_err(|source| LandingError::Delete {
+            path: self.0.display().to_string(),
+            source,
+        })
+    }
+}
+
+fn landed_files_under(dir: &Path) -> Result<Vec<LandedFile>, LandingError> {
+    let list_error = |source| LandingError::List {
+        path: dir.display().to_string(),
+        source,
+    };
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(source) => return Err(list_error(source)),
+    };
+    let mut files = Vec::new();
+    for entry in entries {
+        let path = entry.map_err(list_error)?.path();
+        if path.is_dir() {
+            files.extend(landed_files_under(&path)?);
+        } else if path
+            .extension()
+            .is_some_and(|extension| extension == "parquet")
+        {
+            files.push(LandedFile(path));
+        }
+    }
+    Ok(files)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -264,11 +322,23 @@ impl<L: LayerKind> Dataset<L> {
     }
 }
 
+impl Dataset<layers::Landing> {
+    pub fn landed_files(&self) -> Result<Vec<LandedFile>, LandingError> {
+        let mut files = landed_files_under(&self.dir())?;
+        files.sort_unstable();
+        Ok(files)
+    }
+}
+
 impl<L: Replaceable> Dataset<L> {
     pub async fn replace_with(&self, batches: &[RecordBatch]) -> Result<PathBuf, WriteError> {
         let path = self.partition_file();
         write_batches(&path, batches).await?;
         Ok(path)
+    }
+
+    pub(crate) fn create_geo_partition(&self, schema: &Schema) -> Result<GeoParquetFile, GeoError> {
+        GeoParquetFile::create(&self.partition_file(), schema)
     }
 
     pub async fn replace_with_geo(&self, batches: &[RecordBatch]) -> Result<PathBuf, GeoError> {
@@ -388,9 +458,108 @@ mod tests {
         DatasetSpec::partitioned("overture_extract", "extract_id");
     const EXTRACT_MANIFEST: DatasetSpec<layers::Bronze> =
         DatasetSpec::unpartitioned("extract_manifest");
+    const POLL: DatasetSpec<layers::Landing> = DatasetSpec::partitioned("poll", "polled_date");
 
     fn root() -> Root {
         Root::new("/store")
+    }
+
+    fn land(dataset: &Dataset<layers::Landing>, at: DateTime<Utc>) -> PathBuf {
+        let path = dataset
+            .clone()
+            .on_date(at.date_naive())
+            .unwrap()
+            .batch_file(at);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::File::create(&path).unwrap();
+        path
+    }
+
+    fn paths(files: &[LandedFile]) -> Vec<&Path> {
+        files.iter().map(LandedFile::path).collect()
+    }
+
+    #[test]
+    fn a_landing_dataset_nothing_has_written_holds_no_files() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let files = Root::new(tmp.path()).dataset(POLL).landed_files().unwrap();
+
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn landed_files_are_listed_across_partitions_oldest_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dataset = Root::new(tmp.path()).dataset(POLL);
+        let latest = land(
+            &dataset,
+            Utc.with_ymd_and_hms(2026, 10, 2, 0, 0, 0).unwrap(),
+        );
+        let middle = land(
+            &dataset,
+            Utc.with_ymd_and_hms(2026, 10, 1, 9, 0, 0).unwrap(),
+        );
+        let earliest = land(
+            &dataset,
+            Utc.with_ymd_and_hms(2026, 10, 1, 8, 0, 0).unwrap(),
+        );
+
+        let files = dataset.landed_files().unwrap();
+
+        assert_eq!(paths(&files), [&earliest, &middle, &latest]);
+    }
+
+    #[test]
+    fn a_file_still_being_written_is_not_listed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dataset = Root::new(tmp.path()).dataset(POLL);
+        let finished = land(
+            &dataset,
+            Utc.with_ymd_and_hms(2026, 10, 1, 8, 0, 0).unwrap(),
+        );
+        let staged = format!("{}#0", finished.display());
+        std::fs::File::create(staged).unwrap();
+
+        let files = dataset.landed_files().unwrap();
+
+        assert_eq!(paths(&files), [&finished]);
+    }
+
+    #[test]
+    fn deleting_a_landed_file_leaves_the_others() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dataset = Root::new(tmp.path()).dataset(POLL);
+        let first = land(
+            &dataset,
+            Utc.with_ymd_and_hms(2026, 10, 1, 8, 0, 0).unwrap(),
+        );
+        let second = land(
+            &dataset,
+            Utc.with_ymd_and_hms(2026, 10, 1, 9, 0, 0).unwrap(),
+        );
+        let drained = dataset.landed_files().unwrap().remove(0);
+
+        drained.delete().unwrap();
+
+        assert!(!first.exists());
+        assert_eq!(paths(&dataset.landed_files().unwrap()), [&second]);
+    }
+
+    #[test]
+    fn deleting_a_file_already_gone_is_an_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dataset = Root::new(tmp.path()).dataset(POLL);
+        let path = land(
+            &dataset,
+            Utc.with_ymd_and_hms(2026, 10, 1, 8, 0, 0).unwrap(),
+        );
+        let file = dataset.landed_files().unwrap().remove(0);
+        std::fs::remove_file(path).unwrap();
+
+        let err = file.delete().unwrap_err();
+
+        assert!(matches!(err, LandingError::Delete { .. }), "{err}");
     }
 
     #[test]

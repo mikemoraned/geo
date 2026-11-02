@@ -3,11 +3,13 @@ use domain::{CrossingCompactId, CrossingId, DeviceId, SessionId};
 use medallion::{COUNTRY, DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
-pub const WATER_CROSSING: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("water_crossing", COUNTRY);
+use crate::SessionRowV3;
 
-pub const SESSION_CROSSING: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("session_crossing", "crossed_date");
+pub const WATER_CROSSING_V2: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("water_crossing_v2", COUNTRY);
+
+pub const SESSION_CROSSING_V3: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("session_crossing_v3", "crossed_date");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -17,15 +19,15 @@ pub enum OverlapKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct WaterCrossingRow {
+pub struct WaterCrossingRowV2 {
     pub crossing_id: CrossingId,
     pub crossing_compact_id: CrossingCompactId,
-    pub water_id: String,
-    pub water_subtype: Option<String>,
-    pub water_class: Option<String>,
+    pub overture_water_id: String,
+    pub overture_water_subtype: Option<String>,
+    pub overture_water_class: Option<String>,
     pub track_id: String,
-    pub rail_id: String,
-    pub rail_class: Option<String>,
+    pub overture_rail_id: String,
+    pub overture_rail_class: Option<String>,
     pub overlap_kind: OverlapKind,
     pub overlap_m: f64,
     pub total_overlap_m: f64,
@@ -36,15 +38,36 @@ pub struct WaterCrossingRow {
     pub min_crossing_m: f64,
 }
 
-impl Row for WaterCrossingRow {
+impl Row for WaterCrossingRowV2 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = WATER_CROSSING;
+    const DATASET: DatasetSpec<Self::Layer> = WATER_CROSSING_V2;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const UNIQUE: &'static [&'static str] = &["crossing_id", "crossing_compact_id"];
+
+    fn example() -> Self {
+        Self {
+            crossing_id: CrossingId::new("example").expect("a constant crossing id is a name"),
+            crossing_compact_id: CrossingCompactId::new(1),
+            overture_water_id: "example".to_string(),
+            overture_water_subtype: Some("example".to_string()),
+            overture_water_class: Some("example".to_string()),
+            track_id: "example".to_string(),
+            overture_rail_id: "example".to_string(),
+            overture_rail_class: Some("example".to_string()),
+            overlap_kind: OverlapKind::Line,
+            overlap_m: 0.0,
+            total_overlap_m: 0.0,
+            merged_parts: 1,
+            frac: 0.0,
+            extract_id: "example".to_string(),
+            merge_distance_m: 0.0,
+            min_crossing_m: 0.0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SessionCrossingRow {
+pub struct SessionCrossingRowV3 {
     pub session_id: SessionId,
     pub crossing_id: CrossingId,
     pub device_id: DeviceId,
@@ -55,13 +78,26 @@ pub struct SessionCrossingRow {
     pub match_radius_m: f64,
 }
 
-impl Row for SessionCrossingRow {
+impl Row for SessionCrossingRowV3 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = SESSION_CROSSING;
+    const DATASET: DatasetSpec<Self::Layer> = SESSION_CROSSING_V3;
     const INSTANTS: &'static [&'static str] = &["crossed_at"];
+
+    fn example() -> Self {
+        let session = SessionRowV3::example();
+        Self {
+            session_id: session.session_id,
+            crossing_id: WaterCrossingRowV2::example().crossing_id,
+            device_id: session.device_id,
+            crossed_at: session.started_at,
+            distance_m: 0.0,
+            samples_within: 1,
+            match_radius_m: 250.0,
+        }
+    }
 }
 
-impl Dated for SessionCrossingRow {
+impl Dated for SessionCrossingRowV3 {
     fn partition_date(&self) -> NaiveDate {
         self.crossed_at.date_naive()
     }
@@ -72,33 +108,24 @@ mod tests {
     use arrow::datatypes::DataType;
 
     use super::*;
-
-    fn column<T: Row>(name: &str) -> DataType {
-        medallion::fields::<T>()
-            .expect("describe the rows")
-            .iter()
-            .find(|field| field.name() == name)
-            .unwrap_or_else(|| panic!("no column named `{name}`"))
-            .data_type()
-            .clone()
-    }
+    use crate::testing::column;
 
     #[test]
     fn a_compact_id_is_a_four_byte_column() {
         assert_eq!(
-            column::<WaterCrossingRow>("crossing_compact_id"),
-            DataType::UInt32
+            column::<WaterCrossingRowV2>("crossing_compact_id").data_type(),
+            &DataType::UInt32
         );
     }
 
     #[test]
     fn a_crossing_id_is_a_string_column_in_both_datasets() {
         assert!(matches!(
-            column::<WaterCrossingRow>("crossing_id"),
+            column::<WaterCrossingRowV2>("crossing_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionCrossingRow>("crossing_id"),
+            column::<SessionCrossingRowV3>("crossing_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
@@ -106,7 +133,7 @@ mod tests {
     #[test]
     fn the_kind_of_overlap_is_a_string_column() {
         assert!(matches!(
-            column::<WaterCrossingRow>("overlap_kind"),
+            column::<WaterCrossingRowV2>("overlap_kind").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
@@ -121,11 +148,14 @@ mod tests {
     #[test]
     fn a_crossing_carries_how_it_was_collapsed() {
         for tuning in ["merge_distance_m", "min_crossing_m"] {
-            assert_eq!(column::<WaterCrossingRow>(tuning), DataType::Float64);
+            assert_eq!(
+                column::<WaterCrossingRowV2>(tuning).data_type(),
+                &DataType::Float64
+            );
         }
         assert_eq!(
-            column::<SessionCrossingRow>("match_radius_m"),
-            DataType::Float64
+            column::<SessionCrossingRowV3>("match_radius_m").data_type(),
+            &DataType::Float64
         );
     }
 }

@@ -1,15 +1,22 @@
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
+use domain::Span;
 use medallion::MedallionArgs;
 use motis::ingest::ingest;
+use motis::train_sessions::derive_train_sessions;
 use transport::countries::CountryAreas;
 
 #[derive(Parser)]
-#[command(about = "Derive the silver train_segment dataset from the bronze motis capture log")]
+#[command(
+    about = "Derive the silver train_segment_v4, train_session_v2 and train_session_sample_v2 datasets from the bronze motis capture log"
+)]
 struct Args {
     #[command(flatten)]
     medallion: MedallionArgs,
+    /// How often a train session samples where its train is, such as `10s`.
+    #[arg(long, default_value = "10s")]
+    sample_interval: Span,
 }
 
 #[tokio::main]
@@ -34,8 +41,32 @@ async fn main() {
         read = outcome.read,
         deduped = outcome.deduped,
         partitions = outcome.partitions,
+        not_rail = outcome.not_rail,
         unplaceable = outcome.unplaceable,
+        shapeless = outcome.shapeless,
+        shape_corrected = outcome.shape_corrected,
         medallion_root = %root.path().display(),
         "derived train segments"
+    );
+
+    let sessions = derive_train_sessions(&root, &countries, args.sample_interval)
+        .await
+        .expect("derive train sessions");
+
+    tracing::info!(
+        trips = sessions.trips,
+        sessions = sessions.sessions,
+        samples = sessions.samples,
+        session_partitions = sessions.session_partitions.written,
+        sample_partitions = sessions.sample_partitions.written,
+        "derived train sessions"
+    );
+    tracing::info!(
+        total = sessions.dropped.total(),
+        shapeless = sessions.dropped.shapeless,
+        arrives_before_departing = sessions.dropped.arrives_before_departing,
+        overlapping = sessions.dropped.overlapping,
+        unplaceable = sessions.dropped.unplaceable,
+        "dropped trips"
     );
 }

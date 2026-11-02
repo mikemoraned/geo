@@ -8,7 +8,9 @@ reference data — so it sits beside both rather than inside either.
 ## A crossing is passed when a sample comes near it
 
 The rule is pure distance: a crossing was passed in a session if any sample came within the match
-radius, and the nearest sample says when. It is deliberately simple, with a known failure — a
+radius. Each run of consecutive samples within the radius is one visit, and each visit is one
+pass, so a session that reverses over a crossing passes it twice. The visit's nearest sample says
+when. The rule is deliberately simple, with a known failure — a
 crossing on a line running parallel to the one travelled is within the radius, so it is recorded
 as passed though it never was. Fixing that means matching a session to track rather than to
 points, which is work in its own right.
@@ -29,11 +31,10 @@ the value is in the slice record.
 
 A distance is only a distance inside one projected zone, and the store chooses a zone per country,
 so both inputs are read a country at a time and subtracted in that country's metres. A session is
-matched only against the crossings inside its own bbox grown by the radius, so the distance is
-computed for the pairs that could be within it rather than for every pair. The bbox is grown
-on the sphere rather than by treating a degree as a fixed distance, since a degree of longitude is
-a different length at every latitude. Its edges count as inside: a crossing on the grown edge is
-one at exactly the radius, which the distance test counts.
+matched only against the crossings within the radius of the rectangle bounding its samples. The
+distance is then computed only for the pairs that could be within it, not for every pair. The
+rectangle and the distance share the same metres. A crossing exactly the radius from the
+rectangle's edge is therefore kept, and the distance test decides it.
 
 A match is a session, a crossing and an instant, with no geometry of its own, so the rows are
 partitioned by the date it happened and nothing else. A run derives the whole dataset from the
@@ -47,7 +48,7 @@ not the same claim, so a row stays interpretable after the default changes.
 ## Choosing what a kiosk replays
 
 A session is worth replaying if it passes crossings, since one that passes none shows an empty
-screen for as long as it runs. That is already derived — a row per session per crossing passed —
+screen for as long as it runs. That is already derived — a row per pass —
 so choosing is a count over those rows rather than a second pass over the geometry: keep the
 sessions passing at least so many, take the best few, and write each with the samples that replay
 it.

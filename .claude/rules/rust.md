@@ -50,13 +50,39 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
 
 - Always remove dead code — never suppress warnings with `#[allow(dead_code)]` to keep code "for later". Git history is the archive; the working tree should only contain what's currently used.
 - Prefer an explicit `Result` with a `thiserror` error over a panic. Reserve `unwrap()`/`expect()` for cases that are genuinely infallible by construction (a compile-time constant, a just-checked invariant) or where panicking is the intended behaviour (build scripts, a once-per-process startup install); annotate those with a justification of why it can't fail. When replacing an `expect()` whose message explained *why* it failed, carry that reason into a `thiserror` variant rather than dropping it into a bare `?` or a stringly error. `unwrap()` and `expect()` are fine in tests.
+- **Refuse invalid input where it enters, then treat any later inconsistency as an error.** A
+  constructor checks what the rest of the code relies on, such as an interval that ends after it
+  starts or a line of at least two points, and returns an `Err` for input that breaks it. Code
+  downstream relies on that check rather than repeating it. Where a library call still returns an
+  `Option` or a `Result` that the check has made impossible to fail, map that failure to an error
+  naming the inconsistency and return it. Never drop it silently with `filter_map`, and never
+  replace it with a default.
 - Follow the [NewType](https://doc.rust-lang.org/rust-by-example/generics/new_types.html) idiom — avoid bare Strings or f32s
   - When creating a NewType in Rust that is parsed from a `String`, implement the `FromStr` trait, which returns `Result<Self, Self::Err>` where Err is an associated error type you define. 
   - Additionally, provide a `pub fn new(s: impl Into<String>) -> Result<Self, YourError>` constructor for ergonomic direct construction, and have your `FromStr` implementation delegate to `new()`.
   - `FromStr + .parse()` is the Rust community standard for "string → validated domain type" conversions.
 - Use typed representations instead of untyped arrays (e.g. `DynamicImage` not `Vec<u8>` for images)
 - Arguments convey meaning through types (`C-CUSTOM-TYPE`) — don't take a bare `bool` or `Option` parameter whose meaning is opaque at the call site (`f(true, false)`); use a two-variant enum (`Overwrite::Yes`/`No`). This is the argument-side mirror of "never return `bool` for success" below.
+- **A function hands back what it produces through its return type (`C-NO-OUT`).** A function that
+  fills a `&mut Vec` its caller passes hides its output among its arguments, and its result depends
+  on what the collection already held. A recursive helper is the usual offender: have each call
+  return its own `Vec`, and `extend` the caller's with it. The exception is data the caller already
+  owns and means to modify, such as a buffer reused as in `Read::read`, or an allocation that
+  profiling shows matters.
+- **A constructor leaves its arguments unchanged.** Write `new(legs: Vec<Leg>)`, never
+  `new(mut legs: Vec<Leg>)`. Build what the value holds through an iterator, such as
+  `legs.into_iter().sorted_by_key(...)` from `itertools`, rather than changing the argument.
 - Eagerly derive common traits (`C-COMMON-TRAITS`, `C-DEBUG`) — `Debug, Clone, PartialEq, Eq, Hash, Default` wherever they apply, and every public type implements `Debug`.
+- **An age is an `Age`, never a bare number or duration.** A maximum age, a lookback, or any
+  other measure of how old something may be is a positive span held in the `Age` newtype, whose
+  constructor refuses zero and anything below it. Where no age applies, write `Option<Age>` and
+  `None`, never an `Age` of zero. A signed duration such as `chrono::TimeDelta`, or an integer of
+  minutes, lets a negative or zero age compile; the newtype makes one unrepresentable.
+- **A span of time a person writes is human-readable, never a count of seconds or minutes.** A
+  flag, a config value, or a recipe argument for a duration, an interval, or an age takes text
+  such as `30s`, `10m`, or `4h`, read by the `humantime` crate into a `Span` that refuses zero.
+  Name the flag for what it measures, `--poll-interval` rather than `--poll-interval-secs`, since
+  the unit travels with the value. An age read this way becomes an `Age` through `Span::age`.
 - Represent missing/not-set/disabled data that is expected and valid with `Option<T>` (`None`) — never with sentinel values like `0`, `-1`, or empty strings to encode absence. Use `Result::Err` when the absence instead represents an invalid state the caller should propagate with `?`
 - Errors (`C-GOOD-ERR`): structured [thiserror](https://docs.rs/thiserror/latest/thiserror/) enums for library/domain code, where callers match on outcomes. At a binary's `main`/orchestration layer a type-erased error (`Box<dyn std::error::Error>`) is acceptable — nobody matches on it, a human reads it.
   - Functions that can fail must return `Result<T, E>`, never `bool` for success/failure
@@ -77,6 +103,7 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
 - Binary layout:
   - All binaries must be named files in `src/bin/` (e.g. `src/bin/finder.rs`), never `src/main.rs` or subdirectories like `src/bin/finder/main.rs`
   - Modules used by binaries live under `src/` and are exposed through `lib.rs`, not placed alongside binaries in `src/bin/`
+  - A binary names no recipe, script, or other caller of it. A message states what is missing, such as `LOOKOUT_REDIS_URL must be set`, and never how one caller supplies it. A binary that knows its caller breaks when that caller is renamed, and misleads anyone who runs it another way. Library code a binary calls and tests follow the same rule. A binary may name its own subcommands.
 - **Identity-keyed maps over positionally-aligned `Vec`s for parallel/async work.** When a function takes `&[Input]` and produces one output per input, return `HashMap<Id, Output>` keyed by something derived from the input — not a `Vec<Output>` that callers zip by index. Positional alignment depends on the implementation preserving order: `futures::Stream::buffered` does today, `buffer_unordered` does not, and a `par_iter` or task-pool scheduler may not either. A future switch silently desyncs each output from its input, the bug is invisible at the call site (`scored[i]` looks correct), and only manifests as wrong downstream results. Look up by id at the call site instead — making mismatched positions structurally impossible.
 - Keep feature enablement flags (e.g. `--use-redis`) separate from their configuration values (e.g. `--redis-url`). A feature's on/off switch should not be derived from whether its config happens to be present — these are independent concerns.
 - **Prefer functions over macros — reach for `macro_rules!` only when you genuinely need syntax or control flow a function can't express, and the duplication it removes is actually painful.** A macro being *able* to dedup something is not reason enough. Removing repetition is not, on its own, a justification: accepting a few lines of straightforward duplication (e.g. two `tracing` calls that differ only by level and message) is almost always better than a `macro_rules!` that a reader has to mentally expand. Macros cost more than they look — worse error messages, no go-to-definition, awkward to read and refactor — so the bar is "a function provably can't do this *and* the duplication is genuinely costly", not "this is slightly repetitive".
@@ -88,3 +115,8 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
 - Prefer simple, readable techniques over clever ones until profiling identifies a real hotspot.
   - When the borrow checker pushes back, reach for `.clone()` first. Only escalate to tricks like `std::mem::take`, manual index loops, `RefCell`, or restructuring fields once a benchmark or trace shows the clone matters.
   - Example: in a per-tick loop that needs `&mut self` access while iterating one field, `let xs = self.xs.clone(); for x in xs { self.do_something(&x); }` beats `for x in std::mem::take(&mut self.xs) { ... }`. Both work; the clone is one line, obvious to read, and ~free for small Vecs of small values. Save the cleverness for when it's earned.
+- **Derive a magic value from its name rather than embedding it.** A UUID namespace, or any other
+  number or string whose value means nothing by itself, is computed from a name that says what it
+  is. `Uuid::new_v5(&Uuid::nil(), b"TRAIN_SESSION_NAMESPACE")` shows what the namespace is and
+  where it comes from. `Uuid::from_u128(0x1066_8aee_…)` shows neither. The derivation can cost a
+  `const` and a computation per call. Pay that unless profiling shows the computation matters.

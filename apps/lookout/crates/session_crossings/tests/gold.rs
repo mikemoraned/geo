@@ -1,8 +1,8 @@
 use chrono::{DateTime, TimeZone, Utc};
 use domain::{Bbox, CrossingId, DeviceId, SessionId, StartedBy};
 use geo_types::{LineString, Point};
-use medallion::{Country, GeoRow, Root, write_geo_rows, write_rows};
-use medallion_model::{SessionCrossingRow, SessionRow, SessionSampleRow};
+use medallion::{Country, GeographyRow, Root, write_geography_rows, write_rows};
+use medallion_model::{SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3};
 use session_crossings::gold::{Choosing, choose};
 
 const BERLIN: (f64, f64) = (13.404954, 52.520008);
@@ -12,9 +12,9 @@ fn at(minute: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 7, 22, 9, minute, 0).unwrap()
 }
 
-fn session_of(named: &str, at_lon_lat: (f64, f64)) -> (SessionRow, Point<f64>) {
+fn session_of(named: &str, at_lon_lat: (f64, f64)) -> (SessionRowV3, Point<f64>) {
     let (lon, lat) = at_lon_lat;
-    let session = SessionRow {
+    let session = SessionRowV3 {
         session_id: SessionId::new(named).expect("a session id"),
         device_id: DeviceId::new(format!("device-{named}")).expect("a device id"),
         started_at: at(0),
@@ -49,13 +49,13 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
             let (session, point) = session_of(named, *at_lon_lat);
             let session_id = session.session_id.clone();
             let device_id = session.device_id.clone();
-            session_rows.push(GeoRow {
+            session_rows.push(GeographyRow {
                 row: session,
-                geometry: LineString::from(vec![(point.x(), point.y()), (point.x(), point.y())]),
+                geography: LineString::from(vec![(point.x(), point.y()), (point.x(), point.y())]),
                 country: *country,
             });
-            sample_rows.push(GeoRow {
-                row: SessionSampleRow {
+            sample_rows.push(GeographyRow {
+                row: SessionSampleRowV3 {
                     session_id: session_id.clone(),
                     device_id: device_id.clone(),
                     t: at(1),
@@ -68,11 +68,11 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
                     heading: None,
                     implied_speed_mps: None,
                 },
-                geometry: point,
+                geography: point,
                 country: *country,
             });
             for n in 0..*crossings {
-                crossed.push(SessionCrossingRow {
+                crossed.push(SessionCrossingRowV3 {
                     session_id: session_id.clone(),
                     crossing_id: CrossingId::new(format!("water:track:rail@{named}-{n}"))
                         .expect("a crossing id"),
@@ -86,10 +86,10 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
         }
     }
 
-    write_geo_rows(root, &session_rows)
+    write_geography_rows(root, &session_rows)
         .await
         .expect("write the sessions");
-    write_geo_rows(root, &sample_rows)
+    write_geography_rows(root, &sample_rows)
         .await
         .expect("write the samples");
     write_rows(root, &crossed).await.expect("write the passes");

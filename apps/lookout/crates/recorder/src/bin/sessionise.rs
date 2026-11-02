@@ -1,21 +1,22 @@
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
+use domain::Span;
 use medallion::MedallionArgs;
-use recorder::sessions::{Gap, Lead, sessions};
+use recorder::sessions::{DEFAULT_GAP, DEFAULT_LEAD, Gap, Lead, sessions};
 use recorder::silver;
 use transport::countries::CountryAreas;
 
 #[derive(Parser)]
 #[command(about = "Derive the silver session datasets from the bronze telemetry")]
 struct Args {
-    /// How long a device may go unheard before the silence separates two sessions.
-    #[arg(long, default_value_t = Gap::default().as_seconds() / 60)]
-    gap_mins: u32,
+    /// How long a device may go unheard before the silence separates two sessions, such as 10m.
+    #[arg(long, default_value_t = Span::from(DEFAULT_GAP))]
+    gap: Span,
     /// How long before reporting a session a device may already have been fixing its
-    /// position: samples this close ahead of a report open the session it reports.
-    #[arg(long, default_value_t = Lead::default().as_seconds())]
-    lead_secs: u32,
+    /// position, such as 1m. Samples this close ahead of a report open the session it reports.
+    #[arg(long, default_value_t = Span::from(DEFAULT_LEAD))]
+    lead: Span,
     #[command(flatten)]
     medallion: MedallionArgs,
 }
@@ -30,8 +31,8 @@ async fn main() {
 
     let args = Args::parse();
     let root = args.medallion.root().expect("locate the medallion store");
-    let gap = Gap::new(chrono::Duration::minutes(i64::from(args.gap_mins)));
-    let lead = Lead::new(chrono::Duration::seconds(i64::from(args.lead_secs)));
+    let gap = Gap::new(args.gap.age()).expect("a gap a session can record");
+    let lead = Lead::new(args.lead.age()).expect("a lead a session can record");
 
     let countries = CountryAreas::newest_per_country(&root)
         .await
@@ -49,9 +50,32 @@ async fn main() {
         sample_partitions = outcome.sample_partitions.written,
         sample_partitions_removed = outcome.sample_partitions.removed,
         unplaceable = outcome.unplaceable,
-        gap_mins = args.gap_mins,
-        lead_secs = args.lead_secs,
+        gap = %args.gap,
+        lead = %args.lead,
         medallion_root = %root.path().display(),
         "derived sessions"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_gap_and_a_lead_are_written_as_spans() {
+        let args = Args::parse_from(["sessionise", "--gap", "2h", "--lead", "30s"]);
+
+        assert_eq!(args.gap.to_string(), "2h");
+        assert_eq!(args.lead.to_string(), "30s");
+    }
+
+    #[test]
+    fn a_gap_or_a_lead_of_zero_is_refused() {
+        for flag in ["--gap", "--lead"] {
+            assert!(
+                Args::try_parse_from(["sessionise", flag, "0s"]).is_err(),
+                "{flag}"
+            );
+        }
+    }
 }

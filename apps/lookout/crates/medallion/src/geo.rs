@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -5,12 +7,15 @@ use datafusion::execution::SendableRecordBatchStream;
 use futures::StreamExt;
 
 use crate::country::Country;
-use crate::rows::{Row, RowError, fields};
+use crate::rows::{Geometry, Row, RowError, batch, fields};
 use crate::write::WriteError;
 use arrow::array::{Array, ArrayRef, BinaryArray, RecordBatch};
-use arrow::datatypes::{DataType, Field, FieldRef, Schema};
+use arrow::datatypes::{DataType, Field, FieldRef, Schema, SchemaRef};
 use geoarrow_schema::{Crs, Metadata, WkbType};
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
+use parquet::arrow::AsyncArrowWriter;
+use parquet::arrow::async_writer::ParquetObjectWriter;
+use serde::Serialize;
 
 const CRS84_PROJJSON: &str = include_str!("crs84.projjson.json");
 
@@ -58,38 +63,109 @@ pub fn projected_wkb_field(name: &str, country: Country) -> Result<Field, GeoErr
     Ok(Field::new(name, DataType::Binary, true).with_extension_type(WkbType::new(metadata)))
 }
 
+pub fn geometry_fields(country: Country) -> Result<[Field; 2], GeoError> {
+    Ok([
+        wkb_field(GEOMETRY)?,
+        projected_wkb_field(PROJECTED_GEOMETRY, country)?,
+    ])
+}
+
+pub fn file_schema<T: Row>(country: Country) -> Result<SchemaRef, GeoError> {
+    let none: &[geo_types::Point<f64>] = &[];
+    let batch = match T::GEOMETRY {
+        Geometry::Absent => batch::<T>(&[])?,
+        Geometry::LatLonAndProjected => {
+            let [plain, projected] = geometry_fields(country)?;
+            geo_batch::<T, _>(&[], &[(plain, none), (projected, none)])?
+        }
+    };
+    Ok(batch.schema())
+}
+
 pub struct Projector {
+    country: Country,
     from: proj4rs::Proj,
     to: proj4rs::Proj,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ZonedGeometry<G> {
+    geography: G,
+    projected: G,
+    country: Country,
+}
+
+impl<G> ZonedGeometry<G> {
+    pub fn geography(&self) -> &G {
+        &self.geography
+    }
+
+    pub fn projected(&self) -> &G {
+        &self.projected
+    }
+
+    pub fn country(&self) -> Country {
+        self.country
+    }
 }
 
 impl Projector {
     pub fn for_country(country: Country) -> Result<Self, GeoError> {
         Ok(Self {
+            country,
             from: proj4rs::Proj::from_epsg_code(CRS84_EPSG)?,
             to: proj4rs::Proj::from_epsg_code(country.projected_epsg())?,
         })
     }
 
-    pub fn project<G>(&self, geometry: &G) -> Result<G, GeoError>
+    pub fn project<G>(&self, geography: &G) -> Result<G, GeoError>
     where
         G: geo::MapCoords<f64, f64, Output = G>,
     {
-        geometry.try_map_coords(|coord| {
+        geography.try_map_coords(|coord| {
             // proj4rs takes radians for a geographic system, whatever the source states.
             let mut point = (coord.x.to_radians(), coord.y.to_radians(), 0.0);
             proj4rs::transform::transform(&self.from, &self.to, &mut point)?;
             Ok::<_, GeoError>(geo_types::coord! { x: point.0, y: point.1 })
         })
     }
+
+    pub fn zoned<G>(&self, geography: G) -> Result<ZonedGeometry<G>, GeoError>
+    where
+        G: geo::MapCoords<f64, f64, Output = G>,
+    {
+        let projected = self.project(&geography)?;
+        Ok(ZonedGeometry {
+            geography,
+            projected,
+            country: self.country,
+        })
+    }
 }
 
-pub fn wkb_column<G>(field: Field, geometries: &[G]) -> Result<(FieldRef, ArrayRef), GeoError>
+#[derive(Default)]
+pub struct Projectors {
+    by_country: HashMap<Country, Projector>,
+}
+
+impl Projectors {
+    pub fn for_country(&mut self, country: Country) -> Result<&Projector, GeoError> {
+        Ok(match self.by_country.entry(country) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(Projector::for_country(country)?),
+        })
+    }
+}
+
+pub fn wkb_column<'a, G>(
+    field: Field,
+    geometries: impl IntoIterator<Item = &'a G>,
+) -> Result<(FieldRef, ArrayRef), GeoError>
 where
-    G: geo_traits::GeometryTrait<T = f64>,
+    G: geo_traits::GeometryTrait<T = f64> + 'a,
 {
     let encoded = geometries
-        .iter()
+        .into_iter()
         .map(|geometry| {
             let mut buf = Vec::new();
             wkb::writer::write_geometry(&mut buf, geometry, &wkb::writer::WriteOptions::default())?;
@@ -107,14 +183,22 @@ where
     T: Row,
     G: geo_traits::GeometryTrait<T = f64>,
 {
-    let mut columns = fields::<T>()?;
-    let mut arrays = serde_arrow::to_arrow(&columns, rows)?;
+    let geometry = geometry
+        .iter()
+        .map(|(field, geometries)| wkb_column(field.clone(), *geometries))
+        .collect::<Result<Vec<_>, _>>()?;
+    batch_with_geometry_first::<T>(rows, geometry)
+}
 
-    for (field, geometries) in geometry {
-        let (field, array) = wkb_column(field.clone(), geometries)?;
-        columns.push(field);
-        arrays.push(array);
-    }
+pub(crate) fn batch_with_geometry_first<T: Row>(
+    rows: &(impl Serialize + ?Sized),
+    geometry: Vec<(FieldRef, ArrayRef)>,
+) -> Result<RecordBatch, GeoError> {
+    let (mut columns, mut arrays): (Vec<FieldRef>, Vec<ArrayRef>) = geometry.into_iter().unzip();
+
+    let own = fields::<T>()?;
+    arrays.extend(serde_arrow::to_arrow(&own, rows)?);
+    columns.extend(own);
 
     Ok(RecordBatch::try_new(
         Arc::new(Schema::new(columns)),
@@ -143,6 +227,36 @@ pub fn geometries(
         .collect()
 }
 
+pub(crate) struct GeoParquetFile {
+    encoder: GeoParquetRecordBatchEncoder,
+    writer: AsyncArrowWriter<ParquetObjectWriter>,
+}
+
+impl GeoParquetFile {
+    pub(crate) fn create(path: &Path, schema: &Schema) -> Result<Self, GeoError> {
+        let encoder =
+            GeoParquetRecordBatchEncoder::try_new(schema, &GeoParquetWriterOptions::default())?;
+        let writer = crate::write::writer_at(path, encoder.target_schema())?;
+        Ok(Self { encoder, writer })
+    }
+
+    pub(crate) async fn write(&mut self, batch: &RecordBatch) -> Result<(), GeoError> {
+        let encoded = self.encoder.encode_record_batch(batch)?;
+        self.writer
+            .write(&encoded)
+            .await
+            .map_err(WriteError::from)?;
+        Ok(())
+    }
+
+    pub(crate) async fn close(mut self) -> Result<(), GeoError> {
+        self.writer
+            .append_key_value_metadata(self.encoder.into_keyvalue()?);
+        self.writer.close().await.map_err(WriteError::from)?;
+        Ok(())
+    }
+}
+
 pub(crate) async fn write_geo_batches(
     path: &Path,
     batches: &[RecordBatch],
@@ -151,40 +265,107 @@ pub(crate) async fn write_geo_batches(
         return Err(WriteError::Empty.into());
     };
 
-    let options = GeoParquetWriterOptions::default();
-    let mut encoder = GeoParquetRecordBatchEncoder::try_new(first.schema().as_ref(), &options)?;
-    let mut writer = crate::write::writer_at(path, encoder.target_schema())?;
-
+    let mut file = GeoParquetFile::create(path, first.schema().as_ref())?;
     for batch in batches {
-        writer.write(&encoder.encode_record_batch(batch)?).await?;
+        file.write(batch).await?;
     }
-    writer.append_key_value_metadata(encoder.into_keyvalue()?);
-    writer.close().await?;
-    Ok(())
+    file.close().await
 }
 
 pub(crate) async fn write_geo_stream(
     path: &Path,
     mut batches: SendableRecordBatchStream,
 ) -> Result<usize, GeoError> {
-    let options = GeoParquetWriterOptions::default();
-    let mut encoder = GeoParquetRecordBatchEncoder::try_new(batches.schema().as_ref(), &options)?;
-    let mut writer = crate::write::writer_at(path, encoder.target_schema())?;
+    let mut file = GeoParquetFile::create(path, batches.schema().as_ref())?;
 
     let mut rows = 0;
     while let Some(batch) = batches.next().await {
         let batch = batch?;
         rows += batch.num_rows();
-        writer.write(&encoder.encode_record_batch(&batch)?).await?;
+        file.write(&batch).await?;
     }
-    writer.append_key_value_metadata(encoder.into_keyvalue()?);
-    writer.close().await?;
+    file.close().await?;
     Ok(rows)
 }
 
 #[cfg(test)]
 mod tests {
+    use serde::{Deserialize, Serialize};
+
     use super::*;
+    use crate::dataset::DatasetSpec;
+    use crate::layer::layers;
+    use crate::rows::Geometry;
+
+    #[derive(Serialize, Deserialize)]
+    struct PlaceRow {
+        place_id: String,
+    }
+
+    impl Row for PlaceRow {
+        type Layer = layers::Silver;
+        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("place", "seen_date");
+        const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
+
+        fn example() -> Self {
+            PlaceRow {
+                place_id: "example".to_string(),
+            }
+        }
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct NoteRow {
+        note: String,
+    }
+
+    impl Row for NoteRow {
+        type Layer = layers::Silver;
+        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("note", "seen_date");
+
+        fn example() -> Self {
+            NoteRow {
+                note: "example".to_string(),
+            }
+        }
+    }
+
+    fn names(schema: &Schema) -> Vec<&str> {
+        schema
+            .fields()
+            .iter()
+            .map(|field| field.name().as_str())
+            .collect()
+    }
+
+    #[test]
+    fn a_file_lays_out_both_geometries_before_the_rows_columns() {
+        let schema = file_schema::<PlaceRow>(Country::Germany).unwrap();
+
+        assert_eq!(names(&schema), [GEOMETRY, PROJECTED_GEOMETRY, "place_id"]);
+    }
+
+    #[test]
+    fn a_file_for_a_country_projects_into_that_countrys_crs() {
+        let schema = file_schema::<PlaceRow>(Country::UnitedKingdom).unwrap();
+
+        let projected = schema.field_with_name(PROJECTED_GEOMETRY).unwrap();
+        let extension: serde_json::Value = serde_json::from_str(
+            projected
+                .metadata()
+                .get("ARROW:extension:metadata")
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(extension["crs"]["id"]["code"], 25830);
+    }
+
+    #[test]
+    fn a_file_without_geometry_holds_only_the_rows_columns() {
+        let schema = file_schema::<NoteRow>(Country::Germany).unwrap();
+
+        assert_eq!(names(&schema), ["note"]);
+    }
 
     #[test]
     fn the_bundled_crs_is_projjson_for_crs84() {
@@ -246,6 +427,39 @@ mod tests {
         assert!((coords[0].x - 798_809.63).abs() < 0.01);
         assert!((coords[1].x - 477_271.45).abs() < 0.01);
         assert!((coords[1].y - 5_551_012.24).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_zoned_geometry_holds_its_projection_under_the_projectors_country() {
+        let berlin = geo_types::Point::new(13.404954, 52.520008);
+        let projector = Projector::for_country(Country::Germany).unwrap();
+
+        let zoned = projector.zoned(berlin).unwrap();
+
+        assert_eq!(zoned.geography(), &berlin);
+        assert_eq!(zoned.projected(), &projector.project(&berlin).unwrap());
+        assert_eq!(zoned.country(), Country::Germany);
+    }
+
+    #[test]
+    fn projectors_give_each_country_its_own_zone() {
+        let berlin = geo_types::Point::new(13.404954, 52.520008);
+        let mut projectors = Projectors::default();
+
+        let german = projectors
+            .for_country(Country::Germany)
+            .unwrap()
+            .zoned(berlin)
+            .unwrap();
+        let british = projectors
+            .for_country(Country::UnitedKingdom)
+            .unwrap()
+            .zoned(berlin)
+            .unwrap();
+
+        assert_eq!(german.country(), Country::Germany);
+        assert_eq!(british.country(), Country::UnitedKingdom);
+        assert_ne!(german.projected(), british.projected());
     }
 
     #[test]

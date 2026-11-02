@@ -15,9 +15,9 @@ The queue is a landing format, not an archive. `recorder` drains it into the bro
 telemetry datasets — the verbatim payload alongside the readings interpreted from it — and
 draining is destructive, so what has not been drained is the only copy.
 
-The other two bronze writers pull rather than receive. `motis_poll` queries a local Motis
-server for trains near recently logged positions and appends each poll to a capture log; see
-[motis.md](motis.md). Polls overlap, so the same scheduled leg is captured many times over — a
+The other two bronze writers pull rather than receive. A Motis poller queries a Motis server,
+either for trains near recently logged positions or for every train in one country or region. It
+appends each poll to a capture log; see [motis.md](motis.md). Polls overlap, so the same scheduled leg is captured many times over — a
 capture is what one poll saw, and collapsing those into one row per leg is silver's work.
 `extract` takes point-in-time Overture extracts of a country's rail, water, and administrative
 divisions; see [overture.md](overture.md). A store commonly holds the manifest rather than the
@@ -31,13 +31,14 @@ Silver is derived from bronze, and gold from silver. Each derivation replaces wh
 produces, so any of them can be re-run over unchanged input to the same result.
 
 ```
-bronze telemetry     ──sessionise──────▶ session, session_sample
-bronze motis log     ──motis_ingest────▶ train_segment
-bronze overture      ──notebook────────▶ water_crossing
-session + crossings  ──match_crossings─▶ session_crossing
-water_crossing       ──pack_crossings──▶ gold crossings.pointset, crossings.json
-session_crossing +
-  session_sample     ──pack_sessions───▶ gold sessions.json
+bronze telemetry       ──sessionise──────▶ session_v3, session_sample_v3
+bronze motis log       ──motis_ingest────▶ train_segment_v4, train_session_v2,
+                                           train_session_sample_v2
+bronze overture        ──notebook────────▶ water_crossing_v2
+session_v3 + crossings ──match_crossings─▶ session_crossing_v3
+water_crossing_v2      ──pack_crossings──▶ gold crossings.pointset, crossings.json
+session_crossing_v3 +
+  session_sample_v3    ──pack_sessions───▶ gold sessions.json
 ```
 
 Two properties of that graph matter more than the order:

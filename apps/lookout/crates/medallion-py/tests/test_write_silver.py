@@ -18,7 +18,7 @@ class TestWritingATable:
         table = train_segment_table(["a", "b"], ["2026-07-21", "2026-07-22"], ["DE", "DE"])
 
         written = lookout_medallion.write_silver(
-            "train_segment", table, root=str(store)
+            "train_segment_v4", table, root=str(store)
         )
 
         assert written.rows == 2
@@ -26,17 +26,17 @@ class TestWritingATable:
         assert written.partitions_removed == 0
         assert (
             store
-            / "silver/train_segment/country=DE/departure_date=2026-07-21/part-0.parquet"
+            / "silver/train_segment_v4/country=DE/departure_date=2026-07-21/part-0.parquet"
         ).exists()
 
     def test_the_rows_read_back_through_another_engine(self, store):
         table = train_segment_table(["a"], ["2026-07-21"], ["DE"])
-        lookout_medallion.write_silver("train_segment", table, root=str(store))
+        lookout_medallion.write_silver("train_segment_v4", table, root=str(store))
 
         rows = read_with_duckdb(
             store,
             "SELECT trip_id, departure, geometry, geometry_projected "
-            "FROM read_parquet('{store}/silver/train_segment/**/*.parquet')",
+            "FROM read_parquet('{store}/silver/train_segment_v4/**/*.parquet')",
         )
 
         trip_id, departure, geometry, projected = rows[0]
@@ -49,12 +49,12 @@ class TestWritingATable:
 
     def test_the_partition_values_come_back_as_columns(self, store):
         table = train_segment_table(["a"], ["2026-07-21"], ["DE"])
-        lookout_medallion.write_silver("train_segment", table, root=str(store))
+        lookout_medallion.write_silver("train_segment_v4", table, root=str(store))
 
         rows = read_with_duckdb(
             store,
             "SELECT country, departure_date FROM read_parquet("
-            "'{store}/silver/train_segment/**/*.parquet', hive_partitioning = true)",
+            "'{store}/silver/train_segment_v4/**/*.parquet', hive_partitioning = true)",
         )
 
         assert rows == [("DE", datetime.date(2026, 7, 21))]
@@ -65,7 +65,7 @@ class TestWritingATable:
         con.register("legs", table)
 
         written = lookout_medallion.write_silver(
-            "train_segment", con.sql("SELECT * FROM legs"), root=str(store)
+            "train_segment_v4", con.sql("SELECT * FROM legs"), root=str(store)
         )
 
         assert written.rows == 1
@@ -74,31 +74,31 @@ class TestWritingATable:
 class TestRewriting:
     def test_a_partition_the_table_no_longer_covers_is_removed(self, store):
         lookout_medallion.write_silver(
-            "train_segment",
+            "train_segment_v4",
             train_segment_table(["a", "b"], ["2026-07-21", "2026-07-22"], ["DE", "DE"]),
             root=str(store),
         )
 
         written = lookout_medallion.write_silver(
-            "train_segment",
+            "train_segment_v4",
             train_segment_table(["a"], ["2026-07-21"], ["DE"]),
             root=str(store),
         )
 
         assert written.partitions_removed == 1
         assert not (
-            store / "silver/train_segment/country=DE/departure_date=2026-07-22"
+            store / "silver/train_segment_v4/country=DE/departure_date=2026-07-22"
         ).exists()
 
     def test_rewriting_the_same_table_leaves_the_same_rows(self, store):
         table = train_segment_table(["a"], ["2026-07-21"], ["DE"])
-        lookout_medallion.write_silver("train_segment", table, root=str(store))
-        lookout_medallion.write_silver("train_segment", table, root=str(store))
+        lookout_medallion.write_silver("train_segment_v4", table, root=str(store))
+        lookout_medallion.write_silver("train_segment_v4", table, root=str(store))
 
         rows = read_with_duckdb(
             store,
             "SELECT count(*) FROM read_parquet("
-            "'{store}/silver/train_segment/**/*.parquet')",
+            "'{store}/silver/train_segment_v4/**/*.parquet')",
         )
 
         assert rows == [(1,)]
@@ -110,15 +110,15 @@ class TestCountryOnlyAndGeometrylessLayouts:
         table = water_crossing_table([0x292E417A], [BERLIN], [BERLIN_UTM32N])
 
         written = lookout_medallion.write_silver(
-            "water_crossing", table, root=str(store)
+            "water_crossing_v2", table, root=str(store)
         )
 
         assert written.rows == 1
-        assert (store / "silver/water_crossing/country=DE/part-0.parquet").exists()
+        assert (store / "silver/water_crossing_v2/country=DE/part-0.parquet").exists()
         rows = read_with_duckdb(
             store,
             "SELECT overlap_kind, geometry FROM read_parquet("
-            "'{store}/silver/water_crossing/**/*.parquet')",
+            "'{store}/silver/water_crossing_v2/**/*.parquet')",
         )
         assert rows[0][0] == "line"
         assert shapely.from_wkb(bytes(rows[0][1])).coords[0] == BERLIN
@@ -140,12 +140,12 @@ class TestCountryOnlyAndGeometrylessLayouts:
         )
 
         written = lookout_medallion.write_silver(
-            "session_crossing", table, root=str(store)
+            "session_crossing_v3", table, root=str(store)
         )
 
         assert written.rows == 1
         assert (
-            store / "silver/session_crossing/crossed_date=2026-07-21/part-0.parquet"
+            store / "silver/session_crossing_v3/crossed_date=2026-07-21/part-0.parquet"
         ).exists()
 
 
@@ -161,14 +161,14 @@ class TestWhatIsRefused:
     def test_a_bronze_dataset(self, store):
         table = train_segment_table(["a"], ["2026-07-21"], ["DE"])
 
-        with pytest.raises(ValueError, match="gps_reading"):
-            lookout_medallion.write_silver("gps_reading", table, root=str(store))
+        with pytest.raises(ValueError, match="gps_reading_v2"):
+            lookout_medallion.write_silver("gps_reading_v2", table, root=str(store))
 
     def test_a_column_the_dataset_holds_but_the_table_does_not(self, store):
         table = train_segment_table(["a"], ["2026-07-21"], ["DE"]).drop_columns(["mode"])
 
         with pytest.raises(ValueError, match="mode"):
-            lookout_medallion.write_silver("train_segment", table, root=str(store))
+            lookout_medallion.write_silver("train_segment_v4", table, root=str(store))
 
     def test_a_column_the_dataset_does_not_hold(self, store):
         table = train_segment_table(["a"], ["2026-07-21"], ["DE"]).append_column(
@@ -176,19 +176,19 @@ class TestWhatIsRefused:
         )
 
         with pytest.raises(ValueError, match="scratch"):
-            lookout_medallion.write_silver("train_segment", table, root=str(store))
+            lookout_medallion.write_silver("train_segment_v4", table, root=str(store))
 
     def test_a_country_the_store_does_not_know(self, store):
         table = train_segment_table(["a"], ["2026-07-21"], ["ZZ"])
 
         with pytest.raises(ValueError, match="ZZ"):
-            lookout_medallion.write_silver("train_segment", table, root=str(store))
+            lookout_medallion.write_silver("train_segment_v4", table, root=str(store))
 
     def test_nothing_is_written_when_the_table_is_refused(self, store):
         table = train_segment_table(["a"], ["2026-07-21"], ["DE"]).drop_columns(["mode"])
 
         with pytest.raises(ValueError):
-            lookout_medallion.write_silver("train_segment", table, root=str(store))
+            lookout_medallion.write_silver("train_segment_v4", table, root=str(store))
 
         assert not (store / "silver").exists()
 
@@ -247,20 +247,20 @@ class TestNamesThatIdentifyARow:
         table = crossings(ids=["w1-t1", "w1-t1"], compact_ids=[1, 2])
 
         with pytest.raises(ValueError, match="crossing_id"):
-            lookout_medallion.write_silver("water_crossing", table, root=str(store))
+            lookout_medallion.write_silver("water_crossing_v2", table, root=str(store))
 
     def test_two_crossings_of_one_compact_id_are_refused(self, store):
         table = crossings(ids=["w1-t1", "w1-t2"], compact_ids=[7, 7])
 
         with pytest.raises(ValueError, match="crossing_compact_id"):
-            lookout_medallion.write_silver("water_crossing", table, root=str(store))
+            lookout_medallion.write_silver("water_crossing_v2", table, root=str(store))
 
     def test_distinct_names_are_written(self, store):
         table = crossings(ids=["w1-t1", "w1-t2"], compact_ids=[7, 8])
 
         assert (
             lookout_medallion.write_silver(
-                "water_crossing", table, root=str(store)
+                "water_crossing_v2", table, root=str(store)
             ).rows
             == 2
         )

@@ -32,8 +32,11 @@ for working practice and for the limits of this environment. Current notes:
 - [`.claude/memory/testing-limits.md`](.claude/memory/testing-limits.md) — Docker tests
   don't run in the sandbox, so binaries need running directly
 - [`.claude/memory/working-with-claude.md`](.claude/memory/working-with-claude.md) —
-  committing only on explicit instruction, keeping formatting out of feature commits, why
-  Claude cannot flash the device, and keeping shell plain
+  committing only on explicit instruction, recording each step as a tree until it is
+  committed, keeping formatting out of feature commits, tracing a repeat to its source before
+  memoising it, writing a store migration through the row types and medallion's interfaces, why
+  Claude cannot flash the device, keeping shell plain, and fitting a workspace build into the free
+  disk
 
 Lookout's own facts are in [`apps/lookout/docs/`](apps/lookout/docs/): `medallion.md` (the
 store), `architecture.md` (the pipeline), `telemetry.md` (the wire a device sends),
@@ -44,8 +47,10 @@ timetable feed), `overture.md` (the reference source and what an extract takes).
 
 Launch Claude from the repo root with `just claude`, which runs it under the safehouse sandbox.
 The sandbox grants read/write inside the repo. `~/.espressif` is granted read-only, so a device
-build uses the one shared ESP-IDF install rather than several gigabytes under every worktree. Only
-the first install writes there, and that one runs outside the sandbox.
+build uses the one shared ESP-IDF install rather than several gigabytes under every worktree. Two
+kinds of device build write there, so each runs outside the sandbox. One is the first, which
+installs ESP-IDF. The other is the first to run the `esp-idf-sys` build script after a new pip
+release, since that script upgrades pip in ESP-IDF's Python environment.
 
 ## Prose: invoke the two writing skills before drafting
 

@@ -20,35 +20,32 @@ impl StopPayload {
 }
 
 pub fn skills_invoked(transcript: &str) -> BTreeSet<String> {
-    let mut found = BTreeSet::new();
-    for line in transcript.lines() {
-        if let Ok(value) = serde_json::from_str::<Value>(line) {
-            collect_invocations(&value, &mut found);
-        }
-    }
-    found
+    transcript
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .flat_map(|value| invocations(&value))
+        .collect()
 }
 
-fn collect_invocations(value: &Value, found: &mut BTreeSet<String>) {
+fn invocations(value: &Value) -> BTreeSet<String> {
     match value {
         Value::Object(map) => {
-            if map.get("type") == Some(&Value::String("tool_use".into()))
+            let invoked = if map.get("type") == Some(&Value::String("tool_use".into()))
                 && map.get("name") == Some(&Value::String("Skill".into()))
                 && let Some(Value::String(skill)) =
                     map.get("input").and_then(|input| input.get("skill"))
             {
-                found.insert(skill.clone());
-            }
-            for nested in map.values() {
-                collect_invocations(nested, found);
-            }
+                Some(skill.clone())
+            } else {
+                None
+            };
+            invoked
+                .into_iter()
+                .chain(map.values().flat_map(invocations))
+                .collect()
         }
-        Value::Array(items) => {
-            for nested in items {
-                collect_invocations(nested, found);
-            }
-        }
-        _ => {}
+        Value::Array(items) => items.iter().flat_map(invocations).collect(),
+        _ => BTreeSet::new(),
     }
 }
 

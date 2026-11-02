@@ -1,16 +1,20 @@
 use chrono::{DateTime, NaiveDate, Utc};
+use geo_types::Rect;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
 use domain::{Bbox, DeviceId, SessionId, StartedBy};
 
-pub const SESSION: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("session", "start_date");
+use crate::GpsReadingRowV2;
 
-pub const SESSION_SAMPLE: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("session_sample", "sample_date");
+pub const SESSION_V3: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("session_v3", "start_date");
+
+pub const SESSION_SAMPLE_V3: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("session_sample_v3", "sample_date");
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SessionRow {
+pub struct SessionRowV3 {
     pub session_id: SessionId,
     pub device_id: DeviceId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
@@ -24,21 +28,36 @@ pub struct SessionRow {
     pub bbox: Bbox,
 }
 
-impl Row for SessionRow {
+impl Row for SessionRowV3 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = SESSION;
+    const DATASET: DatasetSpec<Self::Layer> = SESSION_V3;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
+
+    fn example() -> Self {
+        let device_id = GpsReadingRowV2::example().device_id;
+        Self {
+            session_id: SessionId::of(&device_id, DateTime::UNIX_EPOCH),
+            device_id,
+            started_at: DateTime::UNIX_EPOCH,
+            ended_at: DateTime::UNIX_EPOCH,
+            sample_count: 1,
+            started_by: StartedBy::StartSession,
+            gap_seconds: 0,
+            lead_seconds: 0,
+            bbox: Bbox::of(Rect::new((0.0, 0.0), (1.0, 1.0))),
+        }
+    }
 }
 
-impl Dated for SessionRow {
+impl Dated for SessionRowV3 {
     fn partition_date(&self) -> NaiveDate {
         self.started_at.date_naive()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SessionSampleRow {
+pub struct SessionSampleRowV3 {
     pub session_id: SessionId,
     pub device_id: DeviceId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
@@ -53,14 +72,31 @@ pub struct SessionSampleRow {
     pub implied_speed_mps: Option<f64>,
 }
 
-impl Row for SessionSampleRow {
+impl Row for SessionSampleRowV3 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = SESSION_SAMPLE;
+    const DATASET: DatasetSpec<Self::Layer> = SESSION_SAMPLE_V3;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["t"];
+
+    fn example() -> Self {
+        let session = SessionRowV3::example();
+        Self {
+            session_id: session.session_id,
+            device_id: session.device_id,
+            t: session.started_at,
+            seq: 0,
+            lat: 0.0,
+            lon: 0.0,
+            alt: Some(0.0),
+            acc: 0.0,
+            speed: Some(0.0),
+            heading: Some(0.0),
+            implied_speed_mps: Some(0.0),
+        }
+    }
 }
 
-impl Dated for SessionSampleRow {
+impl Dated for SessionSampleRowV3 {
     fn partition_date(&self) -> NaiveDate {
         self.t.date_naive()
     }
@@ -71,33 +107,24 @@ mod tests {
     use arrow::datatypes::DataType;
 
     use super::*;
-
-    fn column<T: Row>(name: &str) -> DataType {
-        medallion::fields::<T>()
-            .expect("describe the rows")
-            .iter()
-            .find(|field| field.name() == name)
-            .unwrap_or_else(|| panic!("no column named `{name}`"))
-            .data_type()
-            .clone()
-    }
+    use crate::testing::column;
 
     #[test]
     fn an_id_is_a_string_column() {
         assert!(matches!(
-            column::<SessionRow>("session_id"),
+            column::<SessionRowV3>("session_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionSampleRow>("session_id"),
+            column::<SessionSampleRowV3>("session_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionRow>("device_id"),
+            column::<SessionRowV3>("device_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
         assert!(matches!(
-            column::<SessionSampleRow>("device_id"),
+            column::<SessionSampleRowV3>("device_id").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
@@ -105,14 +132,15 @@ mod tests {
     #[test]
     fn what_started_a_session_is_a_string_column() {
         assert!(matches!(
-            column::<SessionRow>("started_by"),
+            column::<SessionRowV3>("started_by").data_type(),
             DataType::Utf8 | DataType::LargeUtf8
         ));
     }
 
     #[test]
     fn the_bbox_is_a_struct_of_its_four_bounds() {
-        let DataType::Struct(bounds) = column::<SessionRow>("bbox") else {
+        let bbox = column::<SessionRowV3>("bbox");
+        let DataType::Struct(bounds) = bbox.data_type() else {
             panic!("bbox should be a struct");
         };
 

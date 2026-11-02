@@ -2,13 +2,12 @@ use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
+use hashfn::hashfn;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::device::DeviceId;
 use crate::name::{NameError, checked};
-
-const SESSION_NAMESPACE: Uuid = Uuid::from_u128(0x8f9c_1d3a_6b47_4e21_9a05_c7d8_e2f4_1b60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -19,17 +18,25 @@ pub enum StartedBy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String")]
 pub struct SessionId(String);
 
 impl SessionId {
+    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, NameError> {
         Ok(Self(checked(id.into())?))
     }
 
     pub fn of(device: &DeviceId, started_at: DateTime<Utc>) -> Self {
+        let namespace = Uuid::new_v5(&Uuid::nil(), b"SESSION_NAMESPACE");
         let name = format!("{device}/{}", started_at.timestamp_millis());
-        Self(Uuid::new_v5(&SESSION_NAMESPACE, name.as_bytes()).to_string())
+        Self::from(Uuid::new_v5(&namespace, name.as_bytes()))
+    }
+}
+
+impl From<Uuid> for SessionId {
+    fn from(id: Uuid) -> Self {
+        Self(id.to_string())
     }
 }
 
@@ -38,6 +45,20 @@ impl FromStr for SessionId {
 
     fn from_str(id: &str) -> Result<Self, Self::Err> {
         Self::new(id)
+    }
+}
+
+impl TryFrom<String> for SessionId {
+    type Error = NameError;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Self::new(id)
+    }
+}
+
+impl From<SessionId> for String {
+    fn from(id: SessionId) -> Self {
+        id.0
     }
 }
 
@@ -88,7 +109,7 @@ mod tests {
 
         assert_eq!(
             SessionId::of(&device, started_at).to_string(),
-            "aab6af04-e435-5d49-8faa-d4cc8c999a05"
+            "577c2fa4-3d37-5e83-ae8b-1c72a9ed46bf"
         );
     }
 
@@ -103,5 +124,11 @@ mod tests {
     fn an_id_that_could_not_be_written_as_a_name_is_refused() {
         assert!(SessionId::new("a session/one").is_err());
         assert!("".parse::<SessionId>().is_err());
+    }
+
+    #[test]
+    fn an_id_is_checked_when_it_is_read_back() {
+        assert!(serde_json::from_str::<SessionId>(r#""a-session""#).is_ok());
+        assert!(serde_json::from_str::<SessionId>(r#""a session/one""#).is_err());
     }
 }

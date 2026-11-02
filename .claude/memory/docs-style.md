@@ -27,6 +27,9 @@ How docs under `docs/` (as opposed to slice docs) are written in this repo.
   but it is stated as a standing property rather than narrated as an episode. Write
   comparisons with an alternative in the present tense, since past tense turns a live
   rationale into an anecdote. The history itself belongs in the slice record.
+- **A reference doc stands alone.** It never refers to a dated research doc or to a slice, by
+  link or by name. A research doc disappears once what holds of it moves into reference docs, and
+  a slice disappears once it completes. A reference doc restates any fact it needs from either.
 
 - **Write for a human reader, and leave Claude's environment out.** READMEs, `docs/` and slice
   docs are read by the people working here. The sandbox Claude runs in, and what it can or cannot

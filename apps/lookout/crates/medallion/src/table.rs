@@ -12,7 +12,7 @@ use geoarrow_schema::error::GeoArrowError;
 
 use crate::country::{COUNTRY, Country, UnknownCountry};
 use crate::dataset::DatasetSpec;
-use crate::geo::{GEOMETRY, GeoError, PROJECTED_GEOMETRY, projected_wkb_field, wkb_field};
+use crate::geo::{GEOMETRY, GeoError, PROJECTED_GEOMETRY, geometry_fields};
 use crate::layer::layers;
 use crate::path::{ReplaceError, Replaced, Root};
 use crate::rows::{Geometry, Row, RowError, fields};
@@ -87,6 +87,16 @@ pub enum TableError {
     GeometryMissing { dataset: &'static str },
     #[error("{dataset} carries no geometry, so its rows cannot be written with it")]
     GeometryUnexpected { dataset: &'static str },
+    #[error("{dataset} names each row uniquely, so its rows are written in one call")]
+    UniqueAcrossWrites { dataset: &'static str },
+    #[error(
+        "{dataset} has closed its file for {country} on {date}, so it takes no more rows for it"
+    )]
+    DayClosed {
+        dataset: &'static str,
+        country: Country,
+        date: NaiveDate,
+    },
     #[error("reading the table: {0}")]
     Arrow(#[from] arrow::error::ArrowError),
     #[error("reading the geometry: {0}")]
@@ -314,17 +324,18 @@ impl Columns {
         target: &SilverTarget,
         country: Option<Country>,
     ) -> Result<RecordBatch, TableError> {
-        let mut fields: Vec<FieldRef> = target.columns.clone();
-        let mut arrays: Vec<ArrayRef> = self.own.clone();
+        let mut fields: Vec<FieldRef> = Vec::new();
+        let mut arrays: Vec<ArrayRef> = Vec::new();
 
-        if let Some(geometry) = &self.geometry {
-            fields.push(Arc::new(wkb_field(GEOMETRY)?));
-            arrays.push(geometry.clone());
+        if let (Some(geometry), Some(projected), Some(country)) =
+            (&self.geometry, &self.projected, country)
+        {
+            let [plain, projected_field] = geometry_fields(country)?;
+            fields.extend([Arc::new(plain), Arc::new(projected_field)]);
+            arrays.extend([geometry.clone(), projected.clone()]);
         }
-        if let (Some(projected), Some(country)) = (&self.projected, country) {
-            fields.push(Arc::new(projected_wkb_field(PROJECTED_GEOMETRY, country)?));
-            arrays.push(projected.clone());
-        }
+        fields.extend(target.columns.iter().cloned());
+        arrays.extend(self.own.iter().cloned());
 
         Ok(RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays)?)
     }
@@ -519,7 +530,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::geo::{Projector, wkb_column};
+    use crate::geo::{Projector, file_schema, projected_wkb_field, wkb_column, wkb_field};
     use crate::path::Root;
     use crate::query::Query;
 
@@ -534,6 +545,13 @@ mod tests {
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("crossing", "country");
         const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
         const UNIQUE: &'static [&'static str] = &["crossing_id"];
+
+        fn example() -> Self {
+            CrossingRow {
+                crossing_id: "example".to_string(),
+                overlap_m: 0.0,
+            }
+        }
     }
 
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -546,6 +564,13 @@ mod tests {
         type Layer = layers::Silver;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("pass", "crossed_date");
         const INSTANTS: &'static [&'static str] = &["crossed_at"];
+
+        fn example() -> Self {
+            PassRow {
+                crossing_id: "example".to_string(),
+                crossed_at: 0,
+            }
+        }
     }
 
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -557,6 +582,12 @@ mod tests {
         type Layer = layers::Silver;
         const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("track", "seen_date");
         const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
+
+        fn example() -> Self {
+            TrackRow {
+                track_id: "example".to_string(),
+            }
+        }
     }
 
     fn crossings() -> SilverTarget {
@@ -633,6 +664,19 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_table_is_laid_out_as_a_file_of_its_row_type() {
+        let table = crossing_table(&["a"], &[berlin()], &["DE"]);
+        let columns = translate(&crossings(), &table).unwrap();
+
+        let batch = columns.batch(&crossings(), Some(Country::Germany)).unwrap();
+
+        assert_eq!(
+            batch.schema(),
+            file_schema::<CrossingRow>(Country::Germany).unwrap()
+        );
+    }
+
     #[tokio::test]
     async fn the_partition_column_is_not_stored_in_the_file() {
         let tmp = tempfile::tempdir().unwrap();
@@ -656,10 +700,10 @@ mod tests {
         assert_eq!(
             columns,
             vec![
-                "crossing_id",
-                "overlap_m",
                 GEOMETRY,
                 PROJECTED_GEOMETRY,
+                "crossing_id",
+                "overlap_m",
                 COUNTRY
             ]
         );

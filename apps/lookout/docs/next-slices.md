@@ -13,24 +13,193 @@ your speed and distance from crossings.
 
 It need only support UK and Germany.
 
-## Slice: Evaluation framework based on sampled sessions from myself and motis
+## Slice: Evaluation framework with associated Crow Flies predictor improvement
 
 ### Target
 
-Implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session table) and from motis (bronze/motis_segment). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
+I have some larger ideas for how to come up with a good predictor, but for now I want to prove I can improve things + measure that improvement in some way.
 
-Since I likely won't be in Germany for a while, we can if needed get new motis data by polling motis live in a particular bbox and watching when trains arrive.
+So, I'd like to go from a very simple Crow Flies predictor I have now, which effectively just shows distance to nearby crossings, to one that takes into account current speed and average direction, and predicts when a crossing will be passed in next N minutes.
 
-#### Tasks 
+### Straw Man
 
-...
-- [ ] Delete `docs/2026-08-01-evaluation.md` at the end of this slice. It is a dated
-      assessment of how to measure a predictor, written before one existed and before there
-      was any ground truth to measure against, and kept for the history of the decision.
-      Anything in it still holding by then belongs in the tasks above, in the notebooks
-      that implement the measures, or in a durable doc alongside `medallion.md`; the rest —
-      the rejected alternatives, the reasoning about metrics from other domains — goes
-      stale once a first run has actually produced numbers.
+This approach means we have to become a lot crisper in what a prediction means. Right now the display just shows a radar style view which isn't really making a prediction and is instead just a map of nearby crossings. My thinking here is that, for each crossing, we need to have a little state-machine, something like:
+
+States:
+* OutOfReach: this is maybe an implicit state that any crossing sits in, if it is just in the pointset data, and isn't reachable at all
+* CandidatePass: this is when it becomes nearby enough to be considered as a possible crossing
+* PredictedPass: this is when we expect we will actually pass by this crossing in the next N minutes
+* ActualPass: we just actually passed the crossing
+
+Transitions:
+* OutOfReach <-> CandidatePass: a crossing can oscillate in and out of being a candidate
+* OutOfReach -> PredictedPass or CandidatePass -> PredictedPass: this is us making a prediction, and this transition should lead to a notification of some kind to the user
+* PredictedPass -> CandidatePass or PredictedPass -> OutOfReach: this counts as a failed prediction
+* PredictedPass -> ActualPass: a successful prediction. Note that a crossing stays in the ActualPass state until we've gotten some distance away from it to avoid re-notifying repeatedly. In general, the state transitions should probably have some sort of debouncing to avoid frequent flips in and out of states.
+* ActualPass -> PredictedPass: it's always possible we can pass somewhere multiple times, so this is a new prediction
+* ActualPass -> CandidatePass: still within reach but not currently predicted
+* ActualPass -> OutOfReach: it's now distance from us and we don't even think it is a candidate
+
+In this framework, depending on how clever the predictor is, we may be able to display a crossing but still label it as OutOfReach. This could be, for example, if we decide it is technically close by but we are not going to reach it because it's not on our current track.
+
+However, the cleverness of the predictor we do in this slice should be limited to using a current-speed/direction + light-cone approach i.e. predict what we will reach based on where we will pass by based on current vector. This can start with a low-level of cleverness about current speed/direction (i.e. just literal current speed) and then start building up an overall speed/direction based on an average over last few fixes and/or on speed reported by the GPS device. 
+
+I suspect on Web we could benefit from the cleverness of the GPS baked into the phone, as it's probably doing something clever, but I'd prefer not to use that and instead do it ourselves, as then we have consistent performance across platforms. I am thinking here of some sort of Kalman-filter or similar.
+
+We should implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session_v3 table) and from motis (bronze/motis_segment_v3). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing_v3 for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
+
+### What a prediction is
+
+Each crossing is in one of four states:
+
+- **OutOfReach**: the predictor rules it out.
+- **CandidatePass**: reachable, but not expected within N minutes.
+- **PredictedPass**: expected within N minutes. Entering it raises an alert, which is the
+  notification the user sees and what the evaluation scores.
+- **ActualPass**: recently passed, until the train is far enough away that a new alert means a
+  second pass.
+
+The evaluation scores the first alert before each pass. A train reversing out of Leipzig passes
+the same crossings twice, so the unit is (session, crossing, pass), not the (session, crossing)
+pair of [2026-08-01-evaluation.md](2026-08-01-evaluation.md).
+
+Imprecise samples can split one pass into two. Session `71b9c047`, on 26 July, reports about
+1,450 m of accuracy, and passes four crossings twice each, 22 s apart. The rule that splits a
+session's samples into visits cannot tell such jitter from a real revisit. A real revisit needs
+the train to leave and return, which takes a span of space and time. Where a session's
+uncertainty exceeds that span, two visits are no longer discernible.
+
+### Decisions
+
+Decisions taken before starting, as each changes what gets built. Confirmed 2026-10-03.
+
+The evaluation scores predictions against the ground truth the slice "Motis as ground truth"
+establishes. Most of that capture has no realtime, as
+[its caveat](completed-slices.md#caveat-realtime-stops-partway-through-the-capture) sets out. If
+that proves an issue, limit the evaluation data to legs with realtime.
+
+#### Prediction
+
+- **The state machine lives in `predictor`, over any `Predict`**, so the device, the browser, the
+  replay, and the evaluation share it.
+- **A light cone decides reachability, and the current velocity decides the prediction.** A
+  train's maximum speed and acceleration bound where it can be within the horizon. Projecting the
+  current velocity estimates when a reachable crossing is passed. The bounds are recorded per
+  country, with sources.
+- **`LightCone` sits beside `CrowFlies`.** `CrowFlies` stays as the baseline, and marks every
+  crossing in its radius reachable.
+- **Speed and direction come from the fixes alone**, averaged over the last few, so every platform
+  estimates alike. `CrowFlies` keeps the reported speed, as the constant-velocity baseline.
+- **Transitions debounce with hysteresis and a minimum dwell**, as geofencing APIs do. ActualPass
+  is entered within the 250 m match radius, and left beyond a larger one.
+
+#### Evaluation
+
+- **A Rust binary scores, and a notebook measures.** The binary writes a gold row per pass or false
+  alarm, with the outcome, the lead time, and the run's parameters. An alert with no pass following
+  within the horizon is a false alarm.
+- **A Motis train is a train session in silver.** `train_session_sample_v2` holds its position every
+  10 s, the recorded sessions' median, along its legs. Motis results are reported apart from
+  recorded sessions.
+
+#### Notifications
+
+- **The core raises a notification as a crux effect, on entry into PredictedPass.** The web
+  element shows a banner, and a system notification while the page is hidden. The M5 panel shows a
+  banner.
+
+#### Consequences elsewhere
+
+- `Prediction` gains a reachability field.
+- The `lookout_predictor` binding in `crates/platform/rerun-py` exposes `CrowFlies` alone.
+- The picture in `docs/web.md` and the derivation graph in `docs/architecture.md` change.
+
+#### Open questions
+
+- Why the sentence that scans takes 262 ms on the device rather than 8.5 ms. geo 0.32 takes it
+  to 119 ms, and crux 0.20 to 262 ms. On the host, neither changes it, so the cause lies in the
+  device build. The light cone adds work to that sentence, so the answer matters before it lands.
+
+#### Rejected / deferred
+
+- **A Kalman filter**, until the evaluation shows averaging limits the result. It then comes from
+  a crate that builds for the device.
+
+### Tasks
+
+#### The state machine
+
+- [ ] Survey how geofencing APIs debounce, and record the choice under Decisions.
+- [ ] Add reachability to `Prediction`, and set it in `CrowFlies`.
+- [ ] Add the four states to `predictor`, reporting each transition as an event.
+- [ ] Debounce each transition, with its thresholds as parameters.
+
+#### The evaluation
+
+- [ ] Research how to represent a crossing's discernibility in space and time, before scoring a
+      second pass. Compare how closely a real train can revisit a crossing with how uncertain a
+      session's samples leave the train. Look for prior art, such as scale space in images.
+      Record the findings under Decisions.
+- [ ] Add an `evaluation` crate, with a binary replaying `silver/session_sample_v3` through a
+      predictor and the state machine.
+- [ ] Score each pass in `silver/session_crossing_v3`, and each unmatched alert, as `EvaluationRow`
+      under gold evaluation results.
+- [ ] Add a recipe for the run.
+- [ ] Add a marimo notebook: the headline measures with n, the threshold sweep, and the horizon
+      diagnostic.
+- [ ] Run `CrowFlies` across a sweep of N, as the baseline.
+- [ ] Score the train sessions, and report them apart in the notebook.
+
+#### The light cone
+
+- [ ] Record a maximum speed and acceleration for trains in DE and GB, each with its source.
+- [ ] Add a velocity estimate to `predictor`, averaged over the last few fixes.
+- [ ] Add `LightCone` to `predictor`.
+- [ ] Evaluate it across a sweep of N against the baseline, and choose the operating point.
+- [ ] Bind `LightCone` and the state machine in `crates/platform/rerun-py`. Low priority.
+
+#### Notifications
+
+- [ ] Run `LightCone` and the state machine in `crates/platform-core/src/app.rs`, at the operating
+      point.
+- [ ] Add a notification effect to `Effect`.
+- [ ] Show it in the web element, with a system notification while the page is hidden, and on the
+      M5 panel.
+- [ ] Draw each crossing's state in the web picture and on the M5 panel.
+- [ ] Describe the notification and the states in `docs/web.md` and `docs/device.md`.
+- [ ] Build both shells, and flash the device. The user rides with it.
+
+#### Wrap-up
+
+- [ ] Add the evaluation to the derivation graph in `docs/architecture.md`.
+- [ ] Fold what holds of `docs/2026-08-01-evaluation.md` into a durable doc, and delete it.
+- [ ] Run `just test-no-docker` before every commit. The user runs `just test`.
+
+## Slice: Motis as ground truth for the UK
+
+### Target
+
+Replicate for the UK what the slice "Motis as ground truth" builds for Germany. A local Motis
+server draws rail along the track and gives realtime arrival times. A week-long capture of the
+whole country comes from it.
+
+### Straw Man
+
+Take [2026-10-23-great-britain-capture.md](2026-10-23-great-britain-capture.md) as the straw man.
+
+### Refactor
+
+The German setup moves from the top level of `tools/motis-server` into a subdirectory, so the
+UK's setup can sit beside it. The Justfile, `motis_server`, and `geo_data` at that top level serve
+Germany alone.
+
+### Tasks
+
+- [ ] Make the poller log a warning when a poll's share of realtime legs falls. The German capture
+      lost its realtime on 20 October 2026, and nothing reported it, as
+      [its caveat](completed-slices.md#caveat-realtime-stops-partway-through-the-capture) sets out.
+- [ ] If the warning fires during a capture, investigate the cause before the capture ends. Compare
+      the realtime feed's trip ids with the imported timetable's.
 
 # Milestone: V2
 
@@ -39,55 +208,6 @@ Since I likely won't be in Germany for a while, we can if needed get new motis d
 - Runs on Web/M5Plus + also: Android/iOS App + also: CoreS3 M5 device with GNSS base.
 - Has a predictor that takes into account reachability of a crossing and not just distance,
   either through observational data, or through route connectivity.
-
-## Slice: rail track geometry from pfaedle (parked)
-
-### Target
-
-Give rail legs real curved geometry instead of the straight stop-to-stop lines DELFI's
-`shapes.txt` yields for rail — see [motis.md](motis.md). pfaedle map-matches GTFS trips onto
-OSM to synthesise `shapes.txt`, and produced correct curved rail: `-D -m rail` recomputes
-rail shapes only, leaving bus and coach shapes alone, and rail polylines come out hundreds
-of points where they were four.
-
-**Parked, and the tooling was reverted out of the tree** (`tools/pfaedle`, commit
-`dfd8655`), because importing the result breaks realtime.
-
-### Why it is parked
-
-Import the raw DELFI feed and around 99.97% of RT entities resolve. Import any feed carrying
-pfaedle's `shapes.txt` and trip resolution fails for ~99.6% of them, with **no segment coming
-back realtime-corrected**. The static schedule itself imports fine: the trips are there and
-the rail is genuinely curved.
-
-It is the `shapes.txt` and not the trips. Three attempts broke realtime identically,
-including one that kept `trips.txt` byte-identical to the raw feed apart from the rail
-`shape_id` fields — and there the failing trips were *bus* trips whose `shape_id` was never
-touched. The only remaining difference is the swapped-in `shapes.txt`, which grows from
-308 MB to 2.3 GB. It is not feed currency either: a same-day RT fetch still overlapped the
-static feed's trip ids 99.6%.
-
-Leading hypothesis, untested: the 2.3 GB of rail geometry makes `motis import` hit some
-limit and produce a timetable whose RT trip index is incomplete, while scheduled queries
-still work.
-
-### To resume
-
-1. Confirm the trigger — build the raw feed with only `shapes.txt` swapped, import, and check
-   the RT statistic. Expect it to break.
-2. Chase the cause: read `motis import` for shape, memory or limit warnings; try shrinking
-   `shapes.txt`, by simplifying the rail polylines or dropping the unused bus shapes, and
-   re-test.
-3. If Motis genuinely cannot take large rail shapes, file an issue upstream, or accept
-   straight-line rail — which is what transitous does — and drop this.
-
-Two facts about pfaedle worth keeping if it resumes: it has no homebrew formula and has to
-be built from source against `cmake` and `libzip`, and it must run from its build directory
-with an explicit config path, since it only finds its default MOT-to-OSM matching config
-when installed. Its GTFS parser is also stricter than Motis's — it aborts on the dangling
-references in DELFI's `transfers.txt` and `pathways.txt`, which Motis tolerates.
-
-Each realtime A/B needs the Motis server run by hand: the sandbox denies the LMDB tile mmap.
 
 # Unassigned
 
@@ -119,6 +239,53 @@ become urgent at a size we are not at yet, and both are cheaper to build before 
   annoying, then add a schema provider *over* the dataset definitions rather than replacing
   them. The definitions are plain data every engine can read; a catalog is one engine's view
   of it, and those traits move between that engine's releases.
+
+## Slice: replay the trains whose legs overlap
+
+### Target
+
+Derive train sessions for the trips the ingest drops as `overlapping`. On the capture to 19
+October, that was 7,177 of 47,149 trips, about 15%. In most of them, the next leg was captured
+after the leg before it, and departs before that leg's older arrival. Trusting the newer capture
+where two legs overlap would keep those trips. `motis_ingest` logs each reason it drops a trip, so
+the counts show what a change gains.
+
+Also order a trip's legs that share a departure and an arrival, so that unchanged bronze gives the
+same train sessions. `docs/architecture.md` claims this of every derivation, and these legs break
+the claim. `Legs::new` sorts by departure and arrival, so such legs keep the order the query
+returned them in, and `captures` orders only by departure. They pass the overlap check, since
+neither departs before the other arrives.
+
+On 31 October, deriving from `motis_segment_v3` rather than `motis_segment_v2` changed 34 of
+165,606 sessions, from identical train segments. Each of the 34 trips has legs sharing a departure.
+1,566 samples moved, by up to about 68 km, a distance that suggests a wrong order rather than two
+valid ones. A stable tie-break alone would then repeat the wrong route. The order may need to follow
+the stops, each leg starting where the last one ended.
+
+## Slice: derive the water crossings in Rust
+
+### Target
+
+Derive silver `water_crossing_v2` in Rust, in place of the `v10` notebook, so that unchanged
+extracts give the same crossings. `docs/architecture.md` claims this of every derivation, and the
+notebook breaks the claim. The slice "Sessionisation and Water crossings per session + Refactor to
+Medallion" kept the pipeline a notebook, with only its write in Rust.
+
+A run on 20 October, over the same pinned extracts, changed 42 of the 10,254 crossings that the
+12 October run wrote. At least 40 of them moved onto another segment of the same track, a median
+of about 5 m away and at most 13.6 m. The gold pack in use comes from a third run, on 11 October.
+It differs from the 12 October run by 40 crossings, and from the 20 October run by 48. A moved
+crossing takes a new id and compact id, so packing after any run changes what the device carries.
+
+The notebook names a crossing merged from several parts after the part with the longest overlap,
+through `idxmax`. A point crossing, where the rail meets water mapped as a line, overlaps nothing,
+and the notebook records its overlap as 0 m. A merged point crossing's parts therefore all tie
+at 0 m. `idxmax` then takes the first part, and nothing fixes the order of the parts between runs.
+Taking another part puts the crossing elsewhere on the same track, within the 100 m merge
+distance. That fits how at least 40 of those 42 moved. On 24 October, 642 of the 1,478 merged
+crossings were point crossings. That day's run renamed one of them, and two passes in
+`silver/session_crossing` then named an id the store no longer held. A moved line crossing needs
+another cause.
 
 ## Slice: Enrich and use relative direction of POI
 
@@ -156,8 +323,8 @@ pins current, and gets the arrow generation off 57 before more code depends on i
   feature. The workspace comment in `Cargo.toml` is wrong that geoparquet 0.8 moved to arrow 59:
   0.8 builds on 58.
 - **geo moves to 0.33, the version `sedona-geo` resolves at 0.5.0-rc0.** `crates/domain` and
-  `crates/predictor` pin `geo` themselves, at 0.31. Until they move too, the lock fails. The
-  device build depends on both, so the move needs a device build.
+  `crates/predictor` pin `geo` themselves, at 0.32, the newest beside SedonaDB 0.4.1. Until they
+  move too, the lock fails. The device build depends on both, so the move needs a device build.
 
 ### Tasks
 
@@ -175,6 +342,11 @@ pins current, and gets the arrow generation off 57 before more code depends on i
 
 - 2026-10-03: a scratch copy of the app built against 0.5.0-rc0 and the versions above with no
   source change. 490 non-Docker tests and the geo tests passed. The device build was not tried.
+- 2026-10-19: silver `train_session` hits the same panic, since its `bbox` struct comes before
+  its geometry. A filter on `session_id` panics at `spatial_filter.rs:526`.
+- 2026-10-24: silver's writers now put the geometry columns first, and `Query::register_silver`
+  reads every silver dataset through SedonaDB. Only bronze still meets the panic, since its
+  Overture `segment` files keep the release's column order.
 
 ## Slice: the writing rules applied at the edit, not at the stop
 
@@ -255,3 +427,44 @@ tool, puts the self-check in front of Claude before its next step.
       refused.
 - [ ] Invoke both skills, edit the file, and confirm the self-check arrives before the next step.
 - [ ] Change the file through Bash, and confirm the self-check arrives there as well.
+
+## Slice: geography and geometry columns
+
+### Target
+
+Make silver's files say what its two geometry columns hold. The column named `geometry` holds the
+geography, in lat/lon, and `geometry_projected` holds the geometry, in a country's metres. The code
+measures the first on the round Earth and the second on a plane, but a file declares both as planar.
+[2026-11-02-geography-and-geometry-columns.md](2026-11-02-geography-and-geometry-columns.md) holds
+the assessment.
+
+### Tasks
+
+- [ ] Check each reader of the lat/lon column against a file with spherical edges. SedonaDB treats
+      such a column as a separate type, with its own set of functions.
+- [ ] If the readers allow it, declare the lat/lon column's edges as spherical. Compare every
+      derived dataset before and after.
+- [ ] Rename the columns to `geography` and `geometry`, as new versions of the six datasets that
+      hold them.
+- [ ] Measure a dictionary over the WKB, then GeoArrow-native encoding once SedonaDB reads it.
+
+## Slice: refuse `expect` and `unwrap` outside tests
+
+### Target
+
+Make clippy refuse `expect` and `unwrap` outside tests, so that each one left in the code states why
+it is there. `.claude/rules/rust.md` asks for this in prose, and no lint enforces it. A text count on
+2 November 2026 found about 114 `expect` and 2 `unwrap` calls outside test modules, across 41 files.
+37 of them are in `src/bin/`.
+
+### Tasks
+
+- [ ] Set `expect_used` and `unwrap_used` to `deny` in `[workspace.lints.clippy]`, and allow both in
+      tests through a `clippy.toml`. Check which test helpers outside `#[test]` and `#[cfg(test)]`
+      the lints still flag.
+- [ ] Go through each flagged call in library code. Return an error where the failure can happen.
+      Otherwise, add `#[allow(clippy::expect_used, reason = "...")]`, whose reason says why it
+      cannot fail. This covers `Row::example`, which runs on the write path.
+- [ ] Go through each flagged call in `src/bin/` by the same test.
+- [ ] Apply the same lints to the `m5plus` workspace.
+- [ ] Name the lints in `.claude/rules/rust.md`.

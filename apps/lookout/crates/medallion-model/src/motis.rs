@@ -1,16 +1,230 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use domain::TrainNumber;
+use geo_types::{Coord, LineString};
+use hashfn::hashfn;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
+use nutype::nutype;
+use polyline::errors::PolylineError;
 use serde::{Deserialize, Serialize};
+use strum::{AsRefStr, EnumIter, EnumString};
+use uuid::Uuid;
 
-pub const MOTIS_SEGMENT: DatasetSpec<layers::Bronze> =
-    DatasetSpec::partitioned("motis_segment", "polled_date");
+use crate::motis_source::{MotisSourceId, MotisSourceRowV4};
 
-pub const TRAIN_SEGMENT: DatasetSpec<layers::Silver> =
-    DatasetSpec::partitioned("train_segment", "departure_date");
+const POLYLINE_PRECISION: u32 = 5;
+
+pub const MOTIS_POLL_V2: DatasetSpec<layers::Landing> =
+    DatasetSpec::partitioned("motis_poll_v2", "polled_date");
+
+pub const MOTIS_SEGMENT_V3: DatasetSpec<layers::Bronze> =
+    DatasetSpec::partitioned("motis_segment_v3", "polled_date");
+
+pub const MOTIS_POLYLINE_V2: DatasetSpec<layers::Bronze> =
+    DatasetSpec::unpartitioned("motis_polyline_v2");
+
+pub const TRAIN_SEGMENT_V4: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("train_segment_v4", "departure_date");
+
+#[nutype(
+    validate(with = trip_id_present, error = EmptyTripId),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
+pub struct TripId(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("a trip id cannot be empty")]
+pub struct EmptyTripId;
+
+#[hashfn]
+pub fn trip_id_present(id: &str) -> Result<(), EmptyTripId> {
+    if id.is_empty() {
+        Err(EmptyTripId)
+    } else {
+        Ok(())
+    }
+}
+
+impl TripId {
+    pub fn new(id: impl Into<String>) -> Result<Self, EmptyTripId> {
+        Self::try_new(id)
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.as_ref()
+    }
+}
+
+#[nutype(
+    validate(with = stop_id_present, error = EmptyStopId),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
+pub struct StopId(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("a stop id cannot be empty")]
+pub struct EmptyStopId;
+
+#[hashfn]
+pub fn stop_id_present(id: &str) -> Result<(), EmptyStopId> {
+    if id.is_empty() {
+        Err(EmptyStopId)
+    } else {
+        Ok(())
+    }
+}
+
+impl StopId {
+    pub fn new(id: impl Into<String>) -> Result<Self, EmptyStopId> {
+        Self::try_new(id)
+    }
+}
+
+#[nutype(
+    validate(with = agency_id_present, error = EmptyAgencyId),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
+pub struct AgencyId(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("an agency id cannot be empty")]
+pub struct EmptyAgencyId;
+
+#[hashfn]
+pub fn agency_id_present(id: &str) -> Result<(), EmptyAgencyId> {
+    if id.is_empty() {
+        Err(EmptyAgencyId)
+    } else {
+        Ok(())
+    }
+}
+
+impl AgencyId {
+    pub fn new(id: impl Into<String>) -> Result<Self, EmptyAgencyId> {
+        Self::try_new(id)
+    }
+}
+
+#[nutype(
+    validate(with = polyline_is_valid, error = NotAnEncodedPolyline),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
+pub struct Polyline(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("an encoded polyline is non-empty text of ASCII characters 63 to 126 that decodes")]
+pub struct NotAnEncodedPolyline;
+
+#[derive(Debug, PartialEq, thiserror::Error)]
+pub enum UnencodablePoints {
+    #[error("encoding the points: {0}")]
+    Encoding(#[from] PolylineError),
+    #[error(transparent)]
+    NotAPolyline(#[from] NotAnEncodedPolyline),
+}
+
+#[hashfn]
+pub fn polyline_is_valid(text: &str) -> Result<(), NotAnEncodedPolyline> {
+    if !text.is_empty()
+        && text.bytes().all(|byte| (63..=126).contains(&byte))
+        && polyline::decode_polyline(text, POLYLINE_PRECISION).is_ok()
+    {
+        Ok(())
+    } else {
+        Err(NotAnEncodedPolyline)
+    }
+}
+
+impl Polyline {
+    pub fn new(text: impl Into<String>) -> Result<Self, NotAnEncodedPolyline> {
+        Self::try_new(text)
+    }
+
+    pub fn from_points(
+        points: impl IntoIterator<Item = impl Into<Coord<f64>>>,
+    ) -> Result<Self, UnencodablePoints> {
+        let text =
+            polyline::encode_coordinates(points.into_iter().map(Into::into), POLYLINE_PRECISION)?;
+        Ok(Self::new(text)?)
+    }
+
+    pub fn line(&self) -> LineString<f64> {
+        let text: &str = self.as_ref();
+        polyline::decode_polyline(text, POLYLINE_PRECISION).expect("a polyline decodes")
+    }
+}
+
+#[nutype(
+    validate(with = polyline_id_is_a_uuid, error = NotAPolylineId),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
+pub struct PolylineId(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("a polyline id is a UUID")]
+pub struct NotAPolylineId;
+
+#[hashfn]
+pub fn polyline_id_is_a_uuid(id: &str) -> Result<(), NotAPolylineId> {
+    Uuid::parse_str(id).map(|_| ()).map_err(|_| NotAPolylineId)
+}
+
+impl PolylineId {
+    pub fn new(id: impl Into<String>) -> Result<Self, NotAPolylineId> {
+        Self::try_new(id)
+    }
+
+    pub fn of(polyline: &Polyline) -> Self {
+        let namespace = Uuid::new_v5(&Uuid::nil(), b"MOTIS_POLYLINE_NAMESPACE");
+        let text: &str = polyline.as_ref();
+        Self::try_new(Uuid::new_v5(&namespace, text.as_bytes()).to_string())
+            .expect("a formatted UUID parses as a UUID")
+    }
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    EnumIter,
+    EnumString,
+    AsRefStr,
+)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum RailMode {
+    HighspeedRail,
+    LongDistance,
+    NightRail,
+    RegionalFastRail,
+    RegionalRail,
+    Rail,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MotisSegmentRow {
+pub struct MotisSegmentRowV3 {
+    pub source_id: MotisSourceId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub captured_at: DateTime<Utc>,
     pub trip_id: String,
@@ -35,23 +249,52 @@ pub struct MotisSegmentRow {
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub scheduled_arrival: DateTime<Utc>,
     pub realtime: bool,
-    pub polyline: String,
+    pub polyline_id: PolylineId,
 }
 
-impl Row for MotisSegmentRow {
+impl MotisSegmentRowV3 {
+    pub fn of(poll: MotisPollRowV2) -> Self {
+        Self {
+            polyline_id: PolylineId::of(&poll.polyline),
+            source_id: poll.source_id,
+            captured_at: poll.captured_at,
+            trip_id: poll.trip_id,
+            route_name: poll.route_name,
+            train_number: poll.train_number,
+            agency_id: poll.agency_id,
+            agency_name: poll.agency_name,
+            mode: poll.mode,
+            route_color: poll.route_color,
+            from_stop_id: poll.from_stop_id,
+            from_lat: poll.from_lat,
+            from_lon: poll.from_lon,
+            to_stop_id: poll.to_stop_id,
+            to_lat: poll.to_lat,
+            to_lon: poll.to_lon,
+            departure: poll.departure,
+            arrival: poll.arrival,
+            scheduled_departure: poll.scheduled_departure,
+            scheduled_arrival: poll.scheduled_arrival,
+            realtime: poll.realtime,
+        }
+    }
+}
+
+impl Row for MotisSegmentRowV3 {
     type Layer = layers::Bronze;
-    const DATASET: DatasetSpec<Self::Layer> = MOTIS_SEGMENT;
-    const INSTANTS: &'static [&'static str] = &[
-        "captured_at",
-        "departure",
-        "arrival",
-        "scheduled_departure",
-        "scheduled_arrival",
-    ];
+    const DATASET: DatasetSpec<Self::Layer> = MOTIS_SEGMENT_V3;
+    const INSTANTS: &'static [&'static str] = MotisPollRowV2::INSTANTS;
+
+    fn example() -> Self {
+        Self::of(MotisPollRowV2::example())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TrainSegmentRow {
+pub struct MotisPollRowV2 {
+    pub source_id: MotisSourceId,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub captured_at: DateTime<Utc>,
     pub trip_id: String,
     pub route_name: Option<String>,
     pub train_number: Option<TrainNumber>,
@@ -59,22 +302,128 @@ pub struct TrainSegmentRow {
     pub agency_name: Option<String>,
     pub mode: String,
     pub route_color: Option<String>,
-    pub realtime: bool,
     pub from_stop_id: Option<String>,
+    pub from_lat: f64,
+    pub from_lon: f64,
+    pub to_stop_id: Option<String>,
+    pub to_lat: f64,
+    pub to_lon: f64,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub departure: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub arrival: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub scheduled_departure: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub scheduled_arrival: DateTime<Utc>,
+    pub realtime: bool,
+    pub polyline: Polyline,
+}
+
+impl Row for MotisPollRowV2 {
+    type Layer = layers::Landing;
+    const DATASET: DatasetSpec<Self::Layer> = MOTIS_POLL_V2;
+    const INSTANTS: &'static [&'static str] = &[
+        "captured_at",
+        "departure",
+        "arrival",
+        "scheduled_departure",
+        "scheduled_arrival",
+    ];
+
+    fn example() -> Self {
+        Self {
+            source_id: MotisSourceRowV4::example().source_id,
+            captured_at: DateTime::UNIX_EPOCH,
+            trip_id: "example".to_string(),
+            route_name: Some("example".to_string()),
+            train_number: TrainNumber::from_gtfs("1"),
+            agency_id: Some("example".to_string()),
+            agency_name: Some("example".to_string()),
+            mode: "RAIL".to_string(),
+            route_color: Some("example".to_string()),
+            from_stop_id: Some("example".to_string()),
+            from_lat: 0.0,
+            from_lon: 0.0,
+            to_stop_id: Some("example".to_string()),
+            to_lat: 0.0,
+            to_lon: 0.0,
+            departure: DateTime::UNIX_EPOCH,
+            arrival: DateTime::UNIX_EPOCH,
+            scheduled_departure: DateTime::UNIX_EPOCH,
+            scheduled_arrival: DateTime::UNIX_EPOCH,
+            realtime: false,
+            polyline: Polyline::from_points([(2.0, 1.0)])
+                .expect("a constant point is on the globe"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MotisPolylineRowV2 {
+    pub polyline_id: PolylineId,
+    pub polyline: Polyline,
+}
+
+impl MotisPolylineRowV2 {
+    pub fn of(polyline: Polyline) -> Self {
+        Self {
+            polyline_id: PolylineId::of(&polyline),
+            polyline,
+        }
+    }
+}
+
+impl Row for MotisPolylineRowV2 {
+    type Layer = layers::Bronze;
+    const DATASET: DatasetSpec<Self::Layer> = MOTIS_POLYLINE_V2;
+
+    fn example() -> Self {
+        Self::of(MotisPollRowV2::example().polyline)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrainSegmentRowV4 {
+    pub source_id: MotisSourceId,
+    pub trip_id: TripId,
+    pub route_name: Option<String>,
+    pub train_number: Option<TrainNumber>,
+    pub agency_id: Option<AgencyId>,
+    pub agency_name: Option<String>,
+    pub mode: RailMode,
+    pub realtime: bool,
+    pub from_stop_id: Option<StopId>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub departure: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub arrival: DateTime<Utc>,
 }
 
-impl Row for TrainSegmentRow {
+impl Row for TrainSegmentRowV4 {
     type Layer = layers::Silver;
-    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT;
+    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SEGMENT_V4;
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
+
+    fn example() -> Self {
+        Self {
+            source_id: MotisSourceRowV4::example().source_id,
+            trip_id: TripId::new("example").expect("a trip id"),
+            route_name: Some("example".to_string()),
+            train_number: TrainNumber::from_gtfs("1"),
+            agency_id: Some(AgencyId::new("example").expect("an agency id")),
+            agency_name: Some("example".to_string()),
+            mode: RailMode::HighspeedRail,
+            realtime: false,
+            from_stop_id: Some(StopId::new("example").expect("a stop id")),
+            departure: DateTime::UNIX_EPOCH,
+            arrival: DateTime::UNIX_EPOCH,
+        }
+    }
 }
 
-impl Dated for TrainSegmentRow {
+impl Dated for TrainSegmentRowV4 {
     fn partition_date(&self) -> NaiveDate {
         self.departure.date_naive()
     }
@@ -83,28 +432,206 @@ impl Dated for TrainSegmentRow {
 #[cfg(test)]
 mod tests {
     use arrow::datatypes::DataType;
+    use proptest::prelude::*;
+    use strum::IntoEnumIterator;
 
     use super::*;
+    use crate::testing::column;
+
+    #[test]
+    fn a_polyline_id_is_derived_from_the_polylines_text() {
+        let polyline =
+            Polyline::from_points([(-120.2, 38.5), (-120.95, 40.7), (-126.453, 43.252)]).unwrap();
+        let other = Polyline::from_points([(1.0, 2.0)]).unwrap();
+
+        assert_eq!(
+            PolylineId::of(&polyline).to_string(),
+            "934b0d5d-609c-5e6f-b6ee-0b3ad2b4cd82"
+        );
+        assert_ne!(PolylineId::of(&polyline), PolylineId::of(&other));
+    }
+
+    #[test]
+    fn a_polyline_holds_only_characters_the_encoding_produces() {
+        assert!(Polyline::new("?~").is_ok());
+        for text in ["", ">", "\u{7f}", "é", "a b"] {
+            assert_eq!(Polyline::new(text), Err(NotAnEncodedPolyline), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_polyline_that_does_not_decode_is_refused() {
+        assert_eq!(Polyline::new("other"), Err(NotAnEncodedPolyline));
+    }
+
+    #[test]
+    fn a_polyline_with_a_character_the_decoder_lets_through_is_refused() {
+        assert_eq!(Polyline::new("\u{7f}??"), Err(NotAnEncodedPolyline));
+    }
+
+    #[test]
+    fn points_encode_as_the_polyline_formats_published_example() {
+        let polyline =
+            Polyline::from_points([(-120.2, 38.5), (-120.95, 40.7), (-126.453, 43.252)]).unwrap();
+
+        assert_eq!(polyline.to_string(), "_p~iF~ps|U_ulLnnqC_mqNvxq`@");
+    }
+
+    #[test]
+    fn a_polyline_gives_the_line_it_encodes() {
+        let line = Polyline::from_points([(2.0, 1.0)]).unwrap().line();
+
+        assert_eq!(line, LineString::from(vec![(2.0, 1.0)]));
+    }
+
+    #[test]
+    fn no_points_make_no_polyline() {
+        assert_eq!(
+            Polyline::from_points(Vec::<(f64, f64)>::new()),
+            Err(UnencodablePoints::NotAPolyline(NotAnEncodedPolyline))
+        );
+    }
+
+    #[test]
+    fn a_point_off_the_globe_makes_no_polyline() {
+        assert_eq!(
+            Polyline::from_points([(0.0, 91.0)]),
+            Err(UnencodablePoints::Encoding(
+                PolylineError::LatitudeCoordError {
+                    coord: 91.0,
+                    idx: 0
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn a_polyline_id_is_refused_as_a_polyline() {
+        let id = PolylineId::of(&Polyline::from_points([(1.0, 2.0)]).unwrap());
+
+        assert_eq!(Polyline::new(id.to_string()), Err(NotAnEncodedPolyline));
+    }
+
+    #[test]
+    fn a_polyline_id_that_is_not_a_uuid_is_refused() {
+        assert_eq!(PolylineId::new("not a uuid"), Err(NotAPolylineId));
+    }
+
+    #[test]
+    fn a_segment_names_the_polyline_row_holding_its_text() {
+        let poll = MotisPollRowV2::example();
+        let polyline = MotisPolylineRowV2::of(poll.polyline.clone());
+
+        let row = MotisSegmentRowV3::of(poll);
+
+        assert_eq!(row.polyline_id, polyline.polyline_id);
+    }
+
+    fn names<T: Row>() -> Vec<String> {
+        medallion::fields::<T>()
+            .expect("describe the rows")
+            .iter()
+            .map(|field| field.name().clone())
+            .collect()
+    }
+
+    #[test]
+    fn a_segment_holds_a_polls_columns_with_a_polyline_id_for_its_polyline() {
+        let expected: Vec<String> = names::<MotisPollRowV2>()
+            .into_iter()
+            .map(|name| {
+                if name == "polyline" {
+                    "polyline_id".to_string()
+                } else {
+                    name
+                }
+            })
+            .collect();
+
+        assert_eq!(names::<MotisSegmentRowV3>(), expected);
+    }
+
+    proptest! {
+        #[test]
+        fn an_id_is_accepted_exactly_when_it_is_not_empty(text in ".{0,8}") {
+            prop_assert_eq!(TripId::new(text.clone()).is_ok(), !text.is_empty());
+            prop_assert_eq!(StopId::new(text.clone()).is_ok(), !text.is_empty());
+            prop_assert_eq!(AgencyId::new(text.clone()).is_ok(), !text.is_empty());
+        }
+    }
+
+    #[test]
+    fn a_trip_id_is_written_back_as_given() {
+        let id: TripId = "20261008_09:12_de-DELFI_123".parse().expect("a trip id");
+
+        assert_eq!(id.to_string(), "20261008_09:12_de-DELFI_123");
+        assert_eq!(id.as_str(), "20261008_09:12_de-DELFI_123");
+    }
+
+    #[test]
+    fn an_empty_trip_id_is_refused() {
+        assert_eq!(TripId::new(""), Err(EmptyTripId));
+    }
+
+    #[test]
+    fn an_empty_stop_or_agency_id_is_refused() {
+        assert_eq!(StopId::new(""), Err(EmptyStopId));
+        assert_eq!(AgencyId::new(""), Err(EmptyAgencyId));
+    }
+
+    #[test]
+    fn an_id_is_checked_when_it_is_read_back() {
+        assert!(serde_json::from_str::<TripId>(r#""20261008_09:12_de-DELFI_123""#).is_ok());
+        assert!(serde_json::from_str::<TripId>(r#""""#).is_err());
+        assert!(serde_json::from_str::<StopId>(r#""""#).is_err());
+        assert!(serde_json::from_str::<AgencyId>(r#""""#).is_err());
+    }
+
+    #[test]
+    fn a_rail_mode_is_named_as_motis_names_it() {
+        let names: Vec<String> = RailMode::iter()
+            .map(|mode| mode.as_ref().to_string())
+            .collect();
+
+        assert_eq!(
+            names,
+            [
+                "HIGHSPEED_RAIL",
+                "LONG_DISTANCE",
+                "NIGHT_RAIL",
+                "REGIONAL_FAST_RAIL",
+                "REGIONAL_RAIL",
+                "RAIL"
+            ]
+        );
+        for mode in RailMode::iter() {
+            assert_eq!(serde_json::to_value(mode).expect("a name"), mode.as_ref());
+            assert_eq!(mode.as_ref().parse(), Ok(mode));
+        }
+    }
+
+    #[test]
+    fn a_mode_the_capture_drops_is_no_rail_mode() {
+        for name in ["FERRY", "SUBURBAN", "BUS", ""] {
+            assert!(name.parse::<RailMode>().is_err(), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_rail_mode_is_stored_as_text() {
+        assert_eq!(
+            column::<TrainSegmentRowV4>("mode").data_type(),
+            &DataType::LargeUtf8
+        );
+    }
 
     #[test]
     fn a_train_number_is_a_four_byte_column_in_both_datasets() {
-        for column in [
-            medallion::fields::<MotisSegmentRow>()
-                .expect("describe the rows")
-                .iter()
-                .find(|field| field.name() == "train_number")
-                .expect("a train_number column")
-                .data_type()
-                .clone(),
-            medallion::fields::<TrainSegmentRow>()
-                .expect("describe the rows")
-                .iter()
-                .find(|field| field.name() == "train_number")
-                .expect("a train_number column")
-                .data_type()
-                .clone(),
+        for train_number in [
+            column::<MotisSegmentRowV3>("train_number"),
+            column::<TrainSegmentRowV4>("train_number"),
         ] {
-            assert_eq!(column, DataType::UInt32);
+            assert_eq!(train_number.data_type(), &DataType::UInt32);
         }
     }
 }

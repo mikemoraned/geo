@@ -1,17 +1,17 @@
 mod common;
 
-use std::time::Duration;
-
 use chrono::Utc;
 use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready};
+use domain::Span;
 use medallion::Root;
-use motis::bronze::SegmentLog;
+use motis::capture::{Capture, Coverage};
 use motis::client::MotisClient;
-use motis::poll::{PollConfig, PollOutcome, poll_once};
-use motis::window::PositionWindow;
+use motis::landing::SegmentLog;
+use motis::near_gps::NearGps;
+use motis::zoom::Zoom;
 
 #[tokio::test]
-async fn poll_once_captures_rail_from_local_motis_end_to_end() {
+async fn recent_gps_near_frankfurt_captures_rail_from_local_motis_end_to_end() {
     let (_redis, url) = start_redis().await;
     let mut conn = wait_ready(&url).await;
 
@@ -27,25 +27,30 @@ async fn poll_once_captures_rail_from_local_motis_end_to_end() {
     }
 
     let store = tempfile::tempdir().expect("temp store");
-    let log = SegmentLog::new(Root::new(store.path()));
-    let client = MotisClient::default();
-    let mut window = PositionWindow::new(Duration::from_secs(30 * 60));
-    let config = PollConfig {
-        recent_lookback: Duration::from_secs(5 * 60),
-        query_window_half: Duration::from_secs(5 * 60),
-        zoom: 8.0,
-        sample_limit: 1000,
-    };
+    let mut near_gps = NearGps::new(
+        "30m".parse::<Span>().expect("a span").age(),
+        "5m".parse::<Span>().expect("a span").age(),
+    );
+    let mut capture = Capture::new(
+        MotisClient::default(),
+        SegmentLog::new(Root::new(store.path()), common::local_source().id()),
+        Zoom::default(),
+        "10m".parse().expect("a span"),
+    );
 
-    let outcome = poll_once(now, &mut conn, &client, &log, &mut window, &config)
+    let area = near_gps
+        .look(now, &mut conn)
         .await
-        .expect("poll once against local motis");
+        .expect("look")
+        .area
+        .expect("an area around recent GPS");
+    let captured = capture
+        .capture(now, &Coverage::bbox(area))
+        .await
+        .expect("capture against local motis");
 
-    let PollOutcome::Queried { segments, .. } = outcome else {
-        panic!("expected a Motis query, got {outcome:?}");
-    };
     assert!(
-        segments > 0,
+        captured.segments > 0,
         "expected some rail segments near Frankfurt Hbf"
     );
 

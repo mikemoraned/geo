@@ -4,26 +4,20 @@ use medallion::{Country, DatasetSpec, Row, layers};
 use serde::{Deserialize, Serialize};
 
 use crate::gers::GersId;
+use crate::overture_release::OvertureRelease;
 
 pub const DIVISION_ID: &str = "division_id";
 
 pub const OVERTURE_EXTRACT: DatasetSpec<layers::Bronze> =
     DatasetSpec::partitioned("overture_extract", "extract_id");
 
-pub const EXTRACT_MANIFEST: DatasetSpec<layers::Bronze> =
-    DatasetSpec::unpartitioned("extract_manifest");
+pub const EXTRACT_MANIFEST_V3: DatasetSpec<layers::Bronze> =
+    DatasetSpec::unpartitioned("extract_manifest_v3");
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ExtractManifestRow {
-    pub extract_id: String,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub extracted_at: DateTime<Utc>,
-    pub release: String,
-    pub country: String,
-    pub min_lon: f64,
-    pub min_lat: f64,
-    pub max_lon: f64,
-    pub max_lat: f64,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OvertureRegion {
+    pub id: GersId,
+    pub name: String,
 }
 
 pub fn division_id(country: Country) -> GersId {
@@ -34,7 +28,25 @@ pub fn division_id(country: Country) -> GersId {
     GersId::new(id).expect("a division id written here is a constant, checked by the tests below")
 }
 
-impl ExtractManifestRow {
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExtractManifestRowV3 {
+    pub extract_id: String,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub extracted_at: DateTime<Utc>,
+    pub overture_release: OvertureRelease,
+    /// The code of the country the extract was taken for, as text rather than a [`Country`].
+    ///
+    /// Bronze records what was observed, so a row naming a country the store has no zone for
+    /// still fills in. See
+    /// [docs/overture.md](../../../docs/overture.md#taking-an-extract-reads-the-country-division-filling-one-in-reads-the-manifest).
+    pub country: String,
+    pub min_lon: f64,
+    pub min_lat: f64,
+    pub max_lon: f64,
+    pub max_lat: f64,
+}
+
+impl ExtractManifestRowV3 {
     pub fn bbox(&self) -> Rect<f64> {
         Rect::new(
             Coord {
@@ -49,10 +61,24 @@ impl ExtractManifestRow {
     }
 }
 
-impl Row for ExtractManifestRow {
+impl Row for ExtractManifestRowV3 {
     type Layer = layers::Bronze;
-    const DATASET: DatasetSpec<Self::Layer> = EXTRACT_MANIFEST;
+    const DATASET: DatasetSpec<Self::Layer> = EXTRACT_MANIFEST_V3;
     const INSTANTS: &'static [&'static str] = &["extracted_at"];
+
+    fn example() -> Self {
+        Self {
+            extract_id: "example".to_string(),
+            extracted_at: DateTime::UNIX_EPOCH,
+            overture_release: OvertureRelease::new("2026-09-23.1")
+                .expect("a constant release follows Overture's naming"),
+            country: "DE".to_string(),
+            min_lon: 0.0,
+            min_lat: 0.0,
+            max_lon: 1.0,
+            max_lat: 1.0,
+        }
+    }
 }
 
 #[cfg(test)]

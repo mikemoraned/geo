@@ -1,0 +1,34 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: bronze
+partition_key: ingested_date
+unique: []
+columns:
+  - name: device_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      device_id_present: fed047f0f3ef93b493d7b4d19c13ef35ec41e4568eea51aa73cc394a38a655ce
+  - name: t
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true
+  - name: lat
+    data_type: Float64
+    nullable: false
+  - name: lon
+    data_type: Float64
+    nullable: false
+  - name: alt
+    data_type: Float64
+    nullable: true
+  - name: acc
+    data_type: Float64
+    nullable: false
+  - name: speed
+    data_type: Float64
+    nullable: true
+  - name: heading
+    data_type: Float64
+    nullable: true

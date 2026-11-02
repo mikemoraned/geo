@@ -76,35 +76,36 @@ async fn sessionise(root: &Root) -> silver::WriteOutcome {
 async fn stored_sessions(root: &Root) -> Vec<Session> {
     let query = Query::new(root.clone());
     query
-        .register(medallion_model::SESSION, "sessions")
+        .register_by_name(medallion_model::SESSION_V3)
         .await
         .expect("register");
     query
         .rows(
             "SELECT session_id, device_id, started_at, ended_at, sample_count
-             FROM sessions ORDER BY started_at",
+             FROM session_v3 ORDER BY started_at",
         )
         .await
         .expect("query sessions")
 }
 
 fn partitions(root: &Root) -> Vec<(String, u64)> {
-    fn walk(dir: &std::path::Path, into: &mut Vec<std::path::PathBuf>) {
+    fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
         let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
+            return Vec::new();
         };
-        for entry in entries {
-            let path = entry.expect("entry").path();
-            if path.is_dir() {
-                walk(&path, into);
-            } else {
-                into.push(path);
-            }
-        }
+        entries
+            .flat_map(|entry| {
+                let path = entry.expect("entry").path();
+                if path.is_dir() {
+                    walk(&path)
+                } else {
+                    vec![path]
+                }
+            })
+            .collect()
     }
 
-    let mut paths = Vec::new();
-    walk(&root.path().join("silver"), &mut paths);
+    let mut paths = walk(&root.path().join("silver"));
     paths.sort();
     paths
         .iter()
@@ -123,18 +124,18 @@ fn partitions(root: &Root) -> Vec<(String, u64)> {
 async fn contents(root: &Root) -> String {
     let query = Query::new(root.clone());
     query
-        .register(medallion_model::SESSION, "sessions")
+        .register_by_name(medallion_model::SESSION_V3)
         .await
         .expect("register sessions");
     query
-        .register(medallion_model::SESSION_SAMPLE, "samples")
+        .register_by_name(medallion_model::SESSION_SAMPLE_V3)
         .await
         .expect("register samples");
 
     let mut rendered = String::new();
     for sql in [
-        "SELECT * FROM sessions ORDER BY session_id",
-        "SELECT * FROM samples ORDER BY session_id, seq",
+        "SELECT * FROM session_v3 ORDER BY session_id",
+        "SELECT * FROM session_sample_v3 ORDER BY session_id, seq",
     ] {
         let batches = query.sql(sql).await.expect("query");
         rendered.push_str(

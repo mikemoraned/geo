@@ -1,14 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
-use domain::Bbox;
-use domain::{DeviceId, Pass, SessionId};
+use domain::{DeviceId, Pass, Radius, SessionId};
 use geo_types::Point;
 use medallion::{COUNTRY, Country, DatasetSpec, Query, Replaced, Root, layers};
-use medallion_model::{SessionCrossingRow, WaterCrossingRow};
+use medallion_model::{SessionCrossingRowV3, WaterCrossingRowV2};
 use serde::Deserialize;
 
-use crate::matching::{Crossing, Radius, Sample, Session, passes};
+use crate::matching::{Crossing, NoPass, Sample, Session, passes};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MatchOutcome {
@@ -31,13 +30,14 @@ pub enum CrossingError {
     OffTheGlobe(#[from] domain::CoordinateError),
     #[error("partitioning by country: {0}")]
     Path(#[from] medallion::PathError),
+    #[error("matching sessions to crossings: {0}")]
+    Matching(#[from] NoPass),
 }
 
 #[derive(Debug, Deserialize)]
 struct StoredSession {
     session_id: SessionId,
     device_id: DeviceId,
-    bbox: Bbox,
     samples: Option<Vec<StoredSample>>,
 }
 
@@ -52,7 +52,7 @@ struct StoredSample {
 #[derive(Debug, Deserialize)]
 struct PlacedCrossing {
     #[serde(flatten)]
-    row: WaterCrossingRow,
+    row: WaterCrossingRowV2,
     x: f64,
     y: f64,
     lon: f64,
@@ -61,7 +61,7 @@ struct PlacedCrossing {
 
 pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, CrossingError> {
     let mut outcome = MatchOutcome::default();
-    let mut passed: Vec<SessionCrossingRow> = Vec::new();
+    let mut passed: Vec<SessionCrossingRowV3> = Vec::new();
 
     for country in countries_to_match(root)? {
         let (matched, rows) = matched_in(root, country, radius).await?;
@@ -133,15 +133,12 @@ async fn matched_in(
     root: &Root,
     country: Country,
     radius: Radius,
-) -> Result<(MatchOutcome, Vec<SessionCrossingRow>), CrossingError> {
-    let query = Query::new(root.clone());
-    for (dataset, table) in READ {
-        query.register_of_country(dataset, table, country).await?;
-    }
-
-    let sessions = sessions_in(&query).await?;
-    let crossings = crossings_in(&query).await?;
-    let matched = passes(&sessions, &crossings, radius);
+) -> Result<(MatchOutcome, Vec<SessionCrossingRowV3>), CrossingError> {
+    let Inputs {
+        sessions,
+        crossings,
+    } = inputs(root, country).await?;
+    let matched = passes(&sessions, &crossings, radius)?;
 
     let devices: HashMap<&SessionId, &DeviceId> = sessions
         .iter()
@@ -167,17 +164,34 @@ async fn matched_in(
     ))
 }
 
+#[derive(Debug, Clone)]
+pub struct Inputs {
+    pub sessions: Vec<Session>,
+    pub crossings: Vec<Crossing>,
+}
+
+pub async fn inputs(root: &Root, country: Country) -> Result<Inputs, CrossingError> {
+    let query = Query::new(root.clone());
+    for (dataset, table) in READ {
+        query.register_of_country(dataset, table, country).await?;
+    }
+    Ok(Inputs {
+        sessions: sessions_in(&query).await?,
+        crossings: crossings_in(&query).await?,
+    })
+}
+
 const READ: [(DatasetSpec<layers::Silver>, &str); 3] = [
-    (medallion_model::SESSION, "session"),
-    (medallion_model::SESSION_SAMPLE, "session_sample"),
-    (medallion_model::WATER_CROSSING, "water_crossing"),
+    (medallion_model::SESSION_V3, "session_v3"),
+    (medallion_model::SESSION_SAMPLE_V3, "session_sample_v3"),
+    (medallion_model::WATER_CROSSING_V2, "water_crossing_v2"),
 ];
 
 async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
     let stored: Vec<StoredSession> = query
         .rows(
-            "SELECT s.session_id, s.device_id, s.bbox, p.samples
-             FROM session s
+            "SELECT s.session_id, s.device_id, p.samples
+             FROM session_v3 s
              LEFT JOIN (
                  SELECT session_id,
                         array_agg(
@@ -188,7 +202,7 @@ async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
                             )
                             ORDER BY t
                         ) AS samples
-                 FROM session_sample
+                 FROM session_sample_v3
                  GROUP BY session_id
              ) p ON s.session_id = p.session_id",
         )
@@ -199,7 +213,6 @@ async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
         .map(|session| Session {
             session_id: session.session_id,
             device_id: session.device_id,
-            bbox: session.bbox.rect(),
             samples: session
                 .samples
                 .unwrap_or_default()
@@ -219,7 +232,7 @@ async fn crossings_in(query: &Query) -> Result<Vec<Crossing>, CrossingError> {
             "SELECT *,
                     ST_X(geometry_projected) AS x, ST_Y(geometry_projected) AS y,
                     ST_X(geometry) AS lon, ST_Y(geometry) AS lat
-             FROM water_crossing",
+             FROM water_crossing_v2",
         )
         .await?;
 
@@ -238,8 +251,8 @@ async fn crossings_in(query: &Query) -> Result<Vec<Crossing>, CrossingError> {
         .collect()
 }
 
-fn row(pass: &Pass, device: &DeviceId, radius: Radius) -> SessionCrossingRow {
-    SessionCrossingRow {
+fn row(pass: &Pass, device: &DeviceId, radius: Radius) -> SessionCrossingRowV3 {
+    SessionCrossingRowV3 {
         session_id: pass.session_id.clone(),
         crossing_id: pass.crossing_id.clone(),
         device_id: device.clone(),
@@ -271,7 +284,7 @@ mod tests {
     fn a_row_records_the_radius_it_was_matched_under() {
         let device = DeviceId::new("device-a").expect("an id");
 
-        let row = row(&pass(), &device, Radius::new(150.0));
+        let row = row(&pass(), &device, Radius::new(150.0).expect("a radius"));
 
         assert_eq!(row.match_radius_m, 150.0);
         assert_eq!(row.distance_m, 20.0);
@@ -281,7 +294,7 @@ mod tests {
     fn a_row_names_the_device_the_session_ran_on() {
         let device = DeviceId::new("device-a").expect("an id");
 
-        let row = row(&pass(), &device, Radius::new(150.0));
+        let row = row(&pass(), &device, Radius::new(150.0).expect("a radius"));
 
         assert_eq!(row.device_id, device);
         assert_eq!(row.session_id, pass().session_id);

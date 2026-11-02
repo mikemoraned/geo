@@ -17,18 +17,16 @@ What a passing test run does and doesn't prove when Claude runs it.
 - **DuckDB's `INSTALL spatial` fails under the sandbox**: it stages the extension into
   `~/.duckdb/extensions/…` and that write is refused, so anything running
   `INSTALL spatial; LOAD spatial;` dies with an `IOException` naming a `.tmp-…` file. That
-  covers the `visualise` Python tests (22 of them error, the other 23 pass) and every
-  water-crossings notebook run, so `just test-python` — and therefore `just test-no-docker`
-  as a whole — cannot complete here. Run the three Python suites separately to see which
-  half is real, and have the user run the notebook recipes.
-- **`wasm-pack` writes to `~/Library/Caches` and is refused**, so `just wasm` dies with a bare
-  "Operation not permitted" before it compiles anything. It caches the `wasm-bindgen` and
-  `wasm-opt` it downloads there, through the `dirs` crate, which ignores `XDG_CACHE_HOME` on
-  macOS. Running it with `HOME` pointed at a scratch dir works, as long as `CARGO_HOME` and
-  `RUSTUP_HOME` are given their real values in the same command — the first run then fetches
-  the tools again into that scratch cache. What the built wasm does can be checked under node
-  without a browser: import the `--target web` module and pass the `.wasm` bytes to `init` as
-  `{ module_or_path }`.
+  covers every water-crossings notebook run, so have the user run the notebook recipes. The
+  four suites in `just test-python` pass here, and so does the rest of `just test-no-docker`.
+- **`wasm-pack` writes to `~/Library/Caches` and is refused**, so `just wasm` dies before it
+  compiles anything. wasm-pack 0.15 reports it as a bare "File exists (os error 17)", and older
+  releases as "Operation not permitted". It caches the `wasm-bindgen` and `wasm-opt` it downloads
+  there. Set `WASM_PACK_CACHE` to a scratch dir in the same command, and the first run fetches the
+  tools again into it. What the built wasm does can be checked under node without a browser:
+  import the `--target web` module and pass the `.wasm` bytes to `init` as `{ module_or_path }`.
+- **The sandbox denies the Motis server the mmap of its LMDB tile database**, so the server runs
+  outside it, started by the user. Any check against it, such as a realtime A/B, waits for that.
 - **The sandbox denies by default and grants only what it is given**, so a path outside the
   app directory is unreachable — for reading as much as for writing — unless the launcher
   lists it. That `~/.cargo` and `~/.rustup` are readable says nothing about any other home
@@ -43,4 +41,18 @@ What a passing test run does and doesn't prove when Claude runs it.
   compiled for the host. A clean device build proves it compiles and links for the target and
   nothing more; behaviour needs a flash, which Claude cannot do. See
   [working-with-claude.md](working-with-claude.md).
+- **Once pip has a newer release, a device build writes to `~/.espressif`.** When the
+  `esp-idf-sys` build script runs, it upgrades pip in ESP-IDF's Python environment there. The
+  sandbox refuses that write, and the build ends in `Could not install esp-idf`. One device build
+  outside the sandbox makes the upgrade, and builds here succeed again until pip's next release.
+  `cargo build --release -p m5-core`, run in the device shell's directory, compiles `m5-core` and
+  the crates it depends on for Xtensa without ESP-IDF, so it still works here.
+- **`ps` and `pgrep` cannot list processes here**, so a run must write its own pid.
+  `/usr/bin/time -l sh -c 'echo $$ > "$0"; exec "$@"' <pid file> <command>` does that and still
+  reports the command's resource usage, since `exec` keeps the process.
+- **`footprint` prints only `phys_footprint` and `phys_footprint_peak` here**, under an empty
+  category table. Its text rounds to a whole GiB from 10 GiB up, so `/usr/bin/time -l` gives the
+  exact peak. Point it at the pid with `footprint -p <pid> --sample 5`.
+- **`/usr/bin/sample <pid> 10 -mayDie -file <path>` profiles a running process here**, with no code
+  change or rebuild. Its call tree gives each function's share of each thread's samples.
 - Say plainly, when reporting, which tests could not be run.

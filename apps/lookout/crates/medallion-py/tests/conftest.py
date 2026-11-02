@@ -20,13 +20,15 @@ def train_segment_table(trip_ids, departures, countries):
     rows = len(trip_ids)
     return pa.table(
         {
+            "source_id": pa.array(
+                ["fe022bac-a65e-5a96-8e66-377dd523c2ac"] * rows, pa.string()
+            ),
             "trip_id": pa.array(trip_ids, pa.string()),
             "route_name": pa.array(["ICE 123"] * rows, pa.string()),
             "train_number": pa.array([123] * rows, pa.uint32()),
             "agency_id": pa.array(["db"] * rows, pa.string()),
             "agency_name": pa.array(["DB"] * rows, pa.string()),
             "mode": pa.array(["HIGHSPEED_RAIL"] * rows, pa.string()),
-            "route_color": pa.array(["ff0000"] * rows, pa.string()),
             "realtime": pa.array([True] * rows, pa.bool_()),
             "from_stop_id": pa.array(["berlin-hbf"] * rows, pa.string()),
             "departure": pa.array(
@@ -53,12 +55,12 @@ def water_crossing_table(compact_ids, lat_lon, projected, ids=None):
                 ids or [f"w{n}-t{n}" for n in range(rows)], pa.string()
             ),
             "crossing_compact_id": pa.array(compact_ids, pa.uint32()),
-            "water_id": pa.array(["water-1"] * rows, pa.string()),
-            "water_subtype": pa.array(["river"] * rows, pa.string()),
-            "water_class": pa.array(["river"] * rows, pa.string()),
+            "overture_water_id": pa.array(["water-1"] * rows, pa.string()),
+            "overture_water_subtype": pa.array(["river"] * rows, pa.string()),
+            "overture_water_class": pa.array(["river"] * rows, pa.string()),
             "track_id": pa.array(["track-1"] * rows, pa.string()),
-            "rail_id": pa.array(["rail-1"] * rows, pa.string()),
-            "rail_class": pa.array(["rail"] * rows, pa.string()),
+            "overture_rail_id": pa.array(["rail-1"] * rows, pa.string()),
+            "overture_rail_class": pa.array(["rail"] * rows, pa.string()),
             "overlap_kind": pa.array(["line"] * rows, pa.string()),
             "overlap_m": pa.array([42.0] * rows, pa.float64()),
             "total_overlap_m": pa.array([58.0] * rows, pa.float64()),

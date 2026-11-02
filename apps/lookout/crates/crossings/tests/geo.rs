@@ -8,7 +8,7 @@ use geo_types::{Geometry, Point};
 use geojson::{FeatureCollection, GeoJson};
 use libtest_mimic::{Arguments, Failed, Trial};
 use medallion::{Query, Root};
-use medallion_model::ExtractManifestRow;
+use medallion_model::ExtractManifestRowV3;
 
 const CASES: &str = "../../notebooks/water_crossings/test_cases.geojson";
 
@@ -46,15 +46,15 @@ async fn rail_of(
     Ok(rail)
 }
 
-async fn extracts(root: &Root) -> Result<Vec<ExtractManifestRow>, Box<dyn Error>> {
+async fn extracts(root: &Root) -> Result<Vec<ExtractManifestRowV3>, Box<dyn Error>> {
     let query = Query::new(root.clone());
     query
-        .register_by_name(medallion_model::EXTRACT_MANIFEST)
+        .register_by_name(medallion_model::EXTRACT_MANIFEST_V3)
         .await?;
-    Ok(query.rows("SELECT * FROM extract_manifest").await?)
+    Ok(query.rows("SELECT * FROM extract_manifest_v3").await?)
 }
 
-fn countries_covering(extracts: &[ExtractManifestRow], bbox: &Geometry<f64>) -> String {
+fn countries_covering(extracts: &[ExtractManifestRowV3], bbox: &Geometry<f64>) -> String {
     let countries: BTreeSet<&str> = extracts
         .iter()
         .filter(|extract| extract.bbox().intersects(bbox))
@@ -91,8 +91,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let runtime = tokio::runtime::Runtime::new()?;
     let crossings: Vec<PlacedCrossing> = runtime.block_on(medallion::rows_of_every_country(
         &root,
-        medallion_model::WATER_CROSSING,
-        "water_crossing",
+        medallion_model::WATER_CROSSING_V2,
+        "water_crossing_v2",
         crossings::silver::PLACED,
     ))?;
     let extracts = runtime.block_on(extracts(&root))?;
@@ -124,7 +124,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             by_extract
                 .entry(&crossing.row.extract_id)
                 .or_default()
-                .push(crossing.row.rail_id.clone());
+                .push(crossing.row.overture_rail_id.clone());
         }
         let mut rail = Vec::new();
         for (extract_id, ids) in by_extract {

@@ -1,12 +1,18 @@
 use std::num::NonZeroU32;
 
+use hashfn::hashfn;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(from = "u32")]
 pub struct TrainNumber(u32);
 
 impl TrainNumber {
+    #[hashfn]
+    pub fn new(number: u32) -> Self {
+        Self(number)
+    }
+
     pub fn from_gtfs(raw: &str) -> Option<Self> {
         raw.parse::<NonZeroU32>()
             .ok()
@@ -15,6 +21,12 @@ impl TrainNumber {
 
     pub fn get(self) -> u32 {
         self.0
+    }
+}
+
+impl From<u32> for TrainNumber {
+    fn from(number: u32) -> Self {
+        Self::new(number)
     }
 }
 

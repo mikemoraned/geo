@@ -28,10 +28,8 @@ pub struct Panel<D> {
 }
 
 impl<D: DrawTarget<Color = Rgb565>> Panel<D> {
-    pub fn new(mut display: D) -> Result<Self, D::Error> {
-        display.clear(Rgb565::BLACK)?;
-
-        Ok(Self {
+    pub fn new(display: D) -> Self {
+        Self {
             display,
             style: MonoTextStyleBuilder::new()
                 .font(&FONT_10X20)
@@ -39,7 +37,11 @@ impl<D: DrawTarget<Color = Rgb565>> Panel<D> {
                 .background_color(Rgb565::BLACK)
                 .build(),
             shown: None,
-        })
+        }
+    }
+
+    pub fn clear(&mut self) -> Result<(), D::Error> {
+        self.display.clear(Rgb565::BLACK)
     }
 
     pub fn show(&mut self, view: ViewModel) -> Result<(), D::Error> {

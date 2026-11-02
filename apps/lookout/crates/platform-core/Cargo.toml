@@ -9,7 +9,7 @@ edition.workspace = true
 # its own per-effect machinery and with no BLE anywhere near it. See docs/device.md. One core
 # means one version, so every shell is held to this one. Unpinning costs an associated type;
 # leaving it unpinned costs a device that does not stay up.
-crux_core = "=0.16.2"
+crux_core = "=0.20.0"
 battery-estimator = "0.3"
 bytemuck = "1"
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }

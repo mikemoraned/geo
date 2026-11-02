@@ -6,7 +6,7 @@ use crate::release::{Release, find_superseded};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, thiserror::Error)]
 pub enum Refused {
-    #[error("{0} is not in the source. `just releases` lists what it holds.")]
+    #[error("{0} is not in the source. The `releases` command lists what it holds.")]
     NotServed(Release),
     #[error("{0} is superseded by {1}, so it is not mirrored.")]
     Superseded(Release, Release),

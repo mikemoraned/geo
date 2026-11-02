@@ -1,0 +1,567 @@
+use std::collections::BTreeMap;
+use std::iter::{once, successors};
+use std::sync::Arc;
+
+use chrono::{DateTime, TimeDelta, Utc};
+use domain::Span;
+use geo::{Haversine, InterpolatePoint, Length};
+use geo_types::{LineString, Point};
+use medallion_model::GeometrySource;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Leg {
+    departure: DateTime<Utc>,
+    arrival: DateTime<Utc>,
+    shape: Arc<LineString<f64>>,
+    origin: Point<f64>,
+    destination: Point<f64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum InvalidLeg {
+    #[error("the leg departing at {departure} arrives earlier, at {arrival}")]
+    ArrivesBeforeDeparting {
+        departure: DateTime<Utc>,
+        arrival: DateTime<Utc>,
+    },
+    #[error("the leg departing at {departure} has a shape of {points} points, not two or more")]
+    TooFewPoints {
+        departure: DateTime<Utc>,
+        points: usize,
+    },
+}
+
+impl Leg {
+    pub fn new(
+        departure: DateTime<Utc>,
+        arrival: DateTime<Utc>,
+        shape: Arc<LineString<f64>>,
+    ) -> Result<Self, InvalidLeg> {
+        if arrival < departure {
+            return Err(InvalidLeg::ArrivesBeforeDeparting { departure, arrival });
+        }
+        let (origin, destination) = match shape.0.as_slice() {
+            [origin, .., destination] => (Point::from(*origin), Point::from(*destination)),
+            points => {
+                return Err(InvalidLeg::TooFewPoints {
+                    departure,
+                    points: points.len(),
+                });
+            }
+        };
+        Ok(Self {
+            departure,
+            arrival,
+            shape,
+            origin,
+            destination,
+        })
+    }
+
+    fn duration(&self) -> TimeDelta {
+        self.arrival - self.departure
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NormalisedLegs {
+    legs: Vec<Leg>,
+    departure: DateTime<Utc>,
+    arrival: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum InvalidLegs {
+    #[error("there are no legs to normalise")]
+    NoLegs,
+    #[error("a leg departs at {next_departure}, before the leg before it arrives at {arrival}")]
+    Overlapping {
+        arrival: DateTime<Utc>,
+        next_departure: DateTime<Utc>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum NoWhereabouts {
+    #[error("{t} is before the first leg departs, at {departure}")]
+    BeforeAllLegs {
+        t: DateTime<Utc>,
+        departure: DateTime<Utc>,
+    },
+    #[error("{t} is after the last leg arrives, at {arrival}")]
+    AfterAllLegs {
+        t: DateTime<Utc>,
+        arrival: DateTime<Utc>,
+    },
+    #[error("the leg travelled at {t} has no point along its shape")]
+    NoPointAlongShape { t: DateTime<Utc> },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Placed {
+    pub t: DateTime<Utc>,
+    pub position: Point<f64>,
+    pub geometry_source: GeometrySource,
+}
+
+struct MeasuredLeg<'a> {
+    leg: &'a Leg,
+    distances_from_origin: Vec<f64>,
+}
+
+impl<'a> MeasuredLeg<'a> {
+    fn of(leg: &'a Leg) -> Self {
+        let beyond_origin = leg.shape.lines().scan(0.0, |travelled, segment| {
+            *travelled += Haversine.length(&segment);
+            Some(*travelled)
+        });
+        Self {
+            leg,
+            distances_from_origin: once(0.0).chain(beyond_origin).collect(),
+        }
+    }
+
+    fn point_at_ratio(&self, ratio: f64) -> Option<Point<f64>> {
+        let distance = ratio * self.distances_from_origin.last()?;
+        let end = self
+            .distances_from_origin
+            .partition_point(|from_origin| *from_origin < distance);
+        let Some(start) = end.checked_sub(1) else {
+            return Some(self.leg.origin);
+        };
+        Some(Haversine.point_at_distance_between(
+            Point::from(*self.leg.shape.0.get(start)?),
+            Point::from(*self.leg.shape.0.get(end)?),
+            distance - self.distances_from_origin.get(start)?,
+        ))
+    }
+}
+
+struct MeasuredLegs<'a> {
+    normalised: &'a NormalisedLegs,
+    legs: Vec<MeasuredLeg<'a>>,
+}
+
+impl MeasuredLegs<'_> {
+    fn position_at(&self, t: DateTime<Utc>) -> Result<Point<f64>, NoWhereabouts> {
+        if self.normalised.arrival < t {
+            return Err(NoWhereabouts::AfterAllLegs {
+                t,
+                arrival: self.normalised.arrival,
+            });
+        }
+        let departed = self
+            .legs
+            .partition_point(|measured| measured.leg.departure <= t);
+        let measured = self.legs[..departed]
+            .last()
+            .ok_or(NoWhereabouts::BeforeAllLegs {
+                t,
+                departure: self.normalised.departure,
+            })?;
+        let leg = measured.leg;
+        if t < leg.arrival {
+            let ratio = (t - leg.departure).as_seconds_f64() / leg.duration().as_seconds_f64();
+            measured
+                .point_at_ratio(ratio)
+                .ok_or(NoWhereabouts::NoPointAlongShape { t })
+        } else {
+            Ok(leg.destination)
+        }
+    }
+}
+
+impl NormalisedLegs {
+    pub fn new(legs: &[Leg]) -> Result<Self, InvalidLegs> {
+        let mut legs = legs.to_vec();
+        legs.sort_by_key(|leg| (leg.departure, leg.arrival));
+        let (Some(first), Some(last)) = (legs.first(), legs.last()) else {
+            return Err(InvalidLegs::NoLegs);
+        };
+        let (departure, arrival) = (first.departure, last.arrival);
+        if let Some([leg, next]) = legs
+            .windows(2)
+            .find(|pair| pair[1].departure < pair[0].arrival)
+        {
+            return Err(InvalidLegs::Overlapping {
+                arrival: leg.arrival,
+                next_departure: next.departure,
+            });
+        }
+        Ok(Self {
+            legs,
+            departure,
+            arrival,
+        })
+    }
+
+    pub fn departure(&self) -> DateTime<Utc> {
+        self.departure
+    }
+
+    fn measured(&self) -> MeasuredLegs<'_> {
+        MeasuredLegs {
+            normalised: self,
+            legs: self.legs.iter().map(MeasuredLeg::of).collect(),
+        }
+    }
+
+    pub fn sampled(&self, interval: Span) -> Result<Vec<Placed>, NoWhereabouts> {
+        let step = interval.time_delta();
+        let measured = self.measured();
+        let interpolated = successors(Some(self.departure), |t| Some(*t + step))
+            .take_while(|t| *t < self.arrival)
+            .map(|t| {
+                Ok(Placed {
+                    t,
+                    position: measured.position_at(t)?,
+                    geometry_source: GeometrySource::Interpolated,
+                })
+            })
+            .collect::<Result<Vec<_>, NoWhereabouts>>()?;
+        let stops = self.legs.iter().flat_map(|leg| {
+            [(leg.departure, leg.origin), (leg.arrival, leg.destination)].map(|(t, position)| {
+                Placed {
+                    t,
+                    position,
+                    geometry_source: GeometrySource::Stop,
+                }
+            })
+        });
+
+        let by_instant: BTreeMap<DateTime<Utc>, Placed> = interpolated
+            .into_iter()
+            .chain(stops)
+            .map(|placed| (placed.t, placed))
+            .collect();
+        Ok(by_instant.into_values().collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use geo::InterpolatableLine;
+    use geo_types::line_string;
+    use proptest::prelude::*;
+
+    use super::*;
+
+    fn at(seconds: i64) -> DateTime<Utc> {
+        DateTime::from_timestamp(1_760_000_000 + seconds, 0).expect("an instant")
+    }
+
+    fn leg(departure: i64, arrival: i64, shape: LineString<f64>) -> Leg {
+        Leg::new(at(departure), at(arrival), Arc::new(shape)).expect("a leg")
+    }
+
+    fn normalised(legs: &[Leg]) -> NormalisedLegs {
+        NormalisedLegs::new(legs).expect("normalised legs")
+    }
+
+    fn every_10s() -> Span {
+        "10s".parse().expect("a span")
+    }
+
+    fn north(latitude: f64) -> LineString<f64> {
+        line_string![(x: 8.0, y: 50.0), (x: 8.0, y: latitude)]
+    }
+
+    fn near(actual: Point<f64>, expected: (f64, f64)) -> bool {
+        (actual.x() - expected.0).abs() < 1e-6 && (actual.y() - expected.1).abs() < 1e-6
+    }
+
+    fn shapes() -> impl Strategy<Value = LineString<f64>> {
+        prop::collection::vec((0..6u8, 0..6u8), 2..40).prop_map(|steps| {
+            let points: Vec<(f64, f64)> = steps
+                .into_iter()
+                .map(|(east, up)| (8.0 + f64::from(east) * 0.01, 50.0 + f64::from(up) * 0.01))
+                .collect();
+            LineString::from(points)
+        })
+    }
+
+    fn sample_at(samples: &[Placed], seconds: i64) -> Placed {
+        *samples
+            .iter()
+            .find(|sample| sample.t == at(seconds))
+            .unwrap_or_else(|| panic!("no sample at {seconds} s in {samples:?}"))
+    }
+
+    #[test]
+    fn a_leg_cannot_arrive_before_it_departs() {
+        assert_eq!(
+            Leg::new(at(60), at(0), Arc::new(north(50.1))),
+            Err(InvalidLeg::ArrivesBeforeDeparting {
+                departure: at(60),
+                arrival: at(0),
+            })
+        );
+    }
+
+    #[test]
+    fn a_leg_cannot_have_a_shape_of_one_point() {
+        assert_eq!(
+            Leg::new(at(0), at(60), Arc::new(line_string![(x: 8.0, y: 50.0)])),
+            Err(InvalidLeg::TooFewPoints {
+                departure: at(0),
+                points: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn a_leg_can_arrive_as_it_departs() {
+        assert!(Leg::new(at(60), at(60), Arc::new(north(50.1))).is_ok());
+    }
+
+    #[test]
+    fn no_legs_cannot_be_normalised() {
+        assert_eq!(NormalisedLegs::new(&[]), Err(InvalidLegs::NoLegs));
+    }
+
+    #[test]
+    fn a_leg_cannot_depart_before_the_one_before_it_arrives() {
+        let onward = line_string![(x: 8.0, y: 50.1), (x: 8.1, y: 50.1)];
+
+        assert_eq!(
+            NormalisedLegs::new(&[leg(0, 60, north(50.1)), leg(30, 90, onward)]),
+            Err(InvalidLegs::Overlapping {
+                arrival: at(60),
+                next_departure: at(30),
+            })
+        );
+    }
+
+    #[test]
+    fn a_leg_can_depart_as_the_one_before_it_arrives() {
+        let onward = line_string![(x: 8.0, y: 50.1), (x: 8.1, y: 50.1)];
+
+        assert!(NormalisedLegs::new(&[leg(0, 60, north(50.1)), leg(60, 120, onward)]).is_ok());
+    }
+
+    #[test]
+    fn no_whereabouts_are_known_before_the_first_leg_departs() {
+        assert_eq!(
+            normalised(&[leg(60, 120, north(50.1))])
+                .measured()
+                .position_at(at(0)),
+            Err(NoWhereabouts::BeforeAllLegs {
+                t: at(0),
+                departure: at(60),
+            })
+        );
+    }
+
+    #[test]
+    fn no_whereabouts_are_known_after_the_last_leg_arrives() {
+        assert_eq!(
+            normalised(&[leg(60, 120, north(50.1))])
+                .measured()
+                .position_at(at(180)),
+            Err(NoWhereabouts::AfterAllLegs {
+                t: at(180),
+                arrival: at(120),
+            })
+        );
+    }
+
+    #[test]
+    fn during_a_leg_the_train_is_along_its_shape() {
+        let position = normalised(&[leg(0, 60, north(50.1))])
+            .measured()
+            .position_at(at(30))
+            .expect("a position");
+
+        assert!(near(position, (8.0, 50.05)), "{position:?}");
+    }
+
+    #[test]
+    fn as_a_leg_departs_the_train_is_at_its_origin() {
+        let position = normalised(&[leg(0, 60, north(50.1))])
+            .measured()
+            .position_at(at(0))
+            .expect("a position");
+
+        assert!(near(position, (8.0, 50.0)), "{position:?}");
+    }
+
+    proptest! {
+        #[test]
+        fn a_point_along_a_leg_is_where_walking_its_whole_shape_reaches(
+            shape in shapes(),
+            ratio in 0.0..1.0f64,
+        ) {
+            let walked = shape
+                .point_at_ratio_from_start(&Haversine, ratio)
+                .expect("a point");
+            let leg = leg(0, 60, shape);
+
+            let found = MeasuredLeg::of(&leg).point_at_ratio(ratio).expect("a point");
+
+            prop_assert!(
+                (found.x() - walked.x()).abs() < 1e-9 && (found.y() - walked.y()).abs() < 1e-9,
+                "{found:?} against {walked:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn between_legs_the_train_is_at_the_station() {
+        let onward = line_string![(x: 8.0, y: 50.1), (x: 8.1, y: 50.1)];
+
+        let position = normalised(&[leg(0, 60, north(50.1)), leg(120, 180, onward)])
+            .measured()
+            .position_at(at(90))
+            .expect("a position");
+
+        assert!(near(position, (8.0, 50.1)), "{position:?}");
+    }
+
+    #[test]
+    fn on_arriving_the_train_is_at_the_station() {
+        let position = normalised(&[leg(0, 60, north(50.1))])
+            .measured()
+            .position_at(at(60))
+            .expect("a position");
+
+        assert!(near(position, (8.0, 50.1)), "{position:?}");
+    }
+
+    #[test]
+    fn a_train_is_at_its_first_stop_as_it_departs() {
+        let samples = normalised(&[leg(0, 60, north(50.1))])
+            .sampled(every_10s())
+            .expect("samples");
+
+        let first = samples.first().expect("a sample");
+        assert_eq!(first.t, at(0));
+        assert!(near(first.position, (8.0, 50.0)), "{first:?}");
+        assert_eq!(first.geometry_source, GeometrySource::Stop);
+    }
+
+    #[test]
+    fn a_train_is_at_its_last_stop_as_it_arrives() {
+        let samples = normalised(&[leg(0, 60, north(50.1))])
+            .sampled(every_10s())
+            .expect("samples");
+
+        let last = samples.last().expect("a sample");
+        assert_eq!(last.t, at(60));
+        assert!(near(last.position, (8.0, 50.1)), "{last:?}");
+        assert_eq!(last.geometry_source, GeometrySource::Stop);
+    }
+
+    #[test]
+    fn a_sample_is_taken_every_interval() {
+        let samples = normalised(&[leg(0, 120, north(50.1))])
+            .sampled(every_10s())
+            .expect("samples");
+
+        let gaps: Vec<TimeDelta> = samples
+            .windows(2)
+            .map(|pair| pair[1].t - pair[0].t)
+            .collect();
+        assert_eq!(gaps, vec![TimeDelta::seconds(10); 12]);
+    }
+
+    #[test]
+    fn a_sample_between_stops_is_interpolated() {
+        let samples = normalised(&[leg(0, 60, north(50.1))])
+            .sampled(every_10s())
+            .expect("samples");
+
+        assert!(
+            samples[1..samples.len() - 1]
+                .iter()
+                .all(|sample| sample.geometry_source == GeometrySource::Interpolated),
+            "{samples:?}"
+        );
+    }
+
+    #[test]
+    fn halfway_through_a_leg_the_train_is_halfway_along_its_shape() {
+        let bent = line_string![(x: 8.0, y: 50.0), (x: 8.0, y: 50.01), (x: 8.0, y: 50.1)];
+
+        let samples = normalised(&[leg(0, 60, bent)])
+            .sampled(every_10s())
+            .expect("samples");
+
+        assert!(
+            near(sample_at(&samples, 30).position, (8.0, 50.05)),
+            "{samples:?}"
+        );
+    }
+
+    #[test]
+    fn between_legs_the_train_waits_at_the_stop() {
+        let onward = line_string![(x: 8.0, y: 50.1), (x: 8.1, y: 50.1)];
+
+        let samples = normalised(&[leg(0, 60, north(50.1)), leg(120, 180, onward)])
+            .sampled(every_10s())
+            .expect("samples");
+
+        let waiting = sample_at(&samples, 90);
+        assert!(near(waiting.position, (8.0, 50.1)), "{waiting:?}");
+        assert_eq!(waiting.geometry_source, GeometrySource::Interpolated);
+    }
+
+    #[test]
+    fn an_arrival_and_a_departure_at_one_instant_are_one_stop_sample() {
+        let onward = line_string![(x: 8.0, y: 50.1), (x: 8.1, y: 50.1)];
+
+        let samples = normalised(&[leg(0, 60, north(50.1)), leg(60, 120, onward)])
+            .sampled(every_10s())
+            .expect("samples");
+
+        let at_the_stop: Vec<&Placed> =
+            samples.iter().filter(|sample| sample.t == at(60)).collect();
+        assert_eq!(at_the_stop.len(), 1, "{samples:?}");
+        assert_eq!(at_the_stop[0].geometry_source, GeometrySource::Stop);
+    }
+
+    #[test]
+    fn a_stop_between_two_intervals_is_kept() {
+        let samples = normalised(&[leg(0, 65, north(50.1))])
+            .sampled(every_10s())
+            .expect("samples");
+
+        let instants: Vec<DateTime<Utc>> = samples.iter().map(|sample| sample.t).collect();
+        assert_eq!(instants, [0, 10, 20, 30, 40, 50, 60, 65].map(at));
+        assert_eq!(
+            sample_at(&samples, 65).geometry_source,
+            GeometrySource::Stop
+        );
+    }
+
+    #[test]
+    fn legs_in_any_order_are_sampled_from_the_first_departure() {
+        let onward = line_string![(x: 8.0, y: 50.1), (x: 8.1, y: 50.1)];
+
+        let samples = normalised(&[leg(120, 180, onward), leg(0, 60, north(50.1))])
+            .sampled(every_10s())
+            .expect("samples");
+
+        let instants: Vec<DateTime<Utc>> = samples.iter().map(|sample| sample.t).collect();
+        assert_eq!(
+            instants,
+            (0..=18).map(|step| at(step * 10)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn legs_in_any_order_wait_where_the_last_arrived() {
+        let onward = line_string![(x: 8.0, y: 50.1), (x: 8.1, y: 50.1)];
+        let beyond = line_string![(x: 8.1, y: 50.1), (x: 8.2, y: 50.1)];
+
+        let samples = normalised(&[
+            leg(120, 180, onward),
+            leg(0, 60, north(50.1)),
+            leg(240, 300, beyond),
+        ])
+        .sampled(every_10s())
+        .expect("samples");
+
+        let waiting = sample_at(&samples, 210);
+        assert!(near(waiting.position, (8.1, 50.1)), "{waiting:?}");
+    }
+}

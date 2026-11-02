@@ -7,6 +7,7 @@ prerequisites:
     cd {{ justfile_directory() }}/../.. && just prerequisites
     cargo install rerun-cli --locked
     cargo install wasm-pack --locked
+    cargo install cargo-insta --locked
     rustup target add wasm32-unknown-unknown
     brew install duckdb proj jq
 
@@ -83,11 +84,11 @@ test: test-python test-rust
 
 # Every Rust test, doctests included.
 test-rust: test-doc
-    cargo nextest run --workspace
+    INSTA_UPDATE=unseen cargo nextest run --workspace
 
 # Every test but the Docker ones. The sandbox-safe run.
 test-no-docker: test-python test-doc
-    cargo nextest run --workspace --profile no-docker
+    INSTA_UPDATE=unseen cargo nextest run --workspace --profile no-docker
 
 # The geo tests: the crossings the store holds, against the bbox test cases. Needs a filled store.
 test-geo:
@@ -101,6 +102,7 @@ test-doc:
 test-python:
     uv run --directory crates/medallion-py pytest -q
     uv run --directory crates/platform/rerun-py pytest -q
+    uv run --directory crates/session-crossings-py pytest -q
     uv run --directory notebooks/water_crossings pytest -q
 
 # Tests against real services, in release, with credentials from 1Password. Hits the real redis.
@@ -122,15 +124,35 @@ bronze-init *args:
 
 # Report what the store holds, layer by layer.
 summarise *args:
-    cargo run -q -p summary --bin summarise -- {{args}}
+    cargo run -q --release -p summary --bin summarise -- {{args}}
 
 # Read the telemetry queue into bronze, with the redis URL from 1Password.
 bronze-record *args:
-    op run --env-file=deploy/lookout.env -- cargo run -p recorder --bin recorder -- {{args}}
+    op run --env-file=deploy/lookout.env -- cargo run --release -p recorder --bin recorder -- {{args}}
 
-# Poll Motis for trips near recent GPS into bronze, redis URL from 1Password. Runs until stopped.
-bronze-poll-motis *args:
-    op run --env-file=deploy/lookout.env -- cargo run -p motis --bin motis_poll -- {{args}}
+# Poll Motis for trips near recent GPS into landing for a duration such as 1h, redis URL from 1Password.
+landing-poll-motis duration *args:
+    BUILD_GIT_HASH={{git_hash}} op run --env-file=deploy/lookout.env -- cargo run --release -p motis --bin motis_follow_gps -- --feed local --poll-duration {{duration}} {{args}}
+
+# Capture every train in Thuringia from Transitous into landing, every 10 minutes for a duration such as 1h.
+landing-poll-transitous duration *args:
+    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --motis-url https://api.transitous.org --feed transitous --country DE --region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
+
+# Capture every train in Thuringia from the local Motis server into landing, every 10 minutes for a duration such as 2h. The label names the DELFI build and the setup, such as delfi-2026-10-12.plain.
+landing-poll-local-area label duration *args:
+    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --country DE --region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
+
+# Capture every train in Germany from the local Motis server into landing, every 10 minutes for a duration such as 1d. The label names the DELFI build and the setup, such as delfi-2026-10-10.route-shapes.within.
+landing-poll-local-de label duration *args:
+    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --country DE --poll-interval 10m --poll-duration {{duration}} {{args}}
+
+# Move Motis polls from landing into bronze.
+bronze-promote-motis-landing *args:
+    cargo run --release -p motis --bin motis_promote_landing_to_bronze -- {{args}}
+
+# Fetch the API spec of the Motis version tools/motis-server pins; the motis client is generated from it.
+motis-openapi:
+    version=$(just --justfile ../../tools/motis-server/Justfile --evaluate VERSION) && curl -fsSL "https://raw.githubusercontent.com/motis-project/motis/$version/openapi.yaml" | yq -o=json '.' > crates/motis/openapi.json
 
 # Take an Overture extract into bronze, from the mirror if mounted. No args fills in every recorded one; `new` takes a fresh one.
 bronze-extract *args:
@@ -142,11 +164,11 @@ silver-init *args:
     just silver-motis-ingest {{args}}
     just silver-crossings {{args}}
 
-# Derive silver `train_segment` from the bronze motis capture log.
+# Derive silver `train_segment_v4` from the bronze motis capture log.
 silver-motis-ingest *args:
-    cargo run -p motis --bin motis_ingest -- {{args}}
+    cargo run --release -p motis --bin motis_ingest -- {{args}}
 
-# Derive silver `session` and `session_sample` from the bronze telemetry.
+# Derive silver `session_v3` and `session_sample_v3` from the bronze telemetry.
 silver-sessionise *args:
     cargo run --release -p recorder --bin sessionise -- {{args}}
 
@@ -155,17 +177,17 @@ silver-crossings *args:
     just silver-water-crossings
     just silver-session-crossings {{args}}
 
-# Derive silver `water_crossing` from the crossings notebook. Always writes the repo store.
+# Derive silver `water_crossing_v2` from the crossings notebook. Always writes the repo store.
 silver-water-crossings:
     uv run --no-project notebooks/water_crossings/v10.py
 
-# Derive silver `session_crossing`: the crossings each recorded session passed.
+# Derive silver `session_crossing_v3`: the crossings each recorded session passed.
 silver-session-crossings *args:
     cargo run --release -p session_crossings --bin match_crossings -- {{args}}
 
 # Pack the silver water crossings into gold, and adopt the version written.
 gold-pack-crossings *args:
-    cargo run -p crossings --bin pack_crossings -- --version-file crossings.version {{args}}
+    cargo run --release -p crossings --bin pack_crossings -- --version-file crossings.version {{args}}
 
 export LIBCLANG_PATH := `ls -d "$HOME"/.rustup/toolchains/esp-1.98.1.0/xtensa-esp32-elf-clang/*/esp-clang/lib 2>/dev/null | tail -1`
 

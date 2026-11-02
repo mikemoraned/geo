@@ -17,12 +17,12 @@ def write_parquet(path, table):
 @pytest.fixture
 def filled(store):
     write_parquet(
-        store / "bronze" / "extract_manifest" / "part-0.parquet",
+        store / "bronze" / "extract_manifest_v3" / "part-0.parquet",
         pa.table(
             {
                 "extract_id": pa.array(list(EXTRACTS), pa.string()),
                 "country": pa.array(list(EXTRACTS.values()), pa.string()),
-                "release": pa.array(["2026-07-22.0"] * 2, pa.string()),
+                "overture_release": pa.array(["2026-07-22.0"] * 2, pa.string()),
             }
         ),
     )
@@ -47,7 +47,7 @@ def filled(store):
                 ),
             )
     write_parquet(
-        store / "bronze" / "gps_reading" / "ingested_date=2026-07-22" / "part-0.parquet",
+        store / "bronze" / "gps_reading_v2" / "ingested_date=2026-07-22" / "part-0.parquet",
         pa.table({"device_id": pa.array(["m5-1"], pa.string())}),
     )
     return store
@@ -58,13 +58,13 @@ def query(filled, sql, **kwargs):
 
 
 def test_a_dataset_is_read_under_its_own_name(filled):
-    table = query(filled, "SELECT country FROM extract_manifest ORDER BY country")
+    table = query(filled, "SELECT country FROM extract_manifest_v3 ORDER BY country")
 
     assert table.column("country").to_pylist() == ["DE", "GB"]
 
 
 def test_a_datasets_own_partition_comes_back_as_a_column(filled):
-    table = query(filled, "SELECT device_id, ingested_date FROM gps_reading")
+    table = query(filled, "SELECT device_id, ingested_date FROM gps_reading_v2")
 
     assert table.column("ingested_date").to_pylist() == ["2026-07-22"]
 
@@ -85,7 +85,7 @@ def test_an_extract_joins_to_the_manifest_that_recorded_it(filled):
     table = query(
         filled,
         """
-        SELECT s.id FROM segment s JOIN extract_manifest m USING (extract_id)
+        SELECT s.id FROM segment s JOIN extract_manifest_v3 m USING (extract_id)
         WHERE m.country = 'GB'
         """,
         tables={"segment": {"theme": "transportation", "type": "segment"}},
@@ -119,5 +119,5 @@ def test_a_theme_no_extract_holds_is_reported(filled):
 
 
 def test_a_dataset_bronze_does_not_hold_is_refused_with_the_known_ones(filled):
-    with pytest.raises(ValueError, match="water_crossing"):
-        query(filled, "SELECT * FROM water_crossing")
+    with pytest.raises(ValueError, match="water_crossing_v2"):
+        query(filled, "SELECT * FROM water_crossing_v2")

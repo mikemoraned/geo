@@ -62,10 +62,10 @@ def test_the_crossings_come_from_the_country_the_read_names(store):
 def test_a_dataset_that_has_never_been_derived_says_so(empty_store):
     empty = Store(empty_store)
 
-    with pytest.raises(ValueError, match="water_crossing"):
+    with pytest.raises(ValueError, match="water_crossing_v2"):
         empty.crossings(COUNTRY)
 
-    with pytest.raises(ValueError, match="session_sample"):
+    with pytest.raises(ValueError, match="session_sample_v3"):
         list(empty.samples(SESSION, COUNTRY))
 
 

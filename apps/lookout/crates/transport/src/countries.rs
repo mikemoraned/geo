@@ -1,7 +1,11 @@
+use std::collections::HashMap;
+
 use geo::Contains;
 use geo_types::{Geometry, Point};
 use medallion::{Countries, Country, GEOMETRY, Query, Root};
-use medallion_model::{DIVISION_ID, ExtractManifestRow};
+use medallion_model::{DIVISION_ID, ExtractManifestRowV3, OvertureRelease};
+
+use crate::extract::ExtractId;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CountryError {
@@ -13,31 +17,40 @@ pub enum CountryError {
     Path(#[from] medallion::PathError),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewestExtract {
+    pub id: ExtractId,
+    pub release: OvertureRelease,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct CountryAreas {
     areas: Vec<(Country, Geometry<f64>)>,
+    extracts: HashMap<Country, NewestExtract>,
 }
 
 impl CountryAreas {
     pub async fn newest_per_country(root: &Root) -> Result<Self, CountryError> {
         let query = Query::new(root.clone());
         query
-            .register_by_name(medallion_model::EXTRACT_MANIFEST)
+            .register_by_name(medallion_model::EXTRACT_MANIFEST_V3)
             .await?;
-        let extracts: Vec<ExtractManifestRow> = query.rows(crate::extract::RECORDED).await?;
+        let recorded: Vec<ExtractManifestRowV3> = query.rows(crate::extract::RECORDED).await?;
 
         let newest_of_each_country = Country::ALL.into_iter().filter_map(|country| {
-            extracts
+            recorded
                 .iter()
                 .find(|extract| extract.country == country.code())
-                .map(|extract| (country, extract.extract_id.as_str()))
+                .map(|extract| (country, extract))
         });
 
         let mut areas = Vec::new();
-        for (country, extract_id) in newest_of_each_country {
+        let mut extracts = HashMap::new();
+        for (country, extract) in newest_of_each_country {
+            let id = ExtractId::new(extract.extract_id.clone())?;
             let division_area = root
                 .dataset(medallion_model::OVERTURE_EXTRACT)
-                .for_id(extract_id)?
+                .for_id(&id)?
                 .partition("theme", "divisions")?
                 .partition("type", "division_area")?;
             let table = format!("division_area_{}", country.code().to_lowercase());
@@ -58,9 +71,28 @@ impl CountryAreas {
                         .map(|area| (country, area)),
                 );
             }
+            extracts.insert(
+                country,
+                NewestExtract {
+                    id,
+                    release: extract.overture_release,
+                },
+            );
         }
 
-        Ok(Self { areas })
+        Ok(Self { areas, extracts })
+    }
+
+    pub fn newest_extract(&self, country: Country) -> Option<&NewestExtract> {
+        self.extracts.get(&country)
+    }
+
+    pub fn shapes_of(&self, country: Country) -> Vec<Geometry<f64>> {
+        self.areas
+            .iter()
+            .filter(|(of, _)| *of == country)
+            .map(|(_, area)| area.clone())
+            .collect()
     }
 }
 
@@ -80,36 +112,17 @@ mod tests {
     use arrow::array::{RecordBatch, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
     use chrono::{DateTime, TimeZone, Utc};
-    use datafusion::execution::SendableRecordBatchStream;
-    use geo_types::{Geometry, polygon};
-    use medallion_model::ExtractManifestRow;
+    use geo_types::Geometry;
 
     use super::*;
+    use crate::testing::{record_extract, square_from};
 
     fn square(size: f64) -> Geometry<f64> {
         square_from(0.0, size)
     }
 
-    fn square_from(corner: f64, size: f64) -> Geometry<f64> {
-        Geometry::Polygon(polygon![
-            (x: corner, y: corner),
-            (x: corner + size, y: corner),
-            (x: corner + size, y: corner + size),
-            (x: corner, y: corner + size),
-        ])
-    }
-
     fn at(hour: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 9, 27, hour, 0, 0).unwrap()
-    }
-
-    async fn stream_of(batch: RecordBatch) -> SendableRecordBatchStream {
-        datafusion::prelude::SessionContext::new()
-            .read_batch(batch)
-            .expect("read the batch")
-            .execute_stream()
-            .await
-            .expect("stream the batch")
     }
 
     const LAND: &str = "land";
@@ -150,37 +163,22 @@ mod tests {
         taken_at: DateTime<Utc>,
         areas: &[(&str, Geometry<f64>)],
     ) {
-        let row = ExtractManifestRow {
-            extract_id: id.to_string(),
-            extracted_at: taken_at,
-            release: release.to_string(),
-            country: country.code().to_string(),
-            min_lon: 0.0,
-            min_lat: 0.0,
-            max_lon: 0.0,
-            max_lat: 0.0,
-        };
-        root.rows_of::<ExtractManifestRow>()
-            .append_rows(taken_at, &[row])
-            .await
-            .expect("record the extract");
-
-        root.dataset(medallion_model::OVERTURE_EXTRACT)
-            .for_id(id)
-            .expect("an extract id")
-            .partition("theme", "divisions")
-            .expect("the divisions theme")
-            .partition("type", "division_area")
-            .expect("the division_area type")
-            .append_geo_stream(taken_at, stream_of(division_area(country, areas)).await)
-            .await
-            .expect("write the areas");
+        record_extract(
+            root,
+            id,
+            country,
+            release,
+            taken_at,
+            division_area(country, areas),
+        )
+        .await;
     }
 
     #[test]
     fn a_point_inside_an_area_is_in_that_country() {
         let areas = CountryAreas {
             areas: vec![(Country::Germany, square(10.0))],
+            ..CountryAreas::default()
         };
 
         assert_eq!(
@@ -190,9 +188,27 @@ mod tests {
     }
 
     #[test]
+    fn a_country_has_the_shapes_of_its_own_areas_alone() {
+        let areas = CountryAreas {
+            areas: vec![
+                (Country::Germany, square(10.0)),
+                (Country::UnitedKingdom, square_from(20.0, 10.0)),
+                (Country::Germany, square_from(40.0, 1.0)),
+            ],
+            ..CountryAreas::default()
+        };
+
+        assert_eq!(
+            areas.shapes_of(Country::Germany),
+            vec![square(10.0), square_from(40.0, 1.0)]
+        );
+    }
+
+    #[test]
     fn a_point_outside_every_area_is_in_no_country() {
         let areas = CountryAreas {
             areas: vec![(Country::Germany, square(10.0))],
+            ..CountryAreas::default()
         };
 
         assert_eq!(areas.containing(Point::new(20.0, 20.0)), None);
@@ -283,6 +299,18 @@ mod tests {
             areas.containing(Point::new(25.0, 25.0)),
             Some(Country::UnitedKingdom)
         );
+        assert_eq!(
+            areas
+                .newest_extract(Country::Germany)
+                .map(|extract| extract.release.to_string()),
+            Some("2026-05-21.0".to_string())
+        );
+        assert_eq!(
+            areas
+                .newest_extract(Country::UnitedKingdom)
+                .map(|extract| extract.release.to_string()),
+            Some("2026-07-22.0".to_string())
+        );
     }
 
     #[tokio::test]
@@ -343,5 +371,12 @@ mod tests {
             Some(Country::Germany)
         );
         assert_eq!(areas.containing(Point::new(5.0, 5.0)), None);
+        assert_eq!(
+            areas.newest_extract(Country::Germany),
+            Some(&NewestExtract {
+                id: "20260927T190000Z".parse().expect("an extract id"),
+                release: "2026-07-22.0".parse().expect("a release"),
+            })
+        );
     }
 }

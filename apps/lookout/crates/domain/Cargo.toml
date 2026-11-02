@@ -9,8 +9,11 @@ edition.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
 # Written out with `default-features = false` for the same reason as the entries around
 # it: this crate builds for Xtensa and for wasm. See docs/device.md.
-geo = { version = "0.31", default-features = false }
+geo = { version = "0.32", default-features = false }
 geo-types = { workspace = true }
+hashfn = { workspace = true }
+humantime = "2"
+nutype = { workspace = true }
 num-traits = { version = "0.2", default-features = false }
 # `v5` alone: a session id is a name-based UUID, and `v4` would pull in a random source
 # this crate has no use for and a board may not have. See docs/device.md.
@@ -19,6 +22,7 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+proptest = { workspace = true }
 serde_json = { workspace = true }
 
 [lints]

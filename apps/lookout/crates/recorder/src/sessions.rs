@@ -1,14 +1,12 @@
 use std::collections::HashMap;
+use std::num::NonZeroU32;
 
 use chrono::{DateTime, Duration, Utc};
-use domain::{DeviceId, SessionId, StartedBy};
+use domain::{Age, DeviceId, SessionId, StartedBy, TooManySeconds};
 use geo_types::Point;
 use medallion::{Query, Root};
+use medallion_model::{DEVICE_SESSION_V2, GPS_READING_V2};
 use serde::{Deserialize, Serialize};
-
-const SAMPLES: &str = "samples";
-
-const SESSION_STARTS: &str = "session_starts";
 
 const DISTINCT_SAMPLES: &str = "
     SELECT device_id, t, lat, lon, alt, acc, speed, heading
@@ -16,15 +14,19 @@ const DISTINCT_SAMPLES: &str = "
       SELECT *, ROW_NUMBER() OVER (
         PARTITION BY device_id, t ORDER BY lat, lon, alt, acc, speed, heading
       ) AS rank
-      FROM samples
+      FROM gps_reading_v2
     )
     WHERE rank = 1
     ORDER BY device_id, t
 ";
 
 const DISTINCT_SESSION_STARTS: &str = "
-    SELECT DISTINCT device_id, t FROM session_starts ORDER BY device_id, t
+    SELECT DISTINCT device_id, t FROM device_session_v2 ORDER BY device_id, t
 ";
+
+pub const DEFAULT_GAP: Age = Age::minutes(NonZeroU32::new(10).expect("ten is not zero"));
+
+pub const DEFAULT_LEAD: Age = Age::minutes(NonZeroU32::new(1).expect("one is not zero"));
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
@@ -33,48 +35,54 @@ pub enum SessionError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Gap(Duration);
+pub struct Gap(Age);
 
 impl Gap {
-    pub fn new(silence: Duration) -> Self {
-        Self(silence)
+    pub fn new(silence: Age) -> Result<Self, TooManySeconds> {
+        silence.seconds()?;
+        Ok(Self(silence))
     }
 
     pub fn as_seconds(self) -> u32 {
-        self.0.num_seconds().try_into().unwrap_or(u32::MAX)
+        self.0
+            .seconds()
+            .expect("a gap fits in a u32 of seconds, as Gap::new checked")
     }
 
     fn separates(self, interval: Duration) -> bool {
-        interval > self.0
+        interval > self.0.span()
     }
 }
 
 impl Default for Gap {
     fn default() -> Self {
-        Self(Duration::minutes(10))
+        Self(DEFAULT_GAP)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Lead(Duration);
+pub struct Lead(Age);
 
 impl Lead {
-    pub fn new(before: Duration) -> Self {
-        Self(before)
+    pub fn new(before: Age) -> Result<Self, TooManySeconds> {
+        before.seconds()?;
+        Ok(Self(before))
     }
 
     pub fn as_seconds(self) -> u32 {
-        self.0.num_seconds().try_into().unwrap_or(u32::MAX)
+        self.0
+            .seconds()
+            .expect("a lead fits in a u32 of seconds, as Lead::new checked")
     }
 
     fn reaches(self, announced_at: DateTime<Utc>, started_at: DateTime<Utc>) -> bool {
-        started_at >= announced_at - self.0
+        started_at >= self.0.before(announced_at)
     }
 }
 
 impl Default for Lead {
     fn default() -> Self {
-        Self(Duration::minutes(1))
+        Self(DEFAULT_LEAD)
     }
 }
 
@@ -131,7 +139,7 @@ impl Session {
 pub async fn sessions(root: &Root, gap: Gap, lead: Lead) -> Result<Vec<Session>, SessionError> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(medallion_model::GPS_READING, SAMPLES)
+        .register_if_present(GPS_READING_V2, GPS_READING_V2.name)
         .await?
     {
         return Ok(Vec::new());
@@ -139,7 +147,7 @@ pub async fn sessions(root: &Root, gap: Gap, lead: Lead) -> Result<Vec<Session>,
     let samples: Vec<Sample> = query.rows(DISTINCT_SAMPLES).await?;
 
     let started = if query
-        .register_if_present(medallion_model::DEVICE_SESSION, SESSION_STARTS)
+        .register_if_present(DEVICE_SESSION_V2, DEVICE_SESSION_V2.name)
         .await?
     {
         started_by_device(query.rows(DISTINCT_SESSION_STARTS).await?)
@@ -168,21 +176,6 @@ fn started_by_device(starts: Vec<SessionStart>) -> HashMap<DeviceId, Vec<DateTim
         })
 }
 
-fn absorbed(sessions: &mut Vec<Session>, announced_at: DateTime<Utc>, lead: Lead) -> Vec<Sample> {
-    let precedes_report = sessions
-        .last()
-        .is_some_and(|previous| lead.reaches(announced_at, previous.started_at()));
-
-    if precedes_report {
-        sessions
-            .pop()
-            .expect("a session was just read from the end")
-            .samples
-    } else {
-        Vec::new()
-    }
-}
-
 fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap, lead: Lead) -> Vec<Session> {
     let mut sessions: Vec<Session> = Vec::new();
     let mut unclaimed = started;
@@ -204,7 +197,11 @@ fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap, lead: Lead) ->
         match started_by {
             Some(started_by) => {
                 let mut samples = announced_at
-                    .map(|announced_at| absorbed(&mut sessions, announced_at, lead))
+                    .and_then(|announced_at| {
+                        sessions
+                            .pop_if(|previous| lead.reaches(announced_at, previous.started_at()))
+                    })
+                    .map(|previous| previous.samples)
                     .unwrap_or_default();
                 samples.push(sample.clone());
                 sessions.push(Session {
@@ -313,6 +310,10 @@ mod tests {
         Duration::seconds(n)
     }
 
+    fn age(span: Duration) -> Age {
+        Age::new(span).expect("a positive span")
+    }
+
     #[tokio::test]
     async fn samples_no_session_start_precedes_still_form_a_session() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -346,7 +347,7 @@ mod tests {
                 gps(id, start() + minutes(9), 52.6),
                 gps(id, start() + minutes(30), 52.7),
             ],
-            Gap::new(minutes(10)),
+            Gap::new(age(minutes(10))).expect("a gap"),
         )
         .await;
 
@@ -367,7 +368,7 @@ mod tests {
         let sessions = derived_at(
             &tmp,
             &[gps(id, start(), 52.5), gps(id, start() + minutes(10), 52.6)],
-            Gap::new(minutes(10)),
+            Gap::new(age(minutes(10))).expect("a gap"),
         )
         .await;
 
@@ -566,5 +567,19 @@ mod tests {
             .expect("derive sessions");
 
         assert!(derived.is_empty());
+    }
+
+    #[test]
+    fn a_gap_or_a_lead_too_long_to_record_in_seconds_is_refused() {
+        let too_long = age(Duration::seconds(i64::from(u32::MAX) + 1));
+
+        assert_eq!(Gap::new(too_long), Err(too_long.seconds().unwrap_err()));
+        assert_eq!(Lead::new(too_long), Err(too_long.seconds().unwrap_err()));
+    }
+
+    #[test]
+    fn the_default_gap_and_lead_are_recorded_in_seconds() {
+        assert_eq!(Gap::default().as_seconds(), 600);
+        assert_eq!(Lead::default().as_seconds(), 60);
     }
 }

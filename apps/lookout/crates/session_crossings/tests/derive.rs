@@ -5,7 +5,7 @@ use medallion::{
     COUNTRY, Countries, Country, GEOMETRY, PROJECTED_GEOMETRY, Projector, Query, Root, geo_batch,
     projected_wkb_field, wkb_field,
 };
-use medallion_model::{OverlapKind, WaterCrossingRow};
+use medallion_model::{OverlapKind, WaterCrossingRowV2};
 use recorder::bronze::{Archive, Payload};
 use recorder::sessions::{Gap, Lead, sessions};
 use recorder::silver;
@@ -13,7 +13,8 @@ use serde::Deserialize;
 use shared::{GpsReading, Message, V1Message};
 use uuid::Uuid;
 
-use session_crossings::matching::Radius;
+use domain::Radius;
+use session_crossings::matching::DEFAULT_RADIUS;
 
 struct Germany;
 
@@ -107,18 +108,18 @@ async fn store_with_a_session(root: &Root, samples: usize) {
 
 async fn store_with_crossings(root: &Root, at_metres: &[f64]) {
     let projector = Projector::for_country(Country::Germany).expect("projector");
-    let rows: Vec<WaterCrossingRow> = at_metres
+    let rows: Vec<WaterCrossingRowV2> = at_metres
         .iter()
         .enumerate()
-        .map(|(n, _)| WaterCrossingRow {
+        .map(|(n, _)| WaterCrossingRowV2 {
             crossing_id: CrossingId::new(format!("water:track:rail@{n}")).expect("id"),
             crossing_compact_id: CrossingCompactId::new(n as u32),
-            water_id: "water".into(),
-            water_subtype: Some("river".into()),
-            water_class: Some("river".into()),
+            overture_water_id: "water".into(),
+            overture_water_subtype: Some("river".into()),
+            overture_water_class: Some("river".into()),
             track_id: "track".into(),
-            rail_id: "rail".into(),
-            rail_class: Some("rail".into()),
+            overture_rail_id: "rail".into(),
+            overture_rail_class: Some("rail".into()),
             overlap_kind: OverlapKind::Line,
             overlap_m: 40.0,
             total_overlap_m: 40.0,
@@ -150,7 +151,7 @@ async fn store_with_crossings(root: &Root, at_metres: &[f64]) {
     )
     .expect("build the batch");
 
-    root.rows_of::<WaterCrossingRow>()
+    root.rows_of::<WaterCrossingRowV2>()
         .partition(COUNTRY, Country::Germany)
         .expect("partition")
         .replace_with_geo(&[batch])
@@ -161,7 +162,7 @@ async fn store_with_crossings(root: &Root, at_metres: &[f64]) {
 async fn passes_in(root: &Root) -> Vec<Pass> {
     let query = Query::new(root.clone());
     if !query
-        .register_if_present(medallion_model::SESSION_CROSSING, "session_crossing")
+        .register_if_present(medallion_model::SESSION_CROSSING_V3, "session_crossing_v3")
         .await
         .expect("register")
     {
@@ -170,7 +171,7 @@ async fn passes_in(root: &Root) -> Vec<Pass> {
     query
         .rows(
             "SELECT crossing_id, crossed_at, distance_m, samples_within
-             FROM session_crossing ORDER BY crossed_at, crossing_id",
+             FROM session_crossing_v3 ORDER BY crossed_at, crossing_id",
         )
         .await
         .expect("read the passes")
@@ -184,7 +185,7 @@ async fn a_crossing_the_session_ran_past_is_recorded_against_it() {
     let just_past_the_second_sample = SAMPLE_SPACING_M + 60.0;
     store_with_crossings(&root, &[just_past_the_second_sample]).await;
 
-    let outcome = session_crossings::silver::derive(&root, Radius::default())
+    let outcome = session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 
@@ -207,7 +208,7 @@ async fn a_crossing_nowhere_near_the_session_is_not() {
     store_with_a_session(&root, 3).await;
     store_with_crossings(&root, &[50_000.0]).await;
 
-    let outcome = session_crossings::silver::derive(&root, Radius::default())
+    let outcome = session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 
@@ -223,7 +224,7 @@ async fn the_radius_decides_what_counts_as_passed() {
     store_with_a_session(&root, 3).await;
     store_with_crossings(&root, &[1_060.0]).await;
 
-    let narrow = session_crossings::silver::derive(&root, Radius::new(20.0))
+    let narrow = session_crossings::silver::derive(&root, Radius::new(20.0).expect("a radius"))
         .await
         .expect("derive");
 
@@ -238,11 +239,11 @@ async fn a_rerun_leaves_the_same_passes() {
     store_with_a_session(&root, 3).await;
     store_with_crossings(&root, &[1_060.0, 2_020.0]).await;
 
-    session_crossings::silver::derive(&root, Radius::default())
+    session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
     let first = passes_in(&root).await;
-    let second_run = session_crossings::silver::derive(&root, Radius::default())
+    let second_run = session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive again");
 
@@ -256,11 +257,11 @@ async fn a_pass_the_rerun_no_longer_makes_is_swept() {
     let root = Root::new(tmp.path());
     store_with_a_session(&root, 3).await;
     store_with_crossings(&root, &[1_060.0]).await;
-    session_crossings::silver::derive(&root, Radius::default())
+    session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 
-    let narrowed = session_crossings::silver::derive(&root, Radius::new(20.0))
+    let narrowed = session_crossings::silver::derive(&root, Radius::new(20.0).expect("a radius"))
         .await
         .expect("derive again");
 
@@ -275,13 +276,13 @@ async fn passes_are_partitioned_by_the_date_they_happened_on() {
     store_with_a_session(&root, 3).await;
     store_with_crossings(&root, &[1_060.0]).await;
 
-    session_crossings::silver::derive(&root, Radius::default())
+    session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 
     assert!(
         tmp.path()
-            .join("silver/session_crossing/crossed_date=2026-07-22/part-0.parquet")
+            .join("silver/session_crossing_v3/crossed_date=2026-07-22/part-0.parquet")
             .exists()
     );
 }
@@ -293,7 +294,7 @@ async fn a_session_that_never_moved_still_records_what_it_sat_beside() {
     store_with_a_session(&root, 1).await;
     store_with_crossings(&root, &[30.0]).await;
 
-    let outcome = session_crossings::silver::derive(&root, Radius::default())
+    let outcome = session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 
@@ -309,7 +310,7 @@ async fn the_samples_within_the_radius_are_counted() {
     let between_the_first_two_samples = SAMPLE_SPACING_M / 2.0;
     store_with_crossings(&root, &[between_the_first_two_samples]).await;
 
-    let outcome = session_crossings::silver::derive(&root, Radius::new(1_000.0))
+    let outcome = session_crossings::silver::derive(&root, Radius::new(1_000.0).expect("a radius"))
         .await
         .expect("derive");
 
@@ -361,7 +362,7 @@ async fn a_country_holding_only_some_of_the_datasets_is_left_out_rather_than_fai
     store_with_a_session_in_each_of_two_countries(&root).await;
     store_with_crossings(&root, &[SAMPLE_SPACING_M + 60.0]).await;
 
-    let outcome = session_crossings::silver::derive(&root, Radius::default())
+    let outcome = session_crossings::silver::derive(&root, DEFAULT_RADIUS)
         .await
         .expect("derive");
 

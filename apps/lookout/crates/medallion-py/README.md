@@ -11,11 +11,11 @@ Each function's own documentation is [its docstring](../../README.md#the-python-
 ```python
 import lookout_medallion
 
-written = lookout_medallion.write_silver("train_segment", table)
-written = lookout_medallion.write_silver("train_segment", table, root="/some/store")
+written = lookout_medallion.write_silver("train_segment_v4", table)
+written = lookout_medallion.write_silver("train_segment_v4", table, root="/some/store")
 
 table = lookout_medallion.query_silver(
-    "SELECT trip_id, ST_X(geometry) AS lon FROM train_segment WHERE country = $country",
+    "SELECT trip_id, ST_X(geometry) AS lon FROM train_segment_v4 WHERE country = $country",
     params={"country": "DE"},
 )
 ```
@@ -41,25 +41,6 @@ defines, a country the store does not know. A failure while reading or writing t
 
 ## Using it from a notebook
 
-marimo notebooks here run `--sandbox`, so the dependency goes in the notebook's own inline script
-metadata, with the path resolved relative to the notebook:
-
-```python
-# /// script
-# dependencies = ["lookout-medallion", ...]
-#
-# [tool.uv.sources]
-# lookout-medallion = { path = "../../crates/medallion-py" }
-# ///
-```
-
-Run such a notebook with `uv run --no-project <notebook>.py`. Nothing needs installing first,
-since uv builds the extension with maturin. `just test-python` (from `apps/lookout`) runs the
-tests the same way.
-
-uv rebuilds the extension when a file named under `cache-keys` in `pyproject.toml` changes. The
-list names this crate's sources, the sources of the workspace crates it wraps, and the
-workspace's `Cargo.toml` and `Cargo.lock`. If this crate comes to depend on another workspace
-crate, add that crate's `Cargo.toml` and sources to the list. A change to an unlisted crate
-leaves the old extension in place. To force a rebuild, pass `--reinstall-package
-lookout-medallion` to `uv run`.
+[The python extensions](../../README.md#the-python-extensions) covers taking an extension into a
+notebook, and when uv rebuilds one. This one's package is `lookout-medallion`. `just test-python`
+(from `apps/lookout`) runs its tests.

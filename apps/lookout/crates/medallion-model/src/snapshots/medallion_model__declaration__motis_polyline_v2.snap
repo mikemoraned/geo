@@ -1,0 +1,18 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: bronze
+partition_key: ~
+unique: []
+columns:
+  - name: polyline_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      polyline_id_is_a_uuid: a54698f558aca3dd7408db06439061fa629129143e11755f6ce2d68d430ae3c0
+  - name: polyline
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      polyline_is_valid: 41c780d49a25337a33bdf12dc12c8a477bbfff24917709cb56faa8311d21646a

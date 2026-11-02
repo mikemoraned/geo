@@ -1,0 +1,254 @@
+use std::collections::HashMap;
+
+use chrono::{DateTime, Utc};
+use medallion::Root;
+use medallion_model::{MotisPollRowV2, MotisSourceId, NotAnEncodedPolyline, Polyline, TripId};
+
+use crate::client::TripDetails;
+use crate::segment::SingleTripSegment;
+
+#[derive(Debug, thiserror::Error)]
+pub enum SegmentLogError {
+    #[error("partitioning the capture log: {0}")]
+    Path(#[from] medallion::PathError),
+    #[error("writing the capture log: {0}")]
+    Write(#[from] medallion::AppendError),
+    #[error("building a poll's rows: {0}")]
+    Polyline(#[from] NotAnEncodedPolyline),
+}
+
+pub(crate) fn poll_row(
+    source_id: MotisSourceId,
+    captured_at: DateTime<Utc>,
+    kept: &SingleTripSegment,
+    details: &HashMap<TripId, TripDetails>,
+) -> Result<MotisPollRowV2, NotAnEncodedPolyline> {
+    let trip = kept.trip();
+    let segment = kept.segment();
+    let details = details.get(kept.trip_id());
+    let agency = details.map(|d| &d.agency);
+
+    Ok(MotisPollRowV2 {
+        source_id,
+        captured_at,
+        trip_id: kept.trip_id().to_string(),
+        route_name: trip
+            .display_name
+            .clone()
+            .or_else(|| trip.route_short_name.clone()),
+        train_number: details.and_then(|d| d.train_number),
+        agency_id: agency.and_then(|a| a.id.clone()),
+        agency_name: agency.and_then(|a| a.name.clone()),
+        mode: segment.mode.to_string(),
+        route_color: segment.route_color.clone(),
+        from_stop_id: segment.from.stop_id.clone(),
+        from_lat: segment.from.lat,
+        from_lon: segment.from.lon,
+        to_stop_id: segment.to.stop_id.clone(),
+        to_lat: segment.to.lat,
+        to_lon: segment.to.lon,
+        departure: segment.departure,
+        arrival: segment.arrival,
+        scheduled_departure: segment.scheduled_departure,
+        scheduled_arrival: segment.scheduled_arrival,
+        realtime: segment.real_time,
+        polyline: Polyline::new(segment.polyline.clone())?,
+    })
+}
+
+#[derive(Debug, Clone)]
+pub struct SegmentLog {
+    root: Root,
+    source_id: MotisSourceId,
+}
+
+impl SegmentLog {
+    pub fn new(root: Root, source_id: MotisSourceId) -> Self {
+        Self { root, source_id }
+    }
+
+    fn partition(
+        &self,
+        captured_at: DateTime<Utc>,
+    ) -> Result<medallion::Dataset<medallion::layers::Landing>, SegmentLogError> {
+        Ok(self
+            .root
+            .rows_of::<MotisPollRowV2>()
+            .on_date(captured_at.date_naive())?)
+    }
+
+    pub fn poll_file(
+        &self,
+        captured_at: DateTime<Utc>,
+    ) -> Result<std::path::PathBuf, SegmentLogError> {
+        Ok(self.partition(captured_at)?.batch_file(captured_at))
+    }
+
+    pub async fn append(
+        &self,
+        captured_at: DateTime<Utc>,
+        segments: &[SingleTripSegment],
+        details: &HashMap<TripId, TripDetails>,
+    ) -> Result<usize, SegmentLogError> {
+        let rows = segments
+            .iter()
+            .map(|segment| poll_row(self.source_id.clone(), captured_at, segment, details))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(self
+            .partition(captured_at)?
+            .append_rows(captured_at, &rows)
+            .await?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeZone;
+    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+
+    use medallion_model::Feed;
+
+    use super::*;
+    use crate::testing::{source, trips};
+
+    fn log_under(path: &std::path::Path) -> SegmentLog {
+        SegmentLog::new(Root::new(path), source(Feed::Local).id())
+    }
+
+    fn fixture_segments() -> Vec<SingleTripSegment> {
+        trips()
+            .into_iter()
+            .map(|segment| SingleTripSegment::new(segment).expect("a segment with one trip"))
+            .collect()
+    }
+
+    fn read_back(path: &std::path::Path) -> arrow::array::RecordBatch {
+        let file = std::fs::File::open(path).expect("open written file");
+        let mut reader = ParquetRecordBatchReaderBuilder::try_new(file)
+            .expect("parquet")
+            .build()
+            .expect("reader");
+        reader.next().expect("a batch").expect("batch reads")
+    }
+
+    #[tokio::test]
+    async fn a_poll_lands_one_file_named_for_its_instant_under_its_polled_date() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let log = log_under(tmp.path());
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
+
+        let written = log
+            .append(captured_at, &fixture_segments(), &HashMap::new())
+            .await
+            .expect("append");
+
+        assert_eq!(written, fixture_segments().len());
+        let path = log.poll_file(captured_at).expect("path");
+        assert!(
+            path.ends_with(
+                "landing/motis_poll_v2/polled_date=2026-07-26/20260726T140530000Z.parquet"
+            )
+        );
+        assert_eq!(read_back(&path).num_rows(), fixture_segments().len());
+    }
+
+    #[tokio::test]
+    async fn the_polyline_is_stored_verbatim() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let log = log_under(tmp.path());
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
+        let segments = fixture_segments();
+
+        log.append(captured_at, &segments, &HashMap::new())
+            .await
+            .expect("append");
+
+        let batch = read_back(&log.poll_file(captured_at).expect("path"));
+        let rows: Vec<MotisPollRowV2> = serde_arrow::from_record_batch(&batch).expect("read rows");
+        assert_eq!(
+            rows.iter()
+                .map(|r| r.polyline.to_string())
+                .collect::<Vec<_>>(),
+            segments
+                .iter()
+                .map(|s| s.segment().polyline.clone())
+                .collect::<Vec<_>>(),
+            "the encoded polylines should survive unchanged"
+        );
+        assert_eq!(
+            rows[0].captured_at, captured_at,
+            "the poll instant should round-trip"
+        );
+    }
+
+    #[tokio::test]
+    async fn every_row_names_the_source_that_captured_it() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let log = log_under(tmp.path());
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
+
+        log.append(captured_at, &fixture_segments(), &HashMap::new())
+            .await
+            .expect("append");
+
+        let batch = read_back(&log.poll_file(captured_at).expect("path"));
+        let rows: Vec<MotisPollRowV2> = serde_arrow::from_record_batch(&batch).expect("read rows");
+        let id = source(Feed::Local).id();
+        assert!(rows.iter().all(|row| row.source_id == id));
+    }
+
+    #[tokio::test]
+    async fn separate_polls_write_separate_files() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let log = log_under(tmp.path());
+        let first = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
+        let second = Utc.with_ymd_and_hms(2026, 7, 26, 14, 6, 0).unwrap();
+
+        log.append(first, &fixture_segments(), &HashMap::new())
+            .await
+            .expect("first");
+        log.append(second, &fixture_segments(), &HashMap::new())
+            .await
+            .expect("second");
+
+        let dir = log.poll_file(first).expect("path");
+        let files = std::fs::read_dir(dir.parent().expect("partition dir"))
+            .expect("read dir")
+            .count();
+        assert_eq!(files, 2);
+    }
+
+    #[tokio::test]
+    async fn a_poll_holding_a_polyline_that_is_not_encoded_writes_nothing() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let log = log_under(tmp.path());
+        let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
+        let mut segment = trips().remove(0);
+        segment.polyline = String::new();
+        let segments = [SingleTripSegment::new(segment).expect("a segment with one trip")];
+
+        let err = log
+            .append(captured_at, &segments, &HashMap::new())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, SegmentLogError::Polyline(_)), "{err}");
+        assert!(!log.poll_file(captured_at).expect("path").exists());
+    }
+
+    #[tokio::test]
+    async fn an_empty_poll_writes_nothing() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let log = log_under(tmp.path());
+        let captured_at = Utc::now();
+
+        let written = log
+            .append(captured_at, &[], &HashMap::new())
+            .await
+            .expect("append");
+
+        assert_eq!(written, 0);
+        assert!(!log.poll_file(captured_at).expect("path").exists());
+    }
+}

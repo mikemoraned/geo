@@ -18,9 +18,18 @@
 //!     type Layer = layers::Bronze;
 //!     const DATASET: DatasetSpec<Self::Layer> = GPS_READING;
 //!     const INSTANTS: &'static [&'static str] = &["t"];
+//!
+//!     fn example() -> Self {
+//!         GpsReadingRow {
+//!             device_id: "example".to_string(),
+//!             t: 0,
+//!             lat: 0.0,
+//!             lon: 0.0,
+//!         }
+//!     }
 //! }
 //!
-//! # async fn example(rows: &[GpsReadingRow]) -> Result<(), Box<dyn std::error::Error>> {
+//! # async fn append(rows: &[GpsReadingRow]) -> Result<(), Box<dyn std::error::Error>> {
 //! let now = Utc::now();
 //! medallion::Root::new(medallion::Root::default_path()?)
 //!     .rows_of::<GpsReadingRow>()
@@ -49,14 +58,17 @@ pub use args::MedallionArgs;
 pub use country::{COUNTRY, Countries, Country, UnknownCountry};
 pub use datafusion::scalar::ScalarValue;
 pub use dataset::{DatasetInfo, DatasetSpec};
-pub use derive::{GeoRow, write_geo_rows, write_rows};
+pub use derive::{GeographyRow, GeometryRow, GeometryRowWriter, write_geography_rows, write_rows};
 pub use geo::{
-    GEOMETRY, GeoError, PROJECTED_GEOMETRY, Projector, geo_batch, geometries, projected_wkb_field,
-    wkb_column, wkb_field,
+    GEOMETRY, GeoError, PROJECTED_GEOMETRY, Projector, Projectors, ZonedGeometry, file_schema,
+    geo_batch, geometries, geometry_fields, projected_wkb_field, wkb_column, wkb_field,
 };
 pub use layer::{Layer, LayerKind, Replaceable, layers};
 pub use partition::{Partition, PartitionKey, PartitionValue, PathError};
-pub use path::{AppendError, Dataset, ReplaceError, Replaced, Root, Written, gold_version};
+pub use path::{
+    AppendError, Dataset, LandedFile, LandingError, ReplaceError, Replaced, Root, Written,
+    gold_version,
+};
 pub use query::{Query, QueryError, countries_of, rows_of_every_country, table_references};
 pub use rows::{Dated, Geometry, Row, RowError, batch, fields};
 pub use table::{SilverTarget, TableError, TableWritten, write_table};

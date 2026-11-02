@@ -13,14 +13,100 @@ repeating a string. Whoever owns the data defines the datasets themselves, so th
 list of them.
 
 The layer is the spec's type rather than a field. `DatasetSpec<layers::Bronze>` and
-`DatasetSpec<layers::Silver>` are different types, and the operations that rewrite or delete are
-implemented for the replaceable layers alone. Code that replaces a bronze partition does not
-compile: the method is not there to call.
+`DatasetSpec<layers::Silver>` are different types, and the operations that rewrite or delete
+partitions are implemented for the replaceable layers alone. Code that replaces a bronze partition
+does not compile: the method is not there to call. Landing alone lists its files and deletes one, so
+a drain can remove a file once bronze holds its rows. Deleting a file takes a value the listing
+returned rather than a path, so it reaches nothing outside the dataset.
 
 A dataset's columns are the row type declared beside it. A writer therefore states a schema by
 naming its rows, and a reader of a dataset it did not write reads it back through the same type.
 Instants are declared as UTC millisecond timestamps in that one place, so no two datasets can
 drift apart on how time is stored.
+
+## A dataset's schema is traced from its row type
+
+A dataset's schema is traced through serde from an example of its row type, so no schema is written
+out by hand. Every row type supplies its example through `Row::example`.
+
+The trace reads an example rather than the type alone, since a trace of the type deserialises each
+text field from an empty string. A field whose type checks its text refuses an empty string, so a
+trace of the type fails. Reading a row back still checks each value, since the example changes only
+how the schema is traced.
+
+The trace learns each field's type from the value the example holds there. Two kinds of field need
+a particular value:
+
+- **An `Option` holds `Some`.** A field holding `None` shows no type, and the trace fails.
+- **An enum whose variants carry no data holds its first variant.**
+
+The enum rule follows from how the trace reads such an enum. For each value, serde hands the trace
+its variant's name and its position in the declaration, counting from 0. The trace stores the enum
+as text only when it has seen every position from 0 up to the highest one handed to it. An example
+holds a single value, so it covers every position only when that value is at position 0. For
+example, with `enum Colour { Red, Green, Blue }`:
+
+- An example holding `Colour::Red` covers position 0, so the column is stored as text. `Green` and
+  `Blue` need not appear.
+- An example holding `Colour::Green` leaves position 0 unseen, and the trace fails with
+  `Encountered null only field Green`.
+
+### Adding a dataset
+
+1. Define the dataset as a `DatasetSpec` constant, with a name ending in `_v1` and any partition
+   key.
+2. Define its row type beside it, with one field per column, deriving `Serialize` and `Deserialize`.
+3. Implement `Row` for the row type, setting `DATASET` to the dataset.
+4. Set `GEOMETRY` for rows written with a geometry, `INSTANTS` for fields holding instants, and
+   `UNIQUE` for identifying columns.
+5. If the dataset is partitioned by date, implement `Dated` to give the date each row is stored
+   under.
+6. Implement `example`, returning a row that follows the two rules for an example.
+7. Call `fields` on the row type in a test. An example that breaks either rule then fails the tests,
+   not the first write.
+8. Add the row type to the list in `crates/medallion-model/src/declaration.rs`.
+9. Run `just test-no-docker`, which records the dataset's snapshot.
+
+## Each dataset's declaration is snapshotted
+
+A dataset's declaration is what its code states about it, as
+[medallion.md](../../docs/medallion.md#dataset-versions) defines it. A test in `medallion-model`
+records each declaration as an `insta` snapshot. It holds the dataset's layer, partition key, and
+unique columns. It also holds the columns its files store, in order, with the variants of each enum
+column. `file_schema` lays the columns out with the functions the writers use.
+
+A column holding a newtype lists the hash of each check the newtype runs. `#[hashfn]` on the
+check's function computes the hash from its code. The hash covers that function alone, not the
+functions it calls, so a helper holding part of a check carries `#[hashfn]` too.
+
+Every newtype a row holds takes one shape, so the test can find it:
+
+- It serializes under its own name: it takes neither `serde(transparent)` nor `serde(into = …)`,
+  and a hand-written `Serialize` calls `serialize_newtype_struct`. Arrow and JSON still store its
+  inner value.
+- It is read through `serde(try_from = …)` or `serde(from = …)`, which calls an inherent `new`
+  holding its check.
+- `new` carries `#[hashfn]`, even where it accepts every value, so a check added later changes the
+  hash.
+- The test's list of newtypes names it, with its checks. A row holding a newtype the list lacks
+  fails the test.
+
+`just test-rust` and `just test-no-docker` run with `INSTA_UPDATE=unseen`. A snapshot no run has
+recorded, such as a new version's, is then recorded on its first run. A changed snapshot fails the
+test, and goes to review, by a person or an agent:
+
+1. Run `cargo insta review` to see each change.
+2. Accept a change no reader can see, such as a check refactored without changing what it accepts.
+3. Reject any other change, and give the dataset a new version under a new name.
+
+A change of meaning leaves the declaration as it was, so the test cannot find one. Where a person
+judges one significant, they give the dataset a new version under a new name.
+
+A snapshot stores the declaration as text, so a failure shows how it changed, where a hash would
+show only that it did. Tracing a type shows its structure but not what a check does, which is why
+each check carries a hash of its code. That hash changes on any edit to the function, a refactor
+included, which is why review can accept a change. A snapshot of a check's results over fixed inputs
+would change only with its behaviour, but only for the inputs listed.
 
 ## Appending never overwrites; deriving always replaces
 
@@ -54,10 +140,13 @@ language derived a dataset does not change what is stored.
 
 Either way the caller supplies rows and the definition supplies the rest. The date a row is stored
 under is read from the row itself, so a partition key and the column feeding it are paired where
-the dataset is defined. The projected geometry is derived from the row's country rather than
-supplied, since the zone a country's metres are in is the store's choice, and deriving it here is
-what stops a caller projecting into one zone while the file declares another. Partition values are
-read from the columns the layout names, and go into the path rather than the file.
+the dataset is defined. A `GeographyRow` holds a row's lat/lon and its country, and the store
+derives the row's geometry. The zone a country's metres are in is the store's choice, and deriving
+it here is what stops a caller projecting into one zone while the file declares another. A caller
+that needs those metres itself asks `Projector` for a `ZonedGeometry`, and hands that over in a
+`GeometryRow`. Only `Projector` builds a `ZonedGeometry`, and it names the country it projected for,
+so the same rule holds and each geography is projected once. Partition values are read from the
+columns the layout names, and go into the path rather than the file.
 
 Emptiness has to be said with a table rather than implied by silence. A query matching nothing
 still writes a readable, correctly typed file, since a partition holding no rows is an answer. A
@@ -66,9 +155,12 @@ no batches at all carries no schema to check, and does nothing.
 
 ## Geometry, and the CRS it declares
 
-Silver geometry is WKB simple features, with the CRS in the file metadata as PROJJSON. The
-`geoparquet` encoder produces that metadata rather than this crate assembling it, so a file
-conforms to the spec version that crate implements.
+A row's geography is its lat/lon, on the round Earth. Its geometry is the same shape in a country's
+metres, on a plane. [Silver's rules](../../docs/medallion.md#silver) set out the distinction.
+
+Both are WKB simple features, with the CRS in the file metadata as PROJJSON. The `geoparquet`
+encoder produces that metadata rather than this crate assembling it, so a file conforms to the spec
+version that crate implements.
 
 [One projected zone per country](../../docs/medallion.md#silver), chosen here, so a dataset states
 which country's geometry it holds and never picks a zone of its own.
@@ -93,14 +185,17 @@ column ahead of it. [The panic](../../docs/2026-10-03-sedona-nested-column-panic
 SedonaDB release so far. Bronze Overture `segment` files have that shape, and so does any fixture
 copying a release's column order.
 
-There are two ways round it:
+There are two workarounds:
 
 - **Read the dataset as plain parquet.** `Query::register_at_without_geometry` registers it without
   SedonaDB's geometry handling, so the geometry column arrives as WKB bytes. `medallion::geometries`
   decodes them.
 - **Write the geometry first.** A file whose geometry precedes every nested column reads normally.
-  A fixture can take this route. Bronze cannot, since it keeps the column order of the release it
-  records.
+  Every silver file holds its geometry columns ahead of its other columns, as a workaround until a
+  SedonaDB release fixes [the panic](../../docs/2026-10-03-sedona-nested-column-panic.md). A silver
+  dataset holding a struct, such as `train_session_v2` and its `bbox`, therefore reads with typed
+  geometry. A fixture can use this workaround too. Bronze cannot, since it keeps the column order
+  of the release it records.
 
 ## Where the store is
 

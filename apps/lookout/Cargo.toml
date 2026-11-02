@@ -26,7 +26,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+strum = { version = "0.28", features = ["derive"] }
 thiserror = "2"
+hashfn = "0.2"
+nutype = { version = "0.8", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "v5", "serde"] }
 # `tokio-rustls-comp` gives async TLS streams, but redis 0.27 only parses a
 # `rediss://` URL when `tls-rustls` is also enabled (otherwise `Client::open`
@@ -69,13 +72,12 @@ futures = "0.3"
 md5 = "0.7"
 tempfile = "3"
 proptest = "1"
-# Motis `map/trips` client, progenitor-generated from the OpenAPI spec.
-motis-openapi-progenitor = "0.4"
 polyline = "0.11"
 wkb = "0.9"
 geo-types = "0.7"
-# Pinned to 0.31, the version sedona-geo already resolves in the tree.
-geo = "0.31"
+# 0.32, not 0.33: sedona-geo 0.4.1 resolves geo 0.31, which caps i_overlay below the 4.5 that
+# 0.33 needs. The lock carries 0.31 and 0.32 until SedonaDB 0.5.0.
+geo = "0.32"
 geo-traits = "0.3"
 wkt = "0.14"
 chrono = { version = "0.4", features = ["serde"] }

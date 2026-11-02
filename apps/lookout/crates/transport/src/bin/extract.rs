@@ -4,7 +4,7 @@ use std::process::ExitCode;
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use medallion::{Country, MedallionArgs, Root};
-use medallion_model::ExtractManifestRow;
+use medallion_model::{ExtractManifestRowV3, OvertureRelease};
 use transport::{
     extract::{self, ExtractId, Extraction, Extractor},
     overture::{Overture, Release, ReleaseChoice},
@@ -38,7 +38,7 @@ enum Command {
         /// Overture release to extract (see docs.overturemaps.org/release). Without
         /// one, the latest release the mirror or the bucket holds.
         #[arg(long)]
-        release: Option<String>,
+        overture_release: Option<OvertureRelease>,
         /// Country to extract, as an ISO 3166-1 alpha-2 code.
         #[arg(long, default_value = "DE")]
         country: Country,
@@ -87,12 +87,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let recorded = extract::recorded_as(&root, &id).await?;
             report(&backfill(&root, &mirror, recorded, at).await?);
         }
-        Command::New { release, country } => {
+        Command::New {
+            overture_release,
+            country,
+        } => {
             let id = ExtractId::at(at);
-            let release = ReleaseChoice::from(release).resolve(mirror).await?;
+            let release = ReleaseChoice::from(overture_release)
+                .resolve(mirror)
+                .await?;
             tracing::info!(
                 %id,
-                release = release.id(),
+                release = %release.id(),
                 source = release.location(),
                 %country,
                 root = %root.path().display(),
@@ -134,7 +139,7 @@ async fn backfill_recorded(
     if recorded.is_empty() {
         return Err(extract::ExtractError::NoExtract.into());
     }
-    let in_the_order_taken: Vec<ExtractManifestRow> = recorded.into_iter().rev().collect();
+    let in_the_order_taken: Vec<ExtractManifestRowV3> = recorded.into_iter().rev().collect();
 
     let mut skipped = Vec::new();
     let mut missing = Vec::new();
@@ -185,13 +190,13 @@ fn report(extraction: &Extraction) {
 async fn backfill(
     root: &Root,
     mirror: &Option<PathBuf>,
-    recorded: ExtractManifestRow,
+    recorded: ExtractManifestRowV3,
     at: chrono::DateTime<Utc>,
 ) -> Result<Extraction, Box<dyn std::error::Error>> {
-    let release = Release::at(&recorded.release, mirror.clone());
+    let release = Release::at(recorded.overture_release, mirror.clone());
     tracing::info!(
         id = %recorded.extract_id,
-        release = %recorded.release,
+        release = %recorded.overture_release,
         source = release.location(),
         country = %recorded.country,
         extracted_at = %recorded.extracted_at,
@@ -211,11 +216,11 @@ mod tests {
 
     use super::*;
 
-    fn recorded_row(id: &str, hour: u32) -> ExtractManifestRow {
-        ExtractManifestRow {
+    fn recorded_row(id: &str, hour: u32) -> ExtractManifestRowV3 {
+        ExtractManifestRowV3 {
             extract_id: id.to_string(),
             extracted_at: Utc.with_ymd_and_hms(2026, 9, 27, hour, 0, 0).unwrap(),
-            release: "2026-07-22.0".to_string(),
+            overture_release: "2026-07-22.0".parse().expect("a release"),
             country: Country::Germany.code().to_string(),
             min_lon: 5.8,
             min_lat: 47.2,
@@ -224,11 +229,11 @@ mod tests {
         }
     }
 
-    async fn store_filled_with(rows: &[ExtractManifestRow]) -> (tempfile::TempDir, Root) {
+    async fn store_filled_with(rows: &[ExtractManifestRowV3]) -> (tempfile::TempDir, Root) {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         for row in rows {
-            root.rows_of::<ExtractManifestRow>()
+            root.rows_of::<ExtractManifestRowV3>()
                 .append_rows(row.extracted_at, std::slice::from_ref(row))
                 .await
                 .expect("record the extract");
@@ -305,11 +310,15 @@ mod tests {
     fn a_new_extract_defaults_to_the_latest_release_available_and_germany() {
         let args = Args::parse_from(["extract", "new"]);
 
-        let Some(Command::New { release, country }) = args.command else {
+        let Some(Command::New {
+            overture_release,
+            country,
+        }) = args.command
+        else {
             panic!("expected a new extract");
         };
         assert_eq!(
-            ReleaseChoice::from(release),
+            ReleaseChoice::from(overture_release),
             ReleaseChoice::LatestReleaseAvailable
         );
         assert_eq!(country, Country::Germany);
@@ -317,14 +326,17 @@ mod tests {
 
     #[test]
     fn a_new_extract_takes_a_named_release() {
-        let args = Args::parse_from(["extract", "new", "--release", "2026-07-22.0"]);
+        let args = Args::parse_from(["extract", "new", "--overture-release", "2026-07-22.0"]);
 
-        let Some(Command::New { release, .. }) = args.command else {
+        let Some(Command::New {
+            overture_release, ..
+        }) = args.command
+        else {
             panic!("expected a new extract");
         };
         assert_eq!(
-            ReleaseChoice::from(release),
-            ReleaseChoice::NamedRelease("2026-07-22.0".into())
+            ReleaseChoice::from(overture_release),
+            ReleaseChoice::NamedRelease("2026-07-22.0".parse().expect("a release"))
         );
     }
 

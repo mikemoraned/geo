@@ -1,0 +1,8 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: bronze
+partition_key: extract_id
+unique: []
+columns: []

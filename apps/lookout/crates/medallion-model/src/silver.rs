@@ -1,8 +1,10 @@
 use medallion::{RowError, SilverTarget};
 
 use crate::{
-    SESSION, SESSION_CROSSING, SESSION_SAMPLE, SessionCrossingRow, SessionRow, SessionSampleRow,
-    TRAIN_SEGMENT, TrainSegmentRow, WATER_CROSSING, WaterCrossingRow,
+    SESSION_CROSSING_V3, SESSION_SAMPLE_V3, SESSION_V3, SessionCrossingRowV3, SessionRowV3,
+    SessionSampleRowV3, TRAIN_SEGMENT_V4, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2,
+    TrainSegmentRowV4, TrainSessionRowV2, TrainSessionSampleRowV2, WATER_CROSSING_V2,
+    WaterCrossingRowV2,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -15,14 +17,25 @@ pub enum TargetError {
 
 type Definition = fn() -> Result<SilverTarget, RowError>;
 
-const TARGETS: [(&str, Definition); 5] = [
-    (SESSION.name, SilverTarget::of::<SessionRow>),
-    (SESSION_SAMPLE.name, SilverTarget::of::<SessionSampleRow>),
-    (TRAIN_SEGMENT.name, SilverTarget::of::<TrainSegmentRow>),
-    (WATER_CROSSING.name, SilverTarget::of::<WaterCrossingRow>),
+const TARGETS: [(&str, Definition); 7] = [
+    (SESSION_V3.name, SilverTarget::of::<SessionRowV3>),
     (
-        SESSION_CROSSING.name,
-        SilverTarget::of::<SessionCrossingRow>,
+        SESSION_SAMPLE_V3.name,
+        SilverTarget::of::<SessionSampleRowV3>,
+    ),
+    (TRAIN_SEGMENT_V4.name, SilverTarget::of::<TrainSegmentRowV4>),
+    (TRAIN_SESSION_V2.name, SilverTarget::of::<TrainSessionRowV2>),
+    (
+        TRAIN_SESSION_SAMPLE_V2.name,
+        SilverTarget::of::<TrainSessionSampleRowV2>,
+    ),
+    (
+        WATER_CROSSING_V2.name,
+        SilverTarget::of::<WaterCrossingRowV2>,
+    ),
+    (
+        SESSION_CROSSING_V3.name,
+        SilverTarget::of::<SessionCrossingRowV3>,
     ),
 ];
 
@@ -74,10 +87,17 @@ mod tests {
     }
 
     #[test]
+    fn the_train_sessions_can_be_named() {
+        for name in [TRAIN_SESSION_V2.name, TRAIN_SESSION_SAMPLE_V2.name] {
+            assert!(silver_target(name).is_ok(), "{name} cannot be named");
+        }
+    }
+
+    #[test]
     fn an_unknown_name_is_refused_with_the_known_ones() {
         let err = silver_target("crossings").unwrap_err();
 
         assert!(err.to_string().contains("crossings"), "{err}");
-        assert!(err.to_string().contains(SESSION.name), "{err}");
+        assert!(err.to_string().contains(SESSION_V3.name), "{err}");
     }
 }

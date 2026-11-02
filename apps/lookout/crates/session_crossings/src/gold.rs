@@ -31,12 +31,15 @@ pub enum ChooseError {
 }
 
 pub async fn choose(root: &Root, choosing: Choosing) -> Result<Vec<Replay>, ChooseError> {
-    if !root.dataset(medallion_model::SESSION_CROSSING).is_filled() {
-        return Err(ChooseError::Missing("session_crossing"));
+    if !root
+        .dataset(medallion_model::SESSION_CROSSING_V3)
+        .is_filled()
+    {
+        return Err(ChooseError::Missing("session_crossing_v3"));
     }
 
     let mut replays = Vec::new();
-    for country in medallion::countries_of(root, medallion_model::SESSION).await? {
+    for country in medallion::countries_of(root, medallion_model::SESSION_V3).await? {
         replays.extend(chosen_in(root, country, choosing).await?);
     }
     Ok(replays)
@@ -49,11 +52,11 @@ async fn chosen_in(
 ) -> Result<Vec<Replay>, ChooseError> {
     let query = Query::new(root.clone());
     query
-        .register_if_present(medallion_model::SESSION_CROSSING, "session_crossing")
+        .register_if_present(medallion_model::SESSION_CROSSING_V3, "session_crossing_v3")
         .await?;
     for (dataset, table) in [
-        (medallion_model::SESSION, "session"),
-        (medallion_model::SESSION_SAMPLE, "session_sample"),
+        (medallion_model::SESSION_V3, "session_v3"),
+        (medallion_model::SESSION_SAMPLE_V3, "session_sample_v3"),
     ] {
         if !query.register_of_country(dataset, table, country).await? {
             return Ok(Vec::new());
@@ -63,7 +66,7 @@ async fn chosen_in(
     let counted: Vec<Counted> = query
         .rows(&format!(
             "SELECT c.session_id, COUNT(*) AS crossings
-             FROM session_crossing c JOIN session s USING (session_id)
+             FROM session_crossing_v3 c JOIN session_v3 s USING (session_id)
              GROUP BY c.session_id
              HAVING COUNT(*) >= {min}
              ORDER BY crossings DESC, c.session_id
@@ -83,7 +86,7 @@ async fn chosen_in(
     let samples: Vec<StoredSample> = query
         .rows(&format!(
             "SELECT session_id, t, lat, lon, alt, acc, speed, heading
-             FROM session_sample
+             FROM session_sample_v3
              WHERE session_id IN ({})
              ORDER BY session_id, seq",
             chosen.join(", "),

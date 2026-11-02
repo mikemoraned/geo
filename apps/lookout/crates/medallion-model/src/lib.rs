@@ -1,43 +1,69 @@
 mod bronze;
 mod crossing;
+#[cfg(test)]
+mod declaration;
 mod gers;
 mod motis;
+mod motis_source;
 mod overture;
+mod overture_release;
 mod session;
 mod silver;
 mod telemetry;
+mod testing;
+mod train_session;
 
 use medallion::DatasetInfo;
 
 pub use bronze::{NoSuchBronzeDataset, bronze_dataset};
 pub use crossing::{
-    OverlapKind, SESSION_CROSSING, SessionCrossingRow, WATER_CROSSING, WaterCrossingRow,
+    OverlapKind, SESSION_CROSSING_V3, SessionCrossingRowV3, WATER_CROSSING_V2, WaterCrossingRowV2,
 };
 pub use gers::{GersId, NotAGersId};
-pub use motis::{MOTIS_SEGMENT, MotisSegmentRow, TRAIN_SEGMENT, TrainSegmentRow};
-pub use overture::{
-    DIVISION_ID, EXTRACT_MANIFEST, ExtractManifestRow, OVERTURE_EXTRACT, division_id,
+pub use motis::{
+    AgencyId, EmptyAgencyId, EmptyStopId, EmptyTripId, MOTIS_POLL_V2, MOTIS_POLYLINE_V2,
+    MOTIS_SEGMENT_V3, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, NotAPolylineId,
+    NotAnEncodedPolyline, Polyline, PolylineId, RailMode, StopId, TRAIN_SEGMENT_V4,
+    TrainSegmentRowV4, TripId, UnencodablePoints,
 };
-pub use session::{SESSION, SESSION_SAMPLE, SessionRow, SessionSampleRow};
+pub use motis_source::{
+    Area, Feed, Label, MOTIS_SOURCE_V4, MotisBaseUrl, MotisSource, MotisSourceId, MotisSourceRowV4,
+    MotisVersion, NotALabel, NotAMotisBaseUrl, NotAMotisVersion, UnknownFeed,
+};
+pub use overture::{
+    DIVISION_ID, EXTRACT_MANIFEST_V3, ExtractManifestRowV3, OVERTURE_EXTRACT, OvertureRegion,
+    division_id,
+};
+pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
+pub use session::{SESSION_SAMPLE_V3, SESSION_V3, SessionRowV3, SessionSampleRowV3};
 pub use silver::{TargetError, silver_target};
 pub use telemetry::{
-    ACCEL_READING, AccelReadingRow, DEVICE_SESSION, DeviceSessionRow, GPS_READING, GpsReadingRow,
-    RAW_SAMPLE, RawSampleRow,
+    ACCEL_READING_V2, AccelReadingRowV2, DEVICE_SESSION_V2, DeviceSessionRowV2, GPS_READING_V2,
+    GpsReadingRowV2, RAW_SAMPLE, RawSampleRow,
+};
+pub use train_session::{
+    GeometrySource, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2, TrainSessionRowV2,
+    TrainSessionSampleRowV2, train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 12] = [
+pub const ALL: [DatasetInfo; 17] = [
     RAW_SAMPLE.info(),
-    GPS_READING.info(),
-    ACCEL_READING.info(),
-    DEVICE_SESSION.info(),
-    MOTIS_SEGMENT.info(),
-    TRAIN_SEGMENT.info(),
-    SESSION.info(),
-    SESSION_SAMPLE.info(),
-    WATER_CROSSING.info(),
-    SESSION_CROSSING.info(),
+    GPS_READING_V2.info(),
+    ACCEL_READING_V2.info(),
+    DEVICE_SESSION_V2.info(),
+    MOTIS_POLL_V2.info(),
+    MOTIS_SEGMENT_V3.info(),
+    MOTIS_POLYLINE_V2.info(),
+    MOTIS_SOURCE_V4.info(),
+    TRAIN_SEGMENT_V4.info(),
+    SESSION_V3.info(),
+    SESSION_SAMPLE_V3.info(),
+    TRAIN_SESSION_V2.info(),
+    TRAIN_SESSION_SAMPLE_V2.info(),
+    WATER_CROSSING_V2.info(),
+    SESSION_CROSSING_V3.info(),
     OVERTURE_EXTRACT.info(),
-    EXTRACT_MANIFEST.info(),
+    EXTRACT_MANIFEST_V3.info(),
 ];
 
 #[cfg(test)]
@@ -74,11 +100,13 @@ mod tests {
         assert_eq!(
             replaceable,
             [
-                "session",
-                "session_crossing",
-                "session_sample",
-                "train_segment",
-                "water_crossing"
+                "session_crossing_v3",
+                "session_sample_v3",
+                "session_v3",
+                "train_segment_v4",
+                "train_session_sample_v2",
+                "train_session_v2",
+                "water_crossing_v2"
             ]
         );
     }
@@ -148,15 +176,20 @@ mod tests {
     #[test]
     fn every_row_type_describes_a_dataset_and_names_its_own_instant_columns() {
         check_rows_of::<RawSampleRow>();
-        check_rows_of::<GpsReadingRow>();
-        check_rows_of::<AccelReadingRow>();
-        check_rows_of::<DeviceSessionRow>();
-        check_rows_of::<MotisSegmentRow>();
-        check_rows_of::<TrainSegmentRow>();
-        check_rows_of::<SessionRow>();
-        check_rows_of::<SessionSampleRow>();
-        check_rows_of::<WaterCrossingRow>();
-        check_rows_of::<SessionCrossingRow>();
-        check_rows_of::<ExtractManifestRow>();
+        check_rows_of::<GpsReadingRowV2>();
+        check_rows_of::<AccelReadingRowV2>();
+        check_rows_of::<DeviceSessionRowV2>();
+        check_rows_of::<MotisSegmentRowV3>();
+        check_rows_of::<MotisPollRowV2>();
+        check_rows_of::<MotisPolylineRowV2>();
+        check_rows_of::<MotisSourceRowV4>();
+        check_rows_of::<TrainSegmentRowV4>();
+        check_rows_of::<SessionRowV3>();
+        check_rows_of::<SessionSampleRowV3>();
+        check_rows_of::<TrainSessionRowV2>();
+        check_rows_of::<TrainSessionSampleRowV2>();
+        check_rows_of::<WaterCrossingRowV2>();
+        check_rows_of::<SessionCrossingRowV3>();
+        check_rows_of::<ExtractManifestRowV3>();
     }
 }

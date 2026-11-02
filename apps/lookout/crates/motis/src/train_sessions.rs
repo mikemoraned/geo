@@ -1,0 +1,733 @@
+use std::collections::HashMap;
+
+use domain::{Bbox, Span, implied_speed, path_through};
+use geo::BoundingRect;
+use geo_types::{LineString, Point};
+use medallion::{
+    Countries, Country, GeographyRow, GeometryRow, GeometryRowWriter, Projector, Projectors,
+    Replaced, Root, ZonedGeometry,
+};
+use medallion_model::{
+    Label, MotisSourceId, TrainSessionRowV2, TrainSessionSampleRowV2, TripId, train_session_id,
+};
+
+use crate::ingest::{self, IngestError, PlacedLine, Shape, Shapes, captured};
+use crate::sampling::{InvalidLeg, InvalidLegs, Leg, NormalisedLegs, Placed};
+
+const SAMPLES_PER_WRITE: usize = 100_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TrainSessionsOutcome {
+    pub trips: usize,
+    pub sessions: usize,
+    pub samples: usize,
+    pub dropped: DroppedTrips,
+    pub session_partitions: Replaced,
+    pub sample_partitions: Replaced,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DroppedTrips {
+    pub shapeless: usize,
+    pub arrives_before_departing: usize,
+    pub overlapping: usize,
+    pub unplaceable: usize,
+}
+
+impl DroppedTrips {
+    pub fn total(&self) -> usize {
+        self.shapeless + self.arrives_before_departing + self.overlapping + self.unplaceable
+    }
+}
+
+struct Trip {
+    source_id: MotisSourceId,
+    source_label: Option<Label>,
+    trip_id: TripId,
+    legs: NormalisedLegs,
+    country: Option<Country>,
+}
+
+enum Normalised {
+    Trip(Trip),
+    Dropped(Drop),
+}
+
+enum Drop {
+    Shapeless,
+    ArrivesBeforeDeparting,
+    Overlapping,
+}
+
+struct Session {
+    row: TrainSessionRowV2,
+    path: LineString<f64>,
+    samples: Vec<GeometryRow<TrainSessionSampleRowV2, Point<f64>>>,
+}
+
+pub async fn derive_train_sessions(
+    root: &Root,
+    countries: &impl Countries,
+    interval: Span,
+) -> Result<TrainSessionsOutcome, IngestError> {
+    let labels: HashMap<MotisSourceId, Option<Label>> = crate::source::recorded(root)
+        .await?
+        .into_iter()
+        .map(|source| (source.source_id, source.label))
+        .collect();
+    let captured = captured(root).await?;
+    let mut by_trip: HashMap<(MotisSourceId, TripId), Vec<ingest::Leg>> = HashMap::new();
+    for leg in captured.legs {
+        by_trip
+            .entry((leg.source_id.clone(), leg.trip_id.clone()))
+            .or_default()
+            .push(leg);
+    }
+
+    let shapes = Shapes::placed_in(countries, captured.polylines);
+
+    let mut outcome = TrainSessionsOutcome {
+        trips: by_trip.len(),
+        ..TrainSessionsOutcome::default()
+    };
+    let mut trips = Vec::with_capacity(by_trip.len());
+    for ((source_id, trip_id), legs) in by_trip {
+        let source_label =
+            labels
+                .get(&source_id)
+                .cloned()
+                .ok_or_else(|| IngestError::UnregisteredSource {
+                    source_id: source_id.clone(),
+                })?;
+        match normalised(source_id, source_label, trip_id, &legs, &shapes)? {
+            Normalised::Trip(trip) => trips.push(trip),
+            Normalised::Dropped(Drop::Shapeless) => outcome.dropped.shapeless += 1,
+            Normalised::Dropped(Drop::ArrivesBeforeDeparting) => {
+                outcome.dropped.arrives_before_departing += 1
+            }
+            Normalised::Dropped(Drop::Overlapping) => outcome.dropped.overlapping += 1,
+        }
+    }
+    trips.sort_by_key(|trip| trip.legs.departure());
+
+    let mut projectors = Projectors::default();
+    let mut sample_writer = GeometryRowWriter::<TrainSessionSampleRowV2>::new(root)?;
+    let mut pending: Vec<GeometryRow<TrainSessionSampleRowV2, Point<f64>>> = Vec::new();
+    let mut sessions: Vec<GeographyRow<TrainSessionRowV2, LineString<f64>>> = Vec::new();
+    for trip in trips {
+        match trip.country {
+            None => outcome.dropped.unplaceable += 1,
+            Some(country) => {
+                let placed = trip.legs.sampled(interval)?;
+                let session = session_of(&trip, &placed, projectors.for_country(country)?)?;
+                pending.extend(session.samples);
+                sessions.push(GeographyRow {
+                    row: session.row,
+                    geography: session.path,
+                    country,
+                });
+                if pending.len() >= SAMPLES_PER_WRITE {
+                    sample_writer.write(&pending).await?;
+                    pending.clear();
+                }
+            }
+        }
+    }
+    sample_writer.write(&pending).await?;
+
+    let samples = sample_writer.finish().await?;
+    outcome.samples = samples.rows;
+    outcome.sample_partitions = samples.partitions;
+    let written = medallion::write_geography_rows(root, &sessions).await?;
+    outcome.sessions = written.rows;
+    outcome.session_partitions = written.partitions;
+    Ok(outcome)
+}
+
+fn normalised(
+    source_id: MotisSourceId,
+    source_label: Option<Label>,
+    trip_id: TripId,
+    captured: &[ingest::Leg],
+    shapes: &Shapes<'_, impl Countries>,
+) -> Result<Normalised, IngestError> {
+    let placed_shapes = captured
+        .iter()
+        .map(|leg| shapes.of(leg))
+        .collect::<Result<Vec<Shape>, _>>()?;
+    let placed_lines: Option<Vec<PlacedLine>> = placed_shapes
+        .into_iter()
+        .map(|shape| match shape {
+            Shape::Captured(placed) | Shape::Corrected(placed) => Some(placed),
+            Shape::Missing => None,
+        })
+        .collect();
+    let Some(placed_lines) = placed_lines else {
+        return Ok(Normalised::Dropped(Drop::Shapeless));
+    };
+    let country = captured
+        .iter()
+        .zip(&placed_lines)
+        .min_by_key(|(leg, _)| (leg.departure, leg.arrival))
+        .and_then(|(_, placed)| placed.country);
+    let legs = match captured
+        .iter()
+        .zip(placed_lines)
+        .map(|(leg, placed)| Leg::new(leg.departure, leg.arrival, placed.line))
+        .collect::<Result<Vec<Leg>, InvalidLeg>>()
+    {
+        Ok(legs) => legs,
+        Err(InvalidLeg::ArrivesBeforeDeparting { .. }) => {
+            return Ok(Normalised::Dropped(Drop::ArrivesBeforeDeparting));
+        }
+        Err(source) => {
+            return Err(IngestError::InvalidLeg { trip_id, source });
+        }
+    };
+    match NormalisedLegs::new(&legs) {
+        Ok(legs) => Ok(Normalised::Trip(Trip {
+            source_id,
+            source_label,
+            trip_id,
+            legs,
+            country,
+        })),
+        Err(InvalidLegs::Overlapping { .. }) => Ok(Normalised::Dropped(Drop::Overlapping)),
+        Err(source) => Err(IngestError::InvalidLegs { trip_id, source }),
+    }
+}
+
+fn session_of(
+    trip: &Trip,
+    placed: &[Placed],
+    projector: &Projector,
+) -> Result<Session, IngestError> {
+    let no_samples = || IngestError::NoSamples {
+        trip_id: trip.trip_id.clone(),
+    };
+    let too_many = || IngestError::TooManySamples {
+        trip_id: trip.trip_id.clone(),
+    };
+    let session_id = train_session_id(&trip.source_id, &trip.trip_id);
+    let zoned = placed
+        .iter()
+        .map(|sample| projector.zoned(sample.position))
+        .collect::<Result<Vec<ZonedGeometry<Point<f64>>>, _>>()?;
+    let speeds = std::iter::once(None).chain(placed.windows(2).zip(zoned.windows(2)).map(
+        |(times, points)| {
+            Some(implied_speed(
+                *points[0].projected(),
+                *points[1].projected(),
+                times[1].t - times[0].t,
+            ))
+        },
+    ));
+
+    let samples = placed
+        .iter()
+        .zip(&zoned)
+        .zip(speeds)
+        .enumerate()
+        .map(|(seq, ((sample, geometry), implied_speed_mps))| {
+            let row = TrainSessionSampleRowV2 {
+                session_id: session_id.clone(),
+                source_id: trip.source_id.clone(),
+                trip_id: trip.trip_id.clone(),
+                t: sample.t,
+                seq: u32::try_from(seq).map_err(|_| too_many())?,
+                lat: sample.position.y(),
+                lon: sample.position.x(),
+                implied_speed_mps,
+                geometry_source: sample.geometry_source,
+            };
+            Ok(GeometryRow {
+                row,
+                geometry: *geometry,
+            })
+        })
+        .collect::<Result<Vec<_>, IngestError>>()?;
+
+    let (Some(first), Some(last)) = (placed.first(), placed.last()) else {
+        return Err(no_samples());
+    };
+    let path = path_through(placed.iter().map(|sample| sample.position));
+    let row = TrainSessionRowV2 {
+        session_id,
+        source_id: trip.source_id.clone(),
+        source_label: trip.source_label.clone(),
+        trip_id: trip.trip_id.clone(),
+        started_at: first.t,
+        ended_at: last.t,
+        sample_count: u32::try_from(placed.len()).map_err(|_| too_many())?,
+        bbox: Bbox::of(path.bounding_rect().ok_or_else(no_samples)?),
+    };
+    Ok(Session { row, path, samples })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap as Map;
+
+    use chrono::{DateTime, Duration, TimeZone, Utc};
+    use medallion::Query;
+    use medallion_model::{
+        Feed, MotisSource, Polyline, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2, TripId,
+        train_session_id,
+    };
+    use serde::Deserialize;
+
+    use crate::api::types::TripSegment;
+    use crate::segment::SingleTripSegment;
+    use crate::testing::CaptureLog;
+    use crate::testing::{self, EastIsGermany, Nowhere, germany, regional_trips};
+
+    use super::*;
+
+    fn source() -> MotisSource {
+        MotisSource {
+            label: Some("delfi-2026-10-10.route-shapes".parse().expect("a label")),
+            ..testing::source(Feed::Local)
+        }
+    }
+
+    fn every_10s() -> Span {
+        "10s".parse().expect("a span")
+    }
+
+    fn polled_at(minute: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 7, 19, 9, minute, 0).unwrap()
+    }
+
+    async fn poll(root: &Root, captured_at: DateTime<Utc>, segments: &[TripSegment]) {
+        crate::source::register(root, &source(), captured_at)
+            .await
+            .expect("register the source");
+        poll_unregistered(root, captured_at, segments).await;
+    }
+
+    async fn poll_unregistered(root: &Root, captured_at: DateTime<Utc>, segments: &[TripSegment]) {
+        let segments: Vec<SingleTripSegment> = segments
+            .iter()
+            .cloned()
+            .map(|segment| SingleTripSegment::new(segment).expect("a segment with one trip"))
+            .collect();
+        CaptureLog::new(root.clone(), source().id())
+            .append(captured_at, &segments, &Map::new())
+            .await
+            .expect("append poll");
+    }
+
+    async fn derive(root: &Root, countries: &impl Countries) -> TrainSessionsOutcome {
+        derive_train_sessions(root, countries, every_10s())
+            .await
+            .expect("derive train sessions")
+    }
+
+    async fn count(root: &Root, sql: &str) -> i64 {
+        let query = Query::new(root.clone());
+        query
+            .register_by_name(TRAIN_SESSION_V2)
+            .await
+            .expect("register sessions");
+        query
+            .register_by_name(TRAIN_SESSION_SAMPLE_V2)
+            .await
+            .expect("register samples");
+        query.count(sql).await.expect("count")
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct Named {
+        session_id: String,
+        started_at: i64,
+    }
+
+    async fn sessions_named(root: &Root) -> Vec<Named> {
+        let query = Query::new(root.clone());
+        query
+            .register_by_name(TRAIN_SESSION_V2)
+            .await
+            .expect("register sessions");
+        query
+            .rows("SELECT session_id, started_at FROM train_session_v2")
+            .await
+            .expect("sessions")
+    }
+
+    fn trip_of(segment: &TripSegment) -> TripId {
+        TripId::new(segment.trips[0].trip_id.clone()).expect("a trip id")
+    }
+
+    fn onward_from(segment: &TripSegment, departure: DateTime<Utc>) -> TripSegment {
+        let mut onward = segment.clone();
+        onward.from = segment.to.clone();
+        onward.to = segment.from.clone();
+        onward.departure = departure;
+        onward.arrival = departure + Duration::minutes(10);
+        onward
+    }
+
+    #[tokio::test]
+    async fn each_trip_is_one_session() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        poll(&root, polled_at(0), &regional_trips()).await;
+
+        let outcome = derive(&root, &germany()).await;
+
+        assert_eq!((outcome.trips, outcome.sessions), (4, 4));
+        assert_eq!(
+            count(&root, "SELECT COUNT(*) AS count FROM train_session_v2").await,
+            4
+        );
+    }
+
+    #[tokio::test]
+    async fn a_session_is_named_by_its_source_and_trip() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
+
+        derive(&root, &germany()).await;
+
+        let id = train_session_id(&source().id(), &trip_of(&segment));
+        let named: Vec<String> = sessions_named(&root)
+            .await
+            .into_iter()
+            .map(|session| session.session_id)
+            .collect();
+        assert_eq!(named, [id.to_string()]);
+    }
+
+    #[tokio::test]
+    async fn a_session_carries_its_sources_label() {
+        #[derive(Deserialize)]
+        struct Labelled {
+            source_label: Option<String>,
+        }
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        poll(&root, polled_at(0), &regional_trips()[..1]).await;
+
+        derive(&root, &germany()).await;
+
+        let query = Query::new(root.clone());
+        query
+            .register_by_name(TRAIN_SESSION_V2)
+            .await
+            .expect("register sessions");
+        let labels: Vec<Option<String>> = query
+            .rows::<Labelled>("SELECT source_label FROM train_session_v2")
+            .await
+            .expect("labels")
+            .into_iter()
+            .map(|labelled| labelled.source_label)
+            .collect();
+        assert_eq!(labels, [Some("delfi-2026-10-10.route-shapes".to_string())]);
+    }
+
+    #[tokio::test]
+    async fn a_capture_from_a_source_never_registered_fails_the_ingest() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        poll_unregistered(&root, polled_at(0), &regional_trips()[..1]).await;
+
+        let err = derive_train_sessions(&root, &germany(), every_10s())
+            .await
+            .expect_err("an unregistered source");
+
+        assert!(
+            matches!(err, IngestError::UnregisteredSource { .. }),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_sessions_samples_are_numbered_from_zero_in_time_order() {
+        #[derive(Deserialize)]
+        struct Numbered {
+            seq: u32,
+            implied_speed_mps: Option<f64>,
+        }
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
+
+        let outcome = derive(&root, &germany()).await;
+
+        let query = Query::new(root.clone());
+        query
+            .register_by_name(TRAIN_SESSION_SAMPLE_V2)
+            .await
+            .expect("register samples");
+        let samples: Vec<Numbered> = query
+            .rows("SELECT seq, implied_speed_mps FROM train_session_sample_v2 ORDER BY t")
+            .await
+            .expect("samples");
+        let seqs: Vec<u32> = samples.iter().map(|sample| sample.seq).collect();
+        assert_eq!(seqs, (0..outcome.samples as u32).collect::<Vec<_>>());
+        assert_eq!(samples[0].implied_speed_mps, None);
+        assert!(
+            samples[1..]
+                .iter()
+                .all(|sample| sample.implied_speed_mps.is_some())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_leg_recaptured_with_a_later_departure_is_kept_once() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        let mut delayed = segment.clone();
+        delayed.departure += Duration::minutes(1);
+        delayed.arrival += Duration::minutes(1);
+        poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
+        poll(&root, polled_at(5), std::slice::from_ref(&delayed)).await;
+
+        let outcome = derive(&root, &germany()).await;
+
+        assert_eq!((outcome.sessions, outcome.dropped.total()), (1, 0));
+        let started: Vec<i64> = sessions_named(&root)
+            .await
+            .into_iter()
+            .map(|session| session.started_at)
+            .collect();
+        assert_eq!(started, [delayed.departure.timestamp_millis()]);
+    }
+
+    #[tokio::test]
+    async fn a_trip_whose_legs_overlap_is_left_out_and_counted() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        let early = onward_from(&segment, segment.arrival - Duration::minutes(30));
+        poll(&root, polled_at(0), &[segment, early]).await;
+
+        let outcome = derive(&root, &germany()).await;
+
+        assert_eq!((outcome.trips, outcome.sessions), (1, 0));
+        assert_eq!(
+            outcome.dropped,
+            DroppedTrips {
+                overlapping: 1,
+                ..DroppedTrips::default()
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn a_trip_with_a_leg_arriving_before_it_departs_is_left_out_and_counted() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let mut segment = regional_trips().remove(0);
+        segment.arrival = segment.departure - Duration::minutes(1);
+        poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
+
+        let outcome = derive(&root, &germany()).await;
+
+        assert_eq!((outcome.trips, outcome.sessions), (1, 0));
+        assert_eq!(
+            outcome.dropped,
+            DroppedTrips {
+                arrives_before_departing: 1,
+                ..DroppedTrips::default()
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn a_trip_of_several_legs_waits_at_the_stops_between_them() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        let onward = onward_from(&segment, segment.arrival + Duration::minutes(2));
+        poll(&root, polled_at(0), &[segment.clone(), onward.clone()]).await;
+
+        let outcome = derive(&root, &germany()).await;
+
+        assert_eq!((outcome.trips, outcome.sessions), (1, 1));
+        let samples = (onward.arrival - segment.departure).num_seconds() / 10 + 1;
+        assert_eq!(outcome.samples as i64, samples);
+    }
+
+    #[tokio::test]
+    async fn a_trip_with_a_shapeless_leg_is_left_out_and_counted() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let mut segment = regional_trips().remove(0);
+        segment.polyline = Polyline::from_points([(segment.from.lon, segment.from.lat)])
+            .expect("a stop on the globe")
+            .to_string();
+        segment.to = segment.from.clone();
+        poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
+
+        let outcome = derive(&root, &germany()).await;
+
+        assert_eq!((outcome.trips, outcome.sessions), (1, 0));
+        assert_eq!(
+            outcome.dropped,
+            DroppedTrips {
+                shapeless: 1,
+                ..DroppedTrips::default()
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn a_trip_outside_every_known_country_is_not_written() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        poll(&root, polled_at(0), &regional_trips()).await;
+
+        let outcome = derive(&root, &Nowhere).await;
+
+        assert_eq!(outcome.sessions, 0);
+        assert_eq!(
+            outcome.dropped,
+            DroppedTrips {
+                unplaceable: 4,
+                ..DroppedTrips::default()
+            }
+        );
+        assert!(!root.path().join("silver").exists());
+    }
+
+    fn starting_at_longitude(mut segment: TripSegment, longitude: f64) -> TripSegment {
+        segment.polyline = Polyline::from_points([(longitude, 50.0), (longitude + 1.0, 50.0)])
+            .expect("points on the globe")
+            .to_string();
+        segment
+    }
+
+    #[tokio::test]
+    async fn trips_sharing_a_polyline_are_placed_once() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let countries = EastIsGermany::default();
+        let trips = ["first", "second", "third"].map(|trip_id| {
+            let mut segment = regional_trips().remove(0);
+            segment.trips[0].trip_id = trip_id.to_string();
+            segment
+        });
+        poll(&root, polled_at(0), &trips).await;
+
+        let outcome = derive(&root, &countries).await;
+
+        assert_eq!(outcome.sessions, 3);
+        assert_eq!(countries.lookups(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_trip_starting_outside_every_known_country_is_not_written() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        let onward = onward_from(&segment, segment.arrival + Duration::minutes(2));
+        poll(
+            &root,
+            polled_at(0),
+            &[
+                starting_at_longitude(onward, 8.0),
+                starting_at_longitude(segment, -8.0),
+            ],
+        )
+        .await;
+
+        let outcome = derive(&root, &EastIsGermany::default()).await;
+
+        assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (0, 1));
+    }
+
+    #[tokio::test]
+    async fn a_trip_leaving_every_known_country_is_written_under_the_one_it_starts_in() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        let onward = onward_from(&segment, segment.arrival + Duration::minutes(2));
+        poll(
+            &root,
+            polled_at(0),
+            &[
+                starting_at_longitude(onward, -8.0),
+                starting_at_longitude(segment, 8.0),
+            ],
+        )
+        .await;
+
+        let outcome = derive(&root, &EastIsGermany::default()).await;
+
+        assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (1, 0));
+    }
+
+    #[tokio::test]
+    async fn a_trip_whose_first_leg_takes_no_time_starts_where_that_leg_departs() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let mut instant = regional_trips().remove(0);
+        instant.arrival = instant.departure;
+        let onward = onward_from(&instant, instant.departure + Duration::minutes(2));
+        poll(
+            &root,
+            polled_at(0),
+            &[
+                starting_at_longitude(instant, -0.5),
+                starting_at_longitude(onward, 8.0),
+            ],
+        )
+        .await;
+
+        let outcome = derive(&root, &EastIsGermany::default()).await;
+
+        assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (0, 1));
+    }
+
+    #[tokio::test]
+    async fn samples_are_written_under_the_country_their_trip_starts_in() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        poll(&root, polled_at(0), &regional_trips()).await;
+
+        derive(&root, &germany()).await;
+
+        let countries: Vec<String> =
+            std::fs::read_dir(root.path().join("silver/train_session_sample_v2"))
+                .expect("dataset dir")
+                .map(|entry| {
+                    entry
+                        .expect("entry")
+                        .file_name()
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect();
+        assert_eq!(countries, ["country=DE"]);
+    }
+
+    #[tokio::test]
+    async fn re_deriving_is_idempotent() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        poll(&root, polled_at(0), &regional_trips()).await;
+        let first = derive(&root, &germany()).await;
+        let samples_before = count(
+            &root,
+            "SELECT COUNT(*) AS count FROM train_session_sample_v2",
+        )
+        .await;
+
+        let second = derive(&root, &germany()).await;
+
+        assert_eq!(first.samples, second.samples);
+        assert_eq!(
+            count(
+                &root,
+                "SELECT COUNT(*) AS count FROM train_session_sample_v2"
+            )
+            .await,
+            samples_before
+        );
+    }
+}

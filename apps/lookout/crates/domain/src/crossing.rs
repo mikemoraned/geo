@@ -2,6 +2,7 @@ use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use geo_types::Point;
+use hashfn::hashfn;
 use serde::{Deserialize, Serialize};
 
 use crate::name::{NameError, checked};
@@ -9,10 +10,11 @@ use crate::position::{CoordinateError, degrees, position};
 use crate::precision::Precision;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String")]
 pub struct CrossingId(String);
 
 impl CrossingId {
+    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, NameError> {
         Ok(Self(checked(id.into())?))
     }
@@ -30,6 +32,20 @@ impl FromStr for CrossingId {
     }
 }
 
+impl TryFrom<String> for CrossingId {
+    type Error = NameError;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Self::new(id)
+    }
+}
+
+impl From<CrossingId> for String {
+    fn from(id: CrossingId) -> Self {
+        id.0
+    }
+}
+
 impl Display for CrossingId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -39,10 +55,11 @@ impl Display for CrossingId {
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
 )]
-#[serde(transparent)]
+#[serde(from = "u32")]
 pub struct CrossingCompactId(u32);
 
 impl CrossingCompactId {
+    #[hashfn]
     pub fn new(id: u32) -> Self {
         Self(id)
     }
@@ -211,6 +228,12 @@ mod tests {
                 .to_string(),
             "08b2a5c1fffffff-08f2a5c1"
         );
+    }
+
+    #[test]
+    fn an_id_is_checked_when_it_is_read_back() {
+        assert!(serde_json::from_str::<CrossingId>(r#""08b2a5c1fffffff-08f2a5c1""#).is_ok());
+        assert!(serde_json::from_str::<CrossingId>(r#""water track""#).is_err());
     }
 
     #[test]

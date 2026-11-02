@@ -12,32 +12,41 @@ geo = { workspace = true }
 geo-types = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }
-motis-openapi-progenitor = { workspace = true }
-polyline = { workspace = true }
+progenitor-client = "0.11"
+reqwest = { version = "0.12", features = ["json"] }
 redis = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
 serde_arrow = { workspace = true }
 serde_json = { workspace = true }
 shared = { workspace = true }
+strum = { workspace = true }
 transport = { workspace = true }
 telemetry = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+url = "2"
 wkb = { workspace = true }
 
+[build-dependencies]
+openapiv3 = "2"
+prettyplease = "0.2"
+progenitor = "0.11"
+serde_json = { workspace = true }
+syn = "2"
 
 [dev-dependencies]
 geo-traits = { workspace = true }
 parquet = { workspace = true }
 proptest = { workspace = true }
 tempfile = { workspace = true }
-uuid = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
 wiremock = "0.6"
 testcontainers = "0.27"
 testcontainers-modules = { version = "0.15", features = ["redis"] }
+uuid = { workspace = true }
 
 [lints]
 workspace = true

@@ -24,16 +24,17 @@ derivation may replace.
 ## The bronze datasets: what arrived
 
 Every telemetry payload lands verbatim in `raw_sample`, keyed on its md5, and the readings
-interpreted from it go to one dataset per sensor. `device_session` holds what a device said about
+interpreted from it go to one dataset per sensor. `device_session_v2` holds what a device said about
 itself as recording began.
 
-`motis_segment` holds trip segments as polled, duplication allowed, with the times as instants and
-the path as the encoded polyline the service sent — bronze records what arrived rather than a
-normalised form of it.
+`motis_segment_v3` holds trip segments as polled, duplication allowed, with the times as instants
+and the path as a polyline id. `motis_polyline_v2` holds each id's encoded polyline as the service
+sent it — bronze records what arrived rather than a normalised form of it. A capture reaches bronze
+through the landing dataset `motis_poll_v2`.
 
 `overture_extract` holds upstream reference rows in the upstream's own shape and layout, so those
 rows have no row type here: they keep whatever columns the release gives them, plus the
-`extract_id` joining them to `extract_manifest`.
+`extract_id` joining them to `extract_manifest_v3`.
 
 The manifest is one row per extraction, and its bbox is four bounds — `xmin`, `ymin`, `xmax`,
 `ymax` — rather than a geometry column in a Simple Features encoding. It is provenance, answering
@@ -62,8 +63,8 @@ overlap in — a bridge is one crossing, not one per span — so a row carries i
 total over the parts merged into it, and how many parts those were. `frac` says where along the
 named segment it sits, from 0 at the start to 1 at the end. `track_id` is the connected stretch of
 physical track, named canonically from its own members rather than by a label a run assigned;
-`rail_id` is the upstream segment the representative part lies on, one of possibly several making
-up the track.
+`overture_rail_id` is the upstream segment the representative part lies on, one of possibly
+several making up the track.
 
 The columns saying how close two parts had to be to merge, and the shortest overlap the run kept,
 travel with the row. Unlike the sessions, where a threshold belongs to whoever is reading: two
@@ -77,9 +78,11 @@ apart, so it is refused here rather than at the buffer that packs it.
 
 ## What the tests hold steady
 
-Tracing the schema from Rust types means a change to a type changes the stored columns, so the
-tests assert the properties a reader depends on rather than the schema itself: that a dataset's
-identity cannot collide or drift, that only what the store permits to be replaced is replaceable,
-that a column a row type calls an instant really is one, and that the values readers join and
-filter on keep the type they are stored as. Each test is named for the property it holds, so a
-failure reads as the rule that broke.
+Tracing the schema from Rust types means a change to a type changes the stored columns.
+`declaration.rs` snapshots each dataset's declaration, so such a change fails the tests and goes
+to the review [medallion's README](../medallion/README.md#each-datasets-declaration-is-snapshotted)
+describes. The other tests assert the properties a reader depends on: that a dataset's identity
+cannot collide or drift, that only what the store permits to be replaced is replaceable, that a
+column a row type calls an instant really is one, and that the values readers join and filter on
+keep the type they are stored as. Each test is named for the property it holds, so a failure reads
+as the rule that broke.
