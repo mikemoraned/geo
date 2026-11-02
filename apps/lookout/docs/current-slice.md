@@ -947,19 +947,21 @@ polyline table changes what `motis_ingest` reads. The namespaces are derived bef
 
 After Refactoring, once the slice works end to end.
 
-- [ ] Cut the memory `motis_ingest` takes. On the captures to 25 October, it peaks at a footprint
-      of 4.41 GB and writes 64.2 million train session samples in 219 s. `motis_ingest` on the
+- [x] Cut the memory `motis_ingest` takes. On the captures to 25 October, it peaks at a footprint
+      of 2.90 GB and writes 64.2 million train session samples in 188 s. `motis_ingest` on the
       captures to 25 October, under Observations, profiles it by phase. Three costs are suspected.
       Every collapsed leg is held twice, once for segments and once for sessions. Each session's
       path runs through every sample, held in degrees and projected. Each open partition file
       buffers a row group of up to a million rows. A path from the legs' shapes would also shrink
       `train_session_v2`, at 1.52 GB on disk.
-      The peak now falls early in sampling, while most trips' shapes are still held. The
-      segment phase stays under 3 GB, since its legs go in batches and each day's file closes once
-      written. The third suspect holds only for the sample files, which stay open until sampling
-      ends, and closing them frees 0.65 GB. The first costs time rather than memory, since nothing
-      survives between the two derivations. The second holds in the session phase, which now sets
-      the peak.
+      The peak now falls at the end of the session phase, while `write_geography_rows` writes
+      `train_session_v2`. The segment phase stays under 3 GB, since its legs go in batches and each
+      day's file closes once written. The third suspect holds only for the sample files, which stay
+      open until sampling ends, and closing them frees 0.65 GB. The first costs time rather than
+      memory, since nothing survives between the two derivations. The second holds in the session
+      phase, which now sets the peak.
+      Decided on 2026-11-02: the run is small and fast enough at 2.90 GB and 188 s, so this task
+      ends here.
 - [x] Flush each open partition file's row group as `GeoRowWriter` writes it, in
       `crates/medallion/src/derive.rs`, or close each file once its rows are written. Set
       `max_row_group_size` in `writer_at` too. Every (country, date) file buffers its compressed
@@ -979,11 +981,14 @@ After Refactoring, once the slice works end to end.
       Extended on 2026-11-01: `GeoRowWriter::close_days_before` closes the days a sorted stream has
       passed, and the writer refuses a later row for a closed day. `ingest` sorts both captures'
       legs together, since one day can span them. This cuts the peak from 9.91 GB to 7.31 GB.
-- [ ] Write a day's rows without copying them, in `geo_day` in `crates/medallion/src/derive.rs` and
+- [-] Write a day's rows without copying them, in `geo_day` in `crates/medallion/src/derive.rs` and
       `wkb_column` in `geo.rs`. Serialise `&R`, encode WKB from `&G`, and project and encode one
       geometry at a time into a `BinaryBuilder`. A day's geometry exists about five times over at
       once today, 0.83 GB for the largest day of `train_session_v2`. Batches already bound
       `train_segment_v4`'s copies.
+      Extended on 2026-11-02: projecting each geometry once took `geo_day` to `&R` and `&G`, so only
+      projecting and encoding one geometry at a time remains. The peak now falls during this write.
+      Moot on 2026-11-02: `motis_ingest` is small and fast enough at 2.90 GB and 188 s.
 - [x] Compute each leg's cumulative distances once in `sampled`, in `crates/motis/src/sampling.rs`,
       and interpolate within the one segment `partition_point` finds. `point_at_ratio_from_start`
       measures and walks the whole shape again for every sample: about 30 billion Haversine
@@ -1012,12 +1017,25 @@ After Refactoring, once the slice works end to end.
       the read, and `decode_polyline`, `NotAPolyline`, and `IngestError::Polyline` go.
       `IngestError::PolylineLacking` now comes from the leg naming the polyline. A polyline that
       only a superseded capture names therefore no longer refuses.
-- [ ] Project each geometry once. Let a `GeoRow` carry a projected geometry its caller already has.
+- [x] Project each geometry once. Let a `GeoRow` carry a projected geometry its caller already has.
       The writer then reuses `session_of`'s projection of every sample, and `ingest` projects each
       distinct polyline once. Of the segment projections, 98% repeat a shape already projected.
       `Shapes` holds each polyline once, so it can hold that polyline's projection too. Share one
       per-country projector cache between `GeoRowWriter::write` and `derive_train_sessions`, which
       copies it.
+      Decided on 2026-11-02: `docs/medallion.md` has the store derive a row's projection, so a plain
+      field on `GeoRow` would let a caller choose another zone. `Projector::zoned` instead returns a
+      `ZonedGeometry`, which holds the geography, its projection, and its country. Only `Projector`
+      builds one. `GeometryRowWriter::write` takes `GeometryRow`s and holds no projector.
+      `write_geography_rows` keeps taking `GeographyRow`s and projects a day at a time, so each
+      session's path is not held projected. `Projectors` is the per-country cache. `ingest` holds
+      each polyline's `ZonedGeometry` beside `Shapes`, since sessions do not read it. Coordinates
+      projected fall from about 412 million to about 134 million, and every row matches. This cuts
+      the run from 302 s to 188 s on the same busy machine, and the peak stays near 2.9 GB.
+      Decided on 2026-11-02: the names follow the distinction between geography and geometry that
+      `docs/medallion.md` states. `GeoRow`, `GeoRowWriter`, and `write_geo_rows` become
+      `GeographyRow`, `GeometryRowWriter`, and `write_geography_rows`. Tasks and Observations dated
+      earlier keep the old names.
 - [x] Release each trip's shapes once it is sampled. Iterate `trips` by value in
       `derive_train_sessions`, and pass `NormalisedLegs::new` its legs by value, in place of a deep
       copy of every shape. About 3.3 GB stays held through the session write today, and as much
@@ -1033,13 +1051,14 @@ After Refactoring, once the slice works end to end.
       shapes. An `Arc<LineString<f64>>` handed out by `PlacedLine` removes the copies, and these
       copies set the peak.
       Decided on 2026-11-02: `PlacedLine` holds that `Arc`, and `Leg::new` takes one. This cuts the
-      peak from 4.77 GB to 2.88 GB, and every row matches. The peak now falls while `write_geo_rows`
-      writes `train_session_v2`.
-- [ ] Let `captured` skip what `derive_train_sessions` discards: both count queries and the final
+      peak from 4.77 GB to 2.88 GB, and every row matches. The peak now falls while
+      `write_geography_rows` writes `train_session_v2`.
+- [-] Let `captured` skip what `derive_train_sessions` discards: both count queries and the final
       `ORDER BY departure`. The session phase reruns the whole capture read today. `ingest` writes
       its legs in the query's order, so only `derive_train_sessions` can skip that sort. Legs
       sharing a departure and arrival keep the query's order in `NormalisedLegs::new`, so skipping
       it needs a tie-break there.
+      Moot on 2026-11-02: `motis_ingest` is small and fast enough at 2.90 GB and 188 s.
 - [ ] When `motis_track_area` captures a whole country, test each leg once, with `covers`, against
       one prepared outline. Share the coverage, rather than cloning it each poll. It now passes the
       same shapes as area and as country, so it unions and prepares them twice and tests each leg
@@ -1204,7 +1223,7 @@ On 26 October, `motis_ingest` read 2,742,313 captured rows, which collapse to 1,
 - Swap grew by 7.4 GB from 8.2 GB, on a machine with 24 GB. `time -l` printed 0 swaps, so that
   field does not show swap here. The swap files took 6 GiB of disk and kept it after the run.
 
-Ten changes were measured on the same capture. The flush and the legs passed by value were
+Eleven changes were measured on the same capture. The flush and the legs passed by value were
 dropped, and placing each polyline once replaced the memo. Each other change builds on those before
 it:
 
@@ -1221,6 +1240,7 @@ it:
 | Each polyline placed once, no memo | 4.41 GB | 6.20 GB | 219 s | None | 2.66 GB, 74 row groups |
 | `motis_segment` deleted | 4.77 GB | 3.19 GB | 355 s | 1.1 GB | 2.66 GB, 74 row groups |
 | Each decoded shape shared | 2.88 GB | 3.32 GB | 302 s | None | 2.66 GB, 74 row groups |
+| Each geometry projected once | 2.90 GB | 3.55 GB | 188 s | None | 2.66 GB, 74 row groups |
 
 - The first six runs wrote the same rows. Fingerprints of each trip's segments, each session, and
   each session's samples match.

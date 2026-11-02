@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use domain::{Bbox, implied_speed, path_through};
 use geo::BoundingRect;
 use geo_types::{LineString, Point};
-use medallion::{Countries, GeoRow, Projector, Replaced, Root};
+use medallion::{Countries, GeographyRow, Projector, Replaced, Root};
 use medallion_model::{SessionRowV3, SessionSampleRowV3};
 
 use crate::sessions::Session;
@@ -41,22 +41,22 @@ pub async fn write(
     countries: &impl Countries,
 ) -> Result<WriteOutcome, SilverError> {
     let mut outcome = WriteOutcome::default();
-    let mut session_rows: Vec<GeoRow<SessionRowV3, LineString<f64>>> = Vec::new();
-    let mut sample_rows: Vec<GeoRow<SessionSampleRowV3, Point<f64>>> = Vec::new();
+    let mut session_rows: Vec<GeographyRow<SessionRowV3, LineString<f64>>> = Vec::new();
+    let mut sample_rows: Vec<GeographyRow<SessionSampleRowV3, Point<f64>>> = Vec::new();
 
     for session in sessions {
         match countries.containing(session.started_from()) {
             None => outcome.unplaceable += 1,
             Some(country) => {
                 let placed = place(session, &Projector::for_country(country)?)?;
-                sample_rows.extend(placed.samples.into_iter().map(|sample| GeoRow {
+                sample_rows.extend(placed.samples.into_iter().map(|sample| GeographyRow {
                     row: sample.row,
-                    geometry: sample.point,
+                    geography: sample.point,
                     country,
                 }));
-                session_rows.push(GeoRow {
+                session_rows.push(GeographyRow {
                     row: placed.row,
-                    geometry: placed.path,
+                    geography: placed.path,
                     country,
                 });
             }
@@ -65,10 +65,10 @@ pub async fn write(
 
     outcome.sessions = session_rows.len();
     outcome.samples = sample_rows.len();
-    outcome.session_partitions = medallion::write_geo_rows(root, &session_rows)
+    outcome.session_partitions = medallion::write_geography_rows(root, &session_rows)
         .await?
         .partitions;
-    outcome.sample_partitions = medallion::write_geo_rows(root, &sample_rows)
+    outcome.sample_partitions = medallion::write_geography_rows(root, &sample_rows)
         .await?
         .partitions;
     Ok(outcome)

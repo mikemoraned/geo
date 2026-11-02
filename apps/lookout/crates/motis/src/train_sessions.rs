@@ -1,10 +1,12 @@
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 
 use domain::{Bbox, Span, implied_speed, path_through};
 use geo::BoundingRect;
 use geo_types::{LineString, Point};
-use medallion::{Countries, Country, GeoRow, GeoRowWriter, Projector, Replaced, Root};
+use medallion::{
+    Countries, Country, GeographyRow, GeometryRow, GeometryRowWriter, Projector, Projectors,
+    Replaced, Root, ZonedGeometry,
+};
 use medallion_model::{
     Label, MotisSourceId, TrainSessionRowV2, TrainSessionSampleRowV2, TripId, train_session_id,
 };
@@ -60,7 +62,7 @@ enum Drop {
 struct Session {
     row: TrainSessionRowV2,
     path: LineString<f64>,
-    samples: Vec<(TrainSessionSampleRowV2, Point<f64>)>,
+    samples: Vec<GeometryRow<TrainSessionSampleRowV2, Point<f64>>>,
 }
 
 pub async fn derive_train_sessions(
@@ -108,28 +110,20 @@ pub async fn derive_train_sessions(
     }
     trips.sort_by_key(|trip| trip.legs.departure());
 
-    let mut projectors: HashMap<Country, Projector> = HashMap::new();
-    let mut sample_writer = GeoRowWriter::<TrainSessionSampleRowV2>::new(root)?;
-    let mut pending: Vec<GeoRow<TrainSessionSampleRowV2, Point<f64>>> = Vec::new();
-    let mut sessions: Vec<GeoRow<TrainSessionRowV2, LineString<f64>>> = Vec::new();
+    let mut projectors = Projectors::default();
+    let mut sample_writer = GeometryRowWriter::<TrainSessionSampleRowV2>::new(root)?;
+    let mut pending: Vec<GeometryRow<TrainSessionSampleRowV2, Point<f64>>> = Vec::new();
+    let mut sessions: Vec<GeographyRow<TrainSessionRowV2, LineString<f64>>> = Vec::new();
     for trip in trips {
         match trip.country {
             None => outcome.dropped.unplaceable += 1,
             Some(country) => {
                 let placed = trip.legs.sampled(interval)?;
-                let projector = match projectors.entry(country) {
-                    Entry::Occupied(entry) => entry.into_mut(),
-                    Entry::Vacant(entry) => entry.insert(Projector::for_country(country)?),
-                };
-                let session = session_of(&trip, &placed, projector)?;
-                pending.extend(session.samples.into_iter().map(|(row, geometry)| GeoRow {
-                    row,
-                    geometry,
-                    country,
-                }));
-                sessions.push(GeoRow {
+                let session = session_of(&trip, &placed, projectors.for_country(country)?)?;
+                pending.extend(session.samples);
+                sessions.push(GeographyRow {
                     row: session.row,
-                    geometry: session.path,
+                    geography: session.path,
                     country,
                 });
                 if pending.len() >= SAMPLES_PER_WRITE {
@@ -144,7 +138,7 @@ pub async fn derive_train_sessions(
     let samples = sample_writer.finish().await?;
     outcome.samples = samples.rows;
     outcome.sample_partitions = samples.partitions;
-    let written = medallion::write_geo_rows(root, &sessions).await?;
+    let written = medallion::write_geography_rows(root, &sessions).await?;
     outcome.sessions = written.rows;
     outcome.session_partitions = written.partitions;
     Ok(outcome)
@@ -215,20 +209,26 @@ fn session_of(
         trip_id: trip.trip_id.clone(),
     };
     let session_id = train_session_id(&trip.source_id, &trip.trip_id);
-    let projected = placed
+    let zoned = placed
         .iter()
-        .map(|sample| projector.project(&sample.position))
-        .collect::<Result<Vec<Point<f64>>, _>>()?;
-    let speeds =
-        std::iter::once(None).chain(placed.windows(2).zip(projected.windows(2)).map(
-            |(times, points)| Some(implied_speed(points[0], points[1], times[1].t - times[0].t)),
-        ));
+        .map(|sample| projector.zoned(sample.position))
+        .collect::<Result<Vec<ZonedGeometry<Point<f64>>>, _>>()?;
+    let speeds = std::iter::once(None).chain(placed.windows(2).zip(zoned.windows(2)).map(
+        |(times, points)| {
+            Some(implied_speed(
+                *points[0].projected(),
+                *points[1].projected(),
+                times[1].t - times[0].t,
+            ))
+        },
+    ));
 
     let samples = placed
         .iter()
+        .zip(&zoned)
         .zip(speeds)
         .enumerate()
-        .map(|(seq, (sample, implied_speed_mps))| {
+        .map(|(seq, ((sample, geometry), implied_speed_mps))| {
             let row = TrainSessionSampleRowV2 {
                 session_id: session_id.clone(),
                 source_id: trip.source_id.clone(),
@@ -240,7 +240,10 @@ fn session_of(
                 implied_speed_mps,
                 geometry_source: sample.geometry_source,
             };
-            Ok((row, sample.position))
+            Ok(GeometryRow {
+                row,
+                geometry: *geometry,
+            })
         })
         .collect::<Result<Vec<_>, IngestError>>()?;
 

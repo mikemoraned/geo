@@ -138,10 +138,10 @@ restricted to what is required.
 Format: **[GeoParquet 1.1.0](https://geoparquet.org/releases/v1.1.0/)**, optimised for fast
 and scalable lookup. Metadata that makes queries faster, such as bboxes, is embedded.
 
-- Geometry is [WKB](https://libgeos.org/specifications/wkb/)-encoded
+- A geometry column holds [WKB](https://libgeos.org/specifications/wkb/)-encoded
   [simple features](https://www.ogc.org/standards/sfa).
-- A clean lat/lon geometry in a global CRS (CRS 84) is always present, in a column named
-  the same across every dataset. A reader therefore finds a dataset's geometry without
+- A clean lat/lon geography in a global CRS (CRS 84) is always present, in a column named
+  the same across every dataset. A reader therefore finds a dataset's geography without
   knowing which dataset it is.
 - A column in the projected CRS most appropriate to the entity may additionally be
   pre-computed, since metric distance calculations must not be performed in degrees. It is
@@ -163,6 +163,17 @@ and scalable lookup. Metadata that makes queries faster, such as bboxes, is embe
   transformation](https://proj.org/en/stable/usage/transformation.html) counts the steps the
   journey takes. A zone on the same datum as the lat/lon column skips all of it.
 - CRS is recorded in the GeoParquet metadata as PROJJSON.
+- **The lat/lon column holds a row's geography, and the projected column holds its geometry.** A
+  geography holds angular coordinates on the round Earth, where a distance runs along a great
+  circle. A geometry holds coordinates on a plane, where a distance is a straight line. [Section 4.3
+  of the PostGIS manual](https://postgis.net/docs/using_postgis_dbmanagement.html#PostGIS_Geography)
+  states the distinction. A projection always lands on a plane, so a projected column holds a
+  geometry. A geometry need not be projected, since a PostGIS geometry can hold lat/lon.
+- **A file does not state this distinction.** Both columns are simple features, so the term
+  *geometry column* covers both. Neither sets the `edges` key of
+  [GeoParquet](https://geoparquet.org/releases/v1.1.0/), so a reader of the file takes both as
+  planar. The column named `geometry` holds the geography, and `geometry_projected` holds the
+  geometry.
 - **Follow the upstream schema** when extending or subsetting a reference dataset, and also
   when creating a dataset from scratch, as a mature upstream schema generally already fits
   the requirement.
@@ -183,17 +194,22 @@ the store applies the format. Four things follow from the dataset's definition, 
 in one place:
 
 - which partition a row belongs to
-- the CRS its geometry is projected into and declared in
+- the CRS its geography is projected into and declared in
 - the deletion of a partition a rebuild no longer produces
 - the names a definition says identify a row
 
 A writer that projected its own geometry, or that swept only the partitions it remembered to,
 would be a second implementation of the format with nothing holding it to the first.
 
-The projected geometry is therefore derived from the lat/lon one rather than supplied
-alongside it. The country whose zone it is written in is stated per row rather than per run.
+A row's geometry is therefore derived from its geography rather than supplied alongside it. The
+country whose zone it is written in is stated per row rather than per run.
 Which entity a row belongs to is what decides where it is measured, so the rows making up one
 entity are measured in one zone, wherever they individually fall.
+
+A derivation that needs a row's metres itself, such as for a speed, takes them from the store's
+projector. The projector returns the geography paired with its geometry and its country. A
+derivation can hand over only that pair, so the store still decides the zone and each geography is
+projected once.
 
 An open file keeps its latest row group in memory, even after a flush. The object store's writer
 buffers the group's last chunk as a slice of the group's whole allocation. A derivation that hands

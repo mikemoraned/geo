@@ -1,7 +1,7 @@
 use chrono::{DateTime, TimeZone, Utc};
 use domain::{Bbox, CrossingId, DeviceId, SessionId, StartedBy};
 use geo_types::{LineString, Point};
-use medallion::{Country, GeoRow, Root, write_geo_rows, write_rows};
+use medallion::{Country, GeographyRow, Root, write_geography_rows, write_rows};
 use medallion_model::{SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3};
 use session_crossings::gold::{Choosing, choose};
 
@@ -49,12 +49,12 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
             let (session, point) = session_of(named, *at_lon_lat);
             let session_id = session.session_id.clone();
             let device_id = session.device_id.clone();
-            session_rows.push(GeoRow {
+            session_rows.push(GeographyRow {
                 row: session,
-                geometry: LineString::from(vec![(point.x(), point.y()), (point.x(), point.y())]),
+                geography: LineString::from(vec![(point.x(), point.y()), (point.x(), point.y())]),
                 country: *country,
             });
-            sample_rows.push(GeoRow {
+            sample_rows.push(GeographyRow {
                 row: SessionSampleRowV3 {
                     session_id: session_id.clone(),
                     device_id: device_id.clone(),
@@ -68,7 +68,7 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
                     heading: None,
                     implied_speed_mps: None,
                 },
-                geometry: point,
+                geography: point,
                 country: *country,
             });
             for n in 0..*crossings {
@@ -86,10 +86,10 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
         }
     }
 
-    write_geo_rows(root, &session_rows)
+    write_geography_rows(root, &session_rows)
         .await
         .expect("write the sessions");
-    write_geo_rows(root, &sample_rows)
+    write_geography_rows(root, &sample_rows)
         .await
         .expect("write the samples");
     write_rows(root, &crossed).await.expect("write the passes");

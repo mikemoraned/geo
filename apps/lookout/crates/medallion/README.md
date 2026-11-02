@@ -140,10 +140,13 @@ language derived a dataset does not change what is stored.
 
 Either way the caller supplies rows and the definition supplies the rest. The date a row is stored
 under is read from the row itself, so a partition key and the column feeding it are paired where
-the dataset is defined. The projected geometry is derived from the row's country rather than
-supplied, since the zone a country's metres are in is the store's choice, and deriving it here is
-what stops a caller projecting into one zone while the file declares another. Partition values are
-read from the columns the layout names, and go into the path rather than the file.
+the dataset is defined. A `GeographyRow` holds a row's lat/lon and its country, and the store
+derives the row's geometry. The zone a country's metres are in is the store's choice, and deriving
+it here is what stops a caller projecting into one zone while the file declares another. A caller
+that needs those metres itself asks `Projector` for a `ZonedGeometry`, and hands that over in a
+`GeometryRow`. Only `Projector` builds a `ZonedGeometry`, and it names the country it projected for,
+so the same rule holds and each geography is projected once. Partition values are read from the
+columns the layout names, and go into the path rather than the file.
 
 Emptiness has to be said with a table rather than implied by silence. A query matching nothing
 still writes a readable, correctly typed file, since a partition holding no rows is an answer. A
@@ -152,9 +155,12 @@ no batches at all carries no schema to check, and does nothing.
 
 ## Geometry, and the CRS it declares
 
-Silver geometry is WKB simple features, with the CRS in the file metadata as PROJJSON. The
-`geoparquet` encoder produces that metadata rather than this crate assembling it, so a file
-conforms to the spec version that crate implements.
+A row's geography is its lat/lon, on the round Earth. Its geometry is the same shape in a country's
+metres, on a plane. [Silver's rules](../../docs/medallion.md#silver) set out the distinction.
+
+Both are WKB simple features, with the CRS in the file metadata as PROJJSON. The `geoparquet`
+encoder produces that metadata rather than this crate assembling it, so a file conforms to the spec
+version that crate implements.
 
 [One projected zone per country](../../docs/medallion.md#silver), chosen here, so a dataset states
 which country's geometry it holds and never picks a zone of its own.

@@ -487,19 +487,19 @@ mod tests {
 
     async fn store_boxes(dir: &std::path::Path, ids: &[&str]) -> Root {
         let root = Root::new(dir);
-        let rows: Vec<crate::GeoRow<BoxedRow, geo_types::Point<f64>>> = ids
+        let rows: Vec<crate::GeographyRow<BoxedRow, geo_types::Point<f64>>> = ids
             .iter()
-            .map(|id| crate::GeoRow {
+            .map(|id| crate::GeographyRow {
                 row: BoxedRow {
                     box_id: id.to_string(),
                     seen_at: Utc.with_ymd_and_hms(2026, 7, 21, 9, 0, 0).unwrap(),
                     corner: Corner { x: 1.0, y: 2.0 },
                 },
-                geometry: berlin(),
+                geography: berlin(),
                 country: Country::Germany,
             })
             .collect();
-        crate::write_geo_rows(&root, &rows).await.unwrap();
+        crate::write_geography_rows(&root, &rows).await.unwrap();
         root
     }
 

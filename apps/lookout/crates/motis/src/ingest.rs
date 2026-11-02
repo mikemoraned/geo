@@ -1,7 +1,10 @@
 use chrono::{DateTime, Utc};
 use domain::TrainNumber;
 use geo_types::{Coord, LineString, Point};
-use medallion::{Countries, Country, Dated, GeoRow, GeoRowWriter, Query, Root};
+use medallion::{
+    Countries, Country, Dated, GeoError, GeometryRow, GeometryRowWriter, Projectors, Query, Root,
+    ZonedGeometry,
+};
 use medallion_model::{
     AgencyId, MOTIS_POLYLINE_V2, MOTIS_SEGMENT_V3, MotisPolylineRowV2, MotisSourceId, PolylineId,
     RailMode, StopId, TrainSegmentRowV4, TripId,
@@ -130,7 +133,9 @@ async fn ingest_in_writes_of(
     };
 
     let shapes = Shapes::placed_in(countries, captured.polylines);
-    let mut writer = GeoRowWriter::<TrainSegmentRowV4>::new(root)?;
+    let mut projectors = Projectors::default();
+    let zoned_polylines = shapes.zoned(&mut projectors)?;
+    let mut writer = GeometryRowWriter::<TrainSegmentRowV4>::new(root)?;
     let mut pending = Vec::new();
     for leg in captured.legs {
         let placed = match shapes.of(&leg)? {
@@ -146,11 +151,18 @@ async fn ingest_in_writes_of(
         };
         if let Some(PlacedLine { line, country }) = placed {
             match country {
-                Some(country) => pending.push(GeoRow {
-                    row: TrainSegmentRowV4::from(leg),
-                    geometry: LineString::clone(&line),
-                    country,
-                }),
+                Some(country) => {
+                    let geometry = match zoned_polylines.get(&leg.polyline_id) {
+                        Some(zoned) => zoned.clone(),
+                        None => projectors
+                            .for_country(country)?
+                            .zoned(LineString::clone(&line))?,
+                    };
+                    pending.push(GeometryRow {
+                        row: TrainSegmentRowV4::from(leg),
+                        geometry,
+                    });
+                }
                 None => outcome.unplaceable += 1,
             }
         }
@@ -270,6 +282,26 @@ impl<'a, C: Countries> Shapes<'a, C> {
         }
     }
 
+    fn zoned(
+        &self,
+        projectors: &mut Projectors,
+    ) -> Result<HashMap<PolylineId, ZonedGeometry<LineString<f64>>>, GeoError> {
+        let mut zoned = HashMap::new();
+        for (polyline_id, placed) in &self.by_polyline {
+            if let Some(PlacedLine {
+                line,
+                country: Some(country),
+            }) = placed
+            {
+                let line = projectors
+                    .for_country(*country)?
+                    .zoned(LineString::clone(line))?;
+                zoned.insert(polyline_id.clone(), line);
+            }
+        }
+        Ok(zoned)
+    }
+
     pub(crate) fn of(&self, leg: &Leg) -> Result<Shape, IngestError> {
         let placed =
             self.by_polyline
@@ -320,7 +352,7 @@ mod tests {
     use crate::api::types::{Mode, TripSegment};
     use arrow::array::RecordBatch;
     use chrono::TimeZone;
-    use medallion::{GEOMETRY, PROJECTED_GEOMETRY, Row};
+    use medallion::{GEOMETRY, PROJECTED_GEOMETRY, Projector, Row};
     use medallion_model::{Feed, MotisPollRowV2, MotisSegmentRowV3, Polyline};
 
     use super::*;
@@ -660,6 +692,24 @@ mod tests {
 
         assert!(close(&line, &between_stops(&segment)), "{line:?}");
         assert_eq!(corrected, 1);
+    }
+
+    #[tokio::test]
+    async fn a_corrected_line_is_projected_as_a_captured_one_is() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let start = regional_trips()[0].from.clone();
+        let segment = shaped(&[(start.lon, start.lat)]);
+
+        ingest_one(&root, &segment).await;
+
+        let batches = geometry_batches(&root).await;
+        let projected = Projector::for_country(Country::Germany)
+            .expect("a projector")
+            .project(&LineString::from(first_line(&batches[0], GEOMETRY)))
+            .expect("a projection");
+        let expected: Vec<(f64, f64)> = projected.coords().map(|c| (c.x, c.y)).collect();
+        assert_eq!(first_line(&batches[0], PROJECTED_GEOMETRY), expected);
     }
 
     #[tokio::test]

@@ -6,7 +6,10 @@ use arrow::array::RecordBatch;
 use chrono::NaiveDate;
 
 use crate::country::{COUNTRY, Country};
-use crate::geo::{GeoParquetFile, Projector, geo_batch, geometry_fields};
+use crate::geo::{
+    GeoParquetFile, Projectors, ZonedGeometry, batch_with_geometry_first, geometry_fields,
+    wkb_column,
+};
 use crate::layer::layers;
 use crate::partition::DATE_FORMAT;
 use crate::path::{Replaced, Root};
@@ -16,24 +19,44 @@ use crate::table::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct GeoRow<R, G> {
+pub struct GeographyRow<R, G> {
     pub row: R,
-    pub geometry: G,
+    pub geography: G,
     pub country: Country,
 }
 
-pub async fn write_geo_rows<R, G>(
+#[derive(Debug, Clone, PartialEq)]
+pub struct GeometryRow<R, G> {
+    pub row: R,
+    pub geometry: ZonedGeometry<G>,
+}
+
+pub async fn write_geography_rows<R, G>(
     root: &Root,
-    rows: &[GeoRow<R, G>],
+    rows: &[GeographyRow<R, G>],
 ) -> Result<TableWritten, TableError>
 where
     R: Dated<Layer = layers::Silver> + Clone,
-    G: geo_traits::GeometryTrait<T = f64> + geo::MapCoords<f64, f64, Output = G> + Clone,
+    G: geo_traits::GeometryTrait<T = f64> + geo::MapCoords<f64, f64, Output = G>,
 {
-    let mut writer = GeoRowWriter::<R>::for_any_rows(root)?;
+    let mut writer = GeometryRowWriter::<R>::for_any_rows(root)?;
     check_named(&writer.target, rows.iter().map(|placed| &placed.row))?;
-    for (partition, day) in days_of(rows) {
-        writer.write_day(partition, &day).await?;
+    let mut projectors = Projectors::default();
+    let days = days_of(rows, |placed| (placed.country, placed.row.partition_date()));
+    for (partition, day) in days {
+        let projector = projectors.for_country(partition.0)?;
+        let projected: Vec<G> = day
+            .iter()
+            .map(|placed| projector.project(&placed.geography))
+            .collect::<Result<_, _>>()?;
+        let rows: Vec<&R> = day.iter().map(|placed| &placed.row).collect();
+        let batch = geo_day(
+            &rows,
+            day.iter().map(|placed| &placed.geography),
+            &projected,
+            partition.0,
+        )?;
+        writer.write_day(partition, batch).await?;
         writer.close_day(partition).await?;
     }
     writer.finish().await
@@ -41,20 +64,19 @@ where
 
 type Partition = (Country, NaiveDate);
 
-pub struct GeoRowWriter<R> {
+pub struct GeometryRowWriter<R> {
     root: Root,
     target: SilverTarget,
     date_key: &'static str,
-    projectors: HashMap<Country, Projector>,
     open: HashMap<Partition, GeoParquetFile>,
     closed: Vec<Partition>,
     rows: usize,
     row: PhantomData<R>,
 }
 
-impl<R> GeoRowWriter<R>
+impl<R> GeometryRowWriter<R>
 where
-    R: Dated<Layer = layers::Silver> + Clone,
+    R: Dated<Layer = layers::Silver>,
 {
     pub fn new(root: &Root) -> Result<Self, TableError> {
         let writer = Self::for_any_rows(root)?;
@@ -77,7 +99,6 @@ where
             root: root.clone(),
             target,
             date_key,
-            projectors: HashMap::new(),
             open: HashMap::new(),
             closed: Vec::new(),
             rows: 0,
@@ -85,24 +106,31 @@ where
         })
     }
 
-    pub async fn write<G>(&mut self, rows: &[GeoRow<R, G>]) -> Result<(), TableError>
+    pub async fn write<G>(&mut self, rows: &[GeometryRow<R, G>]) -> Result<(), TableError>
     where
-        G: geo_traits::GeometryTrait<T = f64> + geo::MapCoords<f64, f64, Output = G> + Clone,
+        G: geo_traits::GeometryTrait<T = f64>,
     {
-        for (partition, day) in days_of(rows) {
-            self.write_day(partition, &day).await?;
+        let days = days_of(rows, |zoned| {
+            (zoned.geometry.country(), zoned.row.partition_date())
+        });
+        for (partition, day) in days {
+            let rows: Vec<&R> = day.iter().map(|zoned| &zoned.row).collect();
+            let batch = geo_day(
+                &rows,
+                day.iter().map(|zoned| zoned.geometry.geography()),
+                day.iter().map(|zoned| zoned.geometry.projected()),
+                partition.0,
+            )?;
+            self.write_day(partition, batch).await?;
         }
         Ok(())
     }
 
-    async fn write_day<G>(
+    async fn write_day(
         &mut self,
         (country, date): Partition,
-        day: &[&GeoRow<R, G>],
-    ) -> Result<(), TableError>
-    where
-        G: geo_traits::GeometryTrait<T = f64> + geo::MapCoords<f64, f64, Output = G> + Clone,
-    {
+        batch: RecordBatch,
+    ) -> Result<(), TableError> {
         if self.closed.contains(&(country, date)) {
             return Err(TableError::DayClosed {
                 dataset: self.target.name(),
@@ -110,11 +138,6 @@ where
                 date,
             });
         }
-        let projector = match self.projectors.entry(country) {
-            Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => entry.insert(Projector::for_country(country)?),
-        };
-        let batch = geo_day(day, projector, country)?;
         let file = match self.open.entry((country, date)) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
@@ -128,7 +151,7 @@ where
         };
         file.write(&batch).await?;
 
-        self.rows += day.len();
+        self.rows += batch.num_rows();
         Ok(())
     }
 
@@ -225,11 +248,8 @@ where
     })
 }
 
-fn days_of<R: Dated, G>(rows: &[GeoRow<R, G>]) -> Vec<(Partition, Vec<&GeoRow<R, G>>)> {
-    let partition_of_each_row: Vec<Partition> = rows
-        .iter()
-        .map(|placed| (placed.country, placed.row.partition_date()))
-        .collect();
+fn days_of<T>(rows: &[T], partition_of: impl Fn(&T) -> Partition) -> Vec<(Partition, Vec<&T>)> {
+    let partition_of_each_row: Vec<Partition> = rows.iter().map(partition_of).collect();
 
     group(&partition_of_each_row)
         .into_iter()
@@ -240,28 +260,22 @@ fn days_of<R: Dated, G>(rows: &[GeoRow<R, G>]) -> Vec<(Partition, Vec<&GeoRow<R,
         .collect()
 }
 
-fn geo_day<R, G>(
-    day: &[&GeoRow<R, G>],
-    projector: &Projector,
+fn geo_day<'a, R, G>(
+    rows: &[&R],
+    geography: impl IntoIterator<Item = &'a G>,
+    projected: impl IntoIterator<Item = &'a G>,
     country: Country,
 ) -> Result<RecordBatch, TableError>
 where
-    R: Row + Clone,
-    G: geo_traits::GeometryTrait<T = f64> + geo::MapCoords<f64, f64, Output = G> + Clone,
+    R: Row,
+    G: geo_traits::GeometryTrait<T = f64> + 'a,
 {
-    let rows: Vec<R> = day.iter().map(|placed| placed.row.clone()).collect();
-    let geometry: Vec<G> = day.iter().map(|placed| placed.geometry.clone()).collect();
-    let projected: Vec<G> = geometry
-        .iter()
-        .map(|geometry| projector.project(geometry))
-        .collect::<Result<_, _>>()?;
-
-    let [plain, projected_field] = geometry_fields(country)?;
-    Ok(geo_batch(
-        &rows,
-        &[
-            (plain, geometry.as_slice()),
-            (projected_field, projected.as_slice()),
+    let [geography_field, projected_field] = geometry_fields(country)?;
+    Ok(batch_with_geometry_first::<R>(
+        rows,
+        vec![
+            wkb_column(geography_field, geography)?,
+            wkb_column(projected_field, projected)?,
         ],
     )?)
 }
@@ -285,7 +299,7 @@ mod tests {
 
     use super::*;
     use crate::dataset::DatasetSpec;
-    use crate::geo::PROJECTED_GEOMETRY;
+    use crate::geo::{PROJECTED_GEOMETRY, Projector};
     use crate::query::Query;
     use crate::rows::Geometry;
 
@@ -371,22 +385,24 @@ mod tests {
         }
     }
 
-    fn sighting(id: &str, day: u32, country: Country) -> GeoRow<SightingRow, Point<f64>> {
-        GeoRow {
+    fn sighting(id: &str, day: u32, country: Country) -> GeometryRow<SightingRow, Point<f64>> {
+        GeometryRow {
             row: SightingRow {
                 track_id: id.to_string(),
                 seen_at: at(day),
             },
-            geometry: berlin(),
-            country,
+            geometry: Projector::for_country(country)
+                .unwrap()
+                .zoned(berlin())
+                .unwrap(),
         }
     }
 
     async fn write_in_calls(
         root: &Root,
-        calls: &[&[GeoRow<SightingRow, Point<f64>>]],
+        calls: &[&[GeometryRow<SightingRow, Point<f64>>]],
     ) -> Result<TableWritten, TableError> {
-        let mut writer = GeoRowWriter::<SightingRow>::new(root)?;
+        let mut writer = GeometryRowWriter::<SightingRow>::new(root)?;
         for rows in calls {
             writer.write(rows).await?;
         }
@@ -488,10 +504,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_geometry_row_lands_under_its_country_holding_the_projection_it_carries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = Root::new(tmp.path());
+        let row = sighting("a", 21, Country::UnitedKingdom);
+
+        write_in_calls(&root, &[std::slice::from_ref(&row)])
+            .await
+            .unwrap();
+
+        assert!(sighting_partition(&tmp, "GB", 21));
+        let query = Query::new(root);
+        query
+            .register(SightingRow::DATASET, "sighting")
+            .await
+            .unwrap();
+        let batches = query
+            .sql(&format!(
+                "SELECT ST_AsBinary({PROJECTED_GEOMETRY}) AS {PROJECTED_GEOMETRY} FROM sighting"
+            ))
+            .await
+            .unwrap();
+        let projected = crate::geo::geometries(&batches[0], PROJECTED_GEOMETRY).unwrap();
+        assert_eq!(
+            projected,
+            [geo_types::Geometry::Point(*row.geometry.projected())]
+        );
+    }
+
+    #[tokio::test]
     async fn closing_the_days_before_a_date_lands_their_files_and_keeps_the_rest_open() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let mut writer = GeoRowWriter::<SightingRow>::new(&root).unwrap();
+        let mut writer = GeometryRowWriter::<SightingRow>::new(&root).unwrap();
         writer
             .write(&[
                 sighting("a", 21, Country::Germany),
@@ -511,7 +556,7 @@ mod tests {
     async fn a_row_for_a_closed_day_is_refused() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let mut writer = GeoRowWriter::<SightingRow>::new(&root).unwrap();
+        let mut writer = GeometryRowWriter::<SightingRow>::new(&root).unwrap();
         writer
             .write(&[sighting("a", 21, Country::Germany)])
             .await
@@ -530,7 +575,7 @@ mod tests {
     async fn rows_named_uniquely_cannot_be_written_over_several_calls() {
         let tmp = tempfile::tempdir().unwrap();
 
-        let err = GeoRowWriter::<TrackRow>::new(&Root::new(tmp.path()))
+        let err = GeometryRowWriter::<TrackRow>::new(&Root::new(tmp.path()))
             .err()
             .expect("a refusal");
 
@@ -548,13 +593,13 @@ mod tests {
         Point::new(13.404954, 52.520008)
     }
 
-    fn track(id: &str, day: u32, country: Country) -> GeoRow<TrackRow, LineString<f64>> {
-        GeoRow {
+    fn track(id: &str, day: u32, country: Country) -> GeographyRow<TrackRow, LineString<f64>> {
+        GeographyRow {
             row: TrackRow {
                 track_id: id.to_string(),
                 seen_at: at(day),
             },
-            geometry: LineString::from(vec![berlin(), berlin()]),
+            geography: LineString::from(vec![berlin(), berlin()]),
             country,
         }
     }
@@ -571,7 +616,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
 
-        let written = write_geo_rows(
+        let written = write_geography_rows(
             &root,
             &[
                 track("a", 21, Country::Germany),
@@ -595,7 +640,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
 
-        let written = write_geo_rows(
+        let written = write_geography_rows(
             &root,
             &[
                 track("a", 21, Country::Germany),
@@ -623,12 +668,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
         let nowhere = Point::new(f64::NAN, f64::NAN);
-        let unprojectable = GeoRow {
-            geometry: LineString::from(vec![nowhere, nowhere]),
+        let unprojectable = GeographyRow {
+            geography: LineString::from(vec![nowhere, nowhere]),
             ..track("b", 22, Country::Germany)
         };
 
-        let err = write_geo_rows(&root, &[track("a", 21, Country::Germany), unprojectable])
+        let err = write_geography_rows(&root, &[track("a", 21, Country::Germany), unprojectable])
             .await
             .unwrap_err();
 
@@ -644,7 +689,7 @@ mod tests {
     async fn the_projected_column_holds_the_countrys_metres() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        write_geo_rows(&root, &[track("a", 21, Country::Germany)])
+        write_geography_rows(&root, &[track("a", 21, Country::Germany)])
             .await
             .unwrap();
 
@@ -673,7 +718,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
 
-        let err = write_geo_rows(
+        let err = write_geography_rows(
             &root,
             &[
                 track("a", 21, Country::Germany),
@@ -746,11 +791,11 @@ mod tests {
     async fn a_dataset_carrying_no_geometry_refuses_rows_with_it() {
         let tmp = tempfile::tempdir().unwrap();
 
-        let err = write_geo_rows(
+        let err = write_geography_rows(
             &Root::new(tmp.path()),
-            &[GeoRow {
+            &[GeographyRow {
                 row: pass("a", 21),
-                geometry: berlin(),
+                geography: berlin(),
                 country: Country::Germany,
             }],
         )
@@ -767,11 +812,11 @@ mod tests {
     async fn no_rows_sweep_what_is_there() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        write_geo_rows(&root, &[track("a", 21, Country::Germany)])
+        write_geography_rows(&root, &[track("a", 21, Country::Germany)])
             .await
             .unwrap();
 
-        let written = write_geo_rows::<TrackRow, LineString<f64>>(&root, &[])
+        let written = write_geography_rows::<TrackRow, LineString<f64>>(&root, &[])
             .await
             .unwrap();
 

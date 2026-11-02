@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -13,6 +15,7 @@ use geoarrow_schema::{Crs, Metadata, WkbType};
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
 use parquet::arrow::AsyncArrowWriter;
 use parquet::arrow::async_writer::ParquetObjectWriter;
+use serde::Serialize;
 
 const CRS84_PROJJSON: &str = include_str!("crs84.projjson.json");
 
@@ -80,37 +83,89 @@ pub fn file_schema<T: Row>(country: Country) -> Result<SchemaRef, GeoError> {
 }
 
 pub struct Projector {
+    country: Country,
     from: proj4rs::Proj,
     to: proj4rs::Proj,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ZonedGeometry<G> {
+    geography: G,
+    projected: G,
+    country: Country,
+}
+
+impl<G> ZonedGeometry<G> {
+    pub fn geography(&self) -> &G {
+        &self.geography
+    }
+
+    pub fn projected(&self) -> &G {
+        &self.projected
+    }
+
+    pub fn country(&self) -> Country {
+        self.country
+    }
 }
 
 impl Projector {
     pub fn for_country(country: Country) -> Result<Self, GeoError> {
         Ok(Self {
+            country,
             from: proj4rs::Proj::from_epsg_code(CRS84_EPSG)?,
             to: proj4rs::Proj::from_epsg_code(country.projected_epsg())?,
         })
     }
 
-    pub fn project<G>(&self, geometry: &G) -> Result<G, GeoError>
+    pub fn project<G>(&self, geography: &G) -> Result<G, GeoError>
     where
         G: geo::MapCoords<f64, f64, Output = G>,
     {
-        geometry.try_map_coords(|coord| {
+        geography.try_map_coords(|coord| {
             // proj4rs takes radians for a geographic system, whatever the source states.
             let mut point = (coord.x.to_radians(), coord.y.to_radians(), 0.0);
             proj4rs::transform::transform(&self.from, &self.to, &mut point)?;
             Ok::<_, GeoError>(geo_types::coord! { x: point.0, y: point.1 })
         })
     }
+
+    pub fn zoned<G>(&self, geography: G) -> Result<ZonedGeometry<G>, GeoError>
+    where
+        G: geo::MapCoords<f64, f64, Output = G>,
+    {
+        let projected = self.project(&geography)?;
+        Ok(ZonedGeometry {
+            geography,
+            projected,
+            country: self.country,
+        })
+    }
 }
 
-pub fn wkb_column<G>(field: Field, geometries: &[G]) -> Result<(FieldRef, ArrayRef), GeoError>
+#[derive(Default)]
+pub struct Projectors {
+    by_country: HashMap<Country, Projector>,
+}
+
+impl Projectors {
+    pub fn for_country(&mut self, country: Country) -> Result<&Projector, GeoError> {
+        Ok(match self.by_country.entry(country) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(Projector::for_country(country)?),
+        })
+    }
+}
+
+pub fn wkb_column<'a, G>(
+    field: Field,
+    geometries: impl IntoIterator<Item = &'a G>,
+) -> Result<(FieldRef, ArrayRef), GeoError>
 where
-    G: geo_traits::GeometryTrait<T = f64>,
+    G: geo_traits::GeometryTrait<T = f64> + 'a,
 {
     let encoded = geometries
-        .iter()
+        .into_iter()
         .map(|geometry| {
             let mut buf = Vec::new();
             wkb::writer::write_geometry(&mut buf, geometry, &wkb::writer::WriteOptions::default())?;
@@ -128,13 +183,18 @@ where
     T: Row,
     G: geo_traits::GeometryTrait<T = f64>,
 {
-    let mut columns = Vec::new();
-    let mut arrays = Vec::new();
-    for (field, geometries) in geometry {
-        let (field, array) = wkb_column(field.clone(), geometries)?;
-        columns.push(field);
-        arrays.push(array);
-    }
+    let geometry = geometry
+        .iter()
+        .map(|(field, geometries)| wkb_column(field.clone(), *geometries))
+        .collect::<Result<Vec<_>, _>>()?;
+    batch_with_geometry_first::<T>(rows, geometry)
+}
+
+pub(crate) fn batch_with_geometry_first<T: Row>(
+    rows: &(impl Serialize + ?Sized),
+    geometry: Vec<(FieldRef, ArrayRef)>,
+) -> Result<RecordBatch, GeoError> {
+    let (mut columns, mut arrays): (Vec<FieldRef>, Vec<ArrayRef>) = geometry.into_iter().unzip();
 
     let own = fields::<T>()?;
     arrays.extend(serde_arrow::to_arrow(&own, rows)?);
@@ -367,6 +427,39 @@ mod tests {
         assert!((coords[0].x - 798_809.63).abs() < 0.01);
         assert!((coords[1].x - 477_271.45).abs() < 0.01);
         assert!((coords[1].y - 5_551_012.24).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_zoned_geometry_holds_its_projection_under_the_projectors_country() {
+        let berlin = geo_types::Point::new(13.404954, 52.520008);
+        let projector = Projector::for_country(Country::Germany).unwrap();
+
+        let zoned = projector.zoned(berlin).unwrap();
+
+        assert_eq!(zoned.geography(), &berlin);
+        assert_eq!(zoned.projected(), &projector.project(&berlin).unwrap());
+        assert_eq!(zoned.country(), Country::Germany);
+    }
+
+    #[test]
+    fn projectors_give_each_country_its_own_zone() {
+        let berlin = geo_types::Point::new(13.404954, 52.520008);
+        let mut projectors = Projectors::default();
+
+        let german = projectors
+            .for_country(Country::Germany)
+            .unwrap()
+            .zoned(berlin)
+            .unwrap();
+        let british = projectors
+            .for_country(Country::UnitedKingdom)
+            .unwrap()
+            .zoned(berlin)
+            .unwrap();
+
+        assert_eq!(german.country(), Country::Germany);
+        assert_eq!(british.country(), Country::UnitedKingdom);
+        assert_ne!(german.projected(), british.projected());
     }
 
     #[test]
