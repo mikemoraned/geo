@@ -33,6 +33,18 @@ The last command prints the tree's hash. Once the user approves the commits, `gi
 it, so commit the steps in order. If `HEAD` moves first, as when another session commits
 polls, rebuild each tree on the new `HEAD`.
 
+## Decomposing a slice
+
+A decomposition plans a slice, and leaves the solving to the slice's tasks, so the user can judge
+each step as it lands. On 2026-11-03, a re-run of `/decompose-slice` measured the store, ran a
+throwaway preview of several predictors, and rebuilt the slice around the results. The user had no
+way to assess any of it, and reverted it.
+
+- Keep the plan small enough to read and check, and build it up from scratch in steps.
+- Ask the user rather than measure. Where a decision depends on a number, make measuring it a task.
+- Change only the current slice. Another slice's text stays as written unless the user asks.
+- Write in plain words. "The chosen settings" says what "operating point" says, without the jargon.
+
 ## Memos and caches
 
 A memo that saves much time shows that something upstream repeats work. Find why the same input
