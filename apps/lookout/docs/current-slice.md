@@ -99,7 +99,10 @@ notification that scores best for it, and that notification's lead time sets its
 | --- | --- | --- |
 | Hit | from 30 s to N | 1 |
 | Last moment | under 30 s | 0.25 |
-| Too early | over N | 0.05 |
+| Too early | over N | falls from 1 to 0.05 across the ramp, and stays 0.05 past it |
+
+The **ramp** starts at N, and its width is a setting each run records, as are the scores. The
+first runs use a ramp one minute wide, so a notification 5:30 ahead of its pass scores about 0.53.
 
 Every other notification is a **false alarm**, and scores 0. That covers a notification with no pass
 of its crossing still to come, and one that loses its pass's credit to a better one. A **miss** is a
@@ -138,8 +141,8 @@ erDiagram
   `realtime` added.
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
-- `evaluation_run_v1` holds a run's predictor and settings, method, filter, sample size, seed, and
-  input versions.
+- `evaluation_run_v1` holds a run's predictor and settings, float type, scores and ramp, method,
+  filter, sample size, seed, and input versions.
 - `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
   transitions still counts.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
@@ -167,11 +170,15 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   [the research](2026-08-01-evaluation.md#unit-of-counting) proposes. That leaves every repeat
   unscored.
 - **A notification earns credit by its lead time.** It earns full credit from 30 s to N before its
-  pass, a heavy penalty under 30 s, and almost nothing beyond N. A notification with no pass of its
-  crossing still to come earns nothing. A rider needs warning in time to act, and an early warning
-  goes stale. A crossing passed is gone, unlike a late train, which a rider can still board. This
-  beats a hit anywhere within N, which credits a notification seconds before its pass, and nothing a
-  moment past N.
+  pass, a heavy penalty under 30 s, and almost nothing past the ramp beyond N. A notification with
+  no pass of its crossing still to come earns nothing. A rider needs warning in time to act, and an
+  early warning goes stale. A crossing passed is gone, unlike a late train, which a rider can still
+  board. This beats a hit anywhere within N, which credits a notification seconds before its pass,
+  and nothing a moment past N.
+- **Past N, the score ramps down rather than steps.** CrowFlies and LightCone both aim at N, so
+  their notifications bunch at that edge. Say CrowFlies estimates a pass 4:58 away, and notifies. On
+  track 2% longer than the straight line, the pass comes 5:04 later. A step at N would cut that
+  notification's score from 1 to 0.05, though a rider can barely tell 4:58 from 5:04.
 - **One state machine, the tracker, lives in `predictor`.** A predictor judges which state each
   crossing it reports belongs in. The tracker turns those judgements into transitions, applying the
   legal transitions and the debouncing. The oracle, CrowFlies, and LightCone therefore share one set
@@ -185,6 +192,12 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   `match` can call only the transitions a state has. This follows
   [the typestate pattern](https://cliffle.com/blog/rust-typestate/). It beats a check at run time,
   which a test can only sample.
+- **`trybuild` tests that each illegal transition fails to compile.** An ordinary test cannot call
+  a method that does not exist, since the test itself would not compile.
+  [`trybuild`](https://docs.rs/trybuild) builds each illegal call as a crate of its own, and
+  compares the compiler's message with a committed copy. If a later change adds `pass` to
+  `CandidatePass`, its case compiles, and the test fails. This beats leaving the types untested,
+  where that change breaks nothing.
 - **The first run replays 1000 sessions.** They are picked at random, under a recorded seed, from
   the sessions with `realtime_pct` ≥ 90. A session is the unit a predictor replays. It beats 1000
   sample rows, which hold a handful of sessions, and 1000 passes, which fix recall's denominator
@@ -204,6 +217,23 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   pass goes unscored, as does a notification it credits. The predictor still replays those samples,
   so it has a speed once scoring starts. This beats letting a predictor declare a pass it never
   predicted.
+- **A replay runs in `f32` by default, and its run records the float type.** The apps run the
+  predictor in `f32`, so a replay in `f32` measures the program they run. In Germany, rounding to
+  `f32` moves a point by up to 0.21 m, so judgements differ only where a distance sits at an edge. A
+  run in `f64` shows how much that changes. This beats `f64` alone, the store's float type, which
+  measures a program no app runs.
+- **A dwelling sample takes the arriving leg's `realtime`.** A train dwells at a stop between one
+  leg's arrival and the next leg's departure. Only a wrong arrival time misplaces a dwelling sample,
+  since a train that leaves late is still at the platform. A late departure falls on the departing
+  leg's samples, which carry that leg's flag. `position_at` already places a dwelling sample by the
+  arriving leg. The derivation fixes the choice, so no run varies it. This beats the departing leg,
+  whose missing `realtime` would mark a correct dwell unreliable.
+- **A person chooses the apps' predictor and its settings from a report a skill writes.** The
+  skill, `choose-predictor`, reports the runs in gold for review. The discussion it opens ends in a
+  predictor and settings, which a code change puts in `platform-core`. The choice weighs what the
+  numbers alone leave open, such as recall against false alarms per hour. The report shows every
+  run, so the choice stands beside the runs it passed over. A later predictor goes through the same
+  review. This beats a rule fixed before the results, which cannot weigh a trade-off nobody foresaw.
 
 #### Consequences elsewhere
 
@@ -239,10 +269,11 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   which the types replace. `statum`, `sm`, and `typestate` generate the types from a macro, and
   four states read more plainly written out.
 - **A `compile_fail` doctest for an illegal transition.** Rejected: on stable Rust, one passes on
-  any compile error, a typo included. [`trybuild`](https://docs.rs/trybuild) compares the
-  compiler's message instead.
+  any compile error, a typo included. `trybuild` compares the compiler's message instead.
 - **A probabilistic model of how trains turn.** Deferred: ballpark odds of the extremes bound the
   cone's angle. It comes back once LightCone's misses trace to turns those odds call rare.
+- **A ramp at the 30 s edge.** Deferred: no predictor aims at 30 s, so last-moment notifications
+  spread out rather than bunch at it. It comes back once a run shows them bunching there.
 
 #### Open questions
 
@@ -254,23 +285,15 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   those rows in the steps keeps one definition of each table, at a rebuild cost nobody has measured.
   Leaving them out spares the extension those crates, and defines each table's columns in two
   crates, with a test holding them equal. A timed rebuild in Phase 2 decides it.
-- **Which float does a replay run in?** The tasks assume `f32`, as both apps run, rather than the
-  store's `f64`. Between samples 10 s apart, `f32`'s 0.42 m of latitude is under 1% of the distance
-  a moving train covers.
-- **What do last-moment and too-early notifications score?** The tasks start at 0.25 and 0.05, as
-  settings each run records. Each score changes at a step, so a notification a second past N scores
-  a twentieth of one a second inside. A ramp across each edge would soften that.
-- **Which leg sets a dwelling sample's `realtime`?** A sample waiting at a stop sits between the leg
-  arriving and the leg departing. The answer moves `realtime_pct` for trips with long dwells.
 - **Where does the cleaning rule apply?** `motis::train_sessions` already drops a trip for each of
   four reasons, and logs each count. Marking invalid rows for `select` to filter is the alternative,
   and adds a v3 column. The answer waits on the anomaly task.
 - **How does a comparison state its uncertainty?** One way is an interval on each predictor's rates.
   The other is a bootstrap over sessions of the difference between two predictors on the same
   sessions. The answer shapes `summarise`'s output, and what "robustly" means in the Target.
-- **Which predictor do the apps run once the slice ends?** LightCone where it beats CrowFlies, or
-  CrowFlies until a later slice. The answer sets the predictor and settings that `platform-core`
-  holds.
+- **Where does `choose-predictor`'s report land?** A dated doc in `docs/` keeps the review in a
+  diff, with a table of each run's measures. A notebook can draw maps of misses and false alarms,
+  and is built with the user in a live session. The answer shapes the skill.
 - **Does nextest run `trybuild`'s cases?** Its documentation describes only `cargo test`, and no
   source found confirms nextest. If nextest cannot run them, a `cargo test` line in the test recipes
   runs them, as `test-doc` runs the doctests.
@@ -323,7 +346,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [ ] Decide from that time whether the steps take and build `medallion-model`'s rows, or rows of
       their own.
 - [ ] Add the step `replay` to `evaluation`, feeding a session's times and positions alone through a
-      predictor and the `Tracker`.
+      predictor and the `Tracker`, in the float type its run records.
 - [ ] Add the oracle to `evaluation`: a predictor that reads a session's ground-truth passes, and
       predicts each N ahead.
 - [ ] Add the step `score` to `evaluation`, scoring each notification as
@@ -379,9 +402,13 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 
 #### Phase 5: states in the apps
 
-The apps come last, since they show the states of the predictor the evaluation chooses.
+The apps come last, since they show the states of the predictor a person chooses from the runs.
 
-- [ ] Hold the `Tracker` in `platform-core`'s model, around the predictor the evaluation chose, and
+- [ ] Write the skill `choose-predictor` in the repo's `.claude/skills/`, reporting the runs in gold
+      for review.
+- [ ] Choose the apps' predictor and settings with the user, through `/choose-predictor` over the
+      runs of Phase 4.
+- [ ] Hold the `Tracker` in `platform-core`'s model, around the chosen predictor and settings, and
       expose each crossing's state.
 - [ ] Carry each crossing's state in `web-core`'s `Predicted`, and draw one shape per state in
       `lookout-predictor.js`.
