@@ -57,7 +57,9 @@ Some [analysis](../notebooks/evaluation/explore1.py) shows which `trip_id`s on w
 
 The underlying data may require some further cleaning to remove any other anomalies that exist. As long as this doesn't massively affect coverage then we can adopt a bias to discard invalid data instead of trying to fix it. This may have to happen at the session level i.e. we may have to discard whole sessions if some percentage of it (e.g. 10%) is invalid.
 
-We likely also want to do a version of `session_crossing_v3` but for train sessions, `train_session_crossing_v1`. This *may* be computationally expensive to create in bulk so perhaps we could extend the predictor itself to tell us when it has passed a crossing. I'd rather not though, as that's then using parts of the predictor to derive its own evaluation.
+We will also want to do a version of `session_crossing_v3` but for train sessions, `train_session_crossing_v1`. We'll need this to assess Precision i.e. what the predictor said it would reach soon, vs what it did.
+
+To measure recall, one approach we could take is to have an "oracle" predictor to compare against: we could take the actual crossings the train passed and works backwards to when a perfect predictor would have said it was coming. This allows us to assemble a stream of crossing state updates that would be the best score. This may also flush out if there are some constraints or ambiguities in our system which means even an oracle with perfect foreknowledge can't get a perfect score on precision and recall.
 
 Hopefully these `realtime` samples will be enough samples to give a good statistical evaluation, but if not, we can relax our `realtime` constraint and instead use all of the sessions we have.
 
