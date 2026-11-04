@@ -92,21 +92,29 @@ Overall this means that Tasks should be broken down into major stages with each 
 A **notification** is a crossing's entry into `PredictedPass`. It claims that the train passes the
 crossing within the horizon N.
 
-A **hit** is a notification paired with a ground-truth pass of its crossing within N after it. Each
-pass pairs with one notification at most, the earliest in the N before it. A **false alarm** is a
-notification paired with no pass, which includes a repeat for a pass already paired. A **miss** is a
-pass paired with no notification.
+A notification's **lead time** runs from it to the next pass of its crossing. Each pass credits the
+notification that scores best for it, and that notification's lead time sets its class:
 
-- **Precision** is hits over notifications.
-- **Recall** is hits over the scored passes.
+| Class | Lead time | Score |
+| --- | --- | --- |
+| Hit | from 30 s to N | 1 |
+| Last moment | under 30 s | 0.25 |
+| Too early | over N | 0.05 |
+
+Every other notification is a **false alarm**, and scores 0. That covers a notification with no pass
+of its crossing still to come, and one that loses its pass's credit to a better one. A **miss** is a
+pass that credits no notification.
+
+- **Precision** is the total score over notifications.
+- **Recall** is the total score over the scored passes.
 - **False alarms per hour** is false alarms over the hours replayed.
-- **Lead time** runs from a hit's notification to its pass, and is reported as a distribution.
+- **Lead time** is reported as a distribution, over the notifications the passes credit.
 
-Transitions into the other states are recorded and not scored. The predictor's own `ActualPass` is
-among them, since the ground truth decides whether a pass happened. Timeliness enters through the
-lead-time distribution alone. The early and late classes of
-[the research](2026-08-01-evaluation.md#outcome-classification) wait until that distribution has
-been seen.
+[The research](2026-08-01-evaluation.md#outcome-classification) borrows its early and late classes
+from punctuality, where a late train still carries its rider. These classes depart from it, since a
+crossing passed is gone: nothing after the pass earns credit. Credit is also graded rather than
+counted. Transitions into the other states are recorded and not scored. The predictor's own
+`ActualPass` is among them, since the ground truth decides whether a pass happened.
 
 ### The datasets
 
@@ -122,7 +130,7 @@ erDiagram
     train_session_v3 ||--o{ evaluation_session_v1 : "picked for"
     evaluation_session_v1 ||--o{ evaluation_transition_v1 : "records"
     evaluation_transition_v1 ||--o| evaluation_outcome_v1 : "notification scored as"
-    train_session_crossing_v1 ||--o{ evaluation_outcome_v1 : "paired or missed as"
+    train_session_crossing_v1 ||--o{ evaluation_outcome_v1 : "scored in"
     evaluation_run_v1 ||--|| evaluation_summary_v1 : "sums up"
 ```
 
@@ -136,7 +144,7 @@ erDiagram
   transitions still counts.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
   two samples writes nothing.
-- `evaluation_outcome_v1` holds each notification as a hit or a false alarm, and each miss.
+- `evaluation_outcome_v1` holds each notification with its class and score, and each miss.
 - `evaluation_summary_v1` holds a run's measures, with its counts of sessions, passes, and
   notifications.
 
@@ -153,11 +161,17 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   It beats a binary alone, whose steps a notebook cannot inspect, and a notebook alone, which puts a
   derivation in Python.
 - **Precision counts each notification.** Every entry into `PredictedPass` is one prediction,
-  scored as a hit or a false alarm. A predictor that flickers pays for each flicker, as a rider
-  would. Recall counts each ground-truth pass once. This beats one outcome per (session, crossing)
-  pair, taken from its first notification, as
+  scored as [The measure](#the-measure) sets out. A predictor that flickers pays for each flicker,
+  as a rider would. Recall counts each ground-truth pass once. This beats one outcome per (session,
+  crossing) pair, taken from its first notification, as
   [the research](2026-08-01-evaluation.md#unit-of-counting) proposes. That leaves every repeat
   unscored.
+- **A notification earns credit by its lead time.** It earns full credit from 30 s to N before its
+  pass, a heavy penalty under 30 s, and almost nothing beyond N. A notification with no pass of its
+  crossing still to come earns nothing. A rider needs warning in time to act, and an early warning
+  goes stale. A crossing passed is gone, unlike a late train, which a rider can still board. This
+  beats a hit anywhere within N, which credits a notification seconds before its pass, and nothing a
+  moment past N.
 - **One state machine, the tracker, lives in `predictor`.** A predictor judges which state each
   crossing it reports belongs in. The tracker turns those judgements into transitions, applying the
   legal transitions and the debouncing. The oracle, CrowFlies, and LightCone therefore share one set
@@ -171,15 +185,16 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   iterated on in a notebook then leaves the same record as any other. This beats a notebook that
   only inspects, whose runs a person repeats through the CLI to keep.
 - **N is 5 minutes.** A rider needs a few minutes' warning of a pass, to get a camera out or tell a
-  friend. Five minutes leaves that much for a notification that comes a minute or two late. It
-  beats the minute that [target.md](target.md) gives, which leaves too little time to act. The
+  friend. Five minutes ahead leaves that much, even for a notification a minute or two short of it.
+  It beats the minute that [target.md](target.md) gives, which leaves too little time to act. The
   rider's need fixes N, so no sweep varies it.
 - **A crossing reaches `ActualPass` only from `PredictedPass`.** `ActualPass` marks a prediction
   that came true, so a pass nobody predicted leaves its crossing in `CandidatePass` or
-  `OutOfReach`. A pass in a session's first N leaves no time to predict it, so scoring truncates
-  that start. Such a pass goes unscored, as does a notification paired with it. The predictor still
-  replays those samples, so it has a speed once scoring starts. This beats letting a predictor
-  declare a pass it never predicted.
+  `OutOfReach`. A pass in a session's first minute leaves too little time to notify it 30 s ahead. A
+  predictor first needs samples to measure a speed. Scoring therefore truncates that start. Such a
+  pass goes unscored, as does a notification it credits. The predictor still replays those samples,
+  so it has a speed once scoring starts. This beats letting a predictor declare a pass it never
+  predicted.
 
 #### Consequences elsewhere
 
@@ -223,10 +238,9 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **Which float does a replay run in?** The tasks assume `f32`, as both apps run, rather than the
   store's `f64`. Between samples 10 s apart, `f32`'s 0.42 m of latitude is under 1% of the distance
   a moving train covers.
-- **Does a hit need a minimum lead time?** A rider needs a few minutes, yet
-  [The measure](#the-measure) counts a notification seconds before its pass as a hit. A minimum
-  lead time, such as 2 minutes, would count it in the research's late class. The answer changes
-  `score`.
+- **What do last-moment and too-early notifications score?** The tasks start at 0.25 and 0.05, as
+  settings each run records. Each score changes at a step, so a notification a second past N scores
+  a twentieth of one a second inside. A ramp across each edge would soften that.
 - **Which leg sets a dwelling sample's `realtime`?** A sample waiting at a stop sits between the leg
   arriving and the leg departing. The answer moves `realtime_pct` for trips with long dwells.
 - **Where does the cleaning rule apply?** `motis::train_sessions` already drops a trip for each of
@@ -287,9 +301,9 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       predictor and the `Tracker`.
 - [ ] Add the oracle to `evaluation`: a predictor that reads a session's ground-truth passes, and
       predicts each N ahead.
-- [ ] Add the step `score` to `evaluation`, pairing notifications with passes as
+- [ ] Add the step `score` to `evaluation`, scoring each notification as
       [The measure](#the-measure) defines.
-- [ ] Leave each session's first N out of `score`, as the decision on `ActualPass` sets out.
+- [ ] Leave each session's first minute out of `score`, as the decision on `ActualPass` sets out.
 - [ ] Add the step `summarise` to `evaluation`: the measures, with the counts of sessions, passes,
       and notifications.
 - [ ] Expose every step and the full run in `evaluation-py`, with geometry crossing as GeoArrow.
