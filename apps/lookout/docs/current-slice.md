@@ -250,6 +250,14 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   alarms per hour. The report shows every run, so the choice stands beside the runs it passed over.
   A later predictor goes through the same review. This beats a rule fixed before the results, which
   cannot weigh a trade-off nobody foresaw.
+- **The cleaning rule discards a whole session that fails either of two checks.** A session fails
+  if any sample lies outside its country, or if any sample implies a speed over 100 m/s.
+  `motis::train_sessions` applies both in Rust, as drop reasons beside its existing four, and counts
+  each. A country's land and maritime areas, the ones that already place a point, decide what lies
+  inside it. The speed check catches a jump, a single 10 s step of tens of kilometres onto a stop.
+  [Investigation](#investigation) gives the evidence for both. Discarding fits the Straw Man's bias
+  towards discarding invalid data, and the checks cost 2% of sessions. This beats marking rows for
+  `select` to filter, which adds a v3 column that every reader has to know to apply.
 
 #### Consequences elsewhere
 
@@ -261,6 +269,10 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **Gold holds datasets of rows for the first time.** [medallion.md](medallion.md#partitioning)
   partitions evaluation results by run, and nothing writes them yet. `medallion`'s writers and its
   `Query` gain gold, and `medallion-py` gains `query_gold` and `write_gold`.
+- **A trip leaving its country is no longer written.** `motis::train_sessions` now writes such a
+  trip under the country it starts in, as
+  `a_trip_leaving_every_known_country_is_written_under_the_one_it_starts_in` tests. Under the
+  cleaning rule, it drops the trip instead.
 - **CrowFlies' radius has to reach N ahead.** Its 5 km covers 5 minutes only at 60 km/h or slower,
   so the sweep varies the radius.
 
@@ -297,6 +309,11 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   near-identical sessions a day, so intervals over sessions come out narrower than the truth. Each
   leg in `motis_segment_v3` carries a `route_name`, not yet checked as the name of a line. It comes
   back once two predictors' intervals clear each other only narrowly.
+- **A straightness check on each session.** Deferred: the two checks of the cleaning rule leave
+  some sessions that look bogus on a map, such as one running straight between stops. Finding them
+  needs a measure of how far a path strays from track, such as the `off_track_share` that
+  [the demonstrable-behaviour assessment](2026-10-18-demonstrable-behaviour.md#investigation)
+  adopted. It comes back once a predictor's misses or false alarms trace to such a session.
 
 #### Open questions
 
@@ -308,9 +325,29 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   those rows in the steps keeps one definition of each table, at a rebuild cost nobody has measured.
   Leaving them out spares the extension those crates, and defines each table's columns in two
   crates, with a test holding them equal. A timed rebuild in Phase 2 decides it.
-- **Where does the cleaning rule apply?** `motis::train_sessions` already drops a trip for each of
-  four reasons, and logs each count. Marking invalid rows for `select` to filter is the alternative,
-  and adds a v3 column. The answer waits on the anomaly task.
+
+### Investigation
+
+What `notebooks/evaluation/explore2.py` established about `train_session_sample_v2`, on 2026-11-04.
+The high tail is the 1% of sessions with the most samples, about 1,700 sessions.
+
+- **Samples fall 10 s apart.** Every step between consecutive samples in the high tail takes 10 s.
+  The median step covers 317 m.
+- **A bogus session jumps once.** The user picked 24 bogus-looking sessions from a map of the high
+  tail. In 23 of them, a single step covers 38–236 km and lands on a stop. In the other sessions
+  of the high tail, the median longest step is 496 m.
+- **A speed limit separates the jumps.** In the high tail, no session without a jump exceeds
+  71.5 m/s. Every session with one exceeds 145 m/s. A limit of 100 m/s sits in that gap.
+- **The one pick without a jump leaves Germany.** It runs straight between two stops, and comes
+  from the older `delfi-2026-10-10.route-shapes` source. 620 of its samples lie outside Germany's
+  land and maritime areas. No other session in the high tail has a sample outside them.
+- **The two checks flag every pick, and some sessions that look valid.** In the high tail, they
+  flag all 24 picks and 13 more. Some of those 13 look valid on the map.
+- **Across every session, the checks discard 2%.** Of 165,606 sessions, 3,342 fail the speed check
+  and 8 lie partly outside Germany. None fails both. The 3,350 hold 1,796,894 of the 64,232,436
+  samples. Some sessions that look bogus on the map pass both checks.
+- **Two stops alone marks no fault.** A check on sessions with exactly two stops flagged sessions
+  that look valid on the map, and was dropped.
 
 ### Tasks
 
@@ -326,13 +363,13 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 The evaluation replays these datasets, and their counts show whether the filter, `realtime_pct` ≥
 90, leaves enough sessions.
 
-- [ ] Look for anomalies in `train_session_sample_v2` with the user, in a new
+- [x] Look for anomalies in `train_session_sample_v2` with the user, in a new
       `notebooks/evaluation/explore2.py`, before v3 is declared.
-- [ ] Decide, from the anomalies found, which samples or sessions the cleaning rule discards.
+- [x] Decide, from the anomalies found, which samples or sessions the cleaning rule discards.
 - [ ] Add `realtime` to `TrainSessionSampleRowV3` and `realtime_pct` to `TrainSessionRowV3`, written
       by `motis::train_sessions` in place of v2.
-- [ ] Apply the cleaning rule in `motis::train_sessions`. A rule that marks rows instead lands with
-      `select`.
+- [ ] Apply the cleaning rule's two checks in `motis::train_sessions`, as drop reasons counted
+      beside its existing four.
 - [ ] Re-derive with `just silver-motis-ingest`. Check that about 40,000 sessions reach
       `realtime_pct` ≥ 90, as `explore1.py` counted per day and trip.
 - [ ] Remove `TrainSessionRowV2`, `TrainSessionSampleRowV2`, and their snapshots, and delete the v2
