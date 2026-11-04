@@ -98,7 +98,7 @@ notification paired with no pass, which includes a repeat for a pass already pai
 pass paired with no notification.
 
 - **Precision** is hits over notifications.
-- **Recall** is hits over the passes in the sessions replayed.
+- **Recall** is hits over the scored passes.
 - **False alarms per hour** is false alarms over the hours replayed.
 - **Lead time** runs from a hit's notification to its pass, and is reported as a distribution.
 
@@ -166,6 +166,20 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   the sessions with `realtime_pct` ≥ 90. A session is the unit a predictor replays. It beats 1000
   sample rows, which hold a handful of sessions, and 1000 passes, which fix recall's denominator
   rather than the sessions.
+- **A run started from Python writes gold, as a run of the CLI does.** A notebook writes through
+  `medallion-py`, and the CLI through `medallion`'s writers, so both use one implementation. A run
+  iterated on in a notebook then leaves the same record as any other. This beats a notebook that
+  only inspects, whose runs a person repeats through the CLI to keep.
+- **N is 5 minutes.** A rider needs a few minutes' warning of a pass, to get a camera out or tell a
+  friend. Five minutes leaves that much for a notification that comes a minute or two late. It
+  beats the minute that [target.md](target.md) gives, which leaves too little time to act. The
+  rider's need fixes N, so no sweep varies it.
+- **A crossing reaches `ActualPass` only from `PredictedPass`.** `ActualPass` marks a prediction
+  that came true, so a pass nobody predicted leaves its crossing in `CandidatePass` or
+  `OutOfReach`. A pass in a session's first N leaves no time to predict it, so scoring truncates
+  that start. Such a pass goes unscored, as does a notification paired with it. The predictor still
+  replays those samples, so it has a speed once scoring starts. This beats letting a predictor
+  declare a pass it never predicted.
 
 #### Consequences elsewhere
 
@@ -175,8 +189,10 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **The matching's session loses its device.** `session_crossings::matching::Session` holds a
   `device_id`, which a train session lacks. The device moves to the rows that `silver.rs` builds.
 - **Gold holds datasets of rows for the first time.** [medallion.md](medallion.md#partitioning)
-  partitions evaluation results by run, and nothing writes them yet. `medallion`'s writers, its
-  `Query`, and `medallion-py` each gain gold.
+  partitions evaluation results by run, and nothing writes them yet. `medallion`'s writers and its
+  `Query` gain gold, and `medallion-py` gains `query_gold` and `write_gold`.
+- **CrowFlies' radius has to reach N ahead.** Its 5 km covers 5 minutes only at 60 km/h or slower,
+  so the sweep varies the radius.
 
 #### Rejected / deferred
 
@@ -196,21 +212,21 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 
 #### Open questions
 
-- **Does a run started from Python write gold?** The tasks assume not: the CLI records runs, and a
-  notebook runs the steps to inspect them. A yes adds a gold writer to `medallion-py`.
-- **Do the steps take `medallion-model`'s gold rows?** The tasks keep the store out of the steps'
-  crate, as the assessment's
-  [rebuild timings](2026-10-18-demonstrable-behaviour.md#where-the-extension-lives) advise. The
-  `evaluate` crate then maps each step's rows to a gold dataset's. Taking the store in costs the
-  extension a rebuild time nobody has measured.
+- **Do the steps build the gold datasets' rows themselves?** The Python extension compiles the
+  steps' crate, and rebuilds it whenever a step changes. The gold row types live in
+  `medallion-model`, which brings in DataFusion and SedonaDB. The store's own extension takes about
+  six minutes to rebuild, as the assessment's
+  [rebuild timings](2026-10-18-demonstrable-behaviour.md#where-the-extension-lives) record. Building
+  those rows in the steps keeps one definition of each table, at a rebuild cost nobody has measured.
+  Leaving them out spares the extension those crates, and defines each table's columns in two
+  crates, with a test holding them equal. A timed rebuild in Phase 2 decides it.
 - **Which float does a replay run in?** The tasks assume `f32`, as both apps run, rather than the
   store's `f64`. Between samples 10 s apart, `f32`'s 0.42 m of latitude is under 1% of the distance
   a moving train covers.
-- **Does a crossing reach `ActualPass` without a prediction?** The Straw Man's transitions leave out
-  `CandidatePass` → `ActualPass` and `OutOfReach` → `ActualPass`. The answer sets the tracker's
-  legal transitions, and what an app shows after a pass nobody predicted.
-- **Which N does the first run use?** [target.md](target.md) notifies a minute ahead, and the
-  research's lead-time window ends at 120 s. CrowFlies' sweep settles N for the runs after it.
+- **Does a hit need a minimum lead time?** A rider needs a few minutes, yet
+  [The measure](#the-measure) counts a notification seconds before its pass as a hit. A minimum
+  lead time, such as 2 minutes, would count it in the research's late class. The answer changes
+  `score`.
 - **Which leg sets a dwelling sample's `realtime`?** A sample waiting at a stop sits between the leg
   arriving and the leg departing. The answer moves `realtime_pct` for trips with long dwells.
 - **Where does the cleaning rule apply?** `motis::train_sessions` already drops a trip for each of
@@ -258,30 +274,37 @@ The evaluation replays these datasets, and their counts show whether the filter,
 The oracle's score is known before it runs: perfect, short of what the data or the rules forbid. A
 run of it tests every new part, from the tracker to gold, before a real predictor sits behind them.
 
-- [ ] Add `CrossingState`, `Transition`, and `Tracker` to `predictor`, with a test per transition the
-      Straw Man lists, from constructed judgements.
-- [ ] Create the `evaluation` crate, free of the store, with the step `select`: sessions picked at
+- [ ] Add `CrossingState`, `Transition`, and `Tracker` to `predictor`, tested on constructed
+      judgements, one test per transition the Straw Man lists.
+- [ ] Test that the `Tracker` refuses `ActualPass` from any state but `PredictedPass`.
+- [ ] Create the `evaluation` crate with the step `select`, which picks `TrainSessionRowV3`s at
       random under a seed.
+- [ ] Add the `evaluation-py` extension exposing `select`, and time a rebuild after a change to
+      `select`.
+- [ ] Decide from that time whether the steps take and build `medallion-model`'s rows, or rows of
+      their own.
 - [ ] Add the step `replay` to `evaluation`, feeding a session's times and positions alone through a
       predictor and the `Tracker`.
 - [ ] Add the oracle to `evaluation`: a predictor that reads a session's ground-truth passes, and
       predicts each N ahead.
 - [ ] Add the step `score` to `evaluation`, pairing notifications with passes as
       [The measure](#the-measure) defines.
+- [ ] Leave each session's first N out of `score`, as the decision on `ActualPass` sets out.
 - [ ] Add the step `summarise` to `evaluation`: the measures, with the counts of sessions, passes,
       and notifications.
-- [ ] Add the `evaluation-py` extension, exposing each step and the full run, with geometry crossing
-      as GeoArrow.
+- [ ] Expose every step and the full run in `evaluation-py`, with geometry crossing as GeoArrow.
 - [ ] Build `notebooks/evaluation/predictions.py` with the user, running the oracle's steps on a few
       sessions and drawing each.
 - [ ] Extend `medallion` to gold datasets of rows, partitioned `run_date=<date>/run_id=<id>`, each run
       written once.
-- [ ] Register gold datasets by name in `medallion`'s `Query`, and add `query_gold` to
-      `medallion-py`.
+- [ ] Register gold datasets by name in `medallion`'s `Query`, and add `query_gold` and `write_gold`
+      to `medallion-py`.
 - [ ] Define the gold datasets that [The datasets](#the-datasets) names, in `medallion-model`.
 - [ ] Add the `evaluate` crate, whose CLI runs every step in order or any one alone, and a
       `just evaluate` recipe.
 - [ ] Run the oracle over 1000 sessions with `just evaluate`.
+- [ ] Check that a run written from `predictions.py` through `write_gold` matches the CLI's run on
+      the same seed.
 - [ ] Trace each shortfall from a perfect score in `predictions.py`, through `query_gold`, and record
       its cause under Investigation.
 
@@ -293,8 +316,8 @@ tracker meets that can be wrong.
 - [ ] Have `CrowFlies` judge each crossing: `CandidatePass` within its radius, `PredictedPass` while
       it arrives within N, `ActualPass` within a pass radius.
 - [ ] Run CrowFlies over the oracle's sessions and seed with `just evaluate`.
-- [ ] Sweep N, the pass radius, and the debouncing. Choose CrowFlies' settings from recall plotted
-      against false alarms per hour.
+- [ ] Sweep the radius, the pass radius, and the debouncing. Choose CrowFlies' settings from recall
+      plotted against false alarms per hour.
 - [ ] Draw CrowFlies' false alarms and misses on a map in `predictions.py` with the user, and one
       session's transitions over time.
 
@@ -331,7 +354,9 @@ The apps come last, since they show the states of the predictor the evaluation c
       it, and delete it.
 - [ ] Add `train_session_crossing_v1` and the gold datasets to the derivation graph in
       `docs/architecture.md`.
-- [ ] Describe gold datasets of rows in the gold sections of `docs/medallion.md`.
+- [ ] Describe gold datasets of rows, and writing them from Python, in the gold sections of
+      `docs/medallion.md`.
+- [ ] Describe `query_gold` and `write_gold` in `crates/medallion-py/README.md`.
 - [ ] Describe `realtime` and `realtime_pct` in `crates/motis/README.md`, and train sessions in
       `crates/session_crossings/README.md`.
 - [ ] Rewrite `predictor`'s README for the tracker and LightCone, and `platform-core`'s for the
