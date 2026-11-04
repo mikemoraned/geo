@@ -176,6 +176,15 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   crossing it reports belongs in. The tracker turns those judgements into transitions, applying the
   legal transitions and the debouncing. The oracle, CrowFlies, and LightCone therefore share one set
   of transition rules. This beats a state machine per predictor, whose rules can drift apart.
+- **Each state is a type, so an illegal transition does not compile.** `CandidatePass`,
+  `PredictedPass`, and `ActualPass` are types, and `OutOfReach` is a crossing the tracker holds
+  nothing for. A transition is a method that consumes one state and returns the next. `ActualPass`
+  has no constructor outside its module, and only `PredictedPass` has a method returning one. The
+  tracker keeps each crossing's state in an enum over the types, as
+  [Hoverbear's enum wrapper](https://hoverbear.org/blog/rust-state-machine-pattern/) does. Its
+  `match` can call only the transitions a state has. This follows
+  [the typestate pattern](https://cliffle.com/blog/rust-typestate/). It beats a check at run time,
+  which a test can only sample.
 - **The first run replays 1000 sessions.** They are picked at random, under a recorded seed, from
   the sessions with `realtime_pct` ≥ 90. A session is the unit a predictor replays. It beats 1000
   sample rows, which hold a handful of sessions, and 1000 passes, which fix recall's denominator
@@ -208,6 +217,8 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   `Query` gain gold, and `medallion-py` gains `query_gold` and `write_gold`.
 - **CrowFlies' radius has to reach N ahead.** Its 5 km covers 5 minutes only at 60 km/h or slower,
   so the sweep varies the radius.
+- **A toolchain upgrade can change the `trybuild` messages.** Each case commits the compiler's
+  message, so an upgrade regenerates them with `TRYBUILD=overwrite`.
 
 #### Rejected / deferred
 
@@ -224,6 +235,14 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   unmatched.
 - **Rerun as the viewer of a run.** Deferred, since the notebook draws a session's transitions over
   time. It comes back once watching one replay at speed is wanted.
+- **A state machine crate.** Rejected. `statig` and `rust-fsm` check each transition as it runs,
+  which the types replace. `statum`, `sm`, and `typestate` generate the types from a macro, and
+  four states read more plainly written out.
+- **A `compile_fail` doctest for an illegal transition.** Rejected: on stable Rust, one passes on
+  any compile error, a typo included. [`trybuild`](https://docs.rs/trybuild) compares the
+  compiler's message instead.
+- **A probabilistic model of how trains turn.** Deferred: ballpark odds of the extremes bound the
+  cone's angle. It comes back once LightCone's misses trace to turns those odds call rare.
 
 #### Open questions
 
@@ -252,6 +271,9 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **Which predictor do the apps run once the slice ends?** LightCone where it beats CrowFlies, or
   CrowFlies until a later slice. The answer sets the predictor and settings that `platform-core`
   holds.
+- **Does nextest run `trybuild`'s cases?** Its documentation describes only `cargo test`, and no
+  source found confirms nextest. If nextest cannot run them, a `cargo test` line in the test recipes
+  runs them, as `test-doc` runs the doctests.
 
 ### Tasks
 
@@ -288,9 +310,12 @@ The evaluation replays these datasets, and their counts show whether the filter,
 The oracle's score is known before it runs: perfect, short of what the data or the rules forbid. A
 run of it tests every new part, from the tracker to gold, before a real predictor sits behind them.
 
-- [ ] Add `CrossingState`, `Transition`, and `Tracker` to `predictor`, tested on constructed
-      judgements, one test per transition the Straw Man lists.
-- [ ] Test that the `Tracker` refuses `ActualPass` from any state but `PredictedPass`.
+- [ ] Add a type per state to `predictor`, a consuming method per legal transition, and
+      `CrossingState` over the types.
+- [ ] Add `Tracker` to `predictor`, holding each crossing's `CrossingState` and recording each
+      `Transition`, tested on constructed judgements.
+- [ ] Add `trybuild` cases to `predictor` that call `pass` on a `CandidatePass` and build an
+      `ActualPass` directly, each failing to compile.
 - [ ] Create the `evaluation` crate with the step `select`, which picks `TrainSessionRowV3`s at
       random under a seed.
 - [ ] Add the `evaluation-py` extension exposing `select`, and time a rebuild after a change to
@@ -339,10 +364,13 @@ tracker meets that can be wrong.
 
 LightCone is the improvement the Target asks for, measured against CrowFlies on the same sessions.
 
+- [ ] Measure in `explore1.py` the angle between a train's heading and its positions up to N
+      later.
+- [ ] Read ballpark odds for the extremes of that angle, and bound the cone's angle by them.
 - [ ] Add `LightCone` to `predictor`: a velocity from the last two samples, and `PredictedPass`
       inside the cone it reaches within N.
-- [ ] Run LightCone over the same sessions and seed, sweeping the cone's angle, and compare its best
-      settings with CrowFlies'.
+- [ ] Run LightCone over the same sessions and seed, with angles up to that bound, and compare its
+      best settings with CrowFlies'.
 - [ ] Average the velocity over the last few samples, as a setting of `LightCone`, and run it again.
 - [ ] Draw LightCone's cone at each sample in `predictions.py` with the user, where it beats
       CrowFlies and where it loses.
@@ -373,13 +401,13 @@ The apps come last, since they show the states of the predictor the evaluation c
 - [ ] Describe `query_gold` and `write_gold` in `crates/medallion-py/README.md`.
 - [ ] Describe `realtime` and `realtime_pct` in `crates/motis/README.md`, and train sessions in
       `crates/session_crossings/README.md`.
-- [ ] Rewrite `predictor`'s README for the tracker and LightCone, and `platform-core`'s for the
-      states it exposes.
+- [ ] Rewrite `predictor`'s README for the typed states, the tracker, and LightCone, and
+      `platform-core`'s for the states it exposes.
 - [ ] Show the states in the picture in `docs/web.md`, and on the panel in
       `crates/platform/m5/README.md`.
 - [ ] Write the READMEs of `evaluation`, `evaluate`, and `evaluation-py`.
 - [ ] Name the v3 datasets in the help of `silver-motis-ingest`, and `train_session_crossing_v1` in
       that of `silver-session-crossings`.
-- [ ] Remove `explore1.py`, whose question `realtime_pct` answers, with the answer in the removing
+- [ ] Remove `explore1.py` once its questions are answered, with the answers in the removing
       commit.
 - [ ] Run `just test-no-docker`, and hand over `just test`.
