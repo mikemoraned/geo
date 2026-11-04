@@ -28,7 +28,7 @@ Transitions:
 * `OutOfReach` <-> `CandidatePass`: a crossing can oscillate in and out of being a candidate
 * `OutOfReach` -> `PredictedPass` or `CandidatePass` -> `PredictedPass`: this is us making a prediction, and this transition should lead to a notification of some kind to the user
 * `PredictedPass` -> `CandidatePass` or `PredictedPass` -> `OutOfReach`: this counts as a failed prediction
-* `PredictedPass` -> `ActualPass`: a successful prediction. A
+* `PredictedPass` -> `ActualPass`: a successful prediction.
   * A crossing stays in the `ActualPass` state until we've gotten some distance away from it to avoid re-notifying repeatedly.
   * In general, the state transitions should probably have some sort of debouncing or hysteresis to avoid frequent flips in and out of states.
 * `ActualPass` -> `PredictedPass`: it's always possible we can pass somewhere multiple times, so this counts as a new prediction
@@ -53,11 +53,11 @@ We should drive a predictor based on fake train data as if it was receiving it l
 
 This should use the motis data we have recorded i.e. we should replay `train_session_sample_v2`, with some caveats. The intent of the previous slice was to record a full weeks worth of train data for Germany, but unfortunately part-way through we lost `realtime` feeds [without realising it](completed-slices.md#caveat-realtime-stops-partway-through-the-capture). 
 
-Some [analysis](../notebooks/evaluation/explore1.py) shows which `trip_id`s on which `polled_date`s have > 90% coverage of realtime datapoints. It's aboout 40,000 trips clustered around 2026-10-18 and 2026-10-19. We should implement this 90% coverage filter by re-doing the derivation of `train_session_sample_v2` so that it contains a `realtime` column and extend `train_session_v2` to have a `realtime_pct` which allows us to apply the filter i.e. we'd only include sessions whose coverage was >= 90%.
+Some [analysis](../notebooks/evaluation/explore1.py) shows which `trip_id`s on which `polled_date`s have > 90% coverage of realtime datapoints. It's about 40,000 trips clustered around 2026-10-18 and 2026-10-19. We should implement this 90% coverage filter by re-doing the derivation of `train_session_sample_v2` so that it contains a `realtime` column and extend `train_session_v2` to have a `realtime_pct` which allows us to apply the filter i.e. we'd only include sessions whose coverage was >= 90%.
 
-The underlying data may require some further cleaning to remove any other anomalies that exist. As long as this doesn't massively affect coverage then we can adopt a bias to discard invalid data instead of trying to fix it. This may have to happen at the session level i.e. we may have to disgard whole sessions if some percentage of it (e.g. 10%) is invalid.
+The underlying data may require some further cleaning to remove any other anomalies that exist. As long as this doesn't massively affect coverage then we can adopt a bias to discard invalid data instead of trying to fix it. This may have to happen at the session level i.e. we may have to discard whole sessions if some percentage of it (e.g. 10%) is invalid.
 
-We likely also want to do a version of `session_crossing_v3` but for train sessions, `train_session_v1`. This *may* be computationally expensive to create in bulk so perhaps we could extend the predictor itself to tell us when it has passed a crossing. I'd rather not though, as that's then using parts of the predictor to derive its own evaluation.
+We likely also want to do a version of `session_crossing_v3` but for train sessions, `train_session_crossing_v1`. This *may* be computationally expensive to create in bulk so perhaps we could extend the predictor itself to tell us when it has passed a crossing. I'd rather not though, as that's then using parts of the predictor to derive its own evaluation.
 
 Hopefully these `realtime` samples will be enough samples to give a good statistical evaluation, but if not, we can relax our `realtime` constraint and instead use all of the sessions we have.
 
@@ -65,19 +65,19 @@ We don't need to model gps accuracy in this slice, but it can be an extension we
 
 #### Visualising in Crux App on Web and M5
 
-Whilst the CrowFlies Predictor will need to make explicit the states of each crossing.
+The CrowFlies and LightCone Predictors will need to make explicit the states of each crossing as they see them.
 
 These only have to be minimally supported in the Crux Apps e.g. showing a different shape for each crossing either in the Canvas view, or as some ASCII-art on M5. They don't have to be updated to manifest a notification from the internal predictor as a user-visible notification.
 
 #### Style of development and how to record evaluations
 
-I generally prefer a Walking Skeleton approach and I'd like to apply that here, alongside some of the themes of explainabiluty from [recent investigations](2026-10-18-demonstrable-behaviour.md). This means that I'd like to have a very basic evaluation in place, starting with a small amount of samples, say `1000`. This allows us to go through an inspectable series of steps that show if the method is working before extending to longer runs.
+I generally prefer a Walking Skeleton approach and I'd like to apply that here, alongside some of the themes of explainability from [recent investigations](2026-10-18-demonstrable-behaviour.md). This means that I'd like to have a very basic evaluation in place, starting with a small amount of samples, say `1000`. This allows us to go through an inspectable series of steps that show if the method is working before extending to longer runs.
 
 This also means we don't have to implement the LightCone predictor at start. That can come after we have a proper evaluation of CrowFlies in place.
 
 The output of evaluation should live in `gold` as tables recording things like predictor name + parameters, evaluation method, sample sizes, and random seeds, as well as output. So, we probably want to have a mix of tables describing the evaluation run as well actual results. These can be summary distributions.
 
-However, I probably also want the data in detail about what the evaluator predicted and when, perhaps recorded as an `evaluation_session`, also in `gold`. This can perhaps record the state transitions over time. This can be inspected for debugging to check everything is working, and also to replay edge-cases or to visualise where there are hotspots of prediction failures. If we are wanting to replay over time, rerun may be a good choice, but a notebook is also fine.
+However, I probably also want the data in detail about what the predictor predicted and when, perhaps recorded as an `evaluation_session`, also in `gold`. This can perhaps record the state transitions over time. This can be inspected for debugging to check everything is working, and also to replay edge-cases or to visualise where there are hotspots of prediction failures. If we are wanting to replay over time, rerun may be a good choice, but a notebook is also fine.
 
 Overall this means that Tasks should be broken down into major stages with each stage delivering some aspect of
 * derivation of data for sessions
