@@ -316,9 +316,10 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 
 #### Refactors / extensions
 
-- [ ] Run `just outdated`, and upgrade what it lists that this slice touches, each in a commit of
-      its own.
-- [ ] Move the device out of `session_crossings::matching::Session`, since a train session has none.
+- [-] Run `just outdated`, and upgrade what it lists that this slice touches, each in a commit of
+      its own. Run on 2026-11-04 and the upgrades left for an upgrades slice. SedonaDB 0.5.0 gates
+      most of them, since it moves arrow to 58, datafusion to 54, and geo to 0.33.
+- [x] Move the device out of `session_crossings::matching::Session`, since a train session has none.
 
 #### Phase 1: the sessions and their passes
 
