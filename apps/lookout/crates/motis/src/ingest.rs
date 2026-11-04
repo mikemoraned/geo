@@ -47,6 +47,8 @@ pub enum IngestError {
     Sources(#[from] crate::source::SourceError),
     #[error("placing a train: {0}")]
     Unplaced(#[from] crate::sampling::NoWhereabouts),
+    #[error("the share of a session's samples timed in real time: {0}")]
+    RealtimeShare(#[from] domain::NotAPercentage),
     #[error("projecting a train's sample: {0}")]
     Projection(#[from] medallion::GeoError),
     #[error("trip `{trip_id}`: {source}")]

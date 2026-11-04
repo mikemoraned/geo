@@ -9,7 +9,7 @@ use transport::countries::CountryAreas;
 
 #[derive(Parser)]
 #[command(
-    about = "Derive the silver train_segment_v4, train_session_v2 and train_session_sample_v2 datasets from the bronze motis capture log"
+    about = "Derive the silver train_segment_v4, train_session_v3 and train_session_sample_v3 datasets from the bronze motis capture log"
 )]
 struct Args {
     #[command(flatten)]

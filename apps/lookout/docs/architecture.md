@@ -32,8 +32,8 @@ produces, so any of them can be re-run over unchanged input to the same result.
 
 ```
 bronze telemetry       ──sessionise──────▶ session_v3, session_sample_v3
-bronze motis log       ──motis_ingest────▶ train_segment_v4, train_session_v2,
-                                           train_session_sample_v2
+bronze motis log       ──motis_ingest────▶ train_segment_v4, train_session_v3,
+                                           train_session_sample_v3
 bronze overture        ──notebook────────▶ water_crossing_v2
 session_v3 + crossings ──match_crossings─▶ session_crossing_v3
 water_crossing_v2      ──pack_crossings──▶ gold crossings.pointset, crossings.json
