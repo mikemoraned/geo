@@ -142,14 +142,14 @@ erDiagram
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
 - `evaluation_run_v1` holds a run's predictor and settings, float type, scores and ramp, method,
-  filter, sample size, seed, and input versions.
+  filter, sample size, seed, bootstrap draws, and input versions.
 - `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
   transitions still counts.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
   two samples writes nothing.
 - `evaluation_outcome_v1` holds each notification with its class and score, and each miss.
-- `evaluation_summary_v1` holds a run's measures, with its counts of sessions, passes, and
-  notifications.
+- `evaluation_summary_v1` holds a run's measures and their intervals, with its counts of sessions,
+  passes, and notifications.
 
 ### Decisions
 
@@ -222,6 +222,20 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   leg's samples, which carry that leg's flag. `position_at` already places a dwelling sample by the
   arriving leg. The derivation fixes the choice, so no run varies it. This beats the departing leg,
   whose missing `realtime` would mark a correct dwell unreliable.
+- **Precision, recall, and false alarms per hour each carry an interval, from a bootstrap over
+  sessions.** `summarise` draws as many sessions as the run replayed, with replacement, and works
+  out each measure over the draw. Over many such draws, the middle 95% of each measure's values is
+  its interval. The run records the number of draws, and its seed fixes them. A session's
+  notifications rise and fall together, so drawing notifications would give intervals too narrow.
+  Sessions on one line repeat each other in the same way, so these intervals still come out
+  narrower than the truth. This beats a textbook formula, which assumes independent yes-or-no
+  outcomes rather than graded scores.
+- **Two predictors differ only where their intervals do not overlap.** Overlapping intervals mean
+  the run cannot tell the two apart, not that they are equal. The rule is cautious: it rarely calls
+  a false gain real, and it can miss a small real one. More sessions narrow every interval. The run
+  over every session the filter keeps, about 40,000, gives intervals about six times narrower than
+  1000 sessions do. This beats a paired bootstrap of the difference, which needs a step and a
+  dataset of its own.
 - **A person chooses the apps' predictor and its settings from a report a skill writes.** The
   skill, `choose-predictor`, reports the runs in gold as a dated doc in `docs/`, so the review sits
   in a diff. The discussion it opens ends in a predictor and settings, which a code change puts in
@@ -271,6 +285,11 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   spread out rather than bunch at it. It comes back once a run shows them bunching there.
 - **A notebook as `choose-predictor`'s report.** Rejected: a dated doc keeps the review in a diff.
   It comes back once each review needs the maps that `predictions.py` draws.
+- **Drawing whole lines rather than sessions.** Deferred: drawing lines needs each session to carry
+  its line, and no dataset holds one yet. A line with a train every 20 minutes gives dozens of
+  near-identical sessions a day, so intervals over sessions come out narrower than the truth. Each
+  leg in `motis_segment_v3` carries a `route_name`, not yet checked as the name of a line. It comes
+  back once two predictors' intervals clear each other only narrowly.
 
 #### Open questions
 
@@ -285,9 +304,6 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **Where does the cleaning rule apply?** `motis::train_sessions` already drops a trip for each of
   four reasons, and logs each count. Marking invalid rows for `select` to filter is the alternative,
   and adds a v3 column. The answer waits on the anomaly task.
-- **How does a comparison state its uncertainty?** One way is an interval on each predictor's rates.
-  The other is a bootstrap over sessions of the difference between two predictors on the same
-  sessions. The answer shapes `summarise`'s output, and what "robustly" means in the Target.
 
 ### Tasks
 
@@ -341,8 +357,8 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [ ] Add the step `score` to `evaluation`, scoring each notification as
       [The measure](#the-measure) defines.
 - [ ] Leave each session's first minute out of `score`, as the decision on `ActualPass` sets out.
-- [ ] Add the step `summarise` to `evaluation`: the measures, with the counts of sessions, passes,
-      and notifications.
+- [ ] Add the step `summarise` to `evaluation`: the measures and their intervals, with the counts
+      of sessions, passes, and notifications.
 - [ ] Expose every step and the full run in `evaluation-py`, with geometry crossing as GeoArrow.
 - [ ] Build `notebooks/evaluation/predictions.py` with the user, running the oracle's steps on a few
       sessions and drawing each.
@@ -386,7 +402,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 - [ ] Average the velocity over the last few samples, as a setting of `LightCone`, and run it again.
 - [ ] Draw LightCone's cone at each sample in `predictions.py` with the user, where it beats
       CrowFlies and where it loses.
-- [ ] Run both predictors over every session the filter keeps. If the uncertainty stays too wide,
+- [ ] Run both predictors over every session the filter keeps. If their intervals still overlap,
       widen the filter to every session.
 
 #### Phase 5: states in the apps
