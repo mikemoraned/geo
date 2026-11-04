@@ -7,7 +7,7 @@ use webauthn_rs_proto::ResidentKeyRequirement;
 
 use crate::auth::code::ShortCode;
 use crate::auth::store::{Ceremony, CeremonyId, PendingPasskey};
-use crate::auth::{ACCOUNT, ACCOUNT_HANDLE, Allowing, AuthError, Finish, RelyingParty, Started};
+use crate::auth::{ACCOUNT, Allowing, AuthError, Finish, RelyingParty, Started, account_handle};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -21,7 +21,7 @@ pub async fn start(
 ) -> Result<Json<Started<CreationChallengeResponse>>, AuthError> {
     let (mut options, registration) = relying_party
         .webauthn
-        .start_passkey_registration(ACCOUNT_HANDLE, ACCOUNT, ACCOUNT, None)
+        .start_passkey_registration(account_handle(), ACCOUNT, ACCOUNT, None)
         .map_err(AuthError::Unstarted)?;
     require_discoverable(&mut options);
     let ceremony = CeremonyId::random();

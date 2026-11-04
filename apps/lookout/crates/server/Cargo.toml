@@ -26,13 +26,13 @@ rand = "0.9"
 base32 = "0.5"
 chrono = { workspace = true }
 serde = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 domain = { workspace = true }
 tokio-tungstenite = "0.29"
 futures-util = "0.3"
 tower = { version = "0.5", features = ["util"] }
-uuid = { workspace = true }
 testcontainers = "0.27"
 testcontainers-modules = { version = "0.15", features = ["redis"] }
 passkey = { version = "0.6", features = ["rust-crypto"] }

@@ -53,6 +53,12 @@ pub enum Insertion {
     CodeTaken,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Update {
+    Updated,
+    Gone,
+}
+
 #[async_trait]
 pub trait AuthStore: Send + Sync {
     async fn put_ceremony(&self, id: CeremonyId, ceremony: Ceremony) -> Result<(), StoreError>;
@@ -65,6 +71,7 @@ pub trait AuthStore: Send + Sync {
     async fn take_pending(&self, code: &ShortCode) -> Result<Option<PendingPasskey>, StoreError>;
     async fn find_allowed(&self, id: &CredentialID) -> Result<Option<AllowedPasskey>, StoreError>;
     async fn put_allowed(&self, passkey: AllowedPasskey) -> Result<(), StoreError>;
+    async fn update_allowed(&self, passkey: AllowedPasskey) -> Result<Update, StoreError>;
     async fn list_allowed(&self) -> Result<Vec<AllowedPasskey>, StoreError>;
     async fn remove_allowed(&self, code: &ShortCode) -> Result<Option<AllowedPasskey>, StoreError>;
 

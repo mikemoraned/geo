@@ -1,7 +1,8 @@
 # server
 
 Serves the site and receives what its pages send. `/ws` takes telemetry, `/auth/` registers
-passkeys, `/version` gives the build's git hash, and the static directory serves everything else.
+passkeys and signs them in, `/version` gives the build's git hash, and the static directory serves
+everything else.
 [The telemetry wire](../../docs/telemetry.md) describes what arrives over the socket and when the
 server acks it; [the browser](../../docs/web.md) describes the pages it serves.
 
@@ -95,6 +96,44 @@ write the records, answers 500.
 [discouraged]: https://docs.rs/webauthn-rs/0.5.5/src/webauthn_rs/lib.rs.html#566
 [ignored]: https://docs.rs/webauthn-rs-core/0.5.5/src/webauthn_rs_core/core.rs.html#393
 [id-leak]: https://www.w3.org/TR/webauthn-3/#sctn-credential-id-privacy-leak
+
+## A sign-in names no passkey, and leaves a session
+
+Sign-in takes two requests, as registration does. `POST /auth/signin/start` answers with a ceremony
+ID and the options for [`navigator.credentials.get()`][get]. The options carry an empty allow list,
+so the authenticator offers the passkey it holds for the site, and no caller learns a credential ID.
+webauthn-rs asks for [conditional mediation][conditional-set], which offers passkeys [through
+autofill][conditional] on a username field. The site has no such field, so the server removes the
+mediation, and the browser shows its usual prompt.
+
+`POST /auth/signin/finish` takes back the ceremony ID with the browser's assertion. The server reads
+the user handle and the credential ID from the assertion. It refuses with 403 a user handle other
+than the `recording` account's, as [§7.2 of WebAuthn][verifying] requires. It also refuses with 403
+a credential ID that no allowed passkey holds. It then verifies the assertion against that passkey's
+public key.
+
+A verified sign-in writes the passkey back with its [updated counter and backup state][update] and
+the time of its use. The write replaces only a passkey that is still allowed. A passkey the admin
+revokes during a sign-in therefore stays revoked, and the finish answers 403. Otherwise the finish
+gives the session a [fresh ID][renew], records the passkey's credential ID in it, and answers 204.
+Registration creates no session.
+
+Over HTTPS the session cookie is `__Host-lookout-session`, with `Secure`. A browser accepts a
+[`__Host-` cookie][host] only from a secure origin, so over plain HTTP the cookie is
+`lookout-session`, without `Secure`. Both are `HttpOnly` and `SameSite=Strict`, with `Path=/`. A
+session ends 30 days after its last use, and [every request that carries it][always-save] renews it.
+
+A finish answers 400 as a registration's does: for a ceremony that expired, finished already, or
+never started, and for an assertion that fails verification.
+
+[get]: https://www.w3.org/TR/webauthn-3/#sctn-getAssertion
+[conditional-set]: https://docs.rs/webauthn-rs/0.5.5/src/webauthn_rs/lib.rs.html#1341
+[conditional]: https://w3c.github.io/webappsec-credential-management/#dom-credentialmediationrequirement-conditional
+[verifying]: https://www.w3.org/TR/webauthn-3/#sctn-verifying-assertion
+[update]: https://docs.rs/webauthn-rs/0.5.5/webauthn_rs/prelude/struct.Passkey.html#method.update_credential
+[renew]: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#renew-the-session-id-after-any-privilege-level-change
+[host]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#cookie_prefixes
+[always-save]: https://docs.rs/tower-sessions/0.15.0/tower_sessions/service/struct.SessionManagerLayer.html#method.with_always_save
 
 ## Redis is optional, but a configured redis is not
 

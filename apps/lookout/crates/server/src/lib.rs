@@ -32,6 +32,7 @@ pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
         .route("/version", get(version))
         .merge(auth::routes(state.relying_party.clone()))
         .fallback_service(ServeDir::new(static_dir.into()))
+        .layer(state.relying_party.session_layer())
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(state)

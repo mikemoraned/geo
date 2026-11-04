@@ -258,7 +258,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
       allowed one for `localhost` without redis. Until the binary reads `LOOKOUT_ORIGIN`, its
       origin is `http://localhost:3000`, so a deployed server allows at once any passkey a script
       registers for `localhost`.
-- [ ] Add `/auth/signin/start` and `/auth/signin/finish`, creating the session.
+- [x] Add `/auth/signin/start` and `/auth/signin/finish`, creating the session.
 - [ ] Add `/auth/signout`.
 - [ ] Test the endpoints in `tests/auth.rs` with `passkey`, including that no answer before sign-in
       carries a credential ID.
@@ -313,6 +313,8 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 - [ ] Describe signing in, and the signed-out state of `/record/`, in `docs/web.md`.
 - [ ] Describe who can record, how a passkey gains and loses access, and the risks the design
       accepts, in `docs/access.md`, and index it in `CLAUDE.md`.
+- [ ] Run `cargo-mutants` over `crates/server/src/auth`, and add a test for each mutant that
+      survives. Then review the auth code as a whole.
 - [ ] Run `just test-no-docker` and the server's Docker tests.
 - [ ] Deploy, register from the phone, allow it with `just passkeys allow`, and record a journey.
 - [ ] Set 1Password as the iPhone's passkey provider, under AutoFill in Settings.

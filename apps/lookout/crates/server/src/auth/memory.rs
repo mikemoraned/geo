@@ -10,7 +10,7 @@ use webauthn_rs::prelude::CredentialID;
 use crate::auth::code::ShortCode;
 use crate::auth::store::{
     AllowedPasskey, AuthStore, CEREMONY_LIFETIME, Ceremony, CeremonyId, Insertion,
-    PENDING_LIFETIME, PendingPasskey, StoreError,
+    PENDING_LIFETIME, PendingPasskey, StoreError, Update,
 };
 
 #[derive(Default)]
@@ -92,6 +92,17 @@ impl AuthStore for MemoryAuthStore {
         let id = passkey.passkey.cred_id().clone();
         self.records.lock().await.allowed.insert(id, passkey);
         Ok(())
+    }
+
+    async fn update_allowed(&self, passkey: AllowedPasskey) -> Result<Update, StoreError> {
+        let mut records = self.records.lock().await;
+        match records.allowed.get_mut(passkey.passkey.cred_id()) {
+            Some(held) => {
+                *held = passkey;
+                Ok(Update::Updated)
+            }
+            None => Ok(Update::Gone),
+        }
     }
 
     async fn list_allowed(&self) -> Result<Vec<AllowedPasskey>, StoreError> {
@@ -294,6 +305,45 @@ mod tests {
             .await
             .expect("found");
         assert!(found.is_some());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn updating_rewrites_an_allowed_passkey() {
+        let store = MemoryAuthStore::default();
+        let mut allowed = allowed_passkey(&store).await;
+        let used_at = Utc::now();
+        allowed.last_used_at = Some(used_at);
+
+        let updated = store
+            .update_allowed(allowed.clone())
+            .await
+            .expect("updated");
+
+        assert_eq!(updated, Update::Updated);
+        let found = store
+            .find_allowed(allowed.passkey.cred_id())
+            .await
+            .expect("found");
+        assert_eq!(found.and_then(|a| a.last_used_at), Some(used_at));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn updating_a_revoked_passkey_leaves_it_revoked() {
+        let store = MemoryAuthStore::default();
+        let allowed = allowed_passkey(&store).await;
+        store.remove_allowed(&allowed.code).await.expect("removed");
+
+        let updated = store
+            .update_allowed(allowed.clone())
+            .await
+            .expect("updated");
+
+        assert_eq!(updated, Update::Gone);
+        let found = store
+            .find_allowed(allowed.passkey.cred_id())
+            .await
+            .expect("found");
+        assert!(found.is_none());
     }
 
     #[tokio::test(start_paused = true)]
