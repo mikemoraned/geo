@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use domain::{Bbox, Span, implied_speed, path_through};
+use domain::{Bbox, NotAPercentage, Percentage, Span, implied_speed, path_through};
 use geo::BoundingRect;
 use geo_types::{LineString, Point};
 use medallion::{
@@ -8,11 +8,11 @@ use medallion::{
     Replaced, Root, ZonedGeometry,
 };
 use medallion_model::{
-    Label, MotisSourceId, TrainSessionRowV2, TrainSessionSampleRowV2, TripId, train_session_id,
+    Label, MotisSourceId, TrainSessionRowV3, TrainSessionSampleRowV3, TripId, train_session_id,
 };
 
 use crate::ingest::{self, IngestError, PlacedLine, Shape, Shapes, captured};
-use crate::sampling::{InvalidLeg, InvalidLegs, Leg, NormalisedLegs, Placed};
+use crate::sampling::{InvalidLeg, InvalidLegs, Leg, NormalisedLegs, Placed, TimeSource};
 
 const SAMPLES_PER_WRITE: usize = 100_000;
 
@@ -60,9 +60,9 @@ enum Drop {
 }
 
 struct Session {
-    row: TrainSessionRowV2,
+    row: TrainSessionRowV3,
     path: LineString<f64>,
-    samples: Vec<GeometryRow<TrainSessionSampleRowV2, Point<f64>>>,
+    samples: Vec<GeometryRow<TrainSessionSampleRowV3, Point<f64>>>,
 }
 
 pub async fn derive_train_sessions(
@@ -111,9 +111,9 @@ pub async fn derive_train_sessions(
     trips.sort_by_key(|trip| trip.legs.departure());
 
     let mut projectors = Projectors::default();
-    let mut sample_writer = GeometryRowWriter::<TrainSessionSampleRowV2>::new(root)?;
-    let mut pending: Vec<GeometryRow<TrainSessionSampleRowV2, Point<f64>>> = Vec::new();
-    let mut sessions: Vec<GeographyRow<TrainSessionRowV2, LineString<f64>>> = Vec::new();
+    let mut sample_writer = GeometryRowWriter::<TrainSessionSampleRowV3>::new(root)?;
+    let mut pending: Vec<GeometryRow<TrainSessionSampleRowV3, Point<f64>>> = Vec::new();
+    let mut sessions: Vec<GeographyRow<TrainSessionRowV3, LineString<f64>>> = Vec::new();
     for trip in trips {
         match trip.country {
             None => outcome.dropped.unplaceable += 1,
@@ -173,7 +173,7 @@ fn normalised(
     let legs = match captured
         .iter()
         .zip(placed_lines)
-        .map(|(leg, placed)| Leg::new(leg.departure, leg.arrival, placed.line))
+        .map(|(leg, placed)| Leg::new(leg.departure, leg.arrival, time_source_of(leg), placed.line))
         .collect::<Result<Vec<Leg>, InvalidLeg>>()
     {
         Ok(legs) => legs,
@@ -194,6 +194,22 @@ fn normalised(
         })),
         Err(InvalidLegs::Overlapping { .. }) => Ok(Normalised::Dropped(Drop::Overlapping)),
         Err(source) => Err(IngestError::InvalidLegs { trip_id, source }),
+    }
+}
+
+fn realtime_percentage(placed: &[Placed]) -> Result<Percentage, NotAPercentage> {
+    let realtime = placed
+        .iter()
+        .filter(|sample| sample.time_source == TimeSource::Realtime)
+        .count();
+    Percentage::of(realtime, placed.len())
+}
+
+fn time_source_of(leg: &ingest::Leg) -> TimeSource {
+    if leg.realtime {
+        TimeSource::Realtime
+    } else {
+        TimeSource::Scheduled
     }
 }
 
@@ -229,7 +245,7 @@ fn session_of(
         .zip(speeds)
         .enumerate()
         .map(|(seq, ((sample, geometry), implied_speed_mps))| {
-            let row = TrainSessionSampleRowV2 {
+            let row = TrainSessionSampleRowV3 {
                 session_id: session_id.clone(),
                 source_id: trip.source_id.clone(),
                 trip_id: trip.trip_id.clone(),
@@ -239,6 +255,7 @@ fn session_of(
                 lon: sample.position.x(),
                 implied_speed_mps,
                 geometry_source: sample.geometry_source,
+                realtime: sample.time_source == TimeSource::Realtime,
             };
             Ok(GeometryRow {
                 row,
@@ -251,7 +268,7 @@ fn session_of(
         return Err(no_samples());
     };
     let path = path_through(placed.iter().map(|sample| sample.position));
-    let row = TrainSessionRowV2 {
+    let row = TrainSessionRowV3 {
         session_id,
         source_id: trip.source_id.clone(),
         source_label: trip.source_label.clone(),
@@ -259,6 +276,7 @@ fn session_of(
         started_at: first.t,
         ended_at: last.t,
         sample_count: u32::try_from(placed.len()).map_err(|_| too_many())?,
+        realtime_percentage: realtime_percentage(placed)?,
         bbox: Bbox::of(path.bounding_rect().ok_or_else(no_samples)?),
     };
     Ok(Session { row, path, samples })
@@ -271,7 +289,7 @@ mod tests {
     use chrono::{DateTime, Duration, TimeZone, Utc};
     use medallion::Query;
     use medallion_model::{
-        Feed, MotisSource, Polyline, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2, TripId,
+        Feed, MotisSource, Polyline, TRAIN_SESSION_SAMPLE_V3, TRAIN_SESSION_V3, TripId,
         train_session_id,
     };
     use serde::Deserialize;
@@ -326,11 +344,11 @@ mod tests {
     async fn count(root: &Root, sql: &str) -> i64 {
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION_V2)
+            .register_by_name(TRAIN_SESSION_V3)
             .await
             .expect("register sessions");
         query
-            .register_by_name(TRAIN_SESSION_SAMPLE_V2)
+            .register_by_name(TRAIN_SESSION_SAMPLE_V3)
             .await
             .expect("register samples");
         query.count(sql).await.expect("count")
@@ -345,11 +363,11 @@ mod tests {
     async fn sessions_named(root: &Root) -> Vec<Named> {
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION_V2)
+            .register_by_name(TRAIN_SESSION_V3)
             .await
             .expect("register sessions");
         query
-            .rows("SELECT session_id, started_at FROM train_session_v2")
+            .rows("SELECT session_id, started_at FROM train_session_v3")
             .await
             .expect("sessions")
     }
@@ -377,7 +395,7 @@ mod tests {
 
         assert_eq!((outcome.trips, outcome.sessions), (4, 4));
         assert_eq!(
-            count(&root, "SELECT COUNT(*) AS count FROM train_session_v2").await,
+            count(&root, "SELECT COUNT(*) AS count FROM train_session_v3").await,
             4
         );
     }
@@ -414,11 +432,11 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION_V2)
+            .register_by_name(TRAIN_SESSION_V3)
             .await
             .expect("register sessions");
         let labels: Vec<Option<String>> = query
-            .rows::<Labelled>("SELECT source_label FROM train_session_v2")
+            .rows::<Labelled>("SELECT source_label FROM train_session_v3")
             .await
             .expect("labels")
             .into_iter()
@@ -459,11 +477,11 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION_SAMPLE_V2)
+            .register_by_name(TRAIN_SESSION_SAMPLE_V3)
             .await
             .expect("register samples");
         let samples: Vec<Numbered> = query
-            .rows("SELECT seq, implied_speed_mps FROM train_session_sample_v2 ORDER BY t")
+            .rows("SELECT seq, implied_speed_mps FROM train_session_sample_v3 ORDER BY t")
             .await
             .expect("samples");
         let seqs: Vec<u32> = samples.iter().map(|sample| sample.seq).collect();
@@ -551,6 +569,83 @@ mod tests {
         assert_eq!((outcome.trips, outcome.sessions), (1, 1));
         let samples = (onward.arrival - segment.departure).num_seconds() / 10 + 1;
         assert_eq!(outcome.samples as i64, samples);
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct Timed {
+        realtime: bool,
+    }
+
+    async fn realtime_of_samples(root: &Root) -> Vec<bool> {
+        let query = Query::new(root.clone());
+        query
+            .register_by_name(TRAIN_SESSION_SAMPLE_V3)
+            .await
+            .expect("register samples");
+        query
+            .rows::<Timed>("SELECT realtime FROM train_session_sample_v3 ORDER BY t")
+            .await
+            .expect("samples")
+            .into_iter()
+            .map(|sample| sample.realtime)
+            .collect()
+    }
+
+    async fn realtime_percentage_of_sessions(root: &Root) -> Vec<f64> {
+        #[derive(Deserialize)]
+        struct Share {
+            realtime_percentage: f64,
+        }
+        let query = Query::new(root.clone());
+        query
+            .register_by_name(TRAIN_SESSION_V3)
+            .await
+            .expect("register sessions");
+        query
+            .rows::<Share>("SELECT realtime_percentage FROM train_session_v3")
+            .await
+            .expect("sessions")
+            .into_iter()
+            .map(|session| session.realtime_percentage)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_trip_on_realtime_legs_alone_is_wholly_realtime() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let mut segment = regional_trips().remove(0);
+        segment.real_time = true;
+        poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
+
+        derive(&root, &germany()).await;
+
+        assert!(
+            realtime_of_samples(&root)
+                .await
+                .into_iter()
+                .all(|realtime| realtime)
+        );
+        assert_eq!(realtime_percentage_of_sessions(&root).await, [100.0]);
+    }
+
+    #[tokio::test]
+    async fn a_sessions_realtime_percentage_is_the_share_of_its_samples_on_realtime_legs() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let mut segment = regional_trips().remove(0);
+        segment.real_time = true;
+        let mut onward = onward_from(&segment, segment.arrival + Duration::minutes(2));
+        onward.real_time = false;
+        poll(&root, polled_at(0), &[segment, onward]).await;
+
+        derive(&root, &germany()).await;
+
+        let realtime = realtime_of_samples(&root).await;
+        let on_realtime_legs = realtime.iter().filter(|realtime| **realtime).count();
+        let share = 100.0 * on_realtime_legs as f64 / realtime.len() as f64;
+        assert!(0.0 < share && share < 100.0, "{share}");
+        assert_eq!(realtime_percentage_of_sessions(&root).await, [share]);
     }
 
     #[tokio::test]
@@ -693,7 +788,7 @@ mod tests {
         derive(&root, &germany()).await;
 
         let countries: Vec<String> =
-            std::fs::read_dir(root.path().join("silver/train_session_sample_v2"))
+            std::fs::read_dir(root.path().join("silver/train_session_sample_v3"))
                 .expect("dataset dir")
                 .map(|entry| {
                     entry
@@ -714,7 +809,7 @@ mod tests {
         let first = derive(&root, &germany()).await;
         let samples_before = count(
             &root,
-            "SELECT COUNT(*) AS count FROM train_session_sample_v2",
+            "SELECT COUNT(*) AS count FROM train_session_sample_v3",
         )
         .await;
 
@@ -724,7 +819,7 @@ mod tests {
         assert_eq!(
             count(
                 &root,
-                "SELECT COUNT(*) AS count FROM train_session_sample_v2"
+                "SELECT COUNT(*) AS count FROM train_session_sample_v3"
             )
             .await,
             samples_before

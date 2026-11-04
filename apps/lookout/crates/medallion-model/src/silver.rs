@@ -2,8 +2,8 @@ use medallion::{RowError, SilverTarget};
 
 use crate::{
     SESSION_CROSSING_V3, SESSION_SAMPLE_V3, SESSION_V3, SessionCrossingRowV3, SessionRowV3,
-    SessionSampleRowV3, TRAIN_SEGMENT_V4, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2,
-    TrainSegmentRowV4, TrainSessionRowV2, TrainSessionSampleRowV2, WATER_CROSSING_V2,
+    SessionSampleRowV3, TRAIN_SEGMENT_V4, TRAIN_SESSION_SAMPLE_V3, TRAIN_SESSION_V3,
+    TrainSegmentRowV4, TrainSessionRowV3, TrainSessionSampleRowV3, WATER_CROSSING_V2,
     WaterCrossingRowV2,
 };
 
@@ -24,10 +24,10 @@ const TARGETS: [(&str, Definition); 7] = [
         SilverTarget::of::<SessionSampleRowV3>,
     ),
     (TRAIN_SEGMENT_V4.name, SilverTarget::of::<TrainSegmentRowV4>),
-    (TRAIN_SESSION_V2.name, SilverTarget::of::<TrainSessionRowV2>),
+    (TRAIN_SESSION_V3.name, SilverTarget::of::<TrainSessionRowV3>),
     (
-        TRAIN_SESSION_SAMPLE_V2.name,
-        SilverTarget::of::<TrainSessionSampleRowV2>,
+        TRAIN_SESSION_SAMPLE_V3.name,
+        SilverTarget::of::<TrainSessionSampleRowV3>,
     ),
     (
         WATER_CROSSING_V2.name,
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn the_train_sessions_can_be_named() {
-        for name in [TRAIN_SESSION_V2.name, TRAIN_SESSION_SAMPLE_V2.name] {
+        for name in [TRAIN_SESSION_V3.name, TRAIN_SESSION_SAMPLE_V3.name] {
             assert!(silver_target(name).is_ok(), "{name} cannot be named");
         }
     }

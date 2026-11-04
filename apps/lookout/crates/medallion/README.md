@@ -193,7 +193,7 @@ There are two workarounds:
 - **Write the geometry first.** A file whose geometry precedes every nested column reads normally.
   Every silver file holds its geometry columns ahead of its other columns, as a workaround until a
   SedonaDB release fixes [the panic](../../docs/2026-10-03-sedona-nested-column-panic.md). A silver
-  dataset holding a struct, such as `train_session_v2` and its `bbox`, therefore reads with typed
+  dataset holding a struct, such as `train_session_v3` and its `bbox`, therefore reads with typed
   geometry. A fixture can use this workaround too. Bronze cannot, since it keeps the column order
   of the release it records.
 

@@ -8,10 +8,17 @@ use geo::{Haversine, InterpolatePoint, Length};
 use geo_types::{LineString, Point};
 use medallion_model::GeometrySource;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimeSource {
+    Realtime,
+    Scheduled,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Leg {
     departure: DateTime<Utc>,
     arrival: DateTime<Utc>,
+    time_source: TimeSource,
     shape: Arc<LineString<f64>>,
     origin: Point<f64>,
     destination: Point<f64>,
@@ -35,6 +42,7 @@ impl Leg {
     pub fn new(
         departure: DateTime<Utc>,
         arrival: DateTime<Utc>,
+        time_source: TimeSource,
         shape: Arc<LineString<f64>>,
     ) -> Result<Self, InvalidLeg> {
         if arrival < departure {
@@ -52,6 +60,7 @@ impl Leg {
         Ok(Self {
             departure,
             arrival,
+            time_source,
             shape,
             origin,
             destination,
@@ -102,6 +111,7 @@ pub struct Placed {
     pub t: DateTime<Utc>,
     pub position: Point<f64>,
     pub geometry_source: GeometrySource,
+    pub time_source: TimeSource,
 }
 
 struct MeasuredLeg<'a> {
@@ -143,7 +153,7 @@ struct MeasuredLegs<'a> {
 }
 
 impl MeasuredLegs<'_> {
-    fn position_at(&self, t: DateTime<Utc>) -> Result<Point<f64>, NoWhereabouts> {
+    fn placed_at(&self, t: DateTime<Utc>) -> Result<Placed, NoWhereabouts> {
         if self.normalised.arrival < t {
             return Err(NoWhereabouts::AfterAllLegs {
                 t,
@@ -160,14 +170,20 @@ impl MeasuredLegs<'_> {
                 departure: self.normalised.departure,
             })?;
         let leg = measured.leg;
-        if t < leg.arrival {
+        let position = if t < leg.arrival {
             let ratio = (t - leg.departure).as_seconds_f64() / leg.duration().as_seconds_f64();
             measured
                 .point_at_ratio(ratio)
-                .ok_or(NoWhereabouts::NoPointAlongShape { t })
+                .ok_or(NoWhereabouts::NoPointAlongShape { t })?
         } else {
-            Ok(leg.destination)
-        }
+            leg.destination
+        };
+        Ok(Placed {
+            t,
+            position,
+            geometry_source: GeometrySource::Interpolated,
+            time_source: leg.time_source,
+        })
     }
 }
 
@@ -211,13 +227,7 @@ impl NormalisedLegs {
         let measured = self.measured();
         let interpolated = successors(Some(self.departure), |t| Some(*t + step))
             .take_while(|t| *t < self.arrival)
-            .map(|t| {
-                Ok(Placed {
-                    t,
-                    position: measured.position_at(t)?,
-                    geometry_source: GeometrySource::Interpolated,
-                })
-            })
+            .map(|t| measured.placed_at(t))
             .collect::<Result<Vec<_>, NoWhereabouts>>()?;
         let stops = self.legs.iter().flat_map(|leg| {
             [(leg.departure, leg.origin), (leg.arrival, leg.destination)].map(|(t, position)| {
@@ -225,6 +235,7 @@ impl NormalisedLegs {
                     t,
                     position,
                     geometry_source: GeometrySource::Stop,
+                    time_source: leg.time_source,
                 }
             })
         });
@@ -251,7 +262,13 @@ mod tests {
     }
 
     fn leg(departure: i64, arrival: i64, shape: LineString<f64>) -> Leg {
-        Leg::new(at(departure), at(arrival), Arc::new(shape)).expect("a leg")
+        Leg::new(
+            at(departure),
+            at(arrival),
+            TimeSource::Scheduled,
+            Arc::new(shape),
+        )
+        .expect("a leg")
     }
 
     fn normalised(legs: &[Leg]) -> NormalisedLegs {
@@ -290,7 +307,7 @@ mod tests {
     #[test]
     fn a_leg_cannot_arrive_before_it_departs() {
         assert_eq!(
-            Leg::new(at(60), at(0), Arc::new(north(50.1))),
+            Leg::new(at(60), at(0), TimeSource::Scheduled, Arc::new(north(50.1))),
             Err(InvalidLeg::ArrivesBeforeDeparting {
                 departure: at(60),
                 arrival: at(0),
@@ -301,7 +318,12 @@ mod tests {
     #[test]
     fn a_leg_cannot_have_a_shape_of_one_point() {
         assert_eq!(
-            Leg::new(at(0), at(60), Arc::new(line_string![(x: 8.0, y: 50.0)])),
+            Leg::new(
+                at(0),
+                at(60),
+                TimeSource::Scheduled,
+                Arc::new(line_string![(x: 8.0, y: 50.0)])
+            ),
             Err(InvalidLeg::TooFewPoints {
                 departure: at(0),
                 points: 1,
@@ -311,7 +333,7 @@ mod tests {
 
     #[test]
     fn a_leg_can_arrive_as_it_departs() {
-        assert!(Leg::new(at(60), at(60), Arc::new(north(50.1))).is_ok());
+        assert!(Leg::new(at(60), at(60), TimeSource::Scheduled, Arc::new(north(50.1))).is_ok());
     }
 
     #[test]
@@ -344,7 +366,7 @@ mod tests {
         assert_eq!(
             normalised(&[leg(60, 120, north(50.1))])
                 .measured()
-                .position_at(at(0)),
+                .placed_at(at(0)),
             Err(NoWhereabouts::BeforeAllLegs {
                 t: at(0),
                 departure: at(60),
@@ -357,7 +379,7 @@ mod tests {
         assert_eq!(
             normalised(&[leg(60, 120, north(50.1))])
                 .measured()
-                .position_at(at(180)),
+                .placed_at(at(180)),
             Err(NoWhereabouts::AfterAllLegs {
                 t: at(180),
                 arrival: at(120),
@@ -369,8 +391,9 @@ mod tests {
     fn during_a_leg_the_train_is_along_its_shape() {
         let position = normalised(&[leg(0, 60, north(50.1))])
             .measured()
-            .position_at(at(30))
-            .expect("a position");
+            .placed_at(at(30))
+            .expect("a position")
+            .position;
 
         assert!(near(position, (8.0, 50.05)), "{position:?}");
     }
@@ -379,8 +402,9 @@ mod tests {
     fn as_a_leg_departs_the_train_is_at_its_origin() {
         let position = normalised(&[leg(0, 60, north(50.1))])
             .measured()
-            .position_at(at(0))
-            .expect("a position");
+            .placed_at(at(0))
+            .expect("a position")
+            .position;
 
         assert!(near(position, (8.0, 50.0)), "{position:?}");
     }
@@ -405,14 +429,62 @@ mod tests {
         }
     }
 
+    fn timed(departure: i64, arrival: i64, time_source: TimeSource, shape: LineString<f64>) -> Leg {
+        Leg::new(at(departure), at(arrival), time_source, Arc::new(shape)).expect("a leg")
+    }
+
+    fn onward() -> LineString<f64> {
+        line_string![(x: 8.0, y: 50.1), (x: 8.1, y: 50.1)]
+    }
+
+    #[test]
+    fn a_sample_takes_the_time_source_of_the_leg_it_lies_on() {
+        let samples = normalised(&[
+            timed(0, 60, TimeSource::Realtime, north(50.1)),
+            timed(120, 180, TimeSource::Scheduled, onward()),
+        ])
+        .sampled(every_10s())
+        .expect("samples");
+
+        assert_eq!(sample_at(&samples, 30).time_source, TimeSource::Realtime);
+        assert_eq!(sample_at(&samples, 150).time_source, TimeSource::Scheduled);
+    }
+
+    #[test]
+    fn a_sample_dwelling_at_a_station_takes_the_arriving_legs_time_source() {
+        let samples = normalised(&[
+            timed(0, 60, TimeSource::Realtime, north(50.1)),
+            timed(120, 180, TimeSource::Scheduled, onward()),
+        ])
+        .sampled(every_10s())
+        .expect("samples");
+
+        assert_eq!(sample_at(&samples, 60).time_source, TimeSource::Realtime);
+        assert_eq!(sample_at(&samples, 90).time_source, TimeSource::Realtime);
+        assert_eq!(sample_at(&samples, 120).time_source, TimeSource::Scheduled);
+    }
+
+    #[test]
+    fn a_stop_where_one_leg_arrives_as_the_next_departs_takes_the_departing_legs_time_source() {
+        let samples = normalised(&[
+            timed(0, 60, TimeSource::Scheduled, north(50.1)),
+            timed(60, 120, TimeSource::Realtime, onward()),
+        ])
+        .sampled(every_10s())
+        .expect("samples");
+
+        assert_eq!(sample_at(&samples, 60).time_source, TimeSource::Realtime);
+    }
+
     #[test]
     fn between_legs_the_train_is_at_the_station() {
         let onward = line_string![(x: 8.0, y: 50.1), (x: 8.1, y: 50.1)];
 
         let position = normalised(&[leg(0, 60, north(50.1)), leg(120, 180, onward)])
             .measured()
-            .position_at(at(90))
-            .expect("a position");
+            .placed_at(at(90))
+            .expect("a position")
+            .position;
 
         assert!(near(position, (8.0, 50.1)), "{position:?}");
     }
@@ -421,8 +493,9 @@ mod tests {
     fn on_arriving_the_train_is_at_the_station() {
         let position = normalised(&[leg(0, 60, north(50.1))])
             .measured()
-            .position_at(at(60))
-            .expect("a position");
+            .placed_at(at(60))
+            .expect("a position")
+            .position;
 
         assert!(near(position, (8.0, 50.1)), "{position:?}");
     }

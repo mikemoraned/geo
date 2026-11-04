@@ -42,8 +42,8 @@ pub use telemetry::{
     GpsReadingRowV2, RAW_SAMPLE, RawSampleRow,
 };
 pub use train_session::{
-    GeometrySource, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2, TrainSessionRowV2,
-    TrainSessionSampleRowV2, train_session_id,
+    GeometrySource, TRAIN_SESSION_SAMPLE_V3, TRAIN_SESSION_V3, TrainSessionRowV3,
+    TrainSessionSampleRowV3, train_session_id,
 };
 
 pub const ALL: [DatasetInfo; 17] = [
@@ -58,8 +58,8 @@ pub const ALL: [DatasetInfo; 17] = [
     TRAIN_SEGMENT_V4.info(),
     SESSION_V3.info(),
     SESSION_SAMPLE_V3.info(),
-    TRAIN_SESSION_V2.info(),
-    TRAIN_SESSION_SAMPLE_V2.info(),
+    TRAIN_SESSION_V3.info(),
+    TRAIN_SESSION_SAMPLE_V3.info(),
     WATER_CROSSING_V2.info(),
     SESSION_CROSSING_V3.info(),
     OVERTURE_EXTRACT.info(),
@@ -104,8 +104,8 @@ mod tests {
                 "session_sample_v3",
                 "session_v3",
                 "train_segment_v4",
-                "train_session_sample_v2",
-                "train_session_v2",
+                "train_session_sample_v3",
+                "train_session_v3",
                 "water_crossing_v2"
             ]
         );
@@ -186,8 +186,8 @@ mod tests {
         check_rows_of::<TrainSegmentRowV4>();
         check_rows_of::<SessionRowV3>();
         check_rows_of::<SessionSampleRowV3>();
-        check_rows_of::<TrainSessionRowV2>();
-        check_rows_of::<TrainSessionSampleRowV2>();
+        check_rows_of::<TrainSessionRowV3>();
+        check_rows_of::<TrainSessionSampleRowV3>();
         check_rows_of::<WaterCrossingRowV2>();
         check_rows_of::<SessionCrossingRowV3>();
         check_rows_of::<ExtractManifestRowV3>();
