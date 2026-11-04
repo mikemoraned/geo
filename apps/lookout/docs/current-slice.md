@@ -137,8 +137,8 @@ erDiagram
     evaluation_run_v1 ||--|| evaluation_summary_v1 : "sums up"
 ```
 
-- `train_session_v3` and `train_session_sample_v3` are the v2 datasets with `realtime_pct` and
-  `realtime` added.
+- `train_session_v3` and `train_session_sample_v3` are the v2 datasets with
+  `realtime_percentage` and `realtime` added.
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
 - `evaluation_run_v1` holds a run's predictor and settings, float type, scores and ramp, method,
@@ -200,9 +200,9 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   [the typestate pattern](https://cliffle.com/blog/rust-typestate/). It beats a check at run time,
   which a test can only sample.
 - **The first run replays 1000 sessions.** They are picked at random, under a recorded seed, from
-  the sessions with `realtime_pct` ≥ 90. A session is the unit a predictor replays. It beats 1000
-  sample rows, which hold a handful of sessions, and 1000 passes, which fix recall's denominator
-  rather than the sessions.
+  the sessions with `realtime_percentage` ≥ 90. A session is the unit a predictor replays. It beats
+  1000 sample rows, which hold a handful of sessions, and 1000 passes, which fix recall's
+  denominator rather than the sessions.
 - **A run started from Python writes gold, as a run of the CLI does.** A notebook writes through
   `medallion-py`, and the CLI through `medallion`'s writers, so both use one implementation. A run
   iterated on in a notebook then leaves the same record as any other. This beats a notebook that
@@ -360,18 +360,20 @@ The high tail is the 1% of sessions with the most samples, about 1,700 sessions.
 
 #### Phase 1: the sessions and their passes
 
-The evaluation replays these datasets, and their counts show whether the filter, `realtime_pct` ≥
-90, leaves enough sessions.
+The evaluation replays these datasets, and their counts show whether the filter,
+`realtime_percentage` ≥ 90, leaves enough sessions.
 
 - [x] Look for anomalies in `train_session_sample_v2` with the user, in a new
       `notebooks/evaluation/explore2.py`, before v3 is declared.
 - [x] Decide, from the anomalies found, which samples or sessions the cleaning rule discards.
-- [ ] Add `realtime` to `TrainSessionSampleRowV3` and `realtime_pct` to `TrainSessionRowV3`, written
-      by `motis::train_sessions` in place of v2.
+- [x] Add `realtime` to `TrainSessionSampleRowV3` and `realtime_pct` to `TrainSessionRowV3`, written
+      by `motis::train_sessions` in place of v2. The v2 row types became v3 in place, as a silver
+      version does, so their snapshots went too. The removal task keeps only the v2 files. The
+      column became `realtime_percentage`, a `Percentage` that refuses a value outside 0–100.
 - [ ] Apply the cleaning rule's two checks in `motis::train_sessions`, as drop reasons counted
       beside its existing four.
 - [ ] Re-derive with `just silver-motis-ingest`. Check that about 40,000 sessions reach
-      `realtime_pct` ≥ 90, as `explore1.py` counted per day and trip.
+      `realtime_percentage` ≥ 90, as `explore1.py` counted per day and trip.
 - [ ] Remove `TrainSessionRowV2`, `TrainSessionSampleRowV2`, and their snapshots, and delete the v2
       files from the local store.
 - [ ] Add `TrainSessionCrossingRowV1`, and derive `train_session_crossing_v1` in `session_crossings`
@@ -476,8 +478,8 @@ The apps come last, since they show the states of the predictor a person chooses
 - [ ] Describe gold datasets of rows, and writing them from Python, in the gold sections of
       `docs/medallion.md`.
 - [ ] Describe `query_gold` and `write_gold` in `crates/medallion-py/README.md`.
-- [ ] Describe `realtime` and `realtime_pct` in `crates/motis/README.md`, and train sessions in
-      `crates/session_crossings/README.md`.
+- [ ] Describe `realtime` and `realtime_percentage` in `crates/motis/README.md`, and train sessions
+      in `crates/session_crossings/README.md`.
 - [ ] Rewrite `predictor`'s README for the typed states, the tracker, and LightCone, and
       `platform-core`'s for the states it exposes.
 - [ ] Show the states in the picture in `docs/web.md`, and on the panel in
