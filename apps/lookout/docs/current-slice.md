@@ -291,7 +291,7 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **A ramp at the 30 s edge.** Deferred: no predictor aims at 30 s, so last-moment notifications
   spread out rather than bunch at it. It comes back once a run shows them bunching there.
 - **A notebook as `choose-predictor`'s report.** Rejected: a dated doc keeps the review in a diff.
-  It comes back once each review needs the maps that `predictions.py` draws.
+  It comes back once each review needs the maps that the evaluation's notebooks draw.
 - **Drawing whole lines rather than sessions.** Deferred: drawing lines needs each session to carry
   its line, and no dataset holds one yet. A line with a train every 20 minutes gives dozens of
   near-identical sessions a day, so intervals over sessions come out narrower than the truth. Each
@@ -367,8 +367,8 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [ ] Add the step `summarise` to `evaluation`: the measures and their intervals, with the counts
       of sessions, passes, and notifications.
 - [ ] Expose every step and the full run in `evaluation-py`, with geometry crossing as GeoArrow.
-- [ ] Build `notebooks/evaluation/predictions.py` with the user, running the oracle's steps on a few
-      sessions and drawing each.
+- [ ] Build a new `notebooks/evaluation/explore3.py` with the user, running the oracle's steps on a
+      few sessions and drawing each.
 - [ ] Extend `medallion` to gold datasets of rows, partitioned `run_date=<date>/run_id=<id>`, each run
       written once.
 - [ ] Register gold datasets by name in `medallion`'s `Query`, and add `query_gold` and `write_gold`
@@ -377,9 +377,9 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [ ] Add the `evaluate` crate, whose CLI runs every step in order or any one alone, and a
       `just evaluate` recipe.
 - [ ] Run the oracle over 1000 sessions with `just evaluate`.
-- [ ] Check that a run written from `predictions.py` through `write_gold` matches the CLI's run on
-      the same seed.
-- [ ] Trace each shortfall from a perfect score in `predictions.py`, through `query_gold`, and record
+- [ ] Check that a run written from `explore3.py` through `write_gold` matches the CLI's run on the
+      same seed.
+- [ ] Trace each shortfall from a perfect score in `explore3.py`, through `query_gold`, and record
       its cause under Investigation.
 
 #### Phase 3: CrowFlies through the skeleton
@@ -392,14 +392,14 @@ tracker meets that can be wrong.
 - [ ] Run CrowFlies over the oracle's sessions and seed with `just evaluate`.
 - [ ] Sweep the radius, the pass radius, and the debouncing. Choose CrowFlies' settings from recall
       plotted against false alarms per hour.
-- [ ] Draw CrowFlies' false alarms and misses on a map in `predictions.py` with the user, and one
+- [ ] Draw CrowFlies' false alarms and misses on a map in a new `explore4.py` with the user, and one
       session's transitions over time.
 
 #### Phase 4: LightCone
 
 LightCone is the improvement the Target asks for, measured against CrowFlies on the same sessions.
 
-- [ ] Measure in a new `exploreN.py` the angle between a train's heading and its positions up to N
+- [ ] Measure in a new `explore5.py` the angle between a train's heading and its positions up to N
       later.
 - [ ] Read ballpark odds for the extremes of that angle, and bound the cone's angle by them.
 - [ ] Add `LightCone` to `predictor`: a velocity from the last two samples, and `PredictedPass`
@@ -407,7 +407,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 - [ ] Run LightCone over the same sessions and seed, with angles up to that bound, and compare its
       best settings with CrowFlies'.
 - [ ] Average the velocity over the last few samples, as a setting of `LightCone`, and run it again.
-- [ ] Draw LightCone's cone at each sample in `predictions.py` with the user, where it beats
+- [ ] Draw LightCone's cone at each sample in `explore5.py` with the user, where it beats
       CrowFlies and where it loses.
 - [ ] Run both predictors over every session the filter keeps. If their intervals still overlap,
       widen the filter to every session.
