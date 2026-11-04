@@ -136,17 +136,14 @@ async fn matched_in(
 ) -> Result<(MatchOutcome, Vec<SessionCrossingRowV3>), CrossingError> {
     let Inputs {
         sessions,
+        devices,
         crossings,
     } = inputs(root, country).await?;
     let matched = passes(&sessions, &crossings, radius)?;
 
-    let devices: HashMap<&SessionId, &DeviceId> = sessions
-        .iter()
-        .map(|session| (&session.session_id, &session.device_id))
-        .collect();
     let rows = matched
         .iter()
-        .map(|pass| row(pass, devices[&pass.session_id], radius))
+        .map(|pass| row(pass, &devices[&pass.session_id], radius))
         .collect();
 
     Ok((
@@ -167,6 +164,7 @@ async fn matched_in(
 #[derive(Debug, Clone)]
 pub struct Inputs {
     pub sessions: Vec<Session>,
+    pub devices: HashMap<SessionId, DeviceId>,
     pub crossings: Vec<Crossing>,
 }
 
@@ -175,8 +173,13 @@ pub async fn inputs(root: &Root, country: Country) -> Result<Inputs, CrossingErr
     for (dataset, table) in READ {
         query.register_of_country(dataset, table, country).await?;
     }
+    let stored = stored_sessions_in(&query).await?;
     Ok(Inputs {
-        sessions: sessions_in(&query).await?,
+        devices: stored
+            .iter()
+            .map(|session| (session.session_id.clone(), session.device_id.clone()))
+            .collect(),
+        sessions: stored.into_iter().map(session).collect(),
         crossings: crossings_in(&query).await?,
     })
 }
@@ -187,8 +190,8 @@ const READ: [(DatasetSpec<layers::Silver>, &str); 3] = [
     (medallion_model::WATER_CROSSING_V2, "water_crossing_v2"),
 ];
 
-async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
-    let stored: Vec<StoredSession> = query
+async fn stored_sessions_in(query: &Query) -> Result<Vec<StoredSession>, CrossingError> {
+    Ok(query
         .rows(
             "SELECT s.session_id, s.device_id, p.samples
              FROM session_v3 s
@@ -206,24 +209,22 @@ async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
                  GROUP BY session_id
              ) p ON s.session_id = p.session_id",
         )
-        .await?;
+        .await?)
+}
 
-    Ok(stored
-        .into_iter()
-        .map(|session| Session {
-            session_id: session.session_id,
-            device_id: session.device_id,
-            samples: session
-                .samples
-                .unwrap_or_default()
-                .into_iter()
-                .map(|sample| Sample {
-                    t: sample.t,
-                    projected: Point::new(sample.x, sample.y),
-                })
-                .collect(),
-        })
-        .collect())
+fn session(stored: StoredSession) -> Session {
+    Session {
+        session_id: stored.session_id,
+        samples: stored
+            .samples
+            .unwrap_or_default()
+            .into_iter()
+            .map(|sample| Sample {
+                t: sample.t,
+                projected: Point::new(sample.x, sample.y),
+            })
+            .collect(),
+    }
 }
 
 async fn crossings_in(query: &Query) -> Result<Vec<Crossing>, CrossingError> {

@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use chrono::{DateTime, Utc};
-use domain::{CrossingId, DeviceId, Pass, Radius, SessionId, TooManySamples};
+use domain::{CrossingId, Pass, Radius, SessionId, TooManySamples};
 use geo::{BoundingRect, Distance, Euclidean};
 use geo_types::{MultiPoint, Point};
 
@@ -11,7 +11,6 @@ pub const DEFAULT_RADIUS: Radius =
 #[derive(Debug, Clone)]
 pub struct Session {
     pub session_id: SessionId,
-    pub device_id: DeviceId,
     pub samples: Vec<Sample>,
 }
 
@@ -159,7 +158,6 @@ mod tests {
     fn session(samples: Vec<Sample>) -> Session {
         Session {
             session_id: SessionId::new("session-a").unwrap(),
-            device_id: DeviceId::new("device-a").unwrap(),
             samples,
         }
     }
