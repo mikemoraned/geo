@@ -192,12 +192,6 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   `match` can call only the transitions a state has. This follows
   [the typestate pattern](https://cliffle.com/blog/rust-typestate/). It beats a check at run time,
   which a test can only sample.
-- **`trybuild` tests that each illegal transition fails to compile.** An ordinary test cannot call
-  a method that does not exist, since the test itself would not compile.
-  [`trybuild`](https://docs.rs/trybuild) builds each illegal call as a crate of its own, and
-  compares the compiler's message with a committed copy. If a later change adds `pass` to
-  `CandidatePass`, its case compiles, and the test fails. This beats leaving the types untested,
-  where that change breaks nothing.
 - **The first run replays 1000 sessions.** They are picked at random, under a recorded seed, from
   the sessions with `realtime_pct` ≥ 90. A session is the unit a predictor replays. It beats 1000
   sample rows, which hold a handful of sessions, and 1000 passes, which fix recall's denominator
@@ -247,8 +241,6 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   `Query` gain gold, and `medallion-py` gains `query_gold` and `write_gold`.
 - **CrowFlies' radius has to reach N ahead.** Its 5 km covers 5 minutes only at 60 km/h or slower,
   so the sweep varies the radius.
-- **A toolchain upgrade can change the `trybuild` messages.** Each case commits the compiler's
-  message, so an upgrade regenerates them with `TRYBUILD=overwrite`.
 
 #### Rejected / deferred
 
@@ -268,8 +260,10 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **A state machine crate.** Rejected. `statig` and `rust-fsm` check each transition as it runs,
   which the types replace. `statum`, `sm`, and `typestate` generate the types from a macro, and
   four states read more plainly written out.
-- **A `compile_fail` doctest for an illegal transition.** Rejected: on stable Rust, one passes on
-  any compile error, a typo included. `trybuild` compares the compiler's message instead.
+- **A test that an illegal transition fails to compile.** Rejected: four states have few enough
+  transitions to inspect by eye. Such a test needs [`trybuild`](https://docs.rs/trybuild), since a
+  `compile_fail` doctest passes on any compile error, a typo included. It comes back once the
+  transitions outgrow an inspection.
 - **A probabilistic model of how trains turn.** Deferred: ballpark odds of the extremes bound the
   cone's angle. It comes back once LightCone's misses trace to turns those odds call rare.
 - **A ramp at the 30 s edge.** Deferred: no predictor aims at 30 s, so last-moment notifications
@@ -294,9 +288,6 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **Where does `choose-predictor`'s report land?** A dated doc in `docs/` keeps the review in a
   diff, with a table of each run's measures. A notebook can draw maps of misses and false alarms,
   and is built with the user in a live session. The answer shapes the skill.
-- **Does nextest run `trybuild`'s cases?** Its documentation describes only `cargo test`, and no
-  source found confirms nextest. If nextest cannot run them, a `cargo test` line in the test recipes
-  runs them, as `test-doc` runs the doctests.
 
 ### Tasks
 
@@ -337,8 +328,6 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       `CrossingState` over the types.
 - [ ] Add `Tracker` to `predictor`, holding each crossing's `CrossingState` and recording each
       `Transition`, tested on constructed judgements.
-- [ ] Add `trybuild` cases to `predictor` that call `pass` on a `CandidatePass` and build an
-      `ActualPass` directly, each failing to compile.
 - [ ] Create the `evaluation` crate with the step `select`, which picks `TrainSessionRowV3`s at
       random under a seed.
 - [ ] Add the `evaluation-py` extension exposing `select`, and time a rebuild after a change to
