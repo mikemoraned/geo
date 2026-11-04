@@ -163,6 +163,13 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   [the demonstrable-behaviour assessment](2026-10-18-demonstrable-behaviour.md#a-derivation-reports-its-steps).
   It beats a binary alone, whose steps a notebook cannot inspect, and a notebook alone, which puts a
   derivation in Python.
+- **Each phase explores in a notebook of its own.** A phase that explores starts the next
+  `notebooks/evaluation/exploreN.py`, rather than adding to an earlier phase's. A notebook may
+  duplicate another's cells. The wrap-up folds them into one or more notebooks that demonstrate the
+  evaluation's behaviours or steps, as
+  [the demonstrable-behaviour assessment](2026-10-18-demonstrable-behaviour.md) sets out. This beats
+  one notebook grown across phases, where a question already answered sits among the next phase's
+  work.
 - **Precision counts each notification.** Every entry into `PredictedPass` is one prediction,
   scored as [The measure](#the-measure) sets out. A predictor that flickers pays for each flicker,
   as a rider would. Recall counts each ground-truth pass once. This beats one outcome per (session,
@@ -318,8 +325,8 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 The evaluation replays these datasets, and their counts show whether the filter, `realtime_pct` ≥
 90, leaves enough sessions.
 
-- [ ] Look for anomalies in `train_session_sample_v2` with the user, in
-      `notebooks/evaluation/explore1.py`, before v3 is declared.
+- [ ] Look for anomalies in `train_session_sample_v2` with the user, in a new
+      `notebooks/evaluation/explore2.py`, before v3 is declared.
 - [ ] Decide, from the anomalies found, which samples or sessions the cleaning rule discards.
 - [ ] Add `realtime` to `TrainSessionSampleRowV3` and `realtime_pct` to `TrainSessionRowV3`, written
       by `motis::train_sessions` in place of v2.
@@ -332,7 +339,7 @@ The evaluation replays these datasets, and their counts show whether the filter,
 - [ ] Add `TrainSessionCrossingRowV1`, and derive `train_session_crossing_v1` in `session_crossings`
       through the matching `session_crossing_v3` uses.
 - [ ] If reading every train sample at once runs out of memory, match one date at a time.
-- [ ] Measure in `explore1.py` the spacing of samples in the sessions the filter keeps, against the
+- [ ] Measure in `explore2.py` the spacing of samples in the sessions the filter keeps, against the
       250 m match radius.
 
 #### Phase 2: the skeleton, run with the oracle
@@ -392,7 +399,7 @@ tracker meets that can be wrong.
 
 LightCone is the improvement the Target asks for, measured against CrowFlies on the same sessions.
 
-- [ ] Measure in `explore1.py` the angle between a train's heading and its positions up to N
+- [ ] Measure in a new `exploreN.py` the angle between a train's heading and its positions up to N
       later.
 - [ ] Read ballpark odds for the extremes of that angle, and bound the cone's angle by them.
 - [ ] Add `LightCone` to `predictor`: a velocity from the last two samples, and `PredictedPass`
@@ -440,6 +447,6 @@ The apps come last, since they show the states of the predictor a person chooses
 - [ ] Write the READMEs of `evaluation`, `evaluate`, and `evaluation-py`.
 - [ ] Name the v3 datasets in the help of `silver-motis-ingest`, and `train_session_crossing_v1` in
       that of `silver-session-crossings`.
-- [ ] Remove `explore1.py` once its questions are answered, with the answers in the removing
-      commit.
+- [ ] Fold the `exploreN.py` notebooks into one or more notebooks that demonstrate the evaluation's
+      behaviours or steps. Then remove them, with their answers in the removing commit.
 - [ ] Run `just test-no-docker`, and hand over `just test`.
