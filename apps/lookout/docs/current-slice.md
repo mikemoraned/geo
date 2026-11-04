@@ -223,6 +223,15 @@ The user confirmed these on 2026-10-13, after a security review of the first pla
   use `localhost`. The localhost allowance covers only the laptop, so the phone's first sign-in
   runs against redis: a deploy to fly, or `just serve-redis` behind a tunnel.
 
+### Observations
+
+- **2026-11-04, registration against `just serve`.** Desktop Safari and Chrome each registered a
+  passkey from the console. Each passed the server's options through
+  `PublicKeyCredential.parseCreationOptionsFromJSON`, posted `toJSON()` back unchanged, and got
+  `{"status": "allowed"}`. Registering again in Safari, 1Password offered to replace the
+  `recording` passkey for `localhost`, and one passkey remained. The server still held the first
+  passkey as allowed.
+
 ### Tasks
 
 #### Refactors / extensions
@@ -245,8 +254,10 @@ the redis stores exist. The memory stores stay, for tests and for running withou
       and `passkey` as a dev-dependency.
 - [x] Add the `AuthStore` trait in `crates/server/src/auth/store.rs`, with its memory
       implementation and unit tests of expiry and single use.
-- [ ] Add `/auth/register/start` and `/auth/register/finish`, storing a pending passkey, or an
-      allowed one for `localhost` without redis.
+- [x] Add `/auth/register/start` and `/auth/register/finish`, storing a pending passkey, or an
+      allowed one for `localhost` without redis. Until the binary reads `LOOKOUT_ORIGIN`, its
+      origin is `http://localhost:3000`, so a deployed server allows at once any passkey a script
+      registers for `localhost`.
 - [ ] Add `/auth/signin/start` and `/auth/signin/finish`, creating the session.
 - [ ] Add `/auth/signout`.
 - [ ] Test the endpoints in `tests/auth.rs` with `passkey`, including that no answer before sign-in

@@ -1,10 +1,17 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
+use server::auth::RelyingParty;
 use server::{AppState, build_app};
 use tower::ServiceExt;
+use webauthn_rs::prelude::Url;
 
 fn static_dir() -> String {
     concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
+}
+
+fn relying_party() -> RelyingParty {
+    let origin = Url::parse("https://lookout.example.com").expect("an origin");
+    RelyingParty::in_memory(&origin).expect("a relying party")
 }
 
 async fn fetch(path: &str, accept_encoding: Option<&str>) -> (StatusCode, Option<String>, usize) {
@@ -12,7 +19,11 @@ async fn fetch(path: &str, accept_encoding: Option<&str>) -> (StatusCode, Option
     if let Some(encoding) = accept_encoding {
         request = request.header(header::ACCEPT_ENCODING, encoding);
     }
-    let response = build_app(AppState { sink: None }, static_dir())
+    let state = AppState {
+        sink: None,
+        relying_party: relying_party(),
+    };
+    let response = build_app(state, static_dir())
         .oneshot(request.body(Body::empty()).expect("build request"))
         .await
         .expect("router response");

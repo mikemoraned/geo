@@ -15,6 +15,7 @@ use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
+use crate::auth::RelyingParty;
 use crate::queue::SampleSink;
 
 pub const GIT_HASH: &str = env!("BUILD_GIT_HASH");
@@ -22,12 +23,14 @@ pub const GIT_HASH: &str = env!("BUILD_GIT_HASH");
 #[derive(Clone)]
 pub struct AppState {
     pub sink: Option<Arc<dyn SampleSink>>,
+    pub relying_party: RelyingParty,
 }
 
 pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
     Router::new()
         .route("/ws", any(ws_upgrade))
         .route("/version", get(version))
+        .merge(auth::routes(state.relying_party.clone()))
         .fallback_service(ServeDir::new(static_dir.into()))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())

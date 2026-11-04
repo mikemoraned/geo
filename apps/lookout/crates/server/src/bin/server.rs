@@ -1,8 +1,12 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use server::auth::RelyingParty;
 use server::queue::RedisSink;
 use server::{AppState, build_app};
+use webauthn_rs::prelude::Url;
+
+const LOCAL_ORIGIN: &str = "http://localhost:3000";
 
 fn static_dir() -> String {
     std::env::var("LOOKOUT_STATIC_DIR")
@@ -41,7 +45,17 @@ async fn main() {
         }
     };
 
-    let app = build_app(AppState { sink }, static_dir());
+    let origin = Url::parse(LOCAL_ORIGIN).expect("a constant origin parses");
+    let relying_party =
+        RelyingParty::in_memory(&origin).expect("localhost serves as a relying party ID");
+
+    let app = build_app(
+        AppState {
+            sink,
+            relying_party,
+        },
+        static_dir(),
+    );
 
     let port: u16 = std::env::var("PORT")
         .ok()

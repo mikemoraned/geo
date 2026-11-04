@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use domain::Gps;
 use futures_util::{SinkExt, StreamExt};
+use server::auth::RelyingParty;
 use server::queue::{PushError, SampleSink};
 use server::{AppState, build_app};
 use shared::{Accel, AccelReading, GpsReading, Message, V0Message, V1Message};
@@ -12,6 +13,7 @@ use tokio::net::TcpListener;
 use tokio::time::{Instant, sleep, timeout};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use uuid::Uuid;
+use webauthn_rs::prelude::Url;
 
 struct RecordingSink {
     samples: Arc<Mutex<Vec<RawSample>>>,
@@ -30,6 +32,11 @@ fn static_dir() -> String {
     concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
 }
 
+fn relying_party() -> RelyingParty {
+    let origin = Url::parse("https://lookout.example.com").expect("an origin");
+    RelyingParty::in_memory(&origin).expect("a relying party")
+}
+
 async fn spawn_app() -> (SocketAddr, Arc<Mutex<Vec<RawSample>>>) {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let app = build_app(
@@ -37,6 +44,7 @@ async fn spawn_app() -> (SocketAddr, Arc<Mutex<Vec<RawSample>>>) {
             sink: Some(Arc::new(RecordingSink {
                 samples: Arc::clone(&recorded),
             })),
+            relying_party: relying_party(),
         },
         static_dir(),
     );

@@ -1,15 +1,26 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use server::auth::RelyingParty;
 use server::{AppState, GIT_HASH, build_app};
 use tower::ServiceExt;
+use webauthn_rs::prelude::Url;
 
 fn static_dir() -> String {
     concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
 }
 
+fn relying_party() -> RelyingParty {
+    let origin = Url::parse("https://lookout.example.com").expect("an origin");
+    RelyingParty::in_memory(&origin).expect("a relying party")
+}
+
 #[tokio::test]
 async fn version_endpoint_serves_git_hash() {
-    let app = build_app(AppState { sink: None }, static_dir());
+    let state = AppState {
+        sink: None,
+        relying_party: relying_party(),
+    };
+    let app = build_app(state, static_dir());
 
     let response = app
         .oneshot(
