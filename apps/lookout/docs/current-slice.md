@@ -223,11 +223,12 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   arriving leg. The derivation fixes the choice, so no run varies it. This beats the departing leg,
   whose missing `realtime` would mark a correct dwell unreliable.
 - **A person chooses the apps' predictor and its settings from a report a skill writes.** The
-  skill, `choose-predictor`, reports the runs in gold for review. The discussion it opens ends in a
-  predictor and settings, which a code change puts in `platform-core`. The choice weighs what the
-  numbers alone leave open, such as recall against false alarms per hour. The report shows every
-  run, so the choice stands beside the runs it passed over. A later predictor goes through the same
-  review. This beats a rule fixed before the results, which cannot weigh a trade-off nobody foresaw.
+  skill, `choose-predictor`, reports the runs in gold as a dated doc in `docs/`, so the review sits
+  in a diff. The discussion it opens ends in a predictor and settings, which a code change puts in
+  `platform-core`. The choice weighs what the numbers alone leave open, such as recall against false
+  alarms per hour. The report shows every run, so the choice stands beside the runs it passed over.
+  A later predictor goes through the same review. This beats a rule fixed before the results, which
+  cannot weigh a trade-off nobody foresaw.
 
 #### Consequences elsewhere
 
@@ -268,6 +269,8 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   cone's angle. It comes back once LightCone's misses trace to turns those odds call rare.
 - **A ramp at the 30 s edge.** Deferred: no predictor aims at 30 s, so last-moment notifications
   spread out rather than bunch at it. It comes back once a run shows them bunching there.
+- **A notebook as `choose-predictor`'s report.** Rejected: a dated doc keeps the review in a diff.
+  It comes back once each review needs the maps that `predictions.py` draws.
 
 #### Open questions
 
@@ -285,9 +288,6 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **How does a comparison state its uncertainty?** One way is an interval on each predictor's rates.
   The other is a bootstrap over sessions of the difference between two predictors on the same
   sessions. The answer shapes `summarise`'s output, and what "robustly" means in the Target.
-- **Where does `choose-predictor`'s report land?** A dated doc in `docs/` keeps the review in a
-  diff, with a table of each run's measures. A notebook can draw maps of misses and false alarms,
-  and is built with the user in a live session. The answer shapes the skill.
 
 ### Tasks
 
@@ -393,8 +393,8 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 
 The apps come last, since they show the states of the predictor a person chooses from the runs.
 
-- [ ] Write the skill `choose-predictor` in the repo's `.claude/skills/`, reporting the runs in gold
-      for review.
+- [ ] Write the skill `choose-predictor` in the repo's `.claude/skills/`, which reports the runs
+      in gold as a dated doc in `docs/`.
 - [ ] Choose the apps' predictor and settings with the user, through `/choose-predictor` over the
       runs of Phase 4.
 - [ ] Hold the `Tracker` in `platform-core`'s model, around the chosen predictor and settings, and
