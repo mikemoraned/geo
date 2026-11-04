@@ -259,7 +259,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
       origin is `http://localhost:3000`, so a deployed server allows at once any passkey a script
       registers for `localhost`.
 - [x] Add `/auth/signin/start` and `/auth/signin/finish`, creating the session.
-- [ ] Add `/auth/signout`.
+- [x] Add `/auth/signout`.
 - [ ] Test the endpoints in `tests/auth.rs` with `passkey`, including that no answer before sign-in
       carries a credential ID.
 - [ ] Add `static/signin/`, registering and signing in through `navigator.credentials`.

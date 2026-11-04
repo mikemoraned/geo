@@ -126,6 +126,9 @@ session ends 30 days after its last use, and [every request that carries it][alw
 A finish answers 400 as a registration's does: for a ceremony that expired, finished already, or
 never started, and for an assertion that fails verification.
 
+`POST /auth/signout` deletes the session's record and clears its cookie. It answers 204 whether or
+not the request carries a session.
+
 [get]: https://www.w3.org/TR/webauthn-3/#sctn-getAssertion
 [conditional-set]: https://docs.rs/webauthn-rs/0.5.5/src/webauthn_rs/lib.rs.html#1341
 [conditional]: https://w3c.github.io/webappsec-credential-management/#dom-credentialmediationrequirement-conditional

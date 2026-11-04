@@ -3,6 +3,7 @@ pub mod memory;
 pub mod registration;
 pub mod sessions;
 pub mod signin;
+pub mod signout;
 pub mod store;
 
 #[cfg(test)]
@@ -111,6 +112,7 @@ pub fn routes<S>(relying_party: RelyingParty) -> Router<S> {
         .route("/auth/register/finish", post(registration::finish))
         .route("/auth/signin/start", post(signin::start))
         .route("/auth/signin/finish", post(signin::finish))
+        .route("/auth/signout", post(signout::signout))
         .with_state(relying_party)
 }
 

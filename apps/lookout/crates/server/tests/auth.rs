@@ -22,9 +22,13 @@ use server::auth::store::{
 };
 use server::auth::{Allowing, Finish, RelyingParty, Started};
 use server::{AppState, build_app};
+use std::str::FromStr;
 use tower::ServiceExt;
-use tower_sessions::MemoryStore;
+
+use tower_sessions::cookie::time::Duration;
 use tower_sessions::cookie::{Cookie, SameSite};
+use tower_sessions::session::Id;
+use tower_sessions::{MemoryStore, SessionStore};
 use webauthn_rs::prelude::{CredentialID, RegisterPublicKeyCredential, Url, Uuid, WebauthnBuilder};
 
 const ORIGIN: &str = "https://lookout.example.com";
@@ -188,10 +192,29 @@ fn app(relying_party: RelyingParty) -> Router {
     )
 }
 
-fn app_over(store: &Arc<MemoryAuthStore>, allowing: Allowing) -> Router {
-    let store = Arc::clone(store);
-    let sessions = SharedSessionStore::new(MemoryStore::default());
-    app(RelyingParty::new(&url(ORIGIN), store, sessions, allowing).expect("a relying party"))
+struct Server {
+    app: Router,
+    passkeys: Arc<MemoryAuthStore>,
+    sessions: MemoryStore,
+}
+
+impl Server {
+    fn hosted(allowing: Allowing) -> Self {
+        let passkeys = Arc::new(MemoryAuthStore::default());
+        let sessions = MemoryStore::default();
+        let relying_party = RelyingParty::new(
+            &url(ORIGIN),
+            passkeys.clone(),
+            SharedSessionStore::new(sessions.clone()),
+            allowing,
+        )
+        .expect("a relying party");
+        Self {
+            app: app(relying_party),
+            passkeys,
+            sessions,
+        }
+    }
 }
 
 async fn post(app: &Router, path: &str, body: Body, cookie: Option<&Cookie<'_>>) -> Reply {
@@ -278,16 +301,23 @@ async fn sign_in(app: &Router, browser: &mut Browser, cookie: Option<&Cookie<'_>
 
 #[tokio::test]
 async fn a_registration_waits_under_its_code_for_the_admin() {
-    let store = Arc::new(MemoryAuthStore::default());
-    let app = app_over(&store, Allowing::ByAdmin);
+    let server = Server::hosted(Allowing::ByAdmin);
 
-    let (id, registered) = register(&app, &mut Browser::at(ORIGIN)).await;
+    let (id, registered) = register(&server.app, &mut Browser::at(ORIGIN)).await;
 
     let Registered::Pending { code } = registered else {
         panic!("{registered:?} is not pending");
     };
-    assert!(store.find_allowed(&id).await.expect("found").is_none());
-    let allowed = store
+    assert!(
+        server
+            .passkeys
+            .find_allowed(&id)
+            .await
+            .expect("found")
+            .is_none()
+    );
+    let allowed = server
+        .passkeys
         .allow(&code, None)
         .await
         .expect("allowed")
@@ -297,13 +327,19 @@ async fn a_registration_waits_under_its_code_for_the_admin() {
 
 #[tokio::test]
 async fn a_registration_allowed_at_once_needs_no_admin() {
-    let store = Arc::new(MemoryAuthStore::default());
-    let app = app_over(&store, Allowing::AtOnce);
+    let server = Server::hosted(Allowing::AtOnce);
 
-    let (id, registered) = register(&app, &mut Browser::at(ORIGIN)).await;
+    let (id, registered) = register(&server.app, &mut Browser::at(ORIGIN)).await;
 
     assert_eq!(registered, Registered::Allowed);
-    assert!(store.find_allowed(&id).await.expect("found").is_some());
+    assert!(
+        server
+            .passkeys
+            .find_allowed(&id)
+            .await
+            .expect("found")
+            .is_some()
+    );
 }
 
 #[tokio::test]
@@ -323,9 +359,9 @@ async fn in_memory_only_a_passkey_registered_for_localhost_is_allowed_at_once() 
 
 #[tokio::test]
 async fn registration_asks_for_a_discoverable_passkey() {
-    let app = app_over(&Arc::default(), Allowing::ByAdmin);
+    let server = Server::hosted(Allowing::ByAdmin);
 
-    let options = start_registration(&app).await.options.public_key;
+    let options = start_registration(&server.app).await.options.public_key;
 
     let selection = options
         .authenticator_selection
@@ -338,10 +374,18 @@ async fn registration_asks_for_a_discoverable_passkey() {
 
 #[tokio::test]
 async fn every_registration_is_for_the_recording_account() {
-    let app = app_over(&Arc::default(), Allowing::ByAdmin);
+    let server = Server::hosted(Allowing::ByAdmin);
 
-    let first = start_registration(&app).await.options.public_key.user;
-    let second = start_registration(&app).await.options.public_key.user;
+    let first = start_registration(&server.app)
+        .await
+        .options
+        .public_key
+        .user;
+    let second = start_registration(&server.app)
+        .await
+        .options
+        .public_key
+        .user;
 
     assert_eq!(first.name, "recording");
     assert_eq!(first.id, second.id);
@@ -349,26 +393,26 @@ async fn every_registration_is_for_the_recording_account() {
 
 #[tokio::test]
 async fn registration_names_no_passkey_the_server_holds() {
-    let app = app_over(&Arc::default(), Allowing::AtOnce);
-    register(&app, &mut Browser::at(ORIGIN)).await;
+    let server = Server::hosted(Allowing::AtOnce);
+    register(&server.app, &mut Browser::at(ORIGIN)).await;
 
-    let options = start_registration(&app).await.options.public_key;
+    let options = start_registration(&server.app).await.options.public_key;
 
     assert!(options.exclude_credentials.is_none());
 }
 
 #[tokio::test]
 async fn a_ceremony_finishes_once() {
-    let app = app_over(&Arc::default(), Allowing::ByAdmin);
-    let started = start_registration(&app).await;
+    let server = Server::hosted(Allowing::ByAdmin);
+    let started = start_registration(&server.app).await;
     let credential = Browser::at(ORIGIN).create(started.options).await;
     let finish = Finish {
         ceremony: started.ceremony,
         credential,
     };
 
-    let first = finish_registration(&app, &finish).await;
-    let replayed = finish_registration(&app, &finish).await;
+    let first = finish_registration(&server.app, &finish).await;
+    let replayed = finish_registration(&server.app, &finish).await;
 
     assert!(first.is_ok(), "{first:?}");
     assert_eq!(replayed, Err(StatusCode::BAD_REQUEST));
@@ -376,36 +420,36 @@ async fn a_ceremony_finishes_once() {
 
 #[tokio::test]
 async fn a_finish_needs_a_ceremony_the_server_started() {
-    let app = app_over(&Arc::default(), Allowing::ByAdmin);
-    let started = start_registration(&app).await;
+    let server = Server::hosted(Allowing::ByAdmin);
+    let started = start_registration(&server.app).await;
     let credential = Browser::at(ORIGIN).create(started.options).await;
     let unknown = Finish {
         ceremony: CeremonyId::random(),
         credential,
     };
 
-    let finished = finish_registration(&app, &unknown).await;
+    let finished = finish_registration(&server.app, &unknown).await;
 
     assert_eq!(finished, Err(StatusCode::BAD_REQUEST));
 }
 
 #[tokio::test]
 async fn a_credential_answers_only_the_ceremony_that_challenged_it() {
-    let app = app_over(&Arc::default(), Allowing::ByAdmin);
-    let challenger = start_registration(&app).await;
-    let other = start_registration(&app).await;
+    let server = Server::hosted(Allowing::ByAdmin);
+    let challenger = start_registration(&server.app).await;
+    let other = start_registration(&server.app).await;
     let credential = Browser::at(ORIGIN).create(challenger.options).await;
     let misdirected = Finish {
         ceremony: other.ceremony,
         credential,
     };
 
-    let refused = finish_registration(&app, &misdirected).await;
+    let refused = finish_registration(&server.app, &misdirected).await;
     let answered = Finish {
         ceremony: challenger.ceremony,
         credential: misdirected.credential,
     };
-    let accepted = finish_registration(&app, &answered).await;
+    let accepted = finish_registration(&server.app, &answered).await;
 
     assert_eq!(refused, Err(StatusCode::BAD_REQUEST));
     assert!(accepted.is_ok(), "{accepted:?}");
@@ -413,11 +457,11 @@ async fn a_credential_answers_only_the_ceremony_that_challenged_it() {
 
 #[tokio::test]
 async fn an_allowed_passkey_signs_in_to_a_session() {
-    let app = app_over(&Arc::default(), Allowing::AtOnce);
+    let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
-    register(&app, &mut browser).await;
+    register(&server.app, &mut browser).await;
 
-    let reply = sign_in(&app, &mut browser, None).await;
+    let reply = sign_in(&server.app, &mut browser, None).await;
 
     assert_eq!(reply.status, StatusCode::NO_CONTENT, "{:?}", reply.body);
     assert!(reply.session_cookie().is_some(), "{:?}", reply.headers);
@@ -425,17 +469,16 @@ async fn an_allowed_passkey_signs_in_to_a_session() {
 
 #[tokio::test]
 async fn a_pending_passkey_signs_in_once_the_admin_allows_it() {
-    let store = Arc::new(MemoryAuthStore::default());
-    let app = app_over(&store, Allowing::ByAdmin);
+    let server = Server::hosted(Allowing::ByAdmin);
     let mut browser = Browser::at(ORIGIN);
-    let (_, registered) = register(&app, &mut browser).await;
+    let (_, registered) = register(&server.app, &mut browser).await;
     let Registered::Pending { code } = registered else {
         panic!("{registered:?} is not pending");
     };
 
-    let waiting = sign_in(&app, &mut browser, None).await;
-    store.allow(&code, None).await.expect("allowed");
-    let allowed = sign_in(&app, &mut browser, None).await;
+    let waiting = sign_in(&server.app, &mut browser, None).await;
+    server.passkeys.allow(&code, None).await.expect("allowed");
+    let allowed = sign_in(&server.app, &mut browser, None).await;
 
     assert_eq!(waiting.status, StatusCode::FORBIDDEN);
     assert!(waiting.session_cookie().is_none(), "{:?}", waiting.headers);
@@ -444,17 +487,20 @@ async fn a_pending_passkey_signs_in_once_the_admin_allows_it() {
 
 #[tokio::test]
 async fn a_revoked_passkey_cannot_sign_in() {
-    let store = Arc::new(MemoryAuthStore::default());
-    let app = app_over(&store, Allowing::ByAdmin);
+    let server = Server::hosted(Allowing::ByAdmin);
     let mut browser = Browser::at(ORIGIN);
-    let (_, registered) = register(&app, &mut browser).await;
+    let (_, registered) = register(&server.app, &mut browser).await;
     let Registered::Pending { code } = registered else {
         panic!("{registered:?} is not pending");
     };
-    store.allow(&code, None).await.expect("allowed");
-    store.remove_allowed(&code).await.expect("revoked");
+    server.passkeys.allow(&code, None).await.expect("allowed");
+    server
+        .passkeys
+        .remove_allowed(&code)
+        .await
+        .expect("revoked");
 
-    let reply = sign_in(&app, &mut browser, None).await;
+    let reply = sign_in(&server.app, &mut browser, None).await;
 
     assert_eq!(reply.status, StatusCode::FORBIDDEN);
     assert!(reply.session_cookie().is_none(), "{:?}", reply.headers);
@@ -486,8 +532,7 @@ async fn a_passkey_revoked_during_its_signin_stays_revoked() {
 
 #[tokio::test]
 async fn a_passkey_for_another_account_cannot_sign_in() {
-    let store = Arc::new(MemoryAuthStore::default());
-    let app = app_over(&store, Allowing::ByAdmin);
+    let server = Server::hosted(Allowing::ByAdmin);
     let mut browser = Browser::at(ORIGIN);
     let webauthn = WebauthnBuilder::new("lookout.example.com", &url(ORIGIN))
         .and_then(|builder| builder.build())
@@ -505,16 +550,17 @@ async fn a_passkey_for_another_account_cannot_sign_in() {
     let passkey = webauthn
         .finish_passkey_registration(&credential, &registration)
         .expect("a passkey");
-    let code = store
+    let code = server
+        .passkeys
         .put_pending(PendingPasskey {
             passkey,
             registered_at: chrono::Utc::now(),
         })
         .await
         .expect("stored");
-    store.allow(&code, None).await.expect("allowed");
+    server.passkeys.allow(&code, None).await.expect("allowed");
 
-    let reply = sign_in(&app, &mut browser, None).await;
+    let reply = sign_in(&server.app, &mut browser, None).await;
 
     assert_eq!(reply.status, StatusCode::FORBIDDEN);
     assert!(reply.session_cookie().is_none(), "{:?}", reply.headers);
@@ -522,10 +568,10 @@ async fn a_passkey_for_another_account_cannot_sign_in() {
 
 #[tokio::test]
 async fn sign_in_names_no_passkey_and_asks_for_the_usual_prompt() {
-    let app = app_over(&Arc::default(), Allowing::AtOnce);
-    register(&app, &mut Browser::at(ORIGIN)).await;
+    let server = Server::hosted(Allowing::AtOnce);
+    register(&server.app, &mut Browser::at(ORIGIN)).await;
 
-    let (_, json) = start_signin(&app).await;
+    let (_, json) = start_signin(&server.app).await;
 
     let allowed = &json["options"]["publicKey"]["allowCredentials"];
     assert!(allowed.as_array().is_none_or(Vec::is_empty), "{allowed}");
@@ -534,18 +580,18 @@ async fn sign_in_names_no_passkey_and_asks_for_the_usual_prompt() {
 
 #[tokio::test]
 async fn a_signin_ceremony_finishes_once() {
-    let app = app_over(&Arc::default(), Allowing::AtOnce);
+    let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
-    register(&app, &mut browser).await;
-    let (started, _) = start_signin(&app).await;
+    register(&server.app, &mut browser).await;
+    let (started, _) = start_signin(&server.app).await;
     let credential = browser.get(started.options).await;
     let finish = Finish {
         ceremony: started.ceremony,
         credential,
     };
 
-    let first = finish_signin(&app, &finish, None).await;
-    let replayed = finish_signin(&app, &finish, None).await;
+    let first = finish_signin(&server.app, &finish, None).await;
+    let replayed = finish_signin(&server.app, &finish, None).await;
 
     assert_eq!(first.status, StatusCode::NO_CONTENT, "{:?}", first.body);
     assert_eq!(replayed.status, StatusCode::BAD_REQUEST);
@@ -553,14 +599,14 @@ async fn a_signin_ceremony_finishes_once() {
 
 #[tokio::test]
 async fn signing_in_records_when_the_passkey_was_used() {
-    let store = Arc::new(MemoryAuthStore::default());
-    let app = app_over(&store, Allowing::AtOnce);
+    let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
-    let (id, _) = register(&app, &mut browser).await;
+    let (id, _) = register(&server.app, &mut browser).await;
 
-    sign_in(&app, &mut browser, None).await;
+    sign_in(&server.app, &mut browser, None).await;
 
-    let allowed = store
+    let allowed = server
+        .passkeys
         .find_allowed(&id)
         .await
         .expect("found")
@@ -570,15 +616,15 @@ async fn signing_in_records_when_the_passkey_was_used() {
 
 #[tokio::test]
 async fn signing_in_again_issues_a_fresh_session_id() {
-    let app = app_over(&Arc::default(), Allowing::AtOnce);
+    let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
-    register(&app, &mut browser).await;
+    register(&server.app, &mut browser).await;
 
-    let first = sign_in(&app, &mut browser, None)
+    let first = sign_in(&server.app, &mut browser, None)
         .await
         .session_cookie()
         .expect("a session");
-    let second = sign_in(&app, &mut browser, Some(&first))
+    let second = sign_in(&server.app, &mut browser, Some(&first))
         .await
         .session_cookie()
         .expect("a session");
@@ -588,11 +634,11 @@ async fn signing_in_again_issues_a_fresh_session_id() {
 
 #[tokio::test]
 async fn a_hosted_session_cookie_is_host_only_and_strict() {
-    let app = app_over(&Arc::default(), Allowing::AtOnce);
+    let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
-    register(&app, &mut browser).await;
+    register(&server.app, &mut browser).await;
 
-    let cookie = sign_in(&app, &mut browser, None)
+    let cookie = sign_in(&server.app, &mut browser, None)
         .await
         .session_cookie()
         .expect("a session");
@@ -622,8 +668,8 @@ async fn a_localhost_session_cookie_drops_the_secure_prefix() {
 
 #[tokio::test]
 async fn registration_creates_no_session() {
-    let app = app_over(&Arc::default(), Allowing::AtOnce);
-    let started = post(&app, "/auth/register/start", Body::empty(), None).await;
+    let server = Server::hosted(Allowing::AtOnce);
+    let started = post(&server.app, "/auth/register/start", Body::empty(), None).await;
 
     let mut browser = Browser::at(ORIGIN);
     let options: Started<CredentialCreationOptions> =
@@ -634,7 +680,7 @@ async fn registration_creates_no_session() {
         credential,
     };
     let finished = post(
-        &app,
+        &server.app,
         "/auth/register/finish",
         Body::from(serde_json::to_vec(&finish).expect("json")),
         None,
@@ -647,4 +693,41 @@ async fn registration_creates_no_session() {
         "{:?}",
         finished.headers
     );
+}
+
+#[tokio::test]
+async fn signing_out_ends_the_session() {
+    let server = Server::hosted(Allowing::AtOnce);
+    let mut browser = Browser::at(ORIGIN);
+    register(&server.app, &mut browser).await;
+    let signed_in = sign_in(&server.app, &mut browser, None)
+        .await
+        .session_cookie()
+        .expect("a session");
+    let id = Id::from_str(signed_in.value()).expect("a session id");
+    assert!(server.sessions.load(&id).await.expect("loaded").is_some());
+
+    let reply = post(
+        &server.app,
+        "/auth/signout",
+        Body::empty(),
+        Some(&signed_in),
+    )
+    .await;
+
+    assert_eq!(reply.status, StatusCode::NO_CONTENT, "{:?}", reply.body);
+    assert!(server.sessions.load(&id).await.expect("loaded").is_none());
+    let cleared = reply.session_cookie().expect("a cleared cookie");
+    assert_eq!(cleared.value(), "");
+    assert_eq!(cleared.max_age(), Some(Duration::ZERO));
+}
+
+#[tokio::test]
+async fn signing_out_without_a_session_changes_nothing() {
+    let server = Server::hosted(Allowing::AtOnce);
+
+    let reply = post(&server.app, "/auth/signout", Body::empty(), None).await;
+
+    assert_eq!(reply.status, StatusCode::NO_CONTENT, "{:?}", reply.body);
+    assert!(reply.session_cookie().is_none(), "{:?}", reply.headers);
 }
