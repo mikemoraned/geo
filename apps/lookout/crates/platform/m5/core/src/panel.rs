@@ -68,7 +68,7 @@ fn countdown(at: Option<DateTime<Utc>>, now: Option<DateTime<Utc>>) -> String {
 #[cfg(test)]
 mod tests {
     use chrono::{TimeDelta, TimeZone};
-    use domain::CrossingCompactId;
+    use predictor::Confidence;
 
     use super::*;
 
@@ -125,9 +125,9 @@ mod tests {
             for seconds in [-1, 0, 1, 59, 60, 599, 600, 3_599, 3_600, 86_400] {
                 let line = line(
                     &Prediction {
-                        crossing_compact_id: CrossingCompactId::new(u32::MAX),
                         metres,
                         at: Some(now + TimeDelta::seconds(seconds)),
+                        confidence: Confidence::Low,
                     },
                     Some(now),
                 );
@@ -144,9 +144,9 @@ mod tests {
     fn a_line_with_no_countdown_still_fits() {
         let line = line(
             &Prediction {
-                crossing_compact_id: CrossingCompactId::new(u32::MAX),
                 metres: 999_999.0,
                 at: None,
+                confidence: Confidence::Low,
             },
             Some(instant()),
         );

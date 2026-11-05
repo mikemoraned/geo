@@ -6,7 +6,7 @@ use geo::{Distance, Haversine};
 use domain::{CrossingCompact, Precision, Radius, Sample};
 
 use crate::crossings::Crossings;
-use crate::predict::{Event, ObserveError, Predict, Prediction};
+use crate::predict::{Confidence, Event, ObserveError, Predict, Prediction, Predictions};
 
 pub const DEFAULT_RADIUS: Radius =
     Radius::metres(NonZeroU32::new(5_000).expect("five thousand is not zero"));
@@ -18,7 +18,7 @@ pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
     now: Option<DateTime<Utc>>,
     latest: Option<Sample<P>>,
     speed_mps: Option<P>,
-    predictions: Vec<Prediction<P>>,
+    predictions: Predictions<P>,
 }
 
 impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
@@ -32,7 +32,7 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
             now: None,
             latest: None,
             speed_mps: None,
-            predictions: Vec::new(),
+            predictions: Predictions::new(),
         }
     }
 
@@ -77,27 +77,23 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
         let from = sample.gps.position;
         let radius_metres = self.radius_metres;
 
-        let mut predicted: Vec<Prediction<P>> = self
+        self.predictions = self
             .crossings
             .all()
             .filter_map(|crossing| {
                 let metres = Haversine.distance(from, crossing.position);
-                (metres <= radius_metres).then(|| Prediction {
-                    crossing_compact_id: crossing.id,
-                    metres,
-                    at: speed.and_then(|speed| arrival(sample.t, metres, speed)),
+                (metres <= radius_metres).then(|| {
+                    (
+                        crossing.id,
+                        Prediction {
+                            metres,
+                            at: speed.and_then(|speed| arrival(sample.t, metres, speed)),
+                            confidence: Confidence::Low,
+                        },
+                    )
                 })
             })
             .collect();
-        // Infallible: a haversine over two checked coordinates is a finite number, so no
-        // distance here is NaN and every pair of them orders.
-        predicted.sort_by(|one, other| {
-            one.metres
-                .partial_cmp(&other.metres)
-                .expect("a distance is never NaN")
-        });
-
-        self.predictions = predicted;
         self.speed_mps = speed;
         self.latest = Some(sample);
     }
@@ -144,13 +140,17 @@ impl<P: Precision, C: Crossings<P>> Predict<P> for CrowFlies<P, C> {
         Ok(())
     }
 
-    fn predictions(&self) -> &[Prediction<P>] {
+    fn predictions(&self) -> &Predictions<P> {
         &self.predictions
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use num_traits::float::TotalOrder;
+
+    use crate::predict::nearest_first;
+
     use super::*;
 
     const DEGREE_OF_LATITUDE_M: f64 = 111_195.0;
@@ -185,12 +185,15 @@ mod tests {
         assert!((got - want).abs() < TOLERANCE_M, "{got} is not near {want}");
     }
 
-    fn ids<P: Precision>(predictor: &CrowFlies<P>) -> Vec<u32> {
-        predictor
-            .predictions()
-            .iter()
-            .map(|prediction| prediction.crossing_compact_id.get())
+    fn ids<P: Precision + TotalOrder>(predictor: &CrowFlies<P>) -> Vec<u32> {
+        nearest_first(predictor.predictions())
+            .into_iter()
+            .map(|(crossing_compact_id, _)| crossing_compact_id.get())
             .collect()
+    }
+
+    fn nearest<P: Precision + TotalOrder>(predictor: &CrowFlies<P>, rank: usize) -> Prediction<P> {
+        *nearest_first(predictor.predictions())[rank].1
     }
 
     #[test]
@@ -228,8 +231,8 @@ mod tests {
             .observe(Event::Sampled(fix()))
             .expect("an event in order");
 
-        assert_near(predictor.predictions()[0].metres, HUNDREDTH_DEGREE_M);
-        assert_near(predictor.predictions()[2].metres, 3.0 * HUNDREDTH_DEGREE_M);
+        assert_near(nearest(&predictor, 0).metres, HUNDREDTH_DEGREE_M);
+        assert_near(nearest(&predictor, 2).metres, 3.0 * HUNDREDTH_DEGREE_M);
     }
 
     #[test]
@@ -240,7 +243,7 @@ mod tests {
             .observe(Event::Sampled(fix().with_speed_mps(Some(10.0))))
             .expect("an event in order");
 
-        let predicted = predictor.predictions()[0].at.expect("a time");
+        let predicted = nearest(&predictor, 0).at.expect("a time");
         let seconds = (predicted - instant()).as_seconds_f64();
         assert!(
             (seconds - HUNDREDTH_DEGREE_M / 10.0).abs() < 1.0,
@@ -337,7 +340,7 @@ mod tests {
             .observe(Event::Sampled(fix_at(50.0, 100)))
             .expect("an event in order");
 
-        let predicted = predictor.predictions()[0].at.expect("a time");
+        let predicted = nearest(&predictor, 0).at.expect("a time");
         let seconds = (predicted - (instant() + TimeDelta::seconds(100))).as_seconds_f64();
         assert!((seconds - 100.0f64).abs() < 1.0, "{seconds}s is not 100s");
     }
@@ -350,8 +353,8 @@ mod tests {
             .observe(Event::Sampled(fix()))
             .expect("an event in order");
 
-        assert_near(predictor.predictions()[0].metres, HUNDREDTH_DEGREE_M);
-        assert_eq!(predictor.predictions()[0].at, None);
+        assert_near(nearest(&predictor, 0).metres, HUNDREDTH_DEGREE_M);
+        assert_eq!(nearest(&predictor, 0).at, None);
     }
 
     #[test]
@@ -362,8 +365,8 @@ mod tests {
             .observe(Event::Sampled(fix().with_speed_mps(Some(0.0))))
             .expect("an event in order");
 
-        assert_near(predictor.predictions()[0].metres, HUNDREDTH_DEGREE_M);
-        assert_eq!(predictor.predictions()[0].at, None);
+        assert_near(nearest(&predictor, 0).metres, HUNDREDTH_DEGREE_M);
+        assert_eq!(nearest(&predictor, 0).at, None);
     }
 
     #[test]
@@ -377,7 +380,7 @@ mod tests {
             .observe(Event::Sampled(fix_at(50.0, 10)))
             .expect("an event in order");
 
-        assert_eq!(predictor.predictions()[0].at, None);
+        assert_eq!(nearest(&predictor, 0).at, None);
     }
 
     #[test]
@@ -397,14 +400,14 @@ mod tests {
         predictor
             .observe(Event::Sampled(fix().with_speed_mps(Some(10.0))))
             .expect("an event in order");
-        let predicted = predictor.predictions().to_vec();
+        let predicted = predictor.predictions().clone();
 
         predictor
             .observe(Event::Elapsed(instant() + TimeDelta::seconds(60)))
             .expect("an event in order");
 
         assert_eq!(predictor.now(), Some(instant() + TimeDelta::seconds(60)));
-        assert_eq!(predictor.predictions(), predicted, "the same instants");
+        assert_eq!(predictor.predictions(), &predicted, "the same instants");
     }
 
     #[test]
@@ -432,12 +435,12 @@ mod tests {
         predictor
             .observe(Event::Sampled(fix_at(50.0, 30)))
             .expect("an event in order");
-        let predicted = predictor.predictions().to_vec();
+        let predicted = predictor.predictions().clone();
 
         let refused = predictor.observe(Event::Sampled(fix_at(50.02, 0)));
 
         assert!(refused.is_err());
-        assert_eq!(predictor.predictions(), predicted);
+        assert_eq!(predictor.predictions(), &predicted);
         assert_eq!(predictor.now(), Some(instant() + TimeDelta::seconds(30)));
     }
 
@@ -451,7 +454,7 @@ mod tests {
         let again = predictor.observe(Event::Sampled(fix_at(50.0, 30).with_speed_mps(Some(10.0))));
 
         assert!(again.is_ok());
-        assert!(predictor.predictions()[0].at.is_some(), "the speed landed");
+        assert!(nearest(&predictor, 0).at.is_some(), "the speed landed");
     }
 
     #[test]
@@ -466,12 +469,9 @@ mod tests {
             .expect("an event in order");
 
         assert_eq!(ids(&predictor), vec![1, 2, 3]);
-        assert_near(
-            f64::from(predictor.predictions()[0].metres),
-            HUNDREDTH_DEGREE_M,
-        );
+        assert_near(f64::from(nearest(&predictor, 0).metres), HUNDREDTH_DEGREE_M);
 
-        let predicted = predictor.predictions()[0].at.expect("a time");
+        let predicted = nearest(&predictor, 0).at.expect("a time");
         let seconds = (predicted - instant()).as_seconds_f64();
         assert!(
             (seconds - HUNDREDTH_DEGREE_M / 10.0).abs() < 1.0,
