@@ -426,7 +426,9 @@ The evaluation replays these datasets, and their counts show whether the filter,
 - [x] Match each sample against an R-tree of the crossings, with the samples streamed and ranked by
       `t` within their session. A visit is then a run of consecutive ranks near one crossing. Both
       kinds of session match this way.
-- [ ] Rank samples with equal `t` by a property of the data, so that every run ranks them alike.
+- [x] Rank samples with equal `t` by a property of the data, so that every run ranks them alike.
+      They rank by easting and then by northing. Neither sample dataset holds two samples of one
+      session at the same `t` today.
 - [ ] Measure in `explore2.py` the spacing of samples in the sessions the filter keeps, against the
       250 m match radius.
 

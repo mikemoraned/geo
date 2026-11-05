@@ -56,12 +56,17 @@ impl RankedSample {
     }
 }
 
-const RANKED_SAMPLES: &str = "SELECT session_id,
-        ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY t) AS rank,
-        t,
-        ST_X(geometry_projected) AS x,
-        ST_Y(geometry_projected) AS y
-    FROM samples";
+fn ranked_samples() -> String {
+    format!(
+        "SELECT session_id,
+            ROW_NUMBER() {order} AS rank,
+            t,
+            ST_X(geometry_projected) AS x,
+            ST_Y(geometry_projected) AS y
+        FROM samples",
+        order = Sample::SESSION_ORDER_SQL,
+    )
+}
 
 #[derive(Debug, Deserialize)]
 struct StoredDevice {
@@ -232,7 +237,7 @@ async fn matched_in(
     )?;
 
     let mut matcher = Matcher::new(&index, radius);
-    let mut batches = query.row_batches::<RankedSample>(RANKED_SAMPLES).await?;
+    let mut batches = query.row_batches::<RankedSample>(&ranked_samples()).await?;
     while let Some(batch) = batches.next().await {
         for ranked in batch? {
             matcher.observe(&ranked.session_id, ranked.rank, &ranked.sample());
@@ -264,7 +269,7 @@ pub struct Inputs {
 pub async fn inputs(root: &Root, country: Country) -> Result<Inputs, CrossingError> {
     let query = registered(root, DEVICES, country).await?;
     let ranked: Vec<RankedSample> = query
-        .rows(&format!("{RANKED_SAMPLES} ORDER BY session_id, rank"))
+        .rows(&format!("{} ORDER BY session_id, rank", ranked_samples()))
         .await?;
     Ok(Inputs {
         sessions: ranked
