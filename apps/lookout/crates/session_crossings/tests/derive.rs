@@ -379,23 +379,31 @@ async fn a_country_holding_only_some_of_the_datasets_is_left_out_rather_than_fai
 }
 
 async fn store_with_a_train_session(root: &Root, samples: usize) {
-    let points: Vec<Point<f64>> = (0..samples)
-        .map(|step| Point::new(east_of_berlin(step as f64 * SAMPLE_SPACING_M), BERLIN.y()))
+    let steps: Vec<f64> = (0..samples).map(|step| step as f64).collect();
+    let seqs: Vec<u32> = (0..samples as u32).collect();
+    store_with_a_train_session_along(root, &steps, &seqs).await;
+}
+
+async fn store_with_a_train_session_along(root: &Root, steps: &[f64], seqs: &[u32]) {
+    let points: Vec<Point<f64>> = steps
+        .iter()
+        .map(|step| Point::new(east_of_berlin(step * SAMPLE_SPACING_M), BERLIN.y()))
         .collect();
     let session = TrainSessionRowV3 {
         started_at: at(0),
-        ended_at: at(samples as u32 - 1),
-        sample_count: samples as u32,
+        ended_at: at(steps.len() as u32 - 1),
+        sample_count: steps.len() as u32,
         ..TrainSessionRowV3::example()
     };
     let sample_rows: Vec<GeographyRow<TrainSessionSampleRowV3, Point<f64>>> = points
         .iter()
+        .zip(seqs)
         .enumerate()
-        .map(|(step, point)| GeographyRow {
+        .map(|(minute, (point, seq))| GeographyRow {
             row: TrainSessionSampleRowV3 {
                 session_id: session.session_id.clone(),
-                t: at(step as u32),
-                seq: step as u32,
+                t: at(minute as u32),
+                seq: *seq,
                 lat: point.y(),
                 lon: point.x(),
                 ..TrainSessionSampleRowV3::example()
@@ -498,5 +506,53 @@ async fn train_passes_need_the_train_sessions() {
                 if dataset == "train_session_v3"
         ),
         "{derived:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_train_leaving_a_crossing_and_coming_back_passes_it_twice() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = Root::new(tmp.path());
+    store_with_a_train_session_along(&root, &[0.0, 1.0, 2.0, 1.0, 0.0], &[0, 1, 2, 3, 4]).await;
+    store_with_crossings(&root, &[SAMPLE_SPACING_M + 60.0]).await;
+
+    session_crossings::silver::derive_train(&root, DEFAULT_RADIUS)
+        .await
+        .expect("derive");
+
+    let passes = train_passes_in(&root).await;
+    assert_eq!(
+        passes
+            .iter()
+            .map(|pass| (pass.crossed_at, pass.samples_within))
+            .collect::<Vec<_>>(),
+        [(at(1), 1), (at(3), 1)]
+    );
+}
+
+#[tokio::test]
+async fn a_trains_samples_are_ordered_by_their_times_whatever_their_seq() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = Root::new(tmp.path());
+    let seq_out_of_step_with_time = [0, 2, 4, 1, 3];
+    store_with_a_train_session_along(
+        &root,
+        &[0.0, 1.0, 2.0, 1.0, 0.0],
+        &seq_out_of_step_with_time,
+    )
+    .await;
+    store_with_crossings(&root, &[SAMPLE_SPACING_M + 60.0]).await;
+
+    session_crossings::silver::derive_train(&root, DEFAULT_RADIUS)
+        .await
+        .expect("derive");
+
+    let passes = train_passes_in(&root).await;
+    assert_eq!(
+        passes
+            .iter()
+            .map(|pass| pass.crossed_at)
+            .collect::<Vec<_>>(),
+        [at(1), at(3)]
     );
 }

@@ -8,6 +8,7 @@ use datafusion::scalar::ScalarValue;
 use datafusion::sql::TableReference;
 use datafusion::sql::parser::DFParser;
 use datafusion::sql::resolve::resolve_table_references;
+use futures::{Stream, StreamExt};
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
@@ -385,6 +386,17 @@ impl Query {
         }
         Ok(rows)
     }
+
+    pub async fn row_batches<T>(
+        &self,
+        sql: &str,
+    ) -> Result<impl Stream<Item = Result<Vec<T>, QueryError>> + Unpin + use<T>, QueryError>
+    where
+        T: for<'de> serde::Deserialize<'de>,
+    {
+        let batches = self.ctx.sql(sql).await?.execute_stream().await?;
+        Ok(batches.map(|batch| Ok(serde_arrow::from_record_batch::<Vec<T>>(&batch?)?)))
+    }
 }
 
 #[cfg(test)]
@@ -394,6 +406,7 @@ mod tests {
     use arrow::array::{Int64Array, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
     use chrono::{TimeZone, Utc};
+    use futures::TryStreamExt;
     use serde::{Deserialize, Serialize};
 
     use domain::places::BERLIN;
@@ -667,6 +680,28 @@ mod tests {
             .unwrap();
 
         assert_eq!(rows.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn rows_read_a_batch_at_a_time_add_up_to_every_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = store_with_rows(tmp.path(), vec![1, 2, 3], vec!["a", "b", "c"]).await;
+        let query = Query::new(root);
+        query.register(THING, "thing").await.unwrap();
+        let sql = "SELECT id, name FROM thing ORDER BY id";
+
+        let batches: Vec<Vec<Row>> = query
+            .row_batches(sql)
+            .await
+            .unwrap()
+            .try_collect()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            batches.into_iter().flatten().collect::<Vec<Row>>(),
+            query.rows::<Row>(sql).await.unwrap()
+        );
     }
 
     #[tokio::test]

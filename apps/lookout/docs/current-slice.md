@@ -349,6 +349,24 @@ The high tail is the 1% of sessions with the most samples, about 1,700 sessions.
 - **Two stops alone marks no fault.** A check on sessions with exactly two stops flagged sessions
   that look valid on the map, and was dropped.
 
+What measuring the matching of train sessions to crossings established, on 2026-11-05, over the
+162,256 sessions, 62,435,542 samples, and 5,749 crossings in Germany.
+
+- **Gathering each session's samples into one array exhausts memory.** `match_crossings` gathers
+  them with `array_agg`, grouped by session, and reached 52 GB before it was stopped. Plain
+  aggregates over the same samples take about a second and 0.4 GB.
+- **Nearly every distance measured is unneeded.** The matching keeps each crossing within the radius
+  of the box bounding a session's samples. That keeps 11.5 million pairs of a session and a
+  crossing, and measures 16.8 billion distances from a sample to a crossing. About 7.9 million
+  pairs of a sample and a crossing lie within 250 m, estimated from 2,000 random sessions.
+- **A box filters a long trip poorly.** The median session keeps 14 crossings and the largest keeps
+  3,839, since a trip across the country spans much of it.
+- **SedonaDB's indexed spatial join is out of reach.** Its `spatial-join` feature depends on GEOS
+  in 0.4.1, as [the crossings port](2026-09-27-crossings-in-rust.md) found in 0.4.0. Without it, a
+  join on `ST_DWithin` compares every pair, 3.6 × 10¹¹ distances.
+- **Ranking the samples by time costs 6.3 GB.** `ROW_NUMBER() OVER (PARTITION BY session_id ORDER
+  BY t)` over every train sample takes 5.6 s, and its sort holds every row at once.
+
 ### Observations
 
 - **The re-derive drops what `explore2.py` excluded, session for session** (2026-11-05).
@@ -360,6 +378,13 @@ The high tail is the 1% of sessions with the most samples, about 1,700 sessions.
   figure was an estimate, and 34,521 sessions is enough for the evaluation.
 - **The re-derive takes about 11 minutes and 4.7 GB** (2026-11-05). Compiling takes 7 of the
   minutes, and deriving the segments and sessions the other 4.
+- **Matching through the index of crossings takes 21–33 s and 5.0–7.8 GB** (2026-11-05), over two
+  runs. `match_crossings` wrote the 283 device passes the previous matching wrote. It wrote 2,918,145
+  train passes, over 143,089 of the 162,256 sessions and 4,503 of the 5,749 crossings. Ranking the
+  samples by `t` takes most of the memory.
+- **Deciding nearness by the tree's squared distance moves no pass** (2026-11-05). Every pass
+  stays, and no distance changes by more than 2.8 × 10⁻¹⁴ m. No pass records a distance beyond the
+  radius.
 
 ### Tasks
 
@@ -393,9 +418,15 @@ The evaluation replays these datasets, and their counts show whether the filter,
 - [x] Remove `TrainSessionRowV2`, `TrainSessionSampleRowV2`, and their snapshots, and delete the v2
       files from the local store. `explore1.py` and `explore2.py` stay as the record of what they
       found, and their cells that read v2 no longer run.
-- [ ] Add `TrainSessionCrossingRowV1`, and derive `train_session_crossing_v1` in `session_crossings`
+- [x] Add `TrainSessionCrossingRowV1`, and derive `train_session_crossing_v1` in `session_crossings`
       through the matching `session_crossing_v3` uses.
-- [ ] If reading every train sample at once runs out of memory, match one date at a time.
+- [-] If reading every train sample at once runs out of memory, match one date at a time. Moot:
+      one date at a time leaves the 16.8 billion distances, and splits a session that runs past
+      midnight. The index of crossings below fixes both the memory and the time.
+- [x] Match each sample against an R-tree of the crossings, with the samples streamed and ranked by
+      `t` within their session. A visit is then a run of consecutive ranks near one crossing. Both
+      kinds of session match this way.
+- [ ] Rank samples with equal `t` by a property of the data, so that every run ranks them alike.
 - [ ] Measure in `explore2.py` the spacing of samples in the sessions the filter keeps, against the
       250 m match radius.
 
