@@ -37,9 +37,11 @@ crossing is within the radius, both in the tree and when one session's steps are
 crossing exactly the radius away is therefore passed, and no pass records a distance beyond the
 radius.
 
-The query ranks each sample by time within its session, and that ranking sorts every sample. The
-ranked samples then stream through a batch at a time, and only those near a crossing are kept. A
-visit is a run of consecutive ranks within the radius of one crossing.
+The query ranks each sample by time within its session, and that ranking sorts every sample.
+Samples at the same time rank by easting and then by northing. Two samples alike in time and place
+are interchangeable to the matching, so every run finds the same passes. The ranked samples then
+stream through a batch at a time, and only those near a crossing are kept. A visit is a run of
+consecutive ranks within the radius of one crossing.
 
 A match is a session, a crossing and an instant, with no geometry of its own, so the rows are
 partitioned by the date it happened and nothing else. A run derives the whole dataset from the

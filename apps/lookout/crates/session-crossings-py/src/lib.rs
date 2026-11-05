@@ -72,7 +72,7 @@ fn samples_of(batch: &RecordBatch) -> PyResult<Vec<Sample>> {
         .zip(projected)
         .map(|(t, projected)| Sample { t, projected })
         .collect();
-    samples.sort_by_key(|sample| sample.t);
+    samples.sort_by(Sample::session_order);
     Ok(samples)
 }
 
