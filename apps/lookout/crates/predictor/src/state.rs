@@ -15,6 +15,14 @@ pub struct ActualPass {
     since: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StateKind {
+    OutOfReach,
+    CandidatePass,
+    PredictedPass,
+    ActualPass,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum CrossingState {
     CandidatePass(CandidatePass),
@@ -69,6 +77,14 @@ impl ActualPass {
 }
 
 impl CrossingState {
+    pub fn kind(&self) -> StateKind {
+        match self {
+            Self::CandidatePass(_) => StateKind::CandidatePass,
+            Self::PredictedPass(_) => StateKind::PredictedPass,
+            Self::ActualPass(_) => StateKind::ActualPass,
+        }
+    }
+
     pub fn since(&self) -> DateTime<Utc> {
         match self {
             Self::CandidatePass(state) => state.since(),
