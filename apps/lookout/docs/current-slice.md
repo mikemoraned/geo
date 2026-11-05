@@ -273,9 +273,9 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 
 - [x] Add the redis implementation of `AuthStore` in `crates/server/src/auth/redis.rs`.
 - [x] Test it against a containerised redis, as `redis_sink_docker.rs` tests the sink.
-- [ ] Add `RedisSessionStore`, a `tower_sessions::SessionStore` over the `redis` client, with the
+- [x] Add `RedisSessionStore`, a `tower_sessions::SessionStore` over the `redis` client, with the
       session's expiry as its key's TTL.
-- [ ] Test `RedisSessionStore` against a containerised redis.
+- [x] Test `RedisSessionStore` against a containerised redis.
 
 #### The gate
 
