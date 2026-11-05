@@ -5,15 +5,14 @@ use medallion::{Country, GeographyRow, Root, write_geography_rows, write_rows};
 use medallion_model::{SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3};
 use session_crossings::gold::{Choosing, choose};
 
-const BERLIN: (f64, f64) = (13.404954, 52.520008);
-const EDINBURGH: (f64, f64) = (-3.188267, 55.953251);
+use domain::places::{BERLIN, EDINBURGH};
 
 fn at(minute: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 7, 22, 9, minute, 0).unwrap()
 }
 
-fn session_of(named: &str, at_lon_lat: (f64, f64)) -> (SessionRowV3, Point<f64>) {
-    let (lon, lat) = at_lon_lat;
+fn session_of(named: &str, place: Point<f64>) -> (SessionRowV3, Point<f64>) {
+    let (lon, lat) = place.x_y();
     let session = SessionRowV3 {
         session_id: SessionId::new(named).expect("a session id"),
         device_id: DeviceId::new(format!("device-{named}")).expect("a device id"),
@@ -25,12 +24,12 @@ fn session_of(named: &str, at_lon_lat: (f64, f64)) -> (SessionRowV3, Point<f64>)
         lead_seconds: 60,
         bbox: Bbox::new(lon, lat, lon, lat).expect("a bbox"),
     };
-    (session, Point::new(lon, lat))
+    (session, place)
 }
 
 struct Recorded<'a> {
     country: Country,
-    at: (f64, f64),
+    place: Point<f64>,
     sessions: &'a [(&'a str, usize)],
 }
 
@@ -41,12 +40,12 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
 
     for Recorded {
         country,
-        at: at_lon_lat,
+        place,
         sessions,
     } in recorded
     {
         for (named, crossings) in *sessions {
-            let (session, point) = session_of(named, *at_lon_lat);
+            let (session, point) = session_of(named, *place);
             let session_id = session.session_id.clone();
             let device_id = session.device_id.clone();
             session_rows.push(GeographyRow {
@@ -104,12 +103,12 @@ async fn a_country_with_fewer_than_the_cap_contributes_what_it_has() {
         &[
             Recorded {
                 country: Country::Germany,
-                at: BERLIN,
+                place: BERLIN,
                 sessions: &[("de-best", 6), ("de-next", 5), ("de-third", 4)],
             },
             Recorded {
                 country: Country::UnitedKingdom,
-                at: EDINBURGH,
+                place: EDINBURGH,
                 sessions: &[("gb-only", 4)],
             },
         ],
@@ -141,7 +140,7 @@ async fn a_session_passing_too_few_crossings_is_left_out_of_its_country() {
         &root,
         &[Recorded {
             country: Country::Germany,
-            at: BERLIN,
+            place: BERLIN,
             sessions: &[("de-enough", 5), ("de-too-few", 2)],
         }],
     )

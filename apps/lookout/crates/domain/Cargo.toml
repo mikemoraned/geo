@@ -21,6 +21,9 @@ uuid = { version = "1", default-features = false, features = ["v5"] }
 serde = { workspace = true }
 thiserror = { workspace = true }
 
+[features]
+fixtures = []
+
 [dev-dependencies]
 proptest = { workspace = true }
 serde_json = { workspace = true }

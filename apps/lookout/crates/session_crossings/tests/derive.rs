@@ -1,4 +1,5 @@
 use chrono::{DateTime, TimeZone, Utc};
+use domain::places::BERLIN;
 use domain::{CrossingCompactId, CrossingId, Gps};
 use geo_types::Point;
 use medallion::{
@@ -26,9 +27,9 @@ impl Countries for Germany {
 
 const FAR_EAST_M: f64 = 500_000.0;
 
-struct EastIsElsewhere;
+struct PretendEastIsElsewhere;
 
-impl Countries for EastIsElsewhere {
+impl Countries for PretendEastIsElsewhere {
     fn containing(&self, point: Point<f64>) -> Option<Country> {
         match point.x() < east_of_berlin(FAR_EAST_M) {
             true => Some(Country::Germany),
@@ -46,12 +47,10 @@ struct Pass {
     samples_within: u32,
 }
 
-const LON: f64 = 13.404954;
-const LAT: f64 = 52.520008;
 const SAMPLE_SPACING_M: f64 = 1_000.0;
 
 fn east_of_berlin(metres: f64) -> f64 {
-    LON + metres / 111_320.0 / f64::cos(LAT.to_radians())
+    BERLIN.x() + metres / 111_320.0 / f64::cos(BERLIN.y().to_radians())
 }
 
 fn at(minute: u32) -> DateTime<Utc> {
@@ -62,7 +61,7 @@ fn gps(id: Uuid, t: DateTime<Utc>, lon: f64) -> Message {
     Message::Version1(V1Message::Gps(GpsReading {
         id,
         t: t.timestamp_millis(),
-        gps: Gps::at(LAT, lon)
+        gps: Gps::at(BERLIN.y(), lon)
             .expect("on the globe")
             .with_altitude_metres(Some(38.0))
             .with_accuracy_metres(Some(5.0))
@@ -132,7 +131,7 @@ async fn store_with_crossings(root: &Root, at_metres: &[f64]) {
         .collect();
     let points: Vec<Point<f64>> = at_metres
         .iter()
-        .map(|metres| Point::new(east_of_berlin(*metres), LAT))
+        .map(|metres| Point::new(east_of_berlin(*metres), BERLIN.y()))
         .collect();
     let projected: Vec<Point<f64>> = points
         .iter()
@@ -350,7 +349,7 @@ async fn store_with_a_session_in_each_of_two_countries(root: &Root) {
     let derived = sessions(root, Gap::default(), Lead::default())
         .await
         .expect("derive the sessions");
-    silver::write(root, &derived, &EastIsElsewhere)
+    silver::write(root, &derived, &PretendEastIsElsewhere)
         .await
         .expect("write the sessions");
 }

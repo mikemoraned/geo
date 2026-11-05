@@ -396,6 +396,8 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use serde::{Deserialize, Serialize};
 
+    use domain::places::BERLIN;
+
     use super::*;
     use crate::geo::GEOMETRY;
     use crate::layer::layers;
@@ -481,10 +483,6 @@ mod tests {
         }
     }
 
-    fn berlin() -> geo_types::Point<f64> {
-        geo_types::Point::new(13.404954, 52.520008)
-    }
-
     async fn store_boxes(dir: &std::path::Path, ids: &[&str]) -> Root {
         let root = Root::new(dir);
         let rows: Vec<crate::GeographyRow<BoxedRow, geo_types::Point<f64>>> = ids
@@ -495,7 +493,7 @@ mod tests {
                     seen_at: Utc.with_ymd_and_hms(2026, 7, 21, 9, 0, 0).unwrap(),
                     corner: Corner { x: 1.0, y: 2.0 },
                 },
-                geography: berlin(),
+                geography: BERLIN,
                 country: Country::Germany,
             })
             .collect();
@@ -553,7 +551,7 @@ mod tests {
 
         assert_eq!(
             crate::geo::geometries(&batches[0], GEOMETRY).unwrap(),
-            [geo_types::Geometry::Point(berlin())]
+            [geo_types::Geometry::Point(BERLIN)]
         );
     }
 

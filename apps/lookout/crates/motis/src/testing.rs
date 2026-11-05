@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
 
 use chrono::{DateTime, Utc};
-use geo_types::Point;
+use geo_types::{LineString, Point};
 use medallion::{Countries, Country, Root};
 use medallion_model::{Feed, MotisPollRowV2, MotisSource, MotisSourceId, TripId};
 use url::Url;
@@ -68,20 +68,32 @@ impl Countries for Nowhere {
 }
 
 #[derive(Default)]
-pub(crate) struct EastIsGermany {
+pub(crate) struct PretendEastOfGreenwichIsGermany {
     lookups: Cell<usize>,
+    coverings: Cell<usize>,
 }
 
-impl EastIsGermany {
+impl PretendEastOfGreenwichIsGermany {
     pub(crate) fn lookups(&self) -> usize {
         self.lookups.get()
     }
+
+    pub(crate) fn coverings(&self) -> usize {
+        self.coverings.get()
+    }
 }
 
-impl Countries for EastIsGermany {
+impl Countries for PretendEastOfGreenwichIsGermany {
     fn containing(&self, point: Point<f64>) -> Option<Country> {
         self.lookups.set(self.lookups.get() + 1);
         (point.x() > 0.0).then_some(Country::Germany)
+    }
+
+    fn covering(&self, line: &LineString<f64>) -> Option<Country> {
+        self.coverings.set(self.coverings.get() + 1);
+        line.points()
+            .all(|point| point.x() > 0.0)
+            .then_some(Country::Germany)
     }
 }
 

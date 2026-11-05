@@ -16,6 +16,8 @@ use crate::sampling::{InvalidLeg, InvalidLegs, Leg, NormalisedLegs, Placed, Time
 
 const SAMPLES_PER_WRITE: usize = 100_000;
 
+const MAX_IMPLIED_SPEED_MPS: f64 = 100.0;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TrainSessionsOutcome {
     pub trips: usize,
@@ -32,11 +34,18 @@ pub struct DroppedTrips {
     pub arrives_before_departing: usize,
     pub overlapping: usize,
     pub unplaceable: usize,
+    pub leaves_its_country: usize,
+    pub too_fast: usize,
 }
 
 impl DroppedTrips {
     pub fn total(&self) -> usize {
-        self.shapeless + self.arrives_before_departing + self.overlapping + self.unplaceable
+        self.shapeless
+            + self.arrives_before_departing
+            + self.overlapping
+            + self.unplaceable
+            + self.leaves_its_country
+            + self.too_fast
     }
 }
 
@@ -57,6 +66,7 @@ enum Drop {
     Shapeless,
     ArrivesBeforeDeparting,
     Overlapping,
+    LeavesItsCountry,
 }
 
 struct Session {
@@ -106,6 +116,7 @@ pub async fn derive_train_sessions(
                 outcome.dropped.arrives_before_departing += 1
             }
             Normalised::Dropped(Drop::Overlapping) => outcome.dropped.overlapping += 1,
+            Normalised::Dropped(Drop::LeavesItsCountry) => outcome.dropped.leaves_its_country += 1,
         }
     }
     trips.sort_by_key(|trip| trip.legs.departure());
@@ -120,12 +131,16 @@ pub async fn derive_train_sessions(
             Some(country) => {
                 let placed = trip.legs.sampled(interval)?;
                 let session = session_of(&trip, &placed, projectors.for_country(country)?)?;
-                pending.extend(session.samples);
-                sessions.push(GeographyRow {
-                    row: session.row,
-                    geography: session.path,
-                    country,
-                });
+                if is_too_fast(&session) {
+                    outcome.dropped.too_fast += 1;
+                } else {
+                    pending.extend(session.samples);
+                    sessions.push(GeographyRow {
+                        row: session.row,
+                        geography: session.path,
+                        country,
+                    });
+                }
                 if pending.len() >= SAMPLES_PER_WRITE {
                     sample_writer.write(&pending).await?;
                     pending.clear();
@@ -170,6 +185,13 @@ fn normalised(
         .zip(&placed_lines)
         .min_by_key(|(leg, _)| (leg.departure, leg.arrival))
         .and_then(|(_, placed)| placed.country);
+    if country.is_some_and(|country| {
+        placed_lines
+            .iter()
+            .any(|placed| placed.covered_by != Some(country))
+    }) {
+        return Ok(Normalised::Dropped(Drop::LeavesItsCountry));
+    }
     let legs = match captured
         .iter()
         .zip(placed_lines)
@@ -195,6 +217,15 @@ fn normalised(
         Err(InvalidLegs::Overlapping { .. }) => Ok(Normalised::Dropped(Drop::Overlapping)),
         Err(source) => Err(IngestError::InvalidLegs { trip_id, source }),
     }
+}
+
+fn is_too_fast(session: &Session) -> bool {
+    session.samples.iter().any(|sample| {
+        sample
+            .row
+            .implied_speed_mps
+            .is_some_and(|speed| speed > MAX_IMPLIED_SPEED_MPS)
+    })
 }
 
 fn realtime_percentage(placed: &[Placed]) -> Result<Percentage, NotAPercentage> {
@@ -297,7 +328,7 @@ mod tests {
     use crate::api::types::TripSegment;
     use crate::segment::SingleTripSegment;
     use crate::testing::CaptureLog;
-    use crate::testing::{self, EastIsGermany, Nowhere, germany, regional_trips};
+    use crate::testing::{self, Nowhere, PretendEastOfGreenwichIsGermany, germany, regional_trips};
 
     use super::*;
 
@@ -380,8 +411,14 @@ mod tests {
         let mut onward = segment.clone();
         onward.from = segment.to.clone();
         onward.to = segment.from.clone();
+        let line = Polyline::new(segment.polyline.clone())
+            .expect("a polyline")
+            .line();
+        onward.polyline = Polyline::from_points(line.0.into_iter().rev())
+            .expect("points on the globe")
+            .to_string();
         onward.departure = departure;
-        onward.arrival = departure + Duration::minutes(10);
+        onward.arrival = departure + (segment.arrival - segment.departure);
         onward
     }
 
@@ -701,7 +738,7 @@ mod tests {
     async fn trips_sharing_a_polyline_are_placed_once() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let countries = EastIsGermany::default();
+        let countries = PretendEastOfGreenwichIsGermany::default();
         let trips = ["first", "second", "third"].map(|trip_id| {
             let mut segment = regional_trips().remove(0);
             segment.trips[0].trip_id = trip_id.to_string();
@@ -712,7 +749,7 @@ mod tests {
         let outcome = derive(&root, &countries).await;
 
         assert_eq!(outcome.sessions, 3);
-        assert_eq!(countries.lookups(), 1);
+        assert_eq!((countries.lookups(), countries.coverings()), (1, 1));
     }
 
     #[tokio::test]
@@ -731,13 +768,13 @@ mod tests {
         )
         .await;
 
-        let outcome = derive(&root, &EastIsGermany::default()).await;
+        let outcome = derive(&root, &PretendEastOfGreenwichIsGermany::default()).await;
 
         assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (0, 1));
     }
 
     #[tokio::test]
-    async fn a_trip_leaving_every_known_country_is_written_under_the_one_it_starts_in() {
+    async fn a_trip_leaving_its_country_is_left_out_and_counted() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         let segment = regional_trips().remove(0);
@@ -752,9 +789,72 @@ mod tests {
         )
         .await;
 
-        let outcome = derive(&root, &EastIsGermany::default()).await;
+        let outcome = derive(&root, &PretendEastOfGreenwichIsGermany::default()).await;
 
-        assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (1, 0));
+        assert_eq!(outcome.sessions, 0);
+        assert_eq!(
+            outcome.dropped,
+            DroppedTrips {
+                leaves_its_country: 1,
+                ..DroppedTrips::default()
+            }
+        );
+    }
+
+    fn running_east_from(mut segment: TripSegment, longitude: f64) -> TripSegment {
+        segment.polyline = Polyline::from_points([(longitude, 50.0), (longitude + 0.01, 50.0)])
+            .expect("points on the globe")
+            .to_string();
+        segment
+    }
+
+    #[tokio::test]
+    async fn a_trip_jumping_faster_than_a_train_runs_is_left_out_and_counted() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        let onward = onward_from(&segment, segment.arrival + Duration::seconds(10));
+        poll(
+            &root,
+            polled_at(0),
+            &[
+                running_east_from(segment, 8.0),
+                running_east_from(onward, 9.0),
+            ],
+        )
+        .await;
+
+        let outcome = derive(&root, &PretendEastOfGreenwichIsGermany::default()).await;
+
+        assert_eq!(outcome.sessions, 0);
+        assert_eq!(
+            outcome.dropped,
+            DroppedTrips {
+                too_fast: 1,
+                ..DroppedTrips::default()
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn a_trip_running_at_a_trains_speed_is_kept() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        let onward = onward_from(&segment, segment.arrival + Duration::seconds(10));
+        poll(
+            &root,
+            polled_at(0),
+            &[
+                running_east_from(segment, 8.0),
+                running_east_from(onward, 8.01),
+            ],
+        )
+        .await;
+
+        let outcome = derive(&root, &PretendEastOfGreenwichIsGermany::default()).await;
+
+        assert_eq!((outcome.sessions, outcome.dropped.total()), (1, 0));
     }
 
     #[tokio::test]
@@ -774,7 +874,7 @@ mod tests {
         )
         .await;
 
-        let outcome = derive(&root, &EastIsGermany::default()).await;
+        let outcome = derive(&root, &PretendEastOfGreenwichIsGermany::default()).await;
 
         assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (0, 1));
     }

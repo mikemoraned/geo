@@ -19,6 +19,9 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
+# The same crate again, for the places its tests are set in. A dev-dependency, so the feature
+# is off in anything else that builds this crate.
+domain = { workspace = true, features = ["fixtures"] }
 geojson = { workspace = true }
 libtest-mimic = { workspace = true }
 recorder = { workspace = true }

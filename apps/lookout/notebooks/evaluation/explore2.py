@@ -1134,5 +1134,169 @@ def all_sessions_kept_map(
     return
 
 
+@app.cell
+def v3_counts(all_session_checks, mo, pd, silver_table):
+    v3_sessions = silver_table("""
+    SELECT session_id, trip_id, source_id, COALESCE(source_label, '(no label)') AS source_label,
+           sample_count, realtime_percentage, started_at, ended_at
+    FROM train_session_v3
+    """).to_pandas()
+    _v3_samples = silver_table(
+        "SELECT COUNT(*) AS samples FROM train_session_sample_v3"
+    )["samples"][0].as_py()
+    _kept = all_session_checks[~all_session_checks.excluded]
+    _kept_ids = set(_kept.session_id)
+    _v3_ids = set(v3_sessions.session_id)
+    mo.vstack(
+        [
+            pd.DataFrame(
+                {
+                    "measure": ["sessions", "samples"],
+                    "kept by all_session_checks, from v2": [
+                        len(_kept),
+                        int(_kept.sample_count.sum()),
+                    ],
+                    "written to train_session_v3": [
+                        len(v3_sessions),
+                        _v3_samples,
+                    ],
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "measure": [
+                        "kept by all_session_checks, missing from v3",
+                        "in v3, excluded by all_session_checks",
+                    ],
+                    "sessions": [
+                        len(_kept_ids - _v3_ids),
+                        len(_v3_ids - _kept_ids),
+                    ],
+                }
+            ),
+        ]
+    )
+    return (v3_sessions,)
+
+
+@app.cell
+def v3_realtime_percentage(matplotlib, v3_sessions):
+    _at_least_90 = int((v3_sessions.realtime_percentage >= 90).sum())
+    _figure, _axes = matplotlib.pyplot.subplots(figsize=(9, 3.5))
+    _axes.hist(
+        v3_sessions.realtime_percentage,
+        bins=range(0, 105, 5),
+        color="#2a6fdb",
+        rwidth=0.9,
+    )
+    _axes.set_xlabel("realtime_percentage")
+    _axes.set_ylabel("sessions")
+    _axes.set_title(
+        f"{_at_least_90:,} of {len(v3_sessions):,} sessions in train_session_v3 have realtime_percentage ≥ 90"
+    )
+    _axes.spines[["top", "right"]].set_visible(False)
+    _axes.grid(axis="y", color="#e5e5e5")
+    _axes.set_axisbelow(True)
+    _figure
+    return
+
+
+@app.cell
+def v3_session_paths(
+    gpd,
+    lookout_medallion,
+    mo,
+    pa,
+    pd,
+    shapely,
+    silver_table,
+):
+    _tolerance_degrees = 0.002
+
+    def _v3_paths_on(date):
+        _samples = pa.table(
+            lookout_medallion.query_silver(
+                "SELECT session_id, lon, lat FROM train_session_sample_v3 WHERE sample_date = $date ORDER BY session_id, t, seq",
+                country="DE",
+                params={"date": date},
+            )
+        ).to_pandas()
+        _drawable = _samples[
+            _samples.groupby("session_id").session_id.transform("size") >= 2
+        ]
+        _codes, _session_ids = pd.factorize(_drawable.session_id, sort=True)
+        return gpd.GeoDataFrame(
+            {"session_id": _session_ids, "sample_date": date},
+            geometry=shapely.simplify(
+                shapely.linestrings(
+                    _drawable.lon.to_numpy(),
+                    _drawable.lat.to_numpy(),
+                    indices=_codes,
+                ),
+                _tolerance_degrees,
+            ),
+            crs="OGC:CRS84",
+        )
+
+    _dates = sorted(
+        silver_table(
+            "SELECT DISTINCT sample_date FROM train_session_sample_v3"
+        )["sample_date"].to_pylist()
+    )
+    v3_session_paths = pd.concat(
+        [_v3_paths_on(_date) for _date in _dates], ignore_index=True
+    )
+    mo.md(
+        f"{len(v3_session_paths):,} paths, one per session and day, over "
+        f"{v3_session_paths.session_id.nunique():,} sessions; "
+        f"{int(shapely.get_num_coordinates(v3_session_paths.geometry).sum()):,} vertices "
+        f"after simplifying to {_tolerance_degrees}°"
+    )
+    return (v3_session_paths,)
+
+
+@app.cell
+def v3_sessions_map(
+    labelled_basemap,
+    lonboard,
+    mo,
+    v3_session_paths,
+    v3_sessions,
+):
+    _paths = v3_session_paths.merge(
+        v3_sessions[
+            ["session_id", "trip_id", "source_label", "realtime_percentage"]
+        ],
+        on="session_id",
+        validate="many_to_one",
+    )
+    _realtime = _paths.realtime_percentage >= 90
+    mo.vstack(
+        [
+            mo.md(
+                f"{_paths.session_id.nunique():,} sessions of train_session_v3 drawn as {len(_paths):,} paths: "
+                f"blue where realtime_percentage ≥ 90 ({_paths[_realtime].session_id.nunique():,} sessions), "
+                f"grey elsewhere"
+            ),
+            lonboard.Map(
+                [
+                    lonboard.PathLayer.from_geopandas(
+                        _paths[~_realtime],
+                        get_color=[150, 150, 150],
+                        width_min_pixels=1,
+                    ),
+                    lonboard.PathLayer.from_geopandas(
+                        _paths[_realtime],
+                        get_color=[42, 111, 219],
+                        width_min_pixels=2,
+                    ),
+                ],
+                basemap=labelled_basemap(),
+            ),
+        ]
+    )
+    return
+
+
 if __name__ == "__main__":
     app.run()

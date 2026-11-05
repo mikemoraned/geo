@@ -136,6 +136,8 @@ impl Display for Bbox {
 
 #[cfg(test)]
 mod tests {
+    use crate::places::LONDON;
+
     use super::*;
 
     const GERMANY: &str = "6.08,47.42,15.04,54.93";
@@ -220,7 +222,7 @@ mod tests {
         assert!(bbox.contains(Point::new(13.54, 51.61)));
         assert!(bbox.contains(Point::new(6.08, 47.42)));
         assert!(bbox.contains(Point::new(15.04, 54.93)));
-        assert!(!bbox.contains(Point::new(-0.12, 51.50)));
+        assert!(!bbox.contains(LONDON));
         assert!(!bbox.contains(Point::new(13.54, 55.00)));
     }
 

@@ -349,6 +349,18 @@ The high tail is the 1% of sessions with the most samples, about 1,700 sessions.
 - **Two stops alone marks no fault.** A check on sessions with exactly two stops flagged sessions
   that look valid on the map, and was dropped.
 
+### Observations
+
+- **The re-derive drops what `explore2.py` excluded, session for session** (2026-11-05).
+  `just silver-motis-ingest` wrote 162,256 sessions and 62,435,542 samples. It dropped 3,342 trips
+  as too fast and 8 as leaving their country, beside 7,977 already dropped as overlapping. The
+  sessions written are those that `all_session_checks` keeps, with none missing and none extra.
+- **34,521 written sessions reach `realtime_percentage` ≥ 90** (2026-11-05). `explore1.py` counted
+  about 40,000 trips per polled day above 90%, from the share of legs rather than samples. That
+  figure was an estimate, and 34,521 sessions is enough for the evaluation.
+- **The re-derive takes about 11 minutes and 4.7 GB** (2026-11-05). Compiling takes 7 of the
+  minutes, and deriving the segments and sessions the other 4.
+
 ### Tasks
 
 #### Refactors / extensions
@@ -368,12 +380,16 @@ The evaluation replays these datasets, and their counts show whether the filter,
 - [x] Decide, from the anomalies found, which samples or sessions the cleaning rule discards.
 - [x] Add `realtime` to `TrainSessionSampleRowV3` and `realtime_pct` to `TrainSessionRowV3`, written
       by `motis::train_sessions` in place of v2. The v2 row types became v3 in place, as a silver
-      version does, so their snapshots went too. The removal task keeps only the v2 files. The
-      column became `realtime_percentage`, a `Percentage` that refuses a value outside 0–100.
-- [ ] Apply the cleaning rule's two checks in `motis::train_sessions`, as drop reasons counted
-      beside its existing four.
-- [ ] Re-derive with `just silver-motis-ingest`. Check that about 40,000 sessions reach
-      `realtime_percentage` ≥ 90, as `explore1.py` counted per day and trip.
+      version does, so their snapshots went too. The v2 row types later came back, read and no
+      longer derived, so that `explore2.py` can still read v2. The column became
+      `realtime_percentage`, a `Percentage` that refuses a value outside 0–100.
+- [x] Apply the cleaning rule's two checks in `motis::train_sessions`, as drop reasons counted
+      beside its existing four. The country check tests each leg's line, once per polyline, against
+      the country's land and maritime areas joined into one. A sample lies on its leg's line, so
+      this agrees with a test of every sample, at a fraction of the cost.
+- [x] Re-derive with `just silver-motis-ingest`. Check that about 40,000 sessions reach
+      `realtime_percentage` ≥ 90, as `explore1.py` counted per day and trip. 34,521 reach it, and
+      the 40,000 was an estimate.
 - [ ] Remove `TrainSessionRowV2`, `TrainSessionSampleRowV2`, and their snapshots, and delete the v2
       files from the local store.
 - [ ] Add `TrainSessionCrossingRowV1`, and derive `train_session_crossing_v1` in `session_crossings`

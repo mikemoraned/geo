@@ -203,6 +203,8 @@ mod tests {
     use crux_core::Core;
     use crux_core::bridge::{Bridge, JsonFfiFormat};
     use domain::Gps;
+    use domain::places::DRESDEN_HBF;
+    use geo::{Distance, Haversine};
     use geo_types::Point;
     use predictor::fixtures::{Fix, captured};
 
@@ -290,17 +292,35 @@ mod tests {
         DateTime::from_timestamp(1_785_098_609, 0).expect("an instant")
     }
 
-    const DRESDEN_LON: f64 = 13.7322;
-
     fn at_the_station() -> Gps<f64> {
-        Gps::at(51.0403, 13.7322)
+        Gps::at(DRESDEN_HBF.y(), DRESDEN_HBF.x())
             .expect("on the globe")
             .with_accuracy_metres(Some(5.0))
             .with_speed_mps(Some(27.8))
     }
 
-    fn crossing(id: u32, latitude: f64, longitude: f64) -> CrossingCompact<f64> {
-        CrossingCompact::at(id, latitude, longitude).expect("on the globe")
+    fn north_of_the_station(degrees: f64) -> Point<f64> {
+        Point::new(DRESDEN_HBF.x(), DRESDEN_HBF.y() + degrees)
+    }
+
+    fn near_the_station() -> Point<f64> {
+        north_of_the_station(0.01)
+    }
+
+    fn up_the_line() -> Point<f64> {
+        north_of_the_station(1.0)
+    }
+
+    fn far_from_the_station() -> Point<f64> {
+        north_of_the_station(9.0)
+    }
+
+    fn off_the_globe() -> Point<f64> {
+        Point::new(DRESDEN_HBF.x(), 91.0)
+    }
+
+    fn crossing(id: u32, at: Point<f64>) -> CrossingCompact<f64> {
+        CrossingCompact::at(id, at.y(), at.x()).expect("on the globe")
     }
 
     fn reported(t: DateTime<Utc>, gps: Gps<f64>) -> Event {
@@ -334,7 +354,7 @@ mod tests {
         let core = waiting();
         core.process_event(Event::Reset);
 
-        core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
+        core.process_event(Event::Crossings(vec![crossing(1, near_the_station())]));
 
         let effects = core.process_event(Event::Reset);
 
@@ -363,8 +383,8 @@ mod tests {
         core.process_event(Event::Reset);
 
         core.process_event(Event::Crossings(vec![
-            crossing(1, 51.0503, 13.7322),
-            crossing(2, 60.0, 13.7322),
+            crossing(1, near_the_station()),
+            crossing(2, far_from_the_station()),
         ]));
         core.process_event(reported(instant(), at_the_station()));
 
@@ -375,7 +395,7 @@ mod tests {
     fn crossings_arriving_before_the_shell_starts_are_taken() {
         let core = waiting();
 
-        core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
+        core.process_event(Event::Crossings(vec![crossing(1, near_the_station())]));
         core.process_event(reported(instant(), at_the_station()));
 
         assert_eq!(core.view().predicted, 1);
@@ -386,7 +406,7 @@ mod tests {
         let core = core();
         core.process_event(reported(instant(), at_the_station()));
 
-        let effects = core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
+        let effects = core.process_event(Event::Crossings(vec![crossing(1, near_the_station())]));
 
         assert_eq!(core.view().predicted, 0);
         assert!(effects.is_empty());
@@ -396,11 +416,9 @@ mod tests {
     fn a_point_off_the_globe_is_dropped_rather_than_losing_the_set() {
         let core = waiting();
 
-        let off_the_globe = CrossingCompact::new(1, geo_types::Point::new(13.7322, 91.0));
-
         core.process_event(Event::Crossings(vec![
-            off_the_globe,
-            crossing(2, 51.0503, 13.7322),
+            CrossingCompact::new(1, off_the_globe()),
+            crossing(2, near_the_station()),
         ]));
         core.process_event(reported(instant(), at_the_station()));
 
@@ -432,25 +450,25 @@ mod tests {
         let view = core.view();
         assert_eq!(view.now, Some(instant()));
         assert_eq!(view.speed_mps, Some(27.8));
-        assert!((view.latitude.expect("a fix") - 51.0403).abs() < 1e-4);
+        assert!((view.latitude.expect("a fix") - DRESDEN_HBF.y() as Float).abs() < 1e-4);
         assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
     }
 
     #[test]
     fn a_position_and_a_sentence_move_the_same_fix() {
         let core = core();
-        let sentence = Fix::at(20, 43, 29, 51.0403, 13.7322);
+        let sentence = Fix::at(20, 43, 29, DRESDEN_HBF.y(), DRESDEN_HBF.x());
         core.process_event(Event::Sentence(sentence.rmc()));
 
         core.process_event(reported(
             sentence.t() + TimeDelta::seconds(1),
             Gps {
-                position: Point::new(DRESDEN_LON, 52.0),
+                position: up_the_line(),
                 ..at_the_station()
             },
         ));
 
-        assert!((core.view().latitude.expect("a fix") - 52.0).abs() < 1e-4);
+        assert!((core.view().latitude.expect("a fix") - up_the_line().y() as Float).abs() < 1e-4);
     }
 
     #[test]
@@ -461,12 +479,12 @@ mod tests {
         let effects = core.process_event(reported(
             instant() + TimeDelta::seconds(1),
             Gps {
-                position: Point::new(DRESDEN_LON, 91.0),
+                position: off_the_globe(),
                 ..at_the_station()
             },
         ));
 
-        assert!((core.view().latitude.expect("a fix") - 51.0403).abs() < 1e-4);
+        assert!((core.view().latitude.expect("a fix") - DRESDEN_HBF.y() as Float).abs() < 1e-4);
         assert!(effects.is_empty());
     }
 
@@ -479,12 +497,12 @@ mod tests {
         core.process_event(reported(
             instant() - TimeDelta::seconds(3_600),
             Gps {
-                position: Point::new(DRESDEN_LON, 52.0),
+                position: up_the_line(),
                 ..at_the_station()
             },
         ));
 
-        assert!((core.view().latitude.expect("a fix") - 52.0).abs() < 1e-4);
+        assert!((core.view().latitude.expect("a fix") - up_the_line().y() as Float).abs() < 1e-4);
     }
 
     #[test]
@@ -495,18 +513,19 @@ mod tests {
         let effects = core.process_event(reported(
             instant() - TimeDelta::seconds(1),
             Gps {
-                position: Point::new(DRESDEN_LON, 52.0),
+                position: up_the_line(),
                 ..at_the_station()
             },
         ));
 
-        assert!((core.view().latitude.expect("a fix") - 51.0403).abs() < 1e-4);
+        assert!((core.view().latitude.expect("a fix") - DRESDEN_HBF.y() as Float).abs() < 1e-4);
         assert!(effects.is_empty());
     }
 
     #[test]
     fn a_position_without_a_speed_leaves_one_derived_from_the_fix_before() {
         let core = core();
+        let took = TimeDelta::seconds(10);
         core.process_event(reported(
             instant(),
             Gps {
@@ -516,16 +535,20 @@ mod tests {
         ));
 
         core.process_event(reported(
-            instant() + TimeDelta::seconds(10),
+            instant() + took,
             Gps {
-                position: Point::new(DRESDEN_LON, 51.0503),
+                position: near_the_station(),
                 speed_mps: None,
                 ..at_the_station()
             },
         ));
 
         let derived = core.view().speed_mps.expect("a derived speed");
-        assert!((derived - 111.0).abs() < 20.0, "{derived}m/s");
+        let expected = Haversine.distance(DRESDEN_HBF, near_the_station()) / took.as_seconds_f64();
+        assert!(
+            (f64::from(derived) - expected).abs() < 0.1,
+            "{derived}m/s against {expected}m/s"
+        );
     }
 
     #[test]

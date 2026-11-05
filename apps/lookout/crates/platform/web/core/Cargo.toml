@@ -20,5 +20,8 @@ serde = { workspace = true }
 # Nothing enables it: the shell reads the bridge's JSON without generated bindings.
 typegen = ["crux_core/typegen"]
 
+[dev-dependencies]
+domain = { workspace = true, features = ["fixtures"] }
+
 [lints]
 workspace = true
