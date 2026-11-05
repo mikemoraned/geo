@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use std::fmt;
 
-use geo::Contains;
-use geo_types::{Geometry, Point};
+use geo::{Contains, PreparedGeometry, Relate, unary_union};
+use geo_types::{Geometry, LineString, MultiPolygon, Point};
 use medallion::{Countries, Country, GEOMETRY, Query, Root};
 use medallion_model::{DIVISION_ID, ExtractManifestRowV3, OvertureRelease};
 
@@ -15,6 +16,8 @@ pub enum CountryError {
     Geo(#[from] medallion::GeoError),
     #[error("partitioning the extract: {0}")]
     Path(#[from] medallion::PathError),
+    #[error("an area of {country} is not a polygon")]
+    NotAnArea { country: Country },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,9 +26,24 @@ pub struct NewestExtract {
     pub release: OvertureRelease,
 }
 
+#[derive(Clone)]
+struct Outline {
+    country: Country,
+    prepared: PreparedGeometry<'static, MultiPolygon<f64>>,
+}
+
+impl fmt::Debug for Outline {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Outline")
+            .field("country", &self.country)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct CountryAreas {
     areas: Vec<(Country, Geometry<f64>)>,
+    outlines: Vec<Outline>,
     extracts: HashMap<Country, NewestExtract>,
 }
 
@@ -80,7 +98,25 @@ impl CountryAreas {
             );
         }
 
-        Ok(Self { areas, extracts })
+        Self::new(areas, extracts)
+    }
+
+    fn new(
+        areas: Vec<(Country, Geometry<f64>)>,
+        extracts: HashMap<Country, NewestExtract>,
+    ) -> Result<Self, CountryError> {
+        let outlines = Country::ALL
+            .into_iter()
+            .map(|country| outline_of(country, &areas))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(Self {
+            areas,
+            outlines,
+            extracts,
+        })
     }
 
     pub fn newest_extract(&self, country: Country) -> Option<&NewestExtract> {
@@ -96,12 +132,38 @@ impl CountryAreas {
     }
 }
 
+fn outline_of(
+    country: Country,
+    areas: &[(Country, Geometry<f64>)],
+) -> Result<Option<Outline>, CountryError> {
+    let polygons = areas
+        .iter()
+        .filter(|(of, _)| *of == country)
+        .map(|(_, area)| match area {
+            Geometry::Polygon(polygon) => Ok(MultiPolygon::new(vec![polygon.clone()])),
+            Geometry::MultiPolygon(polygons) => Ok(polygons.clone()),
+            _ => Err(CountryError::NotAnArea { country }),
+        })
+        .collect::<Result<Vec<MultiPolygon<f64>>, _>>()?;
+    Ok((!polygons.is_empty()).then(|| Outline {
+        country,
+        prepared: PreparedGeometry::from(unary_union(&polygons)),
+    }))
+}
+
 impl Countries for CountryAreas {
     fn containing(&self, point: Point<f64>) -> Option<Country> {
         self.areas
             .iter()
             .find(|(_, area)| area.contains(&point))
             .map(|(country, _)| *country)
+    }
+
+    fn covering(&self, line: &LineString<f64>) -> Option<Country> {
+        self.outlines
+            .iter()
+            .find(|outline| outline.prepared.relate(line).is_covers())
+            .map(|outline| outline.country)
     }
 }
 
@@ -112,7 +174,7 @@ mod tests {
     use arrow::array::{RecordBatch, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
     use chrono::{DateTime, TimeZone, Utc};
-    use geo_types::Geometry;
+    use geo_types::{Geometry, line_string, polygon};
 
     use super::*;
     use crate::testing::{record_extract, square_from};
@@ -174,12 +236,51 @@ mod tests {
         .await;
     }
 
+    fn germany(areas: &[Geometry<f64>]) -> CountryAreas {
+        CountryAreas::new(
+            areas
+                .iter()
+                .map(|area| (Country::Germany, area.clone()))
+                .collect(),
+            HashMap::new(),
+        )
+        .expect("areas")
+    }
+
+    #[test]
+    fn a_line_crossing_from_the_land_into_its_waters_is_covered_by_its_country() {
+        let land = square(10.0);
+        let waters = Geometry::Polygon(polygon![
+            (x: 10.0, y: 0.0), (x: 20.0, y: 0.0), (x: 20.0, y: 10.0), (x: 10.0, y: 10.0),
+        ]);
+        let line = line_string![(x: 5.0, y: 5.0), (x: 15.0, y: 5.0)];
+
+        assert_eq!(
+            germany(&[land, waters]).covering(&line),
+            Some(Country::Germany)
+        );
+    }
+
+    #[test]
+    fn a_line_crossing_a_gap_between_two_areas_is_covered_by_no_country() {
+        let line = line_string![(x: 5.0, y: 5.0), (x: 25.0, y: 25.0)];
+
+        assert_eq!(
+            germany(&[square(10.0), square_from(20.0, 10.0)]).covering(&line),
+            None
+        );
+    }
+
+    #[test]
+    fn a_line_leaving_every_area_is_covered_by_no_country() {
+        let line = line_string![(x: 5.0, y: 5.0), (x: 50.0, y: 5.0)];
+
+        assert_eq!(germany(&[square(10.0)]).covering(&line), None);
+    }
+
     #[test]
     fn a_point_inside_an_area_is_in_that_country() {
-        let areas = CountryAreas {
-            areas: vec![(Country::Germany, square(10.0))],
-            ..CountryAreas::default()
-        };
+        let areas = germany(&[square(10.0)]);
 
         assert_eq!(
             areas.containing(Point::new(5.0, 5.0)),
@@ -189,14 +290,15 @@ mod tests {
 
     #[test]
     fn a_country_has_the_shapes_of_its_own_areas_alone() {
-        let areas = CountryAreas {
-            areas: vec![
+        let areas = CountryAreas::new(
+            vec![
                 (Country::Germany, square(10.0)),
                 (Country::UnitedKingdom, square_from(20.0, 10.0)),
                 (Country::Germany, square_from(40.0, 1.0)),
             ],
-            ..CountryAreas::default()
-        };
+            HashMap::new(),
+        )
+        .expect("areas");
 
         assert_eq!(
             areas.shapes_of(Country::Germany),
@@ -206,10 +308,7 @@ mod tests {
 
     #[test]
     fn a_point_outside_every_area_is_in_no_country() {
-        let areas = CountryAreas {
-            areas: vec![(Country::Germany, square(10.0))],
-            ..CountryAreas::default()
-        };
+        let areas = germany(&[square(10.0)]);
 
         assert_eq!(areas.containing(Point::new(20.0, 20.0)), None);
     }

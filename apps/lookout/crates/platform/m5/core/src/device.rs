@@ -64,6 +64,7 @@ impl Shell for Device {
 mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
     use crux_core::Core;
+    use domain::places::DRESDEN_HBF;
     use predictor::fixtures::{Fix, RMC_VOID, captured};
 
     use super::*;
@@ -71,7 +72,7 @@ mod tests {
     use platform_core::{Effect, Event, Lookout};
 
     fn at_the_station() -> Fix {
-        Fix::at(20, 43, 29, 51.0403, 13.7322)
+        Fix::at(20, 43, 29, DRESDEN_HBF.y(), DRESDEN_HBF.x())
             .with_speed_knots(54.0)
             .with_course_degrees(79.94)
     }
@@ -83,7 +84,7 @@ mod tests {
     }
 
     fn stopped() -> Fix {
-        Fix::at(20, 48, 58, 51.0403, 13.7322)
+        Fix::at(20, 48, 58, DRESDEN_HBF.y(), DRESDEN_HBF.x())
     }
 
     fn fix_instant() -> DateTime<Utc> {

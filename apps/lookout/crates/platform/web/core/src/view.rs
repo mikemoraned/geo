@@ -92,13 +92,14 @@ fn located(crossings: &impl Crossings<Float>, predictions: &[Prediction<Float>])
 mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
     use crux_core::Core;
-    use domain::{CrossingCompactId, Gps, Sample};
+    use domain::places::DRESDEN_HBF;
+    use domain::{CrossingCompactId, Gps, Precision, Sample};
     use platform_core::{Event, Lookout};
 
     use super::*;
 
     fn at_the_station() -> Gps<f64> {
-        Gps::at(51.0403, 13.7322)
+        Gps::at(DRESDEN_HBF.y(), DRESDEN_HBF.x())
             .expect("on the globe")
             .with_accuracy_metres(Some(5.0))
             .with_speed_mps(Some(27.8))
@@ -108,11 +109,19 @@ mod tests {
         DateTime::from_timestamp(1_785_098_609, 0).expect("an instant")
     }
 
+    fn north_of_the_station(degrees: f64) -> Point<f64> {
+        Point::new(DRESDEN_HBF.x(), DRESDEN_HBF.y() + degrees)
+    }
+
+    fn crossing<P: Precision>(id: u32, at: Point<f64>) -> CrossingCompact<P> {
+        CrossingCompact::at(id, at.y(), at.x()).expect("on the globe")
+    }
+
     fn crossings() -> Vec<CrossingCompact<Float>> {
         vec![
-            CrossingCompact::at(2, 51.06, 13.7322).expect("on the globe"),
-            CrossingCompact::at(0, 51.04, 13.7322).expect("on the globe"),
-            CrossingCompact::at(1, 51.05, 13.7322).expect("on the globe"),
+            crossing(2, north_of_the_station(0.02)),
+            crossing(0, north_of_the_station(0.0)),
+            crossing(1, north_of_the_station(0.01)),
         ]
     }
 
@@ -129,8 +138,8 @@ mod tests {
         let placed = located(&crossings(), &[prediction(1, 2_000.0, None)]);
 
         assert_eq!(placed.len(), 1);
-        assert!((placed[0].position.y() - 51.05).abs() < 1e-4);
-        assert!((placed[0].position.x() - 13.7322).abs() < 1e-4);
+        assert!((placed[0].position.y() - north_of_the_station(0.01).y() as Float).abs() < 1e-4);
+        assert!((placed[0].position.x() - DRESDEN_HBF.x() as Float).abs() < 1e-4);
         assert_eq!(placed[0].metres, 2_000.0);
     }
 
@@ -179,15 +188,16 @@ mod tests {
     #[test]
     fn a_fix_is_shown_with_the_speed_it_was_predicted_at() {
         let core: Core<Lookout<Browser>> = Core::new();
-        core.process_event(Event::Crossings(vec![
-            CrossingCompact::at(1, 51.0503, 13.7322).expect("on the globe"),
-        ]));
+        core.process_event(Event::Crossings(vec![crossing(
+            1,
+            north_of_the_station(0.01),
+        )]));
 
         core.process_event(Event::Position(Sample::new(instant(), at_the_station())));
 
         let here = core.view().here.expect("a fix");
-        assert!((here.position.y() - 51.0403).abs() < 1e-4);
-        assert!((here.position.x() - 13.7322).abs() < 1e-4);
+        assert!((here.position.y() - DRESDEN_HBF.y() as Float).abs() < 1e-4);
+        assert!((here.position.x() - DRESDEN_HBF.x() as Float).abs() < 1e-4);
         assert_eq!(here.speed_mps, Some(27.8));
         assert_eq!(core.view().predicted.len(), 1);
     }

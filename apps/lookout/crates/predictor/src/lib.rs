@@ -1,6 +1,5 @@
 pub mod crossings;
 pub mod crow_flies;
-#[cfg(any(test, feature = "fixtures"))]
 pub mod fixtures;
 pub mod parser;
 pub mod predict;

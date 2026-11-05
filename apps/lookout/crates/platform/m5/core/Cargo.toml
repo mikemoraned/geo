@@ -12,6 +12,9 @@ platform-core = { workspace = true }
 predictor = { workspace = true }
 
 [dev-dependencies]
+# The same crate again, for the places its tests are set in. A dev-dependency, so the feature
+# is off in anything built for the device.
+domain = { workspace = true, features = ["fixtures"] }
 # The same crate again, for the captured sentences its tests share with this crate's. A
 # dev-dependency, so the feature is off in anything built for the device.
 predictor = { workspace = true, features = ["fixtures"] }

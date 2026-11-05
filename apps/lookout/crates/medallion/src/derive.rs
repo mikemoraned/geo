@@ -297,6 +297,8 @@ mod tests {
     use geo_types::{LineString, Point};
     use serde::{Deserialize, Serialize};
 
+    use domain::places::BERLIN;
+
     use super::*;
     use crate::dataset::DatasetSpec;
     use crate::geo::{PROJECTED_GEOMETRY, Projector};
@@ -393,7 +395,7 @@ mod tests {
             },
             geometry: Projector::for_country(country)
                 .unwrap()
-                .zoned(berlin())
+                .zoned(BERLIN)
                 .unwrap(),
         }
     }
@@ -589,17 +591,13 @@ mod tests {
         Utc.with_ymd_and_hms(2026, 7, day, 9, 0, 0).unwrap()
     }
 
-    fn berlin() -> Point<f64> {
-        Point::new(13.404954, 52.520008)
-    }
-
     fn track(id: &str, day: u32, country: Country) -> GeographyRow<TrackRow, LineString<f64>> {
         GeographyRow {
             row: TrackRow {
                 track_id: id.to_string(),
                 seen_at: at(day),
             },
-            geography: LineString::from(vec![berlin(), berlin()]),
+            geography: LineString::from(vec![BERLIN, BERLIN]),
             country,
         }
     }
@@ -795,7 +793,7 @@ mod tests {
             &Root::new(tmp.path()),
             &[GeographyRow {
                 row: pass("a", 21),
-                geography: berlin(),
+                geography: BERLIN,
                 country: Country::Germany,
             }],
         )
