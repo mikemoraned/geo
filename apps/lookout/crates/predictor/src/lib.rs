@@ -4,13 +4,15 @@ pub mod fixtures;
 pub mod parser;
 pub mod predict;
 pub mod sentence;
-pub mod state;
+mod state;
 pub mod tracker;
 
 pub use crossings::Crossings;
 pub use crow_flies::{CrowFlies, DEFAULT_RADIUS};
 pub use parser::Parser;
-pub use predict::{Event, ObserveError, Predict, Prediction};
+pub use predict::{
+    Confidence, Event, ObserveError, Predict, Prediction, Predictions, nearest_first,
+};
 pub use sentence::{Sentence, SentenceError};
-pub use state::{ActualPass, CandidatePass, CrossingState, PredictedPass, StateKind};
-pub use tracker::{Judgement, Tracker, Transition};
+pub use state::StateKind;
+pub use tracker::{TrackError, Tracker, Transition};

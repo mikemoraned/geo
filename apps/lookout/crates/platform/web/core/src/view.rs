@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use domain::CrossingCompact;
 use geo_types::Point;
 use platform_core::{Float, Model, Shell};
-use predictor::{Crossings, Prediction};
+use predictor::{Crossings, Predictions};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -66,13 +66,11 @@ impl Shell for Browser {
     }
 }
 
-fn located(crossings: &impl Crossings<Float>, predictions: &[Prediction<Float>]) -> Vec<Predicted> {
+fn located(crossings: &impl Crossings<Float>, predictions: &Predictions<Float>) -> Vec<Predicted> {
     let mut located: Vec<Predicted> = crossings
         .all()
         .filter_map(|crossing_compact| {
-            let prediction = predictions
-                .iter()
-                .find(|prediction| prediction.crossing_compact_id == crossing_compact.id)?;
+            let prediction = predictions.get(&crossing_compact.id)?;
             Some(Predicted {
                 position: crossing_compact.position,
                 metres: prediction.metres,
@@ -95,6 +93,7 @@ mod tests {
     use domain::places::DRESDEN_HBF;
     use domain::{CrossingCompactId, Gps, Precision, Sample};
     use platform_core::{Event, Lookout};
+    use predictor::{Confidence, Prediction};
 
     use super::*;
 
@@ -125,17 +124,27 @@ mod tests {
         ]
     }
 
-    fn prediction(id: u32, metres: Float, at: Option<DateTime<Utc>>) -> Prediction<Float> {
-        Prediction {
-            crossing_compact_id: CrossingCompactId::new(id),
-            metres,
-            at,
-        }
+    fn prediction(
+        id: u32,
+        metres: Float,
+        at: Option<DateTime<Utc>>,
+    ) -> (CrossingCompactId, Prediction<Float>) {
+        (
+            CrossingCompactId::new(id),
+            Prediction {
+                metres,
+                at,
+                confidence: Confidence::Low,
+            },
+        )
     }
 
     #[test]
     fn a_prediction_is_placed_where_its_crossing_is() {
-        let placed = located(&crossings(), &[prediction(1, 2_000.0, None)]);
+        let placed = located(
+            &crossings(),
+            &Predictions::from([prediction(1, 2_000.0, None)]),
+        );
 
         assert_eq!(placed.len(), 1);
         assert!((placed[0].position.y() - north_of_the_station(0.01).y() as Float).abs() < 1e-4);
@@ -147,11 +156,11 @@ mod tests {
     fn the_nearest_is_first_however_the_set_was_packed() {
         let placed = located(
             &crossings(),
-            &[
+            &Predictions::from([
                 prediction(0, 1_000.0, None),
                 prediction(2, 3_000.0, None),
                 prediction(1, 2_000.0, None),
-            ],
+            ]),
         );
 
         let metres: Vec<Float> = placed.iter().map(|one| one.metres).collect();
@@ -160,7 +169,10 @@ mod tests {
 
     #[test]
     fn a_prediction_naming_a_crossing_the_set_lacks_is_dropped() {
-        let placed = located(&crossings(), &[prediction(99, 1_000.0, None)]);
+        let placed = located(
+            &crossings(),
+            &Predictions::from([prediction(99, 1_000.0, None)]),
+        );
 
         assert!(placed.is_empty());
     }
@@ -169,7 +181,10 @@ mod tests {
     fn an_arrival_is_carried_as_the_instant_it_was_predicted_for() {
         let at = instant() + TimeDelta::seconds(84);
 
-        let placed = located(&crossings(), &[prediction(0, 1_000.0, Some(at))]);
+        let placed = located(
+            &crossings(),
+            &Predictions::from([prediction(0, 1_000.0, Some(at))]),
+        );
 
         assert_eq!(placed[0].at, Some(at));
     }

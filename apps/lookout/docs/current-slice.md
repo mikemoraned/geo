@@ -89,7 +89,7 @@ Overall this means that Tasks should be broken down into major stages with each 
 
 ### The measure
 
-A **notification** is a crossing's entry into `PredictedPass`. It claims that the train passes the
+A **notification** is a crossing's entry into `AlertedPass`. It claims that the train passes the
 crossing within the horizon N.
 
 A notification's **lead time** runs from it to the next pass of its crossing. Each pass credits the
@@ -116,8 +116,8 @@ pass that credits no notification.
 [The research](2026-08-01-evaluation.md#outcome-classification) borrows its early and late classes
 from punctuality, where a late train still carries its rider. These classes depart from it, since a
 crossing passed is gone: nothing after the pass earns credit. Credit is also graded rather than
-counted. Transitions into the other states are recorded and not scored. The predictor's own
-`ActualPass` is among them, since the ground truth decides whether a pass happened.
+counted. Transitions into the other states are recorded and not scored. Entries into `ActualPass`
+are among them, since the ground truth decides whether a pass happened.
 
 ### The datasets
 
@@ -141,8 +141,8 @@ erDiagram
   `realtime_percentage` and `realtime` added.
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
-- `evaluation_run_v1` holds a run's predictor and settings, float type, scores and ramp, method,
-  filter, sample size, seed, bootstrap draws, and input versions.
+- `evaluation_run_v1` holds a run's predictor and settings, pass detector, float type, scores and
+  ramp, method, filter, sample size, seed, bootstrap draws, and input versions.
 - `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
   transitions still counts.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
@@ -170,7 +170,7 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   [the demonstrable-behaviour assessment](2026-10-18-demonstrable-behaviour.md) sets out. This beats
   one notebook grown across phases, where a question already answered sits among the next phase's
   work.
-- **Precision counts each notification.** Every entry into `PredictedPass` is one prediction,
+- **Precision counts each notification.** Every entry into `AlertedPass` is one notification,
   scored as [The measure](#the-measure) sets out. A predictor that flickers pays for each flicker,
   as a rider would. Recall counts each ground-truth pass once. This beats one outcome per (session,
   crossing) pair, taken from its first notification, as
@@ -186,19 +186,31 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   their notifications bunch at that edge. Say CrowFlies estimates a pass 4:58 away, and notifies. On
   track 2% longer than the straight line, the pass comes 5:04 later. A step at N would cut that
   notification's score from 1 to 0.05, though a rider can barely tell 4:58 from 5:04.
-- **One state machine, the tracker, lives in `predictor`.** A predictor judges which state each
-  crossing it reports belongs in. The tracker turns those judgements into transitions, applying the
-  legal transitions. The oracle, CrowFlies, and LightCone therefore share one set of transition
-  rules. This beats a state machine per predictor, whose rules can drift apart.
-- **A predictor debounces its own judgements.** The predictor knows how it predicts, so it knows
-  which debouncing suits it, and a predictor can need none. The tracker applies each judgement as
+- **One state machine, the tracker, lives in `predictor`.** The tracker turns predictions and
+  passes into transitions, applying the legal transitions. The oracle, CrowFlies, and LightCone
+  therefore share one set of transition rules. This beats a state machine per predictor, whose
+  rules can drift apart.
+- **A prediction carries a confidence, low or high.** The tracker maps low to `CandidatePass` and
+  high to `AlertedPass`. `AlertedPass` replaces `PredictedPass`, so "predict" names only what a
+  predictor does. A predictor then forecasts and never chooses a state. This beats a predictor
+  choosing each crossing's state, which leaves it to declare a pass it can only forecast. Changed
+  on 2026-11-05, when the tracker was built.
+- **A pass detector, not a predictor, reports each pass.** One trait has two implementations. The
+  apps run the online one, which reports a crossing within a pass radius of the latest sample. A
+  replay runs the offline one, which reports the passes in `train_session_crossing_v1`. An
+  evaluation of its own compares the two. A crossing stays in `ActualPass` while the detector
+  reports it, and leaves on the next prediction after that. A pass in ground truth lasts one
+  sample, so `ActualPass` lasts one round. This beats a predictor reporting the pass, which mixes
+  forecasting a pass with observing one. Changed on 2026-11-05, when the tracker was built.
+- **A predictor debounces its own predictions.** The predictor knows how it predicts, so it knows
+  which debouncing suits it, and a predictor can need none. The tracker applies each prediction as
   it arrives. This beats debouncing in the tracker, which imposes one rule on every predictor.
   Debouncing waits until after LightCone, as an optional experiment. Changed on 2026-11-05, when
   the tracker was built: the tracker held the debouncing until then.
 - **Each state is a type, so an illegal transition does not compile.** `CandidatePass`,
-  `PredictedPass`, and `ActualPass` are types, and `OutOfReach` is a crossing the tracker holds
+  `AlertedPass`, and `ActualPass` are types, and `OutOfReach` is a crossing the tracker holds
   nothing for. A transition is a method that consumes one state and returns the next. `ActualPass`
-  has no constructor outside its module, and only `PredictedPass` has a method returning one. The
+  has no constructor outside its module, and only `AlertedPass` has a method returning one. The
   tracker keeps each crossing's state in an enum over the types, as
   [Hoverbear's enum wrapper](https://hoverbear.org/blog/rust-state-machine-pattern/) does. Its
   `match` can call only the transitions a state has. This follows
@@ -216,16 +228,15 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   friend. Five minutes ahead leaves that much, even for a notification a minute or two short of it.
   It beats the minute that [target.md](target.md) gives, which leaves too little time to act. The
   rider's need fixes N, so no sweep varies it.
-- **A crossing reaches `ActualPass` only from `PredictedPass`.** `ActualPass` marks a prediction
-  that came true, so a pass nobody predicted leaves its crossing in `CandidatePass` or
-  `OutOfReach`. A pass in a session's first minute leaves too little time to notify it 30 s ahead. A
+- **A crossing reaches `ActualPass` only from `AlertedPass`.** `ActualPass` marks an alert that
+  came true, so a pass with no alert leaves its crossing in `CandidatePass` or `OutOfReach`. A pass in a session's first minute leaves too little time to notify it 30 s ahead. A
   predictor first needs samples to measure a speed. Scoring therefore truncates that start. Such a
   pass goes unscored, as does a notification it credits. The predictor still replays those samples,
-  so it has a speed once scoring starts. This beats letting a predictor declare a pass it never
-  predicted.
+  so it has a speed once scoring starts. This beats marking a pass with no alert as `ActualPass`,
+  which records a success nobody earned.
 - **A replay runs in `f32` by default, and its run records the float type.** The apps run the
   predictor in `f32`, so a replay in `f32` measures the program they run. In Germany, rounding to
-  `f32` moves a point by up to 0.21 m, so judgements differ only where a distance sits at an edge. A
+  `f32` moves a point by up to 0.21 m, so predictions differ only where a distance sits at an edge. A
   run in `f64` shows how much that changes. This beats `f64` alone, the store's float type, which
   measures a program no app runs.
 - **A dwelling sample takes the arriving leg's `realtime`.** A train dwells at a stop between one
@@ -463,17 +474,20 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [x] Add a type per state to `predictor`, a consuming method per legal transition, and
       `CrossingState` over the types.
 - [x] Add `Tracker` to `predictor`, holding each crossing's `CrossingState` and recording each
-      `Transition`, tested on constructed judgements.
+      `Transition`, tested on constructed judgements. It takes predictions with a confidence and the
+      crossings passed, as the decisions on confidence and the pass detector set out.
 - [ ] Create the `evaluation` crate with the step `select`, which picks `TrainSessionRowV3`s at
       random under a seed.
 - [ ] Add the `evaluation-py` extension exposing `select`, and time a rebuild after a change to
       `select`.
 - [ ] Decide from that time whether the steps take and build `medallion-model`'s rows, or rows of
       their own.
+- [ ] Add the trait `DetectPasses` to `predictor`, and its offline implementation to `evaluation`,
+      which reports a session's passes from `train_session_crossing_v1`.
 - [ ] Add the step `replay` to `evaluation`, feeding a session's times and positions alone through a
-      predictor and the `Tracker`, in the float type its run records.
+      predictor, the offline pass detector, and the `Tracker`, in the float type its run records.
 - [ ] Add the oracle to `evaluation`: a predictor that reads a session's ground-truth passes, and
-      predicts each N ahead.
+      predicts each with high confidence from N ahead.
 - [ ] Add the step `score` to `evaluation`, scoring each notification as
       [The measure](#the-measure) defines.
 - [ ] Leave each session's first minute out of `score`, as the decision on `ActualPass` sets out.
@@ -500,10 +514,10 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 CrowFlies is the baseline that later predictors are measured against, and the first predictor the
 tracker meets that can be wrong.
 
-- [ ] Have `CrowFlies` judge each crossing: `CandidatePass` within its radius, `PredictedPass` while
-      it arrives within N, `ActualPass` within a pass radius.
+- [ ] Give each of `CrowFlies`' predictions a confidence: low within its radius, and high while the
+      crossing arrives within N.
 - [ ] Run CrowFlies over the oracle's sessions and seed with `just evaluate`.
-- [ ] Sweep the radius and the pass radius. Choose CrowFlies' settings from recall
+- [ ] Sweep the radius. Choose CrowFlies' settings from recall
       plotted against false alarms per hour.
 - [ ] Draw CrowFlies' false alarms and misses on a map in a new `explore4.py` with the user, and one
       session's transitions over time.
@@ -515,7 +529,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 - [ ] Measure in a new `explore5.py` the angle between a train's heading and its positions up to N
       later.
 - [ ] Read ballpark odds for the extremes of that angle, and bound the cone's angle by them.
-- [ ] Add `LightCone` to `predictor`: a velocity from the last two samples, and `PredictedPass`
+- [ ] Add `LightCone` to `predictor`: a velocity from the last two samples, and high confidence
       inside the cone it reaches within N.
 - [ ] Run LightCone over the same sessions and seed, with angles up to that bound, and compare its
       best settings with CrowFlies'.
@@ -527,14 +541,23 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 
 #### Phase 5: debouncing, an optional experiment
 
-A run shows whether debouncing a predictor's judgements improves its precision and recall. The apps
+A run shows whether debouncing a predictor's predictions improves its precision and recall. The apps
 can take a predictor without it, so this phase can be skipped.
 
-- [ ] Debounce `LightCone`'s judgements and `CrowFlies`', each as a setting of its predictor.
+- [ ] Debounce `LightCone`'s predictions and `CrowFlies`', each as a setting of its predictor.
 - [ ] Run each predictor with and without its debouncing, over the same sessions and seed, and
       compare precision, recall, and false alarms per hour.
 
-#### Phase 6: states in the apps
+#### Phase 6: the online pass detector
+
+The apps cannot read ground truth, so they detect each pass from the samples alone.
+
+- [ ] Add the online implementation of `DetectPasses` to `predictor`: a crossing within a pass
+      radius of the latest sample.
+- [ ] Evaluate the online detector against the offline one over the same sessions and seed,
+      sweeping the pass radius, and choose the radius with the user.
+
+#### Phase 7: states in the apps
 
 The apps come last, since they show the states of the predictor a person chooses from the runs.
 
@@ -542,8 +565,8 @@ The apps come last, since they show the states of the predictor a person chooses
       in gold as a dated doc in `docs/`.
 - [ ] Choose the apps' predictor and settings with the user, through `/choose-predictor` over the
       runs of Phases 4 and 5.
-- [ ] Hold the `Tracker` in `platform-core`'s model, around the chosen predictor and settings, and
-      expose each crossing's state.
+- [ ] Hold the `Tracker` in `platform-core`'s model, around the chosen predictor and settings and
+      the online pass detector, and expose each crossing's state.
 - [ ] Carry each crossing's state in `web-core`'s `Predicted`, and draw one shape per state in
       `lookout-predictor.js`.
 - [ ] Prefix each crossing's line in `m5-core`'s `panel.rs` with one character per state, within 13
@@ -562,8 +585,8 @@ The apps come last, since they show the states of the predictor a person chooses
 - [ ] Describe `query_gold` and `write_gold` in `crates/medallion-py/README.md`.
 - [ ] Describe `realtime` and `realtime_percentage` in `crates/motis/README.md`, and train sessions
       in `crates/session_crossings/README.md`.
-- [ ] Rewrite `predictor`'s README for the typed states, the tracker, and LightCone, and
-      `platform-core`'s for the states it exposes.
+- [ ] Rewrite `predictor`'s README for the typed states, the tracker, the pass detectors, and
+      LightCone, and `platform-core`'s for the states it exposes.
 - [ ] Show the states in the picture in `docs/web.md`, and on the panel in
       `crates/platform/m5/README.md`.
 - [ ] Write the READMEs of `evaluation`, `evaluate`, and `evaluation-py`.

@@ -1,5 +1,6 @@
 use platform_core::pointset::PointSet;
 use platform_core::{Model, Shell};
+use predictor::nearest_first;
 
 use crate::carried;
 use crate::panel::{self, NEAREST_ON_SCREEN, NO_FIX_YET, NO_TIME_YET, ViewModel};
@@ -51,10 +52,10 @@ impl Shell for Device {
                 None => String::new(),
                 Some(_) => panel::within(predictions.len()),
             },
-            nearest: predictions
-                .iter()
+            nearest: nearest_first(predictions)
+                .into_iter()
                 .take(NEAREST_ON_SCREEN)
-                .map(|prediction| panel::line(prediction, now))
+                .map(|(_, prediction)| panel::line(prediction, now))
                 .collect(),
         }
     }
