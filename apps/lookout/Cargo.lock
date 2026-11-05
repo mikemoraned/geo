@@ -5098,6 +5098,7 @@ dependencies = [
  "clap",
  "datafusion",
  "dirs",
+ "domain",
  "duckdb",
  "futures",
  "geo 0.32.0",

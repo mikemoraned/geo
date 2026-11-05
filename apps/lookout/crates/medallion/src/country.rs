@@ -1,12 +1,20 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
-use geo_types::{Point, Rect, coord};
+use geo_types::{LineString, Point, Rect, coord};
 
 pub const COUNTRY: &str = "country";
 
 pub trait Countries {
     fn containing(&self, point: Point<f64>) -> Option<Country>;
+
+    fn covering(&self, line: &LineString<f64>) -> Option<Country> {
+        let mut countries = line.points().map(|point| self.containing(point));
+        let first = countries.next().flatten()?;
+        countries
+            .all(|country| country == Some(first))
+            .then_some(first)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -84,14 +92,42 @@ impl Country {
 #[cfg(test)]
 mod tests {
     use geo::Contains;
+    use geo_types::line_string;
+
+    use domain::places::{BERLIN, EDINBURGH};
 
     use super::*;
+
+    struct PretendEastOfGreenwichIsGermany;
+
+    impl Countries for PretendEastOfGreenwichIsGermany {
+        fn containing(&self, point: Point<f64>) -> Option<Country> {
+            (point.x() > 0.0).then_some(Country::Germany)
+        }
+    }
+
+    #[test]
+    fn a_line_inside_one_country_is_covered_by_it() {
+        let line = line_string![(x: 1.0, y: 0.0), (x: 2.0, y: 1.0), (x: 3.0, y: 0.0)];
+
+        assert_eq!(
+            PretendEastOfGreenwichIsGermany.covering(&line),
+            Some(Country::Germany)
+        );
+    }
+
+    #[test]
+    fn a_line_with_a_vertex_outside_every_country_is_covered_by_none() {
+        let line = line_string![(x: 1.0, y: 0.0), (x: -2.0, y: 1.0), (x: 3.0, y: 0.0)];
+
+        assert_eq!(PretendEastOfGreenwichIsGermany.covering(&line), None);
+    }
 
     #[test]
     fn a_country_holds_a_place_known_to_be_in_it() {
         for (country, place) in [
-            (Country::Germany, Point::new(13.404954, 52.520008)),
-            (Country::UnitedKingdom, Point::new(-3.188267, 55.953251)),
+            (Country::Germany, BERLIN),
+            (Country::UnitedKingdom, EDINBURGH),
         ] {
             assert!(country.bbox().contains(&place), "{country}: {place:?}");
         }
@@ -100,15 +136,11 @@ mod tests {
     #[test]
     fn no_country_holds_a_place_in_another() {
         assert!(
-            !Country::Germany
-                .bbox()
-                .contains(&Point::new(-3.188267, 55.953251)),
+            !Country::Germany.bbox().contains(&EDINBURGH),
             "Edinburgh is not in Germany's bbox"
         );
         assert!(
-            !Country::UnitedKingdom
-                .bbox()
-                .contains(&Point::new(13.404954, 52.520008)),
+            !Country::UnitedKingdom.bbox().contains(&BERLIN),
             "Berlin is not in the UK's bbox"
         );
     }

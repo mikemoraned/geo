@@ -142,9 +142,10 @@ fn distance(sample: &Sample, crossing: &Crossing) -> f64 {
 mod tests {
     use chrono::TimeZone;
 
+    use domain::places::BERLIN;
+
     use super::*;
 
-    const BERLIN: (f64, f64) = (13.404954, 52.520008);
     const BERLIN_METRES: (f64, f64) = (798_809.63, 5_828_000.60);
 
     fn at(minute: u32) -> DateTime<Utc> {
@@ -170,12 +171,12 @@ mod tests {
     }
 
     fn crossing(id: &str, east: f64) -> Crossing {
-        let degrees = east / 111_320.0 / f64::cos(BERLIN.1.to_radians());
+        let degrees = east / 111_320.0 / f64::cos(BERLIN.y().to_radians());
         Crossing {
             crossing: domain::Crossing::at(
                 domain::CrossingId::new(id).expect("a name"),
-                BERLIN.1,
-                BERLIN.0 + degrees,
+                BERLIN.y(),
+                BERLIN.x() + degrees,
             )
             .expect("on the globe"),
             projected: Point::new(BERLIN_METRES.0 + east, BERLIN_METRES.1),

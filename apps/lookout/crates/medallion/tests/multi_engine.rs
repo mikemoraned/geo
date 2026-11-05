@@ -2,20 +2,17 @@ use std::sync::Arc;
 
 use arrow::array::{Array, BinaryArray, Int64Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema};
+use domain::places::{BERLIN, FRANKFURT, MUNICH};
 use geo_types::{Geometry, Point};
 use medallion::{DatasetSpec, Root, layers, wkb_field};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
-const POINTS: [(i64, f64, f64); 3] = [
-    (1, 13.404954, 52.520008),
-    (2, 11.581981, 48.135125),
-    (3, 8.682127, 50.110924),
-];
+const POINTS: [(i64, Point<f64>); 3] = [(1, BERLIN), (2, MUNICH), (3, FRANKFURT)];
 
 fn expected_geometries() -> Vec<Geometry<f64>> {
     POINTS
         .iter()
-        .map(|(_, lon, lat)| Geometry::Point(Point::new(*lon, *lat)))
+        .map(|(_, point)| Geometry::Point(*point))
         .collect()
 }
 

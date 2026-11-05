@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crossings::{pointset, silver};
+use domain::places::EDINBURGH;
 use domain::{CrossingCompactId, CrossingId};
 use geo_types::Point as GeoPoint;
 use medallion::{
@@ -17,9 +18,6 @@ const LON: f64 = 13.548209;
 const LAT: f64 = 51.617567;
 
 const EXTRACT: &str = "20260727T193628Z";
-
-const GB_LON: f64 = -3.188267;
-const GB_LAT: f64 = 55.953251;
 
 async fn store_with_crossings(root: &Root, country: Country, positions: &[(f64, f64)]) {
     let projector = Projector::for_country(country).expect("projector");
@@ -99,7 +97,10 @@ async fn every_country_the_store_holds_is_packed() {
     store_with_crossings(
         &root,
         Country::UnitedKingdom,
-        &[(GB_LON, GB_LAT), (GB_LON + 0.01, GB_LAT)],
+        &[
+            (EDINBURGH.x(), EDINBURGH.y()),
+            (EDINBURGH.x() + 0.01, EDINBURGH.y()),
+        ],
     )
     .await;
 

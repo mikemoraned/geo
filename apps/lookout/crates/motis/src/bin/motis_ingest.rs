@@ -67,6 +67,8 @@ async fn main() {
         arrives_before_departing = sessions.dropped.arrives_before_departing,
         overlapping = sessions.dropped.overlapping,
         unplaceable = sessions.dropped.unplaceable,
+        leaves_its_country = sessions.dropped.leaves_its_country,
+        too_fast = sessions.dropped.too_fast,
         "dropped trips"
     );
 }

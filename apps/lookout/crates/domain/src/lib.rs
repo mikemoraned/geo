@@ -6,6 +6,7 @@ pub mod gps;
 pub mod name;
 pub mod pass;
 pub mod percentage;
+pub mod places;
 pub mod position;
 pub mod precision;
 pub mod radius;

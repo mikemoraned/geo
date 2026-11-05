@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use std::collections::BTreeMap;
 
 use arrow::datatypes::{Field, SchemaRef};
@@ -11,7 +13,8 @@ use crate::{
     GpsReadingRowV2, Label, MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3,
     MotisSourceId, MotisSourceRowV4, MotisVersion, OVERTURE_EXTRACT, OverlapKind, OvertureRelease,
     RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3,
-    TrainSegmentRowV4, TrainSessionRowV3, TrainSessionSampleRowV3, WaterCrossingRowV2,
+    TrainSegmentRowV4, TrainSessionRowV2, TrainSessionRowV3, TrainSessionSampleRowV2,
+    TrainSessionSampleRowV3, WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -305,6 +308,8 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<SessionSampleRowV3>(&known),
         declaration::<TrainSessionRowV3>(&known),
         declaration::<TrainSessionSampleRowV3>(&known),
+        declaration::<TrainSessionRowV2>(&known),
+        declaration::<TrainSessionSampleRowV2>(&known),
         declaration::<WaterCrossingRowV2>(&known),
         declaration::<SessionCrossingRowV3>(&known),
         declaration::<ExtractManifestRowV3>(&known),

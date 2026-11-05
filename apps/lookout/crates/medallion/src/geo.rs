@@ -290,6 +290,7 @@ pub(crate) async fn write_geo_stream(
 
 #[cfg(test)]
 mod tests {
+    use domain::places::{BERLIN, EDINBURGH, FRANKFURT};
     use serde::{Deserialize, Serialize};
 
     use super::*;
@@ -390,9 +391,7 @@ mod tests {
     fn projecting_lat_lon_yields_metres_in_the_german_zone() {
         let projector = Projector::for_country(Country::Germany).unwrap();
 
-        let projected = projector
-            .project(&geo_types::Point::new(13.404954, 52.520008))
-            .unwrap();
+        let projected = projector.project(&BERLIN).unwrap();
 
         assert!(
             (projected.x() - 798_809.63).abs() < 0.01
@@ -405,9 +404,7 @@ mod tests {
     fn projecting_lat_lon_yields_metres_in_the_british_zone() {
         let projector = Projector::for_country(Country::UnitedKingdom).unwrap();
 
-        let projected = projector
-            .project(&geo_types::Point::new(-3.188267, 55.953251))
-            .unwrap();
+        let projected = projector.project(&EDINBURGH).unwrap();
 
         assert!(
             (projected.x() - 488_244.04).abs() < 0.01
@@ -419,7 +416,7 @@ mod tests {
     #[test]
     fn projecting_a_line_string_projects_every_coordinate() {
         let projector = Projector::for_country(Country::Germany).unwrap();
-        let line = geo_types::LineString::from(vec![(13.404954, 52.520008), (8.682127, 50.110924)]);
+        let line = geo_types::LineString::from(vec![BERLIN, FRANKFURT]);
 
         let projected = projector.project(&line).unwrap();
 
@@ -431,30 +428,28 @@ mod tests {
 
     #[test]
     fn a_zoned_geometry_holds_its_projection_under_the_projectors_country() {
-        let berlin = geo_types::Point::new(13.404954, 52.520008);
         let projector = Projector::for_country(Country::Germany).unwrap();
 
-        let zoned = projector.zoned(berlin).unwrap();
+        let zoned = projector.zoned(BERLIN).unwrap();
 
-        assert_eq!(zoned.geography(), &berlin);
-        assert_eq!(zoned.projected(), &projector.project(&berlin).unwrap());
+        assert_eq!(zoned.geography(), &BERLIN);
+        assert_eq!(zoned.projected(), &projector.project(&BERLIN).unwrap());
         assert_eq!(zoned.country(), Country::Germany);
     }
 
     #[test]
     fn projectors_give_each_country_its_own_zone() {
-        let berlin = geo_types::Point::new(13.404954, 52.520008);
         let mut projectors = Projectors::default();
 
         let german = projectors
             .for_country(Country::Germany)
             .unwrap()
-            .zoned(berlin)
+            .zoned(BERLIN)
             .unwrap();
         let british = projectors
             .for_country(Country::UnitedKingdom)
             .unwrap()
-            .zoned(berlin)
+            .zoned(BERLIN)
             .unwrap();
 
         assert_eq!(german.country(), Country::Germany);

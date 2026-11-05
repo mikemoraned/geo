@@ -15,6 +15,7 @@ pub fn crossings() -> PointSet<'static> {
 mod tests {
     use chrono::{DateTime, Utc};
     use domain::Sample;
+    use domain::places::DRESDEN_HBF;
     use geo::Contains;
     use geo_types::Point;
     use medallion::Country;
@@ -48,7 +49,6 @@ mod tests {
         }
     }
 
-    const DRESDEN_HBF: (f64, f64) = (51.0403, 13.7322);
     const NEAREST_TO_DRESDEN: [(u32, f32); 5] = [
         (0x5c9f_65c9, 2335.0),
         (0x3a81_47c0, 2338.4),
@@ -63,7 +63,7 @@ mod tests {
         let t = DateTime::<Utc>::from_timestamp_millis(1_785_098_609_000).expect("an instant");
         predictor
             .observe(Event::Sampled(
-                Sample::at(t, DRESDEN_HBF.0, DRESDEN_HBF.1).expect("on the globe"),
+                Sample::at(t, DRESDEN_HBF.y(), DRESDEN_HBF.x()).expect("on the globe"),
             ))
             .expect("the first event");
         predictor
