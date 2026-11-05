@@ -262,7 +262,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 - [x] Add `/auth/signout`.
 - [x] Test the endpoints in `tests/auth.rs` with `passkey`, including that no answer before sign-in
       carries a credential ID.
-- [ ] Add `static/signin/`, registering and signing in through `navigator.credentials`.
+- [x] Add `static/signin/`, registering and signing in through `navigator.credentials`.
 - [ ] Register and sign in from desktop Safari and Chrome against `just serve`.
 - [-] Register and sign in from an iPhone over HTTPS. Moved to Wrap-up: a phone's origin is not
       `localhost`, so its passkey needs the admin, and the admin needs redis.
