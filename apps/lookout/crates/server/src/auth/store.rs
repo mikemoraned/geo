@@ -1,3 +1,4 @@
+use std::fmt;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -19,6 +20,12 @@ pub struct CeremonyId(Uuid);
 impl CeremonyId {
     pub fn random() -> Self {
         Self(Uuid::new_v4())
+    }
+}
+
+impl fmt::Display for CeremonyId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -45,7 +52,12 @@ pub struct AllowedPasskey {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum StoreError {}
+pub enum StoreError {
+    #[error("redis failed: {0}")]
+    Redis(#[from] redis::RedisError),
+    #[error("a stored record failed to encode or decode: {0}")]
+    Record(#[from] serde_json::Error),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Insertion {

@@ -26,7 +26,8 @@ connection between concurrent sockets.
 Sign-in keeps three kinds of record. A ceremony is the server's half of a registration or a
 sign-in: the challenge it issued. A pending passkey has been registered but not yet allowed. An
 allowed passkey can sign in. All three sit behind one trait, `AuthStore`, as samples sit behind
-`SampleSink`. A memory implementation of it holds them for the tests and for the server.
+`SampleSink`. A memory implementation of it holds them for the tests and for the server, and a
+redis implementation keeps them in redis.
 
 Taking a ceremony or a pending passkey removes it, so each is used at most once. The server holds
 a challenge until its ceremony completes, as [§13.4.3 of WebAuthn][challenges] recommends.
@@ -44,6 +45,15 @@ groups of four as `K7Q2-M9XD`. Reading a typed code follows Crockford's decoding
 case, hyphens ignored, `O` read as `0`, and `I` and `L` read as `1`. The server also ignores
 spaces.
 
+In redis, each record is JSON. A ceremony sits under `lookout-ceremony:<id>`, and a pending passkey
+under `lookout-passkey-pending:<code>`. Each key expires with its record. [`GETDEL`][getdel] takes
+a record out, so two finishes cannot both take one ceremony. A pending passkey is written with
+[`SET NX`][set], which refuses a code that another pending passkey holds. The allowed passkeys
+share one hash, `lookout-passkeys`, keyed by the credential ID's bytes. A sign-in writes its
+passkey back through a script, which replaces the passkey only if the hash still holds it. Redis
+[blocks every other command][eval] while a script runs, so a revocation cannot fall between the
+check and the write.
+
 Tests register real passkeys through [1Password's `passkey` crate][passkey], a client and an
 authenticator in one. They hand its credentials to webauthn-rs as JSON, the form a page posts. The
 crate's [`MemoryStore`][memory-store] finds a passkey only by a credential ID it is given. A store
@@ -54,6 +64,9 @@ sign-in needs. The endpoint tests give each browser that store.
 [timeouts]: https://www.w3.org/TR/webauthn-3/#sctn-timeout-recommended-range
 [default-timeout]: https://docs.rs/webauthn-rs/0.5.5/webauthn_rs/constant.DEFAULT_AUTHENTICATOR_TIMEOUT.html
 [crockford]: https://www.crockford.com/base32.html
+[getdel]: https://redis.io/docs/latest/commands/getdel/
+[set]: https://redis.io/docs/latest/commands/set/
+[eval]: https://redis.io/docs/latest/develop/programmability/eval-intro/
 [passkey]: https://docs.rs/passkey/0.6.0/passkey/
 [memory-store]: https://docs.rs/passkey-authenticator/0.6.0/src/passkey_authenticator/credential_store.rs.html#90
 [option-store]: https://docs.rs/passkey-authenticator/0.6.0/src/passkey_authenticator/credential_store.rs.html#136

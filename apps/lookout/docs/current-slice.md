@@ -231,6 +231,8 @@ The user confirmed these on 2026-10-13, after a security review of the first pla
   `{"status": "allowed"}`. Registering again in Safari, 1Password offered to replace the
   `recording` passkey for `localhost`, and one passkey remained. The server still held the first
   passkey as allowed.
+- **2026-11-05, `/signin/` against `just serve`.** Desktop Safari and Chrome each registered a
+  passkey and signed in through the page, which continued to `/record/`.
 
 ### Tasks
 
@@ -263,14 +265,14 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 - [x] Test the endpoints in `tests/auth.rs` with `passkey`, including that no answer before sign-in
       carries a credential ID.
 - [x] Add `static/signin/`, registering and signing in through `navigator.credentials`.
-- [ ] Register and sign in from desktop Safari and Chrome against `just serve`.
+- [x] Register and sign in from desktop Safari and Chrome against `just serve`.
 - [-] Register and sign in from an iPhone over HTTPS. Moved to Wrap-up: a phone's origin is not
       `localhost`, so its passkey needs the admin, and the admin needs redis.
 
 #### The redis stores
 
-- [ ] Add the redis implementation of `AuthStore` in `crates/server/src/auth/redis.rs`.
-- [ ] Test it against a containerised redis, as `redis_sink_docker.rs` tests the sink.
+- [x] Add the redis implementation of `AuthStore` in `crates/server/src/auth/redis.rs`.
+- [x] Test it against a containerised redis, as `redis_sink_docker.rs` tests the sink.
 - [ ] Add `RedisSessionStore`, a `tower_sessions::SessionStore` over the `redis` client, with the
       session's expiry as its key's TTL.
 - [ ] Test `RedisSessionStore` against a containerised redis.

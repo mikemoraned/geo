@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use async_trait::async_trait;
 use passkey::authenticator::{Authenticator, MemoryStore, UiHint, UserCheck, UserValidationMethod};
 use passkey::client::{Client, DefaultClientData};

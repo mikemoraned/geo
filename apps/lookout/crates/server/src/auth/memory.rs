@@ -131,46 +131,62 @@ impl AuthStore for MemoryAuthStore {
 mod tests {
     use std::time::Duration;
 
-    use chrono::Utc;
     use tokio::time::advance;
-    use webauthn_rs::prelude::Passkey;
 
     use super::*;
+    use crate::auth::contract::{self, allowed_passkey, pending};
     use crate::auth::store::{CEREMONY_LIFETIME, PENDING_LIFETIME};
     use crate::auth::test_passkeys::{registered_passkey, registration_ceremony};
 
     const A_MOMENT: Duration = Duration::from_secs(1);
 
-    fn pending(passkey: Passkey) -> PendingPasskey {
-        PendingPasskey {
-            passkey,
-            registered_at: Utc::now(),
-        }
-    }
-
-    async fn allowed_passkey(store: &MemoryAuthStore) -> AllowedPasskey {
-        let code = store
-            .put_pending(pending(registered_passkey().await))
-            .await
-            .expect("stored");
-        store
-            .allow(&code, None)
-            .await
-            .expect("allowed")
-            .expect("a pending passkey")
+    #[tokio::test(start_paused = true)]
+    async fn a_ceremony_is_taken_once() {
+        contract::a_ceremony_is_taken_once(&MemoryAuthStore::default()).await;
     }
 
     #[tokio::test(start_paused = true)]
-    async fn a_ceremony_is_taken_once() {
-        let store = MemoryAuthStore::default();
-        let id = CeremonyId::random();
-        store
-            .put_ceremony(id, registration_ceremony())
-            .await
-            .expect("stored");
+    async fn a_pending_passkey_is_taken_once_by_its_code() {
+        contract::a_pending_passkey_is_taken_once_by_its_code(&MemoryAuthStore::default()).await;
+    }
 
-        assert!(store.take_ceremony(id).await.expect("taken").is_some());
-        assert!(store.take_ceremony(id).await.expect("taken").is_none());
+    #[tokio::test(start_paused = true)]
+    async fn a_held_code_refuses_another_pending_passkey() {
+        contract::a_held_code_refuses_another_pending_passkey(&MemoryAuthStore::default()).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn allowing_moves_a_pending_passkey_into_the_allowed_ones() {
+        contract::allowing_moves_a_pending_passkey_into_the_allowed_ones(
+            &MemoryAuthStore::default(),
+        )
+        .await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn allowing_an_unknown_code_allows_nothing() {
+        contract::allowing_an_unknown_code_allows_nothing(&MemoryAuthStore::default()).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn updating_rewrites_an_allowed_passkey() {
+        contract::updating_rewrites_an_allowed_passkey(&MemoryAuthStore::default()).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn updating_a_revoked_passkey_leaves_it_revoked() {
+        contract::updating_a_revoked_passkey_leaves_it_revoked(&MemoryAuthStore::default()).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn revoking_removes_only_the_passkey_with_that_code() {
+        contract::revoking_removes_only_the_passkey_with_that_code(&MemoryAuthStore::default())
+            .await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn revoking_an_unknown_code_removes_nothing() {
+        contract::revoking_an_unknown_code_removes_nothing(&MemoryAuthStore::default()).await;
     }
 
     #[tokio::test(start_paused = true)]
@@ -194,18 +210,6 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn a_pending_passkey_is_taken_once_by_its_code() {
-        let store = MemoryAuthStore::default();
-        let passkey = registered_passkey().await;
-        let id = passkey.cred_id().clone();
-        let code = store.put_pending(pending(passkey)).await.expect("stored");
-
-        let taken = store.take_pending(&code).await.expect("taken");
-        assert_eq!(taken.map(|p| p.passkey.cred_id().clone()), Some(id));
-        assert!(store.take_pending(&code).await.expect("taken").is_none());
-    }
-
-    #[tokio::test(start_paused = true)]
     async fn a_pending_passkey_lasts_an_hour() {
         let store = MemoryAuthStore::default();
         let lasting = store
@@ -221,25 +225,6 @@ mod tests {
         assert!(store.take_pending(&lasting).await.expect("taken").is_some());
         advance(A_MOMENT * 2).await;
         assert!(store.take_pending(&expired).await.expect("taken").is_none());
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn a_held_code_refuses_another_pending_passkey() {
-        let store = MemoryAuthStore::default();
-        let code = ShortCode::random();
-        let first = pending(registered_passkey().await);
-        let first_id = first.passkey.cred_id().clone();
-        let second = pending(registered_passkey().await);
-
-        let inserted = store.insert_pending(&code, first).await.expect("inserted");
-        let refused = store.insert_pending(&code, second).await.expect("refused");
-
-        assert_eq!(
-            (inserted, refused),
-            (Insertion::Inserted, Insertion::CodeTaken)
-        );
-        let held = store.take_pending(&code).await.expect("taken");
-        assert_eq!(held.map(|p| p.passkey.cred_id().clone()), Some(first_id));
     }
 
     #[tokio::test(start_paused = true)]
@@ -261,39 +246,6 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn allowing_moves_a_pending_passkey_into_the_allowed_ones() {
-        let store = MemoryAuthStore::default();
-        let passkey = registered_passkey().await;
-        let id = passkey.cred_id().clone();
-        let code = store.put_pending(pending(passkey)).await.expect("stored");
-
-        let allowed = store
-            .allow(&code, Some("iPhone".into()))
-            .await
-            .expect("allowed")
-            .expect("a pending passkey");
-
-        assert_eq!(allowed.code, code);
-        assert_eq!(allowed.label.as_deref(), Some("iPhone"));
-        assert!(store.take_pending(&code).await.expect("taken").is_none());
-        let found = store.find_allowed(&id).await.expect("found");
-        assert_eq!(found.map(|a| a.code), Some(code));
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn allowing_an_unknown_code_allows_nothing() {
-        let store = MemoryAuthStore::default();
-
-        let allowed = store
-            .allow(&ShortCode::random(), None)
-            .await
-            .expect("allowed");
-
-        assert!(allowed.is_none());
-        assert!(store.list_allowed().await.expect("listed").is_empty());
-    }
-
-    #[tokio::test(start_paused = true)]
     async fn an_allowed_passkey_outlasts_the_pending_hour() {
         let store = MemoryAuthStore::default();
         let allowed = allowed_passkey(&store).await;
@@ -305,65 +257,5 @@ mod tests {
             .await
             .expect("found");
         assert!(found.is_some());
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn updating_rewrites_an_allowed_passkey() {
-        let store = MemoryAuthStore::default();
-        let mut allowed = allowed_passkey(&store).await;
-        let used_at = Utc::now();
-        allowed.last_used_at = Some(used_at);
-
-        let updated = store
-            .update_allowed(allowed.clone())
-            .await
-            .expect("updated");
-
-        assert_eq!(updated, Update::Updated);
-        let found = store
-            .find_allowed(allowed.passkey.cred_id())
-            .await
-            .expect("found");
-        assert_eq!(found.and_then(|a| a.last_used_at), Some(used_at));
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn updating_a_revoked_passkey_leaves_it_revoked() {
-        let store = MemoryAuthStore::default();
-        let allowed = allowed_passkey(&store).await;
-        store.remove_allowed(&allowed.code).await.expect("removed");
-
-        let updated = store
-            .update_allowed(allowed.clone())
-            .await
-            .expect("updated");
-
-        assert_eq!(updated, Update::Gone);
-        let found = store
-            .find_allowed(allowed.passkey.cred_id())
-            .await
-            .expect("found");
-        assert!(found.is_none());
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn revoking_removes_only_the_passkey_with_that_code() {
-        let store = MemoryAuthStore::default();
-        let revoked = allowed_passkey(&store).await;
-        let kept = allowed_passkey(&store).await;
-
-        let removed = store.remove_allowed(&revoked.code).await.expect("removed");
-
-        assert_eq!(removed.map(|r| r.code), Some(revoked.code));
-        let gone = store
-            .find_allowed(revoked.passkey.cred_id())
-            .await
-            .expect("found");
-        assert!(gone.is_none());
-        let listed = store.list_allowed().await.expect("listed");
-        assert_eq!(
-            listed.into_iter().map(|a| a.code).collect::<Vec<_>>(),
-            vec![kept.code]
-        );
     }
 }

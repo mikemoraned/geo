@@ -1,12 +1,12 @@
 pub mod code;
+mod contract;
 pub mod memory;
+pub mod redis;
 pub mod registration;
 pub mod sessions;
 pub mod signin;
 pub mod signout;
 pub mod store;
-
-#[cfg(test)]
 mod test_passkeys;
 
 use std::fmt;
