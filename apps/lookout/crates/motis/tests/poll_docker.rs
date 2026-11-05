@@ -1,7 +1,7 @@
 mod common;
 
 use chrono::Utc;
-use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready};
+use common::{RAIL_MODES, captured_segments, gps, lpush};
 use domain::Span;
 use medallion::Root;
 use motis::capture::{Capture, Captured, Coverage};
@@ -10,6 +10,7 @@ use motis::landing::SegmentLog;
 use motis::near_gps::NearGps;
 use motis::zoom::Zoom;
 use shared::{Accel, AccelReading, Message, V1Message};
+use test_redis::TestRedis;
 use url::Url;
 use uuid::Uuid;
 use wiremock::matchers::{method, path};
@@ -65,8 +66,8 @@ fn rail_fixture_len() -> usize {
 
 #[tokio::test]
 async fn recent_gps_names_the_area_whose_motis_segments_are_logged_docker() {
-    let (_container, url) = start_redis().await;
-    let mut conn = wait_ready(&url).await;
+    let redis = TestRedis::start().await;
+    let mut conn = redis.connection();
 
     let now = Utc::now();
     let now_ms = now.timestamp_millis();

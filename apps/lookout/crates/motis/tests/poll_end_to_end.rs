@@ -1,7 +1,7 @@
 mod common;
 
 use chrono::Utc;
-use common::{RAIL_MODES, captured_segments, gps, lpush, start_redis, wait_ready};
+use common::{RAIL_MODES, captured_segments, gps, lpush};
 use domain::Span;
 use medallion::Root;
 use motis::capture::{Capture, Coverage};
@@ -9,11 +9,12 @@ use motis::client::MotisClient;
 use motis::landing::SegmentLog;
 use motis::near_gps::NearGps;
 use motis::zoom::Zoom;
+use test_redis::TestRedis;
 
 #[tokio::test]
 async fn recent_gps_near_frankfurt_captures_rail_from_local_motis_end_to_end() {
-    let (_redis, url) = start_redis().await;
-    let mut conn = wait_ready(&url).await;
+    let redis = TestRedis::start().await;
+    let mut conn = redis.connection();
 
     let now = Utc::now();
     let now_ms = now.timestamp_millis();

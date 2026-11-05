@@ -160,52 +160,27 @@ mod tests {
     use std::ops::RangeInclusive;
     use std::time::Duration;
 
-    use testcontainers::runners::AsyncRunner;
-    use testcontainers::{ContainerAsync, ImageExt};
-    use testcontainers_modules::redis::{REDIS_PORT, Redis};
-
     use super::*;
     use crate::auth::contract::{self, allowed_passkey, pending};
     use crate::auth::test_passkeys::{registered_passkey, registration_ceremony};
+    use test_redis::TestRedis;
 
     struct Running {
-        _container: ContainerAsync<Redis>,
-        conn: MultiplexedConnection,
+        redis: TestRedis,
         store: RedisAuthStore,
     }
 
     async fn running() -> Running {
-        let container = Redis::default()
-            .with_tag("7-alpine")
-            .start()
-            .await
-            .expect("a redis container");
-        let host = container.get_host().await.expect("a host");
-        let port = container
-            .get_host_port_ipv4(REDIS_PORT)
-            .await
-            .expect("a mapped port");
-        let conn = telemetry::connect(&format!("redis://{host}:{port}"))
-            .await
-            .expect("a connection");
+        let redis = TestRedis::start().await;
         Running {
-            _container: container,
-            store: RedisAuthStore::new(conn.clone()),
-            conn,
+            store: RedisAuthStore::new(redis.connection()),
+            redis,
         }
     }
 
     fn within_a_minute_of(lifetime: Duration) -> RangeInclusive<i64> {
         let lifetime = lifetime.as_secs() as i64;
         lifetime - 60..=lifetime
-    }
-
-    async fn seconds_to_live(conn: &MultiplexedConnection, key: &str) -> i64 {
-        redis::cmd("TTL")
-            .arg(key)
-            .query_async(&mut conn.clone())
-            .await
-            .expect("a TTL")
     }
 
     #[tokio::test]
@@ -256,15 +231,18 @@ mod tests {
 
     #[tokio::test]
     async fn a_ceremony_expires_after_ten_minutes_docker() {
-        let redis = running().await;
+        let running = running().await;
         let id = CeremonyId::random();
-        redis
+        running
             .store
             .put_ceremony(id, registration_ceremony())
             .await
             .expect("stored");
 
-        let ttl = seconds_to_live(&redis.conn, &format!("lookout-ceremony:{id}")).await;
+        let ttl = running
+            .redis
+            .seconds_to_live(&format!("lookout-ceremony:{id}"))
+            .await;
 
         assert!(
             within_a_minute_of(CEREMONY_LIFETIME).contains(&ttl),
@@ -274,28 +252,27 @@ mod tests {
 
     #[tokio::test]
     async fn a_pending_passkey_expires_after_an_hour_docker() {
-        let redis = running().await;
-        let code = redis
+        let running = running().await;
+        let code = running
             .store
             .put_pending(pending(registered_passkey().await))
             .await
             .expect("stored");
 
-        let ttl = seconds_to_live(
-            &redis.conn,
-            &format!("lookout-passkey-pending:{}", code.as_str()),
-        )
-        .await;
+        let ttl = running
+            .redis
+            .seconds_to_live(&format!("lookout-passkey-pending:{}", code.as_str()))
+            .await;
 
         assert!(within_a_minute_of(PENDING_LIFETIME).contains(&ttl), "{ttl}");
     }
 
     #[tokio::test]
     async fn the_allowed_passkeys_never_expire_docker() {
-        let redis = running().await;
-        allowed_passkey(&redis.store).await;
+        let running = running().await;
+        allowed_passkey(&running.store).await;
 
-        let ttl = seconds_to_live(&redis.conn, "lookout-passkeys").await;
+        let ttl = running.redis.seconds_to_live("lookout-passkeys").await;
 
         assert_eq!(ttl, -1);
     }

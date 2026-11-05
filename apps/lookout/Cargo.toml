@@ -94,6 +94,7 @@ recorder = { path = "crates/recorder" }
 session_crossings = { path = "crates/session_crossings" }
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
+test-redis = { path = "crates/test-redis" }
 web-core = { path = "crates/platform/web/core" }
 transport = { path = "crates/transport" }
 

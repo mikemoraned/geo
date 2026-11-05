@@ -5221,8 +5221,7 @@ dependencies = [
  "syn 2.0.119",
  "telemetry",
  "tempfile",
- "testcontainers",
- "testcontainers-modules",
+ "test-redis",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -6662,8 +6661,7 @@ dependencies = [
  "shared",
  "telemetry",
  "tempfile",
- "testcontainers",
- "testcontainers-modules",
+ "test-redis",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7844,8 +7842,7 @@ dependencies = [
  "serde_json",
  "shared",
  "telemetry",
- "testcontainers",
- "testcontainers-modules",
+ "test-redis",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
@@ -8334,8 +8331,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared",
- "testcontainers",
- "testcontainers-modules",
+ "test-redis",
  "thiserror 2.0.18",
  "tokio",
  "uuid",
@@ -8352,6 +8348,16 @@ dependencies = [
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "test-redis"
+version = "0.1.0"
+dependencies = [
+ "redis",
+ "testcontainers",
+ "testcontainers-modules",
+ "tokio",
 ]
 
 [[package]]
