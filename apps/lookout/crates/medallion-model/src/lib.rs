@@ -11,7 +11,6 @@ mod silver;
 mod telemetry;
 mod testing;
 mod train_session;
-mod train_session_v2;
 
 use medallion::DatasetInfo;
 
@@ -45,11 +44,8 @@ pub use train_session::{
     GeometrySource, TRAIN_SESSION_SAMPLE_V3, TRAIN_SESSION_V3, TrainSessionRowV3,
     TrainSessionSampleRowV3, train_session_id,
 };
-pub use train_session_v2::{
-    TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2, TrainSessionRowV2, TrainSessionSampleRowV2,
-};
 
-pub const ALL: [DatasetInfo; 19] = [
+pub const ALL: [DatasetInfo; 17] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
@@ -63,8 +59,6 @@ pub const ALL: [DatasetInfo; 19] = [
     SESSION_SAMPLE_V3.info(),
     TRAIN_SESSION_V3.info(),
     TRAIN_SESSION_SAMPLE_V3.info(),
-    TRAIN_SESSION_V2.info(),
-    TRAIN_SESSION_SAMPLE_V2.info(),
     WATER_CROSSING_V2.info(),
     SESSION_CROSSING_V3.info(),
     OVERTURE_EXTRACT.info(),
@@ -109,9 +103,7 @@ mod tests {
                 "session_sample_v3",
                 "session_v3",
                 "train_segment_v4",
-                "train_session_sample_v2",
                 "train_session_sample_v3",
-                "train_session_v2",
                 "train_session_v3",
                 "water_crossing_v2"
             ]
