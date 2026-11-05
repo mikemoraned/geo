@@ -306,3 +306,15 @@ it is there. `.claude/rules/rust.md` asks for this in prose, and no lint enforce
 - [ ] Go through each flagged call in `src/bin/` by the same test.
 - [ ] Apply the same lints to the `m5plus` workspace.
 - [ ] Name the lints in `.claude/rules/rust.md`.
+
+## Slice: Demonstrable Behaviour
+
+### Target
+
+Some of the algorithms / processing we are doing here is getting quite complex, and I am likely to not remember / understand after some time, particularly if I go away and work on something else. So, we should produce a small "book", expressed in notebooks, and some associated blogposts on how this works, following the principles of [our research](2026-10-18-demonstrable-behaviour.md).
+
+Some of the key areas to cover:
+* deriving water crossings
+* [session crossings and matching](../crates/session_crossings/README.md)
+* [predictor](../crates/predictor/README.md)
+* evaluation
