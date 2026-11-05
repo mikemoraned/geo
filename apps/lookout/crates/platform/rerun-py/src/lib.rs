@@ -1,6 +1,8 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use domain::{CrossingCompact, Radius, Sample};
-use predictor::{CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS, Event, ObserveError, Predict};
+use predictor::{
+    CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS, Event, ObserveError, Predict, nearest_first,
+};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -123,11 +125,10 @@ impl CrowFlies {
 
     /// The crossings it predicts we reach, nearest first.
     fn predictions(&self) -> Vec<Prediction> {
-        self.inner
-            .predictions()
-            .iter()
-            .map(|prediction| Prediction {
-                crossing_compact_id: prediction.crossing_compact_id.get(),
+        nearest_first(self.inner.predictions())
+            .into_iter()
+            .map(|(crossing_compact_id, prediction)| Prediction {
+                crossing_compact_id: crossing_compact_id.get(),
                 metres: prediction.metres,
                 at: prediction.at,
             })

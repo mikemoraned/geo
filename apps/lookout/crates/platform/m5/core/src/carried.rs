@@ -19,7 +19,7 @@ mod tests {
     use geo::Contains;
     use geo_types::Point;
     use medallion::Country;
-    use predictor::{CrowFlies, DEFAULT_RADIUS, Event, Predict};
+    use predictor::{CrowFlies, DEFAULT_RADIUS, Event, Predict, nearest_first};
 
     use super::*;
 
@@ -73,11 +73,10 @@ mod tests {
     fn the_device_agrees_with_the_notebook_about_what_is_nearest() {
         let predictor = at_dresden();
 
-        let ids: Vec<u32> = predictor
-            .predictions()
-            .iter()
+        let ids: Vec<u32> = nearest_first(predictor.predictions())
+            .into_iter()
             .take(NEAREST_TO_DRESDEN.len())
-            .map(|prediction| prediction.crossing_compact_id.get())
+            .map(|(crossing_compact_id, _)| crossing_compact_id.get())
             .collect();
 
         assert_eq!(
@@ -91,8 +90,12 @@ mod tests {
     fn the_device_agrees_with_the_notebook_about_how_far() {
         let predictor = at_dresden();
 
-        for (prediction, (id, metres)) in predictor.predictions().iter().zip(NEAREST_TO_DRESDEN) {
-            assert_eq!(prediction.crossing_compact_id.get(), id);
+        for ((crossing_compact_id, prediction), (id, metres)) in
+            nearest_first(predictor.predictions())
+                .into_iter()
+                .zip(NEAREST_TO_DRESDEN)
+        {
+            assert_eq!(crossing_compact_id.get(), id);
             assert!(
                 (prediction.metres - metres).abs() < TOLERANCE_M,
                 "{:08x}: the device says {}m, the notebook says {metres}m",

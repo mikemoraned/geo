@@ -2,17 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, Utc};
 
-use domain::CrossingCompactId;
+use domain::{CrossingCompactId, Precision};
 
-use crate::predict::ObserveError;
-use crate::state::{CandidatePass, CrossingState, PredictedPass, StateKind};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Judgement {
-    CandidatePass,
-    PredictedPass,
-    ActualPass,
-}
+use crate::predict::{Confidence, Predictions};
+use crate::state::{AlertedPass, CandidatePass, CrossingState, StateKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Transition {
@@ -20,6 +13,15 @@ pub struct Transition {
     pub at: DateTime<Utc>,
     pub from: StateKind,
     pub to: StateKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum TrackError {
+    #[error("a round at {at} is behind the last round at {now}")]
+    OutOfOrder {
+        now: DateTime<Utc>,
+        at: DateTime<Utc>,
+    },
 }
 
 #[derive(Debug, Default)]
@@ -33,26 +35,27 @@ impl Tracker {
         Self::default()
     }
 
-    pub fn state(&self, crossing_compact_id: CrossingCompactId) -> Option<&CrossingState> {
-        self.states.get(&crossing_compact_id)
+    pub fn kind(&self, crossing_compact_id: CrossingCompactId) -> StateKind {
+        CrossingState::kind_of(self.states.get(&crossing_compact_id))
     }
 
-    pub fn judge(
+    pub fn track<P: Precision>(
         &mut self,
         at: DateTime<Utc>,
-        judgements: &BTreeMap<CrossingCompactId, Judgement>,
-    ) -> Result<Vec<Transition>, ObserveError> {
+        predictions: &Predictions<P>,
+        passed: &BTreeSet<CrossingCompactId>,
+    ) -> Result<Vec<Transition>, TrackError> {
         if let Some(now) = self.now
             && at < now
         {
-            return Err(ObserveError::OutOfOrder { now, at });
+            return Err(TrackError::OutOfOrder { now, at });
         }
         self.now = Some(at);
 
         let crossings: BTreeSet<CrossingCompactId> = self
             .states
             .keys()
-            .chain(judgements.keys())
+            .chain(predictions.keys())
             .copied()
             .collect();
 
@@ -60,13 +63,15 @@ impl Tracker {
             .into_iter()
             .filter_map(|crossing_compact_id| {
                 let before = self.states.remove(&crossing_compact_id);
-                let from = before
-                    .as_ref()
-                    .map_or(StateKind::OutOfReach, CrossingState::kind);
-                let after = next(before, judgements.get(&crossing_compact_id).copied(), at);
-                let to = after
-                    .as_ref()
-                    .map_or(StateKind::OutOfReach, CrossingState::kind);
+                let from = CrossingState::kind_of(before.as_ref());
+                let after = next(
+                    before,
+                    predictions
+                        .get(&crossing_compact_id)
+                        .map(|prediction| prediction.confidence),
+                    passed.contains(&crossing_compact_id),
+                );
+                let to = CrossingState::kind_of(after.as_ref());
                 if let Some(state) = after {
                     self.states.insert(crossing_compact_id, state);
                 }
@@ -83,36 +88,35 @@ impl Tracker {
 
 fn next(
     state: Option<CrossingState>,
-    judgement: Option<Judgement>,
-    at: DateTime<Utc>,
+    confidence: Option<Confidence>,
+    passed: bool,
 ) -> Option<CrossingState> {
+    match (state, passed) {
+        (Some(CrossingState::Alerted(state)), true) => Some(CrossingState::Actual(state.pass())),
+        (Some(passing @ CrossingState::Actual(_)), true) => Some(passing),
+        (state, _) => confidence.map(|confidence| match state {
+            Some(state) => predicted(state, confidence),
+            None => entered(confidence),
+        }),
+    }
+}
+
+fn entered(confidence: Confidence) -> CrossingState {
+    match confidence {
+        Confidence::Low => CrossingState::Candidate(CandidatePass),
+        Confidence::High => CrossingState::Alerted(AlertedPass),
+    }
+}
+
+fn predicted(state: CrossingState, confidence: Confidence) -> CrossingState {
     use CrossingState as State;
-    match (state, judgement?) {
-        (None, Judgement::CandidatePass | Judgement::ActualPass) => {
-            Some(State::CandidatePass(CandidatePass::new(at)))
-        }
-        (None, Judgement::PredictedPass) => Some(State::PredictedPass(PredictedPass::new(at))),
-        (Some(State::CandidatePass(state)), Judgement::PredictedPass) => {
-            Some(State::PredictedPass(state.predict(at)))
-        }
-        (Some(State::PredictedPass(state)), Judgement::CandidatePass) => {
-            Some(State::CandidatePass(state.withdraw(at)))
-        }
-        (Some(State::PredictedPass(state)), Judgement::ActualPass) => {
-            Some(State::ActualPass(state.pass(at)))
-        }
-        (Some(State::ActualPass(state)), Judgement::CandidatePass) => {
-            Some(State::CandidatePass(state.release(at)))
-        }
-        (Some(State::ActualPass(state)), Judgement::PredictedPass) => {
-            Some(State::PredictedPass(state.predict(at)))
-        }
-        (
-            Some(unchanged @ State::CandidatePass(_)),
-            Judgement::CandidatePass | Judgement::ActualPass,
-        )
-        | (Some(unchanged @ State::PredictedPass(_)), Judgement::PredictedPass)
-        | (Some(unchanged @ State::ActualPass(_)), Judgement::ActualPass) => Some(unchanged),
+    match (state, confidence) {
+        (State::Candidate(state), Confidence::High) => State::Alerted(state.alert()),
+        (State::Alerted(state), Confidence::Low) => State::Candidate(state.withdraw()),
+        (State::Actual(state), Confidence::Low) => State::Candidate(state.release()),
+        (State::Actual(state), Confidence::High) => State::Alerted(state.alert()),
+        (unchanged @ State::Candidate(_), Confidence::Low)
+        | (unchanged @ State::Alerted(_), Confidence::High) => unchanged,
     }
 }
 
@@ -120,6 +124,8 @@ fn next(
 mod tests {
     use chrono::TimeDelta;
     use proptest::prelude::*;
+
+    use crate::predict::Prediction;
 
     use super::*;
 
@@ -135,15 +141,27 @@ mod tests {
         CrossingCompactId::from(n)
     }
 
-    fn judged(judgements: &[(u32, Judgement)]) -> BTreeMap<CrossingCompactId, Judgement> {
-        judgements
+    fn prediction(confidence: Confidence) -> Prediction<f64> {
+        Prediction {
+            metres: 0.0,
+            at: None,
+            confidence,
+        }
+    }
+
+    fn predictions(predicted: &[(u32, Confidence)]) -> Predictions<f64> {
+        predicted
             .iter()
-            .map(|&(n, judgement)| (id(n), judgement))
+            .map(|&(n, confidence)| (id(n), prediction(confidence)))
             .collect()
     }
 
-    fn nothing() -> BTreeMap<CrossingCompactId, Judgement> {
-        BTreeMap::new()
+    fn passed(crossings: &[u32]) -> BTreeSet<CrossingCompactId> {
+        crossings.iter().copied().map(id).collect()
+    }
+
+    fn none_passed() -> BTreeSet<CrossingCompactId> {
+        BTreeSet::new()
     }
 
     fn transition(n: u32, seconds: i64, from: StateKind, to: StateKind) -> Transition {
@@ -155,23 +173,37 @@ mod tests {
         }
     }
 
-    fn kind(tracker: &Tracker, n: u32) -> StateKind {
+    type Round<'a> = (&'a [(u32, Confidence)], &'a [u32]);
+
+    fn tracker_through(rounds: &[Round]) -> Tracker {
+        let mut tracker = Tracker::new();
+        for (round, &(predicted, crossings)) in (0i64..).zip(rounds) {
+            tracker
+                .track(
+                    later(10 * round),
+                    &predictions(predicted),
+                    &passed(crossings),
+                )
+                .expect("in order");
+        }
         tracker
-            .state(id(n))
-            .map_or(StateKind::OutOfReach, CrossingState::kind)
     }
 
     #[test]
-    fn a_crossing_never_judged_is_out_of_reach() {
-        assert_eq!(kind(&Tracker::new(), 1), StateKind::OutOfReach);
+    fn a_crossing_never_predicted_is_out_of_reach() {
+        assert_eq!(Tracker::new().kind(id(1)), StateKind::OutOfReach);
     }
 
     #[test]
-    fn a_crossing_judged_a_candidate_becomes_one() {
+    fn a_crossing_predicted_with_low_confidence_becomes_a_candidate() {
         let mut tracker = Tracker::new();
 
         let transitions = tracker
-            .judge(instant(), &judged(&[(1, Judgement::CandidatePass)]))
+            .track(
+                instant(),
+                &predictions(&[(1, Confidence::Low)]),
+                &none_passed(),
+            )
             .expect("in order");
 
         assert_eq!(
@@ -183,15 +215,18 @@ mod tests {
                 StateKind::CandidatePass
             )]
         );
-        assert_eq!(kind(&tracker, 1), StateKind::CandidatePass);
     }
 
     #[test]
-    fn a_crossing_out_of_reach_judged_predicted_is_predicted_at_once() {
+    fn a_crossing_out_of_reach_predicted_with_high_confidence_is_alerted_at_once() {
         let mut tracker = Tracker::new();
 
         let transitions = tracker
-            .judge(instant(), &judged(&[(1, Judgement::PredictedPass)]))
+            .track(
+                instant(),
+                &predictions(&[(1, Confidence::High)]),
+                &none_passed(),
+            )
             .expect("in order");
 
         assert_eq!(
@@ -200,35 +235,37 @@ mod tests {
                 1,
                 0,
                 StateKind::OutOfReach,
-                StateKind::PredictedPass
+                StateKind::AlertedPass
             )]
         );
     }
 
     #[test]
-    fn a_judgement_that_repeats_the_state_records_nothing_and_keeps_its_start() {
-        let mut tracker = Tracker::new();
-        tracker
-            .judge(instant(), &judged(&[(1, Judgement::PredictedPass)]))
-            .expect("in order");
+    fn a_prediction_that_repeats_the_state_records_nothing() {
+        let mut tracker = tracker_through(&[(&[(1, Confidence::High)], &[])]);
 
         let transitions = tracker
-            .judge(later(10), &judged(&[(1, Judgement::PredictedPass)]))
+            .track(
+                later(10),
+                &predictions(&[(1, Confidence::High)]),
+                &none_passed(),
+            )
             .expect("in order");
 
         assert!(transitions.is_empty());
-        assert_eq!(tracker.state(id(1)).expect("a state").since(), instant());
+        assert_eq!(tracker.kind(id(1)), StateKind::AlertedPass);
     }
 
     #[test]
-    fn a_prediction_judged_passed_becomes_a_pass() {
-        let mut tracker = Tracker::new();
-        tracker
-            .judge(instant(), &judged(&[(1, Judgement::PredictedPass)]))
-            .expect("in order");
+    fn an_alerted_crossing_passed_becomes_a_pass() {
+        let mut tracker = tracker_through(&[(&[(1, Confidence::High)], &[])]);
 
         let transitions = tracker
-            .judge(later(10), &judged(&[(1, Judgement::ActualPass)]))
+            .track(
+                later(10),
+                &predictions(&[(1, Confidence::High)]),
+                &passed(&[1]),
+            )
             .expect("in order");
 
         assert_eq!(
@@ -236,79 +273,68 @@ mod tests {
             vec![transition(
                 1,
                 10,
-                StateKind::PredictedPass,
+                StateKind::AlertedPass,
                 StateKind::ActualPass
             )]
         );
     }
 
     #[test]
-    fn a_pass_nobody_predicted_leaves_a_candidate_as_it_was() {
-        let mut tracker = Tracker::new();
-        tracker
-            .judge(instant(), &judged(&[(1, Judgement::CandidatePass)]))
-            .expect("in order");
+    fn a_pass_nobody_alerted_leaves_a_candidate_as_it_was() {
+        let mut tracker = tracker_through(&[(&[(1, Confidence::Low)], &[])]);
 
         let transitions = tracker
-            .judge(later(10), &judged(&[(1, Judgement::ActualPass)]))
+            .track(
+                later(10),
+                &predictions(&[(1, Confidence::Low)]),
+                &passed(&[1]),
+            )
             .expect("in order");
 
         assert!(transitions.is_empty());
-        assert_eq!(kind(&tracker, 1), StateKind::CandidatePass);
+        assert_eq!(tracker.kind(id(1)), StateKind::CandidatePass);
     }
 
     #[test]
-    fn a_pass_nobody_predicted_brings_a_crossing_out_of_reach_in_as_a_candidate() {
+    fn a_pass_of_a_crossing_out_of_reach_records_nothing() {
         let mut tracker = Tracker::new();
 
         let transitions = tracker
-            .judge(instant(), &judged(&[(1, Judgement::ActualPass)]))
+            .track(instant(), &predictions(&[]), &passed(&[1]))
             .expect("in order");
 
-        assert_eq!(
-            transitions,
-            vec![transition(
-                1,
-                0,
-                StateKind::OutOfReach,
-                StateKind::CandidatePass
-            )]
-        );
+        assert!(transitions.is_empty());
+        assert_eq!(tracker.kind(id(1)), StateKind::OutOfReach);
     }
 
     #[test]
-    fn a_crossing_no_longer_judged_goes_out_of_reach() {
-        let mut tracker = Tracker::new();
-        tracker
-            .judge(instant(), &judged(&[(1, Judgement::PredictedPass)]))
-            .expect("in order");
-
-        let transitions = tracker.judge(later(10), &nothing()).expect("in order");
-
-        assert_eq!(
-            transitions,
-            vec![transition(
-                1,
-                10,
-                StateKind::PredictedPass,
-                StateKind::OutOfReach
-            )]
-        );
-        assert!(tracker.state(id(1)).is_none());
-    }
-
-    #[test]
-    fn a_crossing_passed_and_predicted_again_is_a_new_prediction() {
-        let mut tracker = Tracker::new();
-        tracker
-            .judge(instant(), &judged(&[(1, Judgement::PredictedPass)]))
-            .expect("in order");
-        tracker
-            .judge(later(10), &judged(&[(1, Judgement::ActualPass)]))
-            .expect("in order");
+    fn a_crossing_stays_passed_while_it_is_passed_whatever_is_predicted() {
+        let mut tracker = tracker_through(&[
+            (&[(1, Confidence::High)], &[]),
+            (&[(1, Confidence::High)], &[1]),
+        ]);
 
         let transitions = tracker
-            .judge(later(20), &judged(&[(1, Judgement::PredictedPass)]))
+            .track(later(20), &predictions(&[]), &passed(&[1]))
+            .expect("in order");
+
+        assert!(transitions.is_empty());
+        assert_eq!(tracker.kind(id(1)), StateKind::ActualPass);
+    }
+
+    #[test]
+    fn a_crossing_no_longer_passed_and_predicted_with_high_confidence_is_alerted_again() {
+        let mut tracker = tracker_through(&[
+            (&[(1, Confidence::High)], &[]),
+            (&[(1, Confidence::High)], &[1]),
+        ]);
+
+        let transitions = tracker
+            .track(
+                later(20),
+                &predictions(&[(1, Confidence::High)]),
+                &none_passed(),
+            )
             .expect("in order");
 
         assert_eq!(
@@ -317,25 +343,66 @@ mod tests {
                 1,
                 20,
                 StateKind::ActualPass,
-                StateKind::PredictedPass
+                StateKind::AlertedPass
             )]
         );
     }
 
     #[test]
-    fn each_crossing_moves_on_its_own_judgement() {
-        let mut tracker = Tracker::new();
-        tracker
-            .judge(
-                instant(),
-                &judged(&[(1, Judgement::CandidatePass), (2, Judgement::PredictedPass)]),
+    fn a_crossing_no_longer_passed_and_predicted_with_low_confidence_is_a_candidate_again() {
+        let mut tracker = tracker_through(&[
+            (&[(1, Confidence::High)], &[]),
+            (&[(1, Confidence::High)], &[1]),
+        ]);
+
+        let transitions = tracker
+            .track(
+                later(20),
+                &predictions(&[(1, Confidence::Low)]),
+                &none_passed(),
             )
             .expect("in order");
 
+        assert_eq!(
+            transitions,
+            vec![transition(
+                1,
+                20,
+                StateKind::ActualPass,
+                StateKind::CandidatePass
+            )]
+        );
+    }
+
+    #[test]
+    fn a_crossing_no_longer_predicted_goes_out_of_reach() {
+        let mut tracker = tracker_through(&[(&[(1, Confidence::High)], &[])]);
+
         let transitions = tracker
-            .judge(
+            .track(later(10), &predictions(&[]), &none_passed())
+            .expect("in order");
+
+        assert_eq!(
+            transitions,
+            vec![transition(
+                1,
+                10,
+                StateKind::AlertedPass,
+                StateKind::OutOfReach
+            )]
+        );
+        assert_eq!(tracker.kind(id(1)), StateKind::OutOfReach);
+    }
+
+    #[test]
+    fn each_crossing_moves_on_its_own_prediction() {
+        let mut tracker = tracker_through(&[(&[(1, Confidence::Low), (2, Confidence::High)], &[])]);
+
+        let transitions = tracker
+            .track(
                 later(10),
-                &judged(&[(1, Judgement::PredictedPass), (2, Judgement::PredictedPass)]),
+                &predictions(&[(1, Confidence::High), (2, Confidence::High)]),
+                &none_passed(),
             )
             .expect("in order");
 
@@ -345,65 +412,73 @@ mod tests {
                 1,
                 10,
                 StateKind::CandidatePass,
-                StateKind::PredictedPass
+                StateKind::AlertedPass
             )]
         );
-        assert_eq!(kind(&tracker, 2), StateKind::PredictedPass);
+        assert_eq!(tracker.kind(id(2)), StateKind::AlertedPass);
     }
 
     #[test]
-    fn a_judgement_behind_the_last_is_refused_and_changes_nothing() {
+    fn a_round_behind_the_last_is_refused_and_changes_nothing() {
         let mut tracker = Tracker::new();
         tracker
-            .judge(later(10), &judged(&[(1, Judgement::PredictedPass)]))
+            .track(
+                later(10),
+                &predictions(&[(1, Confidence::High)]),
+                &none_passed(),
+            )
             .expect("in order");
 
-        let refused = tracker.judge(instant(), &nothing());
+        let refused = tracker.track(instant(), &predictions(&[]), &none_passed());
 
         assert_eq!(
             refused,
-            Err(ObserveError::OutOfOrder {
+            Err(TrackError::OutOfOrder {
                 now: later(10),
                 at: instant(),
             })
         );
-        assert_eq!(kind(&tracker, 1), StateKind::PredictedPass);
+        assert_eq!(tracker.kind(id(1)), StateKind::AlertedPass);
     }
 
     fn legal(from: StateKind, to: StateKind) -> bool {
         use StateKind::*;
         matches!(
             (from, to),
-            (OutOfReach, CandidatePass | PredictedPass)
-                | (CandidatePass, OutOfReach | PredictedPass)
-                | (PredictedPass, OutOfReach | CandidatePass | ActualPass)
-                | (ActualPass, OutOfReach | CandidatePass | PredictedPass)
+            (OutOfReach, CandidatePass | AlertedPass)
+                | (CandidatePass, OutOfReach | AlertedPass)
+                | (AlertedPass, OutOfReach | CandidatePass | ActualPass)
+                | (ActualPass, OutOfReach | CandidatePass | AlertedPass)
         )
     }
 
-    fn judgement() -> impl Strategy<Value = Judgement> {
-        prop_oneof![
-            Just(Judgement::CandidatePass),
-            Just(Judgement::PredictedPass),
-            Just(Judgement::ActualPass),
-        ]
+    fn confidence() -> impl Strategy<Value = Confidence> {
+        prop_oneof![Just(Confidence::Low), Just(Confidence::High)]
     }
 
-    fn rounds() -> impl Strategy<Value = Vec<BTreeMap<CrossingCompactId, Judgement>>> {
-        prop::collection::vec(
-            prop::collection::btree_map((0u32..4).prop_map(id), judgement(), 0..4),
-            1..30,
+    fn round() -> impl Strategy<Value = (Predictions<f64>, BTreeSet<CrossingCompactId>)> {
+        (
+            prop::collection::btree_map(
+                (0u32..4).prop_map(id),
+                confidence().prop_map(prediction),
+                0..4,
+            ),
+            prop::collection::btree_set((0u32..4).prop_map(id), 0..3),
         )
     }
 
     proptest! {
         #[test]
-        fn every_crossing_runs_a_chain_of_legal_transitions_ending_in_its_state(rounds in rounds()) {
+        fn every_crossing_runs_a_chain_of_legal_transitions_ending_in_its_state(
+            rounds in prop::collection::vec(round(), 1..30)
+        ) {
             let mut tracker = Tracker::new();
             let mut last: BTreeMap<CrossingCompactId, StateKind> = BTreeMap::new();
 
-            for (round, judgements) in (0i64..).zip(&rounds) {
-                let transitions = tracker.judge(later(10 * round), judgements).expect("in order");
+            for (round, (predictions, passed)) in (0i64..).zip(&rounds) {
+                let transitions = tracker
+                    .track(later(10 * round), predictions, passed)
+                    .expect("in order");
                 for transition in transitions {
                     let before = last
                         .get(&transition.crossing_compact_id)
@@ -411,13 +486,16 @@ mod tests {
                         .unwrap_or(StateKind::OutOfReach);
                     prop_assert_eq!(transition.from, before);
                     prop_assert!(legal(transition.from, transition.to), "{:?}", transition);
+                    if transition.to == StateKind::ActualPass {
+                        prop_assert!(passed.contains(&transition.crossing_compact_id));
+                    }
                     last.insert(transition.crossing_compact_id, transition.to);
                 }
             }
 
             for n in 0..4 {
                 let recorded = last.get(&id(n)).copied().unwrap_or(StateKind::OutOfReach);
-                prop_assert_eq!(kind(&tracker, n), recorded);
+                prop_assert_eq!(tracker.kind(id(n)), recorded);
             }
         }
     }

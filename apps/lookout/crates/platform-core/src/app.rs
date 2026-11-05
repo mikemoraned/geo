@@ -9,12 +9,14 @@ use crux_core::{
 };
 use domain::{CrossingCompact, Sample};
 use predictor::{
-    Crossings, CrowFlies, DEFAULT_RADIUS, Event as Observed, Parser, Predict, Sentence,
+    Crossings, CrowFlies, DEFAULT_RADIUS, Event as Observed, Parser, Predict, Predictions, Sentence,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::Float;
 use crate::battery::{Battery, Charge};
+
+static NO_PREDICTIONS: Predictions<Float> = Predictions::new();
 
 pub trait Shell: Sized + 'static {
     type ViewModel;
@@ -61,8 +63,8 @@ impl<S: Shell> Model<S> {
         self.ready().and_then(CrowFlies::latest)
     }
 
-    pub fn predictions(&self) -> &[predictor::Prediction<Float>] {
-        self.ready().map_or(&[], CrowFlies::predictions)
+    pub fn predictions(&self) -> &Predictions<Float> {
+        self.ready().map_or(&NO_PREDICTIONS, CrowFlies::predictions)
     }
 
     pub fn speed_mps(&self) -> Option<Float> {
