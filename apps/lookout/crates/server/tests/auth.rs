@@ -20,7 +20,7 @@ use server::auth::sessions::SharedSessionStore;
 use server::auth::store::{
     AllowedPasskey, AuthStore, Ceremony, CeremonyId, Insertion, PendingPasskey, StoreError, Update,
 };
-use server::auth::{Allowing, Finish, RelyingParty, Started};
+use server::auth::{Allowing, AuthError, Finish, RelyingParty, Started};
 use server::{AppState, build_app};
 use std::str::FromStr;
 use tower::ServiceExt;
@@ -483,6 +483,36 @@ async fn a_pending_passkey_signs_in_once_the_admin_allows_it() {
     assert_eq!(waiting.status, StatusCode::FORBIDDEN);
     assert!(waiting.session_cookie().is_none(), "{:?}", waiting.headers);
     assert_eq!(allowed.status, StatusCode::NO_CONTENT, "{:?}", allowed.body);
+}
+
+#[tokio::test]
+async fn a_refusal_answers_with_its_reason_alone() {
+    let server = Server::hosted(Allowing::ByAdmin);
+    let mut browser = Browser::at(ORIGIN);
+    register(&server.app, &mut browser).await;
+    let (started, _) = start_signin(&server.app).await;
+    let finish = Finish {
+        ceremony: started.ceremony,
+        credential: browser.get(started.options).await,
+    };
+
+    let not_allowed = finish_signin(&server.app, &finish, None).await;
+    let replayed = finish_signin(&server.app, &finish, None).await;
+
+    assert_eq!(
+        (not_allowed.status, not_allowed.body),
+        (
+            StatusCode::FORBIDDEN,
+            Bytes::from(AuthError::NotAllowed.to_string())
+        )
+    );
+    assert_eq!(
+        (replayed.status, replayed.body),
+        (
+            StatusCode::BAD_REQUEST,
+            Bytes::from(AuthError::NoCeremony.to_string())
+        )
+    );
 }
 
 #[tokio::test]

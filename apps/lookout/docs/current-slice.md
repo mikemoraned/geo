@@ -260,7 +260,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
       registers for `localhost`.
 - [x] Add `/auth/signin/start` and `/auth/signin/finish`, creating the session.
 - [x] Add `/auth/signout`.
-- [ ] Test the endpoints in `tests/auth.rs` with `passkey`, including that no answer before sign-in
+- [x] Test the endpoints in `tests/auth.rs` with `passkey`, including that no answer before sign-in
       carries a credential ID.
 - [ ] Add `static/signin/`, registering and signing in through `navigator.credentials`.
 - [ ] Register and sign in from desktop Safari and Chrome against `just serve`.
