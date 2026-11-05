@@ -390,8 +390,9 @@ The evaluation replays these datasets, and their counts show whether the filter,
 - [x] Re-derive with `just silver-motis-ingest`. Check that about 40,000 sessions reach
       `realtime_percentage` ≥ 90, as `explore1.py` counted per day and trip. 34,521 reach it, and
       the 40,000 was an estimate.
-- [ ] Remove `TrainSessionRowV2`, `TrainSessionSampleRowV2`, and their snapshots, and delete the v2
-      files from the local store.
+- [x] Remove `TrainSessionRowV2`, `TrainSessionSampleRowV2`, and their snapshots, and delete the v2
+      files from the local store. `explore1.py` and `explore2.py` stay as the record of what they
+      found, and their cells that read v2 no longer run.
 - [ ] Add `TrainSessionCrossingRowV1`, and derive `train_session_crossing_v1` in `session_crossings`
       through the matching `session_crossing_v3` uses.
 - [ ] If reading every train sample at once runs out of memory, match one date at a time.
