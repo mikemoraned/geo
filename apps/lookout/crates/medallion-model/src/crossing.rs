@@ -3,13 +3,16 @@ use domain::{CrossingCompactId, CrossingId, DeviceId, SessionId};
 use medallion::{COUNTRY, DatasetSpec, Dated, Geometry, Row, layers};
 use serde::{Deserialize, Serialize};
 
-use crate::SessionRowV3;
+use crate::{SessionRowV3, TrainSessionRowV3};
 
 pub const WATER_CROSSING_V2: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("water_crossing_v2", COUNTRY);
 
 pub const SESSION_CROSSING_V3: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("session_crossing_v3", "crossed_date");
+
+pub const TRAIN_SESSION_CROSSING_V1: DatasetSpec<layers::Silver> =
+    DatasetSpec::partitioned("train_session_crossing_v1", "crossed_date");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -98,6 +101,41 @@ impl Row for SessionCrossingRowV3 {
 }
 
 impl Dated for SessionCrossingRowV3 {
+    fn partition_date(&self) -> NaiveDate {
+        self.crossed_at.date_naive()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrainSessionCrossingRowV1 {
+    pub session_id: SessionId,
+    pub crossing_id: CrossingId,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub crossed_at: DateTime<Utc>,
+    pub distance_m: f64,
+    pub samples_within: u32,
+    pub match_radius_m: f64,
+}
+
+impl Row for TrainSessionCrossingRowV1 {
+    type Layer = layers::Silver;
+    const DATASET: DatasetSpec<Self::Layer> = TRAIN_SESSION_CROSSING_V1;
+    const INSTANTS: &'static [&'static str] = &["crossed_at"];
+
+    fn example() -> Self {
+        let session = TrainSessionRowV3::example();
+        Self {
+            session_id: session.session_id,
+            crossing_id: WaterCrossingRowV2::example().crossing_id,
+            crossed_at: session.started_at,
+            distance_m: 0.0,
+            samples_within: 1,
+            match_radius_m: 250.0,
+        }
+    }
+}
+
+impl Dated for TrainSessionCrossingRowV1 {
     fn partition_date(&self) -> NaiveDate {
         self.crossed_at.date_naive()
     }
