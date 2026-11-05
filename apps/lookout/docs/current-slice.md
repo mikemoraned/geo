@@ -188,8 +188,13 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   notification's score from 1 to 0.05, though a rider can barely tell 4:58 from 5:04.
 - **One state machine, the tracker, lives in `predictor`.** A predictor judges which state each
   crossing it reports belongs in. The tracker turns those judgements into transitions, applying the
-  legal transitions and the debouncing. The oracle, CrowFlies, and LightCone therefore share one set
-  of transition rules. This beats a state machine per predictor, whose rules can drift apart.
+  legal transitions. The oracle, CrowFlies, and LightCone therefore share one set of transition
+  rules. This beats a state machine per predictor, whose rules can drift apart.
+- **A predictor debounces its own judgements.** The predictor knows how it predicts, so it knows
+  which debouncing suits it, and a predictor can need none. The tracker applies each judgement as
+  it arrives. This beats debouncing in the tracker, which imposes one rule on every predictor.
+  Debouncing waits until after LightCone, as an optional experiment. Changed on 2026-11-05, when
+  the tracker was built: the tracker held the debouncing until then.
 - **Each state is a type, so an illegal transition does not compile.** `CandidatePass`,
   `PredictedPass`, and `ActualPass` are types, and `OutOfReach` is a crossing the tracker holds
   nothing for. A transition is a method that consumes one state and returns the next. `ActualPass`
@@ -457,7 +462,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 
 - [x] Add a type per state to `predictor`, a consuming method per legal transition, and
       `CrossingState` over the types.
-- [ ] Add `Tracker` to `predictor`, holding each crossing's `CrossingState` and recording each
+- [x] Add `Tracker` to `predictor`, holding each crossing's `CrossingState` and recording each
       `Transition`, tested on constructed judgements.
 - [ ] Create the `evaluation` crate with the step `select`, which picks `TrainSessionRowV3`s at
       random under a seed.
@@ -498,7 +503,7 @@ tracker meets that can be wrong.
 - [ ] Have `CrowFlies` judge each crossing: `CandidatePass` within its radius, `PredictedPass` while
       it arrives within N, `ActualPass` within a pass radius.
 - [ ] Run CrowFlies over the oracle's sessions and seed with `just evaluate`.
-- [ ] Sweep the radius, the pass radius, and the debouncing. Choose CrowFlies' settings from recall
+- [ ] Sweep the radius and the pass radius. Choose CrowFlies' settings from recall
       plotted against false alarms per hour.
 - [ ] Draw CrowFlies' false alarms and misses on a map in a new `explore4.py` with the user, and one
       session's transitions over time.
@@ -520,14 +525,23 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 - [ ] Run both predictors over every session the filter keeps. If their intervals still overlap,
       widen the filter to every session.
 
-#### Phase 5: states in the apps
+#### Phase 5: debouncing, an optional experiment
+
+A run shows whether debouncing a predictor's judgements improves its precision and recall. The apps
+can take a predictor without it, so this phase can be skipped.
+
+- [ ] Debounce `LightCone`'s judgements and `CrowFlies`', each as a setting of its predictor.
+- [ ] Run each predictor with and without its debouncing, over the same sessions and seed, and
+      compare precision, recall, and false alarms per hour.
+
+#### Phase 6: states in the apps
 
 The apps come last, since they show the states of the predictor a person chooses from the runs.
 
 - [ ] Write the skill `choose-predictor` in the repo's `.claude/skills/`, which reports the runs
       in gold as a dated doc in `docs/`.
 - [ ] Choose the apps' predictor and settings with the user, through `/choose-predictor` over the
-      runs of Phase 4.
+      runs of Phases 4 and 5.
 - [ ] Hold the `Tracker` in `platform-core`'s model, around the chosen predictor and settings, and
       expose each crossing's state.
 - [ ] Carry each crossing's state in `web-core`'s `Predicted`, and draw one shape per state in
