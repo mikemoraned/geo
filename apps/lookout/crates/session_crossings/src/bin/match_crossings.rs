@@ -27,9 +27,9 @@ async fn main() {
     let args = Args::parse();
     let root = args.medallion.root().expect("locate the medallion store");
 
-    let outcome = silver::derive(&root, args.match_radius_m)
+    let outcome = silver::derive_device(&root, args.match_radius_m)
         .await
-        .expect("derive the crossings each session passed");
+        .expect("derive the crossings each device session passed");
 
     tracing::info!(
         sessions = outcome.sessions,
@@ -40,7 +40,23 @@ async fn main() {
         partitions_removed = outcome.partitions.removed,
         match_radius_m = args.match_radius_m.as_metres(),
         medallion_root = %root.path().display(),
-        "derived the crossings each session passed"
+        "derived the crossings each device session passed"
+    );
+
+    let outcome = silver::derive_train(&root, args.match_radius_m)
+        .await
+        .expect("derive the crossings each train session passed");
+
+    tracing::info!(
+        sessions = outcome.sessions,
+        crossings = outcome.crossings,
+        sessions_matched = outcome.sessions_matched,
+        passes = outcome.passes,
+        partitions = outcome.partitions.written,
+        partitions_removed = outcome.partitions.removed,
+        match_radius_m = args.match_radius_m.as_metres(),
+        medallion_root = %root.path().display(),
+        "derived the crossings each train session passed"
     );
 }
 
