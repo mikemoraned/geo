@@ -2,12 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use domain::{DeviceId, Pass, Radius, SessionId};
+use futures::StreamExt;
 use geo_types::Point;
 use medallion::{COUNTRY, Country, DatasetSpec, Query, Replaced, Root, layers};
 use medallion_model::{SessionCrossingRowV3, TrainSessionCrossingRowV1, WaterCrossingRowV2};
 use serde::Deserialize;
 
-use crate::matching::{Crossing, NoPass, Sample, Session, passes};
+use crate::matching::{Crossing, CrossingIndex, Matcher, NoPass, Sample, Session};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MatchOutcome {
@@ -32,21 +33,35 @@ pub enum CrossingError {
     Path(#[from] medallion::PathError),
     #[error("matching sessions to crossings: {0}")]
     Matching(#[from] NoPass),
+    #[error("counting the sessions: {0}")]
+    Count(#[from] std::num::TryFromIntError),
 }
 
 #[derive(Debug, Deserialize)]
-struct StoredSession {
+struct RankedSample {
     session_id: SessionId,
-    samples: Option<Vec<StoredSample>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct StoredSample {
+    rank: u64,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     t: DateTime<Utc>,
     x: f64,
     y: f64,
 }
+
+impl RankedSample {
+    fn sample(&self) -> Sample {
+        Sample {
+            t: self.t,
+            projected: Point::new(self.x, self.y),
+        }
+    }
+}
+
+const RANKED_SAMPLES: &str = "SELECT session_id,
+        ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY t) AS rank,
+        t,
+        ST_X(geometry_projected) AS x,
+        ST_Y(geometry_projected) AS y
+    FROM samples";
 
 #[derive(Debug, Deserialize)]
 struct StoredDevice {
@@ -208,16 +223,27 @@ async fn matched_in(
     country: Country,
     radius: Radius,
 ) -> Result<(MatchOutcome, Vec<Pass>), CrossingError> {
-    let Inputs {
-        sessions,
-        crossings,
-    } = inputs_of(root, kind, country).await?;
-    let matched = passes(&sessions, &crossings, radius)?;
+    let query = registered(root, kind, country).await?;
+    let index = CrossingIndex::new(crossings_in(&query).await?);
+    let sessions = usize::try_from(
+        query
+            .count("SELECT COUNT(*) AS count FROM sessions")
+            .await?,
+    )?;
+
+    let mut matcher = Matcher::new(&index, radius);
+    let mut batches = query.row_batches::<RankedSample>(RANKED_SAMPLES).await?;
+    while let Some(batch) = batches.next().await {
+        for ranked in batch? {
+            matcher.observe(&ranked.session_id, ranked.rank, &ranked.sample());
+        }
+    }
+    let matched = matcher.passes()?;
 
     Ok((
         MatchOutcome {
-            sessions: sessions.len(),
-            crossings: crossings.len(),
+            sessions,
+            crossings: index.crossings().len(),
             sessions_matched: matched
                 .iter()
                 .map(|pass| &pass.session_id)
@@ -236,10 +262,23 @@ pub struct Inputs {
 }
 
 pub async fn inputs(root: &Root, country: Country) -> Result<Inputs, CrossingError> {
-    inputs_of(root, DEVICES, country).await
+    let query = registered(root, DEVICES, country).await?;
+    let ranked: Vec<RankedSample> = query
+        .rows(&format!("{RANKED_SAMPLES} ORDER BY session_id, rank"))
+        .await?;
+    Ok(Inputs {
+        sessions: ranked
+            .chunk_by(|a, b| a.session_id == b.session_id)
+            .map(|samples| Session {
+                session_id: samples[0].session_id.clone(),
+                samples: samples.iter().map(RankedSample::sample).collect(),
+            })
+            .collect(),
+        crossings: crossings_in(&query).await?,
+    })
 }
 
-async fn inputs_of(root: &Root, kind: Sessions, country: Country) -> Result<Inputs, CrossingError> {
+async fn registered(root: &Root, kind: Sessions, country: Country) -> Result<Query, CrossingError> {
     let query = Query::new(root.clone());
     query
         .register_of_country(kind.sessions, "sessions", country)
@@ -254,51 +293,7 @@ async fn inputs_of(root: &Root, kind: Sessions, country: Country) -> Result<Inpu
             country,
         )
         .await?;
-    Ok(Inputs {
-        sessions: stored_sessions_in(&query)
-            .await?
-            .into_iter()
-            .map(session)
-            .collect(),
-        crossings: crossings_in(&query).await?,
-    })
-}
-
-async fn stored_sessions_in(query: &Query) -> Result<Vec<StoredSession>, CrossingError> {
-    Ok(query
-        .rows(
-            "SELECT s.session_id, p.samples
-             FROM sessions s
-             LEFT JOIN (
-                 SELECT session_id,
-                        array_agg(
-                            named_struct(
-                                't', t,
-                                'x', ST_X(geometry_projected),
-                                'y', ST_Y(geometry_projected)
-                            )
-                            ORDER BY t
-                        ) AS samples
-                 FROM samples
-                 GROUP BY session_id
-             ) p ON s.session_id = p.session_id",
-        )
-        .await?)
-}
-
-fn session(stored: StoredSession) -> Session {
-    Session {
-        session_id: stored.session_id,
-        samples: stored
-            .samples
-            .unwrap_or_default()
-            .into_iter()
-            .map(|sample| Sample {
-                t: sample.t,
-                projected: Point::new(sample.x, sample.y),
-            })
-            .collect(),
-    }
+    Ok(query)
 }
 
 async fn crossings_in(query: &Query) -> Result<Vec<Crossing>, CrossingError> {

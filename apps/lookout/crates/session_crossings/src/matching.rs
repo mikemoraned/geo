@@ -2,8 +2,9 @@ use std::num::NonZeroU32;
 
 use chrono::{DateTime, Utc};
 use domain::{CrossingId, Pass, Radius, SessionId, TooManySamples};
-use geo::{BoundingRect, Distance, Euclidean};
-use geo_types::{MultiPoint, Point};
+use geo_types::Point;
+use rstar::primitives::GeomWithData;
+use rstar::{PointDistance, RTree};
 
 pub const DEFAULT_RADIUS: Radius =
     Radius::metres(NonZeroU32::new(250).expect("two hundred and fifty is not zero"));
@@ -34,20 +35,101 @@ pub enum NoPass {
     TooManySamples(#[from] TooManySamples),
 }
 
+#[derive(Debug)]
+pub struct CrossingIndex {
+    crossings: Vec<Crossing>,
+    tree: RTree<GeomWithData<[f64; 2], usize>>,
+}
+
+impl CrossingIndex {
+    pub fn new(crossings: Vec<Crossing>) -> Self {
+        let tree = RTree::bulk_load(
+            crossings
+                .iter()
+                .enumerate()
+                .map(|(n, crossing)| GeomWithData::new(coordinates(crossing.projected), n))
+                .collect(),
+        );
+        Self { crossings, tree }
+    }
+
+    pub fn crossings(&self) -> &[Crossing] {
+        &self.crossings
+    }
+
+    fn near(&self, sample: &Sample, radius: Radius) -> impl Iterator<Item = (usize, f64)> + '_ {
+        let at = coordinates(sample.projected);
+        self.tree
+            .locate_within_distance(at, squared(radius))
+            .map(move |found| (found.data, found.distance_2(&at).sqrt()))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Hit {
+    session_id: SessionId,
+    crossing: usize,
+    rank: u64,
+    sample: Sample,
+    distance_metres: f64,
+}
+
+#[derive(Debug)]
+pub struct Matcher<'a> {
+    index: &'a CrossingIndex,
+    radius: Radius,
+    hits: Vec<Hit>,
+}
+
+impl<'a> Matcher<'a> {
+    pub fn new(index: &'a CrossingIndex, radius: Radius) -> Self {
+        Self {
+            index,
+            radius,
+            hits: Vec::new(),
+        }
+    }
+
+    pub fn observe(&mut self, session_id: &SessionId, rank: u64, sample: &Sample) {
+        let index = self.index;
+        self.hits.extend(
+            index
+                .near(sample, self.radius)
+                .map(|(crossing, distance_metres)| Hit {
+                    session_id: session_id.clone(),
+                    crossing,
+                    rank,
+                    sample: *sample,
+                    distance_metres,
+                }),
+        );
+    }
+
+    pub fn passes(mut self) -> Result<Vec<Pass>, NoPass> {
+        self.hits.sort_by(|a, b| {
+            (&a.session_id, a.crossing, a.rank).cmp(&(&b.session_id, b.crossing, b.rank))
+        });
+        let mut passed = visits(&self.hits)
+            .map(|visit| pass_of(&self.index.crossings[visit[0].crossing], visit))
+            .collect::<Result<Vec<_>, _>>()?;
+        passed.sort_by(|a, b| (a.crossed_at, &a.crossing_id).cmp(&(b.crossed_at, &b.crossing_id)));
+        Ok(passed)
+    }
+}
+
 pub fn passes(
     sessions: &[Session],
     crossings: &[Crossing],
     radius: Radius,
 ) -> Result<Vec<Pass>, NoPass> {
-    let mut passed: Vec<Pass> = sessions
-        .iter()
-        .map(|session| passes_of(session, crossings, radius))
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .collect();
-    passed.sort_by(|a, b| (a.crossed_at, &a.crossing_id).cmp(&(b.crossed_at, &b.crossing_id)));
-    Ok(passed)
+    let index = CrossingIndex::new(crossings.to_vec());
+    let mut matcher = Matcher::new(&index, radius);
+    for session in sessions {
+        for (rank, sample) in (0..).zip(&session.samples) {
+            matcher.observe(&session.session_id, rank, sample);
+        }
+    }
+    matcher.passes()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -69,55 +151,45 @@ pub fn steps(
     crossing: &Crossing,
     radius: Radius,
 ) -> Result<Steps, NoPass> {
-    let measured: Vec<(Sample, f64)> = samples
-        .iter()
-        .map(|sample| (*sample, distance(sample, crossing)))
-        .collect();
-    let nearby = |(_, distance_metres): &(Sample, f64)| *distance_metres <= radius.as_metres();
-    let visits: Vec<Vec<Near>> = measured
-        .chunk_by(|a, b| nearby(a) == nearby(b))
-        .filter(|run| nearby(&run[0]))
-        .enumerate()
-        .map(|(visit, run)| {
-            run.iter()
-                .map(|&(sample, distance_metres)| Near {
-                    sample,
-                    distance_metres,
-                    visit,
-                })
-                .collect()
+    let hits: Vec<Hit> = (0..)
+        .zip(samples)
+        .filter_map(|(rank, sample)| {
+            within(sample, crossing, radius).map(|distance_metres| Hit {
+                session_id: session_id.clone(),
+                crossing: 0,
+                rank,
+                sample: *sample,
+                distance_metres,
+            })
         })
         .collect();
-    let passes = visits
-        .iter()
-        .map(|visit| pass_of(session_id, crossing, visit))
-        .collect::<Result<_, _>>()?;
+    let visits: Vec<&[Hit]> = visits(&hits).collect();
     Ok(Steps {
-        near: visits.into_iter().flatten().collect(),
-        passes,
+        near: visits
+            .iter()
+            .enumerate()
+            .flat_map(|(visit, hits)| {
+                hits.iter().map(move |hit| Near {
+                    sample: hit.sample,
+                    distance_metres: hit.distance_metres,
+                    visit,
+                })
+            })
+            .collect(),
+        passes: visits
+            .iter()
+            .map(|visit| pass_of(crossing, visit))
+            .collect::<Result<_, _>>()?,
     })
 }
 
-fn passes_of(
-    session: &Session,
-    crossings: &[Crossing],
-    radius: Radius,
-) -> Result<Vec<Pass>, NoPass> {
-    let Some(extent) = MultiPoint::from_iter(session.samples.iter().map(|sample| sample.projected))
-        .bounding_rect()
-    else {
-        return Ok(Vec::new());
-    };
-    let extent = extent.to_polygon();
-    let passed = crossings
-        .iter()
-        .filter(|crossing| Euclidean.distance(&extent, &crossing.projected) <= radius.as_metres())
-        .map(|crossing| steps(&session.session_id, &session.samples, crossing, radius))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(passed.into_iter().flat_map(|steps| steps.passes).collect())
+fn visits(hits: &[Hit]) -> impl Iterator<Item = &[Hit]> {
+    hits.chunk_by(|a, b| {
+        a.session_id == b.session_id && a.crossing == b.crossing && b.rank == a.rank + 1
+    })
 }
 
-fn pass_of(session_id: &SessionId, crossing: &Crossing, visit: &[Near]) -> Result<Pass, NoPass> {
+fn pass_of(crossing: &Crossing, visit: &[Hit]) -> Result<Pass, NoPass> {
     let nearest = visit
         .iter()
         .min_by(|a, b| a.distance_metres.total_cmp(&b.distance_metres))
@@ -126,7 +198,7 @@ fn pass_of(session_id: &SessionId, crossing: &Crossing, visit: &[Near]) -> Resul
         })?;
 
     Ok(Pass::new(
-        session_id.clone(),
+        nearest.session_id.clone(),
         crossing.crossing.id.clone(),
         nearest.sample.t,
         nearest.distance_metres,
@@ -134,8 +206,17 @@ fn pass_of(session_id: &SessionId, crossing: &Crossing, visit: &[Near]) -> Resul
     )?)
 }
 
-fn distance(sample: &Sample, crossing: &Crossing) -> f64 {
-    Euclidean.distance(sample.projected, crossing.projected)
+fn within(sample: &Sample, crossing: &Crossing, radius: Radius) -> Option<f64> {
+    let squared_metres = coordinates(crossing.projected).distance_2(&coordinates(sample.projected));
+    (squared_metres <= squared(radius)).then(|| squared_metres.sqrt())
+}
+
+fn coordinates(point: Point<f64>) -> [f64; 2] {
+    [point.x(), point.y()]
+}
+
+fn squared(radius: Radius) -> f64 {
+    radius.as_metres().powi(2)
 }
 
 #[cfg(test)]
@@ -143,6 +224,7 @@ mod tests {
     use chrono::TimeZone;
 
     use domain::places::BERLIN;
+    use proptest::prelude::*;
 
     use super::*;
 
@@ -365,5 +447,81 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["early", "late"]
         );
+    }
+
+    fn placed(id: &str, x: f64, y: f64) -> Crossing {
+        Crossing {
+            crossing: domain::Crossing::at(
+                domain::CrossingId::new(id).expect("a name"),
+                BERLIN.y(),
+                BERLIN.x(),
+            )
+            .expect("on the globe"),
+            projected: Point::new(BERLIN_METRES.0 + x, BERLIN_METRES.1 + y),
+        }
+    }
+
+    fn scanned(sessions: &[Session], crossings: &[Crossing], radius: Radius) -> Vec<Pass> {
+        sessions
+            .iter()
+            .flat_map(|session| {
+                crossings.iter().flat_map(|crossing| {
+                    steps(&session.session_id, &session.samples, crossing, radius)
+                        .expect("steps")
+                        .passes
+                })
+            })
+            .collect()
+    }
+
+    fn ordered(mut passes: Vec<Pass>) -> Vec<Pass> {
+        passes.sort_by(|a, b| {
+            (&a.session_id, &a.crossing_id, a.crossed_at).cmp(&(
+                &b.session_id,
+                &b.crossing_id,
+                b.crossed_at,
+            ))
+        });
+        passes
+    }
+
+    proptest! {
+        #[test]
+        fn the_index_finds_the_passes_a_scan_of_every_sample_finds(
+            walks in proptest::collection::vec(
+                proptest::collection::vec((0.0..2_000.0f64, 0.0..2_000.0f64), 0..40),
+                1..4,
+            ),
+            places in proptest::collection::vec((0.0..2_000.0f64, 0.0..2_000.0f64), 1..12),
+            metres in 10.0..500.0f64,
+        ) {
+            let sessions: Vec<Session> = walks
+                .iter()
+                .enumerate()
+                .map(|(n, walk)| Session {
+                    session_id: SessionId::new(format!("session-{n}")).expect("an id"),
+                    samples: (0..)
+                        .zip(walk)
+                        .map(|(minute, (x, y))| Sample {
+                            t: at(minute),
+                            projected: Point::new(BERLIN_METRES.0 + x, BERLIN_METRES.1 + y),
+                        })
+                        .collect(),
+                })
+                .collect();
+            let crossings: Vec<Crossing> = places
+                .iter()
+                .enumerate()
+                .map(|(n, (x, y))| placed(&format!("crossing-{n}"), *x, *y))
+                .collect();
+
+            let passed = passes(&sessions, &crossings, radius(metres)).expect("passes");
+
+            prop_assert!(passed.iter().all(|pass| pass.distance_metres <= metres));
+            prop_assert_eq!(
+                ordered(passed),
+                ordered(scanned(&sessions, &crossings, radius(metres)))
+            );
+        }
     }
 }
