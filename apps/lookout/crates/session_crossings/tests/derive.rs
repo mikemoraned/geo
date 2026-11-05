@@ -385,24 +385,30 @@ async fn store_with_a_train_session(root: &Root, samples: usize) {
 }
 
 async fn store_with_a_train_session_along(root: &Root, steps: &[f64], seqs: &[u32]) {
-    let points: Vec<Point<f64>> = steps
+    let timed: Vec<(u32, f64)> = (0..).zip(steps.iter().copied()).collect();
+    store_with_a_train_session_timed(root, &timed, seqs).await;
+}
+
+async fn store_with_a_train_session_timed(root: &Root, timed: &[(u32, f64)], seqs: &[u32]) {
+    let points: Vec<Point<f64>> = timed
         .iter()
-        .map(|step| Point::new(east_of_berlin(step * SAMPLE_SPACING_M), BERLIN.y()))
+        .map(|(_, step)| Point::new(east_of_berlin(step * SAMPLE_SPACING_M), BERLIN.y()))
         .collect();
+    let minutes = timed.iter().map(|(minute, _)| *minute);
     let session = TrainSessionRowV3 {
-        started_at: at(0),
-        ended_at: at(steps.len() as u32 - 1),
-        sample_count: steps.len() as u32,
+        started_at: at(minutes.clone().min().expect("a sample")),
+        ended_at: at(minutes.max().expect("a sample")),
+        sample_count: timed.len() as u32,
         ..TrainSessionRowV3::example()
     };
-    let sample_rows: Vec<GeographyRow<TrainSessionSampleRowV3, Point<f64>>> = points
+    let sample_rows: Vec<GeographyRow<TrainSessionSampleRowV3, Point<f64>>> = timed
         .iter()
+        .zip(&points)
         .zip(seqs)
-        .enumerate()
-        .map(|(minute, (point, seq))| GeographyRow {
+        .map(|(((minute, _), point), seq)| GeographyRow {
             row: TrainSessionSampleRowV3 {
                 session_id: session.session_id.clone(),
-                t: at(minute as u32),
+                t: at(*minute),
                 seq: *seq,
                 lat: point.y(),
                 lon: point.x(),
@@ -554,5 +560,28 @@ async fn a_trains_samples_are_ordered_by_their_times_whatever_their_seq() {
             .map(|pass| pass.crossed_at)
             .collect::<Vec<_>>(),
         [at(1), at(3)]
+    );
+}
+
+#[tokio::test]
+async fn samples_at_the_same_time_are_ordered_by_where_they_are() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = Root::new(tmp.path());
+    let near_written_before_far = [(0, 1.0), (1, 1.0), (1, 0.0), (2, 1.0)];
+    store_with_a_train_session_timed(&root, &near_written_before_far, &[0, 1, 2, 3]).await;
+    store_with_crossings(&root, &[SAMPLE_SPACING_M + 60.0]).await;
+
+    session_crossings::silver::derive_train(&root, DEFAULT_RADIUS)
+        .await
+        .expect("derive");
+
+    let passes = train_passes_in(&root).await;
+    assert_eq!(
+        passes
+            .iter()
+            .map(|pass| (pass.crossed_at, pass.samples_within))
+            .collect::<Vec<_>>(),
+        [(at(0), 1), (at(1), 2)],
+        "the sample further west ranks first, so it splits the visits"
     );
 }

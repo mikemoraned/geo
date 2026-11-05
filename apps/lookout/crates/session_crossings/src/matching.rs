@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::num::NonZeroU32;
 
 use chrono::{DateTime, Utc};
@@ -19,6 +20,20 @@ pub struct Session {
 pub struct Sample {
     pub t: DateTime<Utc>,
     pub projected: Point<f64>,
+}
+
+impl Sample {
+    pub const SESSION_ORDER_SQL: &'static str = "OVER (
+        PARTITION BY session_id
+        ORDER BY t, ST_X(geometry_projected), ST_Y(geometry_projected)
+    )";
+
+    pub fn session_order(&self, other: &Self) -> Ordering {
+        self.t
+            .cmp(&other.t)
+            .then(self.projected.x().total_cmp(&other.projected.x()))
+            .then(self.projected.y().total_cmp(&other.projected.y()))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -263,6 +278,38 @@ mod tests {
             .expect("on the globe"),
             projected: Point::new(BERLIN_METRES.0 + east, BERLIN_METRES.1),
         }
+    }
+
+    #[test]
+    fn samples_in_a_session_are_ordered_by_time_and_then_by_place() {
+        let mut samples = [
+            sample(1, 20.0),
+            Sample {
+                projected: Point::new(BERLIN_METRES.0, BERLIN_METRES.1 + 5.0),
+                ..sample(0, 0.0)
+            },
+            sample(1, 10.0),
+            sample(0, 0.0),
+        ];
+
+        samples.sort_by(Sample::session_order);
+
+        assert_eq!(
+            samples
+                .iter()
+                .map(|sample| (
+                    sample.t,
+                    sample.projected.x() - BERLIN_METRES.0,
+                    sample.projected.y() - BERLIN_METRES.1
+                ))
+                .collect::<Vec<_>>(),
+            [
+                (at(0), 0.0, 0.0),
+                (at(0), 0.0, 5.0),
+                (at(1), 10.0, 0.0),
+                (at(1), 20.0, 0.0)
+            ]
+        );
     }
 
     #[test]
