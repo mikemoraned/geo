@@ -286,9 +286,9 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   estimate.
 - **Interpolating each pass's instant along the path**, as
   [the research](2026-08-01-evaluation.md#ground-truth) proposes. Deferred:
-  `train_session_crossing_v1` takes the nearest sample, as `session_crossing_v3` does. It comes back
-  once samples prove to lie more than twice the match radius apart, where a pass between two goes
-  unmatched.
+  `train_session_crossing_v1` takes the nearest sample, as `session_crossing_v3` does. Samples lie
+  more than twice the match radius apart in 0.18% of steps, which loses about 0.1% of passes, an
+  acceptable share. It comes back once a run's scores trace to a pass lost that way.
 - **Rerun as the viewer of a run.** Deferred, since the notebook draws a session's transitions over
   time. It comes back once watching one replay at speed is wanted.
 - **A state machine crate.** Rejected. `statig` and `rust-fsm` check each transition as it runs,
@@ -367,6 +367,22 @@ What measuring the matching of train sessions to crossings established, on 2026-
 - **Ranking the samples by time costs 6.3 GB.** `ROW_NUMBER() OVER (PARTITION BY session_id ORDER
   BY t)` over every train sample takes 5.6 s, and its sort holds every row at once.
 
+What `notebooks/evaluation/explore2_spacing.py` established about the spacing of samples, on
+2026-11-05, over the 34,521 sessions with `realtime_percentage` ≥ 90 and their 11,069,925 samples.
+
+- **Each step spans 10 s and a median of 188 m.** The 99th percentile is 408 m, and the longest step
+  is 998 m, just under the cleaning rule's 100 m/s.
+- **0.18% of steps exceed twice the radius.** They fall in 362 sessions, on fast lines. 0.055% of
+  the distance travelled lies more than the radius from every sample.
+- **The paths come within the radius of a crossing 439,004 times, and 2,001 record no pass.** A path
+  here is the line through a session's samples in order.
+- **489 misses lie on the train's own track, and the spacing causes each.** Each lies within 50 m
+  of its path, beside a step longer than twice the radius. They are about 0.1% of the 437,003
+  pairs of a session and a crossing passed.
+- **1,334 misses lie beside the track.** Each lies 200–250 m from its path, mostly beside a step
+  shorter than twice the radius. The line between two samples comes within the radius where no
+  sample does, so these are mostly not passes of the train.
+
 ### Observations
 
 - **The re-derive drops what `explore2.py` excluded, session for session** (2026-11-05).
@@ -429,8 +445,10 @@ The evaluation replays these datasets, and their counts show whether the filter,
 - [x] Rank samples with equal `t` by a property of the data, so that every run ranks them alike.
       They rank by easting and then by northing. Neither sample dataset holds two samples of one
       session at the same `t` today.
-- [ ] Measure in `explore2.py` the spacing of samples in the sessions the filter keeps, against the
-      250 m match radius.
+- [x] Measure in `explore2.py` the spacing of samples in the sessions the filter keeps, against the
+      250 m match radius. Measured in `explore2_spacing.py` instead, since the cells of
+      `explore2.py` that read v2 no longer run. The spacing loses about 0.1% of passes, which is
+      acceptable, so interpolating a pass along the path stays deferred.
 
 #### Phase 2: the skeleton, run with the oracle
 
