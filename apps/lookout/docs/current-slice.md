@@ -455,7 +455,7 @@ The evaluation replays these datasets, and their counts show whether the filter,
 The oracle's score is known before it runs: perfect, short of what the data or the rules forbid. A
 run of it tests every new part, from the tracker to gold, before a real predictor sits behind them.
 
-- [ ] Add a type per state to `predictor`, a consuming method per legal transition, and
+- [x] Add a type per state to `predictor`, a consuming method per legal transition, and
       `CrossingState` over the types.
 - [ ] Add `Tracker` to `predictor`, holding each crossing's `CrossingState` and recording each
       `Transition`, tested on constructed judgements.
