@@ -3076,6 +3076,7 @@ name = "evaluation"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "crossings",
  "datafusion",
  "domain",
  "geo 0.32.0",
