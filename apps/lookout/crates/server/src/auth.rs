@@ -111,7 +111,11 @@ impl RelyingParty {
         let Some(id) = session.get::<CredentialID>(SIGNED_IN_PASSKEY).await? else {
             return Ok(None);
         };
-        Ok(self.store.find_allowed(&id).await?)
+        self.allowed(&id).await
+    }
+
+    pub async fn allowed(&self, id: &CredentialID) -> Result<Option<AllowedPasskey>, AuthError> {
+        Ok(self.store.find_allowed(id).await?)
     }
 
     pub fn serves(&self, origin: Option<&HeaderValue>) -> bool {

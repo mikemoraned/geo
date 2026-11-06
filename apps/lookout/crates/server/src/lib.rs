@@ -6,18 +6,20 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::State;
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade, close_code};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::middleware;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
 use shared::Message as TelemetryMessage;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use telemetry::RawSample;
+use tokio::time::{Instant, interval_at};
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tower_sessions::Session;
+use webauthn_rs::prelude::CredentialID;
 
 use crate::auth::{AuthError, RelyingParty};
 use crate::queue::SampleSink;
@@ -69,27 +71,60 @@ async fn ws_upgrade(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
     Ok(match state.relying_party.signed_in(&session).await? {
-        Some(_) => upgrade.on_upgrade(move |socket| handle_socket(socket, state)),
+        Some(allowed) => {
+            let passkey = allowed.passkey.cred_id().clone();
+            upgrade.on_upgrade(move |socket| handle_socket(socket, state, passkey))
+        }
         None => StatusCode::UNAUTHORIZED.into_response(),
     })
 }
 
-async fn handle_socket(mut socket: WebSocket, state: AppState) {
+async fn handle_socket(mut socket: WebSocket, state: AppState, passkey: CredentialID) {
     tracing::info!("websocket connected");
-    while let Some(Ok(msg)) = socket.recv().await {
-        match msg {
-            Message::Text(text) => {
-                if let Ingest::Accepted = handle_sample(&state, &text).await
-                    && socket.send(Message::Text(ACK.into())).await.is_err()
-                {
+    let mut recheck = interval_at(Instant::now() + PASSKEY_RECHECK, PASSKEY_RECHECK);
+    loop {
+        tokio::select! {
+            received = socket.recv() => match received {
+                Some(Ok(Message::Text(text))) => {
+                    if let Ingest::Accepted = handle_sample(&state, &text).await
+                        && socket.send(Message::Text(ACK.into())).await.is_err()
+                    {
+                        break;
+                    }
+                }
+                Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
+                Some(Ok(_)) => {}
+            },
+            _ = recheck.tick() => {
+                if let Some(frame) = closing(&state.relying_party, &passkey).await {
+                    let _ = socket.send(Message::Close(Some(frame))).await;
                     break;
                 }
             }
-            Message::Close(_) => break,
-            _ => {}
         }
     }
     tracing::info!("websocket disconnected");
+}
+
+const PASSKEY_RECHECK: Duration = Duration::from_secs(60);
+const REVOKED: &str = "the passkey is no longer allowed";
+const UNCHECKED: &str = "the passkey could not be rechecked";
+
+async fn closing(relying_party: &RelyingParty, passkey: &CredentialID) -> Option<CloseFrame> {
+    match relying_party.allowed(passkey).await {
+        Ok(Some(_)) => None,
+        Ok(None) => Some(CloseFrame {
+            code: close_code::POLICY,
+            reason: REVOKED.into(),
+        }),
+        Err(err) => {
+            tracing::error!(%err, "closing a socket whose passkey could not be rechecked");
+            Some(CloseFrame {
+                code: close_code::ERROR,
+                reason: UNCHECKED.into(),
+            })
+        }
+    }
 }
 
 const ACK: &str = "ack";
