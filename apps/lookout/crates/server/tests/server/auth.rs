@@ -876,6 +876,24 @@ async fn a_signed_in_session_reaches_the_record_page() {
 }
 
 #[tokio::test]
+async fn a_browser_asks_the_server_before_reusing_the_record_page() {
+    let server = Server::hosted(Allowing::ByAdmin);
+    let (_, cookie) = signed_in_with_code(&server).await;
+
+    for path in RECORD_PATHS {
+        let reply = get(&server.app, path, Some(&cookie)).await;
+        assert_eq!(
+            reply
+                .headers
+                .get(header::CACHE_CONTROL)
+                .map(|value| value.as_bytes()),
+            Some(&b"private, no-cache"[..]),
+            "{path}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn revoking_a_passkey_sends_only_its_session_to_sign_in() {
     let server = Server::hosted(Allowing::ByAdmin);
     let (revoked, shut_out) = signed_in_with_code(&server).await;

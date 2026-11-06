@@ -301,7 +301,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 - [x] Add `crates/server/src/bin/passkeys.rs`, with clap subcommands `list`,
       `allow <code> [--label <name>]`, and `revoke <code>`.
 - [x] Add `just passkeys *args`, with the redis URL from 1Password.
-- [ ] Send `Cache-Control: private, no-cache` with every response the `/record/` gate lets
+- [x] Send `Cache-Control: private, no-cache` with every response the `/record/` gate lets
       through, tested on each `/record` path. Without it, Chrome showed a cached `/record/` to a
       signed-out browser until a force-refresh, since a response without `Cache-Control` is
       reused without asking the server.
