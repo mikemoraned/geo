@@ -172,7 +172,8 @@ geometry columns back with their CRS, so a caller expresses what it wants as a q
 as file traversal.
 
 A read in Rust can name a row type instead of a table. `Query::read_of_country` returns a `Read` of
-that type over one country's partition. Its `filter`, `sort`, and `limit` take the engine's own
+that type over one country's partition. `Query::read` returns one over a whole dataset that has no
+country level. Each refuses a dataset laid out the other way. A `Read`'s `filter`, `sort`, and `limit` take the engine's own
 expressions, and `rows` returns rows of the type, reading only its columns. The engine plans and
 runs these operators as it does a SQL query. [What a read
 costs](../../docs/medallion.md#what-a-read-costs) sets out what that saves.

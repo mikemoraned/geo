@@ -19,7 +19,7 @@ use crate::layer::{LayerKind, layers};
 use crate::partition::Partition;
 use crate::path::{Dataset, Root, any_file_under};
 use crate::read::Read;
-use crate::rows::{Row, RowError};
+use crate::rows::{Geometry, Row, RowError};
 use crate::table::{Layout, SilverTarget};
 
 #[derive(Debug, thiserror::Error)]
@@ -55,6 +55,10 @@ pub enum QueryError {
     CountryNeeded { dataset: &'static str },
     #[error("{dataset} holds no country level, so a read of it names no country")]
     NoCountryLevel { dataset: &'static str },
+}
+
+fn has_country_level<T: Row>() -> bool {
+    T::DATASET.partition_key == Some(COUNTRY) || matches!(T::GEOMETRY, Geometry::LatLonAndProjected)
 }
 
 pub fn table_references(sql: &str) -> Result<Vec<String>, QueryError> {
@@ -266,7 +270,23 @@ impl Query {
         Ok(())
     }
 
+    pub async fn read<T: Row>(&self) -> Result<Read<T>, QueryError> {
+        if has_country_level::<T>() {
+            return Err(QueryError::CountryNeeded {
+                dataset: T::DATASET.name,
+            });
+        }
+        Ok(Read::new(
+            self.frame_at(&self.root.dataset(T::DATASET)).await?,
+        ))
+    }
+
     pub async fn read_of_country<T: Row>(&self, country: Country) -> Result<Read<T>, QueryError> {
+        if !has_country_level::<T>() {
+            return Err(QueryError::NoCountryLevel {
+                dataset: T::DATASET.name,
+            });
+        }
         let of_country = self.root.dataset(T::DATASET).partition(COUNTRY, country)?;
         Ok(Read::new(self.frame_at(&of_country).await?))
     }
