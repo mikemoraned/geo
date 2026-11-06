@@ -1,7 +1,7 @@
 use axum::Json;
 use axum::extract::State;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use webauthn_rs::prelude::{CreationChallengeResponse, RegisterPublicKeyCredential};
 use webauthn_rs_proto::ResidentKeyRequirement;
 
@@ -12,8 +12,15 @@ use crate::auth::{ACCOUNT, Allowing, AuthError, Finish, RelyingParty, Started, a
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum Registered {
-    Pending { code: ShortCode },
+    Pending {
+        #[serde(serialize_with = "as_shown")]
+        code: ShortCode,
+    },
     Allowed,
+}
+
+fn as_shown<S: Serializer>(code: &ShortCode, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.collect_str(code)
 }
 
 pub async fn start(
@@ -67,5 +74,32 @@ fn require_discoverable(options: &mut CreationChallengeResponse) {
     if let Some(selection) = options.public_key.authenticator_selection.as_mut() {
         selection.resident_key = Some(ResidentKeyRequirement::Required);
         selection.require_resident_key = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn a_pending_registration_sends_its_code_as_shown() {
+        let code = ShortCode::new("K7Q2M9XD").expect("a code");
+
+        let sent = serde_json::to_value(Registered::Pending { code }).expect("json");
+
+        assert_eq!(sent, json!({"status": "pending", "code": "K7Q2-M9XD"}));
+    }
+
+    #[test]
+    fn a_pending_registration_reads_back_its_code() {
+        let code = ShortCode::random();
+        let sent =
+            serde_json::to_string(&Registered::Pending { code: code.clone() }).expect("json");
+
+        let read: Registered = serde_json::from_str(&sent).expect("a registration");
+
+        assert_eq!(read, Registered::Pending { code });
     }
 }

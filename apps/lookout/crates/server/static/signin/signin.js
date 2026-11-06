@@ -1,4 +1,5 @@
 const statusEl = document.getElementById("status");
+const codeEl = document.getElementById("code");
 const buttons = [document.getElementById("signin"), document.getElementById("register")];
 
 class Refusal extends Error {
@@ -10,6 +11,11 @@ class Refusal extends Error {
 
 function show(text) {
   statusEl.textContent = text;
+}
+
+function showCode(code) {
+  codeEl.textContent = code ?? "";
+  codeEl.hidden = code === undefined;
 }
 
 async function post(path, body) {
@@ -40,11 +46,12 @@ async function register() {
   });
   const finished = await post("/auth/register/finish", { ceremony, credential: credential.toJSON() });
   const registered = await finished.json();
-  show(
-    registered.status === "allowed"
-      ? "Registered and allowed. Sign in to continue."
-      : "Registered. The passkey can sign in once the admin allows it.",
-  );
+  if (registered.status === "allowed") {
+    show("Registered and allowed. Sign in to continue.");
+  } else {
+    show("Registered. Give this code to the admin. Once they allow it, this passkey can sign in. The code expires in an hour.");
+    showCode(registered.code);
+  }
 }
 
 function explain(error) {
@@ -61,6 +68,7 @@ function whileWaiting(action) {
   return async () => {
     buttons.forEach((button) => (button.disabled = true));
     show("Waiting for the passkey…");
+    showCode(undefined);
     try {
       await action();
     } catch (error) {
