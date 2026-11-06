@@ -1,8 +1,8 @@
 # server
 
-Serves the site and receives what its pages send. `/ws` takes telemetry, `/auth/` registers
-passkeys and signs them in, `/version` gives the build's git hash, and the static directory serves
-everything else.
+Serves the site and receives what its pages send. `/ws` takes telemetry, `/record/` serves the
+recording page to a signed-in browser, `/auth/` registers passkeys and signs them in, `/version`
+gives the build's git hash, and the static directory serves everything else.
 [The telemetry wire](../../docs/telemetry.md) describes what arrives over the socket and when the
 server acks it; [the browser](../../docs/web.md) describes the pages it serves.
 
@@ -11,6 +11,14 @@ server acks it; [the browser](../../docs/web.md) describes the pages it serves.
 The server serves the static directory as it finds it, so `/live` is `live/index.html` and adding
 a page means adding a directory rather than a route in the binary. It compresses every response,
 which the crossings — 180 KB of coordinates — are the first to need and the rest get for free.
+
+Every static file goes out with `Cache-Control: no-cache`, so a browser [revalidates][no-cache] a
+stored copy with the server before reusing it. A page therefore loads its current script after a
+deploy. A response without `Cache-Control` is [heuristically fresh][heuristic], and a browser
+reuses it without asking.
+
+[no-cache]: https://www.rfc-editor.org/rfc/rfc9111#name-no-cache-2
+[heuristic]: https://www.rfc-editor.org/rfc/rfc9111#name-calculating-heuristic-fresh
 
 ## The queue sits behind a trait, so tests drive the real handler
 
@@ -150,6 +158,82 @@ not the request carries a session.
 [renew]: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#renew-the-session-id-after-any-privilege-level-change
 [host]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#cookie_prefixes
 [always-save]: https://docs.rs/tower-sessions/0.15.0/tower_sessions/service/struct.SessionManagerLayer.html#method.with_always_save
+
+## The gate checks the session's passkey on every request
+
+`/record/` and `/ws` need a signed-in session, and the other pages stay open. A session is signed
+in while the passkey it names is still allowed. The gate reads the credential ID from the session
+and looks it up in the allowed passkeys, so revoking a passkey ends its sessions at their next
+request.
+
+A request for `/record/` without a signed-in session redirects to `/signin/`. A signed-in request
+gets `Cache-Control: private, no-cache` in place of the static files' `no-cache`. [`private`][private]
+keeps the page out of shared caches, and `no-cache` makes a browser ask the server before showing a
+stored copy. A browser that has signed out therefore gets the redirect, not its stored page.
+
+`/ws` checks the `Origin` header before the session. It refuses with 403 an upgrade whose `Origin`
+differs from the server's origin, `LOOKOUT_ORIGIN`. Checking `Origin` is the [standard
+defence][ws-origin] against cross-site websocket hijacking. `SameSite=Strict` already keeps the
+cookie off a cross-site upgrade in current browsers, and the check holds without it. An upgrade
+without a signed-in session gets 401.
+
+An open socket rechecks its session every minute. The upgrade request has finished by then, so the
+recheck loads the session from the store by its ID. If the session has signed out, or its passkey
+has been revoked, the server closes the socket with [1008, policy violation][close-codes]. If the
+recheck fails, the server closes the socket with 1011, internal error, rather than let a recording
+continue unchecked.
+
+`GET /auth/status` answers `{"status": "signed_in"}` or `{"status": "signed_out"}`, by the gate's
+check. A page uses it to tell a signed-out session from a dropped connection.
+
+[private]: https://www.rfc-editor.org/rfc/rfc9111#name-private
+[ws-origin]: https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html#origin-header-validation
+[close-codes]: https://www.rfc-editor.org/rfc/rfc6455#section-7.4.1
+
+## A session in redis expires with its key
+
+tower-sessions handles the cookie and its renewal, and a [`SessionStore`][session-store] holds the
+records. The server has two: tower-sessions' `MemoryStore`, and `RedisSessionStore`, which shares
+the queue's redis connection.
+
+`RedisSessionStore` writes a session as JSON under `lookout-session:<id>`. Each write sets the key
+to expire with the session, through [`SET EXAT`][set], so redis removes a session 30 days after its
+last use without a sweep. Every request that carries a session renews it, so each such request
+writes to redis once.
+
+Creating a session writes with `NX`. If another session holds the ID, the store draws a fresh ID
+and writes again. tower-sessions [leaves a collision][create-session] to each store, which can
+draw again or fail.
+
+[session-store]: https://docs.rs/tower-sessions/0.15.0/tower_sessions/trait.SessionStore.html
+[create-session]: https://docs.rs/tower-sessions/0.15.0/tower_sessions/trait.SessionStore.html#method.create
+
+## The admin allows and revokes passkeys from the command line
+
+The `passkeys` binary lists, allows, and revokes passkeys:
+
+```
+passkeys list
+passkeys allow <code> [--label <name>]
+passkeys revoke <code>
+```
+
+It reads `LOOKOUT_REDIS_URL` and works on redis alone, since no command can reach a server's
+memory. Whoever holds the redis URL can allow a passkey, as they can already push samples onto the
+queue.
+
+`allow` moves the pending passkey with that code into the allowed passkeys. The label tells devices
+apart in the list. `allow` fails for a code that expired or never existed. `list` shows each
+allowed passkey's code, label, when it was allowed, and when it last signed in. `revoke` removes
+the allowed passkey with that code. The gate then refuses its sessions at their next request, and
+an open socket closes within a minute.
+
+An allowed passkey keeps the code it was registered under, and `revoke` takes the code `list`
+shows. The allowed passkeys are keyed by credential ID, so `revoke` reads the whole hash to find
+the code. The hash holds one passkey per device, few enough to read whole.
+
+`just passkeys` runs the binary with the production redis URL from 1Password. `just passkeys-local`
+runs it against the redis that `just local-redis` starts.
 
 ## The store is named at startup
 

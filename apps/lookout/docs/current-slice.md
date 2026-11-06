@@ -331,7 +331,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 
 #### Wrap-up
 
-- [ ] Describe the gate, the session store, and the CLI in `crates/server/README.md`.
+- [x] Describe the gate, the session store, and the CLI in `crates/server/README.md`.
 - [ ] Before `/complete-slice`, record in `crates/server/README.md` every fact about the server
       that only this slice doc holds, with its sources.
 - [ ] Describe signing in, and the signed-out state of `/record/`, in `docs/web.md`.
