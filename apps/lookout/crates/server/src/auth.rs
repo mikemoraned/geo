@@ -12,6 +12,7 @@ mod test_passkeys;
 use std::fmt;
 use std::sync::Arc;
 
+use ::redis::aio::MultiplexedConnection;
 use axum::Router;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -22,6 +23,8 @@ use uuid::Uuid;
 use webauthn_rs::prelude::{Url, Webauthn, WebauthnBuilder, WebauthnError};
 
 use crate::auth::memory::MemoryAuthStore;
+use crate::auth::redis::RedisAuthStore;
+use crate::auth::sessions::redis::RedisSessionStore;
 use crate::auth::sessions::{SharedSessionStore, session_layer};
 use crate::auth::store::{AuthStore, CeremonyId, StoreError};
 
@@ -88,6 +91,18 @@ impl RelyingParty {
             Arc::new(MemoryAuthStore::default()),
             SharedSessionStore::new(MemoryStore::default()),
             allowing,
+        )
+    }
+
+    pub fn over_redis(
+        origin: &Url,
+        conn: MultiplexedConnection,
+    ) -> Result<Self, RelyingPartyError> {
+        Self::new(
+            origin,
+            Arc::new(RedisAuthStore::new(conn.clone())),
+            SharedSessionStore::new(RedisSessionStore::new(conn)),
+            Allowing::ByAdmin,
         )
     }
 

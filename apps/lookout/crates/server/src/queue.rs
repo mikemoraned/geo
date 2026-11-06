@@ -23,9 +23,8 @@ pub struct RedisSink {
 }
 
 impl RedisSink {
-    pub async fn connect(url: &str) -> Result<Self, RedisError> {
-        let conn = telemetry::connect(url).await?;
-        Ok(Self { conn })
+    pub fn new(conn: MultiplexedConnection) -> Self {
+        Self { conn }
     }
 }
 

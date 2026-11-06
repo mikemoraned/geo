@@ -12,9 +12,11 @@ async fn redis_round_trip_end_to_end() {
 
     let url = std::env::var("LOOKOUT_REDIS_URL").expect("LOOKOUT_REDIS_URL must be set");
 
-    let sink = RedisSink::connect(&url)
-        .await
-        .expect("connect to real upstash redis (parse + TLS + auth)");
+    let sink = RedisSink::new(
+        telemetry::connect(&url)
+            .await
+            .expect("connect to real upstash redis (parse + TLS + auth)"),
+    );
 
     let sample = Message::Version1(V1Message::Acceleration(AccelReading {
         id: Uuid::new_v4(),

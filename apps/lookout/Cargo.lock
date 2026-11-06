@@ -7830,6 +7830,7 @@ dependencies = [
  "axum",
  "base32",
  "chrono",
+ "clap",
  "domain",
  "futures-util",
  "openssl",

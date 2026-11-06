@@ -151,12 +151,21 @@ not the request carries a session.
 [host]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#cookie_prefixes
 [always-save]: https://docs.rs/tower-sessions/0.15.0/tower_sessions/service/struct.SessionManagerLayer.html#method.with_always_save
 
-## Redis is optional, but a configured redis is not
+## The store is named at startup
 
-With no queue configured the site still serves and logs what it receives, so a deploy is not gated
-on redis. A queue that is configured and unreachable is fatal instead: running log-only would drop
-every sample a phone sent while looking healthy. That failure prints to stderr, which ships
-reliably even when the boot burst of tracing does not.
+The server takes `--store redis` or `--store in-memory`, and starts with neither unnamed. A store
+chosen by whether `LOOKOUT_REDIS_URL` happened to be set would let a production server lose its
+secret and start quietly in memory, forgetting every passkey and session on restart. `redis` needs
+`LOOKOUT_REDIS_URL`, and refuses to start without it. `in-memory` ignores the URL, and logs a
+warning when it is set.
+
+With `redis`, the queue, the sign-in records, and the sessions share one connection, and every
+passkey waits for the admin, `localhost`'s included. A redis that is unreachable at startup is
+fatal. That failure prints to stderr, which ships reliably even when the boot burst of tracing does
+not.
+
+With `in-memory`, the server logs the samples it receives rather than queuing them, and keeps
+passkeys and sessions in memory.
 
 ## The git hash comes from the build, not from `.git`
 

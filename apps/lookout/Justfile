@@ -41,13 +41,13 @@ crs-definitions:
     projinfo -o PROJJSON -q "EPSG:25832" | jq . > crates/medallion/src/etrs89_utm32n.projjson.json
     projinfo -o PROJJSON -q "EPSG:25830" | jq . > crates/medallion/src/etrs89_utm30n.projjson.json
 
-# Serve on http://localhost:3000 (override with PORT). No redis, so samples are logged, not queued.
+# Serve on http://localhost:3000 (override with PORT), logging samples and keeping sign-ins in memory.
 serve:
-    BUILD_GIT_HASH={{git_hash}} cargo run -p server
+    BUILD_GIT_HASH={{git_hash}} cargo run -p server -- --store in-memory
 
-# As `serve`, with the redis URL from 1Password, so samples are queued.
+# As `serve`, with redis from 1Password, so samples are queued and sign-ins kept there.
 serve-redis:
-    BUILD_GIT_HASH={{git_hash}} op run --env-file=deploy/lookout.env -- cargo run -p server
+    BUILD_GIT_HASH={{git_hash}} op run --env-file=deploy/lookout.env -- cargo run -p server -- --store redis
 
 # Build the release binary.
 build:

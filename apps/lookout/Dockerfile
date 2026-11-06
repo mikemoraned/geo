@@ -50,4 +50,4 @@ ENV LOOKOUT_STATIC_DIR=/app/static
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["server"]
+CMD ["server", "--store", "redis"]

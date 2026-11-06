@@ -15,6 +15,7 @@ use passkey::types::webauthn::{
 };
 use server::auth::code::ShortCode;
 use server::auth::memory::MemoryAuthStore;
+use server::auth::redis::RedisAuthStore;
 use server::auth::registration::Registered;
 use server::auth::sessions::SharedSessionStore;
 use server::auth::store::{
@@ -23,6 +24,7 @@ use server::auth::store::{
 use server::auth::{Allowing, AuthError, Finish, RelyingParty, Started};
 use server::{AppState, build_app};
 use std::str::FromStr;
+use test_redis::TestRedis;
 use tower::ServiceExt;
 
 use tower_sessions::cookie::time::Duration;
@@ -355,6 +357,46 @@ async fn in_memory_only_a_passkey_registered_for_localhost_is_allowed_at_once() 
         matches!(elsewhere, Registered::Pending { .. }),
         "{elsewhere:?} is not pending"
     );
+}
+
+#[tokio::test]
+async fn over_redis_even_a_localhost_passkey_waits_for_the_admin_docker() {
+    let redis = TestRedis::start().await;
+    let app = app(
+        RelyingParty::over_redis(&url(LOCALHOST), redis.connection()).expect("a relying party"),
+    );
+
+    let (_, registered) = register(&app, &mut Browser::at(LOCALHOST)).await;
+
+    assert!(
+        matches!(registered, Registered::Pending { .. }),
+        "{registered:?} is not pending"
+    );
+}
+
+#[tokio::test]
+async fn over_redis_a_signin_keeps_its_session_in_redis_docker() {
+    let redis = TestRedis::start().await;
+    let app =
+        app(RelyingParty::over_redis(&url(ORIGIN), redis.connection()).expect("a relying party"));
+    let mut browser = Browser::at(ORIGIN);
+    let (_, registered) = register(&app, &mut browser).await;
+    let Registered::Pending { code } = registered else {
+        panic!("{registered:?} is not pending");
+    };
+    RedisAuthStore::new(redis.connection())
+        .allow(&code, None)
+        .await
+        .expect("allowed")
+        .expect("a pending passkey");
+
+    let reply = sign_in(&app, &mut browser, None).await;
+
+    let cookie = reply.session_cookie().expect("a session cookie");
+    let ttl = redis
+        .seconds_to_live(&format!("lookout-session:{}", cookie.value()))
+        .await;
+    assert!(ttl > 0, "{ttl}");
 }
 
 #[tokio::test]

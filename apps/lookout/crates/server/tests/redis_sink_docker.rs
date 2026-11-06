@@ -11,7 +11,7 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
     let redis = TestRedis::start().await;
     let mut conn = redis.connection();
 
-    let sink = RedisSink::connect(redis.url()).await.expect("connect sink");
+    let sink = RedisSink::new(redis.connection());
 
     let accel_sample = Message::Version1(V1Message::Acceleration(AccelReading {
         id: Uuid::from_u128(1),

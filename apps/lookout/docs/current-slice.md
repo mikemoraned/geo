@@ -279,8 +279,9 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 
 #### The gate
 
-- [ ] Choose the stores in `bin/server.rs`: redis with `LOOKOUT_REDIS_URL`, memory without, and log
-      which.
+- [x] Choose the stores in `bin/server.rs`: redis with `LOOKOUT_REDIS_URL`, memory without, and log
+      which. Changed on 2026-11-05: `--store redis` or `--store in-memory` names the store, and the
+      server refuses to start without one, so a lost redis secret cannot start production in memory.
 - [-] Leave the gate off when `LOOKOUT_REDIS_URL` is unset, and warn at startup. Rejected on
       2026-10-13: the gate stays on, over memory stores.
 - [-] Mark the session signed in when login finishes, and write the updated passkey back. Moved into
