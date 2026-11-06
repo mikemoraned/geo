@@ -526,7 +526,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       which reports a session's passes from `train_session_crossing_v1`.
 - [x] Add the step `replay` to `evaluation`, feeding a session's times and positions alone through a
       predictor, the offline pass detector, and the `Tracker`, in the float type its run records.
-- [ ] Add the oracle to `evaluation`: a predictor that reads a session's ground-truth passes, and
+- [x] Add the oracle to `evaluation`: a predictor that reads a session's ground-truth passes, and
       predicts each with high confidence from N ahead.
 - [ ] Add the step `score` to `evaluation`, scoring each notification as
       [The measure](#the-measure) defines.

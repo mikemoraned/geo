@@ -80,6 +80,7 @@ geo-types = "0.7"
 # 0.33 needs. The lock carries 0.31 and 0.32 until SedonaDB 0.5.0.
 geo = "0.32"
 geo-traits = "0.3"
+itertools = "0.15"
 rstar = "0.13"
 wkt = "0.14"
 chrono = { version = "0.4", features = ["serde"] }
