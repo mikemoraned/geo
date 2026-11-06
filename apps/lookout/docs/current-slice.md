@@ -554,6 +554,8 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       same seed.
 - [ ] Trace each shortfall from a perfect score in `explore3.py`, through `query_gold`, and record
       its cause under Investigation.
+- [ ] Replace `summarise`'s own bootstrap with a proven statistics library's. The library must
+      resample whole sessions and take a seed. Check the oracle still scores perfectly.
 
 #### Phase 3: CrowFlies through the skeleton
 
