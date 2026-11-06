@@ -3099,9 +3099,11 @@ dependencies = [
 name = "evaluation-py"
 version = "0.1.0"
 dependencies = [
+ "crossings",
  "domain",
  "evaluation",
  "medallion",
+ "medallion-model",
  "pyo3",
  "pyo3-arrow",
  "tokio",
