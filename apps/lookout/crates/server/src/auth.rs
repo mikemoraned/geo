@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use ::redis::aio::MultiplexedConnection;
 use axum::Router;
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use serde::{Deserialize, Serialize};
@@ -112,6 +112,10 @@ impl RelyingParty {
             return Ok(None);
         };
         Ok(self.store.find_allowed(&id).await?)
+    }
+
+    pub fn serves(&self, origin: Option<&HeaderValue>) -> bool {
+        origin.is_some_and(|origin| origin == self.origin.origin().ascii_serialization().as_str())
     }
 
     pub fn session_layer(&self) -> SessionManagerLayer<SharedSessionStore> {

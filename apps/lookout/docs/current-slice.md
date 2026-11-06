@@ -290,7 +290,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
       `/signin/`.
 - [x] Refuse a `/ws` upgrade whose session lacks an allowed passkey with 401, tested in
       `ws_roundtrip.rs`.
-- [ ] Return 403 from a `/ws` upgrade whose `Origin` differs from `LOOKOUT_ORIGIN`.
+- [x] Return 403 from a `/ws` upgrade whose `Origin` differs from `LOOKOUT_ORIGIN`.
 - [ ] Re-check an open socket's passkey every minute. Once it is revoked, close the socket.
 - [ ] Add `/auth/status`, returning whether the session is signed in.
 - [ ] Read `LOOKOUT_ORIGIN` in `bin/server.rs`, and set it in `fly.toml`.

@@ -81,9 +81,22 @@ async fn connect(
     addr: SocketAddr,
     cookie: Option<&Cookie<'_>>,
 ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, WsError> {
+    connect_from(addr, Some(LOCALHOST), cookie).await
+}
+
+async fn connect_from(
+    addr: SocketAddr,
+    origin: Option<&str>,
+    cookie: Option<&Cookie<'_>>,
+) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, WsError> {
     let mut request = format!("ws://{addr}/ws")
         .into_client_request()
         .expect("a request");
+    if let Some(origin) = origin {
+        request
+            .headers_mut()
+            .insert(header::ORIGIN, origin.parse().expect("a header"));
+    }
     if let Some(cookie) = cookie {
         request.headers_mut().insert(
             header::COOKIE,
@@ -222,4 +235,36 @@ async fn an_upgrade_after_signing_out_is_refused() {
     let refused = refused_status(connect(running.addr, Some(&cookie)).await);
 
     assert_eq!(refused, Some(StatusCode::UNAUTHORIZED));
+}
+
+#[tokio::test]
+async fn an_upgrade_from_another_origin_is_refused_even_when_signed_in() {
+    let running = spawn_app().await;
+    let cookie = signed_in(&running.app).await;
+    let others = [
+        "https://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost.example.com:3000",
+        "http://evil.example.com",
+        "null",
+    ];
+
+    let mut refusals = Vec::new();
+    for other in others {
+        refusals.push(refused_status(
+            connect_from(running.addr, Some(other), Some(&cookie)).await,
+        ));
+    }
+
+    assert_eq!(refusals, vec![Some(StatusCode::FORBIDDEN); others.len()]);
+}
+
+#[tokio::test]
+async fn an_upgrade_without_an_origin_is_refused_even_when_signed_in() {
+    let running = spawn_app().await;
+    let cookie = signed_in(&running.app).await;
+
+    let refused = refused_status(connect_from(running.addr, None, Some(&cookie)).await);
+
+    assert_eq!(refused, Some(StatusCode::FORBIDDEN));
 }

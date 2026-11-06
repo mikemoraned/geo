@@ -7,7 +7,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::middleware;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
@@ -61,9 +61,13 @@ async fn version() -> &'static str {
 
 async fn ws_upgrade(
     State(state): State<AppState>,
+    headers: HeaderMap,
     session: Session,
     upgrade: WebSocketUpgrade,
 ) -> Result<Response, AuthError> {
+    if !state.relying_party.serves(headers.get(header::ORIGIN)) {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
     Ok(match state.relying_party.signed_in(&session).await? {
         Some(_) => upgrade.on_upgrade(move |socket| handle_socket(socket, state)),
         None => StatusCode::UNAUTHORIZED.into_response(),
