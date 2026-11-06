@@ -288,7 +288,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
       the `/auth/signin/finish` task.
 - [x] Serve `/record/` through a layer that redirects a session without an allowed passkey to
       `/signin/`.
-- [ ] Refuse a `/ws` upgrade whose session lacks an allowed passkey with 401, tested in
+- [x] Refuse a `/ws` upgrade whose session lacks an allowed passkey with 401, tested in
       `ws_roundtrip.rs`.
 - [ ] Return 403 from a `/ws` upgrade whose `Origin` differs from `LOOKOUT_ORIGIN`.
 - [ ] Re-check an open socket's passkey every minute. Once it is revoked, close the socket.

@@ -34,7 +34,7 @@ use tower_sessions::{MemoryStore, SessionStore};
 use webauthn_rs::prelude::{CredentialID, RegisterPublicKeyCredential, Url, Uuid, WebauthnBuilder};
 
 const ORIGIN: &str = "https://lookout.example.com";
-const LOCALHOST: &str = "http://localhost:3000";
+pub const LOCALHOST: &str = "http://localhost:3000";
 
 struct Approving;
 
@@ -63,13 +63,13 @@ impl UserValidationMethod for Approving {
     }
 }
 
-struct Browser {
+pub struct Browser {
     origin: Url,
     passkey: Option<Passkey>,
 }
 
 impl Browser {
-    fn at(origin: &str) -> Self {
+    pub fn at(origin: &str) -> Self {
         Self {
             origin: url(origin),
             passkey: None,
@@ -158,14 +158,14 @@ impl AuthStore for RevokedOnceFound {
     }
 }
 
-struct Reply {
+pub struct Reply {
     status: StatusCode,
     headers: HeaderMap,
     body: Bytes,
 }
 
 impl Reply {
-    fn session_cookie(&self) -> Option<Cookie<'static>> {
+    pub fn session_cookie(&self) -> Option<Cookie<'static>> {
         self.headers
             .get_all(header::SET_COOKIE)
             .iter()
@@ -180,7 +180,7 @@ fn url(origin: &str) -> Url {
     Url::parse(origin).expect("an origin")
 }
 
-fn static_dir() -> String {
+pub fn static_dir() -> String {
     concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
 }
 
@@ -240,7 +240,7 @@ async fn send(app: &Router, request: Request<Body>) -> Reply {
     }
 }
 
-async fn post(app: &Router, path: &str, body: Body, cookie: Option<&Cookie<'_>>) -> Reply {
+pub async fn post(app: &Router, path: &str, body: Body, cookie: Option<&Cookie<'_>>) -> Reply {
     let request = Request::post(path).header(header::CONTENT_TYPE, "application/json");
     send(
         app,
@@ -272,7 +272,7 @@ async fn finish_registration(
     }
 }
 
-async fn register(app: &Router, browser: &mut Browser) -> (CredentialID, Registered) {
+pub async fn register(app: &Router, browser: &mut Browser) -> (CredentialID, Registered) {
     let started = start_registration(app).await;
     let credential = browser.create(started.options).await;
     let id = CredentialID::from(credential.raw_id.to_vec());
@@ -303,7 +303,7 @@ async fn finish_signin(
     post(app, "/auth/signin/finish", Body::from(json), cookie).await
 }
 
-async fn sign_in(app: &Router, browser: &mut Browser, cookie: Option<&Cookie<'_>>) -> Reply {
+pub async fn sign_in(app: &Router, browser: &mut Browser, cookie: Option<&Cookie<'_>>) -> Reply {
     let (started, _) = start_signin(app).await;
     let credential = browser.get(started.options).await;
     let finish = Finish {

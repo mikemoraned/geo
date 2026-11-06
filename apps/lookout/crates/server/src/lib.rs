@@ -7,8 +7,9 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::http::StatusCode;
 use axum::middleware;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
 use shared::Message as TelemetryMessage;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -16,8 +17,9 @@ use telemetry::RawSample;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
+use tower_sessions::Session;
 
-use crate::auth::RelyingParty;
+use crate::auth::{AuthError, RelyingParty};
 use crate::queue::SampleSink;
 
 pub const GIT_HASH: &str = env!("BUILD_GIT_HASH");
@@ -57,8 +59,15 @@ async fn version() -> &'static str {
     GIT_HASH
 }
 
-async fn ws_upgrade(State(state): State<AppState>, upgrade: WebSocketUpgrade) -> Response {
-    upgrade.on_upgrade(move |socket| handle_socket(socket, state))
+async fn ws_upgrade(
+    State(state): State<AppState>,
+    session: Session,
+    upgrade: WebSocketUpgrade,
+) -> Result<Response, AuthError> {
+    Ok(match state.relying_party.signed_in(&session).await? {
+        Some(_) => upgrade.on_upgrade(move |socket| handle_socket(socket, state)),
+        None => StatusCode::UNAUTHORIZED.into_response(),
+    })
 }
 
 async fn handle_socket(mut socket: WebSocket, state: AppState) {

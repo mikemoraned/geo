@@ -2,6 +2,9 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use axum::Router;
+use axum::body::Body;
+use axum::http::{StatusCode, header};
 use domain::Gps;
 use futures_util::{SinkExt, StreamExt};
 use server::auth::RelyingParty;
@@ -9,11 +12,16 @@ use server::queue::{PushError, SampleSink};
 use server::{AppState, build_app};
 use shared::{Accel, AccelReading, GpsReading, Message, V0Message, V1Message};
 use telemetry::RawSample;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{Instant, sleep, timeout};
-use tokio_tungstenite::tungstenite::Message as WsMessage;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::{Error as WsError, Message as WsMessage};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
+use tower_sessions::cookie::Cookie;
 use uuid::Uuid;
 use webauthn_rs::prelude::Url;
+
+use crate::auth::{Browser, LOCALHOST, post, register, sign_in, static_dir};
 
 struct RecordingSink {
     samples: Arc<Mutex<Vec<RawSample>>>,
@@ -28,38 +36,76 @@ impl SampleSink for RecordingSink {
     }
 }
 
-fn static_dir() -> String {
-    concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
+struct Running {
+    addr: SocketAddr,
+    recorded: Arc<Mutex<Vec<RawSample>>>,
+    app: Router,
 }
 
-fn relying_party() -> RelyingParty {
-    let origin = Url::parse("https://lookout.example.com").expect("an origin");
-    RelyingParty::in_memory(&origin).expect("a relying party")
-}
-
-async fn spawn_app() -> (SocketAddr, Arc<Mutex<Vec<RawSample>>>) {
+async fn spawn_app() -> Running {
     let recorded = Arc::new(Mutex::new(Vec::new()));
+    let origin = Url::parse(LOCALHOST).expect("an origin");
     let app = build_app(
         AppState {
             sink: Some(Arc::new(RecordingSink {
                 samples: Arc::clone(&recorded),
             })),
-            relying_party: relying_party(),
+            relying_party: RelyingParty::in_memory(&origin).expect("a relying party"),
         },
         static_dir(),
     );
 
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let addr = listener.local_addr().expect("addr");
+    let served = app.clone();
     tokio::spawn(async move {
-        axum::serve(listener, app).await.expect("serve");
+        axum::serve(listener, served).await.expect("serve");
     });
-    (addr, recorded)
+    Running {
+        addr,
+        recorded,
+        app,
+    }
+}
+
+async fn signed_in(app: &Router) -> Cookie<'static> {
+    let mut browser = Browser::at(LOCALHOST);
+    register(app, &mut browser).await;
+    sign_in(app, &mut browser, None)
+        .await
+        .session_cookie()
+        .expect("a session")
+}
+
+async fn connect(
+    addr: SocketAddr,
+    cookie: Option<&Cookie<'_>>,
+) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, WsError> {
+    let mut request = format!("ws://{addr}/ws")
+        .into_client_request()
+        .expect("a request");
+    if let Some(cookie) = cookie {
+        request.headers_mut().insert(
+            header::COOKIE,
+            cookie.stripped().to_string().parse().expect("a header"),
+        );
+    }
+    connect_async(request).await.map(|(ws, _)| ws)
+}
+
+fn refused_status(
+    connected: Result<WebSocketStream<MaybeTlsStream<TcpStream>>, WsError>,
+) -> Option<StatusCode> {
+    match connected {
+        Err(WsError::Http(response)) => Some(response.status()),
+        _ => None,
+    }
 }
 
 #[tokio::test]
 async fn both_versions_enqueue_and_malformed_is_dropped() {
-    let (addr, recorded) = spawn_app().await;
+    let running = spawn_app().await;
+    let cookie = signed_in(&running.app).await;
 
     let unversioned_from_the_archive = r#"{"id":"00000000-0000-0000-0000-000000000007","t":1700000000007,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5}}"#;
     let v0_expected = Message::Version0(V0Message::Gps(GpsReading {
@@ -84,9 +130,7 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
     }));
     let v1_json = serde_json::to_string(&v1).expect("serialize");
 
-    let (mut ws, _resp) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
-        .await
-        .expect("connect");
+    let mut ws = connect(running.addr, Some(&cookie)).await.expect("connect");
     ws.send(WsMessage::Text("not-a-sample".into()))
         .await
         .expect("send malformed");
@@ -101,7 +145,7 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         {
-            let samples = recorded.lock().expect("lock");
+            let samples = running.recorded.lock().expect("lock");
             if samples.len() >= 2 {
                 assert_eq!(
                     samples.len(),
@@ -128,7 +172,8 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
 
 #[tokio::test]
 async fn server_acks_accepted_message() {
-    let (addr, _recorded) = spawn_app().await;
+    let running = spawn_app().await;
+    let cookie = signed_in(&running.app).await;
 
     let sample = Message::Version1(V1Message::Acceleration(AccelReading {
         id: Uuid::from_u128(99),
@@ -144,9 +189,7 @@ async fn server_acks_accepted_message() {
     }));
     let json = serde_json::to_string(&sample).expect("serialize");
 
-    let (mut ws, _resp) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
-        .await
-        .expect("connect");
+    let mut ws = connect(running.addr, Some(&cookie)).await.expect("connect");
     ws.send(WsMessage::Text(json.into())).await.expect("send");
 
     let frame = timeout(Duration::from_secs(5), ws.next())
@@ -159,4 +202,24 @@ async fn server_acks_accepted_message() {
         WsMessage::Text("ack".into()),
         "expected an ack frame"
     );
+}
+
+#[tokio::test]
+async fn an_upgrade_without_a_session_is_refused() {
+    let running = spawn_app().await;
+
+    let refused = refused_status(connect(running.addr, None).await);
+
+    assert_eq!(refused, Some(StatusCode::UNAUTHORIZED));
+}
+
+#[tokio::test]
+async fn an_upgrade_after_signing_out_is_refused() {
+    let running = spawn_app().await;
+    let cookie = signed_in(&running.app).await;
+    post(&running.app, "/auth/signout", Body::empty(), Some(&cookie)).await;
+
+    let refused = refused_status(connect(running.addr, Some(&cookie)).await);
+
+    assert_eq!(refused, Some(StatusCode::UNAUTHORIZED));
 }
