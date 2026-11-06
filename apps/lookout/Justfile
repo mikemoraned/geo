@@ -1,5 +1,6 @@
 import '../../tools/overture-mirror/mirror.just'
 
+local_redis_url := "redis://localhost:6379"
 git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git diff --quiet 2>/dev/null || echo -dirty)"`
 
 # Install the tools every other recipe needs. See README.md for what each is for.
@@ -45,9 +46,21 @@ crs-definitions:
 serve:
     BUILD_GIT_HASH={{git_hash}} cargo run -p server -- --store in-memory
 
-# As `serve`, with redis from 1Password, so samples are queued and sign-ins kept there.
-serve-redis:
-    BUILD_GIT_HASH={{git_hash}} op run --env-file=deploy/lookout.env -- cargo run -p server -- --store redis
+# List, allow or revoke the passkeys that can sign in, with the redis URL from 1Password.
+passkeys *args:
+    op run --env-file=deploy/lookout.env -- cargo run -q -p server --bin passkeys -- {{args}}
+
+# Run an empty redis in Docker on localhost:6379, for `serve-local-redis` and `passkeys-local`. Ctrl-C stops it.
+local-redis:
+    docker run --rm --name lookout-redis -p 6379:6379 redis:7-alpine
+
+# As `serve`, with the redis `local-redis` runs, so passkeys wait for `passkeys-local allow`.
+serve-local-redis:
+    BUILD_GIT_HASH={{git_hash}} LOOKOUT_REDIS_URL={{local_redis_url}} cargo run -p server -- --store redis
+
+# As `passkeys`, against the redis `local-redis` runs.
+passkeys-local *args:
+    LOOKOUT_REDIS_URL={{local_redis_url}} cargo run -q -p server --bin passkeys -- {{args}}
 
 # Build the release binary.
 build:

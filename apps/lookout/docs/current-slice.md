@@ -221,7 +221,8 @@ The user confirmed these on 2026-10-13, after a security review of the first pla
   base64url itself. The first sign-in from the phone answers it.
 - How an iPhone reaches a server over HTTPS. WebAuthn needs a secure context, and a phone cannot
   use `localhost`. The localhost allowance covers only the laptop, so the phone's first sign-in
-  runs against redis: a deploy to fly, or `just serve-redis` behind a tunnel.
+  runs against redis: a deploy to fly, or `just serve-local-redis` behind a tunnel, with
+  `LOOKOUT_ORIGIN` set to the tunnel's URL.
 
 ### Observations
 
@@ -297,9 +298,13 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 
 #### The admin CLI
 
-- [ ] Add `crates/server/src/bin/passkeys.rs`, with clap subcommands `list`,
+- [x] Add `crates/server/src/bin/passkeys.rs`, with clap subcommands `list`,
       `allow <code> [--label <name>]`, and `revoke <code>`.
-- [ ] Add `just passkeys *args`, with the redis URL from 1Password.
+- [x] Add `just passkeys *args`, with the redis URL from 1Password.
+- [ ] Send `Cache-Control: private, no-cache` with every response the `/record/` gate lets
+      through, tested on each `/record` path. Without it, Chrome showed a cached `/record/` to a
+      signed-out browser until a force-refresh, since a response without `Cache-Control` is
+      reused without asking the server.
 
 #### The pages
 
