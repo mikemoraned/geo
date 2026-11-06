@@ -29,20 +29,20 @@ def ids(table):
     return table.column("session_id").to_pylist()
 
 
-def test_a_draw_holds_as_many_sessions_as_asked_for_in_order_of_id(written):
+def test_a_pick_holds_as_many_sessions_as_asked_for_in_order_of_id(written):
     picked = ids(pick(written))
 
     assert len(picked) == 10
     assert picked == sorted(set(picked))
 
 
-def test_a_draw_holds_only_sessions_at_or_above_the_realtime_percentage(written):
+def test_a_pick_holds_only_sessions_at_or_above_the_realtime_percentage(written):
     picked = pick(written, sessions=50)
 
     assert set(picked.column("realtime_percentage").to_pylist()) == {100.0}
 
 
-def test_a_seed_draws_the_sessions_whose_salted_hashes_come_first(written):
+def test_a_seed_picks_the_sessions_whose_salted_hashes_come_first(written):
     eligible = SESSION_IDS[::2]
 
     def salted(session_id):
@@ -51,14 +51,14 @@ def test_a_seed_draws_the_sessions_whose_salted_hashes_come_first(written):
     assert ids(pick(written, seed=7)) == sorted(sorted(eligible, key=salted)[:10])
 
 
-def test_a_draw_carries_no_geometry(written):
+def test_a_pick_carries_no_geometry(written):
     names = pick(written).column_names
 
     assert "geometry" not in names
     assert "geometry_projected" not in names
 
 
-def test_a_draw_larger_than_the_sessions_passing_the_filter_raises_a_value_error(written):
+def test_a_pick_larger_than_the_sessions_passing_the_filter_raises_a_value_error(written):
     with pytest.raises(ValueError, match="only 50 pass the filter"):
         pick(written, sessions=51)
 
