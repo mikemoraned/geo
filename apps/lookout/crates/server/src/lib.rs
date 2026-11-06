@@ -85,7 +85,7 @@ async fn ws_upgrade(
 
 async fn handle_socket(mut socket: WebSocket, state: AppState, session: Id) {
     tracing::info!("websocket connected");
-    let mut recheck = interval_at(Instant::now() + PASSKEY_RECHECK, PASSKEY_RECHECK);
+    let mut recheck = interval_at(Instant::now() + SESSION_RECHECK, SESSION_RECHECK);
     loop {
         tokio::select! {
             received = socket.recv() => match received {
@@ -110,7 +110,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session: Id) {
     tracing::info!("websocket disconnected");
 }
 
-const PASSKEY_RECHECK: Duration = Duration::from_secs(60);
+const SESSION_RECHECK: Duration = Duration::from_secs(60);
 const SIGNED_OUT: &str = "the session is no longer signed in";
 const UNCHECKED: &str = "the session could not be rechecked";
 

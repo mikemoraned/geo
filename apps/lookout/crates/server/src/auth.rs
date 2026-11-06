@@ -22,7 +22,6 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde::{Deserialize, Serialize};
 use tower_sessions::session::Id;
-use tower_sessions::session_store::{self, SessionStore};
 use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 use uuid::Uuid;
 use webauthn_rs::prelude::{CredentialID, Url, Webauthn, WebauthnBuilder, WebauthnError};
@@ -115,26 +114,15 @@ impl RelyingParty {
         let Some(id) = session.get::<CredentialID>(SIGNED_IN_PASSKEY).await? else {
             return Ok(None);
         };
-        self.allowed(&id).await
-    }
-
-    pub async fn allowed(&self, id: &CredentialID) -> Result<Option<AllowedPasskey>, AuthError> {
-        Ok(self.store.find_allowed(id).await?)
+        Ok(self.store.find_allowed(&id).await?)
     }
 
     pub async fn stored_session_signed_in(
         &self,
         session: &Id,
     ) -> Result<Option<AllowedPasskey>, AuthError> {
-        let Some(record) = self.sessions.load(session).await? else {
-            return Ok(None);
-        };
-        let Some(passkey) = record.data.get(SIGNED_IN_PASSKEY) else {
-            return Ok(None);
-        };
-        let id: CredentialID = serde_json::from_value(passkey.clone())
-            .map_err(|err| session_store::Error::Decode(err.to_string()))?;
-        self.allowed(&id).await
+        let stored = Session::new(Some(*session), Arc::new(self.sessions.clone()), None);
+        self.signed_in(&stored).await
     }
 
     pub fn serves(&self, origin: Option<&HeaderValue>) -> bool {
@@ -193,8 +181,6 @@ pub enum AuthError {
     Store(#[from] StoreError),
     #[error("the session failed: {0}")]
     Session(#[from] tower_sessions::session::Error),
-    #[error("the session store failed: {0}")]
-    SessionStore(#[from] session_store::Error),
 }
 
 impl IntoResponse for AuthError {
@@ -208,10 +194,7 @@ impl IntoResponse for AuthError {
                 tracing::warn!(err = %self, "refused an auth request");
                 (StatusCode::FORBIDDEN, self.to_string()).into_response()
             }
-            AuthError::Unstarted(_)
-            | AuthError::Store(_)
-            | AuthError::Session(_)
-            | AuthError::SessionStore(_) => {
+            AuthError::Unstarted(_) | AuthError::Store(_) | AuthError::Session(_) => {
                 tracing::error!(err = %self, "an auth request failed");
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
