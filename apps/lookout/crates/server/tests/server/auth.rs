@@ -934,6 +934,29 @@ async fn the_other_pages_need_no_session() {
     }
 }
 
+#[tokio::test]
+async fn a_browser_asks_the_server_before_reusing_any_other_file() {
+    let server = Server::hosted(Allowing::ByAdmin);
+
+    for path in [
+        "/",
+        "/signin/",
+        "/signin/signin.js",
+        "/version.js",
+        "/sessions.json",
+    ] {
+        let reply = get(&server.app, path, None).await;
+        assert_eq!(
+            reply
+                .headers
+                .get(header::CACHE_CONTROL)
+                .map(|value| value.as_bytes()),
+            Some(&b"no-cache"[..]),
+            "{path}"
+        );
+    }
+}
+
 async fn sign_in_status(app: &Router, cookie: Option<&Cookie<'_>>) -> SignInStatus {
     let reply = get(app, "/auth/status", cookie).await;
     assert_eq!(reply.status, StatusCode::OK, "{:?}", reply.body);

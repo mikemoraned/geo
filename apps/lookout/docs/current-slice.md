@@ -310,7 +310,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 
 - [x] Show the short code on `/signin/` after registration, and tell the user to pass it to the
       admin.
-- [ ] Send `Cache-Control: no-cache` with every static file, keeping `private, no-cache` on what
+- [x] Send `Cache-Control: no-cache` with every static file, keeping `private, no-cache` on what
       the `/record/` gate lets through. Without it, Chrome ran a cached `signin.js` after the page
       changed, and a phone would keep each page's old script after a deploy.
 - [ ] On each websocket close in `static/record/app.js`, check `/auth/status`. If signed out, show

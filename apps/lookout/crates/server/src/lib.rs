@@ -7,7 +7,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::State;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade, close_code};
-use axum::http::{HeaderMap, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
@@ -17,6 +17,7 @@ use telemetry::RawSample;
 use tokio::time::{Instant, interval_at};
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeader;
 use tower_http::trace::TraceLayer;
 use tower_sessions::Session;
 use webauthn_rs::prelude::CredentialID;
@@ -33,6 +34,7 @@ pub struct AppState {
 }
 
 const RECORD_PAGE: &str = "/record";
+const ASK_FIRST: &str = "no-cache";
 
 pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
     let static_dir = static_dir.into();
@@ -50,7 +52,11 @@ pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
         .route("/version", get(version))
         .merge(auth::routes(state.relying_party.clone()))
         .merge(record)
-        .fallback_service(ServeDir::new(static_dir))
+        .fallback_service(SetResponseHeader::overriding(
+            ServeDir::new(static_dir),
+            header::CACHE_CONTROL,
+            HeaderValue::from_static(ASK_FIRST),
+        ))
         .layer(state.relying_party.session_layer())
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
