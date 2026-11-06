@@ -64,7 +64,7 @@ mod tests {
     use super::*;
     use crate::country::Country;
     use crate::dataset::DatasetSpec;
-    use crate::derive::{GeographyRow, write_geography_rows};
+    use crate::derive::{GeographyRow, write_geography_rows, write_rows};
     use crate::layer::layers;
     use crate::path::Root;
     use crate::query::Query;
@@ -97,6 +97,54 @@ mod tests {
         fn partition_date(&self) -> NaiveDate {
             self.taken_at.date_naive()
         }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    struct DateOnlyRow {
+        row_id: String,
+        #[serde(with = "chrono::serde::ts_milliseconds")]
+        counted_at: DateTime<Utc>,
+        count: u32,
+    }
+
+    impl Row for DateOnlyRow {
+        type Layer = layers::Silver;
+        const DATASET: DatasetSpec<Self::Layer> =
+            DatasetSpec::partitioned("date_only", "counted_date");
+        const INSTANTS: &'static [&'static str] = &["counted_at"];
+
+        fn example() -> Self {
+            DateOnlyRow {
+                row_id: "example".to_string(),
+                counted_at: DateTime::UNIX_EPOCH,
+                count: 0,
+            }
+        }
+    }
+
+    impl Dated for DateOnlyRow {
+        fn partition_date(&self) -> NaiveDate {
+            self.counted_at.date_naive()
+        }
+    }
+
+    fn date_only_rows(count: u32) -> Vec<DateOnlyRow> {
+        (1..=count)
+            .map(|n| DateOnlyRow {
+                row_id: format!("row-{n}"),
+                counted_at: Utc
+                    .with_ymd_and_hms(2026, 7, 20 + n % 3, 9, 0, 0)
+                    .single()
+                    .expect("an instant"),
+                count: n,
+            })
+            .collect()
+    }
+
+    async fn written(dir: &Path, rows: &[DateOnlyRow]) -> Root {
+        let root = Root::new(dir);
+        write_rows(&root, rows).await.expect("write the rows");
+        root
     }
 
     fn reading(n: u32) -> Reading {
@@ -252,6 +300,93 @@ mod tests {
 
         let refused = Query::new(root)
             .read_of_country::<Reading>(Country::UnitedKingdom)
+            .await;
+
+        assert!(
+            matches!(refused, Err(QueryError::NoSuchDataset { .. })),
+            "{refused:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_read_of_a_dataset_laid_out_by_date_returns_every_row_of_every_date() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = written(tmp.path(), &date_only_rows(6)).await;
+
+        let mut read = Query::new(root)
+            .read::<DateOnlyRow>()
+            .await
+            .expect("a read of the date_only_rows")
+            .rows()
+            .await
+            .expect("the date_only_rows");
+        read.sort_by(|one, other| one.row_id.cmp(&other.row_id));
+
+        assert_eq!(read, date_only_rows(6));
+    }
+
+    #[tokio::test]
+    async fn a_read_of_a_dataset_laid_out_by_date_filters_in_the_engine() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = written(tmp.path(), &date_only_rows(6)).await;
+
+        let kept = Query::new(root)
+            .read::<DateOnlyRow>()
+            .await
+            .expect("a read of the date_only_rows")
+            .filter(col("row_id").in_list(vec![lit("row-2"), lit("row-5")], false))
+            .expect("a filter")
+            .sort(vec![col("row_id").sort(true, false)])
+            .expect("a sort")
+            .rows()
+            .await
+            .expect("the date_only_rows");
+
+        assert_eq!(kept.iter().map(|row| row.count).collect::<Vec<_>>(), [2, 5]);
+    }
+
+    #[tokio::test]
+    async fn a_read_of_every_country_at_once_is_refused() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = stored(tmp.path(), &readings(1)).await;
+
+        let refused = Query::new(root).read::<Reading>().await;
+
+        assert!(
+            matches!(
+                refused,
+                Err(QueryError::CountryNeeded { dataset: "reading" })
+            ),
+            "{refused:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_read_of_one_country_of_a_dataset_with_no_country_level_is_refused() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = written(tmp.path(), &date_only_rows(1)).await;
+
+        let refused = Query::new(root)
+            .read_of_country::<DateOnlyRow>(Country::Germany)
+            .await;
+
+        assert!(
+            matches!(
+                refused,
+                Err(QueryError::NoCountryLevel {
+                    dataset: "date_only"
+                })
+            ),
+            "{refused:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_read_of_a_dataset_never_written_is_refused() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+
+        let refused = Query::new(Root::new(tmp.path()))
+            .read::<DateOnlyRow>()
             .await;
 
         assert!(
