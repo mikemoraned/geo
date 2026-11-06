@@ -238,6 +238,12 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   country in its own zone, and a read names the country it reads. The crossings a replay matches
   against are laid out the same way. `evaluation_run_v1` records the country. Decided on
   2026-11-06.
+- **A run's id is a hash of its settings and inputs.** The id is a v5 UUID over everything
+  `evaluation_run_v1` records of the run, its input versions included. The same settings over the
+  same inputs give the same id, and gold refuses a run it already holds, so each run is written
+  once. A rerun after a change that no setting captures needs a setting that captures it. This
+  beats the instant the run started, which writes a copy of each rerun, and a random UUID, which
+  does the same and says nothing of the run. Decided on 2026-11-06.
 - **The steps take and build `medallion-model`'s rows.** `pick` already brings medallion,
   DataFusion, and SedonaDB into `evaluation`. With them linked, a change to a step rebuilds
   `evaluation-py` in 20 s. Each gold table then has its columns defined in one crate, with no test
@@ -543,7 +549,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       No step's table holds geometry yet, so none crosses as GeoArrow.
 - [x] Build a new `notebooks/evaluation/explore3.py` with the user, running the oracle's steps on a
       few sessions and drawing each.
-- [ ] Extend `medallion` to gold datasets of rows, partitioned `run_date=<date>/run_id=<id>`, each run
+- [x] Extend `medallion` to gold datasets of rows, partitioned `run_date=<date>/run_id=<id>`, each run
       written once.
 - [ ] Register gold datasets by name in `medallion`'s `Query`, and add `query_gold` and `write_gold`
       to `medallion-py`.
