@@ -283,6 +283,26 @@ extract: one table cannot span themes whose columns differ, and a theme and type
 extract taken, each row carrying the id of the extract it came from, so the provenance table joins
 to the rows in plain SQL. Geometry comes back as the upstream file holds it.
 
+## What a read costs
+
+A read costs the bytes it scans and the rows it holds, not the size of the dataset. When a read
+states its columns, filter, and order in the query, three properties of the scan keep both small:
+
+- **A scan reads only the columns the read names.** In a dataset holding a path per row, geometry
+  takes most of the bytes. A read that leaves geometry out scans a small part of each file.
+- **A filter skips what statistics rule out.** A filter on a partition key skips whole partitions.
+  A filter on any other column skips each file, and each row group within a file, whose minimum
+  and maximum rule it out. It then applies to the rows as they stream from the scan, so rejected
+  rows never accumulate.
+- **A sort followed by a limit holds only the leading rows.** The scan keeps the first rows as it
+  goes, rather than sorting every row first.
+
+How much a filter skips depends on how the files order its column. A column unrelated to the order
+of writing varies within every file, so its statistics rule out little. Its saving then lies in the
+rows the read never holds, not in the bytes it skips.
+
+A filter or a sort applied to rows already fetched holds every row of the dataset at once.
+
 ## No table format
 
 The layout above *is* the metadata: partitioning is directory names, schema is the files',

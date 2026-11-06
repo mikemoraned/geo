@@ -3,6 +3,7 @@ use std::collections::{BTreeSet, HashMap};
 use datafusion::arrow::array::RecordBatch;
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::ParamValues;
+use datafusion::dataframe::DataFrame;
 use datafusion::prelude::ParquetReadOptions;
 use datafusion::scalar::ScalarValue;
 use datafusion::sql::TableReference;
@@ -17,6 +18,8 @@ use crate::dataset::DatasetSpec;
 use crate::layer::{LayerKind, layers};
 use crate::partition::Partition;
 use crate::path::{Dataset, Root, any_file_under};
+use crate::read::Read;
+use crate::rows::{Row, RowError};
 use crate::table::{Layout, SilverTarget};
 
 #[derive(Debug, thiserror::Error)]
@@ -30,6 +33,8 @@ pub enum QueryError {
     DataFusion(#[from] datafusion::error::DataFusionError),
     #[error("reading rows: {0}")]
     Rows(#[from] serde_arrow::Error),
+    #[error(transparent)]
+    Describing(#[from] RowError),
     #[error("naming a country's partition: {0}")]
     Path(#[from] crate::partition::PathError),
     #[error("listing the partitions of {path}: {source}")]
@@ -256,19 +261,30 @@ impl Query {
         dataset: &Dataset<L>,
         table: &str,
     ) -> Result<(), QueryError> {
+        let frame = self.frame_at(dataset).await?;
+        self.ctx.ctx.register_table(table, frame.into_view())?;
+        Ok(())
+    }
+
+    pub async fn read_of_country<T: Row>(&self, country: Country) -> Result<Read<T>, QueryError> {
+        let of_country = self.root.dataset(T::DATASET).partition(COUNTRY, country)?;
+        Ok(Read::new(self.frame_at(&of_country).await?))
+    }
+
+    async fn frame_at<L: LayerKind>(&self, dataset: &Dataset<L>) -> Result<DataFrame, QueryError> {
         if !dataset.is_filled() {
             return Err(QueryError::NoSuchDataset {
                 layer: dataset.layer(),
                 dataset: dataset.name().to_string(),
             });
         }
-        let dir = dataset.dir();
-        let df = self
+        Ok(self
             .ctx
-            .read_parquet(dir.display().to_string(), GeoParquetReadOptions::default())
-            .await?;
-        self.ctx.ctx.register_table(table, df.into_view())?;
-        Ok(())
+            .read_parquet(
+                dataset.dir().display().to_string(),
+                GeoParquetReadOptions::default(),
+            )
+            .await?)
     }
 
     pub async fn register_if_present<L: LayerKind>(
