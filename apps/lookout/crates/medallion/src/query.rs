@@ -20,6 +20,7 @@ use crate::partition::Partition;
 use crate::path::{Dataset, Root, any_file_under};
 use crate::read::Read;
 use crate::rows::{Geometry, Row, RowError};
+use crate::run::{RUN_DATE, RUN_ID};
 use crate::table::{Layout, SilverTarget};
 
 #[derive(Debug, thiserror::Error)]
@@ -305,6 +306,24 @@ impl Query {
                 GeoParquetReadOptions::default(),
             )
             .await?)
+    }
+
+    pub async fn register_gold(
+        &self,
+        dataset: DatasetSpec<layers::Gold>,
+    ) -> Result<(), QueryError> {
+        let runs = self.root.dataset(dataset);
+        if self
+            .register_as_parquet(&runs, dataset.name, &[RUN_DATE, RUN_ID])
+            .await?
+        {
+            Ok(())
+        } else {
+            Err(QueryError::NoSuchDataset {
+                layer: runs.layer(),
+                dataset: dataset.name.to_string(),
+            })
+        }
     }
 
     pub async fn register_if_present<L: LayerKind>(

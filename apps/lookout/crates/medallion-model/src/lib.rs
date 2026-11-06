@@ -3,6 +3,7 @@ mod crossing;
 mod declaration;
 mod evaluation;
 mod gers;
+mod gold;
 mod motis;
 mod motis_source;
 mod overture;
@@ -26,6 +27,7 @@ pub use evaluation::{
     OutcomeKind,
 };
 pub use gers::{GersId, NotAGersId};
+pub use gold::{GoldTarget, GoldTargetError, gold_target};
 pub use motis::{
     AgencyId, EmptyAgencyId, EmptyStopId, EmptyTripId, MOTIS_POLL_V2, MOTIS_POLYLINE_V2,
     MOTIS_SEGMENT_V3, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, NotAPolylineId,

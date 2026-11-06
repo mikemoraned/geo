@@ -1,8 +1,10 @@
 use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 
+use arrow::array::RecordBatch;
 use chrono::NaiveDate;
 
+use crate::dataset::DatasetSpec;
 use crate::layer::layers;
 use crate::partition::{Partition, PartitionValue, PathError};
 use crate::path::Root;
@@ -58,19 +60,28 @@ pub async fn write_run<T: Row<Layer = layers::Gold>>(
     run_id: &RunId,
     rows: &[T],
 ) -> Result<PathBuf, RunError> {
-    let dataset = T::DATASET;
+    if T::GEOMETRY != Geometry::Absent {
+        return Err(RunError::Geometry {
+            dataset: T::DATASET.name,
+        });
+    }
+    write_run_batch(root, T::DATASET, date, run_id, &batch(rows)?).await
+}
+
+pub async fn write_run_batch(
+    root: &Root,
+    dataset: DatasetSpec<layers::Gold>,
+    date: NaiveDate,
+    run_id: &RunId,
+    rows: &RecordBatch,
+) -> Result<PathBuf, RunError> {
     if dataset.partition_key != Some(RUN_DATE) {
         return Err(RunError::NotByRun {
             dataset: dataset.name,
             key: dataset.partition_key,
         });
     }
-    if T::GEOMETRY != Geometry::Absent {
-        return Err(RunError::Geometry {
-            dataset: dataset.name,
-        });
-    }
-    let runs = root.rows_of::<T>();
+    let runs = root.dataset(dataset);
     if let Some(written_on) = written_on(&runs.dir(), run_id) {
         return Err(RunError::Written {
             dataset: dataset.name,
@@ -79,7 +90,7 @@ pub async fn write_run<T: Row<Layer = layers::Gold>>(
         });
     }
     let partition = runs.on_date(date)?.partition(RUN_ID, run_id)?;
-    Ok(partition.replace_with(&[batch(rows)?]).await?)
+    Ok(partition.replace_with(std::slice::from_ref(rows)).await?)
 }
 
 fn written_on(runs: &Path, run_id: &RunId) -> Option<String> {
@@ -103,8 +114,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::dataset::DatasetSpec;
-    use crate::query::Query;
+    use crate::query::{Query, QueryError};
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct Scored {
@@ -286,5 +296,88 @@ mod tests {
         assert!(RunId::new("a/b").is_err());
         assert!(RunId::new("").is_err());
         assert!(RunId::new("a=b").is_err());
+    }
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct RunCount {
+        run_date: String,
+        run_id: String,
+        rows: i64,
+    }
+
+    async fn two_runs(dir: &Path) -> Root {
+        let root = Root::new(dir);
+        write_run(&root, day(6), &run("abc"), &scored(2))
+            .await
+            .expect("a written run");
+        write_run(&root, day(7), &run("def"), &scored(1))
+            .await
+            .expect("a written run");
+        root
+    }
+
+    #[tokio::test]
+    async fn a_query_of_a_gold_dataset_sees_each_rows_run() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let query = Query::new(two_runs(tmp.path()).await);
+        query
+            .register_gold(Scored::DATASET)
+            .await
+            .expect("a registered dataset");
+
+        let counts: Vec<RunCount> = query
+            .rows(
+                "SELECT run_date, run_id, COUNT(*) AS rows FROM scored \
+                 GROUP BY run_date, run_id ORDER BY run_id",
+            )
+            .await
+            .expect("the counts");
+
+        assert_eq!(
+            counts,
+            [
+                RunCount {
+                    run_date: "2026-11-06".to_string(),
+                    run_id: "abc".to_string(),
+                    rows: 2
+                },
+                RunCount {
+                    run_date: "2026-11-07".to_string(),
+                    run_id: "def".to_string(),
+                    rows: 1
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_query_picks_one_run_by_its_id() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let query = Query::new(two_runs(tmp.path()).await);
+        query
+            .register_gold(Scored::DATASET)
+            .await
+            .expect("a registered dataset");
+
+        let picked: Vec<Scored> = query
+            .rows("SELECT notification_id, score FROM scored WHERE run_id = 'def'")
+            .await
+            .expect("the run's rows");
+
+        assert_eq!(picked, scored(1));
+    }
+
+    #[tokio::test]
+    async fn a_gold_dataset_never_written_is_refused() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+
+        let refused = Query::new(Root::new(tmp.path()))
+            .register_gold(Scored::DATASET)
+            .await;
+
+        assert!(
+            matches!(refused, Err(QueryError::NoSuchDataset { .. })),
+            "{refused:?}"
+        );
     }
 }

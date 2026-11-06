@@ -551,7 +551,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       few sessions and drawing each.
 - [x] Extend `medallion` to gold datasets of rows, partitioned `run_date=<date>/run_id=<id>`, each run
       written once.
-- [ ] Register gold datasets by name in `medallion`'s `Query`, and add `query_gold` and `write_gold`
+- [x] Register gold datasets by name in `medallion`'s `Query`, and add `query_gold` and `write_gold`
       to `medallion-py`.
 - [ ] Define the gold datasets that [The datasets](#the-datasets) names, in `medallion-model`.
 - [ ] Add the `evaluate` crate, whose CLI runs every step in order or any one alone, and a
