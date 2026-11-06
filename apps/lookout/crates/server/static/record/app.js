@@ -1,5 +1,6 @@
 const el = (id) => document.getElementById(id);
 const statusEl = el("status");
+const signedOutEl = el("signed-out");
 const wakeLockEl = el("wakelock");
 const idEl = el("id");
 const accelEl = el("accel");
@@ -226,17 +227,29 @@ function connectWs() {
   ws = new WebSocket(WS_URL);
   ws.addEventListener("open", () => {
     reconnectMs = INITIAL_RECONNECT_MS;
+    signedOutEl.hidden = true;
     setStatus("gathering — connected");
     inFlight = 0;
     flushOutbox();
   });
   ws.addEventListener("message", onAck);
-  ws.addEventListener("close", () => {
-    setStatus("gathering — reconnecting…");
+  ws.addEventListener("close", async () => {
     setTimeout(connectWs, reconnectMs);
     reconnectMs = Math.min(reconnectMs * 2, MAX_RECONNECT_MS);
+    const signedOut = (await signInStatus()) === "signed_out";
+    signedOutEl.hidden = !signedOut;
+    setStatus(signedOut ? "gathering — signed out" : "gathering — reconnecting…");
   });
   ws.addEventListener("error", () => ws.close());
+}
+
+async function signInStatus() {
+  try {
+    const response = await fetch("/auth/status");
+    return response.ok ? (await response.json()).status : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function onAck() {
