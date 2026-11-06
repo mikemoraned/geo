@@ -1,0 +1,65 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: gold
+partition_key: run_date
+unique: []
+columns:
+  - name: sessions
+    data_type: UInt64
+    nullable: false
+  - name: hours
+    data_type: Float64
+    nullable: false
+  - name: passes
+    data_type: UInt64
+    nullable: false
+  - name: notifications
+    data_type: UInt64
+    nullable: false
+  - name: false_alarms
+    data_type: UInt64
+    nullable: false
+  - name: repeats
+    data_type: UInt64
+    nullable: false
+  - name: misses
+    data_type: UInt64
+    nullable: false
+  - name: precision
+    data_type: Float64
+    nullable: true
+  - name: precision_low
+    data_type: Float64
+    nullable: true
+  - name: precision_high
+    data_type: Float64
+    nullable: true
+  - name: recall
+    data_type: Float64
+    nullable: true
+  - name: recall_low
+    data_type: Float64
+    nullable: true
+  - name: recall_high
+    data_type: Float64
+    nullable: true
+  - name: false_alarms_per_hour
+    data_type: Float64
+    nullable: true
+  - name: false_alarms_per_hour_low
+    data_type: Float64
+    nullable: true
+  - name: false_alarms_per_hour_high
+    data_type: Float64
+    nullable: true
+  - name: lead_p10_ms
+    data_type: Int64
+    nullable: true
+  - name: lead_median_ms
+    data_type: Int64
+    nullable: true
+  - name: lead_p90_ms
+    data_type: Int64
+    nullable: true
