@@ -1,3 +1,3 @@
-pub mod select;
+pub mod pick;
 
-pub use select::{Seed, SelectError, Selection, select};
+pub use pick::{Pick, PickError, Seed, pick};
