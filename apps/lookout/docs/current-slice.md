@@ -251,11 +251,15 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   It beats the minute that [target.md](target.md) gives, which leaves too little time to act. The
   rider's need fixes N, so no sweep varies it.
 - **A crossing reaches `ActualPass` only from `AlertedPass`.** `ActualPass` marks an alert that
-  came true, so a pass with no alert leaves its crossing in `CandidatePass` or `OutOfReach`. A pass in a session's first minute leaves too little time to notify it 30 s ahead. A
-  predictor first needs samples to measure a speed. Scoring therefore truncates that start. Such a
-  pass goes unscored, as does a notification it credits. The predictor still replays those samples,
-  so it has a speed once scoring starts. This beats marking a pass with no alert as `ActualPass`,
-  which records a success nobody earned.
+  came true, so a pass with no alert leaves its crossing in `CandidatePass` or `OutOfReach`. An
+  alert that starts in the round of its pass comes true at once. The tracker records both
+  transitions at that round, and the notification is last moment, with a lead time of 0. A pass in a
+  session's first minute leaves too little time to notify it 30 s ahead. A predictor first needs
+  samples to measure a speed. Scoring therefore truncates that start. Such a pass goes unscored, as
+  does a notification it credits. The predictor still replays those samples, so it has a speed once
+  scoring starts. This beats marking a pass with no alert as `ActualPass`, which records a success
+  nobody earned. Changed on 2026-11-06: the oracle's check found an alert that started at a pass
+  left open until the crossing's next pass, which then counted as a miss.
 - **A replay runs in `f32` by default, and its run records the float type.** The apps run the
   predictor in `f32`, so a replay in `f32` measures the program they run. In Germany, rounding to
   `f32` moves a point by up to 0.21 m, so predictions differ only where a distance sits at an edge. A
@@ -533,7 +537,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [x] Leave each session's first minute out of `score`, as the decision on `ActualPass` sets out.
       The minute is `Scoring`'s `warm_up`, counted from `started_at`. A notification that repeats an
       unscored pass goes unscored too.
-- [ ] Add the step `summarise` to `evaluation`: the measures and their intervals, with the counts
+- [x] Add the step `summarise` to `evaluation`: the measures and their intervals, with the counts
       of sessions, passes, and notifications.
 - [ ] Expose every step and the full run in `evaluation-py`, with geometry crossing as GeoArrow.
 - [ ] Build a new `notebooks/evaluation/explore3.py` with the user, running the oracle's steps on a
