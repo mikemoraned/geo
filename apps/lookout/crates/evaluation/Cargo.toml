@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 chrono = { workspace = true }
+crossings = { workspace = true }
 datafusion = { workspace = true }
 domain = { workspace = true }
 geo = { workspace = true }
