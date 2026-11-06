@@ -5,6 +5,7 @@ use domain::{CoordinateError, CrossingCompactId, CrossingId, Precision, Sample, 
 use medallion::{Country, Query, QueryError, Root};
 use medallion_model::{TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3};
 use predictor::{DetectPasses, Event, ObserveError, Predict, TrackError, Tracker, Transition};
+use rayon::prelude::*;
 
 use crate::offline::{OfflineDetector, OfflineError};
 
@@ -56,11 +57,11 @@ pub async fn replay<F, Pr>(
     country: Country,
     sessions: &[TrainSessionRowV3],
     compact_ids: &BTreeMap<CrossingId, CrossingCompactId>,
-    predictor: impl Fn() -> Pr,
+    predictor: impl Fn() -> Pr + Sync,
 ) -> Result<BTreeMap<SessionId, Vec<Transition>>, ReplayError>
 where
-    F: Precision,
-    Pr: Predict<F>,
+    F: Precision + Send,
+    Pr: Predict<F> + Send,
 {
     let picked = col("session_id").in_list(
         sessions
@@ -105,10 +106,16 @@ where
             .or_default()
             .push(sample);
     }
-    detectors
+    let sessions: Vec<(SessionId, Vec<Sample<F>>, OfflineDetector)> = detectors
         .into_iter()
         .map(|(session_id, detector)| {
             let samples = samples_by_session.remove(&session_id).unwrap_or_default();
+            (session_id, samples, detector)
+        })
+        .collect();
+    sessions
+        .into_par_iter()
+        .map(|(session_id, samples, detector)| {
             let transitions = replay_session(samples, predictor(), detector)?;
             Ok((session_id, transitions))
         })

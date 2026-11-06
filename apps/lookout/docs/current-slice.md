@@ -452,6 +452,10 @@ What `notebooks/evaluation/explore2_spacing.py` established about the spacing of
   rest. Optimising `evaluation`, `predictor`, `domain`, `geo`, `geo-types`, and `num-traits` cut
   the replay to 43 s. The reads stayed at about 20 s, with DataFusion unoptimised. Optimising
   `predictor` alone changed nothing, since `CrowFlies<f32>` compiles in the crate that names it.
+- **Replaying sessions in parallel cuts CrowFlies' replay to 41 s in a debug build** (2026-11-06).
+  The same pick, on 8 cores, gave the same 55,775 transitions. The replay took 41 s against 140 s,
+  at a peak of 425 MB against 383 MB. With the six crates optimised, it took 21 s against 43 s, and
+  reading took 16 s of that. Reading now takes most of a replay.
 
 ### Tasks
 
