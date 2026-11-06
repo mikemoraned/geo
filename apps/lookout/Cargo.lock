@@ -3087,6 +3087,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "evaluation-py"
+version = "0.1.0"
+dependencies = [
+ "domain",
+ "evaluation",
+ "medallion",
+ "pyo3",
+ "pyo3-arrow",
+ "tokio",
+]
+
+[[package]]
 name = "facet"
 version = "0.46.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

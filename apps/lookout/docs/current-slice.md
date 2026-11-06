@@ -439,6 +439,11 @@ What `notebooks/evaluation/explore2_spacing.py` established about the spacing of
   it drew 1000 of the 34,521 sessions at or above 90 in 0.87 s. A draw of all 34,521 succeeded, and
   a draw of one more was refused as too few. The three draws peaked at 137 MB. The two geometry
   columns hold 1,478 MB of the 1,485 MB the sessions take in their files, and a draw reads neither.
+- **A change to `select` rebuilds `evaluation-py` in 20 s** (2026-11-06). Two rebuilds through uv,
+  each after a one-word change to `select`, took 20.4 s and 19.3 s. The extension links
+  `medallion-model`, DataFusion, and SedonaDB, since `select` reads the store through medallion.
+  The first build took 12.5 minutes, beside a build of `lookout-medallion` for the tests'
+  fixtures.
 
 ### Tasks
 
@@ -501,7 +506,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [x] Create the `evaluation` crate with the step `select`, which picks `TrainSessionRowV3`s at
       random under a seed. It reads one country through medallion's new `Read<T>`, and the engine
       filters and draws, as the decisions on the typed read and the draw set out.
-- [ ] Add the `evaluation-py` extension exposing `select`, and time a rebuild after a change to
+- [x] Add the `evaluation-py` extension exposing `select`, and time a rebuild after a change to
       `select`.
 - [ ] Decide from that time whether the steps take and build `medallion-model`'s rows, or rows of
       their own.

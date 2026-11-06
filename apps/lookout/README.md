@@ -40,10 +40,10 @@ commands for a deploy, so what is served is built rather than committed.
 
 ## The python extensions
 
-Three crates are pyo3 extension modules: [medallion-py](crates/medallion-py/README.md) for the
+Four crates are pyo3 extension modules: [medallion-py](crates/medallion-py/README.md) for the
 store, [rerun-py](crates/platform/rerun-py/README.md) for replaying a session through the
-predictor, and [session-crossings-py](crates/session-crossings-py/README.md) for the session
-crossings matching's steps. Each one's API reference is its docstrings, which pyo3 publishes from
+predictor, [session-crossings-py](crates/session-crossings-py/README.md) for the session crossings
+matching's steps, and [evaluation-py](crates/evaluation-py/README.md) for the evaluation's steps. Each one's API reference is its docstrings, which pyo3 publishes from
 the doc comments in its `src/lib.rs`, so `help(…)` in a notebook or a REPL is the documentation.
 
 A notebook takes an extension through its own inline script metadata, since marimo notebooks here
