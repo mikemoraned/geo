@@ -93,7 +93,7 @@ A **notification** is a crossing's entry into `AlertedPass`. It claims that the 
 crossing within the horizon N.
 
 A notification's **lead time** runs from it to the next pass of its crossing. Each pass credits the
-notification that scores best for it, and that notification's lead time sets its class:
+notification that scores worst for it, and that notification's lead time sets its class:
 
 | Class | Lead time | Score |
 | --- | --- | --- |
@@ -104,11 +104,11 @@ notification that scores best for it, and that notification's lead time sets its
 The **ramp** starts at N, and its width is a setting each run records, as are the scores. The
 first runs use a ramp one minute wide, so a notification 5:30 ahead of its pass scores about 0.53.
 
-Every other notification is a **false alarm**, and scores 0. That covers a notification with no pass
-of its crossing still to come, and one that loses its pass's credit to a better one. A **miss** is a
-pass that credits no notification.
+Every other notification scores 0. A **repeat** is one whose pass credits another notification. A
+**false alarm** is one with no pass of its crossing still to come. A **miss** is a pass that credits
+no notification.
 
-- **Precision** is the total score over notifications.
+- **Precision** is the total score over notifications, repeats included.
 - **Recall** is the total score over the scored passes.
 - **False alarms per hour** is false alarms over the hours replayed.
 - **Lead time** is reported as a distribution, over the notifications the passes credit.
@@ -528,7 +528,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       predictor, the offline pass detector, and the `Tracker`, in the float type its run records.
 - [x] Add the oracle to `evaluation`: a predictor that reads a session's ground-truth passes, and
       predicts each with high confidence from N ahead.
-- [ ] Add the step `score` to `evaluation`, scoring each notification as
+- [x] Add the step `score` to `evaluation`, scoring each notification as
       [The measure](#the-measure) defines.
 - [ ] Leave each session's first minute out of `score`, as the decision on `ActualPass` sets out.
 - [ ] Add the step `summarise` to `evaluation`: the measures and their intervals, with the counts
