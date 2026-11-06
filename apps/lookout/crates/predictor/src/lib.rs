@@ -1,5 +1,6 @@
 pub mod crossings;
 pub mod crow_flies;
+pub mod detect;
 pub mod fixtures;
 pub mod parser;
 pub mod predict;
@@ -9,6 +10,7 @@ pub mod tracker;
 
 pub use crossings::Crossings;
 pub use crow_flies::{CrowFlies, DEFAULT_RADIUS};
+pub use detect::{DetectPasses, Passes};
 pub use parser::Parser;
 pub use predict::{
     Confidence, Event, ObserveError, Predict, Prediction, Predictions, nearest_first,

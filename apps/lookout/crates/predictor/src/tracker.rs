@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 
 use domain::{CrossingCompactId, Precision};
 
+use crate::detect::Passes;
 use crate::predict::{Confidence, Predictions};
 use crate::state::{AlertedPass, CandidatePass, CrossingState, StateKind};
 
@@ -43,7 +44,7 @@ impl Tracker {
         &mut self,
         at: DateTime<Utc>,
         predictions: &Predictions<P>,
-        passed: &BTreeSet<CrossingCompactId>,
+        passed: &Passes,
     ) -> Result<Vec<Transition>, TrackError> {
         if let Some(now) = self.now
             && at < now
