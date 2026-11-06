@@ -50,12 +50,11 @@ pub struct Credit {
     pub crossed_at: DateTime<Utc>,
     pub lead: TimeDelta,
     pub class: Class,
-    pub score: Score,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Verdict {
-    Credited(Credit),
+    Credited { credit: Credit, score: Score },
     Repeat(Credit),
     FalseAlarm,
     Unscored(Credit),
@@ -75,7 +74,7 @@ pub enum Outcome {
 }
 
 impl Scoring {
-    fn credit(&self, notified_at: DateTime<Utc>, crossed_at: DateTime<Utc>) -> Credit {
+    fn credit(&self, notified_at: DateTime<Utc>, crossed_at: DateTime<Utc>) -> (Credit, Score) {
         let lead = crossed_at - notified_at;
         let (class, score) = if lead < self.last_moment.time_delta() {
             (Class::LastMoment, self.last_moment_score)
@@ -87,12 +86,14 @@ impl Scoring {
             let ramped = 1.0 - past * (1.0 - self.floor.get());
             (Class::TooEarly, Score(ramped.max(self.floor.get())))
         };
-        Credit {
-            crossed_at,
-            lead,
-            class,
+        (
+            Credit {
+                crossed_at,
+                lead,
+                class,
+            },
             score,
-        }
+        )
     }
 }
 
@@ -150,7 +151,7 @@ fn score_session(
         .filter(|transition| transition.to == StateKind::AlertedPass)
         .map(|transition| (transition.at, transition.crossing_compact_id))
         .collect();
-    let candidates: BTreeMap<usize, (CrossingAt, Credit)> = notifications
+    let candidates: BTreeMap<usize, (CrossingAt, Credit, Score)> = notifications
         .iter()
         .enumerate()
         .filter_map(|(index, &(notified_at, crossing_compact_id))| {
@@ -160,29 +161,35 @@ fn score_session(
                     passed == crossing_compact_id && crossed_at >= notified_at
                 })
                 .min()
-                .map(|&pass| (index, (pass, scoring.credit(notified_at, pass.0))))
+                .map(|&pass| {
+                    let (credit, score) = scoring.credit(notified_at, pass.0);
+                    (index, (pass, credit, score))
+                })
         })
         .collect();
 
     let mut credited: BTreeMap<CrossingAt, (usize, Score)> = BTreeMap::new();
-    for (&index, &(pass, credit)) in &candidates {
+    for (&index, &(pass, _, score)) in &candidates {
         credited
             .entry(pass)
             .and_modify(|best| {
-                if credit.score < best.1 {
-                    *best = (index, credit.score);
+                if score < best.1 {
+                    *best = (index, score);
                 }
             })
-            .or_insert((index, credit.score));
+            .or_insert((index, score));
     }
 
     let verdict_of = |index: usize| match candidates.get(&index) {
         None => Verdict::FalseAlarm,
-        Some((pass, credit)) if pass.0 < scored_from => Verdict::Unscored(*credit),
-        Some((pass, credit)) if credited.get(pass).is_some_and(|best| best.0 == index) => {
-            Verdict::Credited(*credit)
+        Some((pass, credit, _)) if pass.0 < scored_from => Verdict::Unscored(*credit),
+        Some((pass, credit, score)) if credited.get(pass).is_some_and(|best| best.0 == index) => {
+            Verdict::Credited {
+                credit: *credit,
+                score: *score,
+            }
         }
-        Some((_, credit)) => Verdict::Repeat(*credit),
+        Some((_, credit, _)) => Verdict::Repeat(*credit),
     };
     let notified =
         notifications
@@ -298,10 +305,9 @@ mod tests {
 
     fn seen(verdict: Verdict) -> Seen {
         match verdict {
-            Verdict::Credited(credit) => Seen::Credited(
-                credit.class,
-                (credit.score.get() * 1_000.0).round() / 1_000.0,
-            ),
+            Verdict::Credited { credit, score } => {
+                Seen::Credited(credit.class, (score.get() * 1_000.0).round() / 1_000.0)
+            }
             Verdict::Repeat(_) => Seen::Repeat,
             Verdict::FalseAlarm => Seen::FalseAlarm,
             Verdict::Unscored(_) => Seen::Unscored,
