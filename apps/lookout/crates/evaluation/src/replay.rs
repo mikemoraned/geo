@@ -57,7 +57,7 @@ pub async fn replay<F, Pr>(
     country: Country,
     sessions: &[TrainSessionRowV3],
     compact_ids: &BTreeMap<CrossingId, CrossingCompactId>,
-    predictor: impl Fn() -> Pr + Sync,
+    predictor: impl Fn(&SessionId) -> Pr + Sync,
 ) -> Result<BTreeMap<SessionId, Vec<Transition>>, ReplayError>
 where
     F: Precision + Send,
@@ -116,7 +116,7 @@ where
     sessions
         .into_par_iter()
         .map(|(session_id, samples, detector)| {
-            let transitions = replay_session(samples, predictor(), detector)?;
+            let transitions = replay_session(samples, predictor(&session_id), detector)?;
             Ok((session_id, transitions))
         })
         .collect()
@@ -373,7 +373,7 @@ mod tests {
             Country::Germany,
             &picked(&["a", "c"]),
             &compact_ids(),
-            || Scripted::alerting(1, &[0, 10, 20, 30]),
+            |_| Scripted::alerting(1, &[0, 10, 20, 30]),
         )
         .await
         .expect("a replay");
@@ -409,7 +409,7 @@ mod tests {
             Country::Germany,
             &picked(&["a"]),
             &compact_ids(),
-            || Scripted::alerting(1, &[0, 10, 20, 30]),
+            |_| Scripted::alerting(1, &[0, 10, 20, 30]),
         )
         .await
         .expect("a replay in order");
@@ -439,7 +439,7 @@ mod tests {
             Country::Germany,
             &picked(&["a", "z"]),
             &compact_ids(),
-            || Scripted::alerting(1, &[0, 10, 20, 30]),
+            |_| Scripted::alerting(1, &[0, 10, 20, 30]),
         )
         .await
         .expect("a replay");
