@@ -289,9 +289,10 @@ fn query_error(err: QueryError) -> PyErr {
         | QueryError::UnknownCountry { .. }
         | QueryError::CountryNeeded { .. }
         | QueryError::NoCountryLevel { .. } => PyValueError::new_err(err.to_string()),
-        QueryError::Rows(_) | QueryError::Path(_) | QueryError::List { .. } => {
-            PyRuntimeError::new_err(err.to_string())
-        }
+        QueryError::Rows(_)
+        | QueryError::Describing(_)
+        | QueryError::Path(_)
+        | QueryError::List { .. } => PyRuntimeError::new_err(err.to_string()),
     }
 }
 
