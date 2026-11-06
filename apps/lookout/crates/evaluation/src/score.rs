@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, TimeDelta, Utc};
 use domain::{CrossingCompactId, CrossingId, SessionId, Span};
 use itertools::Itertools;
+use medallion_model::TrainSessionRowV3;
 use predictor::{StateKind, Transition};
 
 use crate::offline::{OfflineError, RecordedPass, SessionPasses, passes_by_session};
@@ -34,6 +35,7 @@ pub struct Scoring {
     pub ramp: Span,
     pub last_moment_score: Score,
     pub floor: Score,
+    pub warm_up: Span,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -56,6 +58,7 @@ pub enum Verdict {
     Credited(Credit),
     Repeat(Credit),
     FalseAlarm,
+    Unscored(Credit),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -93,23 +96,45 @@ impl Scoring {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ScoreError {
+    #[error(transparent)]
+    Passes(#[from] OfflineError),
+    #[error("the session {session_id} was picked, and the replay holds no transitions for it")]
+    NotReplayed { session_id: SessionId },
+}
+
 pub fn score<R: RecordedPass>(
+    sessions: &[TrainSessionRowV3],
     replayed: &BTreeMap<SessionId, Vec<Transition>>,
     passes: impl IntoIterator<Item = R>,
     compact_ids: &BTreeMap<CrossingId, CrossingCompactId>,
     scoring: &Scoring,
-) -> Result<BTreeMap<SessionId, Vec<Outcome>>, OfflineError> {
-    let mut passes_by_session = passes_by_session(replayed.keys().cloned(), passes, compact_ids)?;
-    Ok(replayed
+) -> Result<BTreeMap<SessionId, Vec<Outcome>>, ScoreError> {
+    let mut passes_by_session = passes_by_session(
+        sessions.iter().map(|session| session.session_id.clone()),
+        passes,
+        compact_ids,
+    )?;
+    sessions
         .iter()
-        .map(|(session_id, transitions)| {
-            let passes = passes_by_session.remove(session_id).unwrap_or_default();
-            (
-                session_id.clone(),
-                score_session(transitions, &passes, scoring),
-            )
+        .map(|session| {
+            let transitions =
+                replayed
+                    .get(&session.session_id)
+                    .ok_or_else(|| ScoreError::NotReplayed {
+                        session_id: session.session_id.clone(),
+                    })?;
+            let passes = passes_by_session
+                .remove(&session.session_id)
+                .unwrap_or_default();
+            let scored_from = session.started_at + scoring.warm_up.time_delta();
+            Ok((
+                session.session_id.clone(),
+                score_session(transitions, &passes, scored_from, scoring),
+            ))
         })
-        .collect())
+        .collect()
 }
 
 type CrossingAt = (DateTime<Utc>, CrossingCompactId);
@@ -117,6 +142,7 @@ type CrossingAt = (DateTime<Utc>, CrossingCompactId);
 fn score_session(
     transitions: &[Transition],
     passes: &SessionPasses,
+    scored_from: DateTime<Utc>,
     scoring: &Scoring,
 ) -> Vec<Outcome> {
     let notifications: Vec<CrossingAt> = transitions
@@ -152,6 +178,7 @@ fn score_session(
 
     let verdict_of = |index: usize| match candidates.get(&index) {
         None => Verdict::FalseAlarm,
+        Some((pass, credit)) if pass.0 < scored_from => Verdict::Unscored(*credit),
         Some((pass, credit)) if credited.get(pass).is_some_and(|best| best.0 == index) => {
             Verdict::Credited(*credit)
         }
@@ -170,7 +197,7 @@ fn score_session(
             );
     let missed = passes
         .iter()
-        .filter(|pass| !credited.contains_key(pass))
+        .filter(|pass| pass.0 >= scored_from && !credited.contains_key(pass))
         .map(|&(crossed_at, crossing_compact_id)| Outcome::Miss {
             crossing_compact_id,
             crossed_at,
@@ -237,6 +264,7 @@ mod tests {
             ramp: Span::new("1m").expect("a span"),
             last_moment_score: Score::new(0.25).expect("a score"),
             floor: Score::new(0.05).expect("a score"),
+            warm_up: Span::new("1m").expect("a span"),
         }
     }
 
@@ -245,6 +273,11 @@ mod tests {
         Credited(Class, f64),
         Repeat,
         FalseAlarm,
+        Unscored,
+    }
+
+    fn long_ago() -> DateTime<Utc> {
+        instant(-3_600)
     }
 
     type Scored = (i64, Seen);
@@ -271,6 +304,7 @@ mod tests {
             ),
             Verdict::Repeat(_) => Seen::Repeat,
             Verdict::FalseAlarm => Seen::FalseAlarm,
+            Verdict::Unscored(_) => Seen::Unscored,
         }
     }
 
@@ -294,6 +328,7 @@ mod tests {
         notifications(&score_session(
             &[alerted(1, 1_000 - lead)],
             &passed(&[(1, 1_000)]),
+            long_ago(),
             &first_runs(),
         ))
     }
@@ -337,6 +372,7 @@ mod tests {
         let outcomes = score_session(
             &[alerted(1, 100), alerted(2, 100)],
             &passed(&[(1, 50), (3, 200)]),
+            long_ago(),
             &first_runs(),
         );
 
@@ -348,7 +384,7 @@ mod tests {
 
     #[test]
     fn a_pass_that_credits_no_notification_is_a_miss() {
-        let outcomes = score_session(&[], &passed(&[(1, 50), (2, 80)]), &first_runs());
+        let outcomes = score_session(&[], &passed(&[(1, 50), (2, 80)]), long_ago(), &first_runs());
 
         assert_eq!(misses(&outcomes), [(1, 50), (2, 80)]);
     }
@@ -364,6 +400,7 @@ mod tests {
                 alerted(1, 990),
             ],
             &passed(&[(1, 1_000)]),
+            long_ago(),
             &first_runs(),
         );
 
@@ -383,6 +420,7 @@ mod tests {
         let outcomes = score_session(
             &[alerted(1, 750), withdrawn(1, 800), alerted(1, 900)],
             &passed(&[(1, 1_000)]),
+            long_ago(),
             &first_runs(),
         );
 
@@ -397,6 +435,7 @@ mod tests {
         let outcomes = score_session(
             &[alerted(1, 400)],
             &passed(&[(1, 300), (1, 600), (1, 900)]),
+            long_ago(),
             &first_runs(),
         );
 
@@ -445,6 +484,7 @@ mod tests {
         ]);
 
         let scored = score(
+            &started(&[("a", -3_600), ("b", -3_600)]),
             &replayed,
             [row("a", 1, 1_000), row("b", 1, 1_000)],
             &compact_ids(),
@@ -460,6 +500,81 @@ mod tests {
         assert_eq!(misses(&scored[&session("b")]), [(1, 1_000)]);
     }
 
+    fn started(sessions: &[(&str, i64)]) -> Vec<TrainSessionRowV3> {
+        sessions
+            .iter()
+            .map(|&(name, seconds)| TrainSessionRowV3 {
+                session_id: session(name),
+                started_at: instant(seconds),
+                ..TrainSessionRowV3::example()
+            })
+            .collect()
+    }
+
+    fn from_start(transitions: &[Transition], passes: &[(u32, i64)]) -> Vec<Outcome> {
+        score(
+            &started(&[("a", 0)]),
+            &BTreeMap::from([(session("a"), transitions.to_vec())]),
+            passes.iter().map(|&(n, seconds)| row("a", n, seconds)),
+            &compact_ids(),
+            &first_runs(),
+        )
+        .expect("known sessions and crossings")
+        .remove(&session("a"))
+        .expect("the session's outcomes")
+    }
+
+    #[test]
+    fn a_pass_in_a_sessions_first_minute_is_neither_scored_nor_missed() {
+        let outcomes = from_start(&[], &[(1, 59), (2, 60)]);
+
+        assert_eq!(misses(&outcomes), [(2, 60)]);
+    }
+
+    #[test]
+    fn a_notification_whose_pass_falls_in_the_first_minute_is_unscored_with_its_repeats() {
+        let outcomes = from_start(
+            &[alerted(1, 10), withdrawn(1, 20), alerted(1, 30)],
+            &[(1, 50)],
+        );
+
+        assert_eq!(
+            notifications(&outcomes),
+            [(10, Seen::Unscored), (30, Seen::Unscored)]
+        );
+    }
+
+    #[test]
+    fn a_notification_in_the_first_minute_is_scored_against_a_later_pass() {
+        let outcomes = from_start(&[alerted(1, 30), alerted(2, 40)], &[(1, 300)]);
+
+        assert_eq!(
+            notifications(&outcomes),
+            [
+                (30, Seen::Credited(Class::Hit, 1.0)),
+                (40, Seen::FalseAlarm)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_session_picked_and_not_replayed_is_refused() {
+        let refused = score(
+            &started(&[("a", 0), ("b", 0)]),
+            &BTreeMap::from([(session("a"), vec![])]),
+            Vec::<TrainSessionCrossingRowV1>::new(),
+            &compact_ids(),
+            &first_runs(),
+        );
+
+        assert_eq!(
+            refused,
+            Err(ScoreError::NotReplayed {
+                session_id: session("b")
+            })
+        );
+    }
+
     proptest! {
         #[test]
         fn each_pass_credits_one_notification_or_is_missed_and_each_notification_is_scored_once(
@@ -473,7 +588,7 @@ mod tests {
                 .collect();
             let passes = passed(&passes.into_iter().unique().collect::<Vec<_>>());
 
-            let outcomes = score_session(&transitions, &passes, &first_runs());
+            let outcomes = score_session(&transitions, &passes, long_ago(), &first_runs());
 
             let credited = notifications(&outcomes).iter().filter(|(_, seen)| matches!(seen, Seen::Credited(..))).count();
             prop_assert_eq!(notifications(&outcomes).len(), transitions.len());

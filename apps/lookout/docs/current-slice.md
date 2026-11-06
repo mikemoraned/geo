@@ -530,7 +530,9 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       predicts each with high confidence from N ahead.
 - [x] Add the step `score` to `evaluation`, scoring each notification as
       [The measure](#the-measure) defines.
-- [ ] Leave each session's first minute out of `score`, as the decision on `ActualPass` sets out.
+- [x] Leave each session's first minute out of `score`, as the decision on `ActualPass` sets out.
+      The minute is `Scoring`'s `warm_up`, counted from `started_at`. A notification that repeats an
+      unscored pass goes unscored too.
 - [ ] Add the step `summarise` to `evaluation`: the measures and their intervals, with the counts
       of sessions, passes, and notifications.
 - [ ] Expose every step and the full run in `evaluation-py`, with geometry crossing as GeoArrow.
