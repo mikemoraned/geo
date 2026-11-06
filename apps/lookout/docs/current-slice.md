@@ -355,6 +355,23 @@ Upstash.
 - [ ] Revoke a passkey during a recording, and check that its socket closes within a minute, and
       that `/record/` then shows the session as signed out.
 
+#### Harden
+
+Checks that the gate holds beyond the cases its tests name. It runs after the manual test, so a
+fix the manual test forces is hardened too, and before Wrap-up, so the docs describe the hardened
+code.
+
+- [ ] Run `cargo-mutants` over `crates/server/src/auth`, and add a test for each mutant that
+      survives.
+- [ ] Review the auth code as a whole, with `/security-review` over the slice's changes.
+- [ ] Run `cargo audit` over the workspace, for advisories against the crates this slice adds:
+      webauthn-rs, its vendored OpenSSL, tower-sessions, and their dependencies.
+- [ ] Check what an error tells a caller. A 400 carries webauthn-rs's reason for refusing a
+      credential. Decide whether a caller needs it, or only the server's log.
+- [ ] Check that no log line carries a session ID, a credential ID, or the redis URL. Include the
+      redis client's errors, which the server and the CLI print.
+- [ ] Run `just test-no-docker` and the server's Docker tests.
+
 #### Wrap-up
 
 - [x] Describe the gate, the session store, and the CLI in `crates/server/README.md`.
@@ -366,6 +383,3 @@ Upstash.
 - [ ] Describe signing in, and the signed-out state of `/record/`, in `docs/web.md`.
 - [ ] Describe who can record, how a passkey gains and loses access, and the risks the design
       accepts, in `docs/access.md`, and index it in `CLAUDE.md`.
-- [ ] Run `cargo-mutants` over `crates/server/src/auth`, and add a test for each mutant that
-      survives. Then review the auth code as a whole.
-- [ ] Run `just test-no-docker` and the server's Docker tests.
