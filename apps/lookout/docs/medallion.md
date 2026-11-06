@@ -534,6 +534,10 @@ Gold partitions on **which run or version produced the output**, and nothing is 
 A run's configuration and input dataset versions are written as columns alongside its
 results, so a run is interpretable without reference to the code that produced it.
 
+**A run is written once.** A write of a run whose id the dataset already holds, under any date, is
+refused, and the rows already written stay. A run with no rows still writes its partition, so a
+read finds the run.
+
 **A coordinate written out for a consumer keeps six decimal places**, about 11 cm. Silver holds a
 position as `f64`, which takes seventeen significant digits to write in full: nanometres, against a
 fix accurate to metres at best. The digits past the sixth cost bytes in every row of every export.

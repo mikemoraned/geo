@@ -1,18 +1,18 @@
 use chrono::{DateTime, Utc};
 use domain::{CrossingCompactId, SessionId};
-use medallion::{DatasetSpec, Row, layers};
+use medallion::{DatasetSpec, RUN_DATE, Row, layers};
 use serde::{Deserialize, Serialize};
 
 use crate::TrainSessionRowV3;
 
 pub const EVALUATION_TRANSITION_V1: DatasetSpec<layers::Gold> =
-    DatasetSpec::partitioned("evaluation_transition_v1", "run_date");
+    DatasetSpec::partitioned("evaluation_transition_v1", RUN_DATE);
 
 pub const EVALUATION_OUTCOME_V1: DatasetSpec<layers::Gold> =
-    DatasetSpec::partitioned("evaluation_outcome_v1", "run_date");
+    DatasetSpec::partitioned("evaluation_outcome_v1", RUN_DATE);
 
 pub const EVALUATION_SUMMARY_V1: DatasetSpec<layers::Gold> =
-    DatasetSpec::partitioned("evaluation_summary_v1", "run_date");
+    DatasetSpec::partitioned("evaluation_summary_v1", RUN_DATE);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
