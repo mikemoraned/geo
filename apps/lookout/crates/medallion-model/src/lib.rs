@@ -1,6 +1,7 @@
 mod bronze;
 mod crossing;
 mod declaration;
+mod evaluation;
 mod gers;
 mod motis;
 mod motis_source;
@@ -18,6 +19,11 @@ pub use bronze::{NoSuchBronzeDataset, bronze_dataset};
 pub use crossing::{
     OverlapKind, SESSION_CROSSING_V3, SessionCrossingRowV3, TRAIN_SESSION_CROSSING_V1,
     TrainSessionCrossingRowV1, WATER_CROSSING_V2, WaterCrossingRowV2,
+};
+pub use evaluation::{
+    CrossingStateKind, EVALUATION_OUTCOME_V1, EVALUATION_SUMMARY_V1, EVALUATION_TRANSITION_V1,
+    EvaluationOutcomeRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1, NotificationClass,
+    OutcomeKind,
 };
 pub use gers::{GersId, NotAGersId};
 pub use motis::{
@@ -46,7 +52,7 @@ pub use train_session::{
     TrainSessionSampleRowV3, train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 18] = [
+pub const ALL: [DatasetInfo; 21] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
@@ -65,6 +71,9 @@ pub const ALL: [DatasetInfo; 18] = [
     TRAIN_SESSION_CROSSING_V1.info(),
     OVERTURE_EXTRACT.info(),
     EXTRACT_MANIFEST_V3.info(),
+    EVALUATION_TRANSITION_V1.info(),
+    EVALUATION_OUTCOME_V1.info(),
+    EVALUATION_SUMMARY_V1.info(),
 ];
 
 #[cfg(test)]
@@ -101,6 +110,9 @@ mod tests {
         assert_eq!(
             replaceable,
             [
+                "evaluation_outcome_v1",
+                "evaluation_summary_v1",
+                "evaluation_transition_v1",
                 "session_crossing_v3",
                 "session_sample_v3",
                 "session_v3",
@@ -194,5 +206,8 @@ mod tests {
         check_rows_of::<SessionCrossingRowV3>();
         check_rows_of::<TrainSessionCrossingRowV1>();
         check_rows_of::<ExtractManifestRowV3>();
+        check_rows_of::<EvaluationTransitionRowV1>();
+        check_rows_of::<EvaluationOutcomeRowV1>();
+        check_rows_of::<EvaluationSummaryRowV1>();
     }
 }
