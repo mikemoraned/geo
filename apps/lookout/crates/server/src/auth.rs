@@ -7,6 +7,7 @@ pub mod registration;
 pub mod sessions;
 pub mod signin;
 pub mod signout;
+pub mod status;
 pub mod store;
 mod test_passkeys;
 
@@ -17,7 +18,7 @@ use ::redis::aio::MultiplexedConnection;
 use axum::Router;
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::post;
+use axum::routing::{get, post};
 use serde::{Deserialize, Serialize};
 use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 use uuid::Uuid;
@@ -144,6 +145,7 @@ pub fn routes<S>(relying_party: RelyingParty) -> Router<S> {
         .route("/auth/signin/start", post(signin::start))
         .route("/auth/signin/finish", post(signin::finish))
         .route("/auth/signout", post(signout::signout))
+        .route("/auth/status", get(status::status))
         .with_state(relying_party)
 }
 

@@ -1,0 +1,23 @@
+use axum::Json;
+use axum::extract::State;
+use serde::{Deserialize, Serialize};
+use tower_sessions::Session;
+
+use crate::auth::{AuthError, RelyingParty};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum SignInStatus {
+    SignedIn,
+    SignedOut,
+}
+
+pub async fn status(
+    State(relying_party): State<RelyingParty>,
+    session: Session,
+) -> Result<Json<SignInStatus>, AuthError> {
+    Ok(Json(match relying_party.signed_in(&session).await? {
+        Some(_) => SignInStatus::SignedIn,
+        None => SignInStatus::SignedOut,
+    }))
+}
