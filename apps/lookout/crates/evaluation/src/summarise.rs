@@ -81,7 +81,7 @@ pub fn summarise(
         .flatten()
         .filter_map(|outcome| match outcome {
             Outcome::Notification {
-                verdict: Verdict::Credited(credit),
+                verdict: Verdict::Credited { credit, .. },
                 ..
             } => Some(credit.lead.as_seconds_f64()),
             _ => None,
@@ -123,8 +123,8 @@ impl Tally {
             },
             |tally, outcome| match outcome {
                 Outcome::Notification { verdict, .. } => match verdict {
-                    Verdict::Credited(credit) => Self {
-                        credited_score: tally.credited_score + credit.score.get(),
+                    Verdict::Credited { score, .. } => Self {
+                        credited_score: tally.credited_score + score.get(),
                         notifications: tally.notifications + 1,
                         passes: tally.passes + 1,
                         ..tally
@@ -272,11 +272,17 @@ mod tests {
         }
     }
 
-    fn credit(class: Class, score: f64, lead: i64) -> Credit {
+    fn credit(class: Class, lead: i64) -> Credit {
         Credit {
             crossed_at: instant(1_000),
             lead: TimeDelta::seconds(lead),
             class,
+        }
+    }
+
+    fn credited(class: Class, score: f64, lead: i64) -> Verdict {
+        Verdict::Credited {
+            credit: credit(class, lead),
             score: Score::new(score).expect("a score"),
         }
     }
@@ -297,7 +303,7 @@ mod tests {
     }
 
     fn hit() -> Outcome {
-        notified(Verdict::Credited(credit(Class::Hit, 1.0, 120)))
+        notified(credited(Class::Hit, 1.0, 120))
     }
 
     fn false_alarm() -> Outcome {
@@ -318,10 +324,10 @@ mod tests {
             session("a"),
             vec![
                 hit(),
-                notified(Verdict::Credited(credit(Class::TooEarly, 0.5, 330))),
-                notified(Verdict::Repeat(credit(Class::Hit, 1.0, 60))),
+                notified(credited(Class::TooEarly, 0.5, 330)),
+                notified(Verdict::Repeat(credit(Class::Hit, 60))),
                 false_alarm(),
-                notified(Verdict::Unscored(credit(Class::Hit, 1.0, 60))),
+                notified(Verdict::Unscored(credit(Class::Hit, 60))),
                 missed(),
             ],
         )]);
