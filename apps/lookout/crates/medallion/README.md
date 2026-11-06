@@ -171,6 +171,12 @@ A dataset is registered as a table by name, which walks its partition directorie
 geometry columns back with their CRS, so a caller expresses what it wants as a query rather than
 as file traversal.
 
+A read in Rust can name a row type instead of a table. `Query::read_of_country` returns a `Read` of
+that type over one country's partition. Its `filter`, `sort`, and `limit` take the engine's own
+expressions, and `rows` returns rows of the type, reading only its columns. The engine plans and
+runs these operators as it does a SQL query. [What a read
+costs](../../docs/medallion.md#what-a-read-costs) sets out what that saves.
+
 A summary answers "is this dataset there, and how much of it" without reading a row: the counts
 come from each parquet file's own footer, so the cost is a seek per file rather than a scan.
 Nothing in it interprets a dataset's columns, which is what lets one summary cover every dataset —
