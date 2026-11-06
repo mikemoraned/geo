@@ -62,10 +62,10 @@ impl Tracker {
 
         Ok(crossings
             .into_iter()
-            .filter_map(|crossing_compact_id| {
+            .flat_map(|crossing_compact_id| {
                 let before = self.states.remove(&crossing_compact_id);
                 let from = CrossingState::kind_of(before.as_ref());
-                let after = next(
+                let (through, after) = next(
                     before,
                     predictions
                         .get(&crossing_compact_id)
@@ -76,12 +76,19 @@ impl Tracker {
                 if let Some(state) = after {
                     self.states.insert(crossing_compact_id, state);
                 }
-                (from != to).then_some(Transition {
-                    crossing_compact_id,
-                    at,
-                    from,
-                    to,
-                })
+                let path: Vec<StateKind> = [Some(from), through, Some(to)]
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                path.windows(2)
+                    .filter(|step| step[0] != step[1])
+                    .map(|step| Transition {
+                        crossing_compact_id,
+                        at,
+                        from: step[0],
+                        to: step[1],
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect())
     }
@@ -91,14 +98,25 @@ fn next(
     state: Option<CrossingState>,
     confidence: Option<Confidence>,
     passed: bool,
-) -> Option<CrossingState> {
+) -> (Option<StateKind>, Option<CrossingState>) {
     match (state, passed) {
-        (Some(CrossingState::Alerted(state)), true) => Some(CrossingState::Actual(state.pass())),
-        (Some(passing @ CrossingState::Actual(_)), true) => Some(passing),
-        (state, _) => confidence.map(|confidence| match state {
-            Some(state) => predicted(state, confidence),
-            None => entered(confidence),
-        }),
+        (Some(CrossingState::Alerted(state)), true) => {
+            (None, Some(CrossingState::Actual(state.pass())))
+        }
+        (Some(passing @ CrossingState::Actual(_)), true) => (None, Some(passing)),
+        (state, passed) => {
+            let predicted = confidence.map(|confidence| match state {
+                Some(state) => predicted(state, confidence),
+                None => entered(confidence),
+            });
+            match (predicted, passed) {
+                (Some(CrossingState::Alerted(state)), true) => (
+                    Some(StateKind::AlertedPass),
+                    Some(CrossingState::Actual(state.pass())),
+                ),
+                (predicted, _) => (None, predicted),
+            }
+        }
     }
 }
 
@@ -277,6 +295,49 @@ mod tests {
                 StateKind::AlertedPass,
                 StateKind::ActualPass
             )]
+        );
+    }
+
+    #[test]
+    fn a_crossing_alerted_and_passed_in_one_round_records_both_at_that_round() {
+        let mut tracker = Tracker::new();
+
+        let transitions = tracker
+            .track(
+                instant(),
+                &predictions(&[(1, Confidence::High)]),
+                &passed(&[1]),
+            )
+            .expect("in order");
+
+        assert_eq!(
+            transitions,
+            vec![
+                transition(1, 0, StateKind::OutOfReach, StateKind::AlertedPass),
+                transition(1, 0, StateKind::AlertedPass, StateKind::ActualPass),
+            ]
+        );
+        assert_eq!(tracker.kind(id(1)), StateKind::ActualPass);
+    }
+
+    #[test]
+    fn a_candidate_alerted_and_passed_in_one_round_records_both_at_that_round() {
+        let mut tracker = tracker_through(&[(&[(1, Confidence::Low)], &[])]);
+
+        let transitions = tracker
+            .track(
+                later(10),
+                &predictions(&[(1, Confidence::High)]),
+                &passed(&[1]),
+            )
+            .expect("in order");
+
+        assert_eq!(
+            transitions,
+            vec![
+                transition(1, 10, StateKind::CandidatePass, StateKind::AlertedPass),
+                transition(1, 10, StateKind::AlertedPass, StateKind::ActualPass),
+            ]
         );
     }
 
