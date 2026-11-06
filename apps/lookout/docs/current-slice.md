@@ -235,6 +235,16 @@ The user confirmed these on 2026-10-13, after a security review of the first pla
 - **2026-11-05, `/signin/` against `just serve`.** Desktop Safari and Chrome each registered a
   passkey and signed in through the page, which continued to `/record/`.
 
+### Pending refactors
+
+- [ ] Check a stored session by building a fresh `Session` for its ID and asking `signed_in`,
+      in place of the hand decode in `RelyingParty::stored_session_signed_in`. tower-sessions
+      0.15's `Session::new(Some(id), store, None)` loads the record on first read, so the decode
+      of `SIGNED_IN_PASSKEY` lives in one place, and `AuthError::SessionStore` goes. A missing
+      record then logs tower-sessions' "record not found" warning once, at the closing recheck.
+- [ ] Inline `RelyingParty::allowed` into `signed_in`, its only caller after the refactor above.
+- [ ] Rename `PASSKEY_RECHECK` to `SESSION_RECHECK`, since the minute's recheck reads the session.
+
 ### Tasks
 
 #### Refactors / extensions
