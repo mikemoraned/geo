@@ -329,20 +329,43 @@ the redis stores exist. The memory stores stay, for tests and for running withou
       passkey. The recheck reads only the passkey, so a recording kept sending after
       `POST /auth/signout` until its passkey was revoked or the socket dropped.
 
+#### End to end manual test
+
+A fresh deploy to production, tested from the laptop's browsers and the iPhone. It runs before
+Wrap-up, since what it finds can change what the docs describe. The phone needs HTTPS, and a
+passkey on a non-`localhost` origin needs the admin, so this phase is the first to run against
+Upstash.
+
+- [ ] In the Upstash console, check that eviction is off. Until this slice, redis held only queued
+      samples. `lookout-passkeys` has no expiry, and eviction under memory pressure would delete it,
+      so every device would need to register again.
+- [ ] Run `just push-secrets`, and check with `fly secrets list` that `LOOKOUT_REDIS_URL` is set.
+      Under `--store redis`, the server refuses to start without it.
+- [ ] Deploy, and check that `/version` gives the deployed commit's hash.
+- [ ] From desktop Safari, register on `/signin/`, allow the code with
+      `just passkeys allow <code> --label <name>`, and sign in. Check that `/signin/` continues to
+      `/record/`.
+- [ ] Check that `just passkeys list` shows the label, and a last use after the sign-in.
+- [ ] From a second browser, check that `/record/` redirects and that `/ws` refuses the upgrade.
+- [ ] Register from the iPhone, allow it with `just passkeys allow`, and record a journey. Answer the
+      open question on `parseCreationOptionsFromJSON` and `toJSON()` in iOS Safari.
+- [ ] Set 1Password as the iPhone's passkey provider, under AutoFill in Settings.
+- [ ] Register through 1Password on the laptop, and allow it. Sign in from the iPhone without
+      registering again.
+- [ ] Revoke a passkey during a recording, and check that its socket closes within a minute, and
+      that `/record/` then shows the session as signed out.
+
 #### Wrap-up
 
 - [x] Describe the gate, the session store, and the CLI in `crates/server/README.md`.
 - [ ] Before `/complete-slice`, record in `crates/server/README.md` every fact about the server
       that only this slice doc holds, with its sources.
+- [ ] Rewrite the capture paragraph of `docs/architecture.md`, which says the server runs without
+      redis by logging samples. The server now takes `--store redis` or `--store in-memory`, and
+      redis also holds passkeys and sessions.
 - [ ] Describe signing in, and the signed-out state of `/record/`, in `docs/web.md`.
 - [ ] Describe who can record, how a passkey gains and loses access, and the risks the design
       accepts, in `docs/access.md`, and index it in `CLAUDE.md`.
 - [ ] Run `cargo-mutants` over `crates/server/src/auth`, and add a test for each mutant that
       survives. Then review the auth code as a whole.
 - [ ] Run `just test-no-docker` and the server's Docker tests.
-- [ ] Deploy, register from the phone, allow it with `just passkeys allow`, and record a journey.
-- [ ] Set 1Password as the iPhone's passkey provider, under AutoFill in Settings.
-- [ ] Register through 1Password on the laptop, and allow it. Sign in from the iPhone without
-      registering again.
-- [ ] From a second browser, check that `/record/` redirects and that `/ws` refuses the upgrade.
-- [ ] Revoke a passkey during a recording, and check that its socket closes within a minute.
