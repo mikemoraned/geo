@@ -1,13 +1,14 @@
 use std::collections::BTreeMap;
 
-use datafusion::prelude::{col, lit};
+use datafusion::prelude::col;
 use domain::{CoordinateError, CrossingCompactId, CrossingId, Precision, Sample, SessionId};
 use medallion::{Country, Query, QueryError, Root};
-use medallion_model::{TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3};
+use medallion_model::{TrainSessionRowV3, TrainSessionSampleRowV3};
 use predictor::{DetectPasses, Event, ObserveError, Predict, TrackError, Tracker, Transition};
 use rayon::prelude::*;
 
 use crate::offline::{OfflineDetector, OfflineError};
+use crate::store::{picked, read_passes};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReplayError {
@@ -63,18 +64,10 @@ where
     F: Precision + Send,
     Pr: Predict<F> + Send,
 {
-    let picked = col("session_id").in_list(
-        sessions
-            .iter()
-            .map(|session| lit(session.session_id.to_string()))
-            .collect(),
-        false,
-    );
-    let query = Query::new(root.clone());
-    let sample_rows = query
+    let sample_rows = Query::new(root.clone())
         .read_of_country::<TrainSessionSampleRowV3>(country)
         .await?
-        .filter(picked.clone())?
+        .filter(picked(sessions))?
         .sort(vec![
             col("session_id").sort(true, false),
             col("t").sort(true, false),
@@ -82,12 +75,7 @@ where
         ])?
         .rows()
         .await?;
-    let passes = query
-        .read::<TrainSessionCrossingRowV1>()
-        .await?
-        .filter(picked)?
-        .rows()
-        .await?;
+    let passes = read_passes(root, sessions).await?;
     let detectors = OfflineDetector::per_session(
         sessions.iter().map(|session| session.session_id.clone()),
         passes,
