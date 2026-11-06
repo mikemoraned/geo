@@ -70,6 +70,10 @@ pub fn batch<T: Row>(rows: &[T]) -> Result<RecordBatch, RowError> {
     Ok(serde_arrow::to_record_batch(&fields::<T>()?, &rows)?)
 }
 
+pub fn from_batch<T: Row>(batch: &RecordBatch) -> Result<Vec<T>, RowError> {
+    Ok(serde_arrow::from_record_batch(batch)?)
+}
+
 #[cfg(test)]
 mod tests {
     use arrow::datatypes::TimeUnit;
@@ -77,7 +81,7 @@ mod tests {
 
     use super::*;
 
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct Reading {
         id: i64,
         t: i64,
@@ -274,5 +278,28 @@ mod tests {
             DateTime::from_timestamp_millis(rows[0].t),
             DateTime::<Utc>::from_timestamp_millis(1_700_000_000_000)
         );
+    }
+
+    #[test]
+    fn rows_survive_a_round_trip_through_a_batch() {
+        let rows = vec![row(1), row(2)];
+
+        let read: Vec<Reading> = from_batch(&batch(&rows).unwrap()).unwrap();
+
+        assert_eq!(read, rows);
+    }
+
+    #[test]
+    fn a_batch_lacking_a_column_of_the_row_is_refused() {
+        let batch = batch(&[row(1)]).unwrap();
+        let without_source = batch
+            .project(
+                &(0..batch.num_columns())
+                    .filter(|&index| batch.schema().field(index).name() != "source")
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+
+        assert!(from_batch::<Reading>(&without_source).is_err());
     }
 }
