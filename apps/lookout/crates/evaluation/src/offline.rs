@@ -27,7 +27,7 @@ impl RecordedPass for TrainSessionCrossingRowV1 {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OfflineDetector {
-    passes: Vec<(DateTime<Utc>, CrossingCompactId)>,
+    passes: SessionPasses,
     now: Option<DateTime<Utc>>,
     passed: Passes,
 }
@@ -46,36 +46,47 @@ impl OfflineDetector {
         passes: impl IntoIterator<Item = R>,
         compact_ids: &BTreeMap<CrossingId, CrossingCompactId>,
     ) -> Result<BTreeMap<SessionId, Self>, OfflineError> {
-        let mut grouped: BTreeMap<SessionId, Vec<(DateTime<Utc>, CrossingCompactId)>> = sessions
-            .into_iter()
-            .map(|session_id| (session_id, Vec::new()))
-            .collect();
-        for pass in passes {
-            let compact_id = *compact_ids.get(pass.crossing_id()).ok_or_else(|| {
-                OfflineError::UnknownCrossing {
-                    crossing_id: pass.crossing_id().clone(),
-                }
-            })?;
-            grouped
-                .get_mut(pass.session_id())
-                .ok_or_else(|| OfflineError::UnknownSession {
-                    session_id: pass.session_id().clone(),
-                })?
-                .push((pass.crossed_at(), compact_id));
-        }
-        Ok(grouped
+        Ok(passes_by_session(sessions, passes, compact_ids)?
             .into_iter()
             .map(|(session_id, passes)| (session_id, Self::new(passes)))
             .collect())
     }
 
-    fn new(passes: Vec<(DateTime<Utc>, CrossingCompactId)>) -> Self {
+    fn new(passes: SessionPasses) -> Self {
         Self {
             passes,
             now: None,
             passed: Passes::new(),
         }
     }
+}
+
+pub(crate) type SessionPasses = Vec<(DateTime<Utc>, CrossingCompactId)>;
+
+pub(crate) fn passes_by_session<R: RecordedPass>(
+    sessions: impl IntoIterator<Item = SessionId>,
+    passes: impl IntoIterator<Item = R>,
+    compact_ids: &BTreeMap<CrossingId, CrossingCompactId>,
+) -> Result<BTreeMap<SessionId, SessionPasses>, OfflineError> {
+    let mut grouped: BTreeMap<SessionId, SessionPasses> = sessions
+        .into_iter()
+        .map(|session_id| (session_id, Vec::new()))
+        .collect();
+    for pass in passes {
+        let compact_id =
+            *compact_ids
+                .get(pass.crossing_id())
+                .ok_or_else(|| OfflineError::UnknownCrossing {
+                    crossing_id: pass.crossing_id().clone(),
+                })?;
+        grouped
+            .get_mut(pass.session_id())
+            .ok_or_else(|| OfflineError::UnknownSession {
+                session_id: pass.session_id().clone(),
+            })?
+            .push((pass.crossed_at(), compact_id));
+    }
+    Ok(grouped)
 }
 
 impl<P: Precision> DetectPasses<P> for OfflineDetector {
