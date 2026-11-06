@@ -445,6 +445,13 @@ What `notebooks/evaluation/explore2_spacing.py` established about the spacing of
   and that run peaked at 1.65 GB, nearly all of it the rows read. Building a detector for each of
   the 162,256 sessions took 5.2 s. A detector holds 16 bytes per pass. `train_session_crossing_v1`
   is laid out by date alone, so `read_of_country` refuses it, and the example reads it through SQL.
+- **CrowFlies' replay of 1000 sessions takes 43 s, half of it reading** (2026-11-06). A throwaway
+  example replayed a pick of 1000 sessions through CrowFlies in `f32`, over Germany's 5,749
+  crossings, into 55,775 transitions. In a debug build it took 140 s, at a peak of 383 MB. The same
+  replay against no crossings took 20 s, so measuring every crossing at every sample takes the
+  rest. Optimising `evaluation`, `predictor`, `domain`, `geo`, `geo-types`, and `num-traits` cut
+  the replay to 43 s. The reads stayed at about 20 s, with DataFusion unoptimised. Optimising
+  `predictor` alone changed nothing, since `CrowFlies<f32>` compiles in the crate that names it.
 
 ### Tasks
 
@@ -513,7 +520,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       their own.
 - [x] Add the trait `DetectPasses` to `predictor`, and its offline implementation to `evaluation`,
       which reports a session's passes from `train_session_crossing_v1`.
-- [ ] Add the step `replay` to `evaluation`, feeding a session's times and positions alone through a
+- [x] Add the step `replay` to `evaluation`, feeding a session's times and positions alone through a
       predictor, the offline pass detector, and the `Tracker`, in the float type its run records.
 - [ ] Add the oracle to `evaluation`: a predictor that reads a session's ground-truth passes, and
       predicts each with high confidence from N ahead.
