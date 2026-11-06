@@ -396,3 +396,29 @@ async fn a_failed_recheck_closes_the_socket() {
 
     assert_eq!(close_code(&mut ws).await, CloseCode::Error);
 }
+
+#[tokio::test(start_paused = true)]
+async fn signing_out_closes_only_that_sessions_socket_within_a_minute() {
+    let running = spawn_app().await;
+    let (_, signed_out_cookie) = signed_in(&running.app).await;
+    let (_, kept_cookie) = signed_in(&running.app).await;
+    let mut signed_out_ws = connect(running.addr, Some(&signed_out_cookie))
+        .await
+        .expect("connect");
+    let mut kept_ws = connect(running.addr, Some(&kept_cookie))
+        .await
+        .expect("connect");
+
+    post(
+        &running.app,
+        "/auth/signout",
+        Body::empty(),
+        Some(&signed_out_cookie),
+    )
+    .await;
+    advance(Duration::from_secs(60)).await;
+    resume();
+
+    assert_eq!(close_code(&mut signed_out_ws).await, CloseCode::Policy);
+    assert_eq!(acked(&mut kept_ws).await, WsMessage::Text("ack".into()));
+}

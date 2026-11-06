@@ -20,7 +20,7 @@ use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeader;
 use tower_http::trace::TraceLayer;
 use tower_sessions::Session;
-use webauthn_rs::prelude::CredentialID;
+use tower_sessions::session::Id;
 
 use crate::auth::{AuthError, RelyingParty};
 use crate::queue::SampleSink;
@@ -76,16 +76,14 @@ async fn ws_upgrade(
     if !state.relying_party.serves(headers.get(header::ORIGIN)) {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
-    Ok(match state.relying_party.signed_in(&session).await? {
-        Some(allowed) => {
-            let passkey = allowed.passkey.cred_id().clone();
-            upgrade.on_upgrade(move |socket| handle_socket(socket, state, passkey))
-        }
-        None => StatusCode::UNAUTHORIZED.into_response(),
+    let signed_in = state.relying_party.signed_in(&session).await?;
+    Ok(match (signed_in, session.id()) {
+        (Some(_), Some(id)) => upgrade.on_upgrade(move |socket| handle_socket(socket, state, id)),
+        _ => StatusCode::UNAUTHORIZED.into_response(),
     })
 }
 
-async fn handle_socket(mut socket: WebSocket, state: AppState, passkey: CredentialID) {
+async fn handle_socket(mut socket: WebSocket, state: AppState, session: Id) {
     tracing::info!("websocket connected");
     let mut recheck = interval_at(Instant::now() + PASSKEY_RECHECK, PASSKEY_RECHECK);
     loop {
@@ -102,7 +100,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, passkey: Credenti
                 Some(Ok(_)) => {}
             },
             _ = recheck.tick() => {
-                if let Some(frame) = closing(&state.relying_party, &passkey).await {
+                if let Some(frame) = closing(&state.relying_party, &session).await {
                     let _ = socket.send(Message::Close(Some(frame))).await;
                     break;
                 }
@@ -113,18 +111,18 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, passkey: Credenti
 }
 
 const PASSKEY_RECHECK: Duration = Duration::from_secs(60);
-const REVOKED: &str = "the passkey is no longer allowed";
-const UNCHECKED: &str = "the passkey could not be rechecked";
+const SIGNED_OUT: &str = "the session is no longer signed in";
+const UNCHECKED: &str = "the session could not be rechecked";
 
-async fn closing(relying_party: &RelyingParty, passkey: &CredentialID) -> Option<CloseFrame> {
-    match relying_party.allowed(passkey).await {
+async fn closing(relying_party: &RelyingParty, session: &Id) -> Option<CloseFrame> {
+    match relying_party.stored_session_signed_in(session).await {
         Ok(Some(_)) => None,
         Ok(None) => Some(CloseFrame {
             code: close_code::POLICY,
-            reason: REVOKED.into(),
+            reason: SIGNED_OUT.into(),
         }),
         Err(err) => {
-            tracing::error!(%err, "closing a socket whose passkey could not be rechecked");
+            tracing::error!(%err, "closing a socket whose session could not be rechecked");
             Some(CloseFrame {
                 code: close_code::ERROR,
                 reason: UNCHECKED.into(),

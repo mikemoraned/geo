@@ -315,7 +315,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
       changed, and a phone would keep each page's old script after a deploy.
 - [x] On each websocket close in `static/record/app.js`, check `/auth/status`. If signed out, show
       it with a link to `/signin/`.
-- [ ] Close an open socket once its session signs out, at the same minute's recheck as a revoked
+- [x] Close an open socket once its session signs out, at the same minute's recheck as a revoked
       passkey. The recheck reads only the passkey, so a recording kept sending after
       `POST /auth/signout` until its passkey was revoked or the socket dropped.
 
