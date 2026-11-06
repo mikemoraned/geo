@@ -28,6 +28,10 @@ cache-keys = [
     { file = "../medallion-model/src/**/*.rs" },
     { file = "../domain/Cargo.toml" },
     { file = "../domain/src/**/*.rs" },
+    { file = "../predictor/Cargo.toml" },
+    { file = "../predictor/src/**/*.rs" },
+    { file = "../crossings/Cargo.toml" },
+    { file = "../crossings/src/**/*.rs" },
     { file = "../../Cargo.toml" },
     { file = "../../Cargo.lock" },
 ]

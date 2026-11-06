@@ -137,6 +137,11 @@ The command printed a failure all the same, so judge it by free disk. The sandbo
 user runs both `tmutil` commands. Check free disk after clearing, and keep the third-party builds
 unless the space is needed.
 
+A cargo command on a python extension's crate slows the next uv build of that extension. On
+6 November 2026, uv rebuilt `evaluation-py` in 9 minutes after `cargo clippy` ran on its crate, and
+in 36 s with nothing run between. Run cargo on an extension's crate after its python tests, not
+between two of their builds.
+
 ## Cargo
 
 `cargo remove` also deletes every `[workspace.dependencies]` entry that no member of the
