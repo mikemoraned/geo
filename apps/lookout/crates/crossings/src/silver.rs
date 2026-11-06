@@ -1,12 +1,12 @@
 use domain::{CoordinateError, CrossingCompactId};
-use medallion::Root;
+use medallion::{COUNTRY, Country, Query, QueryError, Root};
 use medallion_model::WaterCrossingRowV2;
 use serde::Deserialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReadError {
     #[error("reading the store: {0}")]
-    Query(#[from] medallion::QueryError),
+    Query(#[from] QueryError),
     #[error("{dataset} has not been derived yet, so there is nothing to pack")]
     Missing { dataset: &'static str },
     #[error("the store holds a crossing that is not on the globe: {0}")]
@@ -31,6 +31,16 @@ pub struct PlacedCrossing {
 pub const PLACED: &str = "SELECT *, ST_X(geometry) AS lon, ST_Y(geometry) AS lat
                           FROM water_crossing_v2";
 
+pub async fn read_of_country(root: &Root, country: Country) -> Result<Vec<Crossing>, ReadError> {
+    let of_country = root
+        .dataset(medallion_model::WATER_CROSSING_V2)
+        .partition(COUNTRY, country)
+        .map_err(QueryError::from)?;
+    let query = Query::new(root.clone());
+    query.register_at(&of_country, "water_crossing_v2").await?;
+    placed(query.rows(PLACED).await?)
+}
+
 pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
     let stored: Vec<PlacedCrossing> = medallion::rows_of_every_country(
         root,
@@ -45,6 +55,10 @@ pub async fn read(root: &Root) -> Result<Vec<Crossing>, ReadError> {
         });
     }
 
+    placed(stored)
+}
+
+fn placed(stored: Vec<PlacedCrossing>) -> Result<Vec<Crossing>, ReadError> {
     stored
         .into_iter()
         .map(|crossing| {
