@@ -438,6 +438,13 @@ What `notebooks/evaluation/explore2_spacing.py` established about the spacing of
   `medallion-model`, DataFusion, and SedonaDB, since `pick` reads the store through medallion.
   The first build took 12.5 minutes, beside a build of `lookout-medallion` for the tests'
   fixtures.
+- **Building a pick's offline detectors takes milliseconds, and reading their passes takes the
+  time** (2026-11-06). The example `offline_sizing` ran in a debug build over Germany's store. It
+  built the 1000 detectors of a pick in 13 ms. Reading the pick's 12,672 passes alone took 0.73 s,
+  and the whole run took 4.1 s, at a peak of 46 MB. Reading all 2,918,145 passes took 29 s instead,
+  and that run peaked at 1.65 GB, nearly all of it the rows read. Building a detector for each of
+  the 162,256 sessions took 5.2 s. A detector holds 16 bytes per pass. `train_session_crossing_v1`
+  is laid out by date alone, so `read_of_country` refuses it, and the example reads it through SQL.
 
 ### Tasks
 
@@ -504,7 +511,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       `pick`.
 - [x] Decide from that time whether the steps take and build `medallion-model`'s rows, or rows of
       their own.
-- [ ] Add the trait `DetectPasses` to `predictor`, and its offline implementation to `evaluation`,
+- [x] Add the trait `DetectPasses` to `predictor`, and its offline implementation to `evaluation`,
       which reports a session's passes from `train_session_crossing_v1`.
 - [ ] Add the step `replay` to `evaluation`, feeding a session's times and positions alone through a
       predictor, the offline pass detector, and the `Tracker`, in the float type its run records.
