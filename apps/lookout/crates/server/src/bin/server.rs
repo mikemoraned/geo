@@ -24,6 +24,11 @@ struct Args {
     /// restart.
     #[arg(long, value_enum)]
     store: Store,
+
+    /// The origin the site is served from, such as `https://lookout.example.com`. Passkeys work
+    /// only on the origin they were registered on.
+    #[arg(long, env = "LOOKOUT_ORIGIN", default_value = LOCAL_ORIGIN)]
+    origin: Url,
 }
 
 fn fatal(reason: &dyn std::fmt::Display) -> ! {
@@ -47,7 +52,8 @@ async fn main() {
         .install_default()
         .expect("install rustls crypto provider");
 
-    let origin = Url::parse(LOCAL_ORIGIN).expect("a constant origin parses");
+    let origin = args.origin;
+    tracing::info!(%origin, "serving passkeys for this origin");
     let redis_url = std::env::var(REDIS_URL_VAR).ok();
     if args.store == Store::InMemory && redis_url.is_some() {
         tracing::warn!("ignoring {REDIS_URL_VAR}, since the store is in-memory");
@@ -67,7 +73,7 @@ async fn main() {
             (None, RelyingParty::in_memory(&origin))
         }
     };
-    let relying_party = relying_party.expect("localhost serves as a relying party ID");
+    let relying_party = relying_party.unwrap_or_else(|err| fatal(&err));
 
     let app = build_app(
         AppState {
@@ -103,5 +109,26 @@ mod tests {
         assert_eq!(store("redis").ok(), Some(Store::Redis));
         assert_eq!(store("in-memory").ok(), Some(Store::InMemory));
         assert!(store("valkey").is_err());
+    }
+
+    #[test]
+    fn the_origin_defaults_to_localhost() {
+        let args = Args::try_parse_from(["server", "--store", "in-memory"]).expect("args");
+
+        assert_eq!(args.origin.as_str(), "http://localhost:3000/");
+    }
+
+    #[test]
+    fn the_origin_can_be_named() {
+        let origin = |origin| {
+            Args::try_parse_from(["server", "--store", "redis", "--origin", origin])
+                .map(|args| args.origin.to_string())
+        };
+
+        assert_eq!(
+            origin("https://lookout-hom.fly.dev").ok().as_deref(),
+            Some("https://lookout-hom.fly.dev/")
+        );
+        assert!(origin("lookout-hom.fly.dev").is_err());
     }
 }

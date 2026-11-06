@@ -293,7 +293,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
 - [x] Return 403 from a `/ws` upgrade whose `Origin` differs from `LOOKOUT_ORIGIN`.
 - [x] Re-check an open socket's passkey every minute. Once it is revoked, close the socket.
 - [x] Add `/auth/status`, returning whether the session is signed in.
-- [ ] Read `LOOKOUT_ORIGIN` in `bin/server.rs`, and set it in `fly.toml`.
+- [x] Read `LOOKOUT_ORIGIN` in `bin/server.rs`, and set it in `fly.toml`.
 
 #### The admin CLI
 

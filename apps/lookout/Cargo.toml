@@ -36,7 +36,7 @@ uuid = { version = "1", features = ["v4", "v5", "serde"] }
 redis = { version = "1.7", features = ["tokio-rustls-comp", "tls-rustls-webpki-roots"] }
 rustls = { version = "0.23", features = ["ring"] }
 async-trait = "0.1"
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 libtest-mimic = "0.8"
 geojson = "1.0"
 # SedonaDB: a Rust-native, DataFusion/GeoArrow spatial engine used in-process to read
