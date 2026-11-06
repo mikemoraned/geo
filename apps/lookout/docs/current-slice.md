@@ -142,7 +142,8 @@ erDiagram
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
 - `evaluation_run_v1` holds a run's predictor and settings, pass detector, float type, scores and
-  ramp, method, country, filter, sample size, seed, bootstrap resamples, and input versions.
+  ramp, evaluation version, country, filter, sample size, seed, and bootstrap resamples. It also
+  holds the run's code commit and the fingerprint of each silver dataset the run reads.
 - `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
   transitions still counts.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
@@ -241,9 +242,17 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **A run's id is a hash of its settings and inputs.** The id is a v5 UUID over everything
   `evaluation_run_v1` records of the run, its input versions included. The same settings over the
   same inputs give the same id, and gold refuses a run it already holds, so each run is written
-  once. A rerun after a change that no setting captures needs a setting that captures it. This
+  once. A code change or a re-derived dataset changes an input, so a rerun after either gets a
+  new id. This
   beats the instant the run started, which writes a copy of each rerun, and a random UUID, which
   does the same and says nothing of the run. Decided on 2026-11-06.
+- **A run's inputs are its code commit and a fingerprint of each silver dataset it reads.** A
+  fingerprint hashes the size and modification time of the dataset's files. This beats the commit
+  alone, which refuses a run against re-derived data. It also beats the fingerprints alone, which
+  refuse a rerun after a code fix. Decided on 2026-11-06.
+- **A run records the version of the evaluation's rules.** `evaluation_version` is a name such as
+  `replay-v1`, changed by hand when a rule of the evaluation changes, such as how a repeat scores.
+  It takes the place of the method the datasets once listed. Decided on 2026-11-06.
 - **The steps take and build `medallion-model`'s rows.** `pick` already brings medallion,
   DataFusion, and SedonaDB into `evaluation`. With them linked, a change to a step rebuilds
   `evaluation-py` in 20 s. Each gold table then has its columns defined in one crate, with no test
@@ -553,7 +562,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       written once.
 - [x] Register gold datasets by name in `medallion`'s `Query`, and add `query_gold` and `write_gold`
       to `medallion-py`.
-- [ ] Define the gold datasets that [The datasets](#the-datasets) names, in `medallion-model`.
+- [x] Define the gold datasets that [The datasets](#the-datasets) names, in `medallion-model`.
 - [ ] Add the `evaluate` crate, whose CLI runs every step in order or any one alone, and a
       `just evaluate` recipe.
 - [ ] Run the oracle over 1000 sessions with `just evaluate`.

@@ -10,12 +10,13 @@ use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, Trace
 
 use crate::{
     ALL, AccelReadingRowV2, CrossingStateKind, DeviceSessionRowV2, EvaluationOutcomeRowV1,
-    EvaluationSummaryRowV1, EvaluationTransitionRowV1, ExtractManifestRowV3, Feed, GeometrySource,
-    GersId, GpsReadingRowV2, Label, MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2,
-    MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4, MotisVersion, NotificationClass,
-    OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease, RailMode, RawSampleRow,
-    SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3, TrainSegmentRowV4,
-    TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3, WaterCrossingRowV2,
+    EvaluationRunRowV1, EvaluationSessionRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1,
+    ExtractManifestRowV3, Feed, FloatTypeName, GeometrySource, GersId, GpsReadingRowV2, Label,
+    MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId,
+    MotisSourceRowV4, MotisVersion, NotificationClass, OVERTURE_EXTRACT, OutcomeKind, OverlapKind,
+    OvertureRelease, PassDetectorName, PredictorName, RailMode, RawSampleRow, SessionCrossingRowV3,
+    SessionRowV3, SessionSampleRowV3, TrainSegmentRowV4, TrainSessionCrossingRowV1,
+    TrainSessionRowV3, TrainSessionSampleRowV3, WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -209,10 +210,13 @@ fn enums() -> BTreeMap<String, Vec<String>> {
         variants::<CrossingStateKind>(),
         variants::<DeviceType>(),
         variants::<Feed>(),
+        variants::<FloatTypeName>(),
         variants::<GeometrySource>(),
         variants::<NotificationClass>(),
         variants::<OutcomeKind>(),
         variants::<OverlapKind>(),
+        variants::<PassDetectorName>(),
+        variants::<PredictorName>(),
         variants::<RailMode>(),
         variants::<StartedBy>(),
     ])
@@ -319,6 +323,8 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<EvaluationTransitionRowV1>(&known),
         declaration::<EvaluationOutcomeRowV1>(&known),
         declaration::<EvaluationSummaryRowV1>(&known),
+        declaration::<EvaluationRunRowV1>(&known),
+        declaration::<EvaluationSessionRowV1>(&known),
         rowless(OVERTURE_EXTRACT.info()),
     ];
 
