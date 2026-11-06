@@ -118,6 +118,7 @@ test-python:
     uv run --directory crates/medallion-py pytest -q
     uv run --directory crates/platform/rerun-py pytest -q
     uv run --directory crates/session-crossings-py pytest -q
+    uv run --directory crates/evaluation-py pytest -q
     uv run --directory notebooks/water_crossings pytest -q
 
 # Check every crate in Cargo.lock against the RustSec advisory database.

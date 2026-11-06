@@ -3377,6 +3377,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "evaluation-py"
+version = "0.1.0"
+dependencies = [
+ "domain",
+ "evaluation",
+ "medallion",
+ "pyo3",
+ "pyo3-arrow",
+ "tokio",
+]
+
+[[package]]
 name = "event-listener"
 version = "5.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
