@@ -85,7 +85,7 @@ impl Browser {
         )
     }
 
-    async fn create(&mut self, options: CredentialCreationOptions) -> CreatedPublicKeyCredential {
+    async fn register(&mut self, options: CredentialCreationOptions) -> CreatedPublicKeyCredential {
         let mut client = Client::new(self.authenticator()).allows_insecure_localhost(true);
         let created = client
             .register(&self.origin, options, DefaultClientData)
@@ -95,7 +95,10 @@ impl Browser {
         created
     }
 
-    async fn get(&mut self, options: CredentialRequestOptions) -> AuthenticatedPublicKeyCredential {
+    async fn authenticate(
+        &mut self,
+        options: CredentialRequestOptions,
+    ) -> AuthenticatedPublicKeyCredential {
         let mut client = Client::new(self.authenticator()).allows_insecure_localhost(true);
         let asserted = client
             .authenticate(&self.origin, options, DefaultClientData)
@@ -274,7 +277,7 @@ async fn finish_registration(
 
 pub async fn register(app: &Router, browser: &mut Browser) -> (CredentialID, Registered) {
     let started = start_registration(app).await;
-    let credential = browser.create(started.options).await;
+    let credential = browser.register(started.options).await;
     let id = CredentialID::from(credential.raw_id.to_vec());
     let finish = Finish {
         ceremony: started.ceremony,
@@ -305,7 +308,7 @@ async fn finish_signin(
 
 pub async fn sign_in(app: &Router, browser: &mut Browser, cookie: Option<&Cookie<'_>>) -> Reply {
     let (started, _) = start_signin(app).await;
-    let credential = browser.get(started.options).await;
+    let credential = browser.authenticate(started.options).await;
     let finish = Finish {
         ceremony: started.ceremony,
         credential,
@@ -459,7 +462,7 @@ async fn registration_names_no_passkey_the_server_holds() {
 async fn a_ceremony_finishes_once() {
     let server = Server::hosted(Allowing::ByAdmin);
     let started = start_registration(&server.app).await;
-    let credential = Browser::at(ORIGIN).create(started.options).await;
+    let credential = Browser::at(ORIGIN).register(started.options).await;
     let finish = Finish {
         ceremony: started.ceremony,
         credential,
@@ -476,7 +479,7 @@ async fn a_ceremony_finishes_once() {
 async fn a_finish_needs_a_ceremony_the_server_started() {
     let server = Server::hosted(Allowing::ByAdmin);
     let started = start_registration(&server.app).await;
-    let credential = Browser::at(ORIGIN).create(started.options).await;
+    let credential = Browser::at(ORIGIN).register(started.options).await;
     let unknown = Finish {
         ceremony: CeremonyId::random(),
         credential,
@@ -492,7 +495,7 @@ async fn a_credential_answers_only_the_ceremony_that_challenged_it() {
     let server = Server::hosted(Allowing::ByAdmin);
     let challenger = start_registration(&server.app).await;
     let other = start_registration(&server.app).await;
-    let credential = Browser::at(ORIGIN).create(challenger.options).await;
+    let credential = Browser::at(ORIGIN).register(challenger.options).await;
     let misdirected = Finish {
         ceremony: other.ceremony,
         credential,
@@ -547,7 +550,7 @@ async fn a_refusal_answers_with_its_reason_alone() {
     let (started, _) = start_signin(&server.app).await;
     let finish = Finish {
         ceremony: started.ceremony,
-        credential: browser.get(started.options).await,
+        credential: browser.authenticate(started.options).await,
     };
 
     let not_allowed = finish_signin(&server.app, &finish, None).await;
@@ -625,7 +628,7 @@ async fn a_passkey_for_another_account_cannot_sign_in() {
         .start_passkey_registration(Uuid::new_v4(), "another", "another", None)
         .expect("a registration");
     let created = browser
-        .create(
+        .register(
             serde_json::from_value(serde_json::to_value(options).expect("json")).expect("options"),
         )
         .await;
@@ -668,7 +671,7 @@ async fn a_signin_ceremony_finishes_once() {
     let mut browser = Browser::at(ORIGIN);
     register(&server.app, &mut browser).await;
     let (started, _) = start_signin(&server.app).await;
-    let credential = browser.get(started.options).await;
+    let credential = browser.authenticate(started.options).await;
     let finish = Finish {
         ceremony: started.ceremony,
         credential,
@@ -758,7 +761,7 @@ async fn registration_creates_no_session() {
     let mut browser = Browser::at(ORIGIN);
     let options: Started<CredentialCreationOptions> =
         serde_json::from_slice(&started.body).expect("a started registration");
-    let credential = browser.create(options.options).await;
+    let credential = browser.register(options.options).await;
     let finish = Finish {
         ceremony: options.ceremony,
         credential,
