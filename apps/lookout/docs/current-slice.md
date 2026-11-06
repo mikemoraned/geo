@@ -541,7 +541,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       of sessions, passes, and notifications.
 - [x] Expose every step and the full run in `evaluation-py`, with geometry crossing as GeoArrow.
       No step's table holds geometry yet, so none crosses as GeoArrow.
-- [ ] Build a new `notebooks/evaluation/explore3.py` with the user, running the oracle's steps on a
+- [x] Build a new `notebooks/evaluation/explore3.py` with the user, running the oracle's steps on a
       few sessions and drawing each.
 - [ ] Extend `medallion` to gold datasets of rows, partitioned `run_date=<date>/run_id=<id>`, each run
       written once.
