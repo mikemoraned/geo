@@ -7,6 +7,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::middleware;
 use axum::response::Response;
 use axum::routing::{any, get};
 use shared::Message as TelemetryMessage;
@@ -27,12 +28,25 @@ pub struct AppState {
     pub relying_party: RelyingParty,
 }
 
+const RECORD_PAGE: &str = "/record";
+
 pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
+    let static_dir = static_dir.into();
+    let record = Router::new()
+        .nest_service(
+            RECORD_PAGE,
+            ServeDir::new(format!("{static_dir}{RECORD_PAGE}")),
+        )
+        .layer(middleware::from_fn_with_state(
+            state.relying_party.clone(),
+            auth::gate::require_signin,
+        ));
     Router::new()
         .route("/ws", any(ws_upgrade))
         .route("/version", get(version))
         .merge(auth::routes(state.relying_party.clone()))
-        .fallback_service(ServeDir::new(static_dir.into()))
+        .merge(record)
+        .fallback_service(ServeDir::new(static_dir))
         .layer(state.relying_party.session_layer())
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())

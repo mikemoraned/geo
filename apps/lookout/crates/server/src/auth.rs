@@ -1,5 +1,6 @@
 pub mod code;
 mod contract;
+pub mod gate;
 pub mod memory;
 pub mod redis;
 pub mod registration;
@@ -18,15 +19,15 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use serde::{Deserialize, Serialize};
-use tower_sessions::{MemoryStore, SessionManagerLayer};
+use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 use uuid::Uuid;
-use webauthn_rs::prelude::{Url, Webauthn, WebauthnBuilder, WebauthnError};
+use webauthn_rs::prelude::{CredentialID, Url, Webauthn, WebauthnBuilder, WebauthnError};
 
 use crate::auth::memory::MemoryAuthStore;
 use crate::auth::redis::RedisAuthStore;
 use crate::auth::sessions::redis::RedisSessionStore;
-use crate::auth::sessions::{SharedSessionStore, session_layer};
-use crate::auth::store::{AuthStore, CeremonyId, StoreError};
+use crate::auth::sessions::{SIGNED_IN_PASSKEY, SharedSessionStore, session_layer};
+use crate::auth::store::{AllowedPasskey, AuthStore, CeremonyId, StoreError};
 
 const ACCOUNT: &str = "recording";
 
@@ -104,6 +105,13 @@ impl RelyingParty {
             SharedSessionStore::new(RedisSessionStore::new(conn)),
             Allowing::ByAdmin,
         )
+    }
+
+    pub async fn signed_in(&self, session: &Session) -> Result<Option<AllowedPasskey>, AuthError> {
+        let Some(id) = session.get::<CredentialID>(SIGNED_IN_PASSKEY).await? else {
+            return Ok(None);
+        };
+        Ok(self.store.find_allowed(&id).await?)
     }
 
     pub fn session_layer(&self) -> SessionManagerLayer<SharedSessionStore> {

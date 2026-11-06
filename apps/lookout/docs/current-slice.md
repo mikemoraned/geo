@@ -286,7 +286,7 @@ the redis stores exist. The memory stores stay, for tests and for running withou
       2026-10-13: the gate stays on, over memory stores.
 - [-] Mark the session signed in when login finishes, and write the updated passkey back. Moved into
       the `/auth/signin/finish` task.
-- [ ] Serve `/record/` through a layer that redirects a session without an allowed passkey to
+- [x] Serve `/record/` through a layer that redirects a session without an allowed passkey to
       `/signin/`.
 - [ ] Refuse a `/ws` upgrade whose session lacks an allowed passkey with 401, tested in
       `ws_roundtrip.rs`.
