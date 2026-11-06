@@ -142,7 +142,7 @@ erDiagram
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
 - `evaluation_run_v1` holds a run's predictor and settings, pass detector, float type, scores and
-  ramp, method, country, filter, sample size, seed, bootstrap draws, and input versions.
+  ramp, method, country, filter, sample size, seed, bootstrap resamples, and input versions.
 - `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
   transitions still counts.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
@@ -169,7 +169,7 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   `T`'s columns alone. The engine skips each file whose statistics rule the filter out. It drops
   rejected rows as they stream, so a step holds only the rows it keeps. This beats fetching every
   row to filter in Rust, which holds the whole dataset at once. It also beats SQL text, which a step
-  assembles by formatting strings. Decided on 2026-11-06, when `select` was built.
+  assembles by formatting strings. Decided on 2026-11-06, when `pick` was built.
 - **Each phase explores in a notebook of its own.** A phase that explores starts the next
   `notebooks/evaluation/exploreN.py`, rather than adding to an earlier phase's. A notebook may
   duplicate another's cells. The wrap-up folds them into one or more notebooks that demonstrate the
@@ -227,17 +227,21 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   the sessions with `realtime_percentage` ≥ 90. A session is the unit a predictor replays. It beats
   1000 sample rows, which hold a handful of sessions, and 1000 passes, which fix recall's
   denominator rather than the sessions.
-- **`select` draws in the engine, by a hash of each session's id under the seed.** The engine keeps
+- **`pick` picks in the engine, by a hash of each session's id under the seed.** The engine keeps
   the sessions the filter passes, orders them by the SHA-256 of the seed and the session's id, and
   keeps the first N. It returns those N in order of id. Ordering by a salted hash is a standard way
-  to draw without replacement in SQL. The sort and the limit run together, so the engine never
-  holds every eligible session. What a seed draws depends on SHA-256 alone, so no library upgrade
-  changes it. This beats drawing in Rust with a seeded generator, which holds every eligible
-  session, and whose draw changes with the generator's version. Decided on 2026-11-06.
+  to pick without replacement in SQL. The sort and the limit run together, so the engine never
+  holds every eligible session. What a seed picks depends on SHA-256 alone, so no library upgrade
+  changes it. This beats picking in Rust with a seeded generator, which holds every eligible
+  session, and whose picks change with the generator's version. Decided on 2026-11-06.
 - **A run replays one country's sessions.** The store lays train sessions out by country, each
   country in its own zone, and a read names the country it reads. The crossings a replay matches
   against are laid out the same way. `evaluation_run_v1` records the country. Decided on
   2026-11-06.
+- **The steps take and build `medallion-model`'s rows.** `pick` already brings medallion,
+  DataFusion, and SedonaDB into `evaluation`. With them linked, a change to a step rebuilds
+  `evaluation-py` in 20 s. Each gold table then has its columns defined in one crate, with no test
+  holding two definitions equal. Decided on 2026-11-06.
 - **A run started from Python writes gold, as a run of the CLI does.** A notebook writes through
   `medallion-py`, and the CLI through `medallion`'s writers, so both use one implementation. A run
   iterated on in a notebook then leaves the same record as any other. This beats a notebook that
@@ -264,10 +268,11 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   arriving leg. The derivation fixes the choice, so no run varies it. This beats the departing leg,
   whose missing `realtime` would mark a correct dwell unreliable.
 - **Precision, recall, and false alarms per hour each carry an interval, from a bootstrap over
-  sessions.** `summarise` draws as many sessions as the run replayed, with replacement, and works
-  out each measure over the draw. Over many such draws, the middle 95% of each measure's values is
-  its interval. The run records the number of draws, and its seed fixes them. A session's
-  notifications rise and fall together, so drawing notifications would give intervals too narrow.
+  sessions.** `summarise` resamples as many sessions as the run replayed, with replacement, and
+  works out each measure over the resample. Over many resamples, the middle 95% of each measure's
+  values is its interval. The run records the number of resamples, and its seed fixes them. A
+  session's notifications rise and fall together, so resampling notifications would give intervals
+  too narrow.
   Sessions on one line repeat each other in the same way, so these intervals still come out
   narrower than the truth. This beats a textbook formula, which assumes independent yes-or-no
   outcomes rather than graded scores.
@@ -291,7 +296,7 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   inside it. The speed check catches a jump, a single 10 s step of tens of kilometres onto a stop.
   [Investigation](#investigation) gives the evidence for both. Discarding fits the Straw Man's bias
   towards discarding invalid data, and the checks cost 2% of sessions. This beats marking rows for
-  `select` to filter, which adds a v3 column that every reader has to know to apply.
+  `pick` to filter, which adds a v3 column that every reader has to know to apply.
 
 #### Consequences elsewhere
 
@@ -338,7 +343,7 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   spread out rather than bunch at it. It comes back once a run shows them bunching there.
 - **A notebook as `choose-predictor`'s report.** Rejected: a dated doc keeps the review in a diff.
   It comes back once each review needs the maps that the evaluation's notebooks draw.
-- **Drawing whole lines rather than sessions.** Deferred: drawing lines needs each session to carry
+- **Resampling whole lines rather than sessions.** Deferred: resampling lines needs each session to carry
   its line, and no dataset holds one yet. A line with a train every 20 minutes gives dozens of
   near-identical sessions a day, so intervals over sessions come out narrower than the truth. Each
   leg in `motis_segment_v3` carries a `route_name`, not yet checked as the name of a line. It comes
@@ -348,17 +353,6 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   needs a measure of how far a path strays from track, such as the `off_track_share` that
   [the demonstrable-behaviour assessment](2026-10-18-demonstrable-behaviour.md#investigation)
   adopted. It comes back once a predictor's misses or false alarms trace to such a session.
-
-#### Open questions
-
-- **Do the steps build the gold datasets' rows themselves?** The Python extension compiles the
-  steps' crate, and rebuilds it whenever a step changes. The gold row types live in
-  `medallion-model`, which brings in DataFusion and SedonaDB. The store's own extension takes about
-  six minutes to rebuild, as the assessment's
-  [rebuild timings](2026-10-18-demonstrable-behaviour.md#where-the-extension-lives) record. Building
-  those rows in the steps keeps one definition of each table, at a rebuild cost nobody has measured.
-  Leaving them out spares the extension those crates, and defines each table's columns in two
-  crates, with a test holding them equal. A timed rebuild in Phase 2 decides it.
 
 ### Investigation
 
@@ -435,13 +429,13 @@ What `notebooks/evaluation/explore2_spacing.py` established about the spacing of
 - **Deciding nearness by the tree's squared distance moves no pass** (2026-11-05). Every pass
   stays, and no distance changes by more than 2.8 × 10⁻¹⁴ m. No pass records a distance beyond the
   radius.
-- **`select` draws 1000 sessions from the store in under a second** (2026-11-06). In a debug build,
-  it drew 1000 of the 34,521 sessions at or above 90 in 0.87 s. A draw of all 34,521 succeeded, and
-  a draw of one more was refused as too few. The three draws peaked at 137 MB. The two geometry
-  columns hold 1,478 MB of the 1,485 MB the sessions take in their files, and a draw reads neither.
-- **A change to `select` rebuilds `evaluation-py` in 20 s** (2026-11-06). Two rebuilds through uv,
-  each after a one-word change to `select`, took 20.4 s and 19.3 s. The extension links
-  `medallion-model`, DataFusion, and SedonaDB, since `select` reads the store through medallion.
+- **`pick` picks 1000 sessions from the store in under a second** (2026-11-06). In a debug build,
+  it picked 1000 of the 34,521 sessions at or above 90 in 0.87 s. Picking all 34,521 succeeded, and
+  picking one more was refused as too few. The three runs peaked at 137 MB. The two geometry
+  columns hold 1,478 MB of the 1,485 MB the sessions take in their files, and a pick reads neither.
+- **A change to `pick` rebuilds `evaluation-py` in 20 s** (2026-11-06). Two rebuilds through uv,
+  each after a one-word change to `pick`, took 20.4 s and 19.3 s. The extension links
+  `medallion-model`, DataFusion, and SedonaDB, since `pick` reads the store through medallion.
   The first build took 12.5 minutes, beside a build of `lookout-medallion` for the tests'
   fixtures.
 
@@ -503,12 +497,12 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [x] Add `Tracker` to `predictor`, holding each crossing's `CrossingState` and recording each
       `Transition`, tested on constructed judgements. It takes predictions with a confidence and the
       crossings passed, as the decisions on confidence and the pass detector set out.
-- [x] Create the `evaluation` crate with the step `select`, which picks `TrainSessionRowV3`s at
+- [x] Create the `evaluation` crate with the step `pick`, which picks `TrainSessionRowV3`s at
       random under a seed. It reads one country through medallion's new `Read<T>`, and the engine
-      filters and draws, as the decisions on the typed read and the draw set out.
-- [x] Add the `evaluation-py` extension exposing `select`, and time a rebuild after a change to
-      `select`.
-- [ ] Decide from that time whether the steps take and build `medallion-model`'s rows, or rows of
+      filters and picks, as the decisions on the typed read and the pick set out.
+- [x] Add the `evaluation-py` extension exposing `pick`, and time a rebuild after a change to
+      `pick`.
+- [x] Decide from that time whether the steps take and build `medallion-model`'s rows, or rows of
       their own.
 - [ ] Add the trait `DetectPasses` to `predictor`, and its offline implementation to `evaluation`,
       which reports a session's passes from `train_session_crossing_v1`.

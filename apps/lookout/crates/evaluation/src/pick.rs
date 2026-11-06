@@ -9,7 +9,7 @@ use medallion_model::TrainSessionRowV3;
 pub struct Seed(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Selection {
+pub struct Pick {
     pub country: Country,
     pub realtime_at_least: Percentage,
     pub sessions: NonZeroUsize,
@@ -17,7 +17,7 @@ pub struct Selection {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum SelectError {
+pub enum PickError {
     #[error("reading the train sessions: {0}")]
     Query(#[from] QueryError),
     #[error("{wanted} sessions were wanted, and only {eligible} pass the filter")]
@@ -27,17 +27,14 @@ pub enum SelectError {
     },
 }
 
-pub async fn select(
-    root: &Root,
-    selection: &Selection,
-) -> Result<Vec<TrainSessionRowV3>, SelectError> {
-    let wanted = selection.sessions.get();
+pub async fn pick(root: &Root, asked: &Pick) -> Result<Vec<TrainSessionRowV3>, PickError> {
+    let wanted = asked.sessions.get();
     let picked = Query::new(root.clone())
-        .read_of_country::<TrainSessionRowV3>(selection.country)
+        .read_of_country::<TrainSessionRowV3>(asked.country)
         .await?
-        .filter(col("realtime_percentage").gt_eq(lit(f64::from(selection.realtime_at_least))))?
+        .filter(col("realtime_percentage").gt_eq(lit(f64::from(asked.realtime_at_least))))?
         .sort(vec![
-            draw_order(selection.seed).sort(true, false),
+            pick_order(asked.seed).sort(true, false),
             col("session_id").sort(true, false),
         ])?
         .limit(wanted)?
@@ -45,15 +42,15 @@ pub async fn select(
         .rows()
         .await?;
     if picked.len() < wanted {
-        return Err(SelectError::TooFew {
-            wanted: selection.sessions,
+        return Err(PickError::TooFew {
+            wanted: asked.sessions,
             eligible: picked.len(),
         });
     }
     Ok(picked)
 }
 
-fn draw_order(seed: Seed) -> Expr {
+fn pick_order(seed: Seed) -> Expr {
     sha256(concat(vec![lit(format!("{}:", seed.0)), col("session_id")]))
 }
 
@@ -103,8 +100,8 @@ mod tests {
         root
     }
 
-    fn selection(sessions: usize, seed: u64) -> Selection {
-        Selection {
+    fn pick_of(sessions: usize, seed: u64) -> Pick {
+        Pick {
             country: Country::Germany,
             realtime_at_least: Percentage::new(90.0).expect("a percentage"),
             sessions: NonZeroUsize::new(sessions).expect("not zero"),
@@ -124,9 +121,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = stored(tmp.path(), sessions(100)).await;
 
-        let picked = select(&root, &selection(10, 1))
-            .await
-            .expect("enough sessions");
+        let picked = pick(&root, &pick_of(10, 1)).await.expect("enough sessions");
 
         assert_eq!(picked.len(), 10);
         assert!(
@@ -144,9 +139,7 @@ mod tests {
             .collect();
         let root = stored(tmp.path(), candidates).await;
 
-        let picked = select(&root, &selection(50, 1))
-            .await
-            .expect("enough sessions");
+        let picked = pick(&root, &pick_of(50, 1)).await.expect("enough sessions");
 
         assert_eq!(picked.len(), 50);
         assert!(
@@ -157,19 +150,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_refuses_a_selection_larger_than_the_sessions_that_pass_the_filter() {
+    async fn it_refuses_a_pick_larger_than_the_sessions_that_pass_the_filter() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let candidates = (0..10)
             .map(|n| session(n, if n < 3 { 100.0 } else { 0.0 }, 0))
             .collect();
         let root = stored(tmp.path(), candidates).await;
 
-        let refused = select(&root, &selection(4, 1)).await;
+        let refused = pick(&root, &pick_of(4, 1)).await;
 
         assert!(
             matches!(
                 refused,
-                Err(SelectError::TooFew { wanted, eligible: 3 }) if wanted.get() == 4
+                Err(PickError::TooFew { wanted, eligible: 3 }) if wanted.get() == 4
             ),
             "{refused:?}"
         );
@@ -180,12 +173,8 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = stored(tmp.path(), sessions(1_000)).await;
 
-        let one = select(&root, &selection(10, 1))
-            .await
-            .expect("enough sessions");
-        let other = select(&root, &selection(10, 2))
-            .await
-            .expect("enough sessions");
+        let one = pick(&root, &pick_of(10, 1)).await.expect("enough sessions");
+        let other = pick(&root, &pick_of(10, 2)).await.expect("enough sessions");
 
         assert_ne!(ids(&one), ids(&other));
     }
@@ -195,9 +184,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = stored(tmp.path(), sessions(1_000)).await;
 
-        let picked = select(&root, &selection(3, 42))
-            .await
-            .expect("enough sessions");
+        let picked = pick(&root, &pick_of(3, 42)).await.expect("enough sessions");
 
         assert_eq!(
             ids(&picked),
@@ -218,12 +205,10 @@ mod tests {
         )
         .await;
 
-        let from_one_day = select(&one_day, &selection(20, 7))
+        let from_one_day = pick(&one_day, &pick_of(20, 7))
             .await
             .expect("enough sessions");
-        let from_a_week = select(&week, &selection(20, 7))
-            .await
-            .expect("enough sessions");
+        let from_a_week = pick(&week, &pick_of(20, 7)).await.expect("enough sessions");
 
         assert_eq!(ids(&from_one_day), ids(&from_a_week));
     }
@@ -233,11 +218,11 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = stored(tmp.path(), sessions(10)).await;
 
-        let refused = select(
+        let refused = pick(
             &root,
-            &Selection {
+            &Pick {
                 country: Country::UnitedKingdom,
-                ..selection(1, 1)
+                ..pick_of(1, 1)
             },
         )
         .await;
@@ -245,7 +230,7 @@ mod tests {
         assert!(
             matches!(
                 refused,
-                Err(SelectError::Query(QueryError::NoSuchDataset { .. }))
+                Err(PickError::Query(QueryError::NoSuchDataset { .. }))
             ),
             "{refused:?}"
         );

@@ -34,7 +34,7 @@ cache-keys = [
 
 [dependency-groups]
 dev = [
-    # The store's own writer, so a test writes the sessions it draws from as the store holds them.
+    # The store's own writer, so a test writes the sessions it picks from as the store holds them.
     "lookout-medallion",
     "pyarrow==25.0.0",
     "pytest>=9",
