@@ -72,6 +72,6 @@ pub use path::{
 };
 pub use query::{Query, QueryError, countries_of, rows_of_every_country, table_references};
 pub use read::Read;
-pub use rows::{Dated, Geometry, Row, RowError, batch, fields};
+pub use rows::{Dated, Geometry, Row, RowError, batch, fields, from_batch};
 pub use table::{SilverTarget, TableError, TableWritten, write_table};
 pub use write::WriteError;
