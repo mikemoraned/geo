@@ -137,10 +137,11 @@ The command printed a failure all the same, so judge it by free disk. The sandbo
 user runs both `tmutil` commands. Check free disk after clearing, and keep the third-party builds
 unless the space is needed.
 
-A cargo command on a python extension's crate slows the next uv build of that extension. On
-6 November 2026, uv rebuilt `evaluation-py` in 9 minutes after `cargo clippy` ran on its crate, and
-in 36 s with nothing run between. Run cargo on an extension's crate after its python tests, not
-between two of their builds.
+Any other build of a python extension's crates slows the next uv build of that extension. On
+6 November 2026, uv rebuilt `evaluation-py` in 36 s with nothing run between. It took 9 minutes
+after `cargo clippy` ran on the extension's crate, and 7 minutes after a marimo sandbox installed
+the extension. Run cargo on an extension's crate after its python tests, not between two of their
+builds, and expect the first test build after a notebook session to take minutes.
 
 ## Cargo
 

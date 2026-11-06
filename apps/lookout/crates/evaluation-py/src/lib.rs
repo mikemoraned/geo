@@ -16,7 +16,7 @@ use pyo3_arrow::PyTable;
 /// The oracle, which alerts each recorded pass from `horizon` before it, as text such as `"5m"`.
 #[pyclass(frozen)]
 struct Oracle {
-    predictor: Predictor,
+    horizon: Span,
 }
 
 #[pymethods]
@@ -25,17 +25,19 @@ impl Oracle {
     #[pyo3(signature = (*, horizon))]
     fn new(horizon: &str) -> PyResult<Self> {
         Ok(Self {
-            predictor: Predictor::Oracle {
-                horizon: span(horizon)?,
-            },
+            horizon: span(horizon)?,
         })
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Oracle(horizon=\"{}\")", self.horizon)
     }
 }
 
 /// CrowFlies, which predicts each crossing within `radius_metres` of the latest sample.
 #[pyclass(frozen)]
 struct CrowFlies {
-    predictor: Predictor,
+    radius: Radius,
 }
 
 #[pymethods]
@@ -44,10 +46,12 @@ impl CrowFlies {
     #[pyo3(signature = (*, radius_metres))]
     fn new(radius_metres: f64) -> PyResult<Self> {
         Ok(Self {
-            predictor: Predictor::CrowFlies {
-                radius: Radius::new(radius_metres).map_err(value_error)?,
-            },
+            radius: Radius::new(radius_metres).map_err(value_error)?,
         })
+    }
+
+    fn __repr__(&self) -> String {
+        format!("CrowFlies(radius_metres={:?})", self.radius.as_metres())
     }
 }
 
@@ -82,6 +86,20 @@ impl Scoring {
             },
         })
     }
+
+    fn __repr__(&self) -> String {
+        let scoring = &self.scoring;
+        format!(
+            "Scoring(horizon=\"{}\", last_moment=\"{}\", ramp=\"{}\", last_moment_score={:?}, \
+             floor={:?}, warm_up=\"{}\")",
+            scoring.horizon,
+            scoring.last_moment,
+            scoring.ramp,
+            scoring.last_moment_score.get(),
+            scoring.floor.get(),
+            scoring.warm_up,
+        )
+    }
 }
 
 /// The resamples of sessions a summary draws its intervals from, fixed by `seed`.
@@ -102,6 +120,13 @@ impl Bootstrap {
                 seed: Seed(seed),
             },
         })
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Bootstrap(resamples={}, seed={})",
+            self.bootstrap.resamples, self.bootstrap.seed.0
+        )
     }
 }
 
@@ -277,10 +302,14 @@ fn picking(country: &str, realtime_at_least: f64, sessions: usize, seed: u64) ->
 
 fn predictor_of(predictor: &Bound<'_, PyAny>) -> PyResult<Predictor> {
     if let Ok(oracle) = predictor.extract::<PyRef<'_, Oracle>>() {
-        return Ok(oracle.predictor);
+        return Ok(Predictor::Oracle {
+            horizon: oracle.horizon,
+        });
     }
     if let Ok(crow_flies) = predictor.extract::<PyRef<'_, CrowFlies>>() {
-        return Ok(crow_flies.predictor);
+        return Ok(Predictor::CrowFlies {
+            radius: crow_flies.radius,
+        });
     }
     Err(PyValueError::new_err(
         "`predictor` must be an Oracle or a CrowFlies",
