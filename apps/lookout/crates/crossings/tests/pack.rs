@@ -73,6 +73,47 @@ async fn store_with_crossings(root: &Root, country: Country, positions: &[(f64, 
 }
 
 #[tokio::test]
+async fn a_read_of_one_country_holds_that_countrys_crossings_alone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = Root::new(tmp.path());
+    store_with_crossings(&root, Country::Germany, &[(LON, LAT)]).await;
+    store_with_crossings(
+        &root,
+        Country::UnitedKingdom,
+        &[(EDINBURGH.x(), EDINBURGH.y())],
+    )
+    .await;
+
+    let crossings = silver::read_of_country(&root, Country::Germany)
+        .await
+        .unwrap();
+
+    assert_eq!(crossings.len(), 1);
+    assert_eq!(crossings[0].compact_id, compact_id(0));
+    assert!((crossings[0].crossing.longitude() - LON).abs() < 1e-9);
+    assert!((crossings[0].crossing.latitude() - LAT).abs() < 1e-9);
+}
+
+#[tokio::test]
+async fn a_read_of_a_country_holding_no_crossings_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = Root::new(tmp.path());
+    store_with_crossings(&root, Country::Germany, &[(LON, LAT)]).await;
+
+    let refused = silver::read_of_country(&root, Country::UnitedKingdom).await;
+
+    assert!(
+        matches!(
+            refused,
+            Err(silver::ReadError::Query(
+                medallion::QueryError::NoSuchDataset { .. }
+            ))
+        ),
+        "{refused:?}"
+    );
+}
+
+#[tokio::test]
 async fn a_crossing_is_read_with_its_position_and_the_name_the_store_gave_it() {
     let tmp = tempfile::tempdir().unwrap();
     let root = Root::new(tmp.path());
