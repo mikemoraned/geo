@@ -22,9 +22,10 @@ pub use crossing::{
     TrainSessionCrossingRowV1, WATER_CROSSING_V2, WaterCrossingRowV2,
 };
 pub use evaluation::{
-    CrossingStateKind, EVALUATION_OUTCOME_V1, EVALUATION_SUMMARY_V1, EVALUATION_TRANSITION_V1,
-    EvaluationOutcomeRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1, NotificationClass,
-    OutcomeKind,
+    CrossingStateKind, EVALUATION_OUTCOME_V1, EVALUATION_RUN_V1, EVALUATION_SESSION_V1,
+    EVALUATION_SUMMARY_V1, EVALUATION_TRANSITION_V1, EvaluationOutcomeRowV1, EvaluationRunRowV1,
+    EvaluationSessionRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1, FloatTypeName,
+    NotificationClass, OutcomeKind, PassDetectorName, PredictorName,
 };
 pub use gers::{GersId, NotAGersId};
 pub use gold::{GoldTarget, GoldTargetError, gold_target};
@@ -54,7 +55,7 @@ pub use train_session::{
     TrainSessionSampleRowV3, train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 21] = [
+pub const ALL: [DatasetInfo; 23] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
@@ -76,6 +77,8 @@ pub const ALL: [DatasetInfo; 21] = [
     EVALUATION_TRANSITION_V1.info(),
     EVALUATION_OUTCOME_V1.info(),
     EVALUATION_SUMMARY_V1.info(),
+    EVALUATION_RUN_V1.info(),
+    EVALUATION_SESSION_V1.info(),
 ];
 
 #[cfg(test)]
@@ -113,6 +116,8 @@ mod tests {
             replaceable,
             [
                 "evaluation_outcome_v1",
+                "evaluation_run_v1",
+                "evaluation_session_v1",
                 "evaluation_summary_v1",
                 "evaluation_transition_v1",
                 "session_crossing_v3",
@@ -211,5 +216,7 @@ mod tests {
         check_rows_of::<EvaluationTransitionRowV1>();
         check_rows_of::<EvaluationOutcomeRowV1>();
         check_rows_of::<EvaluationSummaryRowV1>();
+        check_rows_of::<EvaluationRunRowV1>();
+        check_rows_of::<EvaluationSessionRowV1>();
     }
 }

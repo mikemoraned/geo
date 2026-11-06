@@ -2,7 +2,8 @@ use arrow::array::RecordBatch;
 use medallion::{DatasetSpec, Row, RowError, layers};
 
 use crate::{
-    EVALUATION_OUTCOME_V1, EVALUATION_SUMMARY_V1, EVALUATION_TRANSITION_V1, EvaluationOutcomeRowV1,
+    EVALUATION_OUTCOME_V1, EVALUATION_RUN_V1, EVALUATION_SESSION_V1, EVALUATION_SUMMARY_V1,
+    EVALUATION_TRANSITION_V1, EvaluationOutcomeRowV1, EvaluationRunRowV1, EvaluationSessionRowV1,
     EvaluationSummaryRowV1, EvaluationTransitionRowV1,
 };
 
@@ -48,7 +49,12 @@ fn rows_of<R: Row>(table: &[RecordBatch]) -> Result<RecordBatch, RowError> {
 
 type Definition = fn() -> GoldTarget;
 
-const TARGETS: [(&str, Definition); 3] = [
+const TARGETS: [(&str, Definition); 5] = [
+    (EVALUATION_RUN_V1.name, GoldTarget::of::<EvaluationRunRowV1>),
+    (
+        EVALUATION_SESSION_V1.name,
+        GoldTarget::of::<EvaluationSessionRowV1>,
+    ),
     (
         EVALUATION_TRANSITION_V1.name,
         GoldTarget::of::<EvaluationTransitionRowV1>,
