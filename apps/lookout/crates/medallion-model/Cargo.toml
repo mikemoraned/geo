@@ -4,6 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
+arrow = { workspace = true }
 chrono = { workspace = true }
 domain = { workspace = true }
 geo-types = { workspace = true }
@@ -20,7 +21,6 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
-arrow = { workspace = true }
 insta = { version = "1", features = ["yaml"] }
 serde-reflection = "0.4"
 serde_json = { workspace = true }

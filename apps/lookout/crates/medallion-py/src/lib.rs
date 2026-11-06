@@ -2,8 +2,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+use arrow::array::RecordBatch;
+use chrono::NaiveDate;
 use medallion::{
-    Country, DatasetSpec, Query, QueryError, Root, ScalarValue, TableError, UnknownCountry, layers,
+    Country, DatasetSpec, Query, QueryError, Root, RunError, RunId, ScalarValue, TableError,
+    UnknownCountry, layers,
 };
 use medallion_model::TargetError;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
@@ -101,11 +104,7 @@ fn query_silver(
         .collect::<PyResult<Vec<_>>>()?;
     let country = country.map(country_of).transpose()?;
     let root = root_or_default(root)?;
-    let params = params
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(name, param)| (name, ScalarValue::from(param)))
-        .collect();
+    let params = scalars(params);
 
     let batches = py
         .detach(|| {
@@ -119,6 +118,98 @@ fn query_silver(
         })
         .map_err(query_error)?;
 
+    table_of(batches)
+}
+
+/// Write `table` as one run of the gold dataset `dataset`, under `run_date` and `run_id`.
+///
+/// `run_date` is an ISO date such as `"2026-11-06"`. Each run is written once: a `run_id` the
+/// dataset already holds, under any date, raises a `ValueError`, as does a table lacking a column
+/// of the dataset. `root` defaults to the store in the repo the caller is working in. See
+/// `docs/medallion.md`.
+#[pyfunction]
+#[pyo3(signature = (dataset, table, *, run_date, run_id, root=None))]
+fn write_gold(
+    py: Python<'_>,
+    dataset: &str,
+    table: PyTable,
+    run_date: &str,
+    run_id: &str,
+    root: Option<PathBuf>,
+) -> PyResult<Written> {
+    let target = medallion_model::gold_target(dataset).map_err(value_error)?;
+    let date = NaiveDate::parse_from_str(run_date, "%Y-%m-%d").map_err(|err| {
+        PyValueError::new_err(format!("`run_date` {run_date:?} is not an ISO date: {err}"))
+    })?;
+    let run_id = RunId::new(run_id).map_err(value_error)?;
+    let root = root_or_default(root)?;
+    let (batches, _) = table.into_inner();
+    let rows = target.rows(&batches).map_err(value_error)?;
+
+    py.detach(|| {
+        runtime().block_on(medallion::write_run_batch(
+            &root,
+            target.spec(),
+            date,
+            &run_id,
+            &rows,
+        ))
+    })
+    .map_err(run_error)?;
+
+    Ok(Written {
+        rows: rows.num_rows(),
+        partitions_written: 1,
+        partitions_removed: 0,
+    })
+}
+
+/// Query the gold datasets, returning an Arrow table: the datasets the query names are its tables.
+///
+/// Each row carries the `run_date` and `run_id` of the run that wrote it, so a query picks runs in
+/// its `WHERE`. `params` binds the query's `$name` placeholders as values. A dataset gold does not
+/// define, or that has never been written, raises a `ValueError` naming it. See
+/// `docs/medallion.md`.
+#[pyfunction]
+#[pyo3(signature = (sql, *, params=None, root=None))]
+fn query_gold(
+    py: Python<'_>,
+    sql: &str,
+    params: Option<HashMap<String, Param>>,
+    root: Option<PathBuf>,
+) -> PyResult<PyTable> {
+    let targets = medallion::table_references(sql)
+        .map_err(query_error)?
+        .iter()
+        .map(|dataset| medallion_model::gold_target(dataset).map_err(value_error))
+        .collect::<PyResult<Vec<_>>>()?;
+    let root = root_or_default(root)?;
+    let params = scalars(params);
+
+    let batches = py
+        .detach(|| {
+            runtime().block_on(async {
+                let query = Query::new(root);
+                for target in &targets {
+                    query.register_gold(target.spec()).await?;
+                }
+                query.sql_with_params(sql, params).await
+            })
+        })
+        .map_err(query_error)?;
+
+    table_of(batches)
+}
+
+fn scalars(params: Option<HashMap<String, Param>>) -> HashMap<String, ScalarValue> {
+    params
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(name, param)| (name, ScalarValue::from(param)))
+        .collect()
+}
+
+fn table_of(batches: Vec<RecordBatch>) -> PyResult<PyTable> {
     // Infallible: a query answers with at least one batch, so the columns are always there.
     let schema = batches
         .first()
@@ -296,6 +387,21 @@ fn query_error(err: QueryError) -> PyErr {
     }
 }
 
+fn run_error(err: RunError) -> PyErr {
+    match err {
+        RunError::Written { .. } | RunError::NotByRun { .. } | RunError::Geometry { .. } => {
+            value_error(err)
+        }
+        RunError::Path(_) | RunError::Row(_) | RunError::Write(_) => {
+            PyRuntimeError::new_err(err.to_string())
+        }
+    }
+}
+
+fn value_error(err: impl std::fmt::Display) -> PyErr {
+    PyValueError::new_err(err.to_string())
+}
+
 fn target_error(err: TargetError) -> PyErr {
     match err {
         TargetError::NoSuchDataset { .. } => PyValueError::new_err(err.to_string()),
@@ -321,6 +427,8 @@ fn table_error(err: TableError) -> PyErr {
 fn lookout_medallion(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(write_silver, module)?)?;
     module.add_function(wrap_pyfunction!(query_silver, module)?)?;
+    module.add_function(wrap_pyfunction!(write_gold, module)?)?;
+    module.add_function(wrap_pyfunction!(query_gold, module)?)?;
     module.add_function(wrap_pyfunction!(query_bronze, module)?)?;
     module.add_function(wrap_pyfunction!(countries_of, module)?)?;
     module.add_function(wrap_pyfunction!(projected_crs, module)?)?;
