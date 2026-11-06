@@ -142,7 +142,7 @@ erDiagram
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
 - `evaluation_run_v1` holds a run's predictor and settings, pass detector, float type, scores and
-  ramp, method, filter, sample size, seed, bootstrap draws, and input versions.
+  ramp, method, country, filter, sample size, seed, bootstrap draws, and input versions.
 - `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
   transitions still counts.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
@@ -163,6 +163,13 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   [the demonstrable-behaviour assessment](2026-10-18-demonstrable-behaviour.md#a-derivation-reports-its-steps).
   It beats a binary alone, whose steps a notebook cannot inspect, and a notebook alone, which puts a
   derivation in Python.
+- **A step reads silver through `Read<T>`, a typed read whose operators the engine runs.**
+  `Query::read_of_country` returns a `Read<T>` over one country's partition. A step states its
+  filter, sort, and limit as the engine's own expressions, and gets back rows of `T`, read from
+  `T`'s columns alone. The engine skips each file whose statistics rule the filter out. It drops
+  rejected rows as they stream, so a step holds only the rows it keeps. This beats fetching every
+  row to filter in Rust, which holds the whole dataset at once. It also beats SQL text, which a step
+  assembles by formatting strings. Decided on 2026-11-06, when `select` was built.
 - **Each phase explores in a notebook of its own.** A phase that explores starts the next
   `notebooks/evaluation/exploreN.py`, rather than adding to an earlier phase's. A notebook may
   duplicate another's cells. The wrap-up folds them into one or more notebooks that demonstrate the
@@ -220,6 +227,17 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   the sessions with `realtime_percentage` ≥ 90. A session is the unit a predictor replays. It beats
   1000 sample rows, which hold a handful of sessions, and 1000 passes, which fix recall's
   denominator rather than the sessions.
+- **`select` draws in the engine, by a hash of each session's id under the seed.** The engine keeps
+  the sessions the filter passes, orders them by the SHA-256 of the seed and the session's id, and
+  keeps the first N. It returns those N in order of id. Ordering by a salted hash is a standard way
+  to draw without replacement in SQL. The sort and the limit run together, so the engine never
+  holds every eligible session. What a seed draws depends on SHA-256 alone, so no library upgrade
+  changes it. This beats drawing in Rust with a seeded generator, which holds every eligible
+  session, and whose draw changes with the generator's version. Decided on 2026-11-06.
+- **A run replays one country's sessions.** The store lays train sessions out by country, each
+  country in its own zone, and a read names the country it reads. The crossings a replay matches
+  against are laid out the same way. `evaluation_run_v1` records the country. Decided on
+  2026-11-06.
 - **A run started from Python writes gold, as a run of the CLI does.** A notebook writes through
   `medallion-py`, and the CLI through `medallion`'s writers, so both use one implementation. A run
   iterated on in a notebook then leaves the same record as any other. This beats a notebook that
@@ -417,6 +435,10 @@ What `notebooks/evaluation/explore2_spacing.py` established about the spacing of
 - **Deciding nearness by the tree's squared distance moves no pass** (2026-11-05). Every pass
   stays, and no distance changes by more than 2.8 × 10⁻¹⁴ m. No pass records a distance beyond the
   radius.
+- **`select` draws 1000 sessions from the store in under a second** (2026-11-06). In a debug build,
+  it drew 1000 of the 34,521 sessions at or above 90 in 0.87 s. A draw of all 34,521 succeeded, and
+  a draw of one more was refused as too few. The three draws peaked at 137 MB. The two geometry
+  columns hold 1,478 MB of the 1,485 MB the sessions take in their files, and a draw reads neither.
 
 ### Tasks
 
@@ -476,8 +498,9 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [x] Add `Tracker` to `predictor`, holding each crossing's `CrossingState` and recording each
       `Transition`, tested on constructed judgements. It takes predictions with a confidence and the
       crossings passed, as the decisions on confidence and the pass detector set out.
-- [ ] Create the `evaluation` crate with the step `select`, which picks `TrainSessionRowV3`s at
-      random under a seed.
+- [x] Create the `evaluation` crate with the step `select`, which picks `TrainSessionRowV3`s at
+      random under a seed. It reads one country through medallion's new `Read<T>`, and the engine
+      filters and draws, as the decisions on the typed read and the draw set out.
 - [ ] Add the `evaluation-py` extension exposing `select`, and time a rebuild after a change to
       `select`.
 - [ ] Decide from that time whether the steps take and build `medallion-model`'s rows, or rows of
