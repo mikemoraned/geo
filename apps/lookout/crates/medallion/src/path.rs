@@ -1,11 +1,15 @@
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use arrow::array::RecordBatch;
 use arrow::datatypes::Schema;
 use chrono::{DateTime, NaiveDate, Utc};
 use datafusion::execution::SendableRecordBatchStream;
+use object_store::ObjectStore;
+use object_store::local::LocalFileSystem;
+use object_store::path::Path as ObjectPath;
 
 use crate::dataset::DatasetSpec;
 use crate::geo::{GeoError, GeoParquetFile, write_geo_batches, write_geo_stream};
@@ -158,6 +162,10 @@ impl Root {
         self.dataset(T::DATASET)
     }
 
+    pub fn object_store(&self) -> Result<Arc<dyn ObjectStore>, object_store::Error> {
+        Ok(Arc::new(LocalFileSystem::new_with_prefix(&self.0)?))
+    }
+
     pub fn gold_artefact(
         &self,
         artifact: &str,
@@ -254,6 +262,17 @@ impl<L: LayerKind> Dataset<L> {
 
     pub fn name(&self) -> &'static str {
         self.spec.name
+    }
+
+    pub fn root(&self) -> Root {
+        Root::new(self.root.clone())
+    }
+
+    pub fn location(&self) -> ObjectPath {
+        [L::LAYER.as_str().to_string(), self.spec.name.to_string()]
+            .into_iter()
+            .chain(self.partitions.iter().map(Partition::to_string))
+            .collect()
     }
 
     pub fn dir(&self) -> PathBuf {

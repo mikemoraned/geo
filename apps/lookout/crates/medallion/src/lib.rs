@@ -44,6 +44,7 @@ mod args;
 mod country;
 mod dataset;
 mod derive;
+mod fingerprint;
 mod geo;
 mod layer;
 mod partition;
@@ -61,6 +62,7 @@ pub use country::{COUNTRY, Countries, Country, UnknownCountry};
 pub use datafusion::scalar::ScalarValue;
 pub use dataset::{DatasetInfo, DatasetSpec};
 pub use derive::{GeographyRow, GeometryRow, GeometryRowWriter, write_geography_rows, write_rows};
+pub use fingerprint::{Fingerprint, FingerprintError, fingerprint_in};
 pub use geo::{
     GEOMETRY, GeoError, PROJECTED_GEOMETRY, Projector, Projectors, ZonedGeometry, file_schema,
     geo_batch, geometries, geometry_fields, projected_wkb_field, wkb_column, wkb_field,
