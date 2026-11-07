@@ -92,6 +92,7 @@ pyo3 = "0.28"
 # 0.16 is the pyo3-arrow release built against arrow 57, so the tables it hands over from
 # python are our `RecordBatch`.
 pyo3-arrow = "0.16"
+code_version = { path = "crates/code_version" }
 crossings = { path = "crates/crossings" }
 platform-core = { path = "crates/platform-core" }
 m5-core = { path = "crates/platform/m5/core" }

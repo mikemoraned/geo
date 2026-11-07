@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 use evaluation::PickError;
-use evaluation::record::{Commit, RecordError, fingerprints, record, run_of};
+use evaluation::record::{CodeVersion, RecordError, fingerprints, record, run_of};
 use evaluation::runs::{RunsError, read_run_row, read_run_rows, read_sessions};
 use evaluation::steps::{self, Run, StepError};
 use medallion::{Root, RunError, RunId, write_run};
@@ -10,12 +10,12 @@ use medallion_model::{
     TRAIN_SESSION_V3, TrainSessionRowV3, WATER_CROSSING_V2,
 };
 
-pub const BUILD_COMMIT: &str = env!("BUILD_GIT_HASH");
+pub const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
 
 #[derive(Debug, thiserror::Error)]
 pub enum EvaluateError {
-    #[error("run {run_id} was begun by commit {begun}, and this build is commit {current}")]
-    CommitChanged {
+    #[error("run {run_id} was begun by code {begun}, and this build is code {current}")]
+    CodeChanged {
         run_id: RunId,
         begun: String,
         current: String,
@@ -37,17 +37,17 @@ pub enum EvaluateError {
     Write(#[from] RunError),
 }
 
-pub async fn pick(root: &Root, run: &Run, commit: &Commit) -> Result<RunId, EvaluateError> {
+pub async fn pick(root: &Root, run: &Run, code: &CodeVersion) -> Result<RunId, EvaluateError> {
     let picked = evaluation::pick(root, &run.pick).await?;
-    let recorded = record(root, run, commit, &picked).await?;
+    let recorded = record(root, run, code, &picked).await?;
     tracing::info!(run_id = %recorded.run_id, sessions = picked.len(), "picked");
     write_run(root, recorded.date, &recorded.run_id, &[recorded.row]).await?;
     write_run(root, recorded.date, &recorded.run_id, &recorded.sessions).await?;
     Ok(recorded.run_id)
 }
 
-pub async fn replay(root: &Root, run_id: &RunId, commit: &Commit) -> Result<(), EvaluateError> {
-    let begun = resume(root, run_id, commit).await?;
+pub async fn replay(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<(), EvaluateError> {
+    let begun = resume(root, run_id, code).await?;
     let transitions = steps::replay(
         root,
         begun.run.pick.country,
@@ -61,8 +61,8 @@ pub async fn replay(root: &Root, run_id: &RunId, commit: &Commit) -> Result<(), 
     Ok(())
 }
 
-pub async fn score(root: &Root, run_id: &RunId, commit: &Commit) -> Result<(), EvaluateError> {
-    let begun = resume(root, run_id, commit).await?;
+pub async fn score(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<(), EvaluateError> {
+    let begun = resume(root, run_id, code).await?;
     let transitions = read_run_rows::<EvaluationTransitionRowV1>(root, run_id).await?;
     let outcomes = steps::score(
         root,
@@ -80,9 +80,9 @@ pub async fn score(root: &Root, run_id: &RunId, commit: &Commit) -> Result<(), E
 pub async fn summarise(
     root: &Root,
     run_id: &RunId,
-    commit: &Commit,
+    code: &CodeVersion,
 ) -> Result<EvaluationSummaryRowV1, EvaluateError> {
-    let begun = resume(root, run_id, commit).await?;
+    let begun = resume(root, run_id, code).await?;
     let outcomes = read_run_rows::<EvaluationOutcomeRowV1>(root, run_id).await?;
     let summary = steps::summarise(&begun.picked, &outcomes, &begun.run.bootstrap)?;
     tracing::info!(%run_id, "summarised");
@@ -93,12 +93,12 @@ pub async fn summarise(
 pub async fn run(
     root: &Root,
     run: &Run,
-    commit: &Commit,
+    code: &CodeVersion,
 ) -> Result<(RunId, EvaluationSummaryRowV1), EvaluateError> {
-    let run_id = pick(root, run, commit).await?;
-    replay(root, &run_id, commit).await?;
-    score(root, &run_id, commit).await?;
-    let summary = summarise(root, &run_id, commit).await?;
+    let run_id = pick(root, run, code).await?;
+    replay(root, &run_id, code).await?;
+    score(root, &run_id, code).await?;
+    let summary = summarise(root, &run_id, code).await?;
     Ok((run_id, summary))
 }
 
@@ -108,13 +108,13 @@ struct Begun {
     picked: Vec<TrainSessionRowV3>,
 }
 
-async fn resume(root: &Root, run_id: &RunId, commit: &Commit) -> Result<Begun, EvaluateError> {
+async fn resume(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<Begun, EvaluateError> {
     let row = read_run_row(root, run_id).await?;
-    if row.code_commit != commit.as_str() {
-        return Err(EvaluateError::CommitChanged {
+    if row.code_version != code.as_str() {
+        return Err(EvaluateError::CodeChanged {
             run_id: run_id.clone(),
-            begun: row.code_commit,
-            current: commit.as_str().to_string(),
+            begun: row.code_version,
+            current: code.as_str().to_string(),
         });
     }
     let now = fingerprints(root).await?;

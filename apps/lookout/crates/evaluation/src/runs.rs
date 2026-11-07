@@ -112,9 +112,9 @@ mod tests {
         SessionId::new(format!("session-{name}")).expect("a session id")
     }
 
-    fn run_row(commit: &str) -> EvaluationRunRowV1 {
+    fn run_row(code: &str) -> EvaluationRunRowV1 {
         EvaluationRunRowV1 {
-            code_commit: commit.to_string(),
+            code_version: code.to_string(),
             ..EvaluationRunRowV1::example()
         }
     }
@@ -131,8 +131,8 @@ mod tests {
 
     async fn two_runs(dir: &Path) -> Root {
         let root = Root::new(dir);
-        for (id, commit, name) in [("abc", "commit-a", "a"), ("def", "commit-d", "d")] {
-            write_run(&root, day(), &run(id), &[run_row(commit)])
+        for (id, code, name) in [("abc", "code-a", "a"), ("def", "code-d", "d")] {
+            write_run(&root, day(), &run(id), &[run_row(code)])
                 .await
                 .expect("a written run");
             write_run(&root, day(), &run(id), &[transition(name)])
@@ -149,7 +149,7 @@ mod tests {
 
         let row = read_run_row(&root, &run("def")).await.expect("the run");
 
-        assert_eq!(row, run_row("commit-d"));
+        assert_eq!(row, run_row("code-d"));
     }
 
     #[tokio::test]

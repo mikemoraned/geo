@@ -21,5 +21,8 @@ evaluation = { workspace = true, features = ["fixtures"] }
 medallion = { workspace = true }
 tempfile = { workspace = true }
 
+[build-dependencies]
+code_version = { workspace = true }
+
 [lints]
 workspace = true

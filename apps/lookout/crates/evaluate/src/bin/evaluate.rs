@@ -3,8 +3,8 @@ use std::num::NonZeroUsize;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use domain::{NotASpan, Percentage, Radius, Span};
-use evaluate::BUILD_COMMIT;
-use evaluation::record::Commit;
+use evaluate::BUILD_CODE_VERSION;
+use evaluation::record::CodeVersion;
 use evaluation::steps::{FloatType, Predictor, Run};
 use evaluation::{Bootstrap, Pick, Score, Scoring, Seed};
 use medallion::{Country, MedallionArgs, RunId};
@@ -165,22 +165,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let cli = Cli::parse();
     let root = cli.medallion.root()?;
-    let commit = Commit::new(BUILD_COMMIT)?;
+    let code = CodeVersion::new(BUILD_CODE_VERSION)?;
 
     match cli.command {
         Command::Run(settings) => {
-            let (run_id, summary) = evaluate::run(&root, &settings.run()?, &commit).await?;
+            let (run_id, summary) = evaluate::run(&root, &settings.run()?, &code).await?;
             println!("run {run_id}");
             print_summary(&summary);
         }
         Command::Pick(settings) => {
-            let run_id = evaluate::pick(&root, &settings.run()?, &commit).await?;
+            let run_id = evaluate::pick(&root, &settings.run()?, &code).await?;
             println!("run {run_id}");
         }
-        Command::Replay(begun) => evaluate::replay(&root, &begun.run_id()?, &commit).await?,
-        Command::Score(begun) => evaluate::score(&root, &begun.run_id()?, &commit).await?,
+        Command::Replay(begun) => evaluate::replay(&root, &begun.run_id()?, &code).await?,
+        Command::Score(begun) => evaluate::score(&root, &begun.run_id()?, &code).await?,
         Command::Summarise(begun) => {
-            print_summary(&evaluate::summarise(&root, &begun.run_id()?, &commit).await?);
+            print_summary(&evaluate::summarise(&root, &begun.run_id()?, &code).await?);
         }
     }
     Ok(())

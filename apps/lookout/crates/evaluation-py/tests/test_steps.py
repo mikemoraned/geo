@@ -161,9 +161,9 @@ def recording(written, picked):
 
 def test_a_record_names_the_run_its_settings_code_and_data_make(written):
     picked = run(written, oracle())["picked"]
-    commit = lookout_evaluation.BUILD_COMMIT
-    if commit == "unknown" or commit.endswith("-dirty"):
-        with pytest.raises(ValueError, match="commit"):
+    code = lookout_evaluation.BUILD_CODE_VERSION
+    if code == "unknown" or code.endswith("-dirty"):
+        with pytest.raises(ValueError, match="code"):
             lookout_evaluation.record(**recording(written, picked))
         return
 
@@ -172,7 +172,7 @@ def test_a_record_names_the_run_its_settings_code_and_data_make(written):
 
     run_row = pa.table(recorded["run"]).to_pylist()[0]
     assert recorded["run_id"] == again["run_id"]
-    assert run_row["code_commit"] == commit
+    assert run_row["code_version"] == code
     assert recorded["run_date"] == run_row["started_at"].date().isoformat()
     assert pa.table(recorded["sessions"]).column("session_id").to_pylist() == SESSION_IDS
     written_run = lookout_medallion.write_gold(
