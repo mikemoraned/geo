@@ -125,7 +125,7 @@ fn query_silver(
 ///
 /// `run_date` is an ISO date such as `"2026-11-06"`. Each run is written once: a `run_id` the
 /// dataset already holds, under any date, raises a `ValueError`, as does a table lacking a column
-/// of the dataset. `root` defaults to the store in the repo the caller is working in. See
+/// of the dataset or holding a column it does not define. `root` defaults to the store in the repo the caller is working in. See
 /// `docs/medallion.md`.
 #[pyfunction]
 #[pyo3(signature = (dataset, table, *, run_date, run_id, root=None))]
@@ -144,23 +144,19 @@ fn write_gold(
     let run_id = RunId::new(run_id).map_err(value_error)?;
     let root = root_or_default(root)?;
     let (batches, _) = table.into_inner();
-    let rows = target.rows(&batches).map_err(value_error)?;
 
-    py.detach(|| {
-        runtime().block_on(medallion::write_run_batch(
-            &root,
-            target.spec(),
-            date,
-            &run_id,
-            &rows,
-        ))
-    })
-    .map_err(run_error)?;
+    let written = py
+        .detach(|| {
+            runtime().block_on(medallion::write_run_table(
+                &root, &target, date, &run_id, &batches,
+            ))
+        })
+        .map_err(run_error)?;
 
     Ok(Written {
-        rows: rows.num_rows(),
-        partitions_written: 1,
-        partitions_removed: 0,
+        rows: written.rows,
+        partitions_written: written.partitions.written,
+        partitions_removed: written.partitions.removed,
     })
 }
 
@@ -392,6 +388,7 @@ fn run_error(err: RunError) -> PyErr {
         RunError::Written { .. } | RunError::NotByRun { .. } | RunError::Geometry { .. } => {
             value_error(err)
         }
+        RunError::Table(err) => table_error(err),
         RunError::Path(_) | RunError::Row(_) | RunError::Write(_) => {
             PyRuntimeError::new_err(err.to_string())
         }

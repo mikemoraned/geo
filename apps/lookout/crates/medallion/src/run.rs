@@ -7,8 +7,9 @@ use chrono::NaiveDate;
 use crate::dataset::DatasetSpec;
 use crate::layer::layers;
 use crate::partition::{Partition, PartitionValue, PathError};
-use crate::path::Root;
+use crate::path::{Replaced, Root};
 use crate::rows::{Geometry, Row, RowError, batch};
+use crate::table::{GoldTarget, TableError, TableWritten};
 use crate::write::WriteError;
 
 pub const RUN_DATE: &str = "run_date";
@@ -55,6 +56,8 @@ pub enum RunError {
     #[error(transparent)]
     Row(#[from] RowError),
     #[error(transparent)]
+    Table(#[from] TableError),
+    #[error(transparent)]
     Write(#[from] WriteError),
 }
 
@@ -72,7 +75,30 @@ pub async fn write_run<T: Row<Layer = layers::Gold>>(
     write_run_batch(root, T::DATASET, date, run_id, &batch(rows)?).await
 }
 
-pub async fn write_run_batch(
+pub async fn write_run_table(
+    root: &Root,
+    target: &GoldTarget,
+    date: NaiveDate,
+    run_id: &RunId,
+    table: &[RecordBatch],
+) -> Result<TableWritten, RunError> {
+    if target.geometry != Geometry::Absent {
+        return Err(RunError::Geometry {
+            dataset: target.name(),
+        });
+    }
+    let rows = target.rows(table)?;
+    write_run_batch(root, target.spec(), date, run_id, &rows).await?;
+    Ok(TableWritten {
+        rows: rows.num_rows(),
+        partitions: Replaced {
+            written: 1,
+            removed: 0,
+        },
+    })
+}
+
+pub(crate) async fn write_run_batch(
     root: &Root,
     dataset: DatasetSpec<layers::Gold>,
     date: NaiveDate,
@@ -116,6 +142,9 @@ fn written_on(runs: &Path, run_id: &RunId) -> Option<String> {
 mod tests {
     use std::path::Path;
 
+    use std::sync::Arc;
+
+    use arrow::array::{ArrayRef, StringArray};
     use datafusion::prelude::{col, lit};
     use serde::{Deserialize, Serialize};
 
@@ -172,6 +201,125 @@ mod tests {
 
     fn run(id: &str) -> RunId {
         RunId::new(id).expect("a run id")
+    }
+
+    fn target() -> GoldTarget {
+        GoldTarget::of::<Scored>().expect("a target")
+    }
+
+    fn scored_table(count: u32) -> RecordBatch {
+        batch(&scored(count)).expect("a table of scores")
+    }
+
+    fn with_column(table: &RecordBatch, name: &str, column: ArrayRef) -> RecordBatch {
+        let mut columns: Vec<(String, ArrayRef)> = table
+            .schema()
+            .fields()
+            .iter()
+            .zip(table.columns())
+            .map(|(field, column)| (field.name().clone(), Arc::clone(column)))
+            .collect();
+        columns.push((name.to_string(), column));
+        RecordBatch::try_from_iter(columns).expect("a table with the column")
+    }
+
+    fn without_column(table: &RecordBatch, name: &str) -> RecordBatch {
+        let index = table.schema().index_of(name).expect("the column");
+        let kept: Vec<usize> = (0..table.num_columns()).filter(|&n| n != index).collect();
+        table.project(&kept).expect("a table without the column")
+    }
+
+    #[tokio::test]
+    async fn a_table_written_as_a_run_reports_its_rows_and_one_partition() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = Root::new(tmp.path());
+
+        let written = write_run_table(&root, &target(), day(6), &run("abc"), &[scored_table(3)])
+            .await
+            .expect("a written run");
+
+        assert_eq!(
+            written,
+            TableWritten {
+                rows: 3,
+                partitions: Replaced {
+                    written: 1,
+                    removed: 0
+                },
+            }
+        );
+        assert_eq!(read_back(tmp.path()).await, scored(3));
+    }
+
+    #[tokio::test]
+    async fn a_tables_columns_are_written_in_the_row_types_order() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = Root::new(tmp.path());
+        let table = scored_table(3);
+        let reversed: Vec<usize> = (0..table.num_columns()).rev().collect();
+
+        write_run_table(
+            &root,
+            &target(),
+            day(6),
+            &run("abc"),
+            &[table.project(&reversed).expect("the columns reversed")],
+        )
+        .await
+        .expect("a written run");
+
+        assert_eq!(read_back(tmp.path()).await, scored(3));
+    }
+
+    #[tokio::test]
+    async fn a_table_lacking_a_column_of_the_row_type_is_refused() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let lacking = without_column(&scored_table(3), "score");
+
+        let refused = write_run_table(
+            &Root::new(tmp.path()),
+            &target(),
+            day(6),
+            &run("abc"),
+            &[lacking],
+        )
+        .await;
+
+        assert!(
+            matches!(
+                &refused,
+                Err(RunError::Table(TableError::Missing { column, .. })) if column == "score"
+            ),
+            "{refused:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_table_holding_a_column_the_row_type_does_not_define_is_refused() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let extra = with_column(
+            &scored_table(3),
+            RUN_ID,
+            Arc::new(StringArray::from(vec!["abc"; 3])),
+        );
+
+        let refused = write_run_table(
+            &Root::new(tmp.path()),
+            &target(),
+            day(6),
+            &run("abc"),
+            &[extra],
+        )
+        .await;
+
+        assert!(
+            matches!(
+                &refused,
+                Err(RunError::Table(TableError::Unexpected { columns, .. })) if *columns == [RUN_ID]
+            ),
+            "{refused:?}"
+        );
+        assert!(!tmp.path().join("gold").exists(), "nothing written");
     }
 
     async fn read_back(dir: &Path) -> Vec<Scored> {
