@@ -6,10 +6,12 @@ use crossings::silver::ReadError;
 use domain::{Percentage, Radius, Span};
 use evaluation::gold::{self, GoldError};
 use evaluation::record::CodeVersion;
-use evaluation::steps::{self, FloatType, Predictor, Run, StepError};
+use evaluation::steps::{self, Predictor, Run, StepError};
 use evaluation::{Pick, PickError, Score, Seed};
 use medallion::{Country, QueryError, Root, Row, RunError};
-use medallion_model::{EvaluationOutcomeRowV1, EvaluationTransitionRowV1, TrainSessionRowV3};
+use medallion_model::{
+    EvaluationOutcomeRowV1, EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
+};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -418,13 +420,11 @@ fn predictor_of(predictor: &Bound<'_, PyAny>) -> PyResult<Predictor> {
 }
 
 fn float_type_of(float_type: &str) -> PyResult<FloatType> {
-    match float_type {
-        "f32" => Ok(FloatType::F32),
-        "f64" => Ok(FloatType::F64),
-        _ => Err(PyValueError::new_err(format!(
+    float_type.parse().map_err(|_| {
+        PyValueError::new_err(format!(
             "`float_type` must be \"f32\" or \"f64\", not {float_type:?}"
-        ))),
-    }
+        ))
+    })
 }
 
 fn span(text: &str) -> PyResult<Span> {

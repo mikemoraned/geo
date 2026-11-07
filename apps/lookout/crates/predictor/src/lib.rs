@@ -16,5 +16,4 @@ pub use predict::{
     Confidence, Event, ObserveError, Predict, Prediction, Predictions, nearest_first,
 };
 pub use sentence::{Sentence, SentenceError};
-pub use state::StateKind;
 pub use tracker::{TrackError, Tracker, Transition};

@@ -4,7 +4,8 @@ use crossings::silver::{Crossing, ReadError, read_of_country};
 use domain::{CoordinateError, Precision, Radius, SessionId, Span};
 use medallion::{Country, QueryError, Root};
 use medallion_model::{
-    EvaluationOutcomeRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1, TrainSessionRowV3,
+    EvaluationOutcomeRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1, FloatType,
+    TrainSessionRowV3,
 };
 use predictor::{CrowFlies, Transition};
 
@@ -23,12 +24,6 @@ use crate::summarise::{Bootstrap, SummariseError};
 pub enum Predictor {
     Oracle { horizon: Span },
     CrowFlies { radius: Radius },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FloatType {
-    F32,
-    F64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

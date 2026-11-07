@@ -108,11 +108,12 @@ mod tests {
     use std::collections::BTreeMap;
 
     use chrono::{DateTime, TimeDelta, Utc};
+    use domain::StateKind;
     use domain::{CrossingCompact, CrossingCompactId, CrossingId, Radius, SessionId};
     use geo_types::Point;
     use medallion::{GeographyRow, Row, write_geography_rows};
     use medallion_model::{TrainSessionCrossingRowV1, TrainSessionSampleRowV3};
-    use predictor::{Confidence, CrowFlies, Prediction, Predictions, StateKind};
+    use predictor::{Confidence, CrowFlies, Prediction, Predictions};
 
     use super::*;
     use crate::offline::{OfflineDetector, passes_by_session};

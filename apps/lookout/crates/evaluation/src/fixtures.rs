@@ -18,7 +18,9 @@ use medallion_model::{
 
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};
-use crate::steps::{FloatType, Predictor, Run};
+use medallion_model::FloatType;
+
+use crate::steps::{Predictor, Run};
 use crate::summarise::Bootstrap;
 
 pub fn instant(seconds: i64) -> DateTime<Utc> {
