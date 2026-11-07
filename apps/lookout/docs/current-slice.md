@@ -351,8 +351,9 @@ Upstash.
       open question on `parseCreationOptionsFromJSON` and `toJSON()` in iOS Safari.
 - [x] Set 1Password as the iPhone's passkey provider, under AutoFill in Settings.
   - was already set
-- [ ] Register through 1Password on the laptop, and allow it. Sign in from the iPhone without
+- [x] Register through 1Password on the laptop, and allow it. Sign in from the iPhone without
       registering again.
+    - did this but the default passkey suggested on iPhone didn't work but the option available when I did "More options" and used 1Password worked (this was the Passkey I had created on the laptop)
 - [ ] Revoke a passkey during a recording, and check that its socket closes within a minute, and
       that `/record/` then shows the session as signed out.
 
