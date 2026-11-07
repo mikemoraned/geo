@@ -623,6 +623,14 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       left out: replacing the typestate structs with `StateKind`, removing the `RecordedPass` trait,
       and removing `PassDetectorName::Online`.
 - [ ] Apply the refactors the `/simplify` pass found.
+      A refactor that changes a crate the M5 compiles, `predictor`, `domain`, or `platform-core`, is
+      checked on the device as well as by the tests. In `predictor`, those are CrowFlies' crossings
+      query and the rule for the order of events. In `domain`, they are the moved enum, the `Span`
+      conversion, and the newtypes. Making `crossings::compacted` generic touches the point set the
+      device carries, so the device checks it too. `just m5plus-build` builds the firmware. The user
+      then flashes it with `just m5plus-flash` and reads its console, since Claude cannot open the
+      serial port. A dependency one of these crates gains follows
+      [the device's rule on dependencies](device.md#a-device-crate-spells-out-what-the-workspace-leaves-on).
       - **Evaluation pipeline**
         - [ ] Narrow replay's read of samples to `session_id`, `t`, `seq`, `lat`, and `lon`, and
               turn on parquet filter pushdown. Reading takes 16 s of a 21 s replay, since all of a
