@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use domain::{CrossingCompact, CrossingCompactId, CrossingId, Precision, SessionId, Span};
+use domain::{CrossingCompact, CrossingCompactId, Precision, SessionId, Span};
 use geo::{Distance, Haversine};
 use geo_types::Point;
 use itertools::Itertools;
 use predictor::{Confidence, Event, ObserveError, Predict, Prediction, Predictions};
 
-use crate::offline::{OfflineError, RecordedPass, passes_by_session};
+use crate::offline::PassesBySession;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Oracle<P: Precision> {
@@ -20,8 +20,6 @@ pub struct Oracle<P: Precision> {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum OracleError {
-    #[error(transparent)]
-    Passes(#[from] OfflineError),
     #[error(
         "a pass names the crossing {crossing_compact_id}, which the crossings given do not place"
     )]
@@ -31,10 +29,8 @@ pub enum OracleError {
 }
 
 impl<P: Precision> Oracle<P> {
-    pub fn per_session<R: RecordedPass>(
-        sessions: impl IntoIterator<Item = SessionId>,
-        passes: impl IntoIterator<Item = R>,
-        compact_ids: &BTreeMap<CrossingId, CrossingCompactId>,
+    pub fn per_session(
+        passes: &PassesBySession,
         crossings: &[CrossingCompact<P>],
         horizon: Span,
     ) -> Result<BTreeMap<SessionId, Self>, OracleError> {
@@ -42,12 +38,12 @@ impl<P: Precision> Oracle<P> {
             .iter()
             .map(|crossing| (crossing.id, crossing.position))
             .collect();
-        passes_by_session(sessions, passes, compact_ids)?
-            .into_iter()
+        passes
+            .iter()
             .map(|(session_id, passes)| {
                 let placed = passes
-                    .into_iter()
-                    .map(|(crossed_at, crossing_compact_id)| {
+                    .iter()
+                    .map(|&(crossed_at, crossing_compact_id)| {
                         positions
                             .get(&crossing_compact_id)
                             .map(|&position| (crossed_at, crossing_compact_id, position))
@@ -56,7 +52,7 @@ impl<P: Precision> Oracle<P> {
                             })
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                Ok((session_id, Self::new(placed, horizon)))
+                Ok((session_id.clone(), Self::new(placed, horizon)))
             })
             .collect()
     }
@@ -119,13 +115,13 @@ impl<P: Precision> Predict<P> for Oracle<P> {
 
 #[cfg(test)]
 mod tests {
-    use domain::Sample;
+    use domain::{CrossingId, Sample};
     use medallion::Row;
     use medallion_model::TrainSessionCrossingRowV1;
     use predictor::{StateKind, Transition};
 
     use super::*;
-    use crate::offline::OfflineDetector;
+    use crate::offline::{OfflineDetector, passes_by_session};
     use crate::replay::replay_session;
     use domain::places::DRESDEN_HBF;
 
@@ -173,21 +169,19 @@ mod tests {
     }
 
     fn oracle(passes: &[(u32, i64)]) -> Oracle<f64> {
-        Oracle::per_session(
-            [session()],
-            rows(passes),
-            &compact_ids(),
-            &placed(10),
-            five_minutes(),
-        )
-        .expect("known sessions and placed crossings")
-        .remove(&session())
-        .expect("an oracle for the session")
+        Oracle::per_session(&resolved(passes), &placed(10), five_minutes())
+            .expect("known sessions and placed crossings")
+            .remove(&session())
+            .expect("an oracle for the session")
+    }
+
+    fn resolved(passes: &[(u32, i64)]) -> PassesBySession {
+        passes_by_session([session()], rows(passes), &compact_ids())
+            .expect("known sessions and crossings")
     }
 
     fn detector(passes: &[(u32, i64)]) -> OfflineDetector {
-        OfflineDetector::per_session([session()], rows(passes), &compact_ids())
-            .expect("known sessions and crossings")
+        OfflineDetector::per_session(&resolved(passes))
             .remove(&session())
             .expect("a detector for the session")
     }
@@ -283,13 +277,7 @@ mod tests {
 
     #[test]
     fn a_pass_of_a_crossing_the_crossings_do_not_place_is_refused() {
-        let refused = Oracle::per_session(
-            [session()],
-            rows(&[(7, 400)]),
-            &compact_ids(),
-            &placed(5),
-            five_minutes(),
-        );
+        let refused = Oracle::per_session(&resolved(&[(7, 400)]), &placed(5), five_minutes());
 
         assert_eq!(
             refused,

@@ -8,6 +8,7 @@ use medallion_model::{
 };
 use predictor::{CrowFlies, Transition};
 
+use crate::offline::{OfflineError, PassesBySession, passes_by_session};
 use crate::oracle::{Oracle, OracleError};
 use crate::pick::{Pick, PickError, pick};
 use crate::replay::ReplayError;
@@ -55,6 +56,8 @@ pub enum StepError {
     Query(#[from] QueryError),
     #[error("reading the crossings: {0}")]
     Crossings(#[from] ReadError),
+    #[error("gathering the sessions' passes: {0}")]
+    Passes(#[from] OfflineError),
     #[error("a crossing lies at no position: {0}")]
     Position(#[from] CoordinateError),
     #[error(transparent)]
@@ -69,6 +72,26 @@ pub enum StepError {
     Rows(#[from] RowsError),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CrossingsAndPasses {
+    pub crossings: Vec<Crossing>,
+    pub passes: PassesBySession,
+}
+
+pub async fn read_crossings_and_passes(
+    root: &Root,
+    country: Country,
+    sessions: &[TrainSessionRowV3],
+) -> Result<CrossingsAndPasses, StepError> {
+    let crossings = read_of_country(root, country).await?;
+    let passes = passes_by_session(
+        sessions.iter().map(|session| session.session_id.clone()),
+        read_passes(root, sessions).await?,
+        &compact_ids(&crossings),
+    )?;
+    Ok(CrossingsAndPasses { crossings, passes })
+}
+
 pub async fn replay(
     root: &Root,
     country: Country,
@@ -76,10 +99,33 @@ pub async fn replay(
     predictor: Predictor,
     float_type: FloatType,
 ) -> Result<Vec<EvaluationTransitionRowV1>, StepError> {
-    let crossings = read_of_country(root, country).await?;
+    let crossings_and_passes = read_crossings_and_passes(root, country, sessions).await?;
+    replay_against(
+        root,
+        country,
+        sessions,
+        &crossings_and_passes,
+        predictor,
+        float_type,
+    )
+    .await
+}
+
+pub async fn replay_against(
+    root: &Root,
+    country: Country,
+    sessions: &[TrainSessionRowV3],
+    crossings_and_passes: &CrossingsAndPasses,
+    predictor: Predictor,
+    float_type: FloatType,
+) -> Result<Vec<EvaluationTransitionRowV1>, StepError> {
     let replayed = match float_type {
-        FloatType::F32 => replayed::<f32>(root, country, sessions, &crossings, predictor).await?,
-        FloatType::F64 => replayed::<f64>(root, country, sessions, &crossings, predictor).await?,
+        FloatType::F32 => {
+            replayed::<f32>(root, country, sessions, crossings_and_passes, predictor).await?
+        }
+        FloatType::F64 => {
+            replayed::<f64>(root, country, sessions, crossings_and_passes, predictor).await?
+        }
     };
     Ok(transition_rows(&replayed))
 }
@@ -88,31 +134,34 @@ async fn replayed<F: Precision + Send + Sync>(
     root: &Root,
     country: Country,
     sessions: &[TrainSessionRowV3],
-    crossings: &[Crossing],
+    crossings_and_passes: &CrossingsAndPasses,
     predictor: Predictor,
 ) -> Result<BTreeMap<SessionId, Vec<Transition>>, StepError> {
-    let compact_ids = compact_ids(crossings);
-    let compact = compacted::<F>(crossings)?;
+    let compact = compacted::<F>(&crossings_and_passes.crossings)?;
     Ok(match predictor {
         Predictor::Oracle { horizon } => {
-            let oracles = Oracle::per_session(
-                sessions.iter().map(|session| session.session_id.clone()),
-                read_passes(root, sessions).await?,
-                &compact_ids,
-                &compact,
-                horizon,
-            )?;
-            crate::replay::replay(root, country, sessions, &compact_ids, |session_id| {
-                // Infallible: `per_session` builds an oracle for every session it is given, and
-                // the replay asks for one per session of the same list.
-                oracles[session_id].clone()
-            })
+            let oracles = Oracle::per_session(&crossings_and_passes.passes, &compact, horizon)?;
+            crate::replay::replay(
+                root,
+                country,
+                sessions,
+                &crossings_and_passes.passes,
+                |session_id| {
+                    // Infallible: `per_session` builds an oracle for every session it is given, and
+                    // the replay asks for one per session of the same list.
+                    oracles[session_id].clone()
+                },
+            )
             .await?
         }
         Predictor::CrowFlies { radius } => {
-            crate::replay::replay(root, country, sessions, &compact_ids, |_| {
-                CrowFlies::new(compact.clone(), radius)
-            })
+            crate::replay::replay(
+                root,
+                country,
+                sessions,
+                &crossings_and_passes.passes,
+                |_| CrowFlies::new(compact.clone(), radius),
+            )
             .await?
         }
     })
@@ -125,15 +174,18 @@ pub async fn score(
     transitions: &[EvaluationTransitionRowV1],
     scoring: &Scoring,
 ) -> Result<Vec<EvaluationOutcomeRowV1>, StepError> {
+    let crossings_and_passes = read_crossings_and_passes(root, country, sessions).await?;
+    score_against(sessions, &crossings_and_passes, transitions, scoring)
+}
+
+pub fn score_against(
+    sessions: &[TrainSessionRowV3],
+    crossings_and_passes: &CrossingsAndPasses,
+    transitions: &[EvaluationTransitionRowV1],
+    scoring: &Scoring,
+) -> Result<Vec<EvaluationOutcomeRowV1>, StepError> {
     let replayed = replayed_from(sessions, transitions)?;
-    let crossings = read_of_country(root, country).await?;
-    let scored = crate::score::score(
-        sessions,
-        &replayed,
-        read_passes(root, sessions).await?,
-        &compact_ids(&crossings),
-        scoring,
-    )?;
+    let scored = crate::score::score(sessions, &replayed, &crossings_and_passes.passes, scoring)?;
     Ok(outcome_rows(&scored))
 }
 
@@ -151,8 +203,17 @@ pub fn summarise(
 pub async fn run(root: &Root, run: &Run) -> Result<Ran, StepError> {
     let country = run.pick.country;
     let picked = pick(root, &run.pick).await?;
-    let transitions = replay(root, country, &picked, run.predictor, run.float_type).await?;
-    let outcomes = score(root, country, &picked, &transitions, &run.scoring).await?;
+    let crossings_and_passes = read_crossings_and_passes(root, country, &picked).await?;
+    let transitions = replay_against(
+        root,
+        country,
+        &picked,
+        &crossings_and_passes,
+        run.predictor,
+        run.float_type,
+    )
+    .await?;
+    let outcomes = score_against(&picked, &crossings_and_passes, &transitions, &run.scoring)?;
     let summary = summarise(&picked, &outcomes, &run.bootstrap)?;
     Ok(Ran {
         picked,

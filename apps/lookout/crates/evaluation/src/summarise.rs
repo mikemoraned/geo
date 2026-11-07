@@ -242,7 +242,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::offline::OfflineDetector;
+    use crate::offline::{OfflineDetector, passes_by_session};
     use crate::oracle::Oracle;
     use crate::replay::replay_session;
     use crate::score::{Class, Credit, Score, Scoring, score};
@@ -470,17 +470,15 @@ mod tests {
                 CrossingCompact::at(n, DRESDEN_HBF.y() + 0.01, DRESDEN_HBF.x()).expect("a crossing")
             })
             .collect();
-        let ids = || picked.iter().map(|session| session.session_id.clone());
-        let mut oracles = Oracle::per_session(
-            ids(),
-            passes.clone(),
+        let resolved = passes_by_session(
+            picked.iter().map(|session| session.session_id.clone()),
+            passes,
             &compact_ids,
-            &crossings,
-            first_runs().horizon,
         )
-        .expect("oracles");
-        let mut detectors =
-            OfflineDetector::per_session(ids(), passes.clone(), &compact_ids).expect("detectors");
+        .expect("known sessions and crossings");
+        let mut oracles =
+            Oracle::per_session(&resolved, &crossings, first_runs().horizon).expect("oracles");
+        let mut detectors = OfflineDetector::per_session(&resolved);
 
         let replayed: BTreeMap<SessionId, Vec<predictor::Transition>> = picked
             .iter()
@@ -499,8 +497,7 @@ mod tests {
                 (session.session_id.clone(), transitions)
             })
             .collect();
-        let scored =
-            score(&picked, &replayed, passes, &compact_ids, &first_runs()).expect("scores");
+        let scored = score(&picked, &replayed, &resolved, &first_runs()).expect("scores");
         summarise(&picked, &scored, &bootstrap(1)).expect("a summary")
     }
 

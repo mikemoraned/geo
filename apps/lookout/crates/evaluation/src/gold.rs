@@ -90,11 +90,21 @@ pub async fn run(root: &Root, run: &Run, code: &CodeVersion) -> Result<(RunId, R
     let picked = crate::pick(root, &run.pick).await?;
     let Recorded { run_id, date, .. } = begin(root, run, code, &picked).await?;
 
-    let transitions = steps::replay(root, country, &picked, run.predictor, run.float_type).await?;
+    let crossings_and_passes = steps::read_crossings_and_passes(root, country, &picked).await?;
+    let transitions = steps::replay_against(
+        root,
+        country,
+        &picked,
+        &crossings_and_passes,
+        run.predictor,
+        run.float_type,
+    )
+    .await?;
     tracing::info!(%run_id, transitions = transitions.len(), "replayed");
     write_run(root, date, &run_id, &transitions).await?;
 
-    let outcomes = steps::score(root, country, &picked, &transitions, &run.scoring).await?;
+    let outcomes =
+        steps::score_against(&picked, &crossings_and_passes, &transitions, &run.scoring)?;
     tracing::info!(%run_id, outcomes = outcomes.len(), "scored");
     write_run(root, date, &run_id, &outcomes).await?;
 

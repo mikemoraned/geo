@@ -41,15 +41,11 @@ pub enum OfflineError {
 }
 
 impl OfflineDetector {
-    pub fn per_session<R: RecordedPass>(
-        sessions: impl IntoIterator<Item = SessionId>,
-        passes: impl IntoIterator<Item = R>,
-        compact_ids: &BTreeMap<CrossingId, CrossingCompactId>,
-    ) -> Result<BTreeMap<SessionId, Self>, OfflineError> {
-        Ok(passes_by_session(sessions, passes, compact_ids)?
-            .into_iter()
-            .map(|(session_id, passes)| (session_id, Self::new(passes)))
-            .collect())
+    pub fn per_session(passes: &PassesBySession) -> BTreeMap<SessionId, Self> {
+        passes
+            .iter()
+            .map(|(session_id, passes)| (session_id.clone(), Self::new(passes.clone())))
+            .collect()
     }
 
     fn new(passes: SessionPasses) -> Self {
@@ -61,14 +57,16 @@ impl OfflineDetector {
     }
 }
 
-pub(crate) type SessionPasses = Vec<(DateTime<Utc>, CrossingCompactId)>;
+pub type SessionPasses = Vec<(DateTime<Utc>, CrossingCompactId)>;
 
-pub(crate) fn passes_by_session<R: RecordedPass>(
+pub type PassesBySession = BTreeMap<SessionId, SessionPasses>;
+
+pub fn passes_by_session<R: RecordedPass>(
     sessions: impl IntoIterator<Item = SessionId>,
     passes: impl IntoIterator<Item = R>,
     compact_ids: &BTreeMap<CrossingId, CrossingCompactId>,
-) -> Result<BTreeMap<SessionId, SessionPasses>, OfflineError> {
-    let mut grouped: BTreeMap<SessionId, SessionPasses> = sessions
+) -> Result<PassesBySession, OfflineError> {
+    let mut grouped: PassesBySession = sessions
         .into_iter()
         .map(|session_id| (session_id, Vec::new()))
         .collect();
@@ -179,10 +177,12 @@ mod tests {
     }
 
     fn detector(passes: Vec<Pass>) -> OfflineDetector {
-        OfflineDetector::per_session([session("a")], passes, &compact_ids(10))
-            .expect("known sessions and crossings")
-            .remove(&session("a"))
-            .expect("a detector for the session")
+        OfflineDetector::per_session(
+            &passes_by_session([session("a")], passes, &compact_ids(10))
+                .expect("known sessions and crossings"),
+        )
+        .remove(&session("a"))
+        .expect("a detector for the session")
     }
 
     fn sampled(seconds: i64) -> Event<f64> {
@@ -265,11 +265,13 @@ mod tests {
     #[test]
     fn each_session_reports_only_its_own_passes() {
         let mut detectors = OfflineDetector::per_session(
-            [session("a"), session("b")],
-            vec![pass_in("a", 1, 5), pass_in("b", 2, 5)],
-            &compact_ids(10),
-        )
-        .expect("known sessions and crossings");
+            &passes_by_session(
+                [session("a"), session("b")],
+                vec![pass_in("a", 1, 5), pass_in("b", 2, 5)],
+                &compact_ids(10),
+            )
+            .expect("known sessions and crossings"),
+        );
 
         let reported: BTreeMap<SessionId, Vec<Vec<u32>>> = detectors
             .iter_mut()
@@ -288,11 +290,13 @@ mod tests {
     #[test]
     fn a_session_with_no_passes_reports_nothing() {
         let mut detectors = OfflineDetector::per_session(
-            [session("a"), session("b")],
-            vec![pass_in("a", 1, 5)],
-            &compact_ids(10),
-        )
-        .expect("known sessions and crossings");
+            &passes_by_session(
+                [session("a"), session("b")],
+                vec![pass_in("a", 1, 5)],
+                &compact_ids(10),
+            )
+            .expect("known sessions and crossings"),
+        );
         let mut quiet = detectors
             .remove(&session("b"))
             .expect("a detector for the session");
@@ -302,11 +306,7 @@ mod tests {
 
     #[test]
     fn a_pass_of_a_session_not_given_is_refused() {
-        let refused = OfflineDetector::per_session(
-            [session("a")],
-            vec![pass_in("b", 1, 5)],
-            &compact_ids(10),
-        );
+        let refused = passes_by_session([session("a")], vec![pass_in("b", 1, 5)], &compact_ids(10));
 
         assert_eq!(
             refused,
@@ -318,8 +318,7 @@ mod tests {
 
     #[test]
     fn a_pass_of_a_crossing_not_given_is_refused() {
-        let refused =
-            OfflineDetector::per_session([session("a")], vec![pass(11, 5)], &compact_ids(10));
+        let refused = passes_by_session([session("a")], vec![pass(11, 5)], &compact_ids(10));
 
         assert_eq!(
             refused,
@@ -337,10 +336,12 @@ mod tests {
             crossed_at: instant(5),
             ..TrainSessionCrossingRowV1::example()
         };
-        let mut detector = OfflineDetector::per_session([session("a")], [row], &compact_ids(10))
-            .expect("known sessions and crossings")
-            .remove(&session("a"))
-            .expect("a detector for the session");
+        let mut detector = OfflineDetector::per_session(
+            &passes_by_session([session("a")], [row], &compact_ids(10))
+                .expect("known sessions and crossings"),
+        )
+        .remove(&session("a"))
+        .expect("a detector for the session");
 
         assert_eq!(rounds(&mut detector, &[0, 10]), [vec![], vec![1]]);
     }
