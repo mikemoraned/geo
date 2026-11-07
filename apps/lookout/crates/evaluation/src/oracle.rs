@@ -127,6 +127,7 @@ mod tests {
     use super::*;
     use crate::offline::OfflineDetector;
     use crate::replay::replay_session;
+    use domain::places::DRESDEN_HBF;
 
     fn instant(seconds: i64) -> DateTime<Utc> {
         DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
@@ -149,7 +150,9 @@ mod tests {
 
     fn placed(count: u32) -> Vec<CrossingCompact<f64>> {
         (0..count)
-            .map(|n| CrossingCompact::at(n, 51.01, 13.73).expect("a crossing"))
+            .map(|n| {
+                CrossingCompact::at(n, DRESDEN_HBF.y() + 0.01, DRESDEN_HBF.x()).expect("a crossing")
+            })
             .collect()
     }
 
@@ -190,7 +193,9 @@ mod tests {
     }
 
     fn sampled(seconds: i64) -> Event<f64> {
-        Event::Sampled(Sample::at(instant(seconds), 51.0, 13.73).expect("a sample"))
+        Event::Sampled(
+            Sample::at(instant(seconds), DRESDEN_HBF.y(), DRESDEN_HBF.x()).expect("a sample"),
+        )
     }
 
     fn predicted_at(oracle: &mut Oracle<f64>, event: Event<f64>) -> Vec<(u32, Option<i64>)> {
@@ -296,8 +301,9 @@ mod tests {
 
     #[test]
     fn replayed_the_oracle_alerts_the_horizon_before_each_pass_and_each_alert_comes_true() {
-        let samples =
-            (0..=60).map(|step| Sample::at(instant(step * 10), 51.0, 13.73).expect("a sample"));
+        let samples = (0..=60).map(|step| {
+            Sample::at(instant(step * 10), DRESDEN_HBF.y(), DRESDEN_HBF.x()).expect("a sample")
+        });
 
         let transitions: Vec<(i64, StateKind, StateKind)> =
             replay_session(samples, oracle(&[(1, 400)]), detector(&[(1, 400)]))

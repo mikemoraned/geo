@@ -17,10 +17,16 @@ predictor = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
+serde_json = { workspace = true }
 statrs = { workspace = true }
 thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[features]
+fixtures = ["domain/fixtures"]
 
 [dev-dependencies]
+domain = { workspace = true, features = ["fixtures"] }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
