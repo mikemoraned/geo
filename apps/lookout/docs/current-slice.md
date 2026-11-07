@@ -359,6 +359,7 @@ Upstash.
     - this was a bit unclear: I revoked the passkey and it seemed to go to "gathering — reconnecting…" at some point but not sure what this means
     - when I did a reload of the /record page, it did then redirect me to sign-in
     - so, maybe it was working, but UI needs to display it better?
+- [ ] review and improve how revoking during a /record shows in UI
 
 #### Harden
 
