@@ -371,7 +371,7 @@ Upstash.
         browser hides the reason.
   - [x] Send `Cache-Control: no-store` with every `/auth/` response, tested. `/auth/status` sends
         no `Cache-Control`, so a browser can answer it from its cache.
-  - [ ] Stop reconnecting once signed out, and try again when the page next becomes visible. Each
+  - [x] Stop reconnecting once signed out, and try again when the page next becomes visible. Each
         retry now gets a 401 and sends another status request, every 30 seconds, without end.
   - [ ] Show in the status how many samples wait on the device, so a signed-out or disconnected
         recording shows that its samples are kept.

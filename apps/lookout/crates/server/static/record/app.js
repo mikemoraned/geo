@@ -235,12 +235,16 @@ function connectWs() {
   });
   ws.addEventListener("message", onAck);
   ws.addEventListener("close", async (event) => {
-    setTimeout(connectWs, reconnectMs);
-    reconnectMs = Math.min(reconnectMs * 2, MAX_RECONNECT_MS);
     const signedOut =
       event.code === SIGNED_OUT_CLOSE || (await signInStatus()) === "signed_out";
     signedOutEl.hidden = !signedOut;
-    setStatus(signedOut ? "gathering — signed out" : "gathering — reconnecting…");
+    if (signedOut) {
+      setStatus("gathering — signed out");
+      return;
+    }
+    setStatus("gathering — reconnecting…");
+    setTimeout(connectWs, reconnectMs);
+    reconnectMs = Math.min(reconnectMs * 2, MAX_RECONNECT_MS);
   });
   ws.addEventListener("error", () => ws.close());
 }
