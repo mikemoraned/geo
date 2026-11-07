@@ -549,6 +549,20 @@ which is the one thing that always differs, and what it cannot carry as a column
 the run's log instead. Something outside the store holding one of these cannot say which run
 produced it, which is why a rerun adds a version rather than replacing one.
 
+## A dataset's fingerprint
+
+A dataset's fingerprint names its contents, so a record of what a derivation read stays checkable
+later. It hashes each file's place in the dataset with what the file's parquet footer says of its
+data: each column's path, type, and levels, each row group's row count, and each column chunk's
+sizes, value count, null count, minimum, and maximum. The footer is read through the object store,
+and no row is read. What the footer says of its writer, such as the library and version that wrote
+the file, does not count.
+
+Rewriting the same rows keeps the fingerprint. Adding a partition changes it, and so does any
+change of rows that moves a count, a size, or a statistic. A writer that encodes the same rows
+differently, such as after an upgrade of its compression, changes the sizes and so the fingerprint.
+A file that is not parquet does not count, and a dataset never written has no fingerprint.
+
 ## Options considered or deferred
 
 Alternatives weighed and set aside, with what would justify revisiting each. None of this
