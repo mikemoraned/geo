@@ -37,14 +37,7 @@ impl GoldTarget {
 }
 
 fn rows_of<R: Row>(table: &[RecordBatch]) -> Result<RecordBatch, RowError> {
-    let rows = table
-        .iter()
-        .map(medallion::from_batch::<R>)
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<R>>();
-    medallion::batch(&rows)
+    medallion::batch(&medallion::from_batches::<R>(table)?)
 }
 
 type Definition = fn() -> GoldTarget;
