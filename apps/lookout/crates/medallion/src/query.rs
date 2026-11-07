@@ -141,10 +141,14 @@ pub struct Query {
 
 impl Query {
     pub fn new(root: Root) -> Self {
-        Self {
-            root,
-            ctx: SedonaContext::new(),
-        }
+        let ctx = SedonaContext::new();
+        let state = ctx.ctx.state_ref();
+        let mut state = state.write();
+        let parquet = &mut state.config_mut().options_mut().execution.parquet;
+        parquet.pushdown_filters = true;
+        parquet.reorder_filters = true;
+        drop(state);
+        Self { root, ctx }
     }
 
     pub async fn register<L: LayerKind>(

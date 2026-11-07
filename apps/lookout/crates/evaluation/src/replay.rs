@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use datafusion::prelude::col;
 use domain::{CoordinateError, CrossingCompactId, CrossingId, Precision, Sample, SessionId};
 use medallion::{Country, Query, QueryError, Root};
-use medallion_model::{TrainSessionRowV3, TrainSessionSampleRowV3};
+use medallion_model::{TrainSessionRowV3, TrainSessionSamplePositionV3, TrainSessionSampleRowV3};
 use predictor::{DetectPasses, Event, ObserveError, Predict, TrackError, Tracker, Transition};
 use rayon::prelude::*;
 
@@ -73,7 +73,7 @@ where
             col("t").sort(true, false),
             col("seq").sort(true, false),
         ])?
-        .rows()
+        .rows_as::<TrainSessionSamplePositionV3>()
         .await?;
     let passes = read_passes(root, sessions).await?;
     let detectors = OfflineDetector::per_session(

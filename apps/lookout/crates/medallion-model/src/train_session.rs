@@ -1,7 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use domain::{Bbox, Percentage, SessionId};
 use geo_types::Rect;
-use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
+use medallion::{DatasetSpec, Dated, Geometry, Projection, Row, layers};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -115,6 +115,31 @@ impl Dated for TrainSessionSampleRowV3 {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrainSessionSamplePositionV3 {
+    pub session_id: SessionId,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub t: DateTime<Utc>,
+    pub seq: u32,
+    pub lat: f64,
+    pub lon: f64,
+}
+
+impl Projection for TrainSessionSamplePositionV3 {
+    type Of = TrainSessionSampleRowV3;
+
+    fn example() -> Self {
+        let sample = TrainSessionSampleRowV3::example();
+        Self {
+            session_id: sample.session_id,
+            t: sample.t,
+            seq: sample.seq,
+            lat: sample.lat,
+            lon: sample.lon,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
@@ -132,6 +157,20 @@ mod tests {
 
     fn trip(id: &str) -> TripId {
         TripId::new(id).expect("a trip id")
+    }
+
+    #[test]
+    fn a_sample_position_reads_only_columns_its_sample_holds() {
+        let held = column_names::<TrainSessionSampleRowV3>();
+        let read: BTreeSet<String> = medallion::projected_columns::<TrainSessionSamplePositionV3>()
+            .expect("describe the position")
+            .into_iter()
+            .collect();
+
+        assert!(
+            read.is_subset(&held),
+            "the position reads {read:?}, and the sample holds only {held:?}"
+        );
     }
 
     fn swapped<T: Row>(left_out: &[&str], added: &[&str]) -> BTreeSet<String> {

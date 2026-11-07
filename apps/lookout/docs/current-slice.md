@@ -511,6 +511,11 @@ What looking for the oracle's shortfalls established, on 2026-11-07, over the 10
   unscored. The release build took 3 min 10 s, and the run about 4 s. The run's five datasets take
   340 KB in gold. The run was removed on 2026-11-07, when a run's code came to be named by a version
   rather than a commit.
+- **Reading a pick's samples takes 0.36 s in a release build** (2026-11-07). The example
+  `sample_read_timing` read the 326,656 samples of a pick of 1000 sessions in Germany. Reading
+  every column took 0.93 s, and switching on filter pushdown cut that to 0.50 s. Reading only the
+  five columns replay uses cut it to 0.36 s. The 16 s that the task cited came from a debug build,
+  with DataFusion unoptimised.
 
 ### Pending refactors
 
@@ -632,9 +637,10 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       serial port. A dependency one of these crates gains follows
       [the device's rule on dependencies](device.md#a-device-crate-spells-out-what-the-workspace-leaves-on).
       - **Evaluation pipeline**
-        - [ ] Narrow replay's read of samples to `session_id`, `t`, `seq`, `lat`, and `lon`, and
+        - [x] Narrow replay's read of samples to `session_id`, `t`, `seq`, `lat`, and `lon`, and
               turn on parquet filter pushdown. Reading takes 16 s of a 21 s replay, since all of a
-              country's 62M samples are decoded to keep about 300k.
+              country's 62M samples are decoded to keep about 300k. The 16 s came from a debug
+              build, as Observations records.
         - [ ] Give `Crossings` a `near(from, radius)` query, which the device keeps as a scan and
               the evaluation backs with one shared R-tree. CrowFlies measures about 1.7 billion
               distances in a run of 1000 sessions, and each radius in Phase 3's sweep measures them

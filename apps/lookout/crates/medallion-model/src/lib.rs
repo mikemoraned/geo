@@ -52,7 +52,7 @@ pub use telemetry::{
 };
 pub use train_session::{
     GeometrySource, TRAIN_SESSION_SAMPLE_V3, TRAIN_SESSION_V3, TrainSessionRowV3,
-    TrainSessionSampleRowV3, train_session_id,
+    TrainSessionSamplePositionV3, TrainSessionSampleRowV3, train_session_id,
 };
 
 pub const ALL: [DatasetInfo; 23] = [
