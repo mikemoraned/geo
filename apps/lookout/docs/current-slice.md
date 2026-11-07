@@ -354,8 +354,11 @@ Upstash.
 - [x] Register through 1Password on the laptop, and allow it. Sign in from the iPhone without
       registering again.
     - did this but the default passkey suggested on iPhone didn't work but the option available when I did "More options" and used 1Password worked (this was the Passkey I had created on the laptop)
-- [ ] Revoke a passkey during a recording, and check that its socket closes within a minute, and
+- [x] Revoke a passkey during a recording, and check that its socket closes within a minute, and
       that `/record/` then shows the session as signed out.
+    - this was a bit unclear: I revoked the passkey and it seemed to go to "gathering — reconnecting…" at some point but not sure what this means
+    - when I did a reload of the /record page, it did then redirect me to sign-in
+    - so, maybe it was working, but UI needs to display it better?
 
 #### Harden
 
