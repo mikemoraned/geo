@@ -247,9 +247,15 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   beats the instant the run started, which writes a copy of each rerun, and a random UUID, which
   does the same and says nothing of the run. Decided on 2026-11-06.
 - **A run's inputs are its code commit and a fingerprint of each silver dataset it reads.** A
-  fingerprint hashes the size and modification time of the dataset's files. This beats the commit
-  alone, which refuses a run against re-derived data. It also beats the fingerprints alone, which
-  refuse a rerun after a code fix. Decided on 2026-11-06.
+  fingerprint hashes the footer of each of the dataset's files, which medallion reads through its
+  object store. A re-derive that writes the same rows keeps the fingerprint, and so the run's id.
+  This beats the commit alone, which refuses a run against re-derived data. It also beats the
+  fingerprints alone, which refuse a rerun after a code fix. Decided on 2026-11-06.
+- **A run is written only from committed code.** `evaluate` refuses to begin a run from a build
+  with uncommitted changes, so every run in gold names a commit that can be checked out. A step run
+  alone also refuses once the commit or a silver dataset's fingerprint differs from its run's. This
+  beats hashing the uncommitted diff into the commit, which keeps no record of the code a run used.
+  Decided on 2026-11-06.
 - **A run records the version of the evaluation's rules.** `evaluation_version` is a name such as
   `replay-v1`, changed by hand when a rule of the evaluation changes, such as how a repeat scores.
   It takes the place of the method the datasets once listed. Decided on 2026-11-06.
@@ -476,6 +482,12 @@ What `notebooks/evaluation/explore2_spacing.py` established about the spacing of
   at a peak of 425 MB against 383 MB. With the six crates optimised, it took 21 s against 43 s, and
   reading took 16 s of that. Reading now takes most of a replay.
 
+### Pending refactors
+
+- [ ] Write medallion's files through `Root::object_store()`, as a dataset's fingerprint reads
+      them. The writer builds its own `LocalFileSystem` from each file's absolute path, so it alone
+      ties the store to the local disk.
+
 ### Tasks
 
 #### Refactors / extensions
@@ -563,7 +575,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [x] Register gold datasets by name in `medallion`'s `Query`, and add `query_gold` and `write_gold`
       to `medallion-py`.
 - [x] Define the gold datasets that [The datasets](#the-datasets) names, in `medallion-model`.
-- [ ] Add the `evaluate` crate, whose CLI runs every step in order or any one alone, and a
+- [x] Add the `evaluate` crate, whose CLI runs every step in order or any one alone, and a
       `just evaluate` recipe.
 - [ ] Run the oracle over 1000 sessions with `just evaluate`.
 - [ ] Check that a run written from `explore3.py` through `write_gold` matches the CLI's run on the

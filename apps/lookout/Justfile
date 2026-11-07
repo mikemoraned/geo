@@ -120,6 +120,10 @@ kiosk-map:
     cp "data/medallion/gold/artifact=map/version={{map_version}}/map.pmtiles" \
         crates/server/static/map.pmtiles
 
+# Evaluate a predictor into gold from a clean tree; `just evaluate run --help` lists the settings.
+evaluate *args:
+    BUILD_GIT_HASH={{git_hash}} cargo run --release -p evaluate --bin evaluate -- {{args}}
+
 # Serve on http://localhost:3000 with the wasm and the data freshly copied.
 serve-web: wasm crossings kiosk-map serve
 
