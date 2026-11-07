@@ -2,7 +2,7 @@ use std::path::Path;
 
 use evaluate::EvaluateError;
 use evaluation::fixtures::{oracle, run_of, store};
-use evaluation::record::Commit;
+use evaluation::record::CodeVersion;
 use evaluation::runs::read_run_rows;
 use medallion::{Root, RunError, RunId, write_rows};
 use medallion_model::{
@@ -10,8 +10,8 @@ use medallion_model::{
     EvaluationTransitionRowV1, TrainSessionCrossingRowV1,
 };
 
-fn commit(hash: &str) -> Commit {
-    Commit::new(hash).expect("a clean commit")
+fn code(hash: &str) -> CodeVersion {
+    CodeVersion::new(hash).expect("a clean code version")
 }
 
 async fn stored(dir: &Path) -> Root {
@@ -32,7 +32,7 @@ async fn a_run_scores_the_oracle_perfectly_and_writes_each_dataset() {
     let tmp = tempfile::tempdir().expect("a temporary directory");
     let root = stored(tmp.path()).await;
 
-    let (run_id, summary) = evaluate::run(&root, &run_of(oracle()), &commit("abc1234"))
+    let (run_id, summary) = evaluate::run(&root, &run_of(oracle()), &code("abc1234"))
         .await
         .expect("a run");
 
@@ -71,20 +71,20 @@ async fn the_steps_run_one_by_one_write_what_a_run_writes() {
     let whole_root = stored(whole.path()).await;
     let stepwise_root = stored(stepwise.path()).await;
     let settings = run_of(oracle());
-    let (whole_id, _) = evaluate::run(&whole_root, &settings, &commit("abc1234"))
+    let (whole_id, _) = evaluate::run(&whole_root, &settings, &code("abc1234"))
         .await
         .expect("a run");
 
-    let stepwise_id = evaluate::pick(&stepwise_root, &settings, &commit("abc1234"))
+    let stepwise_id = evaluate::pick(&stepwise_root, &settings, &code("abc1234"))
         .await
         .expect("a pick");
-    evaluate::replay(&stepwise_root, &stepwise_id, &commit("abc1234"))
+    evaluate::replay(&stepwise_root, &stepwise_id, &code("abc1234"))
         .await
         .expect("a replay");
-    evaluate::score(&stepwise_root, &stepwise_id, &commit("abc1234"))
+    evaluate::score(&stepwise_root, &stepwise_id, &code("abc1234"))
         .await
         .expect("scores");
-    evaluate::summarise(&stepwise_root, &stepwise_id, &commit("abc1234"))
+    evaluate::summarise(&stepwise_root, &stepwise_id, &code("abc1234"))
         .await
         .expect("a summary");
 
@@ -106,11 +106,11 @@ async fn the_steps_run_one_by_one_write_what_a_run_writes() {
 async fn a_run_with_the_same_settings_and_inputs_is_refused() {
     let tmp = tempfile::tempdir().expect("a temporary directory");
     let root = stored(tmp.path()).await;
-    evaluate::run(&root, &run_of(oracle()), &commit("abc1234"))
+    evaluate::run(&root, &run_of(oracle()), &code("abc1234"))
         .await
         .expect("a run");
 
-    let refused = evaluate::run(&root, &run_of(oracle()), &commit("abc1234")).await;
+    let refused = evaluate::run(&root, &run_of(oracle()), &code("abc1234")).await;
 
     assert!(
         matches!(refused, Err(EvaluateError::Write(RunError::Written { .. }))),
@@ -122,7 +122,7 @@ async fn a_run_with_the_same_settings_and_inputs_is_refused() {
 async fn a_step_is_refused_once_silver_has_changed_since_the_pick() {
     let tmp = tempfile::tempdir().expect("a temporary directory");
     let root = stored(tmp.path()).await;
-    let run_id = evaluate::pick(&root, &run_of(oracle()), &commit("abc1234"))
+    let run_id = evaluate::pick(&root, &run_of(oracle()), &code("abc1234"))
         .await
         .expect("a pick");
     write_rows(
@@ -135,7 +135,7 @@ async fn a_step_is_refused_once_silver_has_changed_since_the_pick() {
     .await
     .expect("another pass");
 
-    let refused = evaluate::replay(&root, &run_id, &commit("abc1234")).await;
+    let refused = evaluate::replay(&root, &run_id, &code("abc1234")).await;
 
     assert!(
         matches!(
@@ -148,17 +148,17 @@ async fn a_step_is_refused_once_silver_has_changed_since_the_pick() {
 }
 
 #[tokio::test]
-async fn a_step_is_refused_from_a_build_of_another_commit() {
+async fn a_step_is_refused_from_a_build_of_other_code() {
     let tmp = tempfile::tempdir().expect("a temporary directory");
     let root = stored(tmp.path()).await;
-    let run_id = evaluate::pick(&root, &run_of(oracle()), &commit("abc1234"))
+    let run_id = evaluate::pick(&root, &run_of(oracle()), &code("abc1234"))
         .await
         .expect("a pick");
 
-    let refused = evaluate::replay(&root, &run_id, &commit("def5678")).await;
+    let refused = evaluate::replay(&root, &run_id, &code("def5678")).await;
 
     assert!(
-        matches!(&refused, Err(EvaluateError::CommitChanged { begun, current, .. })
+        matches!(&refused, Err(EvaluateError::CodeChanged { begun, current, .. })
             if begun == "abc1234" && current == "def5678"),
         "{refused:?}"
     );

@@ -143,7 +143,7 @@ erDiagram
   radius.
 - `evaluation_run_v1` holds a run's predictor and settings, pass detector, float type, scores and
   ramp, evaluation version, country, filter, sample size, seed, and bootstrap resamples. It also
-  holds the run's code commit and the fingerprint of each silver dataset the run reads.
+  holds the run's code version and the fingerprint of each silver dataset the run reads.
 - `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
   transitions still counts.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
@@ -246,16 +246,21 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   new id. This
   beats the instant the run started, which writes a copy of each rerun, and a random UUID, which
   does the same and says nothing of the run. Decided on 2026-11-06.
-- **A run's inputs are its code commit and a fingerprint of each silver dataset it reads.** A
+- **A run's inputs are its code version and a fingerprint of each silver dataset it reads.** A
   fingerprint hashes the footer of each of the dataset's files, which medallion reads through its
   object store. A re-derive that writes the same rows keeps the fingerprint, and so the run's id.
-  This beats the commit alone, which refuses a run against re-derived data. It also beats the
+  This beats the code alone, which refuses a run against re-derived data. It also beats the
   fingerprints alone, which refuse a rerun after a code fix. Decided on 2026-11-06.
+- **A run names its code by git's hashes of the code, not by a commit.** The code version joins the
+  hashes of `crates/`, `Cargo.toml`, and `Cargo.lock` at HEAD. A commit of runs, data, or docs
+  leaves it unchanged, so a run committed to gold does not change the next run's id. This beats
+  the commit, which every such commit changes. Changed on 2026-11-07, when a notebook could not
+  match the CLI's run across a commit of that run.
 - **A run is written only from committed code.** `evaluate` refuses to begin a run from a build
-  with uncommitted changes, so every run in gold names a commit that can be checked out. A step run
-  alone also refuses once the commit or a silver dataset's fingerprint differs from its run's. This
-  beats hashing the uncommitted diff into the commit, which keeps no record of the code a run used.
-  Decided on 2026-11-06.
+  with uncommitted changes to its code, so every run in gold names code a checkout holds. A step
+  run alone also refuses once the code version or a silver dataset's fingerprint differs from its
+  run's. This beats hashing the uncommitted diff into the version, which keeps no record of the code
+  a run used. Decided on 2026-11-06.
 - **A run records the version of the evaluation's rules.** `evaluation_version` is a name such as
   `replay-v1`, changed by hand when a rule of the evaluation changes, such as how a repeat scores.
   It takes the place of the method the datasets once listed. Decided on 2026-11-06.
@@ -487,7 +492,8 @@ What `notebooks/evaluation/explore2_spacing.py` established about the spacing of
   repeat, or miss. Precision and recall are each 1, with an interval of 1 to 1, and every lead time
   is 5 minutes. A further 590 notifications credit a pass in a session's first minute, and go
   unscored. The release build took 3 min 10 s, and the run about 4 s. The run's five datasets take
-  340 KB in gold.
+  340 KB in gold. The run was removed on 2026-11-07, when a run's code came to be named by a version
+  rather than a commit.
 
 ### Pending refactors
 

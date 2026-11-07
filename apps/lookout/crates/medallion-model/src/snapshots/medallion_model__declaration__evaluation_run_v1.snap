@@ -12,7 +12,7 @@ columns:
   - name: evaluation_version
     data_type: LargeUtf8
     nullable: false
-  - name: code_commit
+  - name: code_version
     data_type: LargeUtf8
     nullable: false
   - name: country
