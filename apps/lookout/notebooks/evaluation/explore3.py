@@ -329,5 +329,115 @@ def _(crossed, mo, picked, plt, session_table, transitions):
     return
 
 
+@app.cell
+def _(bootstrap, evaluation, mo, oracle, pa, scoring):
+    cli_picked = pa.table(
+        evaluation.pick(
+            country="DE", realtime_at_least=90.0, sessions=1_000, seed=1
+        )
+    )
+    recorded = evaluation.record(
+        country="DE",
+        realtime_at_least=90.0,
+        sessions=1_000,
+        seed=1,
+        predictor=oracle,
+        scoring=scoring,
+        bootstrap=bootstrap,
+        picked=cli_picked,
+    )
+    cli_run_id = "4245cafc-551c-510c-bddf-db9ef4221d1c"
+    mo.md(
+        f"Recorded run `{recorded['run_id']}`; the CLI's is `{cli_run_id}`: "
+        f"{'the same' if recorded['run_id'] == cli_run_id else 'different'}"
+    )
+    return cli_picked, cli_run_id, recorded
+
+
+@app.cell
+def _(bootstrap, cli_picked, evaluation, mo, oracle, pa, scoring):
+    cli_transitions = pa.table(
+        evaluation.replay(country="DE", sessions=cli_picked, predictor=oracle)
+    )
+    cli_outcomes = pa.table(
+        evaluation.score(
+            country="DE",
+            sessions=cli_picked,
+            transitions=cli_transitions,
+            scoring=scoring,
+        )
+    )
+    cli_summary = pa.table(
+        evaluation.summarise(
+            sessions=cli_picked, outcomes=cli_outcomes, bootstrap=bootstrap
+        )
+    )
+    mo.md(
+        f"{cli_transitions.num_rows:,} transitions, {cli_outcomes.num_rows:,} outcomes, "
+        f"and {cli_summary.num_rows} summary"
+    )
+    return cli_outcomes, cli_summary, cli_transitions
+
+
+@app.cell
+def _(
+    cli_outcomes,
+    cli_run_id,
+    cli_summary,
+    cli_transitions,
+    lookout_medallion,
+    pa,
+    recorded,
+):
+    _ours = {
+        "evaluation_run_v1": pa.table(recorded["run"]).drop_columns(
+            ["started_at"]
+        ),
+        "evaluation_session_v1": pa.table(recorded["sessions"]),
+        "evaluation_transition_v1": cli_transitions,
+        "evaluation_outcome_v1": cli_outcomes,
+        "evaluation_summary_v1": cli_summary,
+    }
+
+    def _rows(table):
+        return sorted(table.to_pylist(), key=repr)
+
+    _compared = []
+    for _dataset, _table in _ours.items():
+        _columns = ", ".join(f'"{_column}"' for _column in _table.column_names)
+        _gold = pa.table(
+            lookout_medallion.query_gold(
+                f"SELECT {_columns} FROM {_dataset} WHERE run_id = $run_id",
+                params={"run_id": cli_run_id},
+            )
+        )
+        _compared.append(
+            {
+                "dataset": _dataset,
+                "notebook": _table.num_rows,
+                "gold": _gold.num_rows,
+                "equal": _rows(_table) == _rows(_gold),
+            }
+        )
+    pa.Table.from_pylist(_compared)
+    return
+
+
+@app.cell
+def _(lookout_medallion, mo, recorded):
+    try:
+        lookout_medallion.write_gold(
+            "evaluation_run_v1",
+            recorded["run"],
+            run_date=recorded["run_date"],
+            run_id=recorded["run_id"],
+        )
+        _outcome = "written, which a duplicate must not be"
+    except ValueError as _error:
+        _outcome = f"refused: {_error}"
+    mo.md(f"Writing the recorded run to gold again: {_outcome}")
+    return
+
+
 if __name__ == "__main__":
     app.run()
