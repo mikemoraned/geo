@@ -9,6 +9,7 @@ prerequisites:
     cargo install rerun-cli --locked
     cargo install wasm-pack --locked
     cargo install cargo-insta --locked
+    cargo install cargo-mutants --locked
     rustup target add wasm32-unknown-unknown
     brew install duckdb proj jq
 
@@ -117,6 +118,16 @@ test-python:
     uv run --directory crates/platform/rerun-py pytest -q
     uv run --directory crates/session-crossings-py pytest -q
     uv run --directory notebooks/water_crossings pytest -q
+
+# Mutation-test the Rust this branch changes from origin/main. Extra arguments go to cargo-mutants.
+mutants-on-diff *args:
+    git diff --relative origin/main > target/mutants.diff
+    cargo mutants --in-diff target/mutants.diff {{args}}
+
+# As `mutants-on-diff`, but each test run skips the Docker tests. The sandbox-safe run.
+mutants-on-diff-no-docker *args:
+    git diff --relative origin/main > target/mutants.diff
+    cargo mutants --in-diff target/mutants.diff {{args}} -- --profile no-docker
 
 # Tests against real services, in release, with credentials from 1Password. Hits the real redis.
 end_to_end_test:

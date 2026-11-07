@@ -17,9 +17,9 @@ What is here, and where to read about it:
 ## Running the recipes
 
 `just` recipes run from this directory, and `just --list` is the index. Setting up a machine is
-`just prerequisites`: `rerun`, `wasm-pack`, and `cargo-insta` from cargo, then DuckDB for the
-multi-engine test, PROJ and jq for `crs-definitions`, and the wasm target. `cargo-insta` reviews
-a changed snapshot.
+`just prerequisites`: `rerun`, `wasm-pack`, `cargo-insta`, and `cargo-mutants` from cargo, then
+DuckDB for the multi-engine test, PROJ and jq for `crs-definitions`, and the wasm target.
+`cargo-insta` reviews a changed snapshot, and `cargo-mutants` runs the mutation tests.
 
 A fresh worktree carries bronze and derives the rest: `just init` fills in the Overture extract
 and re-derives every silver dataset. The extract comes from a local mirror of the Overture bucket
@@ -72,3 +72,16 @@ extension in place. To force a rebuild, pass `--reinstall-package <package>` to 
 `just test` runs everything, `just test-no-docker` everything a sandbox can. Among them,
 [doclinks](crates/doclinks/README.md) checks that the links between these docs still resolve. Both
 run the doctests separately from nextest, which does not support them.
+
+`just mutants-on-diff` runs [cargo-mutants](https://mutants.rs/) over the Rust a branch changes
+from `origin/main`, and `just mutants-on-diff-no-docker` does the same without the Docker tests.
+Arguments after the recipe's name go to cargo-mutants, so `-f <glob>` narrows the run to some
+files, and `--in-place` mutates this checkout rather than a copy. If a glob holds `*`, quote it
+twice, as `-f "'crates/server/**'"`, since the recipe passes it to the shell unquoted. Each mutant runs under nextest,
+which [stops at the first failing test](https://mutants.rs/nextest.html). `.cargo/mutants.toml`
+leaves out binaries and build scripts. Mutants that survive mark code that the tests never check.
+
+The recipes diff with `git diff --relative`, run from this directory. cargo-mutants matches a
+diff's paths against the workspace's own, and a plain `git diff` names each file from the
+repository root, so none of its paths match. The base is `origin/main`, since a local `main`
+matches it only while it is pulled.

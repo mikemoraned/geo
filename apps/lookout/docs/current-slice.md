@@ -470,10 +470,14 @@ code.
     PR #50's merge, while the branch was rebased onto `origin/main` at `95a3c059`, PR #51's merge.
     Against `origin/main`, the branch's Rust diff is this slice's 35 files. Against the stale
     `main`, it is 127.
-  - [ ] Add `apps/lookout/.cargo/mutants.toml` with bobby's two settings. Add
+  - [x] Add `apps/lookout/.cargo/mutants.toml` with bobby's two settings. Add
         `just mutants-on-diff` and `just mutants-on-diff-no-docker`, each over
         `git diff origin/main`. Note in `.claude/memory/testing-limits.md` that the sandbox runs the
-        `-no-docker` recipe.
+        `-no-docker` recipe. The recipes use `git diff --relative`: cargo-mutants matches a diff's
+        paths against the workspace's, and a plain diff's repo-root paths matched no mutant.
+  - [ ] Move `apps/lookout/rust-toolchain.toml` and `tools/overture-mirror/rust-toolchain.toml`
+        from 1.97.1 to 1.99.1, the latest stable Rust, in a commit of its own. `just prerequisites` failed
+        at `cargo install rerun-cli --locked`, since `rerun-cli` 0.42.0 needs rustc 1.98.
   - [ ] Run `just mutants-on-diff-no-docker` in place, over `crates/server/src/auth`, without
         `auth/redis.rs` and `auth/sessions/redis.rs`.
   - [ ] Run the two redis files' mutants outside the sandbox, with Docker.
