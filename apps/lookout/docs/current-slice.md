@@ -364,7 +364,7 @@ Upstash.
     - this was a bit unclear: I revoked the passkey and it seemed to go to "gathering — reconnecting…" at some point but not sure what this means
     - when I did a reload of the /record page, it did then redirect me to sign-in
     - so, maybe it was working, but UI needs to display it better?
-- [ ] review and improve how revoking during a /record shows in UI
+- [x] review and improve how revoking during a /record shows in UI
   - [x] Show a socket the server closes with 1008 as signed out, from the close event alone.
         `/record/` ignores the close code and asks `/auth/status`, so a failed status request shows
         a revoke as "reconnecting…". Keep the status request for a refused reconnect, where the
@@ -377,7 +377,7 @@ Upstash.
         recording shows that its samples are kept. The count has a line of its own,
         `unsent samples`, under the status. The status changes on each connect and close, and the
         count on each sample and ack.
-  - [ ] Say in the signed-out text that signing in ends this recording, and that the waiting
+  - [x] Say in the signed-out text that signing in ends this recording, and that the waiting
         samples go once `/record/` is open again. The link stays in the same tab, since two tabs
         would share one outbox.
 
