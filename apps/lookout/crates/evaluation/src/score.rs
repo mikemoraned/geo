@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use domain::{CrossingCompactId, CrossingId, SessionId, Span};
+use domain::{CrossingCompactId, SessionId, Span};
 use itertools::Itertools;
 use medallion_model::TrainSessionRowV3;
 use predictor::{StateKind, Transition};
 
-use crate::offline::{OfflineError, RecordedPass, SessionPasses, passes_by_session};
+use crate::offline::PassesBySession;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Score(f64);
@@ -99,24 +99,16 @@ impl Scoring {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ScoreError {
-    #[error(transparent)]
-    Passes(#[from] OfflineError),
     #[error("the session {session_id} was picked, and the replay holds no transitions for it")]
     NotReplayed { session_id: SessionId },
 }
 
-pub fn score<R: RecordedPass>(
+pub fn score(
     sessions: &[TrainSessionRowV3],
     replayed: &BTreeMap<SessionId, Vec<Transition>>,
-    passes: impl IntoIterator<Item = R>,
-    compact_ids: &BTreeMap<CrossingId, CrossingCompactId>,
+    passes: &PassesBySession,
     scoring: &Scoring,
 ) -> Result<BTreeMap<SessionId, Vec<Outcome>>, ScoreError> {
-    let mut passes_by_session = passes_by_session(
-        sessions.iter().map(|session| session.session_id.clone()),
-        passes,
-        compact_ids,
-    )?;
     sessions
         .iter()
         .map(|session| {
@@ -126,13 +118,14 @@ pub fn score<R: RecordedPass>(
                     .ok_or_else(|| ScoreError::NotReplayed {
                         session_id: session.session_id.clone(),
                     })?;
-            let passes = passes_by_session
-                .remove(&session.session_id)
+            let passes = passes
+                .get(&session.session_id)
+                .map(Vec::as_slice)
                 .unwrap_or_default();
             let scored_from = session.started_at + scoring.warm_up.time_delta();
             Ok((
                 session.session_id.clone(),
-                score_session(transitions, &passes, scored_from, scoring),
+                score_session(transitions, passes, scored_from, scoring),
             ))
         })
         .collect()
@@ -142,7 +135,7 @@ type CrossingAt = (DateTime<Utc>, CrossingCompactId);
 
 fn score_session(
     transitions: &[Transition],
-    passes: &SessionPasses,
+    passes: &[CrossingAt],
     scored_from: DateTime<Utc>,
     scoring: &Scoring,
 ) -> Vec<Outcome> {
@@ -227,12 +220,14 @@ fn score_session(
 
 #[cfg(test)]
 mod tests {
+    use domain::CrossingId;
     use itertools::Itertools;
     use medallion::Row;
     use medallion_model::TrainSessionCrossingRowV1;
     use proptest::prelude::*;
 
     use super::*;
+    use crate::offline::{SessionPasses, passes_by_session};
 
     fn instant(seconds: i64) -> DateTime<Utc> {
         DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
@@ -482,6 +477,18 @@ mod tests {
             .collect()
     }
 
+    fn resolved(
+        sessions: &[TrainSessionRowV3],
+        passes: impl IntoIterator<Item = TrainSessionCrossingRowV1>,
+    ) -> PassesBySession {
+        passes_by_session(
+            sessions.iter().map(|session| session.session_id.clone()),
+            passes,
+            &compact_ids(),
+        )
+        .expect("known sessions and crossings")
+    }
+
     #[test]
     fn each_session_is_scored_against_its_own_passes() {
         let replayed = BTreeMap::from([
@@ -489,11 +496,11 @@ mod tests {
             (session("b"), vec![]),
         ]);
 
+        let sessions = started(&[("a", -3_600), ("b", -3_600)]);
         let scored = score(
-            &started(&[("a", -3_600), ("b", -3_600)]),
+            &sessions,
             &replayed,
-            [row("a", 1, 1_000), row("b", 1, 1_000)],
-            &compact_ids(),
+            &resolved(&sessions, [row("a", 1, 1_000), row("b", 1, 1_000)]),
             &first_runs(),
         )
         .expect("known sessions and crossings");
@@ -518,11 +525,14 @@ mod tests {
     }
 
     fn from_start(transitions: &[Transition], passes: &[(u32, i64)]) -> Vec<Outcome> {
+        let sessions = started(&[("a", 0)]);
         score(
-            &started(&[("a", 0)]),
+            &sessions,
             &BTreeMap::from([(session("a"), transitions.to_vec())]),
-            passes.iter().map(|&(n, seconds)| row("a", n, seconds)),
-            &compact_ids(),
+            &resolved(
+                &sessions,
+                passes.iter().map(|&(n, seconds)| row("a", n, seconds)),
+            ),
             &first_runs(),
         )
         .expect("known sessions and crossings")
@@ -568,8 +578,7 @@ mod tests {
         let refused = score(
             &started(&[("a", 0), ("b", 0)]),
             &BTreeMap::from([(session("a"), vec![])]),
-            Vec::<TrainSessionCrossingRowV1>::new(),
-            &compact_ids(),
+            &PassesBySession::new(),
             &first_runs(),
         );
 

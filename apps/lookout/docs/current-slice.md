@@ -660,7 +660,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               step's rows in memory through `evaluate run`. A notebook cannot write a run as the CLI
               does, and a run fingerprints silver four times and reads back what it wrote. A
               notebook writes a run through `evaluation-py`'s new `evaluate`.
-        - [ ] Read a run's crossings and passes once, and resolve each pass's compact id once. An
+        - [x] Read a run's crossings and passes once, and resolve each pass's compact id once. An
               oracle run reads the passes three times and the crossings twice.
         - [ ] Add `Query::read_of_run::<T>` and `medallion::from_batches`, and drop the SQL text
               that `read_run_rows` builds. The loop that decodes batches is written five times, and

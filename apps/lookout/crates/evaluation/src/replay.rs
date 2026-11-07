@@ -1,21 +1,19 @@
 use std::collections::BTreeMap;
 
 use datafusion::prelude::col;
-use domain::{CoordinateError, CrossingCompactId, CrossingId, Precision, Sample, SessionId};
+use domain::{CoordinateError, Precision, Sample, SessionId};
 use medallion::{Country, Query, QueryError, Root};
 use medallion_model::{TrainSessionRowV3, TrainSessionSamplePositionV3, TrainSessionSampleRowV3};
 use predictor::{DetectPasses, Event, ObserveError, Predict, TrackError, Tracker, Transition};
 use rayon::prelude::*;
 
-use crate::offline::{OfflineDetector, OfflineError};
-use crate::store::{picked, read_passes};
+use crate::offline::{OfflineDetector, PassesBySession};
+use crate::store::picked;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReplayError {
-    #[error("reading the sessions' samples and passes: {0}")]
+    #[error("reading the sessions' samples: {0}")]
     Query(#[from] QueryError),
-    #[error("gathering the sessions' passes: {0}")]
-    Passes(#[from] OfflineError),
     #[error("a sample of {session_id} lies at no position: {source}")]
     Position {
         session_id: SessionId,
@@ -57,7 +55,7 @@ pub async fn replay<F, Pr>(
     root: &Root,
     country: Country,
     sessions: &[TrainSessionRowV3],
-    compact_ids: &BTreeMap<CrossingId, CrossingCompactId>,
+    passes: &PassesBySession,
     predictor: impl Fn(&SessionId) -> Pr + Sync,
 ) -> Result<BTreeMap<SessionId, Vec<Transition>>, ReplayError>
 where
@@ -75,12 +73,7 @@ where
         ])?
         .rows_as::<TrainSessionSamplePositionV3>()
         .await?;
-    let passes = read_passes(root, sessions).await?;
-    let detectors = OfflineDetector::per_session(
-        sessions.iter().map(|session| session.session_id.clone()),
-        passes,
-        compact_ids,
-    )?;
+    let detectors = OfflineDetector::per_session(passes);
 
     let mut samples_by_session: BTreeMap<SessionId, Vec<Sample<F>>> = BTreeMap::new();
     for row in sample_rows {
@@ -117,12 +110,12 @@ mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
     use domain::{CrossingCompact, CrossingCompactId, CrossingId, Radius, SessionId};
     use geo_types::Point;
-    use medallion::{GeographyRow, Row, write_geography_rows, write_rows};
+    use medallion::{GeographyRow, Row, write_geography_rows};
     use medallion_model::{TrainSessionCrossingRowV1, TrainSessionSampleRowV3};
     use predictor::{Confidence, CrowFlies, Prediction, Predictions, StateKind};
 
     use super::*;
-    use crate::offline::OfflineDetector;
+    use crate::offline::{OfflineDetector, passes_by_session};
     use domain::places::DRESDEN_HBF;
 
     fn instant(seconds: i64) -> DateTime<Utc> {
@@ -151,13 +144,12 @@ mod tests {
                 crossed_at: instant(seconds),
                 ..TrainSessionCrossingRowV1::example()
             });
-        let compact_ids = (0..10)
-            .map(|n| (crossing(n), CrossingCompactId::new(n)))
-            .collect();
-        OfflineDetector::per_session([session()], rows, &compact_ids)
-            .expect("known sessions and crossings")
-            .remove(&session())
-            .expect("a detector for the session")
+        OfflineDetector::per_session(
+            &passes_by_session([session()], rows, &compact_ids())
+                .expect("known sessions and crossings"),
+        )
+        .remove(&session())
+        .expect("a detector for the session")
     }
 
     fn sample<F: Precision>(seconds: i64, latitude: f64) -> Sample<F> {
@@ -324,16 +316,26 @@ mod tests {
             .collect()
     }
 
+    fn resolved(
+        sessions: &[TrainSessionRowV3],
+        passes: &[TrainSessionCrossingRowV1],
+    ) -> PassesBySession {
+        passes_by_session(
+            sessions.iter().map(|session| session.session_id.clone()),
+            passes.iter().cloned(),
+            &compact_ids(),
+        )
+        .expect("known sessions and crossings")
+    }
+
     async fn stored(
         dir: &std::path::Path,
         samples: &[GeographyRow<TrainSessionSampleRowV3, Point<f64>>],
-        passes: &[TrainSessionCrossingRowV1],
     ) -> Root {
         let root = Root::new(dir);
         write_geography_rows(&root, samples)
             .await
             .expect("write the samples");
-        write_rows(&root, passes).await.expect("write the passes");
         root
     }
 
@@ -349,24 +351,16 @@ mod tests {
     #[tokio::test]
     async fn each_session_picked_is_replayed_against_its_own_passes_and_no_other_session_is() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
-        let root = stored(
-            tmp.path(),
-            &every_session_samples(&["a", "b", "c"]),
-            &[
-                stored_pass("a", 1, 15),
-                stored_pass("b", 1, 5),
-                stored_pass("c", 1, 25),
-            ],
-        )
-        .await;
+        let root = stored(tmp.path(), &every_session_samples(&["a", "b", "c"])).await;
+        let sessions = picked(&["a", "c"]);
+        let passes = resolved(
+            &sessions,
+            &[stored_pass("a", 1, 15), stored_pass("c", 1, 25)],
+        );
 
-        let replayed = replay(
-            &root,
-            Country::Germany,
-            &picked(&["a", "c"]),
-            &compact_ids(),
-            |_| Scripted::alerting(1, &[0, 10, 20, 30]),
-        )
+        let replayed = replay(&root, Country::Germany, &sessions, &passes, |_| {
+            Scripted::alerting(1, &[0, 10, 20, 30])
+        })
         .await
         .expect("a replay");
 
@@ -394,15 +388,13 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let mut samples = every_session_samples(&["a"]);
         samples.reverse();
-        let root = stored(tmp.path(), &samples, &[stored_pass("a", 1, 15)]).await;
+        let root = stored(tmp.path(), &samples).await;
+        let sessions = picked(&["a"]);
+        let passes = resolved(&sessions, &[stored_pass("a", 1, 15)]);
 
-        let replayed = replay(
-            &root,
-            Country::Germany,
-            &picked(&["a"]),
-            &compact_ids(),
-            |_| Scripted::alerting(1, &[0, 10, 20, 30]),
-        )
+        let replayed = replay(&root, Country::Germany, &sessions, &passes, |_| {
+            Scripted::alerting(1, &[0, 10, 20, 30])
+        })
         .await
         .expect("a replay in order");
 
@@ -419,20 +411,13 @@ mod tests {
     #[tokio::test]
     async fn a_session_picked_with_no_samples_is_replayed_as_no_transitions() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
-        let root = stored(
-            tmp.path(),
-            &every_session_samples(&["a"]),
-            &[stored_pass("a", 1, 15)],
-        )
-        .await;
+        let root = stored(tmp.path(), &every_session_samples(&["a"])).await;
+        let sessions = picked(&["a", "z"]);
+        let passes = resolved(&sessions, &[stored_pass("a", 1, 15)]);
 
-        let replayed = replay(
-            &root,
-            Country::Germany,
-            &picked(&["a", "z"]),
-            &compact_ids(),
-            |_| Scripted::alerting(1, &[0, 10, 20, 30]),
-        )
+        let replayed = replay(&root, Country::Germany, &sessions, &passes, |_| {
+            Scripted::alerting(1, &[0, 10, 20, 30])
+        })
         .await
         .expect("a replay");
 
