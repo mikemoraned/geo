@@ -341,7 +341,7 @@ Upstash.
       so every device would need to register again.
 - [x] Run `just push-secrets`, and check with `fly secrets list` that `LOOKOUT_REDIS_URL` is set.
       Under `--store redis`, the server refuses to start without it.
-- [ ] Deploy, and check that `/version` gives the deployed commit's hash.
+- [x] Deploy, and check that `/version` gives the deployed commit's hash.
 - [ ] From desktop Safari, register on `/signin/`, allow the code with
       `just passkeys allow <code> --label <name>`, and sign in. Check that `/signin/` continues to
       `/record/`.
