@@ -475,9 +475,12 @@ code.
         `git diff origin/main`. Note in `.claude/memory/testing-limits.md` that the sandbox runs the
         `-no-docker` recipe. The recipes use `git diff --relative`: cargo-mutants matches a diff's
         paths against the workspace's, and a plain diff's repo-root paths matched no mutant.
-  - [ ] Move `apps/lookout/rust-toolchain.toml` and `tools/overture-mirror/rust-toolchain.toml`
+  - [x] Move `apps/lookout/rust-toolchain.toml` and `tools/overture-mirror/rust-toolchain.toml`
         from 1.97.1 to 1.99.1, the latest stable Rust, in a commit of its own. `just prerequisites` failed
         at `cargo install rerun-cli --locked`, since `rerun-cli` 0.42.0 needs rustc 1.98.
+        Clippy 1.99 raised two new warnings. `double_must_use` fired on code that async-trait
+        0.1.89 generates, and async-trait 0.1.92 clears it. `result_large_err` fired on
+        `MotisError`, whose request error takes 136 bytes, so that variant is now boxed.
   - [ ] Run `just mutants-on-diff-no-docker` in place, over `crates/server/src/auth`, without
         `auth/redis.rs` and `auth/sessions/redis.rs`.
   - [ ] Run the two redis files' mutants outside the sandbox, with Docker.

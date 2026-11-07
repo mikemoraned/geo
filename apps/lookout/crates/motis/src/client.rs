@@ -27,9 +27,15 @@ const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 #[derive(Debug, thiserror::Error)]
 pub enum MotisError {
     #[error("motis request failed: {0}")]
-    Request(#[from] crate::api::Error<crate::api::types::Error>),
+    Request(#[source] Box<crate::api::Error<crate::api::types::Error>>),
     #[error("motis reports a version this store cannot record: {0}")]
     Version(#[from] NotAMotisVersion),
+}
+
+impl From<crate::api::Error<crate::api::types::Error>> for MotisError {
+    fn from(err: crate::api::Error<crate::api::types::Error>) -> Self {
+        Self::Request(Box::new(err))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
