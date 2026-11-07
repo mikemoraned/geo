@@ -5,4 +5,9 @@
 /gold/*
 !/gold/artifact=crossings/
 !/gold/artifact=sessions/
+!/gold/evaluation_run_v1/
+!/gold/evaluation_session_v1/
+!/gold/evaluation_transition_v1/
+!/gold/evaluation_outcome_v1/
+!/gold/evaluation_summary_v1/
 /bronze/overture_extract/

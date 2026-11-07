@@ -256,12 +256,17 @@ Laid out by what was produced and which run produced it, rather than by a partit
 <root>/gold/artifact=<name>/version=<run>/<file>
 ```
 
-**Gold is derived, and so is not versioned in git — with one exception.** An artefact a build
+**Gold is derived, and so is not versioned in git — with two exceptions.** An artefact a build
 reads is an input to something outside the store, and cannot be re-derived by whoever builds
 it: a checkout has no silver to pack from. The crossings and the sessions are the cases today.
 The device's firmware embeds the crossings and the browser fetches them, and a kiosk replays the
 sessions. Every version packed is committed, and `apps/lookout/crossings.version` and
 `apps/lookout/sessions.version` name the ones being built against.
+
+An evaluation run is the other exception. It records how a predictor scored against the silver of
+its day, and a later re-derive can change that silver, so a later checkout cannot repeat the run. A
+choice of predictor rests on its runs, so every run is committed, and a review reads them from the
+checkout.
 
 ## Reading from another language
 
