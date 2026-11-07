@@ -1,10 +1,5 @@
-use std::collections::HashMap;
-
 use datafusion::prelude::{col, lit};
-use itertools::Itertools;
-use medallion::{
-    Country, Query, QueryError, Root, Row, RowError, RunId, ScalarValue, fields, from_batch, layers,
-};
+use medallion::{Country, Query, QueryError, RUN_ID, Root, Row, RunId, layers};
 use medallion_model::{EvaluationRunRowV1, EvaluationSessionRowV1, TrainSessionRowV3};
 
 #[derive(Debug, thiserror::Error)]
@@ -13,8 +8,6 @@ pub enum RunsError {
     NoSuchRun { run_id: RunId },
     #[error("reading gold: {0}")]
     Query(#[from] QueryError),
-    #[error("reading gold's rows: {0}")]
-    Rows(#[from] RowError),
 }
 
 pub async fn read_run_row(root: &Root, run_id: &RunId) -> Result<EvaluationRunRowV1, RunsError> {
@@ -31,34 +24,14 @@ pub async fn read_run_rows<T: Row<Layer = layers::Gold>>(
     root: &Root,
     run_id: &RunId,
 ) -> Result<Vec<T>, RunsError> {
-    let query = Query::new(root.clone());
-    match query.register_gold(T::DATASET).await {
+    let read = match Query::new(root.clone()).read::<T>().await {
         Err(QueryError::NoSuchDataset { .. }) => return Ok(Vec::new()),
-        registered => registered?,
-    }
-    let columns = fields::<T>()?
-        .iter()
-        .map(|field| format!("\"{}\"", field.name()))
-        .join(", ");
-    let batches = query
-        .sql_with_params(
-            &format!(
-                "SELECT {columns} FROM {} WHERE run_id = $run_id",
-                T::DATASET.name
-            ),
-            HashMap::from([(
-                "run_id".to_string(),
-                ScalarValue::Utf8(Some(run_id.to_string())),
-            )]),
-        )
-        .await?;
-    Ok(batches
-        .iter()
-        .map(from_batch::<T>)
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .collect())
+        read => read?,
+    };
+    Ok(read
+        .filter(col(RUN_ID).eq(lit(run_id.to_string())))?
+        .rows()
+        .await?)
 }
 
 pub async fn read_sessions(

@@ -14,6 +14,8 @@ use crate::write::WriteError;
 pub const RUN_DATE: &str = "run_date";
 pub const RUN_ID: &str = "run_id";
 
+const BY_RUN: [&str; 2] = [RUN_DATE, RUN_ID];
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct RunId(String);
 
@@ -33,10 +35,12 @@ impl Display for RunId {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunError {
-    #[error("{dataset} is not laid out by run: its partition key is {key:?}, not `{RUN_DATE}`")]
+    #[error(
+        "{dataset} is not laid out by run: its partition levels are {levels:?}, not {BY_RUN:?}"
+    )]
     NotByRun {
         dataset: &'static str,
-        key: Option<&'static str>,
+        levels: Vec<&'static str>,
     },
     #[error("{dataset} holds geometry, which a run's rows do not carry")]
     Geometry { dataset: &'static str },
@@ -75,10 +79,11 @@ pub async fn write_run_batch(
     run_id: &RunId,
     rows: &RecordBatch,
 ) -> Result<PathBuf, RunError> {
-    if dataset.partition_key != Some(RUN_DATE) {
+    let levels = dataset.partition_levels();
+    if levels != BY_RUN {
         return Err(RunError::NotByRun {
             dataset: dataset.name,
-            key: dataset.partition_key,
+            levels,
         });
     }
     let runs = root.dataset(dataset);
@@ -111,6 +116,7 @@ fn written_on(runs: &Path, run_id: &RunId) -> Option<String> {
 mod tests {
     use std::path::Path;
 
+    use datafusion::prelude::{col, lit};
     use serde::{Deserialize, Serialize};
 
     use super::*;
@@ -124,7 +130,8 @@ mod tests {
 
     impl Row for Scored {
         type Layer = layers::Gold;
-        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("scored", RUN_DATE);
+        const DATASET: DatasetSpec<Self::Layer> =
+            DatasetSpec::partitioned_within("scored", RUN_DATE, &[RUN_ID]);
 
         fn example() -> Self {
             Scored {
@@ -177,6 +184,31 @@ mod tests {
             .expect("the rows");
         rows.sort_by(|one, other| one.notification_id.cmp(&other.notification_id));
         rows
+    }
+
+    #[tokio::test]
+    async fn a_read_filtered_on_one_run_returns_that_runs_rows_alone() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = Root::new(tmp.path());
+        write_run(&root, day(6), &run("abc"), &scored(3))
+            .await
+            .expect("a written run");
+        write_run(&root, day(7), &run("def"), &scored(2))
+            .await
+            .expect("another written run");
+
+        let mut rows = Query::new(root)
+            .read::<Scored>()
+            .await
+            .expect("a read of the runs")
+            .filter(col(RUN_ID).eq(lit("abc")))
+            .expect("a filter")
+            .rows()
+            .await
+            .expect("the rows");
+        rows.sort_by(|one, other| one.notification_id.cmp(&other.notification_id));
+
+        assert_eq!(rows, scored(3));
     }
 
     #[tokio::test]
@@ -281,11 +313,11 @@ mod tests {
 
         assert!(
             matches!(
-                refused,
+                &refused,
                 Err(RunError::NotByRun {
                     dataset: "exported",
-                    key: Some("made_date")
-                })
+                    levels,
+                }) if *levels == ["made_date"]
             ),
             "{refused:?}"
         );

@@ -1,24 +1,24 @@
 use chrono::{DateTime, Utc};
 use domain::{CrossingCompactId, Percentage, SessionId};
-use medallion::{DatasetSpec, RUN_DATE, Row, layers};
+use medallion::{DatasetSpec, RUN_DATE, RUN_ID, Row, layers};
 use serde::{Deserialize, Serialize};
 
 use crate::TrainSessionRowV3;
 
 pub const EVALUATION_RUN_V1: DatasetSpec<layers::Gold> =
-    DatasetSpec::partitioned("evaluation_run_v1", RUN_DATE);
+    DatasetSpec::partitioned_within("evaluation_run_v1", RUN_DATE, &[RUN_ID]);
 
 pub const EVALUATION_SESSION_V1: DatasetSpec<layers::Gold> =
-    DatasetSpec::partitioned("evaluation_session_v1", RUN_DATE);
+    DatasetSpec::partitioned_within("evaluation_session_v1", RUN_DATE, &[RUN_ID]);
 
 pub const EVALUATION_TRANSITION_V1: DatasetSpec<layers::Gold> =
-    DatasetSpec::partitioned("evaluation_transition_v1", RUN_DATE);
+    DatasetSpec::partitioned_within("evaluation_transition_v1", RUN_DATE, &[RUN_ID]);
 
 pub const EVALUATION_OUTCOME_V1: DatasetSpec<layers::Gold> =
-    DatasetSpec::partitioned("evaluation_outcome_v1", RUN_DATE);
+    DatasetSpec::partitioned_within("evaluation_outcome_v1", RUN_DATE, &[RUN_ID]);
 
 pub const EVALUATION_SUMMARY_V1: DatasetSpec<layers::Gold> =
-    DatasetSpec::partitioned("evaluation_summary_v1", RUN_DATE);
+    DatasetSpec::partitioned_within("evaluation_summary_v1", RUN_DATE, &[RUN_ID]);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

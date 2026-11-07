@@ -662,9 +662,11 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               notebook writes a run through `evaluation-py`'s new `evaluate`.
         - [x] Read a run's crossings and passes once, and resolve each pass's compact id once. An
               oracle run reads the passes three times and the crossings twice.
-        - [ ] Add `Query::read_of_run::<T>` and `medallion::from_batches`, and drop the SQL text
+        - [x] Add `Query::read_of_run::<T>` and `medallion::from_batches`, and drop the SQL text
               that `read_run_rows` builds. The loop that decodes batches is written five times, and
-              the SQL text breaks the decision on typed reads.
+              the SQL text breaks the decision on typed reads. Done without `read_of_run`, which
+              ties `Query` to runs. `Query::read` exposes a dataset's partition levels as columns,
+              and a dataset declares the levels beneath its key with `partitioned_within`.
         - [ ] Write gold through a target beside `SilverTarget`, with its column checks and a real
               `TableWritten`. Gold accepts unexpected columns, and `write_gold` makes up the counts
               it returns.

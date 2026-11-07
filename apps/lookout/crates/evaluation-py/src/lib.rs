@@ -433,14 +433,7 @@ fn span(text: &str) -> PyResult<Span> {
 
 fn rows_of<T: Row>(table: PyTable) -> PyResult<Vec<T>> {
     let (batches, _) = table.into_inner();
-    Ok(batches
-        .iter()
-        .map(medallion::from_batch::<T>)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(value_error)?
-        .into_iter()
-        .flatten()
-        .collect())
+    medallion::from_batches::<T>(&batches).map_err(value_error)
 }
 
 fn table_of<T: Row>(rows: &[T]) -> PyResult<PyTable> {

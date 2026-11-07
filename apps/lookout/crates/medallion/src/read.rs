@@ -5,7 +5,7 @@ use datafusion::logical_expr::{Expr, SortExpr};
 use serde::Deserialize;
 
 use crate::query::QueryError;
-use crate::rows::{Projection, Row, fields, projected_columns};
+use crate::rows::{Projection, Row, fields, from_batches, projected_columns};
 
 #[derive(Debug)]
 pub struct Read<T> {
@@ -60,11 +60,7 @@ impl<T: Row> Read<T> {
 }
 
 async fn rows_of<R: for<'de> Deserialize<'de>>(frame: DataFrame) -> Result<Vec<R>, QueryError> {
-    let mut rows = Vec::new();
-    for batch in frame.collect().await? {
-        rows.extend(serde_arrow::from_record_batch::<Vec<R>>(&batch)?);
-    }
-    Ok(rows)
+    Ok(from_batches(&frame.collect().await?)?)
 }
 
 #[cfg(test)]
@@ -397,6 +393,25 @@ mod tests {
         read.sort_by(|one, other| one.row_id.cmp(&other.row_id));
 
         assert_eq!(read, date_only_rows(6));
+    }
+
+    #[tokio::test]
+    async fn a_read_of_a_dataset_laid_out_by_date_filters_on_the_date_it_is_laid_out_by() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = written(tmp.path(), &date_only_rows(6)).await;
+
+        let mut kept = Query::new(root)
+            .read::<DateOnlyRow>()
+            .await
+            .expect("a read of the date_only_rows")
+            .filter(col("counted_date").eq(lit("2026-07-21")))
+            .expect("a filter")
+            .rows()
+            .await
+            .expect("the date_only_rows");
+        kept.sort_by_key(|row| row.count);
+
+        assert_eq!(kept.iter().map(|row| row.count).collect::<Vec<_>>(), [1, 4]);
     }
 
     #[tokio::test]

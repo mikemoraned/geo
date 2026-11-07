@@ -19,8 +19,7 @@ use crate::layer::{LayerKind, layers};
 use crate::partition::Partition;
 use crate::path::{Dataset, Root, any_file_under};
 use crate::read::Read;
-use crate::rows::{Geometry, Row, RowError};
-use crate::run::{RUN_DATE, RUN_ID};
+use crate::rows::{Geometry, Row, RowError, from_batches};
 use crate::table::{Layout, SilverTarget};
 
 #[derive(Debug, thiserror::Error)]
@@ -281,9 +280,14 @@ impl Query {
                 dataset: T::DATASET.name,
             });
         }
-        Ok(Read::new(
-            self.frame_at(&self.root.dataset(T::DATASET)).await?,
-        ))
+        let dataset = self.root.dataset(T::DATASET);
+        self.parquet_frame(&dataset, &T::DATASET.partition_levels())
+            .await?
+            .map(Read::new)
+            .ok_or_else(|| QueryError::NoSuchDataset {
+                layer: dataset.layer(),
+                dataset: dataset.name().to_string(),
+            })
     }
 
     pub async fn read_of_country<T: Row>(&self, country: Country) -> Result<Read<T>, QueryError> {
@@ -318,7 +322,7 @@ impl Query {
     ) -> Result<(), QueryError> {
         let runs = self.root.dataset(dataset);
         if self
-            .register_as_parquet(&runs, dataset.name, &[RUN_DATE, RUN_ID])
+            .register_as_parquet(&runs, dataset.name, &dataset.partition_levels())
             .await?
         {
             Ok(())
@@ -369,25 +373,37 @@ impl Query {
         table: &str,
         partition_keys: &[&str],
     ) -> Result<bool, QueryError> {
-        if !dataset.is_filled() {
-            return Ok(false);
+        match self.parquet_frame(dataset, partition_keys).await? {
+            Some(rows) => {
+                self.ctx.ctx.register_table(table, rows.into_view())?;
+                Ok(true)
+            }
+            None => Ok(false),
         }
+    }
 
-        let rows = self
-            .ctx
-            .ctx
-            .read_parquet(
-                dataset.dir().display().to_string(),
-                ParquetReadOptions::default().table_partition_cols(
-                    partition_keys
-                        .iter()
-                        .map(|key| ((*key).to_string(), DataType::Utf8))
-                        .collect(),
-                ),
-            )
-            .await?;
-        self.ctx.ctx.register_table(table, rows.into_view())?;
-        Ok(true)
+    async fn parquet_frame<L: LayerKind>(
+        &self,
+        dataset: &Dataset<L>,
+        partition_keys: &[&str],
+    ) -> Result<Option<DataFrame>, QueryError> {
+        if !dataset.is_filled() {
+            return Ok(None);
+        }
+        Ok(Some(
+            self.ctx
+                .ctx
+                .read_parquet(
+                    dataset.dir().display().to_string(),
+                    ParquetReadOptions::default().table_partition_cols(
+                        partition_keys
+                            .iter()
+                            .map(|key| ((*key).to_string(), DataType::Utf8))
+                            .collect(),
+                    ),
+                )
+                .await?,
+        ))
     }
 
     pub async fn register_of_country<L: LayerKind>(
@@ -439,11 +455,7 @@ impl Query {
     where
         T: for<'de> serde::Deserialize<'de>,
     {
-        let mut rows = Vec::new();
-        for batch in self.sql(sql).await? {
-            rows.extend(serde_arrow::from_record_batch::<Vec<T>>(&batch)?);
-        }
-        Ok(rows)
+        Ok(from_batches(&self.sql(sql).await?)?)
     }
 
     pub async fn row_batches<T>(

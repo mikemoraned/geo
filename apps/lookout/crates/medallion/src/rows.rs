@@ -84,8 +84,14 @@ pub fn batch<T: Row>(rows: &[T]) -> Result<RecordBatch, RowError> {
     Ok(serde_arrow::to_record_batch(&fields::<T>()?, &rows)?)
 }
 
-pub fn from_batch<T: Row>(batch: &RecordBatch) -> Result<Vec<T>, RowError> {
-    Ok(serde_arrow::from_record_batch(batch)?)
+pub fn from_batches<T: for<'de> Deserialize<'de>>(
+    batches: &[RecordBatch],
+) -> Result<Vec<T>, RowError> {
+    let mut rows = Vec::new();
+    for batch in batches {
+        rows.extend(serde_arrow::from_record_batch::<Vec<T>>(batch)?);
+    }
+    Ok(rows)
 }
 
 #[cfg(test)]
@@ -298,7 +304,7 @@ mod tests {
     fn rows_survive_a_round_trip_through_a_batch() {
         let rows = vec![row(1), row(2)];
 
-        let read: Vec<Reading> = from_batch(&batch(&rows).unwrap()).unwrap();
+        let read: Vec<Reading> = from_batches(&[batch(&rows).unwrap()]).unwrap();
 
         assert_eq!(read, rows);
     }
@@ -314,6 +320,6 @@ mod tests {
             )
             .unwrap();
 
-        assert!(from_batch::<Reading>(&without_source).is_err());
+        assert!(from_batches::<Reading>(&[without_source]).is_err());
     }
 }
