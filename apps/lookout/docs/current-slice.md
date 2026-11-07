@@ -516,6 +516,11 @@ What looking for the oracle's shortfalls established, on 2026-11-07, over the 10
   every column took 0.93 s, and switching on filter pushdown cut that to 0.50 s. Reading only the
   five columns replay uses cut it to 0.36 s. The 16 s that the task cited came from a debug build,
   with DataFusion unoptimised.
+- **An R-tree of the crossings cuts CrowFlies' replay of 1000 sessions from 3.7 s to 0.54 s**
+  (2026-11-07). The example `crow_flies_index_timing` replayed a pick of 1000 sessions in Germany
+  through CrowFlies in `f32`, in a release build. Scanning every crossing took 3.66 s, and the
+  R-tree took 0.54 s. Both gave the same 55,775 transitions. The 3 s saved did not justify the
+  index, and it was removed.
 
 ### Pending refactors
 
@@ -641,10 +646,13 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               turn on parquet filter pushdown. Reading takes 16 s of a 21 s replay, since all of a
               country's 62M samples are decoded to keep about 300k. The 16 s came from a debug
               build, as Observations records.
-        - [ ] Give `Crossings` a `near(from, radius)` query, which the device keeps as a scan and
+        - [-] Give `Crossings` a `near(from, radius)` query, which the device keeps as a scan and
               the evaluation backs with one shared R-tree. CrowFlies measures about 1.7 billion
               distances in a run of 1000 sessions, and each radius in Phase 3's sweep measures them
-              again.
+              again. Moot: in a release build, the scan costs about 3 s per 1000 sessions, as
+              Observations records. That is too little to justify an index the device does not
+              share. The index comes back once the device has more to do with each fix. It is then
+              built once, for the device and the evaluation alike.
         - [ ] Move writing a run and resuming one from `evaluate` into `evaluation`, and keep each
               step's rows in memory through `evaluate run`. A notebook cannot write a run as the CLI
               does, and a run fingerprints silver four times and reads back what it wrote.
