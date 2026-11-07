@@ -5,7 +5,7 @@ use code_version::{DIRTY, UNKNOWN};
 use domain::{Radius, Span};
 use medallion::{DatasetSpec, FingerprintError, Root, RunId, layers};
 use medallion_model::{
-    EvaluationRunRowV1, EvaluationSessionRowV1, FloatTypeName, PassDetectorName, PredictorName,
+    EvaluationRunRowV1, EvaluationSessionRowV1, PassDetectorName, PredictorName,
     TRAIN_SESSION_CROSSING_V1, TRAIN_SESSION_SAMPLE_V3, TRAIN_SESSION_V3, TrainSessionRowV3,
     WATER_CROSSING_V2,
 };
@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};
-use crate::steps::{FloatType, Predictor, Run};
+use crate::steps::{Predictor, Run};
 use crate::summarise::Bootstrap;
 
 pub const EVALUATION_VERSION: &str = "replay-v1";
@@ -140,10 +140,7 @@ pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> Evaluat
         predictor_horizon_ms,
         predictor_radius_m,
         pass_detector: PassDetectorName::Offline,
-        float_type: match run.float_type {
-            FloatType::F32 => FloatTypeName::F32,
-            FloatType::F64 => FloatTypeName::F64,
-        },
+        float_type: run.float_type,
         horizon_ms: milliseconds(run.scoring.horizon),
         last_moment_ms: milliseconds(run.scoring.last_moment),
         ramp_ms: milliseconds(run.scoring.ramp),
@@ -195,10 +192,7 @@ pub fn run_of(row: &EvaluationRunRowV1) -> Result<Run, RecordError> {
                 .map_err(|err| setting("predictor_radius_m", err))?,
             },
         },
-        float_type: match row.float_type {
-            FloatTypeName::F32 => FloatType::F32,
-            FloatTypeName::F64 => FloatType::F64,
-        },
+        float_type: row.float_type,
         scoring: Scoring {
             horizon: span_of("horizon_ms", row.horizon_ms)?,
             last_moment: span_of("last_moment_ms", row.last_moment_ms)?,
@@ -251,6 +245,7 @@ fn setting(column: &'static str, reason: impl std::fmt::Display) -> RecordError 
 
 #[cfg(test)]
 mod tests {
+    use medallion_model::FloatType;
     use std::num::NonZeroUsize;
 
     use chrono::TimeDelta;

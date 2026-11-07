@@ -1,10 +1,4 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum StateKind {
-    OutOfReach,
-    CandidatePass,
-    AlertedPass,
-    ActualPass,
-}
+use domain::StateKind;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct CandidatePass;

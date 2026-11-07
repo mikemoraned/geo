@@ -1,10 +1,11 @@
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, TimeDelta, Utc};
+use domain::StateKind;
 use domain::{CrossingCompactId, SessionId, Span};
 use itertools::Itertools;
 use medallion_model::TrainSessionRowV3;
-use predictor::{StateKind, Transition};
+use predictor::Transition;
 
 use crate::offline::PassesBySession;
 

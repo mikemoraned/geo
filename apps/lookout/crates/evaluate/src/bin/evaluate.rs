@@ -1,14 +1,14 @@
 use std::error::Error;
 use std::num::NonZeroUsize;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand};
 use domain::{NotASpan, Percentage, Radius, Span};
 use evaluation::gold;
 use evaluation::record::CodeVersion;
-use evaluation::steps::{FloatType, Predictor, Run};
+use evaluation::steps::{Predictor, Run};
 use evaluation::{Bootstrap, Pick, Score, Scoring, Seed};
 use medallion::{Country, MedallionArgs, RunId};
-use medallion_model::EvaluationSummaryRowV1;
+use medallion_model::{EvaluationSummaryRowV1, FloatType, PredictorName};
 
 const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
 
@@ -42,18 +42,6 @@ struct Begun {
     run_id: uuid::Uuid,
 }
 
-#[derive(Clone, Copy, ValueEnum)]
-enum PredictorArg {
-    Oracle,
-    CrowFlies,
-}
-
-#[derive(Clone, Copy, ValueEnum)]
-enum FloatTypeArg {
-    F32,
-    F64,
-}
-
 #[derive(Args)]
 struct Settings {
     /// The country whose train sessions are picked, such as `DE`.
@@ -68,18 +56,18 @@ struct Settings {
     /// The seed the sessions are picked under.
     #[arg(long)]
     seed: u64,
-    /// The predictor the sessions are replayed through.
-    #[arg(long, value_enum)]
-    predictor: PredictorArg,
+    /// The predictor the sessions are replayed through: `oracle` or `crow_flies`.
+    #[arg(long)]
+    predictor: PredictorName,
     /// How far ahead of each pass the oracle alerts, such as `5m`.
     #[arg(long, value_parser = span, required_if_eq("predictor", "oracle"))]
     oracle_horizon: Option<Span>,
     /// How far from the latest sample CrowFlies predicts crossings, in metres.
-    #[arg(long, required_if_eq("predictor", "crow-flies"))]
+    #[arg(long, required_if_eq("predictor", "crow_flies"))]
     radius_metres: Option<Radius>,
-    /// The float type the replay runs in.
-    #[arg(long, value_enum)]
-    float_type: FloatTypeArg,
+    /// The float type the replay runs in: `f32` or `f64`.
+    #[arg(long)]
+    float_type: FloatType,
     /// How far ahead of its pass a notification is a hit, such as `5m`.
     #[arg(long, value_parser = span)]
     horizon: Span,
@@ -109,10 +97,10 @@ struct Settings {
 impl Settings {
     fn run(&self) -> Result<Run, &'static str> {
         let predictor = match (self.predictor, self.oracle_horizon, self.radius_metres) {
-            (PredictorArg::Oracle, Some(horizon), _) => Predictor::Oracle { horizon },
-            (PredictorArg::CrowFlies, _, Some(radius)) => Predictor::CrowFlies { radius },
-            (PredictorArg::Oracle, None, _) => return Err("the oracle needs --oracle-horizon"),
-            (PredictorArg::CrowFlies, _, None) => return Err("CrowFlies needs --radius-metres"),
+            (PredictorName::Oracle, Some(horizon), _) => Predictor::Oracle { horizon },
+            (PredictorName::CrowFlies, _, Some(radius)) => Predictor::CrowFlies { radius },
+            (PredictorName::Oracle, None, _) => return Err("the oracle needs --oracle-horizon"),
+            (PredictorName::CrowFlies, _, None) => return Err("CrowFlies needs --radius-metres"),
         };
         Ok(Run {
             pick: Pick {
@@ -122,10 +110,7 @@ impl Settings {
                 seed: Seed(self.seed),
             },
             predictor,
-            float_type: match self.float_type {
-                FloatTypeArg::F32 => FloatType::F32,
-                FloatTypeArg::F64 => FloatType::F64,
-            },
+            float_type: self.float_type,
             scoring: Scoring {
                 horizon: self.horizon,
                 last_moment: self.last_moment,

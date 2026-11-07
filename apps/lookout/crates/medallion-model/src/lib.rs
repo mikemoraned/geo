@@ -22,10 +22,10 @@ pub use crossing::{
     TrainSessionCrossingRowV1, WATER_CROSSING_V2, WaterCrossingRowV2,
 };
 pub use evaluation::{
-    CrossingStateKind, EVALUATION_OUTCOME_V1, EVALUATION_RUN_V1, EVALUATION_SESSION_V1,
-    EVALUATION_SUMMARY_V1, EVALUATION_TRANSITION_V1, EvaluationOutcomeRowV1, EvaluationRunRowV1,
-    EvaluationSessionRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1, FloatTypeName,
-    NotificationClass, OutcomeKind, PassDetectorName, PredictorName,
+    EVALUATION_OUTCOME_V1, EVALUATION_RUN_V1, EVALUATION_SESSION_V1, EVALUATION_SUMMARY_V1,
+    EVALUATION_TRANSITION_V1, EvaluationOutcomeRowV1, EvaluationRunRowV1, EvaluationSessionRowV1,
+    EvaluationSummaryRowV1, EvaluationTransitionRowV1, FloatType, NotificationClass, OutcomeKind,
+    PassDetectorName, PredictorName,
 };
 pub use gers::{GersId, NotAGersId};
 pub use gold::{GoldTargetError, gold_target};

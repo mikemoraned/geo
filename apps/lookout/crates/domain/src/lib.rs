@@ -13,6 +13,7 @@ pub mod radius;
 pub mod sample;
 pub mod session;
 pub mod span;
+pub mod state;
 pub mod train;
 pub mod travel;
 
@@ -30,5 +31,6 @@ pub use radius::{NotARadius, Radius};
 pub use sample::Sample;
 pub use session::{SessionId, StartedBy};
 pub use span::{NotASpan, Span};
+pub use state::StateKind;
 pub use train::TrainNumber;
 pub use travel::{implied_speed, path_through};

@@ -3,10 +3,10 @@ use std::collections::BTreeMap;
 use chrono::TimeDelta;
 use domain::{CrossingCompactId, SessionId};
 use medallion_model::{
-    CrossingStateKind, EvaluationOutcomeRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1,
-    NotificationClass, OutcomeKind, TrainSessionRowV3,
+    EvaluationOutcomeRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1, NotificationClass,
+    OutcomeKind, TrainSessionRowV3,
 };
-use predictor::{StateKind, Transition};
+use predictor::Transition;
 
 use crate::score::{Class, Credit, NotAScore, Outcome, Score, Verdict};
 use crate::summarise::{Estimate, LeadTimes, Summary};
@@ -40,8 +40,8 @@ pub fn transition_rows(
                     session_id: session_id.clone(),
                     crossing_compact_id: transition.crossing_compact_id,
                     at: transition.at,
-                    from: state_name(transition.from),
-                    to: state_name(transition.to),
+                    from: transition.from,
+                    to: transition.to,
                 })
         })
         .collect()
@@ -56,8 +56,8 @@ pub fn replayed_from(
         session_of(&mut replayed, &row.session_id)?.push(Transition {
             crossing_compact_id: row.crossing_compact_id,
             at: row.at,
-            from: state_kind(row.from),
-            to: state_kind(row.to),
+            from: row.from,
+            to: row.to,
         });
     }
     Ok(replayed)
@@ -216,24 +216,6 @@ fn outcome_of(row: &EvaluationOutcomeRowV1) -> Result<Outcome, RowsError> {
     }
 }
 
-fn state_name(kind: StateKind) -> CrossingStateKind {
-    match kind {
-        StateKind::OutOfReach => CrossingStateKind::OutOfReach,
-        StateKind::CandidatePass => CrossingStateKind::CandidatePass,
-        StateKind::AlertedPass => CrossingStateKind::AlertedPass,
-        StateKind::ActualPass => CrossingStateKind::ActualPass,
-    }
-}
-
-fn state_kind(name: CrossingStateKind) -> StateKind {
-    match name {
-        CrossingStateKind::OutOfReach => StateKind::OutOfReach,
-        CrossingStateKind::CandidatePass => StateKind::CandidatePass,
-        CrossingStateKind::AlertedPass => StateKind::AlertedPass,
-        CrossingStateKind::ActualPass => StateKind::ActualPass,
-    }
-}
-
 fn class_name(class: Class) -> NotificationClass {
     match class {
         Class::Hit => NotificationClass::Hit,
@@ -253,6 +235,7 @@ fn class_kind(name: NotificationClass) -> Class {
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
+    use domain::StateKind;
     use medallion::Row;
     use proptest::prelude::*;
 

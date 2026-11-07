@@ -3,15 +3,17 @@
 use std::collections::BTreeMap;
 
 use arrow::datatypes::{Field, SchemaRef};
-use domain::{CrossingCompactId, CrossingId, DeviceType, SessionId, StartedBy, TrainNumber};
+use domain::{
+    CrossingCompactId, CrossingId, DeviceType, SessionId, StartedBy, StateKind, TrainNumber,
+};
 use medallion::{Country, DatasetInfo, Row, file_schema};
 use serde::{Deserialize, Serialize};
 use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, TracerConfig};
 
 use crate::{
-    ALL, AccelReadingRowV2, CrossingStateKind, DeviceSessionRowV2, EvaluationOutcomeRowV1,
-    EvaluationRunRowV1, EvaluationSessionRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1,
-    ExtractManifestRowV3, Feed, FloatTypeName, GeometrySource, GersId, GpsReadingRowV2, Label,
+    ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationOutcomeRowV1, EvaluationRunRowV1,
+    EvaluationSessionRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1,
+    ExtractManifestRowV3, Feed, FloatType, GeometrySource, GersId, GpsReadingRowV2, Label,
     MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId,
     MotisSourceRowV4, MotisVersion, NotificationClass, OVERTURE_EXTRACT, OutcomeKind, OverlapKind,
     OvertureRelease, PassDetectorName, PredictorName, RailMode, RawSampleRow, SessionCrossingRowV3,
@@ -207,10 +209,9 @@ fn variants<E: for<'de> Deserialize<'de>>() -> (String, Vec<String>) {
 
 fn enums() -> BTreeMap<String, Vec<String>> {
     BTreeMap::from([
-        variants::<CrossingStateKind>(),
         variants::<DeviceType>(),
         variants::<Feed>(),
-        variants::<FloatTypeName>(),
+        variants::<FloatType>(),
         variants::<GeometrySource>(),
         variants::<NotificationClass>(),
         variants::<OutcomeKind>(),
@@ -219,6 +220,7 @@ fn enums() -> BTreeMap<String, Vec<String>> {
         variants::<PredictorName>(),
         variants::<RailMode>(),
         variants::<StartedBy>(),
+        variants::<StateKind>(),
     ])
 }
 

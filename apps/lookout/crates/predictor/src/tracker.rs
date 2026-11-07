@@ -2,11 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, Utc};
 
-use domain::{CrossingCompactId, Precision};
+use domain::{CrossingCompactId, Precision, StateKind};
 
 use crate::detect::Passes;
 use crate::predict::{Confidence, Predictions};
-use crate::state::{AlertedPass, CandidatePass, CrossingState, StateKind};
+use crate::state::{AlertedPass, CandidatePass, CrossingState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Transition {

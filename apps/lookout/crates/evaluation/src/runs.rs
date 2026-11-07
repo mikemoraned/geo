@@ -60,10 +60,11 @@ mod tests {
     use std::path::Path;
 
     use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
+    use domain::StateKind;
     use domain::{CrossingCompactId, SessionId};
     use geo_types::LineString;
     use medallion::{GeographyRow, write_geography_rows, write_run};
-    use medallion_model::{CrossingStateKind, EvaluationTransitionRowV1};
+    use medallion_model::EvaluationTransitionRowV1;
 
     use super::*;
     use domain::places::DRESDEN_HBF;
@@ -97,8 +98,8 @@ mod tests {
             session_id: session(name),
             crossing_compact_id: CrossingCompactId::new(1),
             at: instant(0),
-            from: CrossingStateKind::OutOfReach,
-            to: CrossingStateKind::AlertedPass,
+            from: StateKind::OutOfReach,
+            to: StateKind::AlertedPass,
         }
     }
 

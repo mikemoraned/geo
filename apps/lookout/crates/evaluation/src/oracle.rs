@@ -115,10 +115,11 @@ impl<P: Precision> Predict<P> for Oracle<P> {
 
 #[cfg(test)]
 mod tests {
+    use domain::StateKind;
     use domain::{CrossingId, Sample};
     use medallion::Row;
     use medallion_model::TrainSessionCrossingRowV1;
-    use predictor::{StateKind, Transition};
+    use predictor::Transition;
 
     use super::*;
     use crate::offline::{OfflineDetector, passes_by_session};

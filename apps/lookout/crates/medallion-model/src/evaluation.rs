@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
-use domain::{CrossingCompactId, Percentage, SessionId};
+use domain::{CrossingCompactId, Percentage, SessionId, StateKind};
 use medallion::{DatasetSpec, RUN_DATE, RUN_ID, Row, layers};
 use serde::{Deserialize, Serialize};
+use strum::{AsRefStr, EnumIter, EnumString};
 
 use crate::TrainSessionRowV3;
 
@@ -20,23 +21,14 @@ pub const EVALUATION_OUTCOME_V1: DatasetSpec<layers::Gold> =
 pub const EVALUATION_SUMMARY_V1: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_summary_v1", RUN_DATE, &[RUN_ID]);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CrossingStateKind {
-    OutOfReach,
-    CandidatePass,
-    AlertedPass,
-    ActualPass,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvaluationTransitionRowV1 {
     pub session_id: SessionId,
     pub crossing_compact_id: CrossingCompactId,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub at: DateTime<Utc>,
-    pub from: CrossingStateKind,
-    pub to: CrossingStateKind,
+    pub from: StateKind,
+    pub to: StateKind,
 }
 
 impl Row for EvaluationTransitionRowV1 {
@@ -49,8 +41,8 @@ impl Row for EvaluationTransitionRowV1 {
             session_id: TrainSessionRowV3::example().session_id,
             crossing_compact_id: CrossingCompactId::new(1),
             at: DateTime::UNIX_EPOCH,
-            from: CrossingStateKind::OutOfReach,
-            to: CrossingStateKind::OutOfReach,
+            from: StateKind::OutOfReach,
+            to: StateKind::OutOfReach,
         }
     }
 }
@@ -158,8 +150,11 @@ impl Row for EvaluationSummaryRowV1 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumString, AsRefStr, EnumIter,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum PredictorName {
     Oracle,
     CrowFlies,
@@ -172,9 +167,12 @@ pub enum PassDetectorName {
     Online,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumString, AsRefStr, EnumIter,
+)]
 #[serde(rename_all = "snake_case")]
-pub enum FloatTypeName {
+#[strum(serialize_all = "snake_case")]
+pub enum FloatType {
     F32,
     F64,
 }
@@ -193,7 +191,7 @@ pub struct EvaluationRunRowV1 {
     pub predictor_horizon_ms: Option<i64>,
     pub predictor_radius_m: Option<f64>,
     pub pass_detector: PassDetectorName,
-    pub float_type: FloatTypeName,
+    pub float_type: FloatType,
     pub horizon_ms: i64,
     pub last_moment_ms: i64,
     pub ramp_ms: i64,
@@ -226,7 +224,7 @@ impl Row for EvaluationRunRowV1 {
             predictor_horizon_ms: Some(300_000),
             predictor_radius_m: Some(5_000.0),
             pass_detector: PassDetectorName::Offline,
-            float_type: FloatTypeName::F32,
+            float_type: FloatType::F32,
             horizon_ms: 300_000,
             last_moment_ms: 30_000,
             ramp_ms: 60_000,
@@ -265,5 +263,40 @@ impl Row for EvaluationSessionRowV1 {
             ended_at: DateTime::UNIX_EPOCH,
             hours: 0.0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fmt::Debug;
+    use std::str::FromStr;
+
+    use strum::IntoEnumIterator;
+
+    use super::*;
+
+    fn spelt_alike<E>()
+    where
+        E: IntoEnumIterator + AsRef<str> + FromStr + Serialize + Debug + PartialEq,
+        E::Err: Debug,
+    {
+        for variant in E::iter() {
+            let stored = serde_json::to_value(&variant).expect("a stored name");
+            assert_eq!(stored, serde_json::json!(variant.as_ref()), "{variant:?}");
+            assert_eq!(
+                E::from_str(variant.as_ref()).expect("a parsed name"),
+                variant
+            );
+        }
+    }
+
+    #[test]
+    fn a_predictor_is_named_as_it_is_stored() {
+        spelt_alike::<PredictorName>();
+    }
+
+    #[test]
+    fn a_float_type_is_named_as_it_is_stored() {
+        spelt_alike::<FloatType>();
     }
 }
