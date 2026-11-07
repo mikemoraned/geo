@@ -346,7 +346,7 @@ Upstash.
       `just passkeys allow <code> --label <name>`, and sign in. Check that `/signin/` continues to
       `/record/`.
 - [x] Check that `just passkeys list` shows the label, and a last use after the sign-in.
-- [ ] From a second browser, check that `/record/` redirects and that `/ws` refuses the upgrade.
+- [x] From a second browser, check that `/record/` redirects and that `/ws` refuses the upgrade.
 - [ ] Register from the iPhone, allow it with `just passkeys allow`, and record a journey. Answer the
       open question on `parseCreationOptionsFromJSON` and `toJSON()` in iOS Safari.
 - [ ] Set 1Password as the iPhone's passkey provider, under AutoFill in Settings.
