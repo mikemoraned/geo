@@ -481,6 +481,13 @@ What `notebooks/evaluation/explore2_spacing.py` established about the spacing of
   The same pick, on 8 cores, gave the same 55,775 transitions. The replay took 41 s against 140 s,
   at a peak of 425 MB against 383 MB. With the six crates optimised, it took 21 s against 43 s, and
   reading took 16 s of that. Reading now takes most of a replay.
+- **The oracle scores perfectly over 1000 sessions** (2026-11-07). `just evaluate` wrote run
+  `bef2e910-7b2e-57d7-b0b0-bd67cfa3f098` over 1000 sessions in Germany, 904.6 hours of them, under
+  the first runs' settings. It scored 12,082 passes and 12,082 notifications, with no false alarm,
+  repeat, or miss. Precision and recall are each 1, with an interval of 1 to 1, and every lead time
+  is 5 minutes. A further 590 notifications credit a pass in a session's first minute, and go
+  unscored. The release build took 3 min 10 s, and the run about 4 s. The run's five datasets take
+  340 KB in gold.
 
 ### Pending refactors
 
@@ -577,7 +584,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [x] Define the gold datasets that [The datasets](#the-datasets) names, in `medallion-model`.
 - [x] Add the `evaluate` crate, whose CLI runs every step in order or any one alone, and a
       `just evaluate` recipe.
-- [ ] Run the oracle over 1000 sessions with `just evaluate`.
+- [x] Run the oracle over 1000 sessions with `just evaluate`.
 - [ ] Check that a run written from `explore3.py` through `write_gold` matches the CLI's run on the
       same seed.
 - [ ] Trace each shortfall from a perfect score in `explore3.py`, through `query_gold`, and record
