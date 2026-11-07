@@ -14,6 +14,9 @@ paths:
   nothing inside it. Only `next-slices.md` names milestones. `current-slice.md` and
   `completed-slices.md` carry no milestone line.
 - **Checking off a task in current-slice.md**: just flip `[ ]` to `[x]`, leaving the task text as written. Don't append a summary of what you changed or where — the diff and commit history already record that. Add a note only when it conflicts with the task as written (e.g. you did it differently than described) or meaningfully enriches it (a decision or caveat a future reader needs).
+- **A task with subtasks is ticked last**: a parent stays `[ ]` until every subtask under it is
+  `[x]` or `[-]`. Work that produces subtasks, such as a review that finds refactors, is a task of
+  its own, ticked when it is done, with the subtasks under a new parent.
 - **Sections the work adds**: a slice starts with the sections
   [`decompose-slice`](../skills/decompose-slice/SKILL.md) gives it. Three more appear as the
   work runs, each only once there is something to put in it:
