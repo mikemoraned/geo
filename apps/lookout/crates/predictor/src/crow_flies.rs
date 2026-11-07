@@ -79,19 +79,16 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
 
         self.predictions = self
             .crossings
-            .all()
-            .filter_map(|crossing| {
-                let metres = Haversine.distance(from, crossing.position);
-                (metres <= radius_metres).then(|| {
-                    (
-                        crossing.id,
-                        Prediction {
-                            metres,
-                            at: speed.and_then(|speed| arrival(sample.t, metres, speed)),
-                            confidence: Confidence::Low,
-                        },
-                    )
-                })
+            .near(from, radius_metres)
+            .map(|(crossing, metres)| {
+                (
+                    crossing.id,
+                    Prediction {
+                        metres,
+                        at: speed.and_then(|speed| arrival(sample.t, metres, speed)),
+                        confidence: Confidence::Low,
+                    },
+                )
             })
             .collect();
         self.speed_mps = speed;

@@ -6,8 +6,10 @@ use medallion::{Country, QueryError, Root};
 use medallion_model::{
     EvaluationOutcomeRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1, TrainSessionRowV3,
 };
+use num_traits::AsPrimitive;
 use predictor::{CrowFlies, Transition};
 
+use crate::indexed::IndexedCrossings;
 use crate::oracle::{Oracle, OracleError};
 use crate::pick::{Pick, PickError, pick};
 use crate::replay::ReplayError;
@@ -84,7 +86,7 @@ pub async fn replay(
     Ok(transition_rows(&replayed))
 }
 
-async fn replayed<F: Precision + Send + Sync>(
+async fn replayed<F: Precision + AsPrimitive<f64> + Send + Sync>(
     root: &Root,
     country: Country,
     sessions: &[TrainSessionRowV3],
@@ -110,8 +112,9 @@ async fn replayed<F: Precision + Send + Sync>(
             .await?
         }
         Predictor::CrowFlies { radius } => {
+            let indexed = IndexedCrossings::new(&compact);
             crate::replay::replay(root, country, sessions, &compact_ids, |_| {
-                CrowFlies::new(compact.clone(), radius)
+                CrowFlies::new(indexed.clone(), radius)
             })
             .await?
         }
