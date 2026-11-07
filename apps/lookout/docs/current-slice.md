@@ -591,6 +591,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       its cause under Investigation.
 - [ ] Replace `summarise`'s own bootstrap with a proven statistics library's. The library must
       resample whole sessions and take a seed. Check the oracle still scores perfectly.
+- [ ] Do a `/simplify` pass over all code in this branch, and expand into different refactors under this todo entry
 
 #### Phase 3: CrowFlies through the skeleton
 
