@@ -256,7 +256,7 @@ function connectWs() {
 
 async function signInStatus() {
   try {
-    const response = await fetch("/auth/status");
+    const response = await fetch("/auth/status", { cache: "no-store" });
     return response.ok ? (await response.json()).status : undefined;
   } catch {
     return undefined;

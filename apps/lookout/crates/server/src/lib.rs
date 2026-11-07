@@ -74,12 +74,16 @@ async fn ws_upgrade(
     upgrade: WebSocketUpgrade,
 ) -> Result<Response, AuthError> {
     if !state.relying_party.serves(headers.get(header::ORIGIN)) {
+        tracing::warn!("refused a websocket upgrade from another origin");
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
     let signed_in = state.relying_party.signed_in(&session).await?;
     Ok(match (signed_in, session.id()) {
         (Some(_), Some(id)) => upgrade.on_upgrade(move |socket| handle_socket(socket, state, id)),
-        _ => StatusCode::UNAUTHORIZED.into_response(),
+        _ => {
+            tracing::info!("refused a websocket upgrade without a signed-in session");
+            StatusCode::UNAUTHORIZED.into_response()
+        }
     })
 }
 
@@ -101,7 +105,9 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session: Id) {
             },
             _ = recheck.tick() => {
                 if let Some(frame) = closing(&state.relying_party, &session).await {
-                    let _ = socket.send(Message::Close(Some(frame))).await;
+                    if let Err(err) = socket.send(Message::Close(Some(frame))).await {
+                        tracing::warn!(%err, "the close frame failed to send");
+                    }
                     break;
                 }
             }
@@ -117,10 +123,13 @@ const UNCHECKED: &str = "the session could not be rechecked";
 async fn closing(relying_party: &RelyingParty, session: &Id) -> Option<CloseFrame> {
     match relying_party.stored_session_signed_in(session).await {
         Ok(Some(_)) => None,
-        Ok(None) => Some(CloseFrame {
-            code: close_code::POLICY,
-            reason: SIGNED_OUT.into(),
-        }),
+        Ok(None) => {
+            tracing::info!("closing a socket whose session is no longer signed in");
+            Some(CloseFrame {
+                code: close_code::POLICY,
+                reason: SIGNED_OUT.into(),
+            })
+        }
         Err(err) => {
             tracing::error!(%err, "closing a socket whose session could not be rechecked");
             Some(CloseFrame {

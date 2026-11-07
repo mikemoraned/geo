@@ -235,6 +235,30 @@ The user confirmed these on 2026-10-13, after a security review of the first pla
 - **2026-11-05, `/signin/` against `just serve`.** Desktop Safari and Chrome each registered a
   passkey and signed in through the page, which continued to `/record/`.
 
+### Investigation
+
+**A revoke during a recording shows "reconnecting…" on the iPhone, not "signed out".** Seen in
+both manual tests, the second on 2026-11-07 against `62f90663`, which has every fix under the
+revoke task.
+
+- The server closed the socket as signed out. It connected at 20:46:40 and disconnected at
+  20:48:40, at the second minute's recheck, and logged no failed recheck.
+- The page showed `gathering — reconnecting…` with `unsent samples: 0`. The page shows
+  "reconnecting…" only when the close code is not 1008 and `/auth/status` does not answer
+  `signed_out`, so both checks failed.
+- The logs show nothing after the disconnect. Refused upgrades and status answers were not
+  logged at INFO.
+- Static files carry `no-cache` with an ETag that changes with each file's modification time, so a
+  reload fetches the new `app.js`.
+
+Two suspects. Fly's proxy can drop the close frame, so the browser sees 1006. Safari can still hold
+a `signed_in` answer from before `/auth/status` sent `no-store`. A count of 0 does not fit either:
+under `62f90663`, samples queue after the close, so the count climbs within 10 seconds.
+
+Next: the status request now bypasses the browser's cache, and the server logs each refused
+upgrade, each status answer, and each signed-out close. A revoke from a desktop browser, with the
+Network tab open, shows the close code the browser receives.
+
 ### Pending refactors
 
 - [x] Check a stored session by building a fresh `Session` for its ID and asking `signed_in`,
@@ -380,6 +404,9 @@ Upstash.
   - [x] Say in the signed-out text that signing in ends this recording, and that the waiting
         samples go once `/record/` is open again. The link stays in the same tab, since two tabs
         would share one outbox.
+- [ ] Revoke during a recording from a desktop browser with the Network tab open, and from the
+      iPhone, and check the close code, the status answer, and the server's logs. The iPhone still
+      showed "reconnecting…" after the fixes above. See Investigation.
 
 #### Harden
 
