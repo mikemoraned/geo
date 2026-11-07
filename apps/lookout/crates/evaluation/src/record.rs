@@ -1,0 +1,410 @@
+use std::num::NonZeroUsize;
+
+use chrono::{DateTime, Utc};
+use domain::{Radius, Span};
+use medallion::{DatasetSpec, FingerprintError, Root, RunId, layers};
+use medallion_model::{
+    EvaluationRunRowV1, EvaluationSessionRowV1, FloatTypeName, PassDetectorName, PredictorName,
+    TRAIN_SESSION_CROSSING_V1, TRAIN_SESSION_SAMPLE_V3, TRAIN_SESSION_V3, TrainSessionRowV3,
+    WATER_CROSSING_V2,
+};
+use uuid::Uuid;
+
+use crate::pick::{Pick, Seed};
+use crate::score::{Score, Scoring};
+use crate::steps::{FloatType, Predictor, Run};
+use crate::summarise::Bootstrap;
+
+pub const EVALUATION_VERSION: &str = "replay-v1";
+
+const RUN_NAMESPACE: &[u8] = b"EVALUATION_RUN";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fingerprints {
+    pub train_session_v3: String,
+    pub train_session_sample_v3: String,
+    pub train_session_crossing_v1: String,
+    pub water_crossing_v2: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Inputs {
+    pub code_commit: String,
+    pub fingerprints: Fingerprints,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RecordError {
+    #[error(transparent)]
+    Fingerprint(#[from] FingerprintError),
+    #[error("the run's `{column}` cannot be read back as a setting: {reason}")]
+    Setting {
+        column: &'static str,
+        reason: String,
+    },
+}
+
+pub async fn fingerprints(root: &Root) -> Result<Fingerprints, RecordError> {
+    Ok(Fingerprints {
+        train_session_v3: fingerprint(root, TRAIN_SESSION_V3).await?,
+        train_session_sample_v3: fingerprint(root, TRAIN_SESSION_SAMPLE_V3).await?,
+        train_session_crossing_v1: fingerprint(root, TRAIN_SESSION_CROSSING_V1).await?,
+        water_crossing_v2: fingerprint(root, WATER_CROSSING_V2).await?,
+    })
+}
+
+async fn fingerprint(
+    root: &Root,
+    dataset: DatasetSpec<layers::Silver>,
+) -> Result<String, RecordError> {
+    Ok(root.dataset(dataset).fingerprint().await?.to_string())
+}
+
+fn namespace(name: &[u8]) -> Uuid {
+    Uuid::new_v5(&Uuid::nil(), name)
+}
+
+pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> EvaluationRunRowV1 {
+    let (predictor, predictor_horizon_ms, predictor_radius_m) = match run.predictor {
+        Predictor::Oracle { horizon } => (PredictorName::Oracle, Some(milliseconds(horizon)), None),
+        Predictor::CrowFlies { radius } => {
+            (PredictorName::CrowFlies, None, Some(radius.as_metres()))
+        }
+    };
+    let fingerprints = &inputs.fingerprints;
+    EvaluationRunRowV1 {
+        started_at,
+        evaluation_version: EVALUATION_VERSION.to_string(),
+        code_commit: inputs.code_commit.clone(),
+        country: run.pick.country.to_string(),
+        realtime_at_least: run.pick.realtime_at_least,
+        sessions: run.pick.sessions.get() as u64,
+        pick_seed: run.pick.seed.0,
+        predictor,
+        predictor_horizon_ms,
+        predictor_radius_m,
+        pass_detector: PassDetectorName::Offline,
+        float_type: match run.float_type {
+            FloatType::F32 => FloatTypeName::F32,
+            FloatType::F64 => FloatTypeName::F64,
+        },
+        horizon_ms: milliseconds(run.scoring.horizon),
+        last_moment_ms: milliseconds(run.scoring.last_moment),
+        ramp_ms: milliseconds(run.scoring.ramp),
+        last_moment_score: run.scoring.last_moment_score.get(),
+        floor: run.scoring.floor.get(),
+        warm_up_ms: milliseconds(run.scoring.warm_up),
+        resamples: run.bootstrap.resamples.get() as u64,
+        bootstrap_seed: run.bootstrap.seed.0,
+        train_session_v3_fingerprint: fingerprints.train_session_v3.clone(),
+        train_session_sample_v3_fingerprint: fingerprints.train_session_sample_v3.clone(),
+        train_session_crossing_v1_fingerprint: fingerprints.train_session_crossing_v1.clone(),
+        water_crossing_v2_fingerprint: fingerprints.water_crossing_v2.clone(),
+    }
+}
+
+pub fn run_id(row: &EvaluationRunRowV1) -> RunId {
+    let unstarted = EvaluationRunRowV1 {
+        started_at: DateTime::UNIX_EPOCH,
+        ..row.clone()
+    };
+    // Infallible: a run row holds no map, the one shape serde_json can refuse to write.
+    let canonical = serde_json::to_vec(&unstarted).expect("a run row writes as JSON");
+    let id = Uuid::new_v5(&namespace(RUN_NAMESPACE), &canonical);
+    // Infallible: a UUID's text holds none of the characters a partition value refuses.
+    RunId::new(id.to_string()).expect("a UUID names a partition")
+}
+
+pub fn run_of(row: &EvaluationRunRowV1) -> Result<Run, RecordError> {
+    Ok(Run {
+        pick: Pick {
+            country: row.country.parse().map_err(|err| setting("country", err))?,
+            realtime_at_least: row.realtime_at_least,
+            sessions: count("sessions", row.sessions)?,
+            seed: Seed(row.pick_seed),
+        },
+        predictor: match row.predictor {
+            PredictorName::Oracle => Predictor::Oracle {
+                horizon: span_of(
+                    "predictor_horizon_ms",
+                    row.predictor_horizon_ms
+                        .ok_or_else(|| setting("predictor_horizon_ms", "an oracle needs one"))?,
+                )?,
+            },
+            PredictorName::CrowFlies => Predictor::CrowFlies {
+                radius: Radius::new(
+                    row.predictor_radius_m
+                        .ok_or_else(|| setting("predictor_radius_m", "CrowFlies needs one"))?,
+                )
+                .map_err(|err| setting("predictor_radius_m", err))?,
+            },
+        },
+        float_type: match row.float_type {
+            FloatTypeName::F32 => FloatType::F32,
+            FloatTypeName::F64 => FloatType::F64,
+        },
+        scoring: Scoring {
+            horizon: span_of("horizon_ms", row.horizon_ms)?,
+            last_moment: span_of("last_moment_ms", row.last_moment_ms)?,
+            ramp: span_of("ramp_ms", row.ramp_ms)?,
+            last_moment_score: Score::new(row.last_moment_score)
+                .map_err(|err| setting("last_moment_score", err))?,
+            floor: Score::new(row.floor).map_err(|err| setting("floor", err))?,
+            warm_up: span_of("warm_up_ms", row.warm_up_ms)?,
+        },
+        bootstrap: Bootstrap {
+            resamples: count("resamples", row.resamples)?,
+            seed: Seed(row.bootstrap_seed),
+        },
+    })
+}
+
+pub fn session_rows(picked: &[TrainSessionRowV3]) -> Vec<EvaluationSessionRowV1> {
+    picked
+        .iter()
+        .map(|session| EvaluationSessionRowV1 {
+            session_id: session.session_id.clone(),
+            started_at: session.started_at,
+            ended_at: session.ended_at,
+            hours: (session.ended_at - session.started_at).as_seconds_f64() / 3_600.0,
+        })
+        .collect()
+}
+
+fn milliseconds(span: Span) -> i64 {
+    span.time_delta().num_milliseconds()
+}
+
+fn span_of(column: &'static str, milliseconds: i64) -> Result<Span, RecordError> {
+    Span::new(&format!("{milliseconds}ms")).map_err(|err| setting(column, err))
+}
+
+fn count(column: &'static str, value: u64) -> Result<NonZeroUsize, RecordError> {
+    usize::try_from(value)
+        .ok()
+        .and_then(NonZeroUsize::new)
+        .ok_or_else(|| setting(column, format!("{value} is not a count of at least 1")))
+}
+
+fn setting(column: &'static str, reason: impl std::fmt::Display) -> RecordError {
+    RecordError::Setting {
+        column,
+        reason: reason.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZeroUsize;
+
+    use chrono::TimeDelta;
+    use domain::{Percentage, SessionId};
+    use medallion::{Country, Row};
+
+    use super::*;
+
+    fn span(text: &str) -> Span {
+        Span::new(text).expect("a span")
+    }
+
+    fn oracle_run() -> Run {
+        Run {
+            pick: Pick {
+                country: Country::Germany,
+                realtime_at_least: Percentage::new(90.0).expect("a percentage"),
+                sessions: NonZeroUsize::new(1000).expect("not zero"),
+                seed: Seed(1),
+            },
+            predictor: Predictor::Oracle {
+                horizon: span("5m"),
+            },
+            float_type: FloatType::F32,
+            scoring: Scoring {
+                horizon: span("5m"),
+                last_moment: span("30s"),
+                ramp: span("1m"),
+                last_moment_score: Score::new(0.25).expect("a score"),
+                floor: Score::new(0.05).expect("a score"),
+                warm_up: span("1m"),
+            },
+            bootstrap: Bootstrap {
+                resamples: NonZeroUsize::new(1000).expect("not zero"),
+                seed: Seed(1),
+            },
+        }
+    }
+
+    fn crow_flies_run() -> Run {
+        Run {
+            predictor: Predictor::CrowFlies {
+                radius: Radius::new(5_000.0).expect("a radius"),
+            },
+            float_type: FloatType::F64,
+            ..oracle_run()
+        }
+    }
+
+    fn inputs() -> Inputs {
+        Inputs {
+            code_commit: "abc1234".to_string(),
+            fingerprints: Fingerprints {
+                train_session_v3: "f1".to_string(),
+                train_session_sample_v3: "f2".to_string(),
+                train_session_crossing_v1: "f3".to_string(),
+                water_crossing_v2: "f4".to_string(),
+            },
+        }
+    }
+
+    fn instant(seconds: i64) -> DateTime<Utc> {
+        DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
+            + TimeDelta::seconds(seconds)
+    }
+
+    #[test]
+    fn a_runs_settings_survive_a_round_trip_through_its_row() {
+        for run in [oracle_run(), crow_flies_run()] {
+            let row = run_row(&run, &inputs(), instant(0));
+
+            assert_eq!(run_of(&row).expect("the run's settings"), run);
+        }
+    }
+
+    #[test]
+    fn a_run_row_records_its_inputs_and_the_evaluations_version() {
+        let row = run_row(&oracle_run(), &inputs(), instant(0));
+
+        assert_eq!(
+            (
+                row.evaluation_version.as_str(),
+                row.code_commit.as_str(),
+                row.water_crossing_v2_fingerprint.as_str(),
+                row.started_at
+            ),
+            (EVALUATION_VERSION, "abc1234", "f4", instant(0))
+        );
+    }
+
+    #[test]
+    fn a_run_started_later_with_the_same_settings_and_inputs_has_the_same_id() {
+        let now = run_row(&oracle_run(), &inputs(), instant(0));
+        let later = run_row(&oracle_run(), &inputs(), instant(86_400));
+
+        assert_eq!(run_id(&now), run_id(&later));
+    }
+
+    #[test]
+    fn a_change_of_setting_commit_or_data_changes_the_id() {
+        let id = run_id(&run_row(&oracle_run(), &inputs(), instant(0)));
+        let committed = Inputs {
+            code_commit: "def5678".to_string(),
+            ..inputs()
+        };
+        let rederived = Inputs {
+            fingerprints: Fingerprints {
+                train_session_v3: "changed".to_string(),
+                ..inputs().fingerprints
+            },
+            ..inputs()
+        };
+
+        for other in [
+            run_row(&crow_flies_run(), &inputs(), instant(0)),
+            run_row(&oracle_run(), &committed, instant(0)),
+            run_row(&oracle_run(), &rederived, instant(0)),
+        ] {
+            assert_ne!(run_id(&other), id);
+        }
+    }
+
+    #[test]
+    fn a_run_id_is_a_uuid() {
+        let id = run_id(&run_row(&oracle_run(), &inputs(), instant(0)));
+
+        assert!(uuid::Uuid::parse_str(&id.to_string()).is_ok(), "{id}");
+    }
+
+    #[test]
+    fn an_oracle_row_without_its_horizon_is_refused() {
+        let row = EvaluationRunRowV1 {
+            predictor_horizon_ms: None,
+            ..run_row(&oracle_run(), &inputs(), instant(0))
+        };
+
+        assert!(
+            matches!(
+                run_of(&row),
+                Err(RecordError::Setting {
+                    column: "predictor_horizon_ms",
+                    ..
+                })
+            ),
+            "{:?}",
+            run_of(&row)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_runs_fingerprints_move_with_the_dataset_that_changes_and_no_other() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = crate::fixtures::store(tmp.path(), 2).await;
+        let before = fingerprints(&root).await.expect("fingerprints");
+
+        medallion::write_rows(
+            &root,
+            &[medallion_model::TrainSessionCrossingRowV1 {
+                crossed_at: instant(86_400),
+                ..medallion_model::TrainSessionCrossingRowV1::example()
+            }],
+        )
+        .await
+        .expect("another pass");
+        let after = fingerprints(&root).await.expect("fingerprints");
+
+        assert_ne!(
+            after.train_session_crossing_v1,
+            before.train_session_crossing_v1
+        );
+        assert_eq!(
+            (after.train_session_v3, after.water_crossing_v2),
+            (before.train_session_v3, before.water_crossing_v2)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_dataset_never_written_has_no_fingerprint() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+
+        let refused = fingerprints(&Root::new(tmp.path())).await;
+
+        assert!(
+            matches!(
+                refused,
+                Err(RecordError::Fingerprint(FingerprintError::Unwritten { .. }))
+            ),
+            "{refused:?}"
+        );
+    }
+
+    #[test]
+    fn a_session_row_holds_the_sessions_hours() {
+        let picked = [TrainSessionRowV3 {
+            session_id: SessionId::new("session-a").expect("a session id"),
+            started_at: instant(0),
+            ended_at: instant(5_400),
+            ..TrainSessionRowV3::example()
+        }];
+
+        let rows = session_rows(&picked);
+
+        assert_eq!(
+            rows,
+            [EvaluationSessionRowV1 {
+                session_id: SessionId::new("session-a").expect("a session id"),
+                started_at: instant(0),
+                ended_at: instant(5_400),
+                hours: 1.5,
+            }]
+        );
+    }
+}

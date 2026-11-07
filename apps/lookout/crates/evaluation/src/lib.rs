@@ -1,8 +1,11 @@
+pub mod fixtures;
 pub mod offline;
 pub mod oracle;
 pub mod pick;
+pub mod record;
 pub mod replay;
 pub mod rows;
+pub mod runs;
 pub mod score;
 pub mod steps;
 pub mod store;

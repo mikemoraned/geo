@@ -246,6 +246,7 @@ mod tests {
     use crate::oracle::Oracle;
     use crate::replay::replay_session;
     use crate::score::{Class, Credit, Score, Scoring, score};
+    use domain::places::DRESDEN_HBF;
 
     fn instant(seconds: i64) -> DateTime<Utc> {
         DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
@@ -465,7 +466,9 @@ mod tests {
             .map(|n| (crossing(n), CrossingCompactId::new(n)))
             .collect();
         let crossings: Vec<CrossingCompact<f64>> = (0..10)
-            .map(|n| CrossingCompact::at(n, 51.01, 13.73).expect("a crossing"))
+            .map(|n| {
+                CrossingCompact::at(n, DRESDEN_HBF.y() + 0.01, DRESDEN_HBF.x()).expect("a crossing")
+            })
             .collect();
         let ids = || picked.iter().map(|session| session.session_id.clone());
         let mut oracles = Oracle::per_session(
@@ -484,7 +487,8 @@ mod tests {
             .map(|session| {
                 let samples =
                     (0..=(session.ended_at - session.started_at).num_seconds() / 10).map(|step| {
-                        Sample::<f64>::at(instant(step * 10), 51.0, 13.73).expect("a sample")
+                        Sample::<f64>::at(instant(step * 10), DRESDEN_HBF.y(), DRESDEN_HBF.x())
+                            .expect("a sample")
                     });
                 let transitions = replay_session(
                     samples,
