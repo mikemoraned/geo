@@ -3072,6 +3072,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "evaluate"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "domain",
+ "evaluation",
+ "medallion",
+ "medallion-model",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "evaluation"
 version = "0.1.0"
 dependencies = [
@@ -3089,10 +3107,12 @@ dependencies = [
  "rand 0.10.2",
  "rand_chacha 0.10.0",
  "rayon",
+ "serde_json",
  "statrs",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -4813,6 +4833,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "uuid",
  "wkb",
 ]
 

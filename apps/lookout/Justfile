@@ -71,6 +71,10 @@ gold-pack-sessions *args:
     cargo run --release -p session_crossings --bin pack_sessions -- \
         --version-file sessions.version --min-crossings 5 --max-sessions 3 {{args}}
 
+# Evaluate a predictor into gold from a clean tree; `just evaluate run --help` lists the settings.
+evaluate *args:
+    BUILD_GIT_HASH={{git_hash}} cargo run --release -p evaluate --bin evaluate -- {{args}}
+
 # Copy the sessions a kiosk replays into the dir `server` serves them from.
 kiosk-sessions:
     cp "data/medallion/gold/artifact=sessions/version={{sessions_version}}/sessions.json" \
