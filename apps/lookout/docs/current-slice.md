@@ -347,9 +347,10 @@ Upstash.
       `/record/`.
 - [x] Check that `just passkeys list` shows the label, and a last use after the sign-in.
 - [x] From a second browser, check that `/record/` redirects and that `/ws` refuses the upgrade.
-- [ ] Register from the iPhone, allow it with `just passkeys allow`, and record a journey. Answer the
+- [x] Register from the iPhone, allow it with `just passkeys allow`, and record a journey. Answer the
       open question on `parseCreationOptionsFromJSON` and `toJSON()` in iOS Safari.
-- [ ] Set 1Password as the iPhone's passkey provider, under AutoFill in Settings.
+- [x] Set 1Password as the iPhone's passkey provider, under AutoFill in Settings.
+  - was already set
 - [ ] Register through 1Password on the laptop, and allow it. Sign in from the iPhone without
       registering again.
 - [ ] Revoke a passkey during a recording, and check that its socket closes within a minute, and
