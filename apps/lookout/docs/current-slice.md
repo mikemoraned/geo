@@ -339,7 +339,7 @@ Upstash.
 - [x] In the Upstash console, check that eviction is off. Until this slice, redis held only queued
       samples. `lookout-passkeys` has no expiry, and eviction under memory pressure would delete it,
       so every device would need to register again.
-- [ ] Run `just push-secrets`, and check with `fly secrets list` that `LOOKOUT_REDIS_URL` is set.
+- [x] Run `just push-secrets`, and check with `fly secrets list` that `LOOKOUT_REDIS_URL` is set.
       Under `--store redis`, the server refuses to start without it.
 - [ ] Deploy, and check that `/version` gives the deployed commit's hash.
 - [ ] From desktop Safari, register on `/signin/`, allow the code with
