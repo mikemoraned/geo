@@ -342,10 +342,10 @@ Upstash.
 - [x] Run `just push-secrets`, and check with `fly secrets list` that `LOOKOUT_REDIS_URL` is set.
       Under `--store redis`, the server refuses to start without it.
 - [x] Deploy, and check that `/version` gives the deployed commit's hash.
-- [ ] From desktop Safari, register on `/signin/`, allow the code with
+- [x] From desktop Safari, register on `/signin/`, allow the code with
       `just passkeys allow <code> --label <name>`, and sign in. Check that `/signin/` continues to
       `/record/`.
-- [ ] Check that `just passkeys list` shows the label, and a last use after the sign-in.
+- [x] Check that `just passkeys list` shows the label, and a last use after the sign-in.
 - [ ] From a second browser, check that `/record/` redirects and that `/ws` refuses the upgrade.
 - [ ] Register from the iPhone, allow it with `just passkeys allow`, and record a journey. Answer the
       open question on `parseCreationOptionsFromJSON` and `toJSON()` in iOS Safari.
