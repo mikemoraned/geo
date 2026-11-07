@@ -306,6 +306,13 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   Sessions on one line repeat each other in the same way, so these intervals still come out
   narrower than the truth. This beats a textbook formula, which assumes independent yes-or-no
   outcomes rather than graded scores.
+- **`summarise` keeps its own bootstrap, and a test holds it to SciPy's.** No Rust library
+  resamples whole sessions for a statistic of several columns, with a seed that holds across
+  versions. `linfa` and `ndarray-rand` only draw rows, on older versions of `rand`, and
+  `anofox-statistics` resamples one number per unit. `scipy.stats.bootstrap` does all of it, so
+  `evaluation-py`'s tests require each end of each of `summarise`'s intervals to lie within 5% of
+  the interval's width of SciPy's. This beats computing the intervals in Python, which leaves the
+  CLI without them or embeds an interpreter in it. Decided on 2026-11-07.
 - **Two predictors differ only where their intervals do not overlap.** Overlapping intervals mean
   the run cannot tell the two apart, not that they are equal. The rule is cautious: it rarely calls
   a false gain real, and it can miss a small real one. More sessions narrow every interval. The run
@@ -607,8 +614,8 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       second copy.
 - [x] Trace each shortfall from a perfect score in `explore3.py`, through `query_gold`, and record
       its cause under Investigation. There was none to trace, and Investigation records why.
-- [ ] Replace `summarise`'s own bootstrap with a proven statistics library's. The library must
-      resample whole sessions and take a seed. Check the oracle still scores perfectly.
+- [x] Check `summarise`'s own bootstrap against a proven statistics library's, as the decision on
+      `summarise`'s bootstrap sets out. Replacing it was the task as first written.
 - [ ] Do a `/simplify` pass over all code in this branch, and expand into different refactors under this todo entry
 
 #### Phase 3: CrowFlies through the skeleton
