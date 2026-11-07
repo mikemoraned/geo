@@ -186,7 +186,11 @@ continue unchecked.
 `GET /auth/status` answers `{"status": "signed_in"}` or `{"status": "signed_out"}`, by the gate's
 check. A page uses it to tell a signed-out session from a dropped connection.
 
+Every answer under `/auth/` carries `Cache-Control: no-store`, so a browser [stores
+none][no-store]. A stored status would show a revoked session as signed in.
+
 [private]: https://www.rfc-editor.org/rfc/rfc9111#name-private
+[no-store]: https://www.rfc-editor.org/rfc/rfc9111#name-no-store-2
 [ws-origin]: https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html#origin-header-validation
 [close-codes]: https://www.rfc-editor.org/rfc/rfc6455#section-7.4.1
 

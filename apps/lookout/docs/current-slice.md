@@ -364,7 +364,7 @@ Upstash.
         `/record/` ignores the close code and asks `/auth/status`, so a failed status request shows
         a revoke as "reconnecting…". Keep the status request for a refused reconnect, where the
         browser hides the reason.
-  - [ ] Send `Cache-Control: no-store` with every `/auth/` response, tested. `/auth/status` sends
+  - [x] Send `Cache-Control: no-store` with every `/auth/` response, tested. `/auth/status` sends
         no `Cache-Control`, so a browser can answer it from its cache.
   - [ ] Stop reconnecting once signed out, and try again when the page next becomes visible. Each
         retry now gets a 401 and sends another status request, every 30 seconds, without end.
