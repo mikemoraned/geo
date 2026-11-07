@@ -336,7 +336,7 @@ Wrap-up, since what it finds can change what the docs describe. The phone needs 
 passkey on a non-`localhost` origin needs the admin, so this phase is the first to run against
 Upstash.
 
-- [ ] In the Upstash console, check that eviction is off. Until this slice, redis held only queued
+- [x] In the Upstash console, check that eviction is off. Until this slice, redis held only queued
       samples. `lookout-passkeys` has no expiry, and eviction under memory pressure would delete it,
       so every device would need to register again.
 - [ ] Run `just push-secrets`, and check with `fly secrets list` that `LOOKOUT_REDIS_URL` is set.
