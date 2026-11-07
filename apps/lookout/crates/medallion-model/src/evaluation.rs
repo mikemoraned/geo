@@ -184,7 +184,7 @@ pub struct EvaluationRunRowV1 {
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub started_at: DateTime<Utc>,
     pub evaluation_version: String,
-    pub code_commit: String,
+    pub code_version: String,
     pub country: String,
     pub realtime_at_least: Percentage,
     pub sessions: u64,
@@ -217,7 +217,7 @@ impl Row for EvaluationRunRowV1 {
         Self {
             started_at: DateTime::UNIX_EPOCH,
             evaluation_version: "replay-v1".to_string(),
-            code_commit: "0000000000000000000000000000000000000000".to_string(),
+            code_version: "0000000000000000000000000000000000000000".to_string(),
             country: "DE".to_string(),
             realtime_at_least: Percentage::new(90.0).expect("90 is a percentage"),
             sessions: 1000,

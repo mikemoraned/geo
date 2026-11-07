@@ -1,6 +1,7 @@
 use std::num::NonZeroUsize;
 
 use chrono::{DateTime, NaiveDate, Utc};
+use code_version::{DIRTY, UNKNOWN};
 use domain::{Radius, Span};
 use medallion::{DatasetSpec, FingerprintError, Root, RunId, layers};
 use medallion_model::{
@@ -29,20 +30,17 @@ pub struct Fingerprints {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Inputs {
-    pub code_commit: String,
+    pub code_version: String,
     pub fingerprints: Fingerprints,
 }
 
-const DIRTY: &str = "-dirty";
-const UNKNOWN: &str = "unknown";
-
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Commit(String);
+pub struct CodeVersion(String);
 
-impl Commit {
+impl CodeVersion {
     pub fn new(hash: &str) -> Result<Self, RecordError> {
         if hash.is_empty() || hash == UNKNOWN {
-            return Err(RecordError::NoCommit);
+            return Err(RecordError::NoCodeVersion);
         }
         if hash.ends_with(DIRTY) {
             return Err(RecordError::Uncommitted {
@@ -72,8 +70,8 @@ pub enum RecordError {
          it ran; commit them and build again"
     )]
     Uncommitted { hash: String },
-    #[error("the build recorded no commit, so a run could not name the code it ran")]
-    NoCommit,
+    #[error("the build recorded no code version, so a run could not name the code it ran")]
+    NoCodeVersion,
     #[error(transparent)]
     Fingerprint(#[from] FingerprintError),
     #[error("the run's `{column}` cannot be read back as a setting: {reason}")]
@@ -106,11 +104,11 @@ fn namespace(name: &[u8]) -> Uuid {
 pub async fn record(
     root: &Root,
     run: &Run,
-    commit: &Commit,
+    code: &CodeVersion,
     picked: &[TrainSessionRowV3],
 ) -> Result<Recorded, RecordError> {
     let inputs = Inputs {
-        code_commit: commit.as_str().to_string(),
+        code_version: code.as_str().to_string(),
         fingerprints: fingerprints(root).await?,
     };
     let row = run_row(run, &inputs, Utc::now());
@@ -133,7 +131,7 @@ pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> Evaluat
     EvaluationRunRowV1 {
         started_at,
         evaluation_version: EVALUATION_VERSION.to_string(),
-        code_commit: inputs.code_commit.clone(),
+        code_version: inputs.code_version.clone(),
         country: run.pick.country.to_string(),
         realtime_at_least: run.pick.realtime_at_least,
         sessions: run.pick.sessions.get() as u64,
@@ -304,7 +302,7 @@ mod tests {
 
     fn inputs() -> Inputs {
         Inputs {
-            code_commit: "abc1234".to_string(),
+            code_version: "abc1234".to_string(),
             fingerprints: Fingerprints {
                 train_session_v3: "f1".to_string(),
                 train_session_sample_v3: "f2".to_string(),
@@ -335,7 +333,7 @@ mod tests {
         assert_eq!(
             (
                 row.evaluation_version.as_str(),
-                row.code_commit.as_str(),
+                row.code_version.as_str(),
                 row.water_crossing_v2_fingerprint.as_str(),
                 row.started_at
             ),
@@ -352,10 +350,10 @@ mod tests {
     }
 
     #[test]
-    fn a_change_of_setting_commit_or_data_changes_the_id() {
+    fn a_change_of_setting_code_or_data_changes_the_id() {
         let id = run_id(&run_row(&oracle_run(), &inputs(), instant(0)));
-        let committed = Inputs {
-            code_commit: "def5678".to_string(),
+        let recoded = Inputs {
+            code_version: "def5678".to_string(),
             ..inputs()
         };
         let rederived = Inputs {
@@ -368,7 +366,7 @@ mod tests {
 
         for other in [
             run_row(&crow_flies_run(), &inputs(), instant(0)),
-            run_row(&oracle_run(), &committed, instant(0)),
+            run_row(&oracle_run(), &recoded, instant(0)),
             run_row(&oracle_run(), &rederived, instant(0)),
         ] {
             assert_ne!(run_id(&other), id);
@@ -467,33 +465,41 @@ mod tests {
     }
 
     #[test]
-    fn a_build_with_uncommitted_changes_or_no_commit_is_refused() {
+    fn a_build_with_uncommitted_changes_or_no_code_version_is_refused() {
         assert!(matches!(
-            Commit::new("abc1234-dirty"),
+            CodeVersion::new("abc1234-dirty"),
             Err(RecordError::Uncommitted { .. })
         ));
-        assert!(matches!(Commit::new("unknown"), Err(RecordError::NoCommit)));
-        assert!(matches!(Commit::new(""), Err(RecordError::NoCommit)));
+        assert!(matches!(
+            CodeVersion::new("unknown"),
+            Err(RecordError::NoCodeVersion)
+        ));
+        assert!(matches!(
+            CodeVersion::new(""),
+            Err(RecordError::NoCodeVersion)
+        ));
         assert_eq!(
-            Commit::new("abc1234").expect("a commit").as_str(),
+            CodeVersion::new("abc1234")
+                .expect("a code version")
+                .as_str(),
             "abc1234"
         );
     }
 
     #[tokio::test]
-    async fn a_recorded_run_names_its_commit_inputs_and_sessions_under_its_id() {
+    async fn a_recorded_run_names_its_code_inputs_and_sessions_under_its_id() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = crate::fixtures::store(tmp.path(), 3).await;
         let run = crate::fixtures::run_of(crate::fixtures::oracle());
         let picked = crate::pick::pick(&root, &run.pick).await.expect("a pick");
-        let commit = Commit::new("abc1234").expect("a commit");
+        let code = CodeVersion::new("abc1234").expect("a code version");
 
-        let recorded = record(&root, &run, &commit, &picked)
+        let recorded = record(&root, &run, &code, &picked)
             .await
             .expect("a recorded run");
 
         let inputs = Inputs {
-            code_commit: "abc1234".to_string(),
+            code_version: "abc1234".to_string(),
             fingerprints: fingerprints(&root).await.expect("fingerprints"),
         };
         assert_eq!(

@@ -73,7 +73,7 @@ gold-pack-sessions *args:
 
 # Evaluate a predictor into gold from a clean tree; `just evaluate run --help` lists the settings.
 evaluate *args:
-    BUILD_GIT_HASH={{git_hash}} cargo run --release -p evaluate --bin evaluate -- {{args}}
+    cargo run --release -p evaluate --bin evaluate -- {{args}}
 
 # Copy the sessions a kiosk replays into the dir `server` serves them from.
 kiosk-sessions:

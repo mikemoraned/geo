@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 
 use crossings::silver::ReadError;
 use domain::{Percentage, Radius, Span};
-use evaluation::record::Commit;
+use evaluation::record::CodeVersion;
 use evaluation::steps::{self, FloatType, Predictor, Run, StepError};
 use evaluation::{Pick, PickError, Score, Seed};
 use medallion::{Country, QueryError, Root, Row};
@@ -14,7 +14,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_arrow::PyTable;
 
-const BUILD_COMMIT: &str = env!("BUILD_GIT_HASH");
+const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
 
 /// The oracle, which alerts each recorded pass from `horizon` before it, as text such as `"5m"`.
 #[pyclass(frozen)]
@@ -297,7 +297,7 @@ fn run<'py>(
 ///
 /// The dict's `"run_id"` and `"run_date"` are the text `write_gold` takes. Its `"run"` and
 /// `"sessions"` are the run's tables of gold `evaluation_run_v1` and `evaluation_session_v1`. The
-/// run names `BUILD_COMMIT`, the commit this extension was built from, and a fingerprint of each
+/// run names `BUILD_CODE_VERSION`, the code this extension was built from, and a fingerprint of each
 /// silver dataset it reads. Its id hashes those with its settings, so the same settings over the
 /// same code and data record the same run. If the extension was built from uncommitted code, a
 /// `ValueError` is raised.
@@ -328,15 +328,11 @@ fn record<'py>(
         bootstrap: bootstrap.bootstrap,
     };
     let picked = rows_of::<TrainSessionRowV3>(picked)?;
-    let commit = Commit::new(BUILD_COMMIT).map_err(value_error)?;
+    let code = CodeVersion::new(BUILD_CODE_VERSION).map_err(value_error)?;
     let root = root_or_default(root)?;
 
     let recorded = py
-        .detach(|| {
-            runtime().block_on(evaluation::record::record(
-                &root, &settings, &commit, &picked,
-            ))
-        })
+        .detach(|| runtime().block_on(evaluation::record::record(&root, &settings, &code, &picked)))
         .map_err(runtime_error)?;
 
     let tables = PyDict::new(py);
@@ -460,6 +456,6 @@ fn lookout_evaluation(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(summarise, module)?)?;
     module.add_function(wrap_pyfunction!(run, module)?)?;
     module.add_function(wrap_pyfunction!(record, module)?)?;
-    module.add("BUILD_COMMIT", BUILD_COMMIT)?;
+    module.add("BUILD_CODE_VERSION", BUILD_CODE_VERSION)?;
     Ok(())
 }
