@@ -441,6 +441,16 @@ What `notebooks/evaluation/explore2_spacing.py` established about the spacing of
   shorter than twice the radius. The line between two samples comes within the radius where no
   sample does, so these are mostly not passes of the train.
 
+What looking for the oracle's shortfalls established, on 2026-11-07, over the 1000 sessions of run
+`4245cafc-551c-510c-bddf-db9ef4221d1c` and their 12,672 passes.
+
+- **The oracle falls short of a perfect score nowhere.** It falls short only on two passes of one
+  crossing less than 40 s apart, where its alert for the second comes under 30 s ahead.
+- **No crossing is passed twice within 90 s.** 72 passes repeat a crossing the session passed
+  before, and the shortest gap between two passes of one crossing is 90 s. A pass is one visit
+  within the match radius, so a train leaves the radius and comes back between two passes. 15
+  repeats come within 5 minutes, and each still scores as a hit.
+
 ### Observations
 
 - **The re-derive drops what `explore2.py` excluded, session for session** (2026-11-05).
@@ -595,8 +605,8 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       run id, rows equal to those `query_gold` reads back, and `write_gold` refusing it as already
       written. A run's id hashes its settings, code, and data, so the notebook cannot write a
       second copy.
-- [ ] Trace each shortfall from a perfect score in `explore3.py`, through `query_gold`, and record
-      its cause under Investigation.
+- [x] Trace each shortfall from a perfect score in `explore3.py`, through `query_gold`, and record
+      its cause under Investigation. There was none to trace, and Investigation records why.
 - [ ] Replace `summarise`'s own bootstrap with a proven statistics library's. The library must
       resample whole sessions and take a seed. Check the oracle still scores perfectly.
 - [ ] Do a `/simplify` pass over all code in this branch, and expand into different refactors under this todo entry
