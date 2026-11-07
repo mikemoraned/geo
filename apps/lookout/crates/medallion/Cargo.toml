@@ -25,6 +25,7 @@ serde = { workspace = true }
 serde_arrow = { workspace = true }
 parquet = { workspace = true }
 thiserror = { workspace = true }
+uuid = { workspace = true }
 tokio = { workspace = true }
 wkb = { workspace = true }
 
