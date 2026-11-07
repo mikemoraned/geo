@@ -3369,17 +3369,13 @@ dependencies = [
 name = "evaluate"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "clap",
  "code_version",
  "domain",
  "evaluation",
  "medallion",
  "medallion-model",
- "tempfile",
- "thiserror 2.0.18",
  "tokio",
- "tracing",
  "tracing-subscriber",
  "uuid",
 ]
@@ -3408,6 +3404,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
  "uuid",
 ]
 

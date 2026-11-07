@@ -4,10 +4,11 @@ use std::sync::OnceLock;
 
 use crossings::silver::ReadError;
 use domain::{Percentage, Radius, Span};
+use evaluation::gold::{self, GoldError};
 use evaluation::record::CodeVersion;
 use evaluation::steps::{self, FloatType, Predictor, Run, StepError};
 use evaluation::{Pick, PickError, Score, Seed};
-use medallion::{Country, QueryError, Root, Row};
+use medallion::{Country, QueryError, Root, Row, RunError};
 use medallion_model::{EvaluationOutcomeRowV1, EvaluationTransitionRowV1, TrainSessionRowV3};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -293,6 +294,53 @@ fn run<'py>(
     Ok(tables)
 }
 
+/// Run as `run` does, writing each step's table to gold, as a dict of the run's id and the tables.
+///
+/// The dict's `"run_id"` names the run in gold, and its other keys are those of `run`. The run
+/// names `BUILD_CODE_VERSION` and a fingerprint of each silver dataset it reads, as `record` sets
+/// out. A `ValueError` is raised if the extension was built from uncommitted code, or if gold
+/// already holds the run.
+#[pyfunction]
+#[pyo3(signature = (
+    *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap,
+    float_type="f32", root=None
+))]
+#[allow(clippy::too_many_arguments)]
+fn evaluate<'py>(
+    py: Python<'py>,
+    country: &str,
+    realtime_at_least: f64,
+    sessions: usize,
+    seed: u64,
+    predictor: &Bound<'py, PyAny>,
+    scoring: PyRef<'py, Scoring>,
+    bootstrap: PyRef<'py, Bootstrap>,
+    float_type: &str,
+    root: Option<PathBuf>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let settings = Run {
+        pick: picking(country, realtime_at_least, sessions, seed)?,
+        predictor: predictor_of(predictor)?,
+        float_type: float_type_of(float_type)?,
+        scoring: scoring.scoring,
+        bootstrap: bootstrap.bootstrap,
+    };
+    let code = CodeVersion::new(BUILD_CODE_VERSION).map_err(value_error)?;
+    let root = root_or_default(root)?;
+
+    let (run_id, ran) = py
+        .detach(|| runtime().block_on(gold::run(&root, &settings, &code)))
+        .map_err(gold_error)?;
+
+    let tables = PyDict::new(py);
+    tables.set_item("run_id", run_id.to_string())?;
+    tables.set_item("picked", table_of(&ran.picked)?)?;
+    tables.set_item("transitions", table_of(&ran.transitions)?)?;
+    tables.set_item("outcomes", table_of(&ran.outcomes)?)?;
+    tables.set_item("summary", table_of(&[ran.summary])?)?;
+    Ok(tables)
+}
+
 /// Record a run over the sessions `picked`, as a dict of its id, its date, and its first two tables.
 ///
 /// The dict's `"run_id"` and `"run_date"` are the text `write_gold` takes. Its `"run"` and
@@ -422,6 +470,15 @@ fn step_error(err: StepError) -> PyErr {
     }
 }
 
+fn gold_error(err: GoldError) -> PyErr {
+    match err {
+        GoldError::Pick(err) => pick_error(err),
+        GoldError::Step(err) => step_error(err),
+        GoldError::Write(RunError::Written { .. }) => value_error(err),
+        _ => runtime_error(err),
+    }
+}
+
 fn root_or_default(root: Option<PathBuf>) -> PyResult<Root> {
     match root {
         Some(path) => Ok(Root::new(path)),
@@ -455,6 +512,7 @@ fn lookout_evaluation(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(score, module)?)?;
     module.add_function(wrap_pyfunction!(summarise, module)?)?;
     module.add_function(wrap_pyfunction!(run, module)?)?;
+    module.add_function(wrap_pyfunction!(evaluate, module)?)?;
     module.add_function(wrap_pyfunction!(record, module)?)?;
     module.add("BUILD_CODE_VERSION", BUILD_CODE_VERSION)?;
     Ok(())

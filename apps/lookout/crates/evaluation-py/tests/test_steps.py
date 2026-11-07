@@ -183,3 +183,41 @@ def test_a_record_names_the_run_its_settings_code_and_data_make(written):
         root=written,
     )
     assert written_run.rows == 1
+
+
+def evaluating(written):
+    return dict(
+        country="DE",
+        realtime_at_least=90.0,
+        sessions=len(SESSION_IDS),
+        seed=1,
+        predictor=oracle(),
+        scoring=first_runs(),
+        bootstrap=bootstrap(),
+        root=written,
+    )
+
+
+def test_an_evaluation_writes_to_gold_the_tables_it_returns(written):
+    code = lookout_evaluation.BUILD_CODE_VERSION
+    if code == "unknown" or code.endswith("-dirty"):
+        with pytest.raises(ValueError, match="code"):
+            lookout_evaluation.evaluate(**evaluating(written))
+        return
+
+    evaluated = lookout_evaluation.evaluate(**evaluating(written))
+
+    for dataset, name in [
+        ("evaluation_transition_v1", "transitions"),
+        ("evaluation_outcome_v1", "outcomes"),
+        ("evaluation_summary_v1", "summary"),
+    ]:
+        stored = pa.table(
+            lookout_medallion.query_gold(
+                f"SELECT * FROM {dataset} WHERE run_id = '{evaluated['run_id']}'",
+                root=written,
+            )
+        )
+        assert stored.num_rows == pa.table(evaluated[name]).num_rows
+    with pytest.raises(ValueError, match="already"):
+        lookout_evaluation.evaluate(**evaluating(written))

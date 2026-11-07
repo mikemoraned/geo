@@ -4,22 +4,14 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
-chrono = { workspace = true }
 clap = { workspace = true }
 domain = { workspace = true }
 evaluation = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }
-thiserror = { workspace = true }
 tokio = { workspace = true }
-tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
-
-[dev-dependencies]
-evaluation = { workspace = true, features = ["fixtures"] }
-medallion = { workspace = true }
-tempfile = { workspace = true }
 
 [build-dependencies]
 code_version = { workspace = true }

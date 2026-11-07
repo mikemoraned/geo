@@ -3,12 +3,14 @@ use std::num::NonZeroUsize;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use domain::{NotASpan, Percentage, Radius, Span};
-use evaluate::BUILD_CODE_VERSION;
+use evaluation::gold;
 use evaluation::record::CodeVersion;
 use evaluation::steps::{FloatType, Predictor, Run};
 use evaluation::{Bootstrap, Pick, Score, Scoring, Seed};
 use medallion::{Country, MedallionArgs, RunId};
 use medallion_model::EvaluationSummaryRowV1;
+
+const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
 
 #[derive(Parser)]
 #[command(about = "Evaluate a predictor over picked train sessions, writing each step to gold")]
@@ -159,7 +161,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "evaluate=info".into()),
+                .unwrap_or_else(|_| "evaluation=info".into()),
         )
         .init();
 
@@ -169,18 +171,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     match cli.command {
         Command::Run(settings) => {
-            let (run_id, summary) = evaluate::run(&root, &settings.run()?, &code).await?;
+            let (run_id, ran) = gold::run(&root, &settings.run()?, &code).await?;
             println!("run {run_id}");
-            print_summary(&summary);
+            print_summary(&ran.summary);
         }
         Command::Pick(settings) => {
-            let run_id = evaluate::pick(&root, &settings.run()?, &code).await?;
+            let run_id = gold::pick(&root, &settings.run()?, &code).await?;
             println!("run {run_id}");
         }
-        Command::Replay(begun) => evaluate::replay(&root, &begun.run_id()?, &code).await?,
-        Command::Score(begun) => evaluate::score(&root, &begun.run_id()?, &code).await?,
+        Command::Replay(begun) => gold::replay(&root, &begun.run_id()?, &code).await?,
+        Command::Score(begun) => gold::score(&root, &begun.run_id()?, &code).await?,
         Command::Summarise(begun) => {
-            print_summary(&evaluate::summarise(&root, &begun.run_id()?, &code).await?);
+            print_summary(&gold::summarise(&root, &begun.run_id()?, &code).await?);
         }
     }
     Ok(())
