@@ -198,6 +198,7 @@ const MAX_OUTBOX = 5000;
 const INITIAL_RECONNECT_MS = 1000;
 const MAX_RECONNECT_MS = 30000;
 const OUTBOX_KEY = "lookout_outbox";
+const SIGNED_OUT_CLOSE = 1008;
 
 let ws = null;
 let outbox = loadOutbox();
@@ -233,10 +234,11 @@ function connectWs() {
     flushOutbox();
   });
   ws.addEventListener("message", onAck);
-  ws.addEventListener("close", async () => {
+  ws.addEventListener("close", async (event) => {
     setTimeout(connectWs, reconnectMs);
     reconnectMs = Math.min(reconnectMs * 2, MAX_RECONNECT_MS);
-    const signedOut = (await signInStatus()) === "signed_out";
+    const signedOut =
+      event.code === SIGNED_OUT_CLOSE || (await signInStatus()) === "signed_out";
     signedOutEl.hidden = !signedOut;
     setStatus(signedOut ? "gathering — signed out" : "gathering — reconnecting…");
   });

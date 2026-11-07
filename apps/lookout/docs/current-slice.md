@@ -360,6 +360,19 @@ Upstash.
     - when I did a reload of the /record page, it did then redirect me to sign-in
     - so, maybe it was working, but UI needs to display it better?
 - [ ] review and improve how revoking during a /record shows in UI
+  - [x] Show a socket the server closes with 1008 as signed out, from the close event alone.
+        `/record/` ignores the close code and asks `/auth/status`, so a failed status request shows
+        a revoke as "reconnecting…". Keep the status request for a refused reconnect, where the
+        browser hides the reason.
+  - [ ] Send `Cache-Control: no-store` with every `/auth/` response, tested. `/auth/status` sends
+        no `Cache-Control`, so a browser can answer it from its cache.
+  - [ ] Stop reconnecting once signed out, and try again when the page next becomes visible. Each
+        retry now gets a 401 and sends another status request, every 30 seconds, without end.
+  - [ ] Show in the status how many samples wait on the device, so a signed-out or disconnected
+        recording shows that its samples are kept.
+  - [ ] Say in the signed-out text that signing in ends this recording, and that the waiting
+        samples go once `/record/` is open again. The link stays in the same tab, since two tabs
+        would share one outbox.
 
 #### Harden
 
