@@ -259,6 +259,31 @@ Next: the status request now bypasses the browser's cache, and the server logs e
 upgrade, each status answer, and each signed-out close. A revoke from a desktop browser, with the
 Network tab open, shows the close code the browser receives.
 
+**Cause: the iPhone runs an `app.js` stored before `28bf0dea`.** A third test on 2026-11-07,
+against `489a7edc`, registered, signed in, revoked, and started gathering.
+
+- The server logged the signed-out close at 21:17:35, then refused upgrades 1.2, 2.2, 4.2, 8.2,
+  and 16.2 seconds apart, then every 30 seconds. That is the reconnect loop of the script before
+  `343a2a26`. The deployed script reconnects after neither a 1008 close nor a signed-out status.
+- The server logged no status answer. The deployed script requests `/auth/status` with
+  `cache: "no-store"` before each reconnect, and that request reaches the server.
+- The page showed `unsent samples: 0`. The line is in the new `index.html`, and only the new
+  `app.js` updates it.
+
+Before `28bf0dea`, `/record/app.js` carried no `Cache-Control`. Safari stored it with
+[heuristic freshness](https://www.rfc-editor.org/rfc/rfc9111#name-calculating-heuristic-fresh),
+reused it without asking the server, and so never received the `no-cache` the server now sends.
+Safari revalidates a navigation, so `index.html` arrived new. The old script's status request went
+to the same cache, so no status request reached the server, and a stored `signed_in` answer
+explains "reconnecting…".
+
+Clearing the site's data on the iPhone removes the stored script. Every file under `/record/` now
+carries `no-cache`, so once replaced, the script stays current. Clearing also removes the outbox in
+`localStorage` and the session cookie.
+
+Confirmed on 2026-11-07: with the site's data cleared on the iPhone, a revoke during a recording
+shows the session as signed out.
+
 ### Pending refactors
 
 - [x] Check a stored session by building a fresh `Session` for its ID and asking `signed_in`,
@@ -404,9 +429,11 @@ Upstash.
   - [x] Say in the signed-out text that signing in ends this recording, and that the waiting
         samples go once `/record/` is open again. The link stays in the same tab, since two tabs
         would share one outbox.
-- [ ] Revoke during a recording from a desktop browser with the Network tab open, and from the
+- [x] Revoke during a recording from a desktop browser with the Network tab open, and from the
       iPhone, and check the close code, the status answer, and the server's logs. The iPhone still
       showed "reconnecting…" after the fixes above. See Investigation.
+      Only the iPhone ran it. The server's logs found the cause, a stored `app.js`, without the
+      desktop browser's close code.
 
 #### Harden
 
