@@ -616,7 +616,81 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       its cause under Investigation. There was none to trace, and Investigation records why.
 - [x] Check `summarise`'s own bootstrap against a proven statistics library's, as the decision on
       `summarise`'s bootstrap sets out. Replacing it was the task as first written.
-- [ ] Do a `/simplify` pass over all code in this branch, and expand into different refactors under this todo entry
+- [x] Do a `/simplify` pass over all code in this branch, and expand into different refactors under this todo entry
+      Run on 2026-11-07 over the crates, the `Justfile`, and `Cargo.toml`, without the notebooks.
+      Four reviews, for reuse, simplification, efficiency, and altitude, found the refactors that the
+      next task lists. Three of their suggestions conflict with a decision or a later phase, and are
+      left out: replacing the typestate structs with `StateKind`, removing the `RecordedPass` trait,
+      and removing `PassDetectorName::Online`.
+- [ ] Apply the refactors the `/simplify` pass found.
+      - **Evaluation pipeline**
+        - [ ] Narrow replay's read of samples to `session_id`, `t`, `seq`, `lat`, and `lon`, and
+              turn on parquet filter pushdown. Reading takes 16 s of a 21 s replay, since all of a
+              country's 62M samples are decoded to keep about 300k.
+        - [ ] Give `Crossings` a `near(from, radius)` query, which the device keeps as a scan and
+              the evaluation backs with one shared R-tree. CrowFlies measures about 1.7 billion
+              distances in a run of 1000 sessions, and each radius in Phase 3's sweep measures them
+              again.
+        - [ ] Move writing a run and resuming one from `evaluate` into `evaluation`, and keep each
+              step's rows in memory through `evaluate run`. A notebook cannot write a run as the CLI
+              does, and a run fingerprints silver four times and reads back what it wrote.
+        - [ ] Read a run's crossings and passes once, and resolve each pass's compact id once. An
+              oracle run reads the passes three times and the crossings twice.
+        - [ ] Add `Query::read_of_run::<T>` and `medallion::from_batches`, and drop the SQL text
+              that `read_run_rows` builds. The loop that decodes batches is written five times, and
+              the SQL text breaks the decision on typed reads.
+        - [ ] Write gold through a target beside `SilverTarget`, with its column checks and a real
+              `TableWritten`. Gold accepts unexpected columns, and `write_gold` makes up the counts
+              it returns.
+        - [ ] Give each mirrored enum one home, such as `StateKind` in `domain`, and parse the float
+              type and the predictor with `strum`. Four enums name the float type, each pair joined
+              by a converter.
+        - [ ] Convert between a run and its row with `From` and `TryFrom`, give `Span` a
+              `TryFrom<TimeDelta>`, and give `Score` a `FromStr`. `span_of` writes milliseconds as
+              text to parse them back, and the CLI wraps parsers that exist.
+        - [ ] Define a run's fingerprinted inputs once, with a `changed_since`, and read their
+              fingerprints concurrently. The four datasets are listed in four places across two
+              crates.
+        - [ ] Have the steps take each session's id, start, and end, rather than silver's
+              `TrainSessionRowV3`. That drops `read_sessions`, a second `IN` filter, and a second
+              formula for a session's hours.
+        - [ ] Give predictors, pass detectors, and the tracker one rule for the order of events,
+              such as a `Clock`. Four copies hold the rule, with two error types, and two of the
+              copies already differ.
+        - [ ] Make `crossings::compacted` generic over the float type, and call it from the
+              evaluation. The evaluation holds a second copy of how a device compacts its crossings.
+        - [ ] Share the pyo3 helpers of the three extensions, with one mapping of errors to Python
+              exceptions, and classify `StepError` once. One store error raises `ValueError` in one
+              module and `RuntimeError` in another.
+        - [ ] Import `evaluation`'s test helpers from `fixtures`, and let `write_geography_rows`
+              write a dataset partitioned by country alone. `instant()` is defined about ten times,
+              and three crates build a crossings table by hand.
+      - **Build identity**
+        - [ ] Take `motis`'s build identity from `code_version`, move `CodeVersion` into that crate,
+              and drop `BUILD_GIT_HASH` from the recipes. The two schemes test for uncommitted
+              changes differently, and a plain `cargo run` of `motis` records "unknown".
+        - [ ] Watch only tracked files in `code_version`'s build script. It watches all of
+              `crates/`, so a write under a `.venv` or `m5plus/target` relinks `evaluate`.
+      - **Derivation pipeline**
+        - [ ] Read the capture and place its polylines once per `motis_ingest`, and pass both to
+              both derivations. A re-derive reads, deduplicates, and places the whole capture twice.
+        - [ ] Build capture's `Coverage` from the prepared outline of `CountryAreas`, and memoise
+              `keeps` by polyline. The two unions of a country disagree on a shape that is not a
+              polygon, and most of a poll's relates repeat an earlier answer.
+        - [ ] Rank train samples by their stored `seq`, rather than by a `ROW_NUMBER()` window. The
+              window takes 6.3 GB, most of the matching's peak.
+        - [ ] Project each train sample once, close each day's samples once they are written, and
+              stop holding every session's path. All three feed the 4.7 GB peak of a re-derive.
+        - [ ] Find passes one way, by building `steps` on `Matcher`, and point the geo test at that
+              path. The store-backed test checks a path that production never runs.
+        - [ ] Flatten `TrainSegmentRowV4` into `Leg`, and make `Trip.country` a `Country`. `Leg`
+              copies eleven fields by hand, and the `Option` exists only to count a drop.
+        - [ ] Give the division-area path one helper, and list landed files through the object
+              store. Three places spell the path, and a second walk of the disk lists the files.
+        - [ ] Declare every validated newtype with `nutype`. Two idioms coexist, and each
+              hand-written type takes 25 to 60 lines.
+        - [ ] Describe the table of `session-crossings-py` with medallion's fields. Its copy has
+              drifted, and leaves `crossed_at` non-nullable.
 
 #### Phase 3: CrowFlies through the skeleton
 
