@@ -1,6 +1,7 @@
 const el = (id) => document.getElementById(id);
 const statusEl = el("status");
 const signedOutEl = el("signed-out");
+const unsentEl = el("unsent");
 const wakeLockEl = el("wakelock");
 const idEl = el("id");
 const accelEl = el("accel");
@@ -213,6 +214,10 @@ function loadOutbox() {
   }
 }
 
+function showUnsent() {
+  unsentEl.textContent = String(outbox.length);
+}
+
 function persistOutbox() {
   try {
     localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox));
@@ -263,6 +268,7 @@ function onAck() {
   outbox.shift();
   inFlight = Math.max(0, inFlight - 1);
   persistOutbox();
+  showUnsent();
 }
 
 function flushOutbox() {
@@ -280,6 +286,7 @@ function sendSample(sample) {
     inFlight = Math.max(0, inFlight - dropped);
   }
   persistOutbox();
+  showUnsent();
   flushOutbox();
 }
 
@@ -353,5 +360,6 @@ async function start() {
 
 startBtn.addEventListener("click", start);
 
+showUnsent();
 if (outbox.length) ensureWs();
 

@@ -373,8 +373,10 @@ Upstash.
         no `Cache-Control`, so a browser can answer it from its cache.
   - [x] Stop reconnecting once signed out, and try again when the page next becomes visible. Each
         retry now gets a 401 and sends another status request, every 30 seconds, without end.
-  - [ ] Show in the status how many samples wait on the device, so a signed-out or disconnected
-        recording shows that its samples are kept.
+  - [x] Show in the status how many samples wait on the device, so a signed-out or disconnected
+        recording shows that its samples are kept. The count has a line of its own,
+        `unsent samples`, under the status. The status changes on each connect and close, and the
+        count on each sample and ack.
   - [ ] Say in the signed-out text that signing in ends this recording, and that the waiting
         samples go once `/record/` is open again. The link stays in the same tab, since two tabs
         would share one outbox.
