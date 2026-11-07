@@ -443,6 +443,42 @@ code.
 
 - [ ] Run `cargo-mutants` over `crates/server/src/auth`, and add a test for each mutant that
       survives.
+  - How bobby runs it, at
+    [`6820d16b`](https://github.com/mikemoraned/bobby/blob/6820d16b127fa35dbb00e6270a831ff5a7051064/.cargo/mutants.toml#L4):
+    `.cargo/mutants.toml` sets `test_tool = "nextest"` and excludes `**/src/bin/**` and
+    `**/build.rs`. `just mutants-on-diff` runs `cargo mutants --in-diff` over `git diff main`, and
+    a `-no-docker` variant passes `-- --profile no-docker`. Bobby mutates core logic: pure,
+    invariant-bearing code and value types. It skips adapters, handlers, orchestration, and
+    binaries, where a surviving mutant is usually equivalent or only an integration test kills it.
+  - What the cargo-mutants docs add. Nextest stops at the first failing test, which makes each
+    mutant faster ([changelog](https://mutants.rs/changelog.html)). `--in-diff` tests only the
+    mutants that overlap the diff ([in-diff](https://mutants.rs/in-diff.html)), and a diff without
+    `a/` and `b/` prefixes matches nothing. `exclude_re` filters a mutant by its full name
+    ([filtering](https://mutants.rs/filter_mutants.html)). A filter given on the command line
+    replaces the config's, not adds to it. By default, cargo-mutants copies the workspace and
+    builds the copy from scratch. `--in-place` mutates the checkout and reuses `target/`, and rules
+    out `--jobs` ([in-place](https://mutants.rs/in-place.html)). `--package` limits what is
+    mutated, not what is copied ([workspaces](https://mutants.rs/workspaces.html)). Survivors are
+    triaged before tests are written, since many are equivalent
+    ([Thoughtworks Radar](https://www.thoughtworks.com/de/radar/tools/cargo-mutants)).
+  - Lookout departs from bobby in three ways. The endpoint tests drive the real router in
+    process, over memory stores, so a surviving mutant in a handler is a real gap, and the
+    handlers are mutated. The two redis files have only Docker tests, so a sandbox run excludes
+    them. Free disk stood at 26 GiB on 2026-11-07, so a run is `--in-place`, in this clean
+    worktree.
+  - Diff against `origin/main`, not `main`. On 2026-11-07 the local `main` stood at `46fe3749`,
+    PR #50's merge, while the branch was rebased onto `origin/main` at `95a3c059`, PR #51's merge.
+    Against `origin/main`, the branch's Rust diff is this slice's 35 files. Against the stale
+    `main`, it is 127.
+  - [ ] Add `apps/lookout/.cargo/mutants.toml` with bobby's two settings. Add
+        `just mutants-on-diff` and `just mutants-on-diff-no-docker`, each over
+        `git diff origin/main`. Note in `.claude/memory/testing-limits.md` that the sandbox runs the
+        `-no-docker` recipe.
+  - [ ] Run `just mutants-on-diff-no-docker` in place, over `crates/server/src/auth`, without
+        `auth/redis.rs` and `auth/sessions/redis.rs`.
+  - [ ] Run the two redis files' mutants outside the sandbox, with Docker.
+  - [ ] Triage each survivor. A missing test gets a test. An equivalent mutant goes into
+        `exclude_re`, with its reason in the commit message.
 - [ ] Review the auth code as a whole, with `/security-review` over the slice's changes.
 - [ ] Run `cargo audit` over the workspace, for advisories against the crates this slice adds:
       webauthn-rs, its vendored OpenSSL, tower-sessions, and their dependencies.
