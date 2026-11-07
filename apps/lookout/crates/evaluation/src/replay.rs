@@ -123,6 +123,7 @@ mod tests {
 
     use super::*;
     use crate::offline::OfflineDetector;
+    use domain::places::DRESDEN_HBF;
 
     fn instant(seconds: i64) -> DateTime<Utc> {
         DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
@@ -160,7 +161,7 @@ mod tests {
     }
 
     fn sample<F: Precision>(seconds: i64, latitude: f64) -> Sample<F> {
-        Sample::at(instant(seconds), latitude, 13.73).expect("a sample")
+        Sample::at(instant(seconds), latitude, DRESDEN_HBF.x()).expect("a sample")
     }
 
     struct Scripted {
@@ -215,7 +216,7 @@ mod tests {
 
     #[test]
     fn an_alert_then_its_pass_records_each_state_at_the_sample_it_starts() {
-        let samples = [0, 10, 20, 30].map(|seconds| sample(seconds, 51.0));
+        let samples = [0, 10, 20, 30].map(|seconds| sample(seconds, DRESDEN_HBF.y()));
 
         let transitions = replay_session(
             samples,
@@ -236,10 +237,12 @@ mod tests {
 
     #[test]
     fn crow_flies_in_f32_takes_a_crossing_in_and_out_of_its_radius_as_a_train_passes_it() {
-        let crossings: Vec<CrossingCompact<f32>> =
-            vec![CrossingCompact::at(1, 51.05, 13.73).expect("a crossing")];
+        let crossings: Vec<CrossingCompact<f32>> = vec![
+            CrossingCompact::at(1, DRESDEN_HBF.y() + 0.05, DRESDEN_HBF.x()).expect("a crossing"),
+        ];
         let predictor = CrowFlies::new(crossings, Radius::new(1_000.0).expect("a radius"));
-        let samples = (0..50).map(|step| sample::<f32>(step * 10, 51.0 + 0.002 * step as f64));
+        let samples =
+            (0..50).map(|step| sample::<f32>(step * 10, DRESDEN_HBF.y() + 0.002 * step as f64));
 
         let transitions =
             replay_session(samples, predictor, detector(&[(1, 250)])).expect("a replay");
@@ -258,10 +261,11 @@ mod tests {
 
     #[test]
     fn a_sample_behind_the_last_is_refused() {
-        let crossings: Vec<CrossingCompact<f64>> =
-            vec![CrossingCompact::at(1, 51.05, 13.73).expect("a crossing")];
+        let crossings: Vec<CrossingCompact<f64>> = vec![
+            CrossingCompact::at(1, DRESDEN_HBF.y() + 0.05, DRESDEN_HBF.x()).expect("a crossing"),
+        ];
         let predictor = CrowFlies::new(crossings, Radius::new(1_000.0).expect("a radius"));
-        let samples = [sample(10, 51.0), sample(0, 51.0)];
+        let samples = [sample(10, DRESDEN_HBF.y()), sample(0, DRESDEN_HBF.y())];
 
         let refused = replay_session(samples, predictor, detector(&[]));
 
@@ -286,17 +290,17 @@ mod tests {
         seq: u32,
         seconds: i64,
     ) -> GeographyRow<TrainSessionSampleRowV3, Point<f64>> {
-        let latitude = 51.0 + 0.002 * f64::from(seq);
+        let latitude = DRESDEN_HBF.y() + 0.002 * f64::from(seq);
         GeographyRow {
             row: TrainSessionSampleRowV3 {
                 session_id: named(name),
                 t: instant(seconds),
                 seq,
                 lat: latitude,
-                lon: 13.73,
+                lon: DRESDEN_HBF.x(),
                 ..TrainSessionSampleRowV3::example()
             },
-            geography: Point::new(13.73, latitude),
+            geography: Point::new(DRESDEN_HBF.x(), latitude),
             country: Country::Germany,
         }
     }

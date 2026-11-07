@@ -64,6 +64,7 @@ mod tests {
     use medallion::{GeographyRow, Row, write_geography_rows};
 
     use super::*;
+    use domain::places::DRESDEN_HBF;
 
     fn started(day: i64) -> DateTime<Utc> {
         DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
@@ -90,7 +91,10 @@ mod tests {
             .into_iter()
             .map(|row| GeographyRow {
                 row,
-                geography: LineString::from(vec![(13.73, 51.04), (13.74, 51.05)]),
+                geography: LineString::from(vec![
+                    DRESDEN_HBF.x_y(),
+                    (DRESDEN_HBF.x() + 0.01, DRESDEN_HBF.y() + 0.01),
+                ]),
                 country: Country::Germany,
             })
             .collect();

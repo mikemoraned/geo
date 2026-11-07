@@ -125,6 +125,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+    use domain::places::DRESDEN_HBF;
 
     struct Pass {
         session_id: SessionId,
@@ -185,7 +186,9 @@ mod tests {
     }
 
     fn sampled(seconds: i64) -> Event<f64> {
-        Event::Sampled(Sample::at(instant(seconds), 51.04, 13.73).expect("a sample"))
+        Event::Sampled(
+            Sample::at(instant(seconds), DRESDEN_HBF.y(), DRESDEN_HBF.x()).expect("a sample"),
+        )
     }
 
     fn passed_at(detector: &mut OfflineDetector, event: Event<f64>) -> Vec<u32> {
