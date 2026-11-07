@@ -585,8 +585,10 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 - [x] Add the `evaluate` crate, whose CLI runs every step in order or any one alone, and a
       `just evaluate` recipe.
 - [x] Run the oracle over 1000 sessions with `just evaluate`.
-- [ ] Check that a run written from `explore3.py` through `write_gold` matches the CLI's run on the
-      same seed.
+- [ ] Check that a run recorded in `explore3.py` with the CLI's settings is the CLI's run: the same
+      run id, rows equal to those `query_gold` reads back, and `write_gold` refusing it as already
+      written. A run's id hashes its settings, code, and data, so the notebook cannot write a
+      second copy.
 - [ ] Trace each shortfall from a perfect score in `explore3.py`, through `query_gold`, and record
       its cause under Investigation.
 - [ ] Replace `summarise`'s own bootstrap with a proven statistics library's. The library must
