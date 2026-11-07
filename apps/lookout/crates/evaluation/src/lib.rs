@@ -1,4 +1,5 @@
 pub mod fixtures;
+pub mod gold;
 pub mod offline;
 pub mod oracle;
 pub mod pick;

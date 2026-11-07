@@ -527,6 +527,9 @@ What looking for the oracle's shortfalls established, on 2026-11-07, over the 10
 - [ ] Write medallion's files through `Root::object_store()`, as a dataset's fingerprint reads
       them. The writer builds its own `LocalFileSystem` from each file's absolute path, so it alone
       ties the store to the local disk.
+- [ ] Fold `evaluate`'s binary into `evaluation`, once `code_version`'s build script watches only
+      tracked files. Until then the script rebuilds `evaluation`, and so `evaluation-py`, on any
+      write under `crates/`. The binary's `clap` and `tracing-subscriber` go behind a feature.
 
 ### Tasks
 
@@ -653,9 +656,10 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               Observations records. That is too little to justify an index the device does not
               share. The index comes back once the device has more to do with each fix. It is then
               built once, for the device and the evaluation alike.
-        - [ ] Move writing a run and resuming one from `evaluate` into `evaluation`, and keep each
+        - [x] Move writing a run and resuming one from `evaluate` into `evaluation`, and keep each
               step's rows in memory through `evaluate run`. A notebook cannot write a run as the CLI
-              does, and a run fingerprints silver four times and reads back what it wrote.
+              does, and a run fingerprints silver four times and reads back what it wrote. A
+              notebook writes a run through `evaluation-py`'s new `evaluate`.
         - [ ] Read a run's crossings and passes once, and resolve each pass's compact id once. An
               oracle run reads the passes three times and the crossings twice.
         - [ ] Add `Query::read_of_run::<T>` and `medallion::from_batches`, and drop the SQL text
