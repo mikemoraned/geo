@@ -17,6 +17,7 @@ module-name = "lookout_evaluation"
 
 [tool.uv]
 cache-keys = [
+    { git = { commit = true } },
     { file = "pyproject.toml" },
     { file = "Cargo.toml" },
     { file = "src/**/*.rs" },

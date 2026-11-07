@@ -143,3 +143,43 @@ def test_transitions_of_a_session_not_picked_are_refused(written):
             scoring=first_runs(),
             root=written,
         )
+
+
+def recording(written, picked):
+    return dict(
+        country="DE",
+        realtime_at_least=90.0,
+        sessions=len(SESSION_IDS),
+        seed=1,
+        predictor=oracle(),
+        scoring=first_runs(),
+        bootstrap=bootstrap(),
+        picked=picked,
+        root=written,
+    )
+
+
+def test_a_record_names_the_run_its_settings_code_and_data_make(written):
+    picked = run(written, oracle())["picked"]
+    commit = lookout_evaluation.BUILD_COMMIT
+    if commit == "unknown" or commit.endswith("-dirty"):
+        with pytest.raises(ValueError, match="commit"):
+            lookout_evaluation.record(**recording(written, picked))
+        return
+
+    recorded = lookout_evaluation.record(**recording(written, picked))
+    again = lookout_evaluation.record(**recording(written, picked))
+
+    run_row = pa.table(recorded["run"]).to_pylist()[0]
+    assert recorded["run_id"] == again["run_id"]
+    assert run_row["code_commit"] == commit
+    assert recorded["run_date"] == run_row["started_at"].date().isoformat()
+    assert pa.table(recorded["sessions"]).column("session_id").to_pylist() == SESSION_IDS
+    written_run = lookout_medallion.write_gold(
+        "evaluation_run_v1",
+        recorded["run"],
+        run_date=recorded["run_date"],
+        run_id=recorded["run_id"],
+        root=written,
+    )
+    assert written_run.rows == 1

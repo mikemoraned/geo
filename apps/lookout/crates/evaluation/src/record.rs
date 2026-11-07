@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use domain::{Radius, Span};
 use medallion::{DatasetSpec, FingerprintError, Root, RunId, layers};
 use medallion_model::{
@@ -33,8 +33,47 @@ pub struct Inputs {
     pub fingerprints: Fingerprints,
 }
 
+const DIRTY: &str = "-dirty";
+const UNKNOWN: &str = "unknown";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Commit(String);
+
+impl Commit {
+    pub fn new(hash: &str) -> Result<Self, RecordError> {
+        if hash.is_empty() || hash == UNKNOWN {
+            return Err(RecordError::NoCommit);
+        }
+        if hash.ends_with(DIRTY) {
+            return Err(RecordError::Uncommitted {
+                hash: hash.to_string(),
+            });
+        }
+        Ok(Self(hash.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Recorded {
+    pub run_id: RunId,
+    pub date: NaiveDate,
+    pub row: EvaluationRunRowV1,
+    pub sessions: Vec<EvaluationSessionRowV1>,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum RecordError {
+    #[error(
+        "the code was built with uncommitted changes ({hash}), so a run could not name the code \
+         it ran; commit them and build again"
+    )]
+    Uncommitted { hash: String },
+    #[error("the build recorded no commit, so a run could not name the code it ran")]
+    NoCommit,
     #[error(transparent)]
     Fingerprint(#[from] FingerprintError),
     #[error("the run's `{column}` cannot be read back as a setting: {reason}")]
@@ -62,6 +101,25 @@ async fn fingerprint(
 
 fn namespace(name: &[u8]) -> Uuid {
     Uuid::new_v5(&Uuid::nil(), name)
+}
+
+pub async fn record(
+    root: &Root,
+    run: &Run,
+    commit: &Commit,
+    picked: &[TrainSessionRowV3],
+) -> Result<Recorded, RecordError> {
+    let inputs = Inputs {
+        code_commit: commit.as_str().to_string(),
+        fingerprints: fingerprints(root).await?,
+    };
+    let row = run_row(run, &inputs, Utc::now());
+    Ok(Recorded {
+        run_id: run_id(&row),
+        date: row.started_at.date_naive(),
+        row,
+        sessions: session_rows(picked),
+    })
 }
 
 pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> EvaluationRunRowV1 {
@@ -406,5 +464,44 @@ mod tests {
                 hours: 1.5,
             }]
         );
+    }
+
+    #[test]
+    fn a_build_with_uncommitted_changes_or_no_commit_is_refused() {
+        assert!(matches!(
+            Commit::new("abc1234-dirty"),
+            Err(RecordError::Uncommitted { .. })
+        ));
+        assert!(matches!(Commit::new("unknown"), Err(RecordError::NoCommit)));
+        assert!(matches!(Commit::new(""), Err(RecordError::NoCommit)));
+        assert_eq!(
+            Commit::new("abc1234").expect("a commit").as_str(),
+            "abc1234"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_recorded_run_names_its_commit_inputs_and_sessions_under_its_id() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = crate::fixtures::store(tmp.path(), 3).await;
+        let run = crate::fixtures::run_of(crate::fixtures::oracle());
+        let picked = crate::pick::pick(&root, &run.pick).await.expect("a pick");
+        let commit = Commit::new("abc1234").expect("a commit");
+
+        let recorded = record(&root, &run, &commit, &picked)
+            .await
+            .expect("a recorded run");
+
+        let inputs = Inputs {
+            code_commit: "abc1234".to_string(),
+            fingerprints: fingerprints(&root).await.expect("fingerprints"),
+        };
+        assert_eq!(
+            recorded.row,
+            run_row(&run, &inputs, recorded.row.started_at)
+        );
+        assert_eq!(recorded.run_id, run_id(&recorded.row));
+        assert_eq!(recorded.date, recorded.row.started_at.date_naive());
+        assert_eq!(recorded.sessions, session_rows(&picked));
     }
 }

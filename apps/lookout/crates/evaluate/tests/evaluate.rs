@@ -1,7 +1,8 @@
 use std::path::Path;
 
-use evaluate::{Commit, EvaluateError};
+use evaluate::EvaluateError;
 use evaluation::fixtures::{oracle, run_of, store};
+use evaluation::record::Commit;
 use evaluation::runs::read_run_rows;
 use medallion::{Root, RunError, RunId, write_rows};
 use medallion_model::{
@@ -161,17 +162,4 @@ async fn a_step_is_refused_from_a_build_of_another_commit() {
             if begun == "abc1234" && current == "def5678"),
         "{refused:?}"
     );
-}
-
-#[test]
-fn a_build_with_uncommitted_changes_or_no_commit_is_refused() {
-    assert!(matches!(
-        Commit::new("abc1234-dirty"),
-        Err(EvaluateError::Uncommitted { .. })
-    ));
-    assert!(matches!(
-        Commit::new("unknown"),
-        Err(EvaluateError::NoCommit)
-    ));
-    assert!(matches!(Commit::new(""), Err(EvaluateError::NoCommit)));
 }

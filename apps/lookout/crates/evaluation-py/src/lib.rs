@@ -4,6 +4,7 @@ use std::sync::OnceLock;
 
 use crossings::silver::ReadError;
 use domain::{Percentage, Radius, Span};
+use evaluation::record::Commit;
 use evaluation::steps::{self, FloatType, Predictor, Run, StepError};
 use evaluation::{Pick, PickError, Score, Seed};
 use medallion::{Country, QueryError, Root, Row};
@@ -12,6 +13,8 @@ use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_arrow::PyTable;
+
+const BUILD_COMMIT: &str = env!("BUILD_GIT_HASH");
 
 /// The oracle, which alerts each recorded pass from `horizon` before it, as text such as `"5m"`.
 #[pyclass(frozen)]
@@ -290,6 +293,60 @@ fn run<'py>(
     Ok(tables)
 }
 
+/// Record a run over the sessions `picked`, as a dict of its id, its date, and its first two tables.
+///
+/// The dict's `"run_id"` and `"run_date"` are the text `write_gold` takes. Its `"run"` and
+/// `"sessions"` are the run's tables of gold `evaluation_run_v1` and `evaluation_session_v1`. The
+/// run names `BUILD_COMMIT`, the commit this extension was built from, and a fingerprint of each
+/// silver dataset it reads. Its id hashes those with its settings, so the same settings over the
+/// same code and data record the same run. If the extension was built from uncommitted code, a
+/// `ValueError` is raised.
+#[pyfunction]
+#[pyo3(signature = (
+    *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap, picked,
+    float_type="f32", root=None
+))]
+#[allow(clippy::too_many_arguments)]
+fn record<'py>(
+    py: Python<'py>,
+    country: &str,
+    realtime_at_least: f64,
+    sessions: usize,
+    seed: u64,
+    predictor: &Bound<'py, PyAny>,
+    scoring: PyRef<'py, Scoring>,
+    bootstrap: PyRef<'py, Bootstrap>,
+    picked: PyTable,
+    float_type: &str,
+    root: Option<PathBuf>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let settings = Run {
+        pick: picking(country, realtime_at_least, sessions, seed)?,
+        predictor: predictor_of(predictor)?,
+        float_type: float_type_of(float_type)?,
+        scoring: scoring.scoring,
+        bootstrap: bootstrap.bootstrap,
+    };
+    let picked = rows_of::<TrainSessionRowV3>(picked)?;
+    let commit = Commit::new(BUILD_COMMIT).map_err(value_error)?;
+    let root = root_or_default(root)?;
+
+    let recorded = py
+        .detach(|| {
+            runtime().block_on(evaluation::record::record(
+                &root, &settings, &commit, &picked,
+            ))
+        })
+        .map_err(runtime_error)?;
+
+    let tables = PyDict::new(py);
+    tables.set_item("run_id", recorded.run_id.to_string())?;
+    tables.set_item("run_date", recorded.date.to_string())?;
+    tables.set_item("run", table_of(&[recorded.row])?)?;
+    tables.set_item("sessions", table_of(&recorded.sessions)?)?;
+    Ok(tables)
+}
+
 fn picking(country: &str, realtime_at_least: f64, sessions: usize, seed: u64) -> PyResult<Pick> {
     Ok(Pick {
         country: country.parse::<Country>().map_err(value_error)?,
@@ -402,5 +459,7 @@ fn lookout_evaluation(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(score, module)?)?;
     module.add_function(wrap_pyfunction!(summarise, module)?)?;
     module.add_function(wrap_pyfunction!(run, module)?)?;
+    module.add_function(wrap_pyfunction!(record, module)?)?;
+    module.add("BUILD_COMMIT", BUILD_COMMIT)?;
     Ok(())
 }

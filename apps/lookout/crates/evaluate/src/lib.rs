@@ -1,8 +1,6 @@
-use chrono::{NaiveDate, Utc};
+use chrono::NaiveDate;
 use evaluation::PickError;
-use evaluation::record::{
-    Inputs, RecordError, fingerprints, run_id, run_of, run_row, session_rows,
-};
+use evaluation::record::{Commit, RecordError, fingerprints, record, run_of};
 use evaluation::runs::{RunsError, read_run_row, read_run_rows, read_sessions};
 use evaluation::steps::{self, Run, StepError};
 use medallion::{Root, RunError, RunId, write_run};
@@ -14,35 +12,8 @@ use medallion_model::{
 
 pub const BUILD_COMMIT: &str = env!("BUILD_GIT_HASH");
 
-const DIRTY: &str = "-dirty";
-const UNKNOWN: &str = "unknown";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Commit(String);
-
-impl Commit {
-    pub fn new(hash: &str) -> Result<Self, EvaluateError> {
-        if hash.is_empty() || hash == UNKNOWN {
-            return Err(EvaluateError::NoCommit);
-        }
-        if hash.ends_with(DIRTY) {
-            return Err(EvaluateError::Uncommitted {
-                hash: hash.to_string(),
-            });
-        }
-        Ok(Self(hash.to_string()))
-    }
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum EvaluateError {
-    #[error(
-        "the code was built with uncommitted changes ({hash}), so a run could not name the code \
-         it ran; commit them and build again"
-    )]
-    Uncommitted { hash: String },
-    #[error("the build recorded no commit, so a run could not name the code it ran")]
-    NoCommit,
     #[error("run {run_id} was begun by commit {begun}, and this build is commit {current}")]
     CommitChanged {
         run_id: RunId,
@@ -67,18 +38,12 @@ pub enum EvaluateError {
 }
 
 pub async fn pick(root: &Root, run: &Run, commit: &Commit) -> Result<RunId, EvaluateError> {
-    let inputs = Inputs {
-        code_commit: commit.0.clone(),
-        fingerprints: fingerprints(root).await?,
-    };
-    let row = run_row(run, &inputs, Utc::now());
-    let run_id = run_id(&row);
-    let date = row.started_at.date_naive();
     let picked = evaluation::pick(root, &run.pick).await?;
-    tracing::info!(%run_id, sessions = picked.len(), "picked");
-    write_run(root, date, &run_id, &[row]).await?;
-    write_run(root, date, &run_id, &session_rows(&picked)).await?;
-    Ok(run_id)
+    let recorded = record(root, run, commit, &picked).await?;
+    tracing::info!(run_id = %recorded.run_id, sessions = picked.len(), "picked");
+    write_run(root, recorded.date, &recorded.run_id, &[recorded.row]).await?;
+    write_run(root, recorded.date, &recorded.run_id, &recorded.sessions).await?;
+    Ok(recorded.run_id)
 }
 
 pub async fn replay(root: &Root, run_id: &RunId, commit: &Commit) -> Result<(), EvaluateError> {
@@ -145,11 +110,11 @@ struct Begun {
 
 async fn resume(root: &Root, run_id: &RunId, commit: &Commit) -> Result<Begun, EvaluateError> {
     let row = read_run_row(root, run_id).await?;
-    if row.code_commit != commit.0 {
+    if row.code_commit != commit.as_str() {
         return Err(EvaluateError::CommitChanged {
             run_id: run_id.clone(),
             begun: row.code_commit,
-            current: commit.0.clone(),
+            current: commit.as_str().to_string(),
         });
     }
     let now = fingerprints(root).await?;

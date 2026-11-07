@@ -3,7 +3,8 @@ use std::num::NonZeroUsize;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use domain::{NotASpan, Percentage, Radius, Span};
-use evaluate::{BUILD_COMMIT, Commit};
+use evaluate::BUILD_COMMIT;
+use evaluation::record::Commit;
 use evaluation::steps::{FloatType, Predictor, Run};
 use evaluation::{Bootstrap, Pick, Score, Scoring, Seed};
 use medallion::{Country, MedallionArgs, RunId};
