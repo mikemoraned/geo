@@ -17,11 +17,10 @@ use std::sync::Arc;
 
 use ::redis::aio::MultiplexedConnection;
 use axum::Router;
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde::{Deserialize, Serialize};
-use tower_http::set_header::SetResponseHeaderLayer;
 use tower_sessions::session::Id;
 use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 use uuid::Uuid;
@@ -145,8 +144,6 @@ impl fmt::Debug for RelyingParty {
     }
 }
 
-const NEVER_STORE: &str = "no-store";
-
 pub fn routes<S>(relying_party: RelyingParty) -> Router<S> {
     Router::new()
         .route("/auth/register/start", post(registration::start))
@@ -155,10 +152,6 @@ pub fn routes<S>(relying_party: RelyingParty) -> Router<S> {
         .route("/auth/signin/finish", post(signin::finish))
         .route("/auth/signout", post(signout::signout))
         .route("/auth/status", get(status::status))
-        .layer(SetResponseHeaderLayer::overriding(
-            header::CACHE_CONTROL,
-            HeaderValue::from_static(NEVER_STORE),
-        ))
         .with_state(relying_party)
 }
 

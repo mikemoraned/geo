@@ -17,7 +17,7 @@ use telemetry::RawSample;
 use tokio::time::{Instant, interval_at};
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
-use tower_http::set_header::SetResponseHeader;
+use tower_http::set_header::{SetResponseHeader, SetResponseHeaderLayer};
 use tower_http::trace::TraceLayer;
 use tower_sessions::Session;
 use tower_sessions::session::Id;
@@ -35,6 +35,7 @@ pub struct AppState {
 
 const RECORD_PAGE: &str = "/record";
 const ASK_FIRST: &str = "no-cache";
+const NEVER_STORE: &str = "no-store";
 
 pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
     let static_dir = static_dir.into();
@@ -58,6 +59,10 @@ pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
             HeaderValue::from_static(ASK_FIRST),
         ))
         .layer(state.relying_party.session_layer())
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static(NEVER_STORE),
+        ))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(state)

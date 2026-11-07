@@ -293,7 +293,7 @@ shows the session as signed out.
       record then logs tower-sessions' "record not found" warning once, at the closing recheck.
 - [x] Inline `RelyingParty::allowed` into `signed_in`, its only caller after the refactor above.
 - [x] Rename `PASSKEY_RECHECK` to `SESSION_RECHECK`, since the minute's recheck reads the session.
-- [ ] Set `Cache-Control: no-store` on every answer that sets none, with one outer
+- [x] Set `Cache-Control: no-store` on every answer that sets none, with one outer
       `SetResponseHeader::if_not_present` layer. Static files keep `no-cache`, and `/record/` keeps
       `private, no-cache`. The `/auth/` layer then goes, and its test stays. Three times a route
       sent no `Cache-Control`, and a browser reused a stored answer. With the default, a route

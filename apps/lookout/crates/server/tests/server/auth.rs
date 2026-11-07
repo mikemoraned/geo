@@ -1001,6 +1001,23 @@ async fn a_browser_never_stores_an_auth_answer() {
     }
 }
 
+#[tokio::test]
+async fn an_answer_from_a_route_that_sets_no_cache_control_is_never_stored() {
+    let server = Server::hosted(Allowing::ByAdmin);
+
+    for path in ["/version", "/record/"] {
+        let reply = get(&server.app, path, None).await;
+        assert_eq!(
+            reply
+                .headers
+                .get(header::CACHE_CONTROL)
+                .map(|value| value.as_bytes()),
+            Some(&b"no-store"[..]),
+            "{path}"
+        );
+    }
+}
+
 async fn sign_in_status(app: &Router, cookie: Option<&Cookie<'_>>) -> SignInStatus {
     let reply = get(app, "/auth/status", cookie).await;
     assert_eq!(reply.status, StatusCode::OK, "{:?}", reply.body);

@@ -17,8 +17,13 @@ stored copy with the server before reusing it. A page therefore loads its curren
 deploy. A response without `Cache-Control` is [heuristically fresh][heuristic], and a browser
 reuses it without asking.
 
+A response whose route sets no `Cache-Control` gets `no-store` from the server's outermost layer,
+so a browser [stores none of it][no-store]. A route that names no caching rule therefore never
+leaves a stored copy behind.
+
 [no-cache]: https://www.rfc-editor.org/rfc/rfc9111#name-no-cache-2
 [heuristic]: https://www.rfc-editor.org/rfc/rfc9111#name-calculating-heuristic-fresh
+[no-store]: https://www.rfc-editor.org/rfc/rfc9111#name-no-store-2
 
 ## The queue sits behind a trait, so tests drive the real handler
 
@@ -186,11 +191,10 @@ continue unchecked.
 `GET /auth/status` answers `{"status": "signed_in"}` or `{"status": "signed_out"}`, by the gate's
 check. A page uses it to tell a signed-out session from a dropped connection.
 
-Every answer under `/auth/` carries `Cache-Control: no-store`, so a browser [stores
-none][no-store]. A stored status would show a revoked session as signed in.
+No route under `/auth/` sets `Cache-Control`, so every answer there carries the server's default,
+`no-store`. A stored status would show a revoked session as signed in.
 
 [private]: https://www.rfc-editor.org/rfc/rfc9111#name-private
-[no-store]: https://www.rfc-editor.org/rfc/rfc9111#name-no-store-2
 [ws-origin]: https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html#origin-header-validation
 [close-codes]: https://www.rfc-editor.org/rfc/rfc6455#section-7.4.1
 
