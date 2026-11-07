@@ -2,7 +2,7 @@ use std::error::Error;
 use std::num::NonZeroUsize;
 
 use clap::{Args, Parser, Subcommand};
-use domain::{NotASpan, Percentage, Radius, Span};
+use domain::{Percentage, Radius, Span};
 use evaluation::gold;
 use evaluation::record::CodeVersion;
 use evaluation::steps::{Predictor, Run};
@@ -48,7 +48,7 @@ struct Settings {
     #[arg(long)]
     country: Country,
     /// The least share of a session's samples that come from realtime data, in percent.
-    #[arg(long, value_parser = percentage)]
+    #[arg(long)]
     realtime_at_least: Percentage,
     /// How many sessions to pick.
     #[arg(long)]
@@ -60,7 +60,7 @@ struct Settings {
     #[arg(long)]
     predictor: PredictorName,
     /// How far ahead of each pass the oracle alerts, such as `5m`.
-    #[arg(long, value_parser = span, required_if_eq("predictor", "oracle"))]
+    #[arg(long, required_if_eq("predictor", "oracle"))]
     oracle_horizon: Option<Span>,
     /// How far from the latest sample CrowFlies predicts crossings, in metres.
     #[arg(long, required_if_eq("predictor", "crow_flies"))]
@@ -69,22 +69,22 @@ struct Settings {
     #[arg(long)]
     float_type: FloatType,
     /// How far ahead of its pass a notification is a hit, such as `5m`.
-    #[arg(long, value_parser = span)]
+    #[arg(long)]
     horizon: Span,
     /// How close to its pass a notification is last moment, such as `30s`.
-    #[arg(long, value_parser = span)]
+    #[arg(long)]
     last_moment: Span,
     /// How far past the horizon a notification's score falls to the floor, such as `1m`.
-    #[arg(long, value_parser = span)]
+    #[arg(long)]
     ramp: Span,
     /// The score of a last-moment notification, from 0 to 1.
-    #[arg(long, value_parser = score)]
+    #[arg(long)]
     last_moment_score: Score,
     /// The score a notification too early falls to, from 0 to 1.
-    #[arg(long, value_parser = score)]
+    #[arg(long)]
     floor: Score,
     /// How long from a session's start its passes go unscored, such as `1m`.
-    #[arg(long, value_parser = span)]
+    #[arg(long)]
     warm_up: Span,
     /// How many resamples of the sessions the intervals are drawn from.
     #[arg(long)]
@@ -125,20 +125,6 @@ impl Settings {
             },
         })
     }
-}
-
-fn span(text: &str) -> Result<Span, NotASpan> {
-    Span::new(text)
-}
-
-fn percentage(text: &str) -> Result<Percentage, String> {
-    let value: f64 = text.parse().map_err(|err| format!("{text:?}: {err}"))?;
-    Percentage::new(value).map_err(|err| err.to_string())
-}
-
-fn score(text: &str) -> Result<Score, String> {
-    let value: f64 = text.parse().map_err(|err| format!("{text:?}: {err}"))?;
-    Score::new(value).map_err(|err| err.to_string())
 }
 
 #[tokio::main]

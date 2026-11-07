@@ -7,7 +7,7 @@ use medallion_model::{
 };
 
 use crate::PickError;
-use crate::record::{CodeVersion, RecordError, Recorded, fingerprints, record, run_of};
+use crate::record::{CodeVersion, RecordError, Recorded, fingerprints, record};
 use crate::runs::{RunsError, read_run_row, read_run_rows, read_sessions};
 use crate::steps::{self, Ran, Run, StepError};
 
@@ -190,7 +190,7 @@ async fn resume(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<Begun
             datasets: changed,
         });
     }
-    let run = run_of(&row)?;
+    let run = Run::try_from(&row)?;
     let sessions = read_run_rows::<EvaluationSessionRowV1>(root, run_id).await?;
     let picked = read_sessions(root, run.pick.country, &sessions).await?;
     Ok(Begun {

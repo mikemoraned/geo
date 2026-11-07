@@ -17,6 +17,8 @@ pub enum NotASpan {
     Zero { text: String },
     #[error("`{text}` is longer than a span can be")]
     TooLong { text: String },
+    #[error("{delta} is no time at all; a span is longer than zero")]
+    NotPositive { delta: TimeDelta },
 }
 
 impl Span {
@@ -58,6 +60,17 @@ impl From<Age> for Span {
                 .to_std()
                 .expect("an age is longer than zero, so it is a std duration"),
         )
+    }
+}
+
+impl TryFrom<TimeDelta> for Span {
+    type Error = NotASpan;
+
+    fn try_from(delta: TimeDelta) -> Result<Self, Self::Error> {
+        match delta.to_std() {
+            Ok(duration) if !duration.is_zero() => Ok(Self(duration)),
+            _ => Err(NotASpan::NotPositive { delta }),
+        }
     }
 }
 
@@ -130,6 +143,21 @@ mod tests {
             "500000000y".parse::<Span>(),
             Err(NotASpan::TooLong { .. })
         ));
+    }
+
+    #[test]
+    fn a_positive_time_delta_is_a_span_of_the_same_length() {
+        assert_eq!(
+            Span::try_from(TimeDelta::milliseconds(1_500)),
+            Ok(span("1500ms"))
+        );
+    }
+
+    #[test]
+    fn a_time_delta_of_zero_or_less_is_refused() {
+        for delta in [TimeDelta::zero(), TimeDelta::seconds(-30)] {
+            assert_eq!(Span::try_from(delta), Err(NotASpan::NotPositive { delta }));
+        }
     }
 
     #[test]
