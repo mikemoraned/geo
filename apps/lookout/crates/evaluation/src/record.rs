@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use code_version::{DIRTY, UNKNOWN};
 use domain::{Radius, Span};
 use medallion::{DatasetSpec, FingerprintError, Root, RunId, layers};
@@ -168,45 +168,50 @@ pub fn run_id(row: &EvaluationRunRowV1) -> RunId {
     RunId::new(id.to_string()).expect("a UUID names a partition")
 }
 
-pub fn run_of(row: &EvaluationRunRowV1) -> Result<Run, RecordError> {
-    Ok(Run {
-        pick: Pick {
-            country: row.country.parse().map_err(|err| setting("country", err))?,
-            realtime_at_least: row.realtime_at_least,
-            sessions: count("sessions", row.sessions)?,
-            seed: Seed(row.pick_seed),
-        },
-        predictor: match row.predictor {
-            PredictorName::Oracle => Predictor::Oracle {
-                horizon: span_of(
-                    "predictor_horizon_ms",
-                    row.predictor_horizon_ms
-                        .ok_or_else(|| setting("predictor_horizon_ms", "an oracle needs one"))?,
-                )?,
+impl TryFrom<&EvaluationRunRowV1> for Run {
+    type Error = RecordError;
+
+    fn try_from(row: &EvaluationRunRowV1) -> Result<Self, Self::Error> {
+        Ok(Run {
+            pick: Pick {
+                country: row.country.parse().map_err(|err| setting("country", err))?,
+                realtime_at_least: row.realtime_at_least,
+                sessions: count("sessions", row.sessions)?,
+                seed: Seed(row.pick_seed),
             },
-            PredictorName::CrowFlies => Predictor::CrowFlies {
-                radius: Radius::new(
-                    row.predictor_radius_m
-                        .ok_or_else(|| setting("predictor_radius_m", "CrowFlies needs one"))?,
-                )
-                .map_err(|err| setting("predictor_radius_m", err))?,
+            predictor: match row.predictor {
+                PredictorName::Oracle => Predictor::Oracle {
+                    horizon: span_of(
+                        "predictor_horizon_ms",
+                        row.predictor_horizon_ms.ok_or_else(|| {
+                            setting("predictor_horizon_ms", "an oracle needs one")
+                        })?,
+                    )?,
+                },
+                PredictorName::CrowFlies => Predictor::CrowFlies {
+                    radius: Radius::new(
+                        row.predictor_radius_m
+                            .ok_or_else(|| setting("predictor_radius_m", "CrowFlies needs one"))?,
+                    )
+                    .map_err(|err| setting("predictor_radius_m", err))?,
+                },
             },
-        },
-        float_type: row.float_type,
-        scoring: Scoring {
-            horizon: span_of("horizon_ms", row.horizon_ms)?,
-            last_moment: span_of("last_moment_ms", row.last_moment_ms)?,
-            ramp: span_of("ramp_ms", row.ramp_ms)?,
-            last_moment_score: Score::new(row.last_moment_score)
-                .map_err(|err| setting("last_moment_score", err))?,
-            floor: Score::new(row.floor).map_err(|err| setting("floor", err))?,
-            warm_up: span_of("warm_up_ms", row.warm_up_ms)?,
-        },
-        bootstrap: Bootstrap {
-            resamples: count("resamples", row.resamples)?,
-            seed: Seed(row.bootstrap_seed),
-        },
-    })
+            float_type: row.float_type,
+            scoring: Scoring {
+                horizon: span_of("horizon_ms", row.horizon_ms)?,
+                last_moment: span_of("last_moment_ms", row.last_moment_ms)?,
+                ramp: span_of("ramp_ms", row.ramp_ms)?,
+                last_moment_score: Score::new(row.last_moment_score)
+                    .map_err(|err| setting("last_moment_score", err))?,
+                floor: Score::new(row.floor).map_err(|err| setting("floor", err))?,
+                warm_up: span_of("warm_up_ms", row.warm_up_ms)?,
+            },
+            bootstrap: Bootstrap {
+                resamples: count("resamples", row.resamples)?,
+                seed: Seed(row.bootstrap_seed),
+            },
+        })
+    }
 }
 
 pub fn session_rows(picked: &[TrainSessionRowV3]) -> Vec<EvaluationSessionRowV1> {
@@ -226,7 +231,7 @@ fn milliseconds(span: Span) -> i64 {
 }
 
 fn span_of(column: &'static str, milliseconds: i64) -> Result<Span, RecordError> {
-    Span::new(&format!("{milliseconds}ms")).map_err(|err| setting(column, err))
+    Span::try_from(TimeDelta::milliseconds(milliseconds)).map_err(|err| setting(column, err))
 }
 
 fn count(column: &'static str, value: u64) -> Result<NonZeroUsize, RecordError> {
@@ -317,7 +322,7 @@ mod tests {
         for run in [oracle_run(), crow_flies_run()] {
             let row = run_row(&run, &inputs(), instant(0));
 
-            assert_eq!(run_of(&row).expect("the run's settings"), run);
+            assert_eq!(Run::try_from(&row).expect("the run's settings"), run);
         }
     }
 
@@ -384,14 +389,14 @@ mod tests {
 
         assert!(
             matches!(
-                run_of(&row),
+                Run::try_from(&row),
                 Err(RecordError::Setting {
                     column: "predictor_horizon_ms",
                     ..
                 })
             ),
             "{:?}",
-            run_of(&row)
+            Run::try_from(&row)
         );
     }
 

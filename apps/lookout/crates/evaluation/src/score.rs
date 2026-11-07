@@ -1,4 +1,6 @@
 use std::collections::BTreeMap;
+use std::num::ParseFloatError;
+use std::str::FromStr;
 
 use chrono::{DateTime, TimeDelta, Utc};
 use domain::StateKind;
@@ -16,6 +18,14 @@ pub struct Score(f64);
 #[error("a score lies from 0 to 1, and {0} does not")]
 pub struct NotAScore(f64);
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum UnreadableScore {
+    #[error("`{text}` is not a number: {reason}")]
+    NotANumber { text: String, reason: String },
+    #[error(transparent)]
+    OutOfRange(#[from] NotAScore),
+}
+
 impl Score {
     pub fn new(value: f64) -> Result<Self, NotAScore> {
         (0.0..=1.0)
@@ -26,6 +36,20 @@ impl Score {
 
     pub fn get(self) -> f64 {
         self.0
+    }
+}
+
+impl FromStr for Score {
+    type Err = UnreadableScore;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let value: f64 =
+            text.parse()
+                .map_err(|err: ParseFloatError| UnreadableScore::NotANumber {
+                    text: text.to_string(),
+                    reason: err.to_string(),
+                })?;
+        Ok(Self::new(value)?)
     }
 }
 
@@ -446,6 +470,19 @@ mod tests {
             [(400, Seen::Credited(Class::Hit, 1.0))]
         );
         assert_eq!(misses(&outcomes), [(1, 300), (1, 900)]);
+    }
+
+    #[test]
+    fn a_score_reads_from_its_text() {
+        assert_eq!("0.25".parse::<Score>(), Ok(Score(0.25)));
+        assert_eq!(
+            "1.5".parse::<Score>(),
+            Err(UnreadableScore::OutOfRange(NotAScore(1.5)))
+        );
+        assert!(matches!(
+            "high".parse::<Score>(),
+            Err(UnreadableScore::NotANumber { .. })
+        ));
     }
 
     #[test]

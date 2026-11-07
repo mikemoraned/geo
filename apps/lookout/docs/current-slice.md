@@ -670,12 +670,13 @@ run of it tests every new part, from the tracker to gold, before a real predicto
         - [x] Write gold through a target beside `SilverTarget`, with its column checks and a real
               `TableWritten`. Gold accepts unexpected columns, and `write_gold` makes up the counts
               it returns.
-        - [ ] Give each mirrored enum one home, such as `StateKind` in `domain`, and parse the float
+        - [x] Give each mirrored enum one home, such as `StateKind` in `domain`, and parse the float
               type and the predictor with `strum`. Four enums name the float type, each pair joined
               by a converter.
-        - [ ] Convert between a run and its row with `From` and `TryFrom`, give `Span` a
+        - [x] Convert between a run and its row with `From` and `TryFrom`, give `Span` a
               `TryFrom<TimeDelta>`, and give `Score` a `FromStr`. `span_of` writes milliseconds as
-              text to parse them back, and the CLI wraps parsers that exist.
+              text to parse them back, and the CLI wraps parsers that exist. A row is still built
+              by `run_row`, since it takes the run's inputs and start as well as the run.
         - [ ] Define a run's fingerprinted inputs once, with a `changed_since`, and read their
               fingerprints concurrently. The four datasets are listed in four places across two
               crates.
