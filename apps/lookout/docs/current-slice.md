@@ -667,7 +667,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               the SQL text breaks the decision on typed reads. Done without `read_of_run`, which
               ties `Query` to runs. `Query::read` exposes a dataset's partition levels as columns,
               and a dataset declares the levels beneath its key with `partitioned_within`.
-        - [ ] Write gold through a target beside `SilverTarget`, with its column checks and a real
+        - [x] Write gold through a target beside `SilverTarget`, with its column checks and a real
               `TableWritten`. Gold accepts unexpected columns, and `write_gold` makes up the counts
               it returns.
         - [ ] Give each mirrored enum one home, such as `StateKind` in `domain`, and parse the float

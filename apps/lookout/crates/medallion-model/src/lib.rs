@@ -28,7 +28,7 @@ pub use evaluation::{
     NotificationClass, OutcomeKind, PassDetectorName, PredictorName,
 };
 pub use gers::{GersId, NotAGersId};
-pub use gold::{GoldTarget, GoldTargetError, gold_target};
+pub use gold::{GoldTargetError, gold_target};
 pub use motis::{
     AgencyId, EmptyAgencyId, EmptyStopId, EmptyTripId, MOTIS_POLL_V2, MOTIS_POLYLINE_V2,
     MOTIS_SEGMENT_V3, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, NotAPolylineId,

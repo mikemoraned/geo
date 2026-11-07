@@ -15,7 +15,7 @@ use crate::dataset::DatasetSpec;
 use crate::geo::{GEOMETRY, GeoError, PROJECTED_GEOMETRY, geometry_fields};
 use crate::layer::layers;
 use crate::path::{ReplaceError, Replaced, Root};
-use crate::rows::{Geometry, Row, RowError, fields};
+use crate::rows::{Geometry, Row, RowError, batch, fields, from_batches};
 
 #[derive(Debug, Clone)]
 pub struct SilverTarget {
@@ -23,6 +23,14 @@ pub struct SilverTarget {
     columns: Vec<FieldRef>,
     pub(crate) geometry: Geometry,
     unique: &'static [&'static str],
+}
+
+#[derive(Debug, Clone)]
+pub struct GoldTarget {
+    spec: DatasetSpec<layers::Gold>,
+    columns: Vec<FieldRef>,
+    pub(crate) geometry: Geometry,
+    rows_of: fn(&[RecordBatch]) -> Result<RecordBatch, RowError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -181,6 +189,44 @@ impl SilverTarget {
     }
 }
 
+impl GoldTarget {
+    pub fn of<R: Row<Layer = layers::Gold>>() -> Result<Self, RowError> {
+        Ok(Self {
+            spec: R::DATASET,
+            columns: fields::<R>()?,
+            geometry: R::GEOMETRY,
+            rows_of: rows_of::<R>,
+        })
+    }
+
+    pub fn spec(&self) -> DatasetSpec<layers::Gold> {
+        self.spec
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.spec.name
+    }
+
+    pub fn expected_columns(&self) -> Vec<String> {
+        self.columns
+            .iter()
+            .map(|field| field.name().clone())
+            .collect()
+    }
+
+    pub(crate) fn rows(&self, table: &[RecordBatch]) -> Result<RecordBatch, TableError> {
+        let expected = self.expected_columns();
+        for part in table {
+            check_columns(self.name(), &expected, part)?;
+        }
+        Ok((self.rows_of)(table)?)
+    }
+}
+
+fn rows_of<R: Row>(table: &[RecordBatch]) -> Result<RecordBatch, RowError> {
+    batch(&from_batches::<R>(table)?)
+}
+
 pub async fn write_table(
     root: &Root,
     target: &SilverTarget,
@@ -190,7 +236,7 @@ pub async fn write_table(
         return Ok(TableWritten::default());
     };
     let table = arrow::compute::concat_batches(&first.schema(), table)?;
-    check_columns(target, &table)?;
+    check_columns(target.name(), &target.expected_columns()?, &table)?;
     check_unique(target, &table)?;
 
     let columns = translate(target, &table)?;
@@ -494,12 +540,15 @@ pub(crate) fn check_unique(target: &SilverTarget, table: &RecordBatch) -> Result
     Ok(())
 }
 
-fn check_columns(target: &SilverTarget, table: &RecordBatch) -> Result<(), TableError> {
-    let expected = target.expected_columns()?;
-    for column in &expected {
+fn check_columns(
+    dataset: &'static str,
+    expected: &[String],
+    table: &RecordBatch,
+) -> Result<(), TableError> {
+    for column in expected {
         if table.schema_ref().index_of(column).is_err() {
             return Err(TableError::Missing {
-                dataset: target.name(),
+                dataset,
                 column: column.clone(),
             });
         }
@@ -514,7 +563,7 @@ fn check_columns(target: &SilverTarget, table: &RecordBatch) -> Result<(), Table
         .collect();
     if !unexpected.is_empty() {
         return Err(TableError::Unexpected {
-            dataset: target.name(),
+            dataset,
             columns: unexpected,
         });
     }

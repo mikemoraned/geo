@@ -94,6 +94,18 @@ def test_a_table_lacking_a_column_of_the_dataset_is_refused(store):
         )
 
 
+def test_a_table_holding_a_column_the_dataset_does_not_define_is_refused(store):
+    table = transition_table(["session-a"])
+    with pytest.raises(ValueError, match="run_id"):
+        lookout_medallion.write_gold(
+            "evaluation_transition_v1",
+            table.append_column("run_id", pa.array(["abc"] * table.num_rows, pa.string())),
+            run_date="2026-11-06",
+            run_id="abc",
+            root=str(store),
+        )
+
+
 def test_a_query_of_a_gold_dataset_never_written_is_refused(store):
     with pytest.raises(ValueError, match="evaluation_summary_v1"):
         query(store, "SELECT * FROM evaluation_summary_v1")
