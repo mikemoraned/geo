@@ -2,9 +2,10 @@ use std::marker::PhantomData;
 
 use datafusion::dataframe::DataFrame;
 use datafusion::logical_expr::{Expr, SortExpr};
+use serde::Deserialize;
 
 use crate::query::QueryError;
-use crate::rows::{Row, fields};
+use crate::rows::{Projection, Row, fields, projected_columns};
 
 #[derive(Debug)]
 pub struct Read<T> {
@@ -33,11 +34,11 @@ impl<T: Row> Read<T> {
     }
 
     pub async fn rows(self) -> Result<Vec<T>, QueryError> {
-        let mut rows = Vec::new();
-        for batch in self.projected()?.collect().await? {
-            rows.extend(serde_arrow::from_record_batch::<Vec<T>>(&batch)?);
-        }
-        Ok(rows)
+        rows_of(self.projected()?).await
+    }
+
+    pub async fn rows_as<P: Projection<Of = T>>(self) -> Result<Vec<P>, QueryError> {
+        rows_of(self.projected_as::<P>()?).await
     }
 
     fn projected(self) -> Result<DataFrame, QueryError> {
@@ -45,9 +46,25 @@ impl<T: Row> Read<T> {
             .iter()
             .map(|field| field.name().clone())
             .collect();
+        self.selected(&columns)
+    }
+
+    fn projected_as<P: Projection<Of = T>>(self) -> Result<DataFrame, QueryError> {
+        self.selected(&projected_columns::<P>()?)
+    }
+
+    fn selected(self, columns: &[String]) -> Result<DataFrame, QueryError> {
         let columns: Vec<&str> = columns.iter().map(String::as_str).collect();
         Ok(self.frame.select_columns(&columns)?)
     }
+}
+
+async fn rows_of<R: for<'de> Deserialize<'de>>(frame: DataFrame) -> Result<Vec<R>, QueryError> {
+    let mut rows = Vec::new();
+    for batch in frame.collect().await? {
+        rows.extend(serde_arrow::from_record_batch::<Vec<R>>(&batch)?);
+    }
+    Ok(rows)
 }
 
 #[cfg(test)]
@@ -96,6 +113,23 @@ mod tests {
     impl Dated for Reading {
         fn partition_date(&self) -> NaiveDate {
             self.taken_at.date_naive()
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    struct ReadingLevel {
+        reading_id: String,
+        level: f64,
+    }
+
+    impl Projection for ReadingLevel {
+        type Of = Reading;
+
+        fn example() -> Self {
+            ReadingLevel {
+                reading_id: "example".to_string(),
+                level: 0.0,
+            }
         }
     }
 
@@ -240,9 +274,11 @@ mod tests {
     }
 
     async fn scan_of(read: Read<Reading>, analyze: Analyze) -> String {
-        let explained = read
-            .projected()
-            .expect("a projection")
+        scan_of_frame(read.projected().expect("a projection"), analyze).await
+    }
+
+    async fn scan_of_frame(frame: DataFrame, analyze: Analyze) -> String {
+        let explained = frame
             .explain(false, analyze == Analyze::Yes)
             .expect("a plan")
             .collect()
@@ -274,6 +310,44 @@ mod tests {
             scan.contains("projection=[reading_id, taken_at, level]"),
             "{scan}"
         );
+    }
+
+    #[tokio::test]
+    async fn a_projection_returns_its_columns_of_every_row() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = stored(tmp.path(), &readings(3)).await;
+
+        let mut levels = read(root)
+            .await
+            .rows_as::<ReadingLevel>()
+            .await
+            .expect("the levels");
+        levels.sort_by(|one, other| one.reading_id.cmp(&other.reading_id));
+
+        assert_eq!(
+            levels,
+            readings(3)
+                .into_iter()
+                .map(|reading| ReadingLevel {
+                    reading_id: reading.reading_id,
+                    level: reading.level,
+                })
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn the_scan_of_a_projection_reads_its_columns_and_no_others() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = stored(tmp.path(), &readings(6)).await;
+        let frame = read(root)
+            .await
+            .projected_as::<ReadingLevel>()
+            .expect("a projection");
+
+        let scan = scan_of_frame(frame, Analyze::No).await;
+
+        assert!(scan.contains("projection=[reading_id, level]"), "{scan}");
     }
 
     #[tokio::test]

@@ -38,6 +38,20 @@ pub trait Row: Serialize + for<'de> Deserialize<'de> {
     fn example() -> Self;
 }
 
+pub trait Projection: Serialize + for<'de> Deserialize<'de> {
+    type Of: Row;
+
+    fn example() -> Self;
+}
+
+pub fn projected_columns<P: Projection>() -> Result<Vec<String>, RowError> {
+    let options = TracingOptions::default().enums_without_data_as_strings(true);
+    Ok(Vec::<FieldRef>::from_samples(&[P::example()], options)?
+        .iter()
+        .map(|field| field.name().clone())
+        .collect())
+}
+
 pub trait Dated: Row {
     fn partition_date(&self) -> NaiveDate;
 }
