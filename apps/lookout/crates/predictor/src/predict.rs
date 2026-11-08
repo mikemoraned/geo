@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use domain::{CrossingCompactId, Precision, Sample};
 
+use crate::clock::OutOfOrder;
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Event<P: Precision> {
     Sampled(Sample<P>),
@@ -38,17 +40,8 @@ pub fn nearest_first<P: Precision + TotalOrder>(
     nearest
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum ObserveError {
-    #[error("an event at {at} is behind the clock at {now}")]
-    OutOfOrder {
-        now: DateTime<Utc>,
-        at: DateTime<Utc>,
-    },
-}
-
 pub trait Predict<P: Precision> {
-    fn observe(&mut self, event: Event<P>) -> Result<(), ObserveError>;
+    fn observe(&mut self, event: Event<P>) -> Result<(), OutOfOrder>;
 
     fn predictions(&self) -> &Predictions<P>;
 }

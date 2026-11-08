@@ -686,9 +686,11 @@ run of it tests every new part, from the tracker to gold, before a real predicto
         - [x] Have the steps take each session's id, start, and end, rather than silver's
               `TrainSessionRowV3`. That drops `read_sessions`, a second `IN` filter, and a second
               formula for a session's hours.
-        - [ ] Give predictors, pass detectors, and the tracker one rule for the order of events,
+        - [x] Give predictors, pass detectors, and the tracker one rule for the order of events,
               such as a `Clock`. Four copies hold the rule, with two error types, and two of the
-              copies already differ.
+              copies already differ. The rule is CrowFlies' own: a fix is ordered against the last
+              fix, and a tick against the clock. The oracle and the offline detector now accept a
+              fix that lags a tick, which a replay never sends.
         - [ ] Make `crossings::compacted` generic over the float type, and call it from the
               evaluation. The evaluation holds a second copy of how a device compacts its crossings.
         - [ ] Share the pyo3 helpers of the three extensions, with one mapping of errors to Python

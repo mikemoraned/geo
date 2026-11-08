@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 
 use domain::{CrossingCompactId, Precision, StateKind};
 
+use crate::clock::{Clock, OutOfOrder};
 use crate::detect::Passes;
 use crate::predict::{Confidence, Predictions};
 use crate::state::{AlertedPass, CandidatePass, CrossingState};
@@ -16,18 +17,9 @@ pub struct Transition {
     pub to: StateKind,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum TrackError {
-    #[error("a round at {at} is behind the last round at {now}")]
-    OutOfOrder {
-        now: DateTime<Utc>,
-        at: DateTime<Utc>,
-    },
-}
-
 #[derive(Debug, Default)]
 pub struct Tracker {
-    now: Option<DateTime<Utc>>,
+    clock: Clock,
     states: BTreeMap<CrossingCompactId, CrossingState>,
 }
 
@@ -45,13 +37,8 @@ impl Tracker {
         at: DateTime<Utc>,
         predictions: &Predictions<P>,
         passed: &Passes,
-    ) -> Result<Vec<Transition>, TrackError> {
-        if let Some(now) = self.now
-            && at < now
-        {
-            return Err(TrackError::OutOfOrder { now, at });
-        }
-        self.now = Some(at);
+    ) -> Result<Vec<Transition>, OutOfOrder> {
+        self.clock.elapsed(at)?;
 
         let crossings: BTreeSet<CrossingCompactId> = self
             .states
@@ -495,7 +482,7 @@ mod tests {
 
         assert_eq!(
             refused,
-            Err(TrackError::OutOfOrder {
+            Err(OutOfOrder {
                 now: later(10),
                 at: instant(),
             })

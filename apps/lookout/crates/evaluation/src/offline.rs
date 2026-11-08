@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use domain::{CrossingCompactId, CrossingId, Precision, SessionId};
 use medallion_model::TrainSessionCrossingRowV1;
-use predictor::{DetectPasses, Event, ObserveError, Passes};
+use predictor::{Clock, DetectPasses, Event, OutOfOrder, Passes};
 
 pub trait RecordedPass {
     fn session_id(&self) -> &SessionId;
@@ -28,7 +28,7 @@ impl RecordedPass for TrainSessionCrossingRowV1 {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OfflineDetector {
     passes: SessionPasses,
-    now: Option<DateTime<Utc>>,
+    clock: Clock,
     passed: Passes,
 }
 
@@ -51,7 +51,7 @@ impl OfflineDetector {
     fn new(passes: SessionPasses) -> Self {
         Self {
             passes,
-            now: None,
+            clock: Clock::default(),
             passed: Passes::new(),
         }
     }
@@ -88,25 +88,19 @@ pub fn passes_by_session<R: RecordedPass>(
 }
 
 impl<P: Precision> DetectPasses<P> for OfflineDetector {
-    fn observe(&mut self, event: Event<P>) -> Result<(), ObserveError> {
-        let at = match event {
-            Event::Sampled(sample) => sample.t,
-            Event::Elapsed(at) => at,
-        };
-        if let Some(now) = self.now
-            && at < now
-        {
-            return Err(ObserveError::OutOfOrder { now, at });
-        }
+    fn observe(&mut self, event: Event<P>) -> Result<(), OutOfOrder> {
+        let before = self.clock.now();
+        self.clock.observe(&event)?;
+        let now = self.clock.now();
         self.passed = self
             .passes
             .iter()
             .filter(|&&(crossed_at, _)| {
-                crossed_at <= at && self.now.is_none_or(|now| crossed_at > now)
+                now.is_some_and(|now| crossed_at <= now)
+                    && before.is_none_or(|before| crossed_at > before)
             })
             .map(|&(_, compact_id)| compact_id)
             .collect();
-        self.now = Some(at);
         Ok(())
     }
 
@@ -255,7 +249,7 @@ mod tests {
 
         assert_eq!(
             refused,
-            Err(ObserveError::OutOfOrder {
+            Err(OutOfOrder {
                 now: instant(10),
                 at: instant(9)
             })
