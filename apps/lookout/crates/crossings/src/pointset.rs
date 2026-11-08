@@ -1,4 +1,4 @@
-use domain::{CoordinateError, CrossingCompact, CrossingCompactId};
+use domain::{CoordinateError, CrossingCompact, CrossingCompactId, Precision};
 
 use crate::silver::Crossing;
 
@@ -27,7 +27,7 @@ pub enum FormatError {
 #[error("{0} points is more than a u32 count can name")]
 pub struct TooManyPoints(usize);
 
-pub fn compacted(crossing: &Crossing) -> Result<CrossingCompact<f32>, CoordinateError> {
+pub fn compacted<P: Precision>(crossing: &Crossing) -> Result<CrossingCompact<P>, CoordinateError> {
     CrossingCompact::at(
         crossing.compact_id,
         crossing.crossing.latitude(),
@@ -244,9 +244,8 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn a_point_carries_its_crossings_position() {
-        let crossing = Crossing {
+    fn ruhland() -> Crossing {
+        Crossing {
             crossing: domain::Crossing::at(
                 "water:rail@0.5".parse().expect("id"),
                 RUHLAND.1,
@@ -255,12 +254,30 @@ mod tests {
             .expect("on the globe"),
             compact_id: CrossingCompactId::new(0x292e_417a),
             extract_id: "20260727T193628Z".to_string(),
-        };
+        }
+    }
 
-        let packed = compacted(&crossing).expect("on the globe");
+    #[test]
+    fn a_point_carries_its_crossings_position() {
+        let crossing = ruhland();
+
+        let packed = compacted::<f32>(&crossing).expect("on the globe");
 
         assert_eq!(packed.id, crossing.compact_id);
         assert_eq!(packed.latitude(), RUHLAND.1 as f32);
         assert_eq!(packed.longitude(), RUHLAND.0 as f32);
+    }
+
+    #[test]
+    fn a_point_in_f64_carries_its_crossings_position_unrounded() {
+        let crossing = ruhland();
+
+        let compact = compacted::<f64>(&crossing).expect("on the globe");
+
+        assert_eq!(compact.id, crossing.compact_id);
+        assert_eq!(
+            (compact.latitude(), compact.longitude()),
+            (RUHLAND.1, RUHLAND.0)
+        );
     }
 }
