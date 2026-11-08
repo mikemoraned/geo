@@ -6,7 +6,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use domain::StateKind;
 use domain::{CrossingCompactId, SessionId, Span};
 use itertools::Itertools;
-use medallion_model::TrainSessionRowV3;
+use medallion_model::EvaluationSessionRowV1;
 use predictor::Transition;
 
 use crate::offline::PassesBySession;
@@ -129,7 +129,7 @@ pub enum ScoreError {
 }
 
 pub fn score(
-    sessions: &[TrainSessionRowV3],
+    sessions: &[EvaluationSessionRowV1],
     replayed: &BTreeMap<SessionId, Vec<Transition>>,
     passes: &PassesBySession,
     scoring: &Scoring,
@@ -516,7 +516,7 @@ mod tests {
     }
 
     fn resolved(
-        sessions: &[TrainSessionRowV3],
+        sessions: &[EvaluationSessionRowV1],
         passes: impl IntoIterator<Item = TrainSessionCrossingRowV1>,
     ) -> PassesBySession {
         passes_by_session(
@@ -551,13 +551,13 @@ mod tests {
         assert_eq!(misses(&scored[&session("b")]), [(1, 1_000)]);
     }
 
-    fn started(sessions: &[(&str, i64)]) -> Vec<TrainSessionRowV3> {
+    fn started(sessions: &[(&str, i64)]) -> Vec<EvaluationSessionRowV1> {
         sessions
             .iter()
-            .map(|&(name, seconds)| TrainSessionRowV3 {
+            .map(|&(name, seconds)| EvaluationSessionRowV1 {
                 session_id: session(name),
                 started_at: instant(seconds),
-                ..TrainSessionRowV3::example()
+                ..EvaluationSessionRowV1::example()
             })
             .collect()
     }

@@ -4,14 +4,15 @@ use crossings::silver::{Crossing, ReadError, read_of_country};
 use domain::{CoordinateError, Precision, Radius, SessionId, Span};
 use medallion::{Country, QueryError, Root};
 use medallion_model::{
-    EvaluationOutcomeRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1, FloatType,
-    TrainSessionRowV3,
+    EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationSummaryRowV1,
+    EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
 };
 use predictor::{CrowFlies, Transition};
 
 use crate::offline::{OfflineError, PassesBySession, passes_by_session};
 use crate::oracle::{Oracle, OracleError};
 use crate::pick::{Pick, PickError, pick};
+use crate::record::session_rows;
 use crate::replay::ReplayError;
 use crate::rows::{
     RowsError, outcome_rows, replayed_from, scored_from, summary_row, transition_rows,
@@ -76,7 +77,7 @@ pub struct CrossingsAndPasses {
 pub async fn read_crossings_and_passes(
     root: &Root,
     country: Country,
-    sessions: &[TrainSessionRowV3],
+    sessions: &[EvaluationSessionRowV1],
 ) -> Result<CrossingsAndPasses, StepError> {
     let crossings = read_of_country(root, country).await?;
     let passes = passes_by_session(
@@ -90,7 +91,7 @@ pub async fn read_crossings_and_passes(
 pub async fn replay(
     root: &Root,
     country: Country,
-    sessions: &[TrainSessionRowV3],
+    sessions: &[EvaluationSessionRowV1],
     predictor: Predictor,
     float_type: FloatType,
 ) -> Result<Vec<EvaluationTransitionRowV1>, StepError> {
@@ -109,7 +110,7 @@ pub async fn replay(
 pub async fn replay_against(
     root: &Root,
     country: Country,
-    sessions: &[TrainSessionRowV3],
+    sessions: &[EvaluationSessionRowV1],
     crossings_and_passes: &CrossingsAndPasses,
     predictor: Predictor,
     float_type: FloatType,
@@ -128,7 +129,7 @@ pub async fn replay_against(
 async fn replayed<F: Precision + Send + Sync>(
     root: &Root,
     country: Country,
-    sessions: &[TrainSessionRowV3],
+    sessions: &[EvaluationSessionRowV1],
     crossings_and_passes: &CrossingsAndPasses,
     predictor: Predictor,
 ) -> Result<BTreeMap<SessionId, Vec<Transition>>, StepError> {
@@ -165,7 +166,7 @@ async fn replayed<F: Precision + Send + Sync>(
 pub async fn score(
     root: &Root,
     country: Country,
-    sessions: &[TrainSessionRowV3],
+    sessions: &[EvaluationSessionRowV1],
     transitions: &[EvaluationTransitionRowV1],
     scoring: &Scoring,
 ) -> Result<Vec<EvaluationOutcomeRowV1>, StepError> {
@@ -174,7 +175,7 @@ pub async fn score(
 }
 
 pub fn score_against(
-    sessions: &[TrainSessionRowV3],
+    sessions: &[EvaluationSessionRowV1],
     crossings_and_passes: &CrossingsAndPasses,
     transitions: &[EvaluationTransitionRowV1],
     scoring: &Scoring,
@@ -185,7 +186,7 @@ pub fn score_against(
 }
 
 pub fn summarise(
-    sessions: &[TrainSessionRowV3],
+    sessions: &[EvaluationSessionRowV1],
     outcomes: &[EvaluationOutcomeRowV1],
     bootstrap: &Bootstrap,
 ) -> Result<EvaluationSummaryRowV1, StepError> {
@@ -198,18 +199,19 @@ pub fn summarise(
 pub async fn run(root: &Root, run: &Run) -> Result<Ran, StepError> {
     let country = run.pick.country;
     let picked = pick(root, &run.pick).await?;
-    let crossings_and_passes = read_crossings_and_passes(root, country, &picked).await?;
+    let sessions = session_rows(&picked);
+    let crossings_and_passes = read_crossings_and_passes(root, country, &sessions).await?;
     let transitions = replay_against(
         root,
         country,
-        &picked,
+        &sessions,
         &crossings_and_passes,
         run.predictor,
         run.float_type,
     )
     .await?;
-    let outcomes = score_against(&picked, &crossings_and_passes, &transitions, &run.scoring)?;
-    let summary = summarise(&picked, &outcomes, &run.bootstrap)?;
+    let outcomes = score_against(&sessions, &crossings_and_passes, &transitions, &run.scoring)?;
+    let summary = summarise(&sessions, &outcomes, &run.bootstrap)?;
     Ok(Ran {
         picked,
         transitions,
@@ -282,11 +284,12 @@ mod tests {
         let root = store(tmp.path(), 3).await;
         let settings = run_of(oracle());
         let ran = run(&root, &settings).await.expect("a run");
+        let sessions = session_rows(&ran.picked);
 
         let transitions = replay(
             &root,
             Country::Germany,
-            &ran.picked,
+            &sessions,
             settings.predictor,
             settings.float_type,
         )
@@ -295,13 +298,13 @@ mod tests {
         let outcomes = score(
             &root,
             Country::Germany,
-            &ran.picked,
+            &sessions,
             &transitions,
             &settings.scoring,
         )
         .await
         .expect("scores");
-        let summary = summarise(&ran.picked, &outcomes, &settings.bootstrap).expect("a summary");
+        let summary = summarise(&sessions, &outcomes, &settings.bootstrap).expect("a summary");
 
         assert_eq!(
             (transitions, outcomes, summary),

@@ -683,7 +683,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               fingerprints concurrently. The four datasets are listed in four places across two
               crates. The run row became `evaluation_run_v2`, whose fingerprints are one map
               keyed by dataset, so the datasets are listed once, in `evaluation`.
-        - [ ] Have the steps take each session's id, start, and end, rather than silver's
+        - [x] Have the steps take each session's id, start, and end, rather than silver's
               `TrainSessionRowV3`. That drops `read_sessions`, a second `IN` filter, and a second
               formula for a session's hours.
         - [ ] Give predictors, pass detectors, and the tracker one rule for the order of events,

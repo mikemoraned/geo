@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use datafusion::prelude::col;
 use domain::{CoordinateError, Precision, Sample, SessionId};
 use medallion::{Country, Query, QueryError, Root};
-use medallion_model::{TrainSessionRowV3, TrainSessionSamplePositionV3, TrainSessionSampleRowV3};
+use medallion_model::{
+    EvaluationSessionRowV1, TrainSessionSamplePositionV3, TrainSessionSampleRowV3,
+};
 use predictor::{DetectPasses, Event, ObserveError, Predict, TrackError, Tracker, Transition};
 use rayon::prelude::*;
 
@@ -54,7 +56,7 @@ where
 pub async fn replay<F, Pr>(
     root: &Root,
     country: Country,
-    sessions: &[TrainSessionRowV3],
+    sessions: &[EvaluationSessionRowV1],
     passes: &PassesBySession,
     predictor: impl Fn(&SessionId) -> Pr + Sync,
 ) -> Result<BTreeMap<SessionId, Vec<Transition>>, ReplayError>
@@ -307,18 +309,18 @@ mod tests {
         }
     }
 
-    fn picked(names: &[&str]) -> Vec<TrainSessionRowV3> {
+    fn picked(names: &[&str]) -> Vec<EvaluationSessionRowV1> {
         names
             .iter()
-            .map(|&name| TrainSessionRowV3 {
+            .map(|&name| EvaluationSessionRowV1 {
                 session_id: named(name),
-                ..TrainSessionRowV3::example()
+                ..EvaluationSessionRowV1::example()
             })
             .collect()
     }
 
     fn resolved(
-        sessions: &[TrainSessionRowV3],
+        sessions: &[EvaluationSessionRowV1],
         passes: &[TrainSessionCrossingRowV1],
     ) -> PassesBySession {
         passes_by_session(

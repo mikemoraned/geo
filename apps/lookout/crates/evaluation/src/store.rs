@@ -4,11 +4,11 @@ use crossings::silver::Crossing;
 use datafusion::prelude::{Expr, col, lit};
 use domain::{CoordinateError, CrossingCompact, CrossingCompactId, CrossingId, Precision};
 use medallion::{Query, QueryError, Root};
-use medallion_model::{TrainSessionCrossingRowV1, TrainSessionRowV3};
+use medallion_model::{EvaluationSessionRowV1, TrainSessionCrossingRowV1};
 
 pub async fn read_passes(
     root: &Root,
-    sessions: &[TrainSessionRowV3],
+    sessions: &[EvaluationSessionRowV1],
 ) -> Result<Vec<TrainSessionCrossingRowV1>, QueryError> {
     Query::new(root.clone())
         .read::<TrainSessionCrossingRowV1>()
@@ -18,7 +18,7 @@ pub async fn read_passes(
         .await
 }
 
-pub(crate) fn picked(sessions: &[TrainSessionRowV3]) -> Expr {
+pub(crate) fn picked(sessions: &[EvaluationSessionRowV1]) -> Expr {
     col("session_id").in_list(
         sessions
             .iter()
@@ -69,12 +69,12 @@ mod tests {
         SessionId::new(format!("session-{name}")).expect("a session id")
     }
 
-    fn picked_sessions(names: &[&str]) -> Vec<TrainSessionRowV3> {
+    fn picked_sessions(names: &[&str]) -> Vec<EvaluationSessionRowV1> {
         names
             .iter()
-            .map(|&name| TrainSessionRowV3 {
+            .map(|&name| EvaluationSessionRowV1 {
                 session_id: session(name),
-                ..TrainSessionRowV3::example()
+                ..EvaluationSessionRowV1::example()
             })
             .collect()
     }
