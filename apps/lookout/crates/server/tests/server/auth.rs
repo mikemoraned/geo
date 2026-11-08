@@ -1,17 +1,12 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use axum::body::{Body, Bytes};
 use axum::http::StatusCode;
 use passkey::types::webauthn::{CredentialCreationOptions, ResidentKeyRequirement};
-use server::auth::code::ShortCode;
-use server::auth::memory::MemoryAuthStore;
 use server::auth::redis::RedisAuthStore;
 use server::auth::registration::Registered;
 use server::auth::sessions::SharedSessionStore;
-use server::auth::store::{
-    AllowedPasskey, AuthStore, Ceremony, CeremonyId, Insertion, PendingPasskey, StoreError, Update,
-};
+use server::auth::store::{AuthStore, CeremonyId, PendingPasskey};
 use server::auth::{Allowing, AuthError, Finish, RelyingParty, Started};
 use std::str::FromStr;
 use test_redis::TestRedis;
@@ -20,64 +15,12 @@ use tower_sessions::cookie::SameSite;
 use tower_sessions::cookie::time::Duration;
 use tower_sessions::session::Id;
 use tower_sessions::{MemoryStore, SessionStore};
-use webauthn_rs::prelude::{CredentialID, RegisterPublicKeyCredential, Uuid, WebauthnBuilder};
+use webauthn_rs::prelude::{RegisterPublicKeyCredential, Uuid, WebauthnBuilder};
 
 use crate::support::{
-    Browser, LOCALHOST, ORIGIN, Server, app, finish_registration, finish_signin, get, post,
-    register, sign_in, start_registration, start_signin, url,
+    Browser, LOCALHOST, Lookup, ORIGIN, ScriptedAuthStore, Server, app, finish_registration,
+    finish_signin, get, post, register, sign_in, start_registration, start_signin, url,
 };
-
-#[derive(Default)]
-struct RevokedOnceFound {
-    inner: MemoryAuthStore,
-}
-
-#[async_trait]
-impl AuthStore for RevokedOnceFound {
-    async fn put_ceremony(&self, id: CeremonyId, ceremony: Ceremony) -> Result<(), StoreError> {
-        self.inner.put_ceremony(id, ceremony).await
-    }
-
-    async fn take_ceremony(&self, id: CeremonyId) -> Result<Option<Ceremony>, StoreError> {
-        self.inner.take_ceremony(id).await
-    }
-
-    async fn insert_pending(
-        &self,
-        code: &ShortCode,
-        passkey: PendingPasskey,
-    ) -> Result<Insertion, StoreError> {
-        self.inner.insert_pending(code, passkey).await
-    }
-
-    async fn take_pending(&self, code: &ShortCode) -> Result<Option<PendingPasskey>, StoreError> {
-        self.inner.take_pending(code).await
-    }
-
-    async fn find_allowed(&self, id: &CredentialID) -> Result<Option<AllowedPasskey>, StoreError> {
-        let found = self.inner.find_allowed(id).await?;
-        if let Some(allowed) = &found {
-            self.inner.remove_allowed(&allowed.code).await?;
-        }
-        Ok(found)
-    }
-
-    async fn put_allowed(&self, passkey: AllowedPasskey) -> Result<(), StoreError> {
-        self.inner.put_allowed(passkey).await
-    }
-
-    async fn update_allowed(&self, passkey: AllowedPasskey) -> Result<Update, StoreError> {
-        self.inner.update_allowed(passkey).await
-    }
-
-    async fn list_allowed(&self) -> Result<Vec<AllowedPasskey>, StoreError> {
-        self.inner.list_allowed().await
-    }
-
-    async fn remove_allowed(&self, code: &ShortCode) -> Result<Option<AllowedPasskey>, StoreError> {
-        self.inner.remove_allowed(code).await
-    }
-}
 
 #[tokio::test]
 async fn a_registration_waits_under_its_code_for_the_admin() {
@@ -358,7 +301,7 @@ async fn a_revoked_passkey_cannot_sign_in() {
 
 #[tokio::test]
 async fn a_passkey_revoked_during_its_signin_stays_revoked() {
-    let store = Arc::new(RevokedOnceFound::default());
+    let store = Arc::new(ScriptedAuthStore::new(Lookup::RevokeOnceFound));
     let sessions = SharedSessionStore::new(MemoryStore::default());
     let relying_party = RelyingParty::new(&url(ORIGIN), store.clone(), sessions, Allowing::AtOnce)
         .expect("a relying party");

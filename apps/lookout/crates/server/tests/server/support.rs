@@ -1,4 +1,6 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
+use async_trait::async_trait;
 
 use axum::Router;
 use axum::body::{Body, Bytes};
@@ -13,7 +15,9 @@ use server::auth::code::ShortCode;
 use server::auth::memory::MemoryAuthStore;
 use server::auth::registration::Registered;
 use server::auth::sessions::SharedSessionStore;
-use server::auth::store::AuthStore;
+use server::auth::store::{
+    AllowedPasskey, AuthStore, Ceremony, CeremonyId, Insertion, PendingPasskey, StoreError, Update,
+};
 use server::auth::{Allowing, Finish, RelyingParty, Started};
 use server::{AppState, build_app};
 use test_passkeys::approving_authenticator;
@@ -238,4 +242,85 @@ pub async fn signed_in_with_code(server: &Server) -> (ShortCode, Cookie<'static>
         .session_cookie()
         .expect("a session");
     (code, cookie)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lookup {
+    Find,
+    Fail,
+    RevokeOnceFound,
+}
+
+pub struct ScriptedAuthStore {
+    pub inner: MemoryAuthStore,
+    lookup: Mutex<Lookup>,
+}
+
+impl ScriptedAuthStore {
+    pub fn new(lookup: Lookup) -> Self {
+        Self {
+            inner: MemoryAuthStore::default(),
+            lookup: Mutex::new(lookup),
+        }
+    }
+
+    pub fn script(&self, lookup: Lookup) {
+        *self.lookup.lock().expect("unpoisoned") = lookup;
+    }
+}
+
+#[async_trait]
+impl AuthStore for ScriptedAuthStore {
+    async fn put_ceremony(&self, id: CeremonyId, ceremony: Ceremony) -> Result<(), StoreError> {
+        self.inner.put_ceremony(id, ceremony).await
+    }
+
+    async fn take_ceremony(&self, id: CeremonyId) -> Result<Option<Ceremony>, StoreError> {
+        self.inner.take_ceremony(id).await
+    }
+
+    async fn insert_pending(
+        &self,
+        code: &ShortCode,
+        passkey: PendingPasskey,
+    ) -> Result<Insertion, StoreError> {
+        self.inner.insert_pending(code, passkey).await
+    }
+
+    async fn take_pending(&self, code: &ShortCode) -> Result<Option<PendingPasskey>, StoreError> {
+        self.inner.take_pending(code).await
+    }
+
+    async fn find_allowed(&self, id: &CredentialID) -> Result<Option<AllowedPasskey>, StoreError> {
+        let lookup = *self.lookup.lock().expect("unpoisoned");
+        match lookup {
+            Lookup::Find => self.inner.find_allowed(id).await,
+            Lookup::Fail => Err(serde_json::from_str::<()>("")
+                .expect_err("unparseable")
+                .into()),
+            Lookup::RevokeOnceFound => {
+                let found = self.inner.find_allowed(id).await?;
+                if let Some(allowed) = &found {
+                    self.inner.remove_allowed(&allowed.code).await?;
+                }
+                Ok(found)
+            }
+        }
+    }
+
+    async fn put_allowed(&self, passkey: AllowedPasskey) -> Result<(), StoreError> {
+        self.inner.put_allowed(passkey).await
+    }
+
+    async fn update_allowed(&self, passkey: AllowedPasskey) -> Result<Update, StoreError> {
+        self.inner.update_allowed(passkey).await
+    }
+
+    async fn list_allowed(&self) -> Result<Vec<AllowedPasskey>, StoreError> {
+        self.inner.list_allowed().await
+    }
+
+    async fn remove_allowed(&self, code: &ShortCode) -> Result<Option<AllowedPasskey>, StoreError> {
+        self.inner.remove_allowed(code).await
+    }
 }

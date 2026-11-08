@@ -1,5 +1,4 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -8,12 +7,8 @@ use axum::body::Body;
 use axum::http::{StatusCode, header};
 use domain::Gps;
 use futures_util::{SinkExt, StreamExt};
-use server::auth::code::ShortCode;
-use server::auth::memory::MemoryAuthStore;
 use server::auth::sessions::SharedSessionStore;
-use server::auth::store::{
-    AllowedPasskey, AuthStore, Ceremony, CeremonyId, Insertion, PendingPasskey, StoreError, Update,
-};
+use server::auth::store::AuthStore;
 use server::auth::{Allowing, RelyingParty};
 use server::queue::{PushError, SampleSink};
 use server::{AppState, build_app};
@@ -30,7 +25,7 @@ use tower_sessions::cookie::Cookie;
 use uuid::Uuid;
 use webauthn_rs::prelude::{CredentialID, Url};
 
-use crate::support::{Browser, LOCALHOST, post, register, sign_in};
+use crate::support::{Browser, LOCALHOST, Lookup, ScriptedAuthStore, post, register, sign_in};
 
 struct RecordingSink {
     samples: Arc<Mutex<Vec<RawSample>>>,
@@ -45,71 +40,17 @@ impl SampleSink for RecordingSink {
     }
 }
 
-#[derive(Default)]
-struct Passkeys {
-    store: MemoryAuthStore,
-    lookups_fail: AtomicBool,
-}
-
-#[async_trait::async_trait]
-impl AuthStore for Passkeys {
-    async fn put_ceremony(&self, id: CeremonyId, ceremony: Ceremony) -> Result<(), StoreError> {
-        self.store.put_ceremony(id, ceremony).await
-    }
-
-    async fn take_ceremony(&self, id: CeremonyId) -> Result<Option<Ceremony>, StoreError> {
-        self.store.take_ceremony(id).await
-    }
-
-    async fn insert_pending(
-        &self,
-        code: &ShortCode,
-        passkey: PendingPasskey,
-    ) -> Result<Insertion, StoreError> {
-        self.store.insert_pending(code, passkey).await
-    }
-
-    async fn take_pending(&self, code: &ShortCode) -> Result<Option<PendingPasskey>, StoreError> {
-        self.store.take_pending(code).await
-    }
-
-    async fn find_allowed(&self, id: &CredentialID) -> Result<Option<AllowedPasskey>, StoreError> {
-        match self.lookups_fail.load(Ordering::SeqCst) {
-            true => Err(serde_json::from_str::<()>("")
-                .expect_err("unparseable")
-                .into()),
-            false => self.store.find_allowed(id).await,
-        }
-    }
-
-    async fn put_allowed(&self, passkey: AllowedPasskey) -> Result<(), StoreError> {
-        self.store.put_allowed(passkey).await
-    }
-
-    async fn update_allowed(&self, passkey: AllowedPasskey) -> Result<Update, StoreError> {
-        self.store.update_allowed(passkey).await
-    }
-
-    async fn list_allowed(&self) -> Result<Vec<AllowedPasskey>, StoreError> {
-        self.store.list_allowed().await
-    }
-
-    async fn remove_allowed(&self, code: &ShortCode) -> Result<Option<AllowedPasskey>, StoreError> {
-        self.store.remove_allowed(code).await
-    }
-}
-
 struct Running {
     addr: SocketAddr,
     recorded: Arc<Mutex<Vec<RawSample>>>,
     app: Router,
-    passkeys: Arc<Passkeys>,
+    passkeys: Arc<ScriptedAuthStore>,
 }
 
 async fn spawn_app() -> Running {
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let origin = Url::parse(LOCALHOST).expect("an origin");
-    let passkeys = Arc::new(Passkeys::default());
+    let passkeys = Arc::new(ScriptedAuthStore::new(Lookup::Find));
     let relying_party = RelyingParty::new(
         &origin,
         passkeys.clone(),
@@ -390,7 +331,7 @@ async fn a_failed_recheck_closes_the_socket() {
     let (_, cookie) = signed_in(&running.app).await;
     let mut ws = connect(running.addr, Some(&cookie)).await.expect("connect");
 
-    running.passkeys.lookups_fail.store(true, Ordering::SeqCst);
+    running.passkeys.script(Lookup::Fail);
     advance(Duration::from_secs(60)).await;
     resume();
 

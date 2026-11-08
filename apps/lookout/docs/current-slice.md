@@ -555,7 +555,7 @@ code.
 - [ ] Check that no log line carries a session ID, a credential ID, or the redis URL. Include the
       redis client's errors, which the server and the CLI print.
 - [ ] Run `just test-no-docker` and the server's Docker tests.
-- [ ] Move each test helper and each piece of server code that sits in the wrong place.
+- [x] Move each test helper and each piece of server code that sits in the wrong place.
   - [ ] `tests/compression.rs` and `tests/version.rs` each define their own `relying_party()`
         helper, which builds a relying party and has nothing to do with compression or the
         version. Decide where a helper shared by the server's tests belongs.
@@ -576,7 +576,7 @@ code.
   - [x] Add a `test-passkeys` crate, a dev-dependency as `test-redis` is, holding the authenticator
         that approves every check. `src/auth/test_passkeys.rs` and `tests/server/auth.rs` each
         hold a copy today, since integration tests cannot see `#[cfg(test)]` code.
-  - [ ] Replace `RevokedOnceFound` and the websocket tests' `Passkeys` with one `AuthStore` in
+  - [x] Replace `RevokedOnceFound` and the websocket tests' `Passkeys` with one `AuthStore` in
         `support.rs`. Each wraps `MemoryAuthStore`, passes eight of its nine methods through, and
         changes one.
 
