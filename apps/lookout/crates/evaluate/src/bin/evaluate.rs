@@ -2,9 +2,9 @@ use std::error::Error;
 use std::num::NonZeroUsize;
 
 use clap::{Args, Parser, Subcommand};
+use code_version::CodeVersion;
 use domain::{Percentage, Radius, Span};
 use evaluation::gold;
-use evaluation::record::CodeVersion;
 use evaluation::steps::{Predictor, Run};
 use evaluation::{Bootstrap, Pick, Score, Scoring, Seed};
 use medallion::{Country, MedallionArgs, RunId};

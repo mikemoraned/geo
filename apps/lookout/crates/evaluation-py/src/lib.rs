@@ -1,10 +1,11 @@
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
+use code_version::CodeVersion;
 use crossings::silver::ReadError;
 use domain::{Percentage, Radius, Span};
 use evaluation::gold::{self, GoldError};
-use evaluation::record::{CodeVersion, session_rows};
+use evaluation::record::session_rows;
 use evaluation::runs::RunsError;
 use evaluation::steps::{self, Predictor, Run, StepError};
 use evaluation::{Pick, PickError, Score, Seed};

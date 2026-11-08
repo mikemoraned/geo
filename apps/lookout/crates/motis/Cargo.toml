@@ -31,6 +31,7 @@ url = "2"
 wkb = { workspace = true }
 
 [build-dependencies]
+code_version = { workspace = true }
 openapiv3 = "2"
 prettyplease = "0.2"
 progenitor = "0.11"

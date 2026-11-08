@@ -703,9 +703,11 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               and three crates build a crossings table by hand. The write by country is its own
               function, `write_geography_rows_by_country`, since the dated one groups rows by date.
       - **Build identity**
-        - [ ] Take `motis`'s build identity from `code_version`, move `CodeVersion` into that crate,
+        - [x] Take `motis`'s build identity from `code_version`, move `CodeVersion` into that crate,
               and drop `BUILD_GIT_HASH` from the recipes. The two schemes test for uncommitted
-              changes differently, and a plain `cargo run` of `motis` records "unknown".
+              changes differently, and a plain `cargo run` of `motis` records "unknown". The
+              server keeps `BUILD_GIT_HASH`, since it builds in Docker, where no repo is there to
+              read a version from.
         - [ ] Watch only tracked files in `code_version`'s build script. It watches all of
               `crates/`, so a write under a `.venv` or `m5plus/target` relinks `evaluate`.
       - **Derivation pipeline**

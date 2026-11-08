@@ -15,6 +15,7 @@ test = false
 doctest = false
 
 [dependencies]
+code_version = { workspace = true }
 crossings = { workspace = true }
 domain = { workspace = true }
 evaluation = { workspace = true }
