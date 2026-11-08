@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::path::Path;
 use std::sync::Arc;
 
 use datafusion::execution::SendableRecordBatchStream;
@@ -13,6 +12,8 @@ use arrow::array::{Array, ArrayRef, BinaryArray, RecordBatch};
 use arrow::datatypes::{DataType, Field, FieldRef, Schema, SchemaRef};
 use geoarrow_schema::{Crs, Metadata, WkbType};
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
+use object_store::ObjectStore;
+use object_store::path::Path as ObjectPath;
 use parquet::arrow::AsyncArrowWriter;
 use parquet::arrow::async_writer::ParquetObjectWriter;
 use serde::Serialize;
@@ -233,10 +234,14 @@ pub(crate) struct GeoParquetFile {
 }
 
 impl GeoParquetFile {
-    pub(crate) fn create(path: &Path, schema: &Schema) -> Result<Self, GeoError> {
+    pub(crate) fn create(
+        store: Arc<dyn ObjectStore>,
+        location: ObjectPath,
+        schema: &Schema,
+    ) -> Result<Self, GeoError> {
         let encoder =
             GeoParquetRecordBatchEncoder::try_new(schema, &GeoParquetWriterOptions::default())?;
-        let writer = crate::write::writer_at(path, encoder.target_schema())?;
+        let writer = crate::write::writer_at(store, location, encoder.target_schema())?;
         Ok(Self { encoder, writer })
     }
 
@@ -258,14 +263,15 @@ impl GeoParquetFile {
 }
 
 pub(crate) async fn write_geo_batches(
-    path: &Path,
+    store: Arc<dyn ObjectStore>,
+    location: ObjectPath,
     batches: &[RecordBatch],
 ) -> Result<(), GeoError> {
     let Some(first) = batches.first() else {
         return Err(WriteError::Empty.into());
     };
 
-    let mut file = GeoParquetFile::create(path, first.schema().as_ref())?;
+    let mut file = GeoParquetFile::create(store, location, first.schema().as_ref())?;
     for batch in batches {
         file.write(batch).await?;
     }
@@ -273,10 +279,11 @@ pub(crate) async fn write_geo_batches(
 }
 
 pub(crate) async fn write_geo_stream(
-    path: &Path,
+    store: Arc<dyn ObjectStore>,
+    location: ObjectPath,
     mut batches: SendableRecordBatchStream,
 ) -> Result<usize, GeoError> {
-    let mut file = GeoParquetFile::create(path, batches.schema().as_ref())?;
+    let mut file = GeoParquetFile::create(store, location, batches.schema().as_ref())?;
 
     let mut rows = 0;
     while let Some(batch) = batches.next().await {

@@ -1,7 +1,7 @@
-use std::path::Path;
+use std::sync::Arc;
 
 use arrow::array::RecordBatch;
-use object_store::local::LocalFileSystem;
+use object_store::ObjectStore;
 use object_store::path::Path as ObjectPath;
 use parquet::arrow::AsyncArrowWriter;
 use parquet::arrow::async_writer::ParquetObjectWriter;
@@ -12,11 +12,11 @@ const ZSTD_LEVEL: i32 = 3;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WriteError {
-    #[error("{path} is not an absolute path into the store")]
-    Path {
+    #[error("creating the store's root at {path}: {source}")]
+    Root {
         path: String,
         #[source]
-        source: object_store::path::Error,
+        source: std::io::Error,
     },
     #[error("object store error: {0}")]
     Store(#[from] object_store::Error),
@@ -28,12 +28,16 @@ pub enum WriteError {
     Exists { path: String },
 }
 
-pub(crate) async fn write_batches(path: &Path, batches: &[RecordBatch]) -> Result<(), WriteError> {
+pub(crate) async fn write_batches(
+    store: Arc<dyn ObjectStore>,
+    location: ObjectPath,
+    batches: &[RecordBatch],
+) -> Result<(), WriteError> {
     let Some(first) = batches.first() else {
         return Err(WriteError::Empty);
     };
 
-    let mut writer = writer_at(path, first.schema())?;
+    let mut writer = writer_at(store, location, first.schema())?;
     for batch in batches {
         writer.write(batch).await?;
     }
@@ -41,16 +45,25 @@ pub(crate) async fn write_batches(path: &Path, batches: &[RecordBatch]) -> Resul
     Ok(())
 }
 
+pub(crate) async fn refuse_existing(
+    store: &dyn ObjectStore,
+    location: &ObjectPath,
+) -> Result<(), WriteError> {
+    match store.head(location).await {
+        Ok(_) => Err(WriteError::Exists {
+            path: location.to_string(),
+        }),
+        Err(object_store::Error::NotFound { .. }) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
 pub(crate) fn writer_at(
-    path: &Path,
+    store: Arc<dyn ObjectStore>,
+    location: ObjectPath,
     schema: arrow::datatypes::SchemaRef,
 ) -> Result<AsyncArrowWriter<ParquetObjectWriter>, WriteError> {
-    let location = ObjectPath::from_absolute_path(path).map_err(|source| WriteError::Path {
-        path: path.display().to_string(),
-        source,
-    })?;
-    let object_writer =
-        ParquetObjectWriter::new(std::sync::Arc::new(LocalFileSystem::new()), location);
+    let object_writer = ParquetObjectWriter::new(store, location);
     let properties = WriterProperties::builder()
         .set_compression(Compression::ZSTD(ZstdLevel::try_new(ZSTD_LEVEL)?))
         .build();
@@ -93,6 +106,17 @@ mod tests {
         .unwrap()
     }
 
+    fn destination(
+        root: &Root,
+        name: &str,
+    ) -> (Arc<dyn ObjectStore>, ObjectPath, std::path::PathBuf) {
+        (
+            root.object_store().unwrap(),
+            ObjectPath::from(name),
+            root.path().join(name),
+        )
+    }
+
     fn rows_in(path: &std::path::Path) -> usize {
         let file = std::fs::File::open(path).unwrap();
         ParquetRecordBatchReaderBuilder::try_new(file)
@@ -106,13 +130,10 @@ mod tests {
     #[tokio::test]
     async fn writing_creates_the_partition_directories_and_a_readable_parquet_file() {
         let tmp = tempfile::tempdir().unwrap();
-        let path = Root::new(tmp.path())
-            .dataset(SENSOR_READING)
-            .partition("sensor", "gps")
-            .unwrap()
-            .batch_file(Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap());
+        let (store, location, path) =
+            destination(&Root::new(tmp.path()), "bronze/a=1/b=2/part-0.parquet");
 
-        write_batches(&path, &[batch(vec![1, 2], vec!["a", "b"])])
+        write_batches(store, location, &[batch(vec![1, 2], vec!["a", "b"])])
             .await
             .unwrap();
 
@@ -123,11 +144,9 @@ mod tests {
     #[tokio::test]
     async fn every_column_of_every_row_group_is_compressed_with_zstd() {
         let tmp = tempfile::tempdir().unwrap();
-        let path = Root::new(tmp.path())
-            .dataset(SENSOR_READING)
-            .partition_file();
+        let (store, location, path) = destination(&Root::new(tmp.path()), "part-0.parquet");
 
-        write_batches(&path, &[batch(vec![1, 2], vec!["a", "b"])])
+        write_batches(store, location, &[batch(vec![1, 2], vec!["a", "b"])])
             .await
             .unwrap();
 
@@ -153,12 +172,11 @@ mod tests {
     #[tokio::test]
     async fn multiple_batches_are_written_into_the_one_file() {
         let tmp = tempfile::tempdir().unwrap();
-        let path = Root::new(tmp.path())
-            .dataset(SENSOR_READING)
-            .partition_file();
+        let (store, location, path) = destination(&Root::new(tmp.path()), "part-0.parquet");
 
         write_batches(
-            &path,
+            store,
+            location,
             &[batch(vec![1], vec!["a"]), batch(vec![2, 3], vec!["b", "c"])],
         )
         .await
@@ -170,11 +188,9 @@ mod tests {
     #[tokio::test]
     async fn writing_no_batches_is_an_error_rather_than_an_empty_file() {
         let tmp = tempfile::tempdir().unwrap();
-        let path = Root::new(tmp.path())
-            .dataset(SENSOR_READING)
-            .partition_file();
+        let (store, location, path) = destination(&Root::new(tmp.path()), "part-0.parquet");
 
-        let err = write_batches(&path, &[]).await.unwrap_err();
+        let err = write_batches(store, location, &[]).await.unwrap_err();
 
         assert!(matches!(err, WriteError::Empty), "unexpected error: {err}");
         assert!(!path.exists(), "no file should have been created");
@@ -183,16 +199,14 @@ mod tests {
     #[tokio::test]
     async fn a_failed_write_leaves_no_file_at_the_destination() {
         let tmp = tempfile::tempdir().unwrap();
-        let path = Root::new(tmp.path())
-            .dataset(SENSOR_READING)
-            .partition_file();
+        let (store, location, path) = destination(&Root::new(tmp.path()), "part-0.parquet");
         let mismatched = RecordBatch::try_new(
             Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)])),
             vec![Arc::new(Int64Array::from(vec![9]))],
         )
         .unwrap();
 
-        let err = write_batches(&path, &[batch(vec![1], vec!["a"]), mismatched])
+        let err = write_batches(store, location, &[batch(vec![1], vec!["a"]), mismatched])
             .await
             .unwrap_err();
 
@@ -230,14 +244,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_relative_destination_is_rejected() {
-        let err = write_batches(
-            std::path::Path::new("relative/part-0.parquet"),
-            &[batch(vec![1], vec!["a"])],
-        )
-        .await
-        .unwrap_err();
+    async fn appending_into_a_root_not_yet_made_makes_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 5, 30).unwrap();
+        let dataset = Root::new(tmp.path().join("not-yet-made"))
+            .dataset(SENSOR_READING)
+            .on_date(at.date_naive())
+            .unwrap();
 
-        assert!(matches!(err, WriteError::Path { .. }), "unexpected: {err}");
+        let path = dataset
+            .append(at, &[batch(vec![1], vec!["a"])])
+            .await
+            .unwrap();
+
+        assert_eq!(rows_in(&path), 1);
     }
 }

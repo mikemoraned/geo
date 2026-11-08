@@ -16,7 +16,7 @@ use crate::geo::{GeoError, GeoParquetFile, write_geo_batches, write_geo_stream};
 use crate::layer::{Layer, LayerKind, Replaceable, layers};
 use crate::partition::{DATE_FORMAT, Partition, PathError};
 use crate::rows::{Row, RowError, batch};
-use crate::write::{WriteError, write_batches};
+use crate::write::{WriteError, refuse_existing, write_batches};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppendError {
@@ -29,6 +29,14 @@ pub enum AppendError {
 const BATCH_STEM_FORMAT: &str = "%Y%m%dT%H%M%S%3fZ";
 
 const PARTITION_STEM: &str = "part-0";
+
+fn batch_stem(at: DateTime<Utc>) -> String {
+    at.format(BATCH_STEM_FORMAT).to_string()
+}
+
+fn file_name(stem: &str) -> String {
+    format!("{stem}.parquet")
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReplaceError {
@@ -166,6 +174,14 @@ impl Root {
         Ok(Arc::new(LocalFileSystem::new_with_prefix(&self.0)?))
     }
 
+    fn writable_store(&self) -> Result<Arc<dyn ObjectStore>, WriteError> {
+        std::fs::create_dir_all(&self.0).map_err(|source| WriteError::Root {
+            path: self.0.display().to_string(),
+            source,
+        })?;
+        Ok(self.object_store()?)
+    }
+
     pub fn gold_artefact(
         &self,
         artifact: &str,
@@ -184,7 +200,7 @@ impl Root {
 
 #[must_use]
 pub fn gold_version(run: DateTime<Utc>) -> String {
-    run.format(BATCH_STEM_FORMAT).to_string()
+    batch_stem(run)
 }
 
 const ARTIFACT: &str = "artifact";
@@ -286,7 +302,7 @@ impl<L: LayerKind> Dataset<L> {
     }
 
     pub fn batch_file(&self, at: DateTime<Utc>) -> PathBuf {
-        self.file(&at.format(BATCH_STEM_FORMAT).to_string())
+        self.file(&batch_stem(at))
     }
 
     pub fn partition_file(&self) -> PathBuf {
@@ -298,14 +314,10 @@ impl<L: LayerKind> Dataset<L> {
         at: DateTime<Utc>,
         batches: &[RecordBatch],
     ) -> Result<PathBuf, WriteError> {
-        let path = self.batch_file(at);
-        if path.exists() {
-            return Err(WriteError::Exists {
-                path: path.display().to_string(),
-            });
-        }
-        write_batches(&path, batches).await?;
-        Ok(path)
+        let (store, location) = self.destination(&batch_stem(at))?;
+        refuse_existing(store.as_ref(), &location).await?;
+        write_batches(store, location, batches).await?;
+        Ok(self.batch_file(at))
     }
 
     pub async fn append_rows<T: Row>(
@@ -325,19 +337,24 @@ impl<L: LayerKind> Dataset<L> {
         at: DateTime<Utc>,
         batches: SendableRecordBatchStream,
     ) -> Result<Written, GeoError> {
-        let path = self.batch_file(at);
-        if path.exists() {
-            return Err(WriteError::Exists {
-                path: path.display().to_string(),
-            }
-            .into());
-        }
-        let rows = write_geo_stream(&path, batches).await?;
-        Ok(Written { path, rows })
+        let (store, location) = self.destination(&batch_stem(at))?;
+        refuse_existing(store.as_ref(), &location).await?;
+        let rows = write_geo_stream(store, location, batches).await?;
+        Ok(Written {
+            path: self.batch_file(at),
+            rows,
+        })
     }
 
     fn file(&self, stem: &str) -> PathBuf {
-        self.dir().join(format!("{stem}.parquet"))
+        self.dir().join(file_name(stem))
+    }
+
+    fn destination(&self, stem: &str) -> Result<(Arc<dyn ObjectStore>, ObjectPath), WriteError> {
+        Ok((
+            self.root().writable_store()?,
+            self.location().child(file_name(stem)),
+        ))
     }
 }
 
@@ -351,19 +368,20 @@ impl Dataset<layers::Landing> {
 
 impl<L: Replaceable> Dataset<L> {
     pub async fn replace_with(&self, batches: &[RecordBatch]) -> Result<PathBuf, WriteError> {
-        let path = self.partition_file();
-        write_batches(&path, batches).await?;
-        Ok(path)
+        let (store, location) = self.destination(PARTITION_STEM)?;
+        write_batches(store, location, batches).await?;
+        Ok(self.partition_file())
     }
 
     pub(crate) fn create_geo_partition(&self, schema: &Schema) -> Result<GeoParquetFile, GeoError> {
-        GeoParquetFile::create(&self.partition_file(), schema)
+        let (store, location) = self.destination(PARTITION_STEM)?;
+        GeoParquetFile::create(store, location, schema)
     }
 
     pub async fn replace_with_geo(&self, batches: &[RecordBatch]) -> Result<PathBuf, GeoError> {
-        let path = self.partition_file();
-        write_geo_batches(&path, batches).await?;
-        Ok(path)
+        let (store, location) = self.destination(PARTITION_STEM)?;
+        write_geo_batches(store, location, batches).await?;
+        Ok(self.partition_file())
     }
 
     pub async fn replace_dates_geo(
