@@ -13,9 +13,11 @@ use passkey::types::webauthn::{
     AuthenticatedPublicKeyCredential, CreatedPublicKeyCredential, CredentialCreationOptions,
     CredentialRequestOptions,
 };
+use server::auth::code::ShortCode;
 use server::auth::memory::MemoryAuthStore;
 use server::auth::registration::Registered;
 use server::auth::sessions::SharedSessionStore;
+use server::auth::store::AuthStore;
 use server::auth::{Allowing, Finish, RelyingParty, Started};
 use server::{AppState, build_app};
 use tower::ServiceExt;
@@ -26,6 +28,13 @@ use webauthn_rs::prelude::{CredentialID, Url};
 
 pub const ORIGIN: &str = "https://lookout.example.com";
 pub const LOCALHOST: &str = "http://localhost:3000";
+
+pub const RECORD_PATHS: [&str; 4] = [
+    "/record",
+    "/record/",
+    "/record/index.html",
+    "/record/app.js",
+];
 
 struct Approving;
 
@@ -252,4 +261,18 @@ pub async fn sign_in(app: &Router, browser: &mut Browser, cookie: Option<&Cookie
         credential,
     };
     finish_signin(app, &finish, cookie).await
+}
+
+pub async fn signed_in_with_code(server: &Server) -> (ShortCode, Cookie<'static>) {
+    let mut browser = Browser::at(ORIGIN);
+    let (_, registered) = register(&server.app, &mut browser).await;
+    let Registered::Pending { code } = registered else {
+        panic!("{registered:?} is not pending");
+    };
+    server.passkeys.allow(&code, None).await.expect("allowed");
+    let cookie = sign_in(&server.app, &mut browser, None)
+        .await
+        .session_cookie()
+        .expect("a session");
+    (code, cookie)
 }

@@ -1,16 +1,14 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use axum::Router;
 use axum::body::{Body, Bytes};
-use axum::http::{StatusCode, header};
+use axum::http::StatusCode;
 use passkey::types::webauthn::{CredentialCreationOptions, ResidentKeyRequirement};
 use server::auth::code::ShortCode;
 use server::auth::memory::MemoryAuthStore;
 use server::auth::redis::RedisAuthStore;
 use server::auth::registration::Registered;
 use server::auth::sessions::SharedSessionStore;
-use server::auth::status::SignInStatus;
 use server::auth::store::{
     AllowedPasskey, AuthStore, Ceremony, CeremonyId, Insertion, PendingPasskey, StoreError, Update,
 };
@@ -18,14 +16,14 @@ use server::auth::{Allowing, AuthError, Finish, RelyingParty, Started};
 use std::str::FromStr;
 use test_redis::TestRedis;
 
+use tower_sessions::cookie::SameSite;
 use tower_sessions::cookie::time::Duration;
-use tower_sessions::cookie::{Cookie, SameSite};
 use tower_sessions::session::Id;
 use tower_sessions::{MemoryStore, SessionStore};
 use webauthn_rs::prelude::{CredentialID, RegisterPublicKeyCredential, Uuid, WebauthnBuilder};
 
 use crate::support::{
-    Browser, LOCALHOST, ORIGIN, Reply, Server, app, finish_registration, finish_signin, get, post,
+    Browser, LOCALHOST, ORIGIN, Server, app, finish_registration, finish_signin, get, post,
     register, sign_in, start_registration, start_signin, url,
 };
 
@@ -612,278 +610,4 @@ async fn signing_out_without_a_session_changes_nothing() {
 
     assert_eq!(reply.status, StatusCode::NO_CONTENT, "{:?}", reply.body);
     assert!(reply.session_cookie().is_none(), "{:?}", reply.headers);
-}
-
-const RECORD_PATHS: [&str; 4] = [
-    "/record",
-    "/record/",
-    "/record/index.html",
-    "/record/app.js",
-];
-
-fn assert_sent_to_signin(path: &str, reply: &Reply) {
-    assert_eq!(
-        reply.status,
-        StatusCode::SEE_OTHER,
-        "{path}: {:?}",
-        reply.body
-    );
-    assert_eq!(
-        reply.headers.get(header::LOCATION).map(|to| to.as_bytes()),
-        Some(b"/signin/".as_slice()),
-        "{path}"
-    );
-}
-
-async fn signed_in_with_code(server: &Server) -> (ShortCode, Cookie<'static>) {
-    let mut browser = Browser::at(ORIGIN);
-    let (_, registered) = register(&server.app, &mut browser).await;
-    let Registered::Pending { code } = registered else {
-        panic!("{registered:?} is not pending");
-    };
-    server.passkeys.allow(&code, None).await.expect("allowed");
-    let cookie = sign_in(&server.app, &mut browser, None)
-        .await
-        .session_cookie()
-        .expect("a session");
-    (code, cookie)
-}
-
-#[tokio::test]
-async fn the_record_page_sends_a_visitor_without_a_session_to_sign_in() {
-    let server = Server::hosted(Allowing::ByAdmin);
-
-    for path in RECORD_PATHS {
-        assert_sent_to_signin(path, &get(&server.app, path, None).await);
-    }
-}
-
-#[tokio::test]
-async fn no_other_spelling_of_a_record_path_reaches_the_record_page() {
-    let server = Server::hosted(Allowing::ByAdmin);
-
-    for path in [
-        "//record/",
-        "//record/app.js",
-        "/record%2Fapp.js",
-        "/./record/index.html",
-    ] {
-        let reply = get(&server.app, path, None).await;
-        assert_eq!(reply.status, StatusCode::NOT_FOUND, "{path}");
-    }
-}
-
-#[tokio::test]
-async fn a_signed_in_session_reaches_the_record_page() {
-    let server = Server::hosted(Allowing::ByAdmin);
-    let (_, cookie) = signed_in_with_code(&server).await;
-
-    for path in RECORD_PATHS {
-        let reply = get(&server.app, path, Some(&cookie)).await;
-        assert_eq!(reply.status, StatusCode::OK, "{path}: {:?}", reply.body);
-    }
-}
-
-#[tokio::test]
-async fn a_browser_asks_the_server_before_reusing_the_record_page() {
-    let server = Server::hosted(Allowing::ByAdmin);
-    let (_, cookie) = signed_in_with_code(&server).await;
-
-    for path in RECORD_PATHS {
-        let reply = get(&server.app, path, Some(&cookie)).await;
-        assert_eq!(
-            reply
-                .headers
-                .get(header::CACHE_CONTROL)
-                .map(|value| value.as_bytes()),
-            Some(&b"private, no-cache"[..]),
-            "{path}"
-        );
-    }
-}
-
-#[tokio::test]
-async fn revoking_a_passkey_sends_only_its_session_to_sign_in() {
-    let server = Server::hosted(Allowing::ByAdmin);
-    let (revoked, shut_out) = signed_in_with_code(&server).await;
-    let (_, kept) = signed_in_with_code(&server).await;
-
-    server
-        .passkeys
-        .remove_allowed(&revoked)
-        .await
-        .expect("revoked");
-
-    for path in RECORD_PATHS {
-        assert_sent_to_signin(path, &get(&server.app, path, Some(&shut_out)).await);
-        let reply = get(&server.app, path, Some(&kept)).await;
-        assert_eq!(reply.status, StatusCode::OK, "{path}: {:?}", reply.body);
-    }
-}
-
-#[tokio::test]
-async fn signing_out_sends_the_session_to_sign_in() {
-    let server = Server::hosted(Allowing::ByAdmin);
-    let (_, cookie) = signed_in_with_code(&server).await;
-
-    post(&server.app, "/auth/signout", Body::empty(), Some(&cookie)).await;
-
-    for path in RECORD_PATHS {
-        assert_sent_to_signin(path, &get(&server.app, path, Some(&cookie)).await);
-    }
-}
-
-#[tokio::test]
-async fn the_other_pages_need_no_session() {
-    let server = Server::hosted(Allowing::ByAdmin);
-
-    for path in ["/", "/live/", "/kiosk/", "/signin/"] {
-        let reply = get(&server.app, path, None).await;
-        assert_eq!(reply.status, StatusCode::OK, "{path}: {:?}", reply.body);
-    }
-}
-
-#[tokio::test]
-async fn a_browser_asks_the_server_before_reusing_any_other_file() {
-    let server = Server::hosted(Allowing::ByAdmin);
-
-    for path in [
-        "/",
-        "/signin/",
-        "/signin/signin.js",
-        "/version.js",
-        "/sessions.json",
-    ] {
-        let reply = get(&server.app, path, None).await;
-        assert_eq!(
-            reply
-                .headers
-                .get(header::CACHE_CONTROL)
-                .map(|value| value.as_bytes()),
-            Some(&b"no-cache"[..]),
-            "{path}"
-        );
-    }
-}
-
-#[tokio::test]
-async fn a_browser_never_stores_an_auth_answer() {
-    let server = Server::hosted(Allowing::AtOnce);
-    let mut browser = Browser::at(ORIGIN);
-    register(&server.app, &mut browser).await;
-    let signed_in = sign_in(&server.app, &mut browser, None).await;
-    let cookie = signed_in.session_cookie().expect("a session");
-
-    let replies = [
-        ("a sign-in", signed_in),
-        (
-            "a registration's start",
-            post(&server.app, "/auth/register/start", Body::empty(), None).await,
-        ),
-        (
-            "a sign-in's start",
-            post(&server.app, "/auth/signin/start", Body::empty(), None).await,
-        ),
-        (
-            "a refused finish",
-            post(&server.app, "/auth/signin/finish", Body::from("{}"), None).await,
-        ),
-        (
-            "the status",
-            get(&server.app, "/auth/status", Some(&cookie)).await,
-        ),
-        (
-            "a sign-out",
-            post(&server.app, "/auth/signout", Body::empty(), Some(&cookie)).await,
-        ),
-    ];
-
-    for (answer, reply) in replies {
-        assert_eq!(
-            reply
-                .headers
-                .get(header::CACHE_CONTROL)
-                .map(|value| value.as_bytes()),
-            Some(&b"no-store"[..]),
-            "{answer}"
-        );
-    }
-}
-
-#[tokio::test]
-async fn an_answer_from_a_route_that_sets_no_cache_control_is_never_stored() {
-    let server = Server::hosted(Allowing::ByAdmin);
-
-    for path in ["/version", "/record/"] {
-        let reply = get(&server.app, path, None).await;
-        assert_eq!(
-            reply
-                .headers
-                .get(header::CACHE_CONTROL)
-                .map(|value| value.as_bytes()),
-            Some(&b"no-store"[..]),
-            "{path}"
-        );
-    }
-}
-
-async fn sign_in_status(app: &Router, cookie: Option<&Cookie<'_>>) -> SignInStatus {
-    let reply = get(app, "/auth/status", cookie).await;
-    assert_eq!(reply.status, StatusCode::OK, "{:?}", reply.body);
-    serde_json::from_slice(&reply.body).expect("a status")
-}
-
-#[tokio::test]
-async fn the_status_without_a_session_is_signed_out() {
-    let server = Server::hosted(Allowing::ByAdmin);
-
-    assert_eq!(
-        sign_in_status(&server.app, None).await,
-        SignInStatus::SignedOut
-    );
-}
-
-#[tokio::test]
-async fn the_status_of_a_session_with_an_allowed_passkey_is_signed_in() {
-    let server = Server::hosted(Allowing::ByAdmin);
-    let (_, cookie) = signed_in_with_code(&server).await;
-
-    assert_eq!(
-        sign_in_status(&server.app, Some(&cookie)).await,
-        SignInStatus::SignedIn
-    );
-}
-
-#[tokio::test]
-async fn revoking_a_passkey_signs_out_only_its_session() {
-    let server = Server::hosted(Allowing::ByAdmin);
-    let (revoked, shut_out) = signed_in_with_code(&server).await;
-    let (_, kept) = signed_in_with_code(&server).await;
-
-    server
-        .passkeys
-        .remove_allowed(&revoked)
-        .await
-        .expect("revoked");
-
-    assert_eq!(
-        (
-            sign_in_status(&server.app, Some(&shut_out)).await,
-            sign_in_status(&server.app, Some(&kept)).await,
-        ),
-        (SignInStatus::SignedOut, SignInStatus::SignedIn)
-    );
-}
-
-#[tokio::test]
-async fn the_status_after_signing_out_is_signed_out() {
-    let server = Server::hosted(Allowing::ByAdmin);
-    let (_, cookie) = signed_in_with_code(&server).await;
-
-    post(&server.app, "/auth/signout", Body::empty(), Some(&cookie)).await;
-
-    assert_eq!(
-        sign_in_status(&server.app, Some(&cookie)).await,
-        SignInStatus::SignedOut
-    );
 }

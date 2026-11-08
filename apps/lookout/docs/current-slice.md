@@ -568,7 +568,7 @@ code.
         and the origins. `ws_roundtrip.rs` imports them from the auth tests' file today.
   - [x] Move `tests/compression.rs` and `tests/version.rs` into the `tests/server/` binary, building
         their relying party through `support.rs`.
-  - [ ] Split `tests/server/auth.rs`, at 1,121 lines, by what each test covers: `auth.rs` for
+  - [x] Split `tests/server/auth.rs`, at 1,121 lines, by what each test covers: `auth.rs` for
         ceremonies, sign-in, sessions, and sign-out, `gate.rs` for the `/record/` gate,
         `caching.rs` for `Cache-Control` across the site, and `status.rs` for `/auth/status`.
   - [ ] Move the websocket endpoint out of `src/lib.rs` into `src/ws.rs`, leaving `lib.rs` to
