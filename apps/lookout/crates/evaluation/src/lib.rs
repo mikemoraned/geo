@@ -1,3 +1,4 @@
+pub mod fingerprints;
 pub mod fixtures;
 pub mod gold;
 pub mod offline;

@@ -77,15 +77,6 @@ columns:
   - name: bootstrap_seed
     data_type: UInt64
     nullable: false
-  - name: train_session_v3_fingerprint
-    data_type: LargeUtf8
-    nullable: false
-  - name: train_session_sample_v3_fingerprint
-    data_type: LargeUtf8
-    nullable: false
-  - name: train_session_crossing_v1_fingerprint
-    data_type: LargeUtf8
-    nullable: false
-  - name: water_crossing_v2_fingerprint
-    data_type: LargeUtf8
+  - name: fingerprints
+    data_type: "Map(\"entries\": non-null Struct(\"key\": non-null LargeUtf8, \"value\": non-null LargeUtf8), unsorted)"
     nullable: false

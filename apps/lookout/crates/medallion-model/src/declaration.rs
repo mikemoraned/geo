@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, TracerConfig};
 
 use crate::{
-    ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationOutcomeRowV1, EvaluationRunRowV1,
+    ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationOutcomeRowV1, EvaluationRunRowV2,
     EvaluationSessionRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1,
     ExtractManifestRowV3, Feed, FloatType, GeometrySource, GersId, GpsReadingRowV2, Label,
     MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId,
@@ -325,7 +325,7 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<EvaluationTransitionRowV1>(&known),
         declaration::<EvaluationOutcomeRowV1>(&known),
         declaration::<EvaluationSummaryRowV1>(&known),
-        declaration::<EvaluationRunRowV1>(&known),
+        declaration::<EvaluationRunRowV2>(&known),
         declaration::<EvaluationSessionRowV1>(&known),
         rowless(OVERTURE_EXTRACT.info()),
     ];

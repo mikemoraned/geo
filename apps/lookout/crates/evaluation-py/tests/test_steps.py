@@ -176,7 +176,7 @@ def test_a_record_names_the_run_its_settings_code_and_data_make(written):
     assert recorded["run_date"] == run_row["started_at"].date().isoformat()
     assert pa.table(recorded["sessions"]).column("session_id").to_pylist() == SESSION_IDS
     written_run = lookout_medallion.write_gold(
-        "evaluation_run_v1",
+        "evaluation_run_v2",
         recorded["run"],
         run_date=recorded["run_date"],
         run_id=recorded["run_id"],

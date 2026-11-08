@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use chrono::{DateTime, Utc};
 use domain::{CrossingCompactId, Percentage, SessionId, StateKind};
 use medallion::{DatasetSpec, RUN_DATE, RUN_ID, Row, layers};
@@ -6,8 +8,8 @@ use strum::{AsRefStr, EnumIter, EnumString};
 
 use crate::TrainSessionRowV3;
 
-pub const EVALUATION_RUN_V1: DatasetSpec<layers::Gold> =
-    DatasetSpec::partitioned_within("evaluation_run_v1", RUN_DATE, &[RUN_ID]);
+pub const EVALUATION_RUN_V2: DatasetSpec<layers::Gold> =
+    DatasetSpec::partitioned_within("evaluation_run_v2", RUN_DATE, &[RUN_ID]);
 
 pub const EVALUATION_SESSION_V1: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_session_v1", RUN_DATE, &[RUN_ID]);
@@ -178,7 +180,7 @@ pub enum FloatType {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EvaluationRunRowV1 {
+pub struct EvaluationRunRowV2 {
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub started_at: DateTime<Utc>,
     pub evaluation_version: String,
@@ -200,15 +202,12 @@ pub struct EvaluationRunRowV1 {
     pub warm_up_ms: i64,
     pub resamples: u64,
     pub bootstrap_seed: u64,
-    pub train_session_v3_fingerprint: String,
-    pub train_session_sample_v3_fingerprint: String,
-    pub train_session_crossing_v1_fingerprint: String,
-    pub water_crossing_v2_fingerprint: String,
+    pub fingerprints: BTreeMap<String, String>,
 }
 
-impl Row for EvaluationRunRowV1 {
+impl Row for EvaluationRunRowV2 {
     type Layer = layers::Gold;
-    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_RUN_V1;
+    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_RUN_V2;
     const INSTANTS: &'static [&'static str] = &["started_at"];
 
     fn example() -> Self {
@@ -233,10 +232,7 @@ impl Row for EvaluationRunRowV1 {
             warm_up_ms: 60_000,
             resamples: 1000,
             bootstrap_seed: 1,
-            train_session_v3_fingerprint: "example".to_string(),
-            train_session_sample_v3_fingerprint: "example".to_string(),
-            train_session_crossing_v1_fingerprint: "example".to_string(),
-            water_crossing_v2_fingerprint: "example".to_string(),
+            fingerprints: BTreeMap::from([("example".to_string(), "example".to_string())]),
         }
     }
 }

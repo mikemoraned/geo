@@ -129,21 +129,22 @@ erDiagram
     train_session_v3 ||--|{ train_session_sample_v3 : "sampled as"
     train_session_v3 ||--o{ train_session_crossing_v1 : "passes"
     water_crossing_v2 ||--o{ train_session_crossing_v1 : "passed in"
-    evaluation_run_v1 ||--|{ evaluation_session_v1 : "replays"
+    evaluation_run_v2 ||--|{ evaluation_session_v1 : "replays"
     train_session_v3 ||--o{ evaluation_session_v1 : "picked for"
     evaluation_session_v1 ||--o{ evaluation_transition_v1 : "records"
     evaluation_transition_v1 ||--o| evaluation_outcome_v1 : "notification scored as"
     train_session_crossing_v1 ||--o{ evaluation_outcome_v1 : "scored in"
-    evaluation_run_v1 ||--|| evaluation_summary_v1 : "sums up"
+    evaluation_run_v2 ||--|| evaluation_summary_v1 : "sums up"
 ```
 
 - `train_session_v3` and `train_session_sample_v3` are the v2 datasets with
   `realtime_percentage` and `realtime` added.
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
-- `evaluation_run_v1` holds a run's predictor and settings, pass detector, float type, scores and
+- `evaluation_run_v2` holds a run's predictor and settings, pass detector, float type, scores and
   ramp, evaluation version, country, filter, sample size, seed, and bootstrap resamples. It also
-  holds the run's code version and the fingerprint of each silver dataset the run reads.
+  holds the run's code version, and a map from each silver dataset the run reads to its
+  fingerprint. A dataset added to or removed from the run's inputs needs no new column.
 - `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
   transitions still counts.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
@@ -449,7 +450,8 @@ What `notebooks/evaluation/explore2_spacing.py` established about the spacing of
   sample does, so these are mostly not passes of the train.
 
 What looking for the oracle's shortfalls established, on 2026-11-07, over the 1000 sessions of run
-`4245cafc-551c-510c-bddf-db9ef4221d1c` and their 12,672 passes.
+`4245cafc-551c-510c-bddf-db9ef4221d1c` and their 12,672 passes. The run was removed on 2026-11-07,
+when `evaluation_run_v2` replaced the run row's four fingerprint columns with one map.
 
 - **The oracle falls short of a perfect score nowhere.** It falls short only on two passes of one
   crossing less than 40 s apart, where its alert for the second comes under 30 s ahead.
@@ -677,9 +679,10 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               `TryFrom<TimeDelta>`, and give `Score` a `FromStr`. `span_of` writes milliseconds as
               text to parse them back, and the CLI wraps parsers that exist. A row is still built
               by `run_row`, since it takes the run's inputs and start as well as the run.
-        - [ ] Define a run's fingerprinted inputs once, with a `changed_since`, and read their
+        - [x] Define a run's fingerprinted inputs once, with a `changed_since`, and read their
               fingerprints concurrently. The four datasets are listed in four places across two
-              crates.
+              crates. The run row became `evaluation_run_v2`, whose fingerprints are one map
+              keyed by dataset, so the datasets are listed once, in `evaluation`.
         - [ ] Have the steps take each session's id, start, and end, rather than silver's
               `TrainSessionRowV3`. That drops `read_sessions`, a second `IN` filter, and a second
               formula for a session's hours.
