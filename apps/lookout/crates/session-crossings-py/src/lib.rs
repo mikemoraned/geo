@@ -6,7 +6,7 @@ use arrow::datatypes::{DataType, Field, FieldRef, TimeUnit};
 use chrono::{DateTime, Utc};
 use domain::{CrossingId, Pass, Radius, SessionId};
 use geo_types::{Geometry, Point};
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use py_common::{runtime_error, table_of_batch, value_error};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_arrow::PyTable;
@@ -54,8 +54,8 @@ fn steps<'py>(
     }
 
     let answer = PyDict::new(py);
-    answer.set_item("near", table(near_batch(&near)?)?)?;
-    answer.set_item("passes", table(passes_batch(&passes)?)?)?;
+    answer.set_item("near", table_of_batch(near_batch(&near)?)?)?;
+    answer.set_item("passes", table_of_batch(passes_batch(&passes)?)?)?;
     Ok(answer)
 }
 
@@ -98,7 +98,7 @@ fn crossings_of(batch: &RecordBatch) -> PyResult<Vec<Crossing>> {
 fn column<'a>(batch: &'a RecordBatch, name: &str) -> PyResult<&'a ArrayRef> {
     batch
         .column_by_name(name)
-        .ok_or_else(|| PyValueError::new_err(format!("the table has no `{name}` column")))
+        .ok_or_else(|| value_error(format!("the table has no `{name}` column")))
 }
 
 fn instants(batch: &RecordBatch, name: &str) -> PyResult<Vec<DateTime<Utc>>> {
@@ -176,7 +176,7 @@ fn near_batch(near: &[(CrossingId, Near)]) -> PyResult<RecordBatch> {
                 t: one.sample.t,
                 distance_m: one.distance_metres,
                 visit: one.visit.try_into().map_err(|_| {
-                    PyRuntimeError::new_err(format!(
+                    runtime_error(format!(
                         "visit {} is more than the `visit` column can number",
                         one.visit
                     ))
@@ -222,21 +222,8 @@ fn batch<T: Serialize + for<'de> Deserialize<'de>>(
     serde_arrow::to_record_batch(&fields, &rows).map_err(runtime_error)
 }
 
-fn table(batch: RecordBatch) -> PyResult<PyTable> {
-    let schema = batch.schema();
-    PyTable::try_new(vec![batch], schema).map_err(runtime_error)
-}
-
 fn unreadable(name: &str, reason: impl std::fmt::Display) -> PyErr {
-    PyValueError::new_err(format!("the `{name}` column cannot be read: {reason}"))
-}
-
-fn value_error(err: impl std::fmt::Display) -> PyErr {
-    PyValueError::new_err(err.to_string())
-}
-
-fn runtime_error(err: impl std::fmt::Display) -> PyErr {
-    PyRuntimeError::new_err(err.to_string())
+    value_error(format!("the `{name}` column cannot be read: {reason}"))
 }
 
 #[pymodule]

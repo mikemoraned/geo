@@ -99,6 +99,7 @@ m5-core = { path = "crates/platform/m5/core" }
 map = { path = "crates/map" }
 medallion = { path = "crates/medallion" }
 medallion-model = { path = "crates/medallion-model" }
+py-common = { path = "crates/py-common" }
 domain = { path = "crates/domain" }
 evaluation = { path = "crates/evaluation" }
 predictor = { path = "crates/predictor" }

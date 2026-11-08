@@ -3419,6 +3419,7 @@ dependencies = [
  "evaluation",
  "medallion",
  "medallion-model",
+ "py-common",
  "pyo3",
  "pyo3-arrow",
  "tokio",
@@ -5244,6 +5245,7 @@ dependencies = [
  "chrono",
  "medallion",
  "medallion-model",
+ "py-common",
  "pyo3",
  "pyo3-arrow",
  "tokio",
@@ -6495,6 +6497,18 @@ dependencies = [
  "bitflags",
  "memchr",
  "unicase",
+]
+
+[[package]]
+name = "py-common"
+version = "0.1.0"
+dependencies = [
+ "arrow 57.3.1",
+ "medallion",
+ "medallion-model",
+ "pyo3",
+ "pyo3-arrow",
+ "tokio",
 ]
 
 [[package]]
@@ -8034,6 +8048,7 @@ dependencies = [
  "domain",
  "geo-types",
  "medallion",
+ "py-common",
  "pyo3",
  "pyo3-arrow",
  "serde",

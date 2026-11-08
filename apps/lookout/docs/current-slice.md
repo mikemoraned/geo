@@ -695,7 +695,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               evaluation. The evaluation holds a second copy of how a device compacts its crossings.
               Checked against the device by repacking: the point set came out byte for byte the
               same, and the firmware does not link `crossings`.
-        - [ ] Share the pyo3 helpers of the three extensions, with one mapping of errors to Python
+        - [x] Share the pyo3 helpers of the three extensions, with one mapping of errors to Python
               exceptions, and classify `StepError` once. One store error raises `ValueError` in one
               module and `RuntimeError` in another.
         - [ ] Import `evaluation`'s test helpers from `fixtures`, and let `write_geography_rows`
