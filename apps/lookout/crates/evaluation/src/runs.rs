@@ -38,18 +38,14 @@ pub async fn read_run_rows<T: Row<Layer = layers::Gold>>(
 mod tests {
     use std::path::Path;
 
-    use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
+    use chrono::NaiveDate;
     use domain::StateKind;
     use domain::{CrossingCompactId, SessionId};
     use medallion::write_run;
     use medallion_model::EvaluationTransitionRowV1;
 
     use super::*;
-
-    fn instant(seconds: i64) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
-            + TimeDelta::seconds(seconds)
-    }
+    use crate::fixtures::instant;
 
     fn day() -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 11, 6).expect("a date")

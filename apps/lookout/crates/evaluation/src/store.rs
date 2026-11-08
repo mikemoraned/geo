@@ -39,16 +39,11 @@ pub fn compact_ids(crossings: &[Crossing]) -> BTreeMap<CrossingId, CrossingCompa
 mod tests {
     use std::path::Path;
 
-    use chrono::{DateTime, TimeDelta, Utc};
     use domain::SessionId;
     use medallion::{Row, write_rows};
 
     use super::*;
-
-    fn instant(seconds: i64) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
-            + TimeDelta::seconds(seconds)
-    }
+    use crate::fixtures::instant;
 
     fn session(name: &str) -> SessionId {
         SessionId::new(format!("session-{name}")).expect("a session id")

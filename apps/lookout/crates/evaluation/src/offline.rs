@@ -111,12 +111,13 @@ impl<P: Precision> DetectPasses<P> for OfflineDetector {
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeDelta;
+
     use domain::Sample;
     use medallion::Row;
     use proptest::prelude::*;
 
     use super::*;
+    use crate::fixtures::{crossing, instant};
     use domain::places::DRESDEN_HBF;
 
     struct Pass {
@@ -139,17 +140,8 @@ mod tests {
         }
     }
 
-    fn instant(seconds: i64) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
-            + TimeDelta::seconds(seconds)
-    }
-
     fn session(name: &str) -> SessionId {
         SessionId::new(format!("session-{name}")).expect("a session id")
-    }
-
-    fn crossing(n: u32) -> CrossingId {
-        CrossingId::new(format!("crossing-{n}")).expect("a crossing id")
     }
 
     fn compact_ids(crossings: u32) -> BTreeMap<CrossingId, CrossingCompactId> {

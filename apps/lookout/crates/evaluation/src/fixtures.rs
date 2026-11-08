@@ -8,18 +8,16 @@ use domain::places::DRESDEN_HBF;
 use domain::{CrossingCompactId, CrossingId, Percentage, SessionId, Span};
 use geo_types::{LineString, Point};
 use medallion::{
-    COUNTRY, Country, GEOMETRY, GeographyRow, PROJECTED_GEOMETRY, Projector, Root, Row, geo_batch,
-    projected_wkb_field, wkb_field, write_geography_rows, write_rows,
+    Country, GeographyRow, Root, Row, write_geography_rows, write_geography_rows_by_country,
+    write_rows,
 };
 use medallion_model::{
-    TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3, WATER_CROSSING_V2,
+    FloatType, TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3,
     WaterCrossingRowV2,
 };
 
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};
-use medallion_model::FloatType;
-
 use crate::steps::{Predictor, Run};
 use crate::summarise::Bootstrap;
 
@@ -37,38 +35,19 @@ pub fn crossing(n: u32) -> CrossingId {
 }
 
 pub async fn write_crossings(root: &Root, placed: &[(u32, f64, f64)]) {
-    let projector = Projector::for_country(Country::Germany).expect("a projector");
-    let rows: Vec<WaterCrossingRowV2> = placed
+    let rows: Vec<GeographyRow<WaterCrossingRowV2, Point<f64>>> = placed
         .iter()
-        .map(|&(n, _, _)| WaterCrossingRowV2 {
-            crossing_id: crossing(n),
-            crossing_compact_id: CrossingCompactId::new(n),
-            ..WaterCrossingRowV2::example()
+        .map(|&(n, lat, lon)| GeographyRow {
+            row: WaterCrossingRowV2 {
+                crossing_id: crossing(n),
+                crossing_compact_id: CrossingCompactId::new(n),
+                ..WaterCrossingRowV2::example()
+            },
+            geography: Point::new(lon, lat),
+            country: Country::Germany,
         })
         .collect();
-    let points: Vec<Point<f64>> = placed
-        .iter()
-        .map(|&(_, lat, lon)| Point::new(lon, lat))
-        .collect();
-    let projected: Vec<Point<f64>> = points
-        .iter()
-        .map(|point| projector.project(point).expect("a projection"))
-        .collect();
-    let batch = geo_batch(
-        &rows,
-        &[
-            (wkb_field(GEOMETRY).expect("a field"), points.as_slice()),
-            (
-                projected_wkb_field(PROJECTED_GEOMETRY, Country::Germany).expect("a field"),
-                projected.as_slice(),
-            ),
-        ],
-    )
-    .expect("a batch");
-    root.dataset(WATER_CROSSING_V2)
-        .partition(COUNTRY, Country::Germany)
-        .expect("a partition")
-        .replace_with_geo(&[batch])
+    write_geography_rows_by_country(root, &rows)
         .await
         .expect("write the crossings");
 }

@@ -698,9 +698,10 @@ run of it tests every new part, from the tracker to gold, before a real predicto
         - [x] Share the pyo3 helpers of the three extensions, with one mapping of errors to Python
               exceptions, and classify `StepError` once. One store error raises `ValueError` in one
               module and `RuntimeError` in another.
-        - [ ] Import `evaluation`'s test helpers from `fixtures`, and let `write_geography_rows`
+        - [x] Import `evaluation`'s test helpers from `fixtures`, and let `write_geography_rows`
               write a dataset partitioned by country alone. `instant()` is defined about ten times,
-              and three crates build a crossings table by hand.
+              and three crates build a crossings table by hand. The write by country is its own
+              function, `write_geography_rows_by_country`, since the dated one groups rows by date.
       - **Build identity**
         - [ ] Take `motis`'s build identity from `code_version`, move `CodeVersion` into that crate,
               and drop `BUILD_GIT_HASH` from the recipes. The two schemes test for uncommitted

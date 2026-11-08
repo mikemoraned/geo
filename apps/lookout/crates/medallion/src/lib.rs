@@ -61,7 +61,10 @@ pub use args::MedallionArgs;
 pub use country::{COUNTRY, Countries, Country, UnknownCountry};
 pub use datafusion::scalar::ScalarValue;
 pub use dataset::{DatasetInfo, DatasetSpec};
-pub use derive::{GeographyRow, GeometryRow, GeometryRowWriter, write_geography_rows, write_rows};
+pub use derive::{
+    GeographyRow, GeometryRow, GeometryRowWriter, write_geography_rows,
+    write_geography_rows_by_country, write_rows,
+};
 pub use fingerprint::{Fingerprint, FingerprintError, fingerprint_in};
 pub use geo::{
     GEOMETRY, GeoError, PROJECTED_GEOMETRY, Projector, Projectors, ZonedGeometry, file_schema,

@@ -252,12 +252,8 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+    use crate::fixtures::{crossing, instant};
     use crate::offline::{SessionPasses, passes_by_session};
-
-    fn instant(seconds: i64) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
-            + TimeDelta::seconds(seconds)
-    }
 
     fn alerted(crossing: u32, seconds: i64) -> Transition {
         Transition {
@@ -494,10 +490,6 @@ mod tests {
 
     fn session(name: &str) -> SessionId {
         SessionId::new(format!("session-{name}")).expect("a session id")
-    }
-
-    fn crossing(n: u32) -> CrossingId {
-        CrossingId::new(format!("crossing-{n}")).expect("a crossing id")
     }
 
     fn row(name: &str, n: u32, seconds: i64) -> TrainSessionCrossingRowV1 {
