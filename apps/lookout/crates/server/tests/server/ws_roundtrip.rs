@@ -30,7 +30,7 @@ use tower_sessions::cookie::Cookie;
 use uuid::Uuid;
 use webauthn_rs::prelude::{CredentialID, Url};
 
-use crate::auth::{Browser, LOCALHOST, post, register, sign_in, static_dir};
+use crate::auth::{Browser, LOCALHOST, post, register, sign_in};
 
 struct RecordingSink {
     samples: Arc<Mutex<Vec<RawSample>>>,
@@ -124,7 +124,7 @@ async fn spawn_app() -> Running {
             })),
             relying_party,
         },
-        static_dir(),
+        env!("CARGO_MANIFEST_DIR"),
     );
 
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");

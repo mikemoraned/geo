@@ -5,10 +5,6 @@ use server::{AppState, build_app};
 use tower::ServiceExt;
 use webauthn_rs::prelude::Url;
 
-fn static_dir() -> String {
-    concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
-}
-
 fn relying_party() -> RelyingParty {
     let origin = Url::parse("https://lookout.example.com").expect("an origin");
     RelyingParty::in_memory(&origin).expect("a relying party")
@@ -23,7 +19,7 @@ async fn fetch(path: &str, accept_encoding: Option<&str>) -> (StatusCode, Option
         sink: None,
         relying_party: relying_party(),
     };
-    let response = build_app(state, static_dir())
+    let response = build_app(state, env!("CARGO_MANIFEST_DIR"))
         .oneshot(request.body(Body::empty()).expect("build request"))
         .await
         .expect("router response");

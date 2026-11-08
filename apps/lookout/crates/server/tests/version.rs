@@ -5,10 +5,6 @@ use server::{AppState, GIT_HASH, build_app};
 use tower::ServiceExt;
 use webauthn_rs::prelude::Url;
 
-fn static_dir() -> String {
-    concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
-}
-
 fn relying_party() -> RelyingParty {
     let origin = Url::parse("https://lookout.example.com").expect("an origin");
     RelyingParty::in_memory(&origin).expect("a relying party")
@@ -20,7 +16,7 @@ async fn version_endpoint_serves_git_hash() {
         sink: None,
         relying_party: relying_party(),
     };
-    let app = build_app(state, static_dir());
+    let app = build_app(state, env!("CARGO_MANIFEST_DIR"));
 
     let response = app
         .oneshot(

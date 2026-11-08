@@ -2,6 +2,7 @@ pub mod auth;
 pub mod queue;
 pub mod stores;
 
+use std::path::Path;
 use std::sync::Arc;
 
 use axum::Router;
@@ -37,13 +38,10 @@ const RECORD_PAGE: &str = "/record";
 const ASK_FIRST: &str = "no-cache";
 const NEVER_STORE: &str = "no-store";
 
-pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
-    let static_dir = static_dir.into();
+pub fn build_app(state: AppState, site_dir: impl AsRef<Path>) -> Router {
+    let site_dir = site_dir.as_ref();
     let record = Router::new()
-        .nest_service(
-            RECORD_PAGE,
-            ServeDir::new(format!("{static_dir}{RECORD_PAGE}")),
-        )
+        .nest_service(RECORD_PAGE, ServeDir::new(site_dir.join("gated/record")))
         .layer(middleware::from_fn_with_state(
             state.relying_party.clone(),
             auth::gate::require_signin,
@@ -54,7 +52,7 @@ pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
         .merge(auth::routes(state.relying_party.clone()))
         .merge(record)
         .fallback_service(SetResponseHeader::overriding(
-            ServeDir::new(static_dir),
+            ServeDir::new(site_dir.join("static")),
             header::CACHE_CONTROL,
             HeaderValue::from_static(ASK_FIRST),
         ))

@@ -546,7 +546,7 @@ code.
       - `signin.js` writes server data only through `textContent`, and `app.js` puts none into HTML.
       - Sign-in sends an empty `allowCredentials`, and registration sends no exclusion list.
       - Logs carry the short code, and no session ID, credential, or redis URL.
-- [ ] Keep `static/record/` out of the fallback `ServeDir`, so no path variant serves the page
+- [x] Keep `static/record/` out of the fallback `ServeDir`, so no path variant serves the page
       without a session. Test each variant the review named.
 - [ ] Run `cargo audit` over the workspace, for advisories against the crates this slice adds:
       webauthn-rs, its vendored OpenSSL, tower-sessions, and their dependencies.

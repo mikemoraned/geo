@@ -184,17 +184,13 @@ fn url(origin: &str) -> Url {
     Url::parse(origin).expect("an origin")
 }
 
-pub fn static_dir() -> String {
-    concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
-}
-
 fn app(relying_party: RelyingParty) -> Router {
     build_app(
         AppState {
             sink: None,
             relying_party,
         },
-        static_dir(),
+        env!("CARGO_MANIFEST_DIR"),
     )
 }
 
@@ -891,6 +887,21 @@ async fn the_record_page_sends_a_visitor_without_a_session_to_sign_in() {
 
     for path in RECORD_PATHS {
         assert_sent_to_signin(path, &get(&server.app, path, None).await);
+    }
+}
+
+#[tokio::test]
+async fn no_other_spelling_of_a_record_path_reaches_the_record_page() {
+    let server = Server::hosted(Allowing::ByAdmin);
+
+    for path in [
+        "//record/",
+        "//record/app.js",
+        "/record%2Fapp.js",
+        "/./record/index.html",
+    ] {
+        let reply = get(&server.app, path, None).await;
+        assert_eq!(reply.status, StatusCode::NOT_FOUND, "{path}");
     }
 }
 

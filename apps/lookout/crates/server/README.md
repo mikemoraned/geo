@@ -185,6 +185,11 @@ gets `Cache-Control: private, no-cache` in place of the static files' `no-cache`
 keeps the page out of shared caches, and `no-cache` makes a browser ask the server before showing a
 stored copy. A browser that has signed out therefore gets the redirect, not its stored page.
 
+The page's files sit in `gated/record/`, outside `static/`, which the server serves to anyone.
+[`ServeDir`][serve-dir] reads `//record/` as `record/`, and `/record%2Fapp.js` as `record/app.js`.
+Neither path matches the `/record` route, so each request goes to `static/`. Outside `static/`,
+the page is reachable only through the gate.
+
 `/ws` checks the `Origin` header before the session. It refuses with 403 an upgrade whose `Origin`
 differs from the server's origin, `LOOKOUT_ORIGIN`. Checking `Origin` is the [standard
 defence][ws-origin] against cross-site websocket hijacking. `SameSite=Strict` already keeps the
@@ -204,6 +209,7 @@ No route under `/auth/` sets `Cache-Control`, so every answer there carries the 
 `no-store`. A stored status would show a revoked session as signed in.
 
 [private]: https://www.rfc-editor.org/rfc/rfc9111#name-private
+[serve-dir]: https://docs.rs/tower-http/0.7.1/tower_http/services/struct.ServeDir.html
 [ws-origin]: https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html#origin-header-validation
 [close-codes]: https://www.rfc-editor.org/rfc/rfc6455#section-7.4.1
 

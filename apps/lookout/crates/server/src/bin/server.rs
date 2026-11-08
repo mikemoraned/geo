@@ -11,9 +11,8 @@ use webauthn_rs::prelude::Url;
 
 const LOCAL_ORIGIN: &str = "http://localhost:3000";
 
-fn static_dir() -> String {
-    std::env::var("LOOKOUT_STATIC_DIR")
-        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string())
+fn site_dir() -> String {
+    std::env::var("LOOKOUT_SITE_DIR").unwrap_or_else(|_| env!("CARGO_MANIFEST_DIR").to_string())
 }
 
 #[derive(Parser)]
@@ -80,7 +79,7 @@ async fn main() {
             sink,
             relying_party,
         },
-        static_dir(),
+        site_dir(),
     );
 
     let port: u16 = std::env::var("PORT")

@@ -45,8 +45,9 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=builder /prod/target/release/server /usr/local/bin/server
 COPY --from=builder /prod/crates/server/static /app/static
+COPY --from=builder /prod/crates/server/gated /app/gated
 
-ENV LOOKOUT_STATIC_DIR=/app/static
+ENV LOOKOUT_SITE_DIR=/app
 ENV PORT=8080
 EXPOSE 8080
 
