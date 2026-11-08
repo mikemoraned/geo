@@ -579,6 +579,8 @@ code.
   - [x] Replace `RevokedOnceFound` and the websocket tests' `Passkeys` with one `AuthStore` in
         `support.rs`. Each wraps `MemoryAuthStore`, passes eight of its nine methods through, and
         changes one.
+  - [ ] run `/simplify`, review with user, and then gather any todos accepted for changes under as a new group of todos after this
+  - [ ] run `/security-review` again
 
 #### Wrap-up
 
