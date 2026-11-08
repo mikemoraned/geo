@@ -41,6 +41,11 @@ How docs under `docs/` (as opposed to slice docs) are written in this repo.
   can check the claim at its source. Link to the exact section where one exists, and pin library
   docs to the version in use.
 
+- **Link another project at its first mention.** A passage that names another of the user's
+  projects, such as [bobby](https://github.com/mikemoraned/bobby), links its GitHub repository the
+  first time it names it, in slice docs as in reference docs. A reader then knows which project
+  is meant, and can reach it.
+
 - **Write for a human reader, and leave Claude's environment out.** READMEs, `docs/` and slice
   docs are read by the people working here. The sandbox Claude runs in, and what it can or cannot
   reach, belongs in `.claude/memory/testing-limits.md`. A doc states what a step needs, such as

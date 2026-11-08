@@ -298,6 +298,15 @@ shows the session as signed out.
       `private, no-cache`. The `/auth/` layer then goes, and its test stays. Three times a route
       sent no `Cache-Control`, and a browser reused a stored answer. With the default, a route
       that sets none is never stored.
+- [ ] Bound the two loops that draw a fresh ID until one is free: `AuthStore::put_pending` for a
+      short code, and `RedisSessionStore::create` for a session ID. Each loops without end while
+      every ID it draws is taken, so a broken key hangs the request rather than failing it. The
+      Docker mutants run found this when a constant `session_key` hung `create`. One helper
+      replaces both loops, built on [`backon`](https://docs.rs/backon/1.6.0/backon/), as
+      [bobby](https://github.com/mikemoraned/bobby) uses. It waits a second, then doubles the
+      wait, and gives up once the next wait would take the total past 10 seconds
+      ([`with_total_delay`](https://docs.rs/backon/1.6.0/backon/struct.ExponentialBuilder.html#method.with_total_delay)).
+      Giving up returns an error that names the cause, which the request answers with 500.
 
 ### Tasks
 
@@ -441,9 +450,9 @@ Checks that the gate holds beyond the cases its tests name. It runs after the ma
 fix the manual test forces is hardened too, and before Wrap-up, so the docs describe the hardened
 code.
 
-- [ ] Run `cargo-mutants` over `crates/server/src/auth`, and add a test for each mutant that
+- [x] Run `cargo-mutants` over `crates/server/src/auth`, and add a test for each mutant that
       survives.
-  - How bobby runs it, at
+  - How [bobby](https://github.com/mikemoraned/bobby) runs it, at
     [`6820d16b`](https://github.com/mikemoraned/bobby/blob/6820d16b127fa35dbb00e6270a831ff5a7051064/.cargo/mutants.toml#L4):
     `.cargo/mutants.toml` sets `test_tool = "nextest"` and excludes `**/src/bin/**` and
     `**/build.rs`. `just mutants-on-diff` runs `cargo mutants --in-diff` over `git diff main`, and
@@ -487,8 +496,13 @@ code.
         unviable. Most unviable mutants return `Default::default()` from a type without a default.
         The timeout turns `put_pending`'s insert loop into one that never returns, so the run
         caught the change.
-  - [ ] Run the two redis files' mutants outside the sandbox, with Docker.
-  - [ ] Triage each survivor. A missing test gets a test. An equivalent mutant goes into
+  - [x] Run the two redis files' mutants outside the sandbox, with Docker.
+        On 2026-11-08, 35 mutants ran in place in 19 minutes: 23 caught, 10 unviable, 2 timed
+        out, and none missed. Both timeouts make `session_key` return a constant, so every
+        session shares one key. `RedisSessionStore::create` then never wins its `SET NX` and
+        draws IDs without end. That loop has no bound, which Pending refactors records. A first attempt failed its baseline,
+        since testcontainers found no socket at `/var/run/docker.sock` until OrbStack ran.
+  - [x] Triage each survivor. A missing test gets a test. An equivalent mutant goes into
         `exclude_re`, with its reason in the commit message.
         The sandbox run's seven survivors each lacked a test, and a rerun on 2026-11-08 caught
         all seven:

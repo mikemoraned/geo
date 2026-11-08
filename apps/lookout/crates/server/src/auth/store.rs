@@ -9,6 +9,7 @@ use webauthn_rs::prelude::{
 };
 
 use crate::auth::code::ShortCode;
+use crate::auth::fresh::{Claim, ClaimError, claim_fresh};
 
 pub const CEREMONY_LIFETIME: Duration = Duration::from_secs(10 * 60);
 pub const PENDING_LIFETIME: Duration = Duration::from_secs(60 * 60);
@@ -57,6 +58,17 @@ pub enum StoreError {
     Redis(#[from] redis::RedisError),
     #[error("a stored record failed to encode or decode: {0}")]
     Record(#[from] serde_json::Error),
+    #[error("every short code drawn was taken, after waiting up to {0:?} in all")]
+    NoFreeCode(Duration),
+}
+
+impl From<ClaimError<StoreError>> for StoreError {
+    fn from(err: ClaimError<StoreError>) -> Self {
+        match err {
+            ClaimError::NoneFree(waited) => Self::NoFreeCode(waited),
+            ClaimError::Store(err) => err,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,12 +100,16 @@ pub trait AuthStore: Send + Sync {
     async fn remove_allowed(&self, code: &ShortCode) -> Result<Option<AllowedPasskey>, StoreError>;
 
     async fn put_pending(&self, passkey: PendingPasskey) -> Result<ShortCode, StoreError> {
-        loop {
-            let code = ShortCode::random();
-            if self.insert_pending(&code, passkey.clone()).await? == Insertion::Inserted {
-                return Ok(code);
+        Ok(claim_fresh(ShortCode::random, |code| {
+            let passkey = passkey.clone();
+            async move {
+                Ok(match self.insert_pending(&code, passkey).await? {
+                    Insertion::Inserted => Claim::Claimed,
+                    Insertion::CodeTaken => Claim::Taken,
+                })
             }
-        }
+        })
+        .await?)
     }
 
     async fn allow(

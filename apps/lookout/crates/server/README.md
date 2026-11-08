@@ -53,6 +53,13 @@ A pending passkey waits an hour under its short code. No two pending passkeys ho
 so allowing a code allows exactly one passkey. Allowing moves the passkey into the allowed
 passkeys, which stay until revoked.
 
+A registration draws a fresh short code for its pending passkey, and a sign-in draws a fresh
+session ID. Each stores its record under the drawn ID only if nothing holds that ID. If something
+does, the server waits and draws again, through [backon][backon]: a second at first, doubling
+each time. Once the next wait would take the total past 10 seconds, it [stops][total-delay] and
+the request fails with 500. A store in which every ID is taken, as a broken key would make it,
+then fails the request rather than holding it open.
+
 A short code is 8 characters of [Crockford's base32][crockford], 40 random bits, shown in two
 groups of four as `K7Q2-M9XD`. Reading a typed code follows Crockford's decoding rules: either
 case, hyphens ignored, `O` read as `0`, and `I` and `L` read as `1`. The server also ignores
@@ -77,6 +84,8 @@ sign-in needs. The endpoint tests give each browser that store.
 [timeouts]: https://www.w3.org/TR/webauthn-3/#sctn-timeout-recommended-range
 [default-timeout]: https://docs.rs/webauthn-rs/0.5.5/webauthn_rs/constant.DEFAULT_AUTHENTICATOR_TIMEOUT.html
 [crockford]: https://www.crockford.com/base32.html
+[backon]: https://docs.rs/backon/1.6.0/backon/
+[total-delay]: https://docs.rs/backon/1.6.0/backon/struct.ExponentialBuilder.html#method.with_total_delay
 [getdel]: https://redis.io/docs/latest/commands/getdel/
 [set]: https://redis.io/docs/latest/commands/set/
 [eval]: https://redis.io/docs/latest/develop/programmability/eval-intro/
@@ -209,9 +218,9 @@ to expire with the session, through [`SET EXAT`][set], so redis removes a sessio
 last use without a sweep. Every request that carries a session renews it, so each such request
 writes to redis once.
 
-Creating a session writes with `NX`. If another session holds the ID, the store draws a fresh ID
-and writes again. tower-sessions [leaves a collision][create-session] to each store, which can
-draw again or fail.
+Creating a session writes with `NX`. While another session holds the ID, the store draws a fresh
+one, within the 10-second limit on drawing a fresh ID. tower-sessions
+[leaves a collision][create-session] to each store, which can draw again or fail.
 
 [session-store]: https://docs.rs/tower-sessions/0.15.0/tower_sessions/trait.SessionStore.html
 [create-session]: https://docs.rs/tower-sessions/0.15.0/tower_sessions/trait.SessionStore.html#method.create

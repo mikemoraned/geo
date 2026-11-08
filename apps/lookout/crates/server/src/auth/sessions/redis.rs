@@ -3,6 +3,8 @@ use redis::aio::MultiplexedConnection;
 use tower_sessions::session::{Id, Record};
 use tower_sessions::session_store::{self, SessionStore};
 
+use crate::auth::fresh::{Claim, ClaimError, claim_fresh};
+
 fn session_key(id: &Id) -> String {
     format!("lookout-session:{id}")
 }
@@ -36,17 +38,31 @@ impl RedisSessionStore {
 #[async_trait]
 impl SessionStore for RedisSessionStore {
     async fn create(&self, record: &mut Record) -> session_store::Result<()> {
-        loop {
-            let created: Option<String> = set(record)?
-                .arg("NX")
-                .query_async(&mut self.conn.clone())
-                .await
-                .map_err(backend)?;
-            if created.is_some() {
-                return Ok(());
+        let template = record.clone();
+        record.id = claim_fresh(Id::default, |id| {
+            let candidate = Record {
+                id,
+                ..template.clone()
+            };
+            let mut conn = self.conn.clone();
+            async move {
+                let created: Option<String> = set(&candidate)?
+                    .arg("NX")
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(backend)?;
+                Ok(match created {
+                    Some(_) => Claim::Claimed,
+                    None => Claim::Taken,
+                })
             }
-            record.id = Id::default();
-        }
+        })
+        .await
+        .map_err(|err| match err {
+            ClaimError::Store(err) => err,
+            none_free => session_store::Error::Backend(none_free.to_string()),
+        })?;
+        Ok(())
     }
 
     async fn save(&self, record: &Record) -> session_store::Result<()> {

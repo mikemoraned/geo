@@ -29,7 +29,8 @@ for working practice and for the limits of this environment. Current notes:
   Python minimal, in a uv project dir, no low-level fiddliness
 - [`.claude/memory/docs-style.md`](.claude/memory/docs-style.md) — reference docs are
   written abstractly (no component names in rules) and in dry language, a README change cites
-  the sources behind it, and an interface is a trait, not a port
+  the sources behind it, another project is linked at its first mention, and an interface is a
+  trait, not a port
 - [`.claude/memory/testing-limits.md`](.claude/memory/testing-limits.md) — Docker tests
   don't run in the sandbox, so binaries need running directly
 - [`.claude/memory/working-with-claude.md`](.claude/memory/working-with-claude.md) —

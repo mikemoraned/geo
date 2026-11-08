@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod code;
 mod contract;
+pub mod fresh;
 pub mod gate;
 pub mod memory;
 pub mod redis;
