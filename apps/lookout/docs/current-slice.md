@@ -691,8 +691,10 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               copies already differ. The rule is CrowFlies' own: a fix is ordered against the last
               fix, and a tick against the clock. The oracle and the offline detector now accept a
               fix that lags a tick, which a replay never sends.
-        - [ ] Make `crossings::compacted` generic over the float type, and call it from the
+        - [x] Make `crossings::compacted` generic over the float type, and call it from the
               evaluation. The evaluation holds a second copy of how a device compacts its crossings.
+              Checked against the device by repacking: the point set came out byte for byte the
+              same, and the firmware does not link `crossings`.
         - [ ] Share the pyo3 helpers of the three extensions, with one mapping of errors to Python
               exceptions, and classify `StepError` once. One store error raises `ValueError` in one
               module and `RuntimeError` in another.

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crossings::silver::Crossing;
 use datafusion::prelude::{Expr, col, lit};
-use domain::{CoordinateError, CrossingCompact, CrossingCompactId, CrossingId, Precision};
+use domain::{CrossingCompactId, CrossingId};
 use medallion::{Query, QueryError, Root};
 use medallion_model::{EvaluationSessionRowV1, TrainSessionCrossingRowV1};
 
@@ -32,21 +32,6 @@ pub fn compact_ids(crossings: &[Crossing]) -> BTreeMap<CrossingId, CrossingCompa
     crossings
         .iter()
         .map(|crossing| (crossing.crossing.id.clone(), crossing.compact_id))
-        .collect()
-}
-
-pub fn compacted<F: Precision>(
-    crossings: &[Crossing],
-) -> Result<Vec<CrossingCompact<F>>, CoordinateError> {
-    crossings
-        .iter()
-        .map(|crossing| {
-            CrossingCompact::at(
-                crossing.compact_id,
-                crossing.crossing.latitude(),
-                crossing.crossing.longitude(),
-            )
-        })
         .collect()
 }
 

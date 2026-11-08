@@ -18,7 +18,7 @@ use crate::rows::{
     RowsError, outcome_rows, replayed_from, scored_from, summary_row, transition_rows,
 };
 use crate::score::{ScoreError, Scoring};
-use crate::store::{compact_ids, compacted, read_passes};
+use crate::store::{compact_ids, read_passes};
 use crate::summarise::{Bootstrap, SummariseError};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -133,7 +133,11 @@ async fn replayed<F: Precision + Send + Sync>(
     crossings_and_passes: &CrossingsAndPasses,
     predictor: Predictor,
 ) -> Result<BTreeMap<SessionId, Vec<Transition>>, StepError> {
-    let compact = compacted::<F>(&crossings_and_passes.crossings)?;
+    let compact = crossings_and_passes
+        .crossings
+        .iter()
+        .map(crossings::compacted::<F>)
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(match predictor {
         Predictor::Oracle { horizon } => {
             let oracles = Oracle::per_session(&crossings_and_passes.passes, &compact, horizon)?;

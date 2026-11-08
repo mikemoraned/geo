@@ -21,5 +21,5 @@ pub use rows::{RowsError, outcome_rows, replayed_from, scored_from, summary_row,
 pub use score::{
     Class, Credit, NotAScore, Outcome, Score, ScoreError, Scoring, UnreadableScore, Verdict, score,
 };
-pub use store::{compact_ids, compacted, read_passes};
+pub use store::{compact_ids, read_passes};
 pub use summarise::{Bootstrap, Estimate, LeadTimes, SummariseError, Summary, summarise};
