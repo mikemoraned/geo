@@ -5,7 +5,7 @@ use std::ops::Add;
 
 use chrono::TimeDelta;
 use domain::SessionId;
-use medallion_model::TrainSessionRowV3;
+use medallion_model::EvaluationSessionRowV1;
 
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -56,7 +56,7 @@ pub enum SummariseError {
 }
 
 pub fn summarise(
-    sessions: &[TrainSessionRowV3],
+    sessions: &[EvaluationSessionRowV1],
     scored: &BTreeMap<SessionId, Vec<Outcome>>,
     bootstrap: &Bootstrap,
 ) -> Result<Summary, SummariseError> {
@@ -69,8 +69,7 @@ pub fn summarise(
                     .ok_or_else(|| SummariseError::NotScored {
                         session_id: session.session_id.clone(),
                     })?;
-            let hours = (session.ended_at - session.started_at).as_seconds_f64() / 3_600.0;
-            Ok(Tally::of(outcomes, hours))
+            Ok(Tally::of(outcomes, session.hours))
         })
         .collect::<Result<_, SummariseError>>()?;
     let whole: Tally = tallies.iter().copied().sum();
@@ -238,12 +237,13 @@ mod tests {
     use domain::{CrossingCompact, CrossingCompactId, CrossingId, Sample, Span};
     use itertools::Itertools;
     use medallion::Row;
-    use medallion_model::TrainSessionCrossingRowV1;
+    use medallion_model::{TrainSessionCrossingRowV1, TrainSessionRowV3};
     use proptest::prelude::*;
 
     use super::*;
     use crate::offline::{OfflineDetector, passes_by_session};
     use crate::oracle::Oracle;
+    use crate::record::session_rows;
     use crate::replay::replay_session;
     use crate::score::{Class, Credit, Score, Scoring, score};
     use domain::places::DRESDEN_HBF;
@@ -257,13 +257,14 @@ mod tests {
         SessionId::new(format!("session-{name}")).expect("a session id")
     }
 
-    fn lasting(name: &str, seconds: i64) -> TrainSessionRowV3 {
-        TrainSessionRowV3 {
+    fn lasting(name: &str, seconds: i64) -> EvaluationSessionRowV1 {
+        session_rows(&[TrainSessionRowV3 {
             session_id: session(name),
             started_at: instant(0),
             ended_at: instant(seconds),
             ..TrainSessionRowV3::example()
-        }
+        }])
+        .remove(0)
     }
 
     fn bootstrap(seed: u64) -> Bootstrap {
@@ -406,7 +407,7 @@ mod tests {
                 (session(&n.to_string()), outcomes)
             })
             .collect();
-        let sessions: Vec<TrainSessionRowV3> =
+        let sessions: Vec<EvaluationSessionRowV1> =
             (0..20).map(|n| lasting(&n.to_string(), 3_600)).collect();
 
         let once = summarise(&sessions, &scored, &bootstrap(7)).expect("a summary");
@@ -443,7 +444,7 @@ mod tests {
     }
 
     fn oracle_summary(sessions: &[(i64, Vec<(u32, i64)>)]) -> Summary {
-        let picked: Vec<TrainSessionRowV3> = sessions
+        let picked: Vec<EvaluationSessionRowV1> = sessions
             .iter()
             .enumerate()
             .map(|(n, (seconds, _))| lasting(&n.to_string(), *seconds))

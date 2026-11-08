@@ -1,6 +1,6 @@
 use datafusion::prelude::{col, lit};
-use medallion::{Country, Query, QueryError, RUN_ID, Root, Row, RunId, layers};
-use medallion_model::{EvaluationRunRowV2, EvaluationSessionRowV1, TrainSessionRowV3};
+use medallion::{Query, QueryError, RUN_ID, Root, Row, RunId, layers};
+use medallion_model::EvaluationRunRowV2;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunsError {
@@ -34,27 +34,6 @@ pub async fn read_run_rows<T: Row<Layer = layers::Gold>>(
         .await?)
 }
 
-pub async fn read_sessions(
-    root: &Root,
-    country: Country,
-    sessions: &[EvaluationSessionRowV1],
-) -> Result<Vec<TrainSessionRowV3>, RunsError> {
-    let picked = col("session_id").in_list(
-        sessions
-            .iter()
-            .map(|session| lit(session.session_id.to_string()))
-            .collect(),
-        false,
-    );
-    Ok(Query::new(root.clone())
-        .read_of_country::<TrainSessionRowV3>(country)
-        .await?
-        .filter(picked)?
-        .sort(vec![col("session_id").sort(true, false)])?
-        .rows()
-        .await?)
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -62,12 +41,10 @@ mod tests {
     use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
     use domain::StateKind;
     use domain::{CrossingCompactId, SessionId};
-    use geo_types::LineString;
-    use medallion::{GeographyRow, write_geography_rows, write_run};
+    use medallion::write_run;
     use medallion_model::EvaluationTransitionRowV1;
 
     use super::*;
-    use domain::places::DRESDEN_HBF;
 
     fn instant(seconds: i64) -> DateTime<Utc> {
         DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
@@ -152,48 +129,5 @@ mod tests {
             .expect("the run's transitions");
 
         assert_eq!(transitions, [transition("a")]);
-    }
-
-    #[tokio::test]
-    async fn the_picked_sessions_are_read_again_from_silver_in_order_of_id() {
-        let tmp = tempfile::tempdir().expect("a temporary directory");
-        let root = Root::new(tmp.path());
-        let line = LineString::from(vec![
-            DRESDEN_HBF.x_y(),
-            (DRESDEN_HBF.x(), DRESDEN_HBF.y() + 0.01),
-        ]);
-        let stored: Vec<GeographyRow<TrainSessionRowV3, LineString<f64>>> = ["c", "a", "b"]
-            .into_iter()
-            .map(|name| GeographyRow {
-                row: TrainSessionRowV3 {
-                    session_id: session(name),
-                    ..TrainSessionRowV3::example()
-                },
-                geography: line.clone(),
-                country: Country::Germany,
-            })
-            .collect();
-        write_geography_rows(&root, &stored)
-            .await
-            .expect("written sessions");
-        let picked: Vec<EvaluationSessionRowV1> = ["c", "a"]
-            .into_iter()
-            .map(|name| EvaluationSessionRowV1 {
-                session_id: session(name),
-                ..EvaluationSessionRowV1::example()
-            })
-            .collect();
-
-        let sessions = read_sessions(&root, Country::Germany, &picked)
-            .await
-            .expect("the sessions");
-
-        assert_eq!(
-            sessions
-                .iter()
-                .map(|session| session.session_id.clone())
-                .collect::<Vec<_>>(),
-            [session("a"), session("c")]
-        );
     }
 }

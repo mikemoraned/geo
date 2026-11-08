@@ -8,7 +8,7 @@ use medallion_model::{
 use crate::PickError;
 use crate::fingerprints::Fingerprints;
 use crate::record::{CodeVersion, RecordError, Recorded, record};
-use crate::runs::{RunsError, read_run_row, read_run_rows, read_sessions};
+use crate::runs::{RunsError, read_run_row, read_run_rows};
 use crate::steps::{self, Ran, Run, StepError};
 
 #[derive(Debug, thiserror::Error)]
@@ -46,7 +46,7 @@ pub async fn replay(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<(
     let transitions = steps::replay(
         root,
         begun.run.pick.country,
-        &begun.picked,
+        &begun.sessions,
         begun.run.predictor,
         begun.run.float_type,
     )
@@ -62,7 +62,7 @@ pub async fn score(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<()
     let outcomes = steps::score(
         root,
         begun.run.pick.country,
-        &begun.picked,
+        &begun.sessions,
         &transitions,
         &begun.run.scoring,
     )
@@ -79,7 +79,7 @@ pub async fn summarise(
 ) -> Result<EvaluationSummaryRowV1, GoldError> {
     let begun = resume(root, run_id, code).await?;
     let outcomes = read_run_rows::<EvaluationOutcomeRowV1>(root, run_id).await?;
-    let summary = steps::summarise(&begun.picked, &outcomes, &begun.run.bootstrap)?;
+    let summary = steps::summarise(&begun.sessions, &outcomes, &begun.run.bootstrap)?;
     tracing::info!(%run_id, "summarised");
     write_run(root, begun.date, run_id, std::slice::from_ref(&summary)).await?;
     Ok(summary)
@@ -88,13 +88,18 @@ pub async fn summarise(
 pub async fn run(root: &Root, run: &Run, code: &CodeVersion) -> Result<(RunId, Ran), GoldError> {
     let country = run.pick.country;
     let picked = crate::pick(root, &run.pick).await?;
-    let Recorded { run_id, date, .. } = begin(root, run, code, &picked).await?;
+    let Recorded {
+        run_id,
+        date,
+        sessions,
+        ..
+    } = begin(root, run, code, &picked).await?;
 
-    let crossings_and_passes = steps::read_crossings_and_passes(root, country, &picked).await?;
+    let crossings_and_passes = steps::read_crossings_and_passes(root, country, &sessions).await?;
     let transitions = steps::replay_against(
         root,
         country,
-        &picked,
+        &sessions,
         &crossings_and_passes,
         run.predictor,
         run.float_type,
@@ -104,11 +109,11 @@ pub async fn run(root: &Root, run: &Run, code: &CodeVersion) -> Result<(RunId, R
     write_run(root, date, &run_id, &transitions).await?;
 
     let outcomes =
-        steps::score_against(&picked, &crossings_and_passes, &transitions, &run.scoring)?;
+        steps::score_against(&sessions, &crossings_and_passes, &transitions, &run.scoring)?;
     tracing::info!(%run_id, outcomes = outcomes.len(), "scored");
     write_run(root, date, &run_id, &outcomes).await?;
 
-    let summary = steps::summarise(&picked, &outcomes, &run.bootstrap)?;
+    let summary = steps::summarise(&sessions, &outcomes, &run.bootstrap)?;
     tracing::info!(%run_id, "summarised");
     write_run(root, date, &run_id, std::slice::from_ref(&summary)).await?;
 
@@ -145,7 +150,7 @@ async fn begin(
 struct Begun {
     run: Run,
     date: NaiveDate,
-    picked: Vec<TrainSessionRowV3>,
+    sessions: Vec<EvaluationSessionRowV1>,
 }
 
 async fn resume(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<Begun, GoldError> {
@@ -168,12 +173,12 @@ async fn resume(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<Begun
         });
     }
     let run = Run::try_from(&row)?;
-    let sessions = read_run_rows::<EvaluationSessionRowV1>(root, run_id).await?;
-    let picked = read_sessions(root, run.pick.country, &sessions).await?;
+    let mut sessions = read_run_rows::<EvaluationSessionRowV1>(root, run_id).await?;
+    sessions.sort_by(|one, other| one.session_id.cmp(&other.session_id));
     Ok(Begun {
         run,
         date: row.started_at.date_naive(),
-        picked,
+        sessions,
     })
 }
 
