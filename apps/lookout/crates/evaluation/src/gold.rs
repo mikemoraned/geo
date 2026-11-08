@@ -7,7 +7,9 @@ use medallion_model::{
 
 use crate::PickError;
 use crate::fingerprints::Fingerprints;
-use crate::record::{CodeVersion, RecordError, Recorded, record};
+use code_version::CodeVersion;
+
+use crate::record::{RecordError, Recorded, record};
 use crate::runs::{RunsError, read_run_row, read_run_rows};
 use crate::steps::{self, Ran, Run, StepError};
 

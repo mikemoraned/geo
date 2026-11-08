@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
-use code_version::{DIRTY, UNKNOWN};
+use code_version::CodeVersion;
 use domain::{Radius, Span};
 use medallion::{FingerprintError, Root, RunId};
 use medallion_model::{
@@ -25,27 +25,6 @@ pub struct Inputs {
     pub fingerprints: Fingerprints,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CodeVersion(String);
-
-impl CodeVersion {
-    pub fn new(hash: &str) -> Result<Self, RecordError> {
-        if hash.is_empty() || hash == UNKNOWN {
-            return Err(RecordError::NoCodeVersion);
-        }
-        if hash.ends_with(DIRTY) {
-            return Err(RecordError::Uncommitted {
-                hash: hash.to_string(),
-            });
-        }
-        Ok(Self(hash.to_string()))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Recorded {
     pub run_id: RunId,
@@ -56,13 +35,6 @@ pub struct Recorded {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RecordError {
-    #[error(
-        "the code was built with uncommitted changes ({hash}), so a run could not name the code \
-         it ran; commit them and build again"
-    )]
-    Uncommitted { hash: String },
-    #[error("the build recorded no code version, so a run could not name the code it ran")]
-    NoCodeVersion,
     #[error(transparent)]
     Fingerprint(#[from] FingerprintError),
     #[error("the run's `{column}` cannot be read back as a setting: {reason}")]

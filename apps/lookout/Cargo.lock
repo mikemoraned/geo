@@ -1772,6 +1772,9 @@ checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 [[package]]
 name = "code_version"
 version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.18",
+]
 
 [[package]]
 name = "colorchoice"
@@ -5310,6 +5313,7 @@ dependencies = [
  "arrow 57.3.1",
  "chrono",
  "clap",
+ "code_version",
  "domain",
  "geo 0.32.0",
  "geo-traits",

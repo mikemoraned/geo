@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 clap = { workspace = true }
+code_version = { workspace = true }
 domain = { workspace = true }
 evaluation = { workspace = true }
 medallion = { workspace = true }

@@ -4,8 +4,40 @@ use std::process::Command;
 pub const ENV: &str = "BUILD_CODE_VERSION";
 
 const CODE: [&str; 3] = ["crates", "Cargo.toml", "Cargo.lock"];
-pub const DIRTY: &str = "-dirty";
-pub const UNKNOWN: &str = "unknown";
+const DIRTY: &str = "-dirty";
+const UNKNOWN: &str = "unknown";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeVersion(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum CodeVersionError {
+    #[error(
+        "the code was built with uncommitted changes ({hash}), so it has no version to name; \
+         commit them and build again"
+    )]
+    Uncommitted { hash: String },
+    #[error("the build recorded no code version")]
+    Unknown,
+}
+
+impl CodeVersion {
+    pub fn new(hash: &str) -> Result<Self, CodeVersionError> {
+        if hash.is_empty() || hash == UNKNOWN {
+            return Err(CodeVersionError::Unknown);
+        }
+        if hash.ends_with(DIRTY) {
+            return Err(CodeVersionError::Uncommitted {
+                hash: hash.to_string(),
+            });
+        }
+        Ok(Self(hash.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 pub fn emit() {
     let workspace = workspace();
@@ -75,4 +107,37 @@ fn git(workspace: &Path, arguments: &[&str]) -> Option<String> {
         .status
         .success()
         .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_version_of_committed_code_is_named_as_it_reads() {
+        let version = CodeVersion::new("1a2b3c4d.5e6f7a8b.9c0d1e2f").expect("a code version");
+
+        assert_eq!(version.as_str(), "1a2b3c4d.5e6f7a8b.9c0d1e2f");
+    }
+
+    #[test]
+    fn a_version_of_uncommitted_code_is_refused() {
+        assert_eq!(
+            CodeVersion::new("1a2b3c4d-dirty"),
+            Err(CodeVersionError::Uncommitted {
+                hash: "1a2b3c4d-dirty".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn a_build_with_no_version_is_refused() {
+        for hash in ["", "unknown"] {
+            assert_eq!(
+                CodeVersion::new(hash),
+                Err(CodeVersionError::Unknown),
+                "{hash:?}"
+            );
+        }
+    }
 }
