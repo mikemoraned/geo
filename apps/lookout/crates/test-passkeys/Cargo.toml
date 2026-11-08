@@ -1,0 +1,11 @@
+[package]
+name = "test-passkeys"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+passkey = { workspace = true }
+
+[lints]
+workspace = true

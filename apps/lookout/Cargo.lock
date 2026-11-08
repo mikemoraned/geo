@@ -7867,6 +7867,7 @@ dependencies = [
  "serde_json",
  "shared",
  "telemetry",
+ "test-passkeys",
  "test-redis",
  "thiserror 2.0.18",
  "tokio",
@@ -8373,6 +8374,14 @@ dependencies = [
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "test-passkeys"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "passkey",
 ]
 
 [[package]]

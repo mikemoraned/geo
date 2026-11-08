@@ -36,6 +36,7 @@ uuid = { version = "1", features = ["v4", "v5", "serde"] }
 redis = { version = "1.7", features = ["tokio-rustls-comp", "tls-rustls-webpki-roots"] }
 rustls = { version = "0.23", features = ["ring"] }
 async-trait = "0.1"
+passkey = { version = "0.6", features = ["rust-crypto"] }
 clap = { version = "4", features = ["derive", "env"] }
 libtest-mimic = "0.8"
 geojson = "1.0"
@@ -94,6 +95,7 @@ recorder = { path = "crates/recorder" }
 session_crossings = { path = "crates/session_crossings" }
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
+test-passkeys = { path = "crates/test-passkeys" }
 test-redis = { path = "crates/test-redis" }
 web-core = { path = "crates/platform/web/core" }
 transport = { path = "crates/transport" }

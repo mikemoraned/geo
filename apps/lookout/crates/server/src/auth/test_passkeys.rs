@@ -1,12 +1,10 @@
 #![cfg(test)]
 
-use async_trait::async_trait;
-use passkey::authenticator::{Authenticator, MemoryStore, UiHint, UserCheck, UserValidationMethod};
+use passkey::authenticator::MemoryStore;
 use passkey::client::{Client, DefaultClientData};
-use passkey::crypto::AvailableBackend;
-use passkey::types::ctap2::{Aaguid, Ctap2Error};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use test_passkeys::approving_authenticator;
 use webauthn_rs::prelude::{
     Passkey, RegisterPublicKeyCredential, Url, Uuid, Webauthn, WebauthnBuilder,
 };
@@ -14,33 +12,6 @@ use webauthn_rs::prelude::{
 use crate::auth::store::Ceremony;
 
 const RP_ID: &str = "lookout.example.com";
-
-struct Approving;
-
-#[async_trait]
-impl UserValidationMethod for Approving {
-    type PasskeyItem = passkey::types::Passkey;
-
-    async fn check_user<'a>(
-        &self,
-        _hint: UiHint<'a, Self::PasskeyItem>,
-        presence: bool,
-        verification: bool,
-    ) -> Result<UserCheck, Ctap2Error> {
-        Ok(UserCheck {
-            presence,
-            verification,
-        })
-    }
-
-    fn is_presence_enabled(&self) -> bool {
-        true
-    }
-
-    fn is_verification_enabled(&self) -> Option<bool> {
-        Some(true)
-    }
-}
 
 fn origin() -> Url {
     Url::parse(&format!("https://{RP_ID}")).expect("an origin")
@@ -68,12 +39,7 @@ pub async fn registered_passkey() -> Passkey {
     let (options, registration) = webauthn
         .start_passkey_registration(Uuid::new_v4(), "recording", "recording", None)
         .expect("a registration");
-    let authenticator = Authenticator::new(
-        Aaguid::new_empty(),
-        MemoryStore::new(),
-        Approving,
-        AvailableBackend,
-    );
+    let authenticator = approving_authenticator(MemoryStore::new());
     let created = Client::new(authenticator)
         .register(&origin(), through_json(&options), DefaultClientData)
         .await

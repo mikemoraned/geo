@@ -78,7 +78,8 @@ Tests register real passkeys through [1Password's `passkey` crate][passkey], a c
 authenticator in one. They hand its credentials to webauthn-rs as JSON, the form a page posts. The
 crate's [`MemoryStore`][memory-store] finds a passkey only by a credential ID it is given. A store
 of one passkey, `Option<Passkey>`, [finds it with none given][option-store], as a discoverable
-sign-in needs. The endpoint tests give each browser that store.
+sign-in needs. The endpoint tests give each browser that store. Both kinds of test build their
+authenticator through [`test-passkeys`](../test-passkeys/README.md).
 
 [challenges]: https://www.w3.org/TR/webauthn-3/#sctn-cryptographic-challenges
 [timeouts]: https://www.w3.org/TR/webauthn-3/#sctn-timeout-recommended-range

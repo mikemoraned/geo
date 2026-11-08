@@ -573,7 +573,7 @@ code.
         `caching.rs` for `Cache-Control` across the site, and `status.rs` for `/auth/status`.
   - [x] Move the websocket endpoint out of `src/lib.rs` into `src/ws.rs`, leaving `lib.rs` to
         assemble the app.
-  - [ ] Add a `test-passkeys` crate, a dev-dependency as `test-redis` is, holding the authenticator
+  - [x] Add a `test-passkeys` crate, a dev-dependency as `test-redis` is, holding the authenticator
         that approves every check. `src/auth/test_passkeys.rs` and `tests/server/auth.rs` each
         hold a copy today, since integration tests cannot see `#[cfg(test)]` code.
   - [ ] Replace `RevokedOnceFound` and the websocket tests' `Passkeys` with one `AuthStore` in

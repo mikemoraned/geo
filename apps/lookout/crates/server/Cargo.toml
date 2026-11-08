@@ -36,7 +36,8 @@ domain = { workspace = true }
 tokio-tungstenite = "0.29"
 futures-util = "0.3"
 tower = { version = "0.5", features = ["util"] }
+test-passkeys = { workspace = true }
 test-redis = { workspace = true }
-passkey = { version = "0.6", features = ["rust-crypto"] }
+passkey = { workspace = true }
 proptest = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

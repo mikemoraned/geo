@@ -1,14 +1,10 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::http::{HeaderMap, Request, StatusCode, header, request};
-use passkey::authenticator::{Authenticator, UiHint, UserCheck, UserValidationMethod};
 use passkey::client::{Client, DefaultClientData};
-use passkey::crypto::AvailableBackend;
 use passkey::types::Passkey;
-use passkey::types::ctap2::{Aaguid, Ctap2Error};
 use passkey::types::webauthn::{
     AuthenticatedPublicKeyCredential, CreatedPublicKeyCredential, CredentialCreationOptions,
     CredentialRequestOptions,
@@ -20,6 +16,7 @@ use server::auth::sessions::SharedSessionStore;
 use server::auth::store::AuthStore;
 use server::auth::{Allowing, Finish, RelyingParty, Started};
 use server::{AppState, build_app};
+use test_passkeys::approving_authenticator;
 use tower::ServiceExt;
 
 use tower_sessions::MemoryStore;
@@ -36,33 +33,6 @@ pub const RECORD_PATHS: [&str; 4] = [
     "/record/app.js",
 ];
 
-struct Approving;
-
-#[async_trait]
-impl UserValidationMethod for Approving {
-    type PasskeyItem = Passkey;
-
-    async fn check_user<'a>(
-        &self,
-        _hint: UiHint<'a, Self::PasskeyItem>,
-        presence: bool,
-        verification: bool,
-    ) -> Result<UserCheck, Ctap2Error> {
-        Ok(UserCheck {
-            presence,
-            verification,
-        })
-    }
-
-    fn is_presence_enabled(&self) -> bool {
-        true
-    }
-
-    fn is_verification_enabled(&self) -> Option<bool> {
-        Some(true)
-    }
-}
-
 pub struct Browser {
     origin: Url,
     passkey: Option<Passkey>,
@@ -76,20 +46,12 @@ impl Browser {
         }
     }
 
-    fn authenticator(&self) -> Authenticator<Option<Passkey>, Approving, AvailableBackend> {
-        Authenticator::new(
-            Aaguid::new_empty(),
-            self.passkey.clone(),
-            Approving,
-            AvailableBackend,
-        )
-    }
-
     pub async fn register(
         &mut self,
         options: CredentialCreationOptions,
     ) -> CreatedPublicKeyCredential {
-        let mut client = Client::new(self.authenticator()).allows_insecure_localhost(true);
+        let mut client = Client::new(approving_authenticator(self.passkey.clone()))
+            .allows_insecure_localhost(true);
         let created = client
             .register(&self.origin, options, DefaultClientData)
             .await
@@ -102,7 +64,8 @@ impl Browser {
         &mut self,
         options: CredentialRequestOptions,
     ) -> AuthenticatedPublicKeyCredential {
-        let mut client = Client::new(self.authenticator()).allows_insecure_localhost(true);
+        let mut client = Client::new(approving_authenticator(self.passkey.clone()))
+            .allows_insecure_localhost(true);
         let asserted = client
             .authenticate(&self.origin, options, DefaultClientData)
             .await
