@@ -20,6 +20,7 @@ chrono = { workspace = true }
 domain = { workspace = true }
 geo-types = { workspace = true }
 medallion = { workspace = true }
+py-common = { workspace = true }
 pyo3 = { workspace = true }
 pyo3-arrow = { workspace = true }
 serde = { workspace = true }

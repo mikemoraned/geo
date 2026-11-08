@@ -19,6 +19,7 @@ arrow = { workspace = true }
 chrono = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }
+py-common = { workspace = true }
 pyo3 = { workspace = true }
 pyo3-arrow = { workspace = true }
 tokio = { workspace = true }

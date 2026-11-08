@@ -1,19 +1,21 @@
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::sync::OnceLock;
 
 use crossings::silver::ReadError;
 use domain::{Percentage, Radius, Span};
 use evaluation::gold::{self, GoldError};
 use evaluation::record::{CodeVersion, session_rows};
+use evaluation::runs::RunsError;
 use evaluation::steps::{self, Predictor, Run, StepError};
 use evaluation::{Pick, PickError, Score, Seed};
-use medallion::{Country, QueryError, Root, Row, RunError};
+use medallion::Country;
 use medallion_model::{
     EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationTransitionRowV1, FloatType,
     TrainSessionRowV3,
 };
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use py_common::{
+    query_error, root_or_default, rows_of, run_error, runtime, runtime_error, table_of, value_error,
+};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_arrow::PyTable;
@@ -123,7 +125,7 @@ impl Bootstrap {
         Ok(Self {
             bootstrap: evaluation::Bootstrap {
                 resamples: NonZeroUsize::new(resamples)
-                    .ok_or_else(|| PyValueError::new_err("`resamples` must be at least 1"))?,
+                    .ok_or_else(|| value_error("`resamples` must be at least 1"))?,
                 seed: Seed(seed),
             },
         })
@@ -399,7 +401,7 @@ fn picking(country: &str, realtime_at_least: f64, sessions: usize, seed: u64) ->
         country: country.parse::<Country>().map_err(value_error)?,
         realtime_at_least: Percentage::new(realtime_at_least).map_err(value_error)?,
         sessions: NonZeroUsize::new(sessions)
-            .ok_or_else(|| PyValueError::new_err("`sessions` must be at least 1"))?,
+            .ok_or_else(|| value_error("`sessions` must be at least 1"))?,
         seed: Seed(seed),
     })
 }
@@ -415,14 +417,12 @@ fn predictor_of(predictor: &Bound<'_, PyAny>) -> PyResult<Predictor> {
             radius: crow_flies.radius,
         });
     }
-    Err(PyValueError::new_err(
-        "`predictor` must be an Oracle or a CrowFlies",
-    ))
+    Err(value_error("`predictor` must be an Oracle or a CrowFlies"))
 }
 
 fn float_type_of(float_type: &str) -> PyResult<FloatType> {
     float_type.parse().map_err(|_| {
-        PyValueError::new_err(format!(
+        value_error(format!(
             "`float_type` must be \"f32\" or \"f64\", not {float_type:?}"
         ))
     })
@@ -436,34 +436,18 @@ fn sessions_of(picked: PyTable) -> PyResult<Vec<EvaluationSessionRowV1>> {
     Ok(session_rows(&rows_of::<TrainSessionRowV3>(picked)?))
 }
 
-fn rows_of<T: Row>(table: PyTable) -> PyResult<Vec<T>> {
-    let (batches, _) = table.into_inner();
-    medallion::from_batches::<T>(&batches).map_err(value_error)
-}
-
-fn table_of<T: Row>(rows: &[T]) -> PyResult<PyTable> {
-    let batch = medallion::batch(rows).map_err(runtime_error)?;
-    let schema = batch.schema();
-    PyTable::try_new(vec![batch], schema).map_err(runtime_error)
-}
-
 fn pick_error(err: PickError) -> PyErr {
     match err {
-        PickError::TooFew { .. } | PickError::Query(QueryError::NoSuchDataset { .. }) => {
-            value_error(err)
-        }
-        PickError::Query(_) => runtime_error(err),
+        PickError::TooFew { .. } => value_error(err),
+        PickError::Query(err) => query_error(err),
     }
 }
 
 fn step_error(err: StepError) -> PyErr {
     match err {
         StepError::Pick(err) => pick_error(err),
-        StepError::Rows(_)
-        | StepError::Query(QueryError::NoSuchDataset { .. })
-        | StepError::Crossings(ReadError::Query(QueryError::NoSuchDataset { .. })) => {
-            value_error(err)
-        }
+        StepError::Query(err) | StepError::Crossings(ReadError::Query(err)) => query_error(err),
+        StepError::Rows(_) => value_error(err),
         _ => runtime_error(err),
     }
 }
@@ -472,31 +456,10 @@ fn gold_error(err: GoldError) -> PyErr {
     match err {
         GoldError::Pick(err) => pick_error(err),
         GoldError::Step(err) => step_error(err),
-        GoldError::Write(RunError::Written { .. }) => value_error(err),
+        GoldError::Write(err) => run_error(err),
+        GoldError::Runs(RunsError::Query(err)) => query_error(err),
         _ => runtime_error(err),
     }
-}
-
-fn root_or_default(root: Option<PathBuf>) -> PyResult<Root> {
-    match root {
-        Some(path) => Ok(Root::new(path)),
-        None => Ok(Root::new(Root::default_path().map_err(runtime_error)?)),
-    }
-}
-
-fn runtime() -> &'static tokio::runtime::Runtime {
-    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| {
-        tokio::runtime::Runtime::new().expect("a tokio runtime for the store's reads")
-    })
-}
-
-fn value_error(err: impl std::fmt::Display) -> PyErr {
-    PyValueError::new_err(err.to_string())
-}
-
-fn runtime_error(err: impl std::fmt::Display) -> PyErr {
-    PyRuntimeError::new_err(err.to_string())
 }
 
 #[pymodule]
