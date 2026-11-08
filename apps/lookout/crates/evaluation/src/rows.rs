@@ -234,17 +234,13 @@ fn class_kind(name: NotificationClass) -> Class {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, TimeDelta, Utc};
+    use chrono::TimeDelta;
     use domain::StateKind;
     use medallion::Row;
     use proptest::prelude::*;
 
     use super::*;
-
-    fn instant(seconds: i64) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
-            + TimeDelta::seconds(seconds)
-    }
+    use crate::fixtures::instant;
 
     fn session(name: &str) -> SessionId {
         SessionId::new(format!("session-{name}")).expect("a session id")

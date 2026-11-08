@@ -225,11 +225,11 @@ mod tests {
     use std::collections::BTreeMap;
     use std::num::NonZeroUsize;
 
-    use chrono::TimeDelta;
     use domain::Percentage;
     use medallion::Country;
 
     use super::*;
+    use crate::fixtures::instant;
 
     fn span(text: &str) -> Span {
         Span::new(text).expect("a span")
@@ -280,11 +280,6 @@ mod tests {
                 ("water_crossing_v2".to_string(), "f4".to_string()),
             ])),
         }
-    }
-
-    fn instant(seconds: i64) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
-            + TimeDelta::seconds(seconds)
     }
 
     #[test]

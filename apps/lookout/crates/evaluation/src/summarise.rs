@@ -233,7 +233,7 @@ fn lead_times(leads: Vec<f64>) -> Option<LeadTimes> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, Utc};
+
     use domain::{CrossingCompact, CrossingCompactId, CrossingId, Sample, Span};
     use itertools::Itertools;
     use medallion::Row;
@@ -241,17 +241,13 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+    use crate::fixtures::{crossing, instant};
     use crate::offline::{OfflineDetector, passes_by_session};
     use crate::oracle::Oracle;
     use crate::record::session_rows;
     use crate::replay::replay_session;
     use crate::score::{Class, Credit, Score, Scoring, score};
     use domain::places::DRESDEN_HBF;
-
-    fn instant(seconds: i64) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
-            + TimeDelta::seconds(seconds)
-    }
 
     fn session(name: &str) -> SessionId {
         SessionId::new(format!("session-{name}")).expect("a session id")
@@ -426,10 +422,6 @@ mod tests {
                 session_id: session("a")
             })
         );
-    }
-
-    fn crossing(n: u32) -> CrossingId {
-        CrossingId::new(format!("crossing-{n}")).expect("a crossing id")
     }
 
     fn first_runs() -> Scoring {

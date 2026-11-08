@@ -113,7 +113,7 @@ where
 mod tests {
     use std::collections::BTreeMap;
 
-    use chrono::{DateTime, TimeDelta, Utc};
+    use chrono::{DateTime, Utc};
     use domain::StateKind;
     use domain::{CrossingCompact, CrossingCompactId, CrossingId, Radius, SessionId};
     use geo_types::Point;
@@ -122,13 +122,9 @@ mod tests {
     use predictor::{Confidence, CrowFlies, Prediction, Predictions};
 
     use super::*;
+    use crate::fixtures::{crossing, instant};
     use crate::offline::{OfflineDetector, passes_by_session};
     use domain::places::DRESDEN_HBF;
-
-    fn instant(seconds: i64) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
-            + TimeDelta::seconds(seconds)
-    }
 
     fn session() -> SessionId {
         named("a")
@@ -136,10 +132,6 @@ mod tests {
 
     fn named(name: &str) -> SessionId {
         SessionId::new(format!("session-{name}")).expect("a session id")
-    }
-
-    fn crossing(n: u32) -> CrossingId {
-        CrossingId::new(format!("crossing-{n}")).expect("a crossing id")
     }
 
     fn detector(passes: &[(u32, i64)]) -> OfflineDetector {

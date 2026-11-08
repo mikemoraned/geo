@@ -117,21 +117,13 @@ mod tests {
     use predictor::Transition;
 
     use super::*;
+    use crate::fixtures::{crossing, instant};
     use crate::offline::{OfflineDetector, passes_by_session};
     use crate::replay::replay_session;
     use domain::places::DRESDEN_HBF;
 
-    fn instant(seconds: i64) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(1_785_098_609_000).expect("an instant")
-            + TimeDelta::seconds(seconds)
-    }
-
     fn session() -> SessionId {
         SessionId::new("session-a").expect("a session id")
-    }
-
-    fn crossing(n: u32) -> CrossingId {
-        CrossingId::new(format!("crossing-{n}")).expect("a crossing id")
     }
 
     fn compact_ids() -> BTreeMap<CrossingId, CrossingCompactId> {

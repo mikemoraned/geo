@@ -4,8 +4,8 @@ use domain::{CrossingCompactId, CrossingId, Gps};
 use geo_types::LineString;
 use geo_types::Point;
 use medallion::{
-    COUNTRY, Countries, Country, GEOMETRY, GeographyRow, PROJECTED_GEOMETRY, Projector, Query,
-    Root, Row, geo_batch, projected_wkb_field, wkb_field, write_geography_rows,
+    Countries, Country, GeographyRow, Query, Root, Row, write_geography_rows,
+    write_geography_rows_by_country,
 };
 use medallion_model::{
     OverlapKind, TrainSessionRowV3, TrainSessionSampleRowV3, WaterCrossingRowV2,
@@ -109,54 +109,33 @@ async fn store_with_a_session(root: &Root, samples: usize) {
 }
 
 async fn store_with_crossings(root: &Root, at_metres: &[f64]) {
-    let projector = Projector::for_country(Country::Germany).expect("projector");
-    let rows: Vec<WaterCrossingRowV2> = at_metres
+    let rows: Vec<GeographyRow<WaterCrossingRowV2, Point<f64>>> = at_metres
         .iter()
         .enumerate()
-        .map(|(n, _)| WaterCrossingRowV2 {
-            crossing_id: CrossingId::new(format!("water:track:rail@{n}")).expect("id"),
-            crossing_compact_id: CrossingCompactId::new(n as u32),
-            overture_water_id: "water".into(),
-            overture_water_subtype: Some("river".into()),
-            overture_water_class: Some("river".into()),
-            track_id: "track".into(),
-            overture_rail_id: "rail".into(),
-            overture_rail_class: Some("rail".into()),
-            overlap_kind: OverlapKind::Line,
-            overlap_m: 40.0,
-            total_overlap_m: 40.0,
-            merged_parts: 1,
-            frac: 0.5,
-            extract_id: "20260727T193628Z".into(),
-            merge_distance_m: 100.0,
-            min_crossing_m: 5.0,
+        .map(|(n, metres)| GeographyRow {
+            row: WaterCrossingRowV2 {
+                crossing_id: CrossingId::new(format!("water:track:rail@{n}")).expect("id"),
+                crossing_compact_id: CrossingCompactId::new(n as u32),
+                overture_water_id: "water".into(),
+                overture_water_subtype: Some("river".into()),
+                overture_water_class: Some("river".into()),
+                track_id: "track".into(),
+                overture_rail_id: "rail".into(),
+                overture_rail_class: Some("rail".into()),
+                overlap_kind: OverlapKind::Line,
+                overlap_m: 40.0,
+                total_overlap_m: 40.0,
+                merged_parts: 1,
+                frac: 0.5,
+                extract_id: "20260727T193628Z".into(),
+                merge_distance_m: 100.0,
+                min_crossing_m: 5.0,
+            },
+            geography: Point::new(east_of_berlin(*metres), BERLIN.y()),
+            country: Country::Germany,
         })
         .collect();
-    let points: Vec<Point<f64>> = at_metres
-        .iter()
-        .map(|metres| Point::new(east_of_berlin(*metres), BERLIN.y()))
-        .collect();
-    let projected: Vec<Point<f64>> = points
-        .iter()
-        .map(|point| projector.project(point).expect("project"))
-        .collect();
-
-    let batch = geo_batch(
-        &rows,
-        &[
-            (wkb_field(GEOMETRY).expect("field"), points.as_slice()),
-            (
-                projected_wkb_field(PROJECTED_GEOMETRY, Country::Germany).expect("field"),
-                projected.as_slice(),
-            ),
-        ],
-    )
-    .expect("build the batch");
-
-    root.rows_of::<WaterCrossingRowV2>()
-        .partition(COUNTRY, Country::Germany)
-        .expect("partition")
-        .replace_with_geo(&[batch])
+    write_geography_rows_by_country(root, &rows)
         .await
         .expect("write the crossings");
 }
