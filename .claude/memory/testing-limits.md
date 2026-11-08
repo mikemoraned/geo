@@ -10,7 +10,9 @@ What a passing test run does and doesn't prove when Claude runs it.
   files out with `-e <path>`, and have the user run them with `just mutants-on-diff -f <path>`.
 - **Run mutants with `--in-place` while free disk is short.** By default cargo-mutants copies the
   workspace and builds the copy from scratch. `--in-place` reuses `target/` instead, but a run cut
-  short leaves a mutated file behind, so check `git status` afterwards.
+  short leaves a mutated file behind, so check `git status` afterwards. An in-place run also leaves
+  a `proptest-regressions/` directory beside any crate whose proptests a mutant failed. Its seeds
+  record the mutant's failures, not the code's, so delete it.
 - **A `_docker` test is often the only end-to-end coverage of a binary's own surface** —
   argument parsing, exit codes, the process actually starting. So "all tests pass" from
   inside the sandbox can still hide a broken CLI. This has bitten once: `--medallion-root`

@@ -116,3 +116,22 @@ pub trait AuthStore: Send + Sync {
         Ok(Some(allowed))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use proptest::prelude::*;
+
+    use super::*;
+
+    proptest! {
+        #[test]
+        fn different_ceremonies_show_differently(a in any::<u128>(), b in any::<u128>()) {
+            prop_assume!(a != b);
+
+            prop_assert_ne!(
+                CeremonyId(Uuid::from_u128(a)).to_string(),
+                CeremonyId(Uuid::from_u128(b)).to_string()
+            );
+        }
+    }
+}

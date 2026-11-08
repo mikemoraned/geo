@@ -784,6 +784,36 @@ async fn registration_creates_no_session() {
 }
 
 #[tokio::test]
+async fn each_request_renews_the_session() {
+    let server = Server::hosted(Allowing::AtOnce);
+    let mut browser = Browser::at(ORIGIN);
+    register(&server.app, &mut browser).await;
+    let cookie = sign_in(&server.app, &mut browser, None)
+        .await
+        .session_cookie()
+        .expect("a session");
+    let id = Id::from_str(cookie.value()).expect("a session id");
+    let expiry = async || {
+        server
+            .sessions
+            .load(&id)
+            .await
+            .expect("loaded")
+            .expect("a session")
+            .expiry_date
+    };
+    let signed_in_until = expiry().await;
+
+    get(&server.app, "/auth/status", Some(&cookie)).await;
+
+    let renewed_until = expiry().await;
+    assert!(
+        renewed_until > signed_in_until,
+        "{renewed_until} is not after {signed_in_until}"
+    );
+}
+
+#[tokio::test]
 async fn signing_out_ends_the_session() {
     let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);

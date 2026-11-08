@@ -481,11 +481,26 @@ code.
         Clippy 1.99 raised two new warnings. `double_must_use` fired on code that async-trait
         0.1.89 generates, and async-trait 0.1.92 clears it. `result_large_err` fired on
         `MotisError`, whose request error takes 136 bytes, so that variant is now boxed.
-  - [ ] Run `just mutants-on-diff-no-docker` in place, over `crates/server/src/auth`, without
+  - [x] Run `just mutants-on-diff-no-docker` in place, over `crates/server/src/auth`, without
         `auth/redis.rs` and `auth/sessions/redis.rs`.
+        On 2026-11-08, 97 mutants ran in 16 minutes: 34 caught, 7 missed, 1 timed out, and 55
+        unviable. Most unviable mutants return `Default::default()` from a type without a default.
+        The timeout turns `put_pending`'s insert loop into one that never returns, so the run
+        caught the change.
   - [ ] Run the two redis files' mutants outside the sandbox, with Docker.
   - [ ] Triage each survivor. A missing test gets a test. An equivalent mutant goes into
         `exclude_re`, with its reason in the commit message.
+        The sandbox run's seven survivors each lacked a test, and a rerun on 2026-11-08 caught
+        all seven:
+        - Turning a `ShortCode` into a `String` runs only when a store writes JSON, so only
+          the redis tests reached it. A proptest now round-trips a code through JSON.
+        - No test reached a ceremony at the exact moment its lifetime ends. One now does.
+        - Signing in creates a session, and only a later request saves it again. A test now
+          checks that a request moves the session's expiry forward.
+        - The memory tests counted time with the lifetime constants they checked, so a mutated
+          constant moved the test with it. They now state ten minutes and an hour.
+        - A `CeremonyId`'s text names its redis key, so only the redis tests reached it. A
+          proptest now checks that two ceremony IDs never show the same text.
 - [ ] Review the auth code as a whole, with `/security-review` over the slice's changes.
 - [ ] Run `cargo audit` over the workspace, for advisories against the crates this slice adds:
       webauthn-rs, its vendored OpenSSL, tower-sessions, and their dependencies.

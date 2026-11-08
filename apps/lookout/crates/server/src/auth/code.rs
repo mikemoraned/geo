@@ -119,5 +119,13 @@ mod tests {
 
             prop_assert_eq!(ShortCode::new(typed), Ok(code));
         }
+
+        #[test]
+        fn a_code_survives_a_json_round_trip(bytes in any::<[u8; 5]>()) {
+            let code = ShortCode::from_bytes(bytes);
+            let json = serde_json::to_string(&code).expect("serialised");
+
+            prop_assert_eq!(serde_json::from_str::<ShortCode>(&json).expect("deserialised"), code);
+        }
     }
 }

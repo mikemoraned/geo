@@ -135,10 +135,11 @@ mod tests {
 
     use super::*;
     use crate::auth::contract::{self, allowed_passkey, pending};
-    use crate::auth::store::{CEREMONY_LIFETIME, PENDING_LIFETIME};
     use crate::auth::test_passkeys::{registered_passkey, registration_ceremony};
 
     const A_MOMENT: Duration = Duration::from_secs(1);
+    const TEN_MINUTES: Duration = Duration::from_secs(10 * 60);
+    const AN_HOUR: Duration = Duration::from_secs(60 * 60);
 
     #[tokio::test(start_paused = true)]
     async fn a_ceremony_is_taken_once() {
@@ -203,10 +204,24 @@ mod tests {
             .await
             .expect("stored");
 
-        advance(CEREMONY_LIFETIME - A_MOMENT).await;
+        advance(TEN_MINUTES - A_MOMENT).await;
         assert!(store.take_ceremony(lasting).await.expect("taken").is_some());
         advance(A_MOMENT * 2).await;
         assert!(store.take_ceremony(expired).await.expect("taken").is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_ceremony_is_gone_the_moment_its_ten_minutes_end() {
+        let store = MemoryAuthStore::default();
+        let id = CeremonyId::random();
+        store
+            .put_ceremony(id, registration_ceremony())
+            .await
+            .expect("stored");
+
+        advance(TEN_MINUTES).await;
+
+        assert!(store.take_ceremony(id).await.expect("taken").is_none());
     }
 
     #[tokio::test(start_paused = true)]
@@ -221,7 +236,7 @@ mod tests {
             .await
             .expect("stored");
 
-        advance(PENDING_LIFETIME - A_MOMENT).await;
+        advance(AN_HOUR - A_MOMENT).await;
         assert!(store.take_pending(&lasting).await.expect("taken").is_some());
         advance(A_MOMENT * 2).await;
         assert!(store.take_pending(&expired).await.expect("taken").is_none());
@@ -236,7 +251,7 @@ mod tests {
             .await
             .expect("inserted");
 
-        advance(PENDING_LIFETIME + A_MOMENT).await;
+        advance(AN_HOUR + A_MOMENT).await;
         let reinserted = store
             .insert_pending(&code, pending(registered_passkey().await))
             .await
@@ -250,7 +265,7 @@ mod tests {
         let store = MemoryAuthStore::default();
         let allowed = allowed_passkey(&store).await;
 
-        advance(PENDING_LIFETIME * 24).await;
+        advance(AN_HOUR * 24).await;
 
         let found = store
             .find_allowed(allowed.passkey.cred_id())
