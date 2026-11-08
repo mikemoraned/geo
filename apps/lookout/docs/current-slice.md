@@ -298,7 +298,7 @@ shows the session as signed out.
       `private, no-cache`. The `/auth/` layer then goes, and its test stays. Three times a route
       sent no `Cache-Control`, and a browser reused a stored answer. With the default, a route
       that sets none is never stored.
-- [ ] Bound the two loops that draw a fresh ID until one is free: `AuthStore::put_pending` for a
+- [x] Bound the two loops that draw a fresh ID until one is free: `AuthStore::put_pending` for a
       short code, and `RedisSessionStore::create` for a session ID. Each loops without end while
       every ID it draws is taken, so a broken key hangs the request rather than failing it. The
       Docker mutants run found this when a constant `session_key` hung `create`. One helper
@@ -307,6 +307,9 @@ shows the session as signed out.
       wait, and gives up once the next wait would take the total past 10 seconds
       ([`with_total_delay`](https://docs.rs/backon/1.6.0/backon/struct.ExponentialBuilder.html#method.with_total_delay)).
       Giving up returns an error that names the cause, which the request answers with 500.
+      On 2026-11-08 a Docker mutants run over both redis files caught 26 of 36 mutants, and the
+      other 10 were unviable. The constant `session_key` mutants now fail their tests within the
+      wait, where they had hung, and the run took 9 minutes rather than 19.
 
 ### Tasks
 

@@ -13,6 +13,8 @@ What a passing test run does and doesn't prove when Claude runs it.
   short leaves a mutated file behind, so check `git status` afterwards. An in-place run also leaves
   a `proptest-regressions/` directory beside any crate whose proptests a mutant failed. Its seeds
   record the mutant's failures, not the code's, so delete it.
+- **Commit before the user starts an in-place run.** The user watches `git diff` to see each
+  mutation, so the tree has to hold nothing else. Leave the code alone until the run reports.
 - **A `_docker` test is often the only end-to-end coverage of a binary's own surface** —
   argument parsing, exit codes, the process actually starting. So "all tests pass" from
   inside the sandbox can still hide a broken CLI. This has bitten once: `--medallion-root`
