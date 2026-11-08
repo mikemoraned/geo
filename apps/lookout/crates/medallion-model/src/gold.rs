@@ -1,8 +1,8 @@
 use medallion::{GoldTarget, RowError};
 
 use crate::{
-    EVALUATION_OUTCOME_V1, EVALUATION_RUN_V1, EVALUATION_SESSION_V1, EVALUATION_SUMMARY_V1,
-    EVALUATION_TRANSITION_V1, EvaluationOutcomeRowV1, EvaluationRunRowV1, EvaluationSessionRowV1,
+    EVALUATION_OUTCOME_V1, EVALUATION_RUN_V2, EVALUATION_SESSION_V1, EVALUATION_SUMMARY_V1,
+    EVALUATION_TRANSITION_V1, EvaluationOutcomeRowV1, EvaluationRunRowV2, EvaluationSessionRowV1,
     EvaluationSummaryRowV1, EvaluationTransitionRowV1,
 };
 
@@ -17,7 +17,7 @@ pub enum GoldTargetError {
 type Definition = fn() -> Result<GoldTarget, RowError>;
 
 const TARGETS: [(&str, Definition); 5] = [
-    (EVALUATION_RUN_V1.name, GoldTarget::of::<EvaluationRunRowV1>),
+    (EVALUATION_RUN_V2.name, GoldTarget::of::<EvaluationRunRowV2>),
     (
         EVALUATION_SESSION_V1.name,
         GoldTarget::of::<EvaluationSessionRowV1>,

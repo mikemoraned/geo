@@ -2,12 +2,12 @@ use chrono::NaiveDate;
 use medallion::{Root, RunError, RunId, write_run};
 use medallion_model::{
     EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationSummaryRowV1,
-    EvaluationTransitionRowV1, TRAIN_SESSION_CROSSING_V1, TRAIN_SESSION_SAMPLE_V3,
-    TRAIN_SESSION_V3, TrainSessionRowV3, WATER_CROSSING_V2,
+    EvaluationTransitionRowV1, TrainSessionRowV3,
 };
 
 use crate::PickError;
-use crate::record::{CodeVersion, RecordError, Recorded, fingerprints, record};
+use crate::fingerprints::Fingerprints;
+use crate::record::{CodeVersion, RecordError, Recorded, record};
 use crate::runs::{RunsError, read_run_row, read_run_rows, read_sessions};
 use crate::steps::{self, Ran, Run, StepError};
 
@@ -22,7 +22,7 @@ pub enum GoldError {
     #[error("silver has changed since run {run_id} was begun, in {datasets:?}")]
     DataChanged {
         run_id: RunId,
-        datasets: Vec<&'static str>,
+        datasets: Vec<String>,
     },
     #[error(transparent)]
     Pick(#[from] PickError),
@@ -157,33 +157,10 @@ async fn resume(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<Begun
             current: code.as_str().to_string(),
         });
     }
-    let now = fingerprints(root).await?;
-    let changed: Vec<&'static str> = [
-        (
-            TRAIN_SESSION_V3.name,
-            &row.train_session_v3_fingerprint,
-            &now.train_session_v3,
-        ),
-        (
-            TRAIN_SESSION_SAMPLE_V3.name,
-            &row.train_session_sample_v3_fingerprint,
-            &now.train_session_sample_v3,
-        ),
-        (
-            TRAIN_SESSION_CROSSING_V1.name,
-            &row.train_session_crossing_v1_fingerprint,
-            &now.train_session_crossing_v1,
-        ),
-        (
-            WATER_CROSSING_V2.name,
-            &row.water_crossing_v2_fingerprint,
-            &now.water_crossing_v2,
-        ),
-    ]
-    .into_iter()
-    .filter(|(_, begun, current)| begun != current)
-    .map(|(dataset, _, _)| dataset)
-    .collect();
+    let changed = Fingerprints::read(root)
+        .await
+        .map_err(RecordError::from)?
+        .changed_since(&Fingerprints::from(row.fingerprints.clone()));
     if !changed.is_empty() {
         return Err(GoldError::DataChanged {
             run_id: run_id.clone(),
@@ -205,7 +182,7 @@ mod tests {
     use std::path::Path;
 
     use medallion::write_rows;
-    use medallion_model::{EvaluationRunRowV1, TrainSessionCrossingRowV1};
+    use medallion_model::{EvaluationRunRowV2, TrainSessionCrossingRowV1};
 
     use super::*;
     use crate::fixtures::{instant, oracle, run_of, store};
@@ -244,7 +221,7 @@ mod tests {
             ),
             (Some(1.0), Some(1.0), 3)
         );
-        assert_eq!(written::<EvaluationRunRowV1>(&root, &run_id).await.len(), 1);
+        assert_eq!(written::<EvaluationRunRowV2>(&root, &run_id).await.len(), 1);
         assert_eq!(
             written::<EvaluationSessionRowV1>(&root, &run_id)
                 .await

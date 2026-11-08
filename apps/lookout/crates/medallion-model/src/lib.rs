@@ -22,8 +22,8 @@ pub use crossing::{
     TrainSessionCrossingRowV1, WATER_CROSSING_V2, WaterCrossingRowV2,
 };
 pub use evaluation::{
-    EVALUATION_OUTCOME_V1, EVALUATION_RUN_V1, EVALUATION_SESSION_V1, EVALUATION_SUMMARY_V1,
-    EVALUATION_TRANSITION_V1, EvaluationOutcomeRowV1, EvaluationRunRowV1, EvaluationSessionRowV1,
+    EVALUATION_OUTCOME_V1, EVALUATION_RUN_V2, EVALUATION_SESSION_V1, EVALUATION_SUMMARY_V1,
+    EVALUATION_TRANSITION_V1, EvaluationOutcomeRowV1, EvaluationRunRowV2, EvaluationSessionRowV1,
     EvaluationSummaryRowV1, EvaluationTransitionRowV1, FloatType, NotificationClass, OutcomeKind,
     PassDetectorName, PredictorName,
 };
@@ -77,7 +77,7 @@ pub const ALL: [DatasetInfo; 23] = [
     EVALUATION_TRANSITION_V1.info(),
     EVALUATION_OUTCOME_V1.info(),
     EVALUATION_SUMMARY_V1.info(),
-    EVALUATION_RUN_V1.info(),
+    EVALUATION_RUN_V2.info(),
     EVALUATION_SESSION_V1.info(),
 ];
 
@@ -116,7 +116,7 @@ mod tests {
             replaceable,
             [
                 "evaluation_outcome_v1",
-                "evaluation_run_v1",
+                "evaluation_run_v2",
                 "evaluation_session_v1",
                 "evaluation_summary_v1",
                 "evaluation_transition_v1",
@@ -216,7 +216,7 @@ mod tests {
         check_rows_of::<EvaluationTransitionRowV1>();
         check_rows_of::<EvaluationOutcomeRowV1>();
         check_rows_of::<EvaluationSummaryRowV1>();
-        check_rows_of::<EvaluationRunRowV1>();
+        check_rows_of::<EvaluationRunRowV2>();
         check_rows_of::<EvaluationSessionRowV1>();
     }
 }

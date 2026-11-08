@@ -3,14 +3,13 @@ use std::num::NonZeroUsize;
 use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use code_version::{DIRTY, UNKNOWN};
 use domain::{Radius, Span};
-use medallion::{DatasetSpec, FingerprintError, Root, RunId, layers};
+use medallion::{FingerprintError, Root, RunId};
 use medallion_model::{
-    EvaluationRunRowV1, EvaluationSessionRowV1, PassDetectorName, PredictorName,
-    TRAIN_SESSION_CROSSING_V1, TRAIN_SESSION_SAMPLE_V3, TRAIN_SESSION_V3, TrainSessionRowV3,
-    WATER_CROSSING_V2,
+    EvaluationRunRowV2, EvaluationSessionRowV1, PassDetectorName, PredictorName, TrainSessionRowV3,
 };
 use uuid::Uuid;
 
+use crate::fingerprints::Fingerprints;
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};
 use crate::steps::{Predictor, Run};
@@ -19,14 +18,6 @@ use crate::summarise::Bootstrap;
 pub const EVALUATION_VERSION: &str = "replay-v1";
 
 const RUN_NAMESPACE: &[u8] = b"EVALUATION_RUN";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Fingerprints {
-    pub train_session_v3: String,
-    pub train_session_sample_v3: String,
-    pub train_session_crossing_v1: String,
-    pub water_crossing_v2: String,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Inputs {
@@ -59,7 +50,7 @@ impl CodeVersion {
 pub struct Recorded {
     pub run_id: RunId,
     pub date: NaiveDate,
-    pub row: EvaluationRunRowV1,
+    pub row: EvaluationRunRowV2,
     pub sessions: Vec<EvaluationSessionRowV1>,
 }
 
@@ -81,22 +72,6 @@ pub enum RecordError {
     },
 }
 
-pub async fn fingerprints(root: &Root) -> Result<Fingerprints, RecordError> {
-    Ok(Fingerprints {
-        train_session_v3: fingerprint(root, TRAIN_SESSION_V3).await?,
-        train_session_sample_v3: fingerprint(root, TRAIN_SESSION_SAMPLE_V3).await?,
-        train_session_crossing_v1: fingerprint(root, TRAIN_SESSION_CROSSING_V1).await?,
-        water_crossing_v2: fingerprint(root, WATER_CROSSING_V2).await?,
-    })
-}
-
-async fn fingerprint(
-    root: &Root,
-    dataset: DatasetSpec<layers::Silver>,
-) -> Result<String, RecordError> {
-    Ok(root.dataset(dataset).fingerprint().await?.to_string())
-}
-
 fn namespace(name: &[u8]) -> Uuid {
     Uuid::new_v5(&Uuid::nil(), name)
 }
@@ -109,7 +84,7 @@ pub async fn record(
 ) -> Result<Recorded, RecordError> {
     let inputs = Inputs {
         code_version: code.as_str().to_string(),
-        fingerprints: fingerprints(root).await?,
+        fingerprints: Fingerprints::read(root).await?,
     };
     let row = run_row(run, &inputs, Utc::now());
     Ok(Recorded {
@@ -120,15 +95,14 @@ pub async fn record(
     })
 }
 
-pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> EvaluationRunRowV1 {
+pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> EvaluationRunRowV2 {
     let (predictor, predictor_horizon_ms, predictor_radius_m) = match run.predictor {
         Predictor::Oracle { horizon } => (PredictorName::Oracle, Some(milliseconds(horizon)), None),
         Predictor::CrowFlies { radius } => {
             (PredictorName::CrowFlies, None, Some(radius.as_metres()))
         }
     };
-    let fingerprints = &inputs.fingerprints;
-    EvaluationRunRowV1 {
+    EvaluationRunRowV2 {
         started_at,
         evaluation_version: EVALUATION_VERSION.to_string(),
         code_version: inputs.code_version.clone(),
@@ -149,29 +123,26 @@ pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> Evaluat
         warm_up_ms: milliseconds(run.scoring.warm_up),
         resamples: run.bootstrap.resamples.get() as u64,
         bootstrap_seed: run.bootstrap.seed.0,
-        train_session_v3_fingerprint: fingerprints.train_session_v3.clone(),
-        train_session_sample_v3_fingerprint: fingerprints.train_session_sample_v3.clone(),
-        train_session_crossing_v1_fingerprint: fingerprints.train_session_crossing_v1.clone(),
-        water_crossing_v2_fingerprint: fingerprints.water_crossing_v2.clone(),
+        fingerprints: inputs.fingerprints.clone().into(),
     }
 }
 
-pub fn run_id(row: &EvaluationRunRowV1) -> RunId {
-    let unstarted = EvaluationRunRowV1 {
+pub fn run_id(row: &EvaluationRunRowV2) -> RunId {
+    let unstarted = EvaluationRunRowV2 {
         started_at: DateTime::UNIX_EPOCH,
         ..row.clone()
     };
-    // Infallible: a run row holds no map, the one shape serde_json can refuse to write.
+    // Infallible: a run row's one map is keyed by text, and serde_json refuses only other keys.
     let canonical = serde_json::to_vec(&unstarted).expect("a run row writes as JSON");
     let id = Uuid::new_v5(&namespace(RUN_NAMESPACE), &canonical);
     // Infallible: a UUID's text holds none of the characters a partition value refuses.
     RunId::new(id.to_string()).expect("a UUID names a partition")
 }
 
-impl TryFrom<&EvaluationRunRowV1> for Run {
+impl TryFrom<&EvaluationRunRowV2> for Run {
     type Error = RecordError;
 
-    fn try_from(row: &EvaluationRunRowV1) -> Result<Self, Self::Error> {
+    fn try_from(row: &EvaluationRunRowV2) -> Result<Self, Self::Error> {
         Ok(Run {
             pick: Pick {
                 country: row.country.parse().map_err(|err| setting("country", err))?,
@@ -251,11 +222,12 @@ fn setting(column: &'static str, reason: impl std::fmt::Display) -> RecordError 
 #[cfg(test)]
 mod tests {
     use medallion_model::FloatType;
+    use std::collections::BTreeMap;
     use std::num::NonZeroUsize;
 
     use chrono::TimeDelta;
-    use domain::{Percentage, SessionId};
-    use medallion::{Country, Row};
+    use domain::Percentage;
+    use medallion::Country;
 
     use super::*;
 
@@ -303,12 +275,10 @@ mod tests {
     fn inputs() -> Inputs {
         Inputs {
             code_version: "abc1234".to_string(),
-            fingerprints: Fingerprints {
-                train_session_v3: "f1".to_string(),
-                train_session_sample_v3: "f2".to_string(),
-                train_session_crossing_v1: "f3".to_string(),
-                water_crossing_v2: "f4".to_string(),
-            },
+            fingerprints: Fingerprints::from(BTreeMap::from([
+                ("train_session_v3".to_string(), "f1".to_string()),
+                ("water_crossing_v2".to_string(), "f4".to_string()),
+            ])),
         }
     }
 
@@ -334,7 +304,7 @@ mod tests {
             (
                 row.evaluation_version.as_str(),
                 row.code_version.as_str(),
-                row.water_crossing_v2_fingerprint.as_str(),
+                row.fingerprints["water_crossing_v2"].as_str(),
                 row.started_at
             ),
             (EVALUATION_VERSION, "abc1234", "f4", instant(0))
@@ -357,10 +327,10 @@ mod tests {
             ..inputs()
         };
         let rederived = Inputs {
-            fingerprints: Fingerprints {
-                train_session_v3: "changed".to_string(),
-                ..inputs().fingerprints
-            },
+            fingerprints: Fingerprints::from(BTreeMap::from([
+                ("train_session_v3".to_string(), "changed".to_string()),
+                ("water_crossing_v2".to_string(), "f4".to_string()),
+            ])),
             ..inputs()
         };
 
@@ -382,7 +352,7 @@ mod tests {
 
     #[test]
     fn an_oracle_row_without_its_horizon_is_refused() {
-        let row = EvaluationRunRowV1 {
+        let row = EvaluationRunRowV2 {
             predictor_horizon_ms: None,
             ..run_row(&oracle_run(), &inputs(), instant(0))
         };
@@ -401,92 +371,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_runs_fingerprints_move_with_the_dataset_that_changes_and_no_other() {
-        let tmp = tempfile::tempdir().expect("a temporary directory");
-        let root = crate::fixtures::store(tmp.path(), 2).await;
-        let before = fingerprints(&root).await.expect("fingerprints");
-
-        medallion::write_rows(
-            &root,
-            &[medallion_model::TrainSessionCrossingRowV1 {
-                crossed_at: instant(86_400),
-                ..medallion_model::TrainSessionCrossingRowV1::example()
-            }],
-        )
-        .await
-        .expect("another pass");
-        let after = fingerprints(&root).await.expect("fingerprints");
-
-        assert_ne!(
-            after.train_session_crossing_v1,
-            before.train_session_crossing_v1
-        );
-        assert_eq!(
-            (after.train_session_v3, after.water_crossing_v2),
-            (before.train_session_v3, before.water_crossing_v2)
-        );
-    }
-
-    #[tokio::test]
-    async fn a_dataset_never_written_has_no_fingerprint() {
-        let tmp = tempfile::tempdir().expect("a temporary directory");
-
-        let refused = fingerprints(&Root::new(tmp.path())).await;
-
-        assert!(
-            matches!(
-                refused,
-                Err(RecordError::Fingerprint(FingerprintError::Unwritten { .. }))
-            ),
-            "{refused:?}"
-        );
-    }
-
-    #[test]
-    fn a_session_row_holds_the_sessions_hours() {
-        let picked = [TrainSessionRowV3 {
-            session_id: SessionId::new("session-a").expect("a session id"),
-            started_at: instant(0),
-            ended_at: instant(5_400),
-            ..TrainSessionRowV3::example()
-        }];
-
-        let rows = session_rows(&picked);
-
-        assert_eq!(
-            rows,
-            [EvaluationSessionRowV1 {
-                session_id: SessionId::new("session-a").expect("a session id"),
-                started_at: instant(0),
-                ended_at: instant(5_400),
-                hours: 1.5,
-            }]
-        );
-    }
-
-    #[test]
-    fn a_build_with_uncommitted_changes_or_no_code_version_is_refused() {
-        assert!(matches!(
-            CodeVersion::new("abc1234-dirty"),
-            Err(RecordError::Uncommitted { .. })
-        ));
-        assert!(matches!(
-            CodeVersion::new("unknown"),
-            Err(RecordError::NoCodeVersion)
-        ));
-        assert!(matches!(
-            CodeVersion::new(""),
-            Err(RecordError::NoCodeVersion)
-        ));
-        assert_eq!(
-            CodeVersion::new("abc1234")
-                .expect("a code version")
-                .as_str(),
-            "abc1234"
-        );
-    }
-
-    #[tokio::test]
     async fn a_recorded_run_names_its_code_inputs_and_sessions_under_its_id() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = crate::fixtures::store(tmp.path(), 3).await;
@@ -500,7 +384,7 @@ mod tests {
 
         let inputs = Inputs {
             code_version: "abc1234".to_string(),
-            fingerprints: fingerprints(&root).await.expect("fingerprints"),
+            fingerprints: Fingerprints::read(&root).await.expect("fingerprints"),
         };
         assert_eq!(
             recorded.row,

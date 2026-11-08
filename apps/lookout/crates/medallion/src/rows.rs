@@ -45,11 +45,17 @@ pub trait Projection: Serialize + for<'de> Deserialize<'de> {
 }
 
 pub fn projected_columns<P: Projection>() -> Result<Vec<String>, RowError> {
-    let options = TracingOptions::default().enums_without_data_as_strings(true);
+    let options = tracing_options();
     Ok(Vec::<FieldRef>::from_samples(&[P::example()], options)?
         .iter()
         .map(|field| field.name().clone())
         .collect())
+}
+
+fn tracing_options() -> TracingOptions {
+    TracingOptions::default()
+        .enums_without_data_as_strings(true)
+        .map_as_struct(false)
 }
 
 pub trait Dated: Row {
@@ -57,7 +63,7 @@ pub trait Dated: Row {
 }
 
 pub fn fields<T: Row>() -> Result<Vec<FieldRef>, RowError> {
-    let options = TracingOptions::default().enums_without_data_as_strings(true);
+    let options = tracing_options();
     let options = T::INSTANTS.iter().try_fold(options, |options, &name| {
         options.overwrite(
             name,

@@ -3389,6 +3389,7 @@ dependencies = [
  "crossings",
  "datafusion",
  "domain",
+ "futures",
  "geo 0.32.0",
  "geo-types",
  "itertools 0.15.0",
