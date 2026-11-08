@@ -693,7 +693,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               write a dataset partitioned by country alone. `instant()` is defined about ten times,
               and three crates build a crossings table by hand. The write by country is its own
               function, `write_geography_rows_by_country`, since the dated one groups rows by date.
-        - [ ] Write medallion's files through `Root::object_store()`, as a dataset's fingerprint
+        - [x] Write medallion's files through `Root::object_store()`, as a dataset's fingerprint
               reads them. The writer builds its own `LocalFileSystem` from each file's absolute
               path, so it alone ties the store to the local disk.
       - **Build identity**
