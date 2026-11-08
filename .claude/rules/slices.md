@@ -22,5 +22,6 @@ paths:
   work runs, each only once there is something to put in it:
   - `Investigation` — what chasing a symptom established, and the evidence for it.
   - `Observations` — what a run or a field trip showed, dated where the date matters.
-  - `Pending refactors` — a refactor the work revealed. It runs after the feature, so it goes here unticked rather than into the group in hand.
+  - `Pending refactors` — a deferred refactor that belongs to no task group, unticked. It sits
+    after `Tasks`. A refactor that belongs to a group goes into that group as a task.
 - **Task checkbox states**: `[ ]` = todo, `[x]` = done, `[-]` = moot/cancelled (no longer worth doing — e.g. superseded, or the premise was refuted). Use `[-]` rather than deleting or striking through the task, and add a short note saying why it's moot.

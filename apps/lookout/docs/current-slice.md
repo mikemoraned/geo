@@ -524,15 +524,6 @@ when `evaluation_run_v2` replaced the run row's four fingerprint columns with on
   R-tree took 0.54 s. Both gave the same 55,775 transitions. The 3 s saved did not justify the
   index, and it was removed.
 
-### Pending refactors
-
-- [ ] Write medallion's files through `Root::object_store()`, as a dataset's fingerprint reads
-      them. The writer builds its own `LocalFileSystem` from each file's absolute path, so it alone
-      ties the store to the local disk.
-- [ ] Fold `evaluate`'s binary into `evaluation`, once `code_version`'s build script watches only
-      tracked files. Until then the script rebuilds `evaluation`, and so `evaluation-py`, on any
-      write under `crates/`. The binary's `clap` and `tracing-subscriber` go behind a feature.
-
 ### Tasks
 
 #### Refactors / extensions
@@ -702,14 +693,23 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               write a dataset partitioned by country alone. `instant()` is defined about ten times,
               and three crates build a crossings table by hand. The write by country is its own
               function, `write_geography_rows_by_country`, since the dated one groups rows by date.
+        - [ ] Write medallion's files through `Root::object_store()`, as a dataset's fingerprint
+              reads them. The writer builds its own `LocalFileSystem` from each file's absolute
+              path, so it alone ties the store to the local disk.
       - **Build identity**
         - [x] Take `motis`'s build identity from `code_version`, move `CodeVersion` into that crate,
               and drop `BUILD_GIT_HASH` from the recipes. The two schemes test for uncommitted
               changes differently, and a plain `cargo run` of `motis` records "unknown". The
               server keeps `BUILD_GIT_HASH`, since it builds in Docker, where no repo is there to
               read a version from.
-        - [ ] Watch only tracked files in `code_version`'s build script. It watches all of
-              `crates/`, so a write under a `.venv` or `m5plus/target` relinks `evaluate`.
+        - [x] Watch only tracked files in `code_version`'s build script. It watches all of
+              `crates/`, so a write under a `.venv` or `m5plus/target` relinks `evaluate`. An
+              untracked file no longer marks the code dirty either, so the version and what the
+              script watches agree.
+        - [ ] Fold `evaluate`'s binary into `evaluation`, once the build script watches only tracked
+              files. Until then the script rebuilds `evaluation`, and so `evaluation-py`, on any
+              write under `crates/`. The binary's `clap` and `tracing-subscriber` go behind a
+              feature.
       - **Derivation pipeline**
         - [ ] Read the capture and place its polylines once per `motis_ingest`, and pass both to
               both derivations. A re-derive reads, deduplicates, and places the whole capture twice.
