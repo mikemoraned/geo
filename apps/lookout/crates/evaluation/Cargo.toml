@@ -3,8 +3,13 @@ name = "evaluation"
 version = "0.1.0"
 edition.workspace = true
 
+[[bin]]
+name = "evaluate"
+required-features = ["cli"]
+
 [dependencies]
 chrono = { workspace = true }
+clap = { workspace = true, optional = true }
 code_version = { workspace = true }
 crossings = { workspace = true }
 datafusion = { workspace = true }
@@ -22,10 +27,16 @@ rayon = { workspace = true }
 serde_json = { workspace = true }
 statrs = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }
 uuid = { workspace = true }
 
+[build-dependencies]
+code_version = { workspace = true }
+
 [features]
+cli = ["dep:clap", "dep:tokio", "dep:tracing-subscriber"]
 fixtures = ["domain/fixtures"]
 
 [dev-dependencies]

@@ -706,7 +706,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               `crates/`, so a write under a `.venv` or `m5plus/target` relinks `evaluate`. An
               untracked file no longer marks the code dirty either, so the version and what the
               script watches agree.
-        - [ ] Fold `evaluate`'s binary into `evaluation`, once the build script watches only tracked
+        - [x] Fold `evaluate`'s binary into `evaluation`, once the build script watches only tracked
               files. Until then the script rebuilds `evaluation`, and so `evaluation-py`, on any
               write under `crates/`. The binary's `clap` and `tracing-subscriber` go behind a
               feature.
@@ -811,7 +811,8 @@ The apps come last, since they show the states of the predictor a person chooses
       LightCone, and `platform-core`'s for the states it exposes.
 - [ ] Show the states in the picture in `docs/web.md`, and on the panel in
       `crates/platform/m5/README.md`.
-- [ ] Write the READMEs of `evaluation`, `evaluate`, and `evaluation-py`.
+- [ ] Write the READMEs of `evaluation`, covering its `evaluate` binary and the `cli` feature that
+      builds it, and of `evaluation-py`.
 - [ ] Name the v3 datasets in the help of `silver-motis-ingest`, and `train_session_crossing_v1` in
       that of `silver-session-crossings`.
 - [ ] Fold the `exploreN.py` notebooks into one or more notebooks that demonstrate the evaluation's

@@ -3369,25 +3369,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "evaluate"
-version = "0.1.0"
-dependencies = [
- "clap",
- "code_version",
- "domain",
- "evaluation",
- "medallion",
- "medallion-model",
- "tokio",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "evaluation"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "clap",
  "code_version",
  "crossings",
  "datafusion",
@@ -3409,6 +3395,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
