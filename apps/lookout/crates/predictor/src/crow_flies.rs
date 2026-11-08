@@ -5,8 +5,9 @@ use geo::{Distance, Haversine};
 
 use domain::{CrossingCompact, Precision, Radius, Sample};
 
+use crate::clock::{Clock, OutOfOrder};
 use crate::crossings::Crossings;
-use crate::predict::{Confidence, Event, ObserveError, Predict, Prediction, Predictions};
+use crate::predict::{Confidence, Event, Predict, Prediction, Predictions};
 
 pub const DEFAULT_RADIUS: Radius =
     Radius::metres(NonZeroU32::new(5_000).expect("five thousand is not zero"));
@@ -15,7 +16,7 @@ pub const DEFAULT_RADIUS: Radius =
 pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
     crossings: C,
     radius_metres: P,
-    now: Option<DateTime<Utc>>,
+    clock: Clock,
     latest: Option<Sample<P>>,
     speed_mps: Option<P>,
     predictions: Predictions<P>,
@@ -29,7 +30,7 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
         Self {
             crossings,
             radius_metres,
-            now: None,
+            clock: Clock::default(),
             latest: None,
             speed_mps: None,
             predictions: Predictions::new(),
@@ -37,7 +38,7 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
     }
 
     pub fn now(&self) -> Option<DateTime<Utc>> {
-        self.now
+        self.clock.now()
     }
 
     pub fn latest(&self) -> Option<&Sample<P>> {
@@ -54,22 +55,6 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
 
     pub fn crossings(&self) -> &C {
         &self.crossings
-    }
-
-    fn advance(&mut self, to: DateTime<Utc>) -> Result<(), ObserveError> {
-        match self.now {
-            Some(now) if to < now => Err(ObserveError::OutOfOrder { now, at: to }),
-            _ => {
-                self.now = Some(to);
-                Ok(())
-            }
-        }
-    }
-
-    fn reached(&mut self, at: DateTime<Utc>) {
-        if self.now.is_none_or(|now| at > now) {
-            self.now = Some(at);
-        }
     }
 
     fn predict(&mut self, sample: Sample<P>) {
@@ -121,21 +106,10 @@ fn arrival<P: Precision>(at: DateTime<Utc>, metres: P, speed_mps: P) -> Option<D
 }
 
 impl<P: Precision, C: Crossings<P>> Predict<P> for CrowFlies<P, C> {
-    fn observe(&mut self, event: Event<P>) -> Result<(), ObserveError> {
-        match event {
-            Event::Sampled(sample) => {
-                if let Some(latest) = &self.latest
-                    && sample.t < latest.t
-                {
-                    return Err(ObserveError::OutOfOrder {
-                        now: latest.t,
-                        at: sample.t,
-                    });
-                }
-                self.reached(sample.t);
-                self.predict(sample);
-            }
-            Event::Elapsed(t) => self.advance(t)?,
+    fn observe(&mut self, event: Event<P>) -> Result<(), OutOfOrder> {
+        self.clock.observe(&event)?;
+        if let Event::Sampled(sample) = event {
+            self.predict(sample);
         }
         Ok(())
     }
@@ -421,7 +395,7 @@ mod tests {
 
         assert_eq!(
             refused,
-            Err(ObserveError::OutOfOrder {
+            Err(OutOfOrder {
                 now: instant() + TimeDelta::seconds(30),
                 at: instant(),
             })

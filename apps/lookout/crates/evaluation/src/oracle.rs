@@ -5,7 +5,7 @@ use domain::{CrossingCompact, CrossingCompactId, Precision, SessionId, Span};
 use geo::{Distance, Haversine};
 use geo_types::Point;
 use itertools::Itertools;
-use predictor::{Confidence, Event, ObserveError, Predict, Prediction, Predictions};
+use predictor::{Clock, Confidence, Event, OutOfOrder, Predict, Prediction, Predictions};
 
 use crate::offline::PassesBySession;
 
@@ -13,7 +13,7 @@ use crate::offline::PassesBySession;
 pub struct Oracle<P: Precision> {
     passes: Vec<(DateTime<Utc>, CrossingCompactId, Point<P>)>,
     horizon: TimeDelta,
-    now: Option<DateTime<Utc>>,
+    clock: Clock,
     latest: Option<Point<P>>,
     predictions: Predictions<P>,
 }
@@ -66,7 +66,7 @@ impl<P: Precision> Oracle<P> {
                 })
                 .collect(),
             horizon: horizon.time_delta(),
-            now: None,
+            clock: Clock::default(),
             latest: None,
             predictions: Predictions::new(),
         }
@@ -92,17 +92,12 @@ impl<P: Precision> Oracle<P> {
 }
 
 impl<P: Precision> Predict<P> for Oracle<P> {
-    fn observe(&mut self, event: Event<P>) -> Result<(), ObserveError> {
-        let (at, from) = match event {
-            Event::Sampled(sample) => (sample.t, Some(sample.gps.position)),
-            Event::Elapsed(at) => (at, self.latest),
+    fn observe(&mut self, event: Event<P>) -> Result<(), OutOfOrder> {
+        let at = self.clock.observe(&event)?;
+        let from = match event {
+            Event::Sampled(sample) => Some(sample.gps.position),
+            Event::Elapsed(_) => self.latest,
         };
-        if let Some(now) = self.now
-            && at < now
-        {
-            return Err(ObserveError::OutOfOrder { now, at });
-        }
-        self.now = Some(at);
         self.latest = from;
         self.predictions = from.map(|from| self.predict(at, from)).unwrap_or_default();
         Ok(())
@@ -269,7 +264,7 @@ mod tests {
 
         assert_eq!(
             oracle.observe(sampled(9)),
-            Err(ObserveError::OutOfOrder {
+            Err(OutOfOrder {
                 now: instant(10),
                 at: instant(9)
             })

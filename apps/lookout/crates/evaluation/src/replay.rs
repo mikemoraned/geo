@@ -6,7 +6,7 @@ use medallion::{Country, Query, QueryError, Root};
 use medallion_model::{
     EvaluationSessionRowV1, TrainSessionSamplePositionV3, TrainSessionSampleRowV3,
 };
-use predictor::{DetectPasses, Event, ObserveError, Predict, TrackError, Tracker, Transition};
+use predictor::{DetectPasses, Event, OutOfOrder, Predict, Tracker, Transition};
 use rayon::prelude::*;
 
 use crate::offline::{OfflineDetector, PassesBySession};
@@ -22,11 +22,11 @@ pub enum ReplayError {
         source: CoordinateError,
     },
     #[error("the predictor refused a sample: {0}")]
-    Predicting(ObserveError),
+    Predicting(OutOfOrder),
     #[error("the pass detector refused a sample: {0}")]
-    Detecting(ObserveError),
+    Detecting(OutOfOrder),
     #[error("the tracker refused a round: {0}")]
-    Tracking(#[from] TrackError),
+    Tracking(OutOfOrder),
 }
 
 pub fn replay_session<F, Pr, D>(
@@ -48,7 +48,11 @@ where
         detector
             .observe(Event::Sampled(sample))
             .map_err(ReplayError::Detecting)?;
-        transitions.extend(tracker.track(sample.t, predictor.predictions(), detector.passed())?);
+        transitions.extend(
+            tracker
+                .track(sample.t, predictor.predictions(), detector.passed())
+                .map_err(ReplayError::Tracking)?,
+        );
     }
     Ok(transitions)
 }
@@ -182,7 +186,7 @@ mod tests {
     }
 
     impl Predict<f64> for Scripted {
-        fn observe(&mut self, event: Event<f64>) -> Result<(), ObserveError> {
+        fn observe(&mut self, event: Event<f64>) -> Result<(), OutOfOrder> {
             let Event::Sampled(sample) = event else {
                 return Ok(());
             };
@@ -267,7 +271,7 @@ mod tests {
         assert!(
             matches!(
                 refused,
-                Err(ReplayError::Predicting(ObserveError::OutOfOrder { now, at }))
+                Err(ReplayError::Predicting(OutOfOrder { now, at }))
                     if now == instant(10) && at == instant(0)
             ),
             "{refused:?}"

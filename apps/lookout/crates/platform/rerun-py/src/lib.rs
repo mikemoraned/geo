@@ -1,7 +1,7 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use domain::{CrossingCompact, Radius, Sample};
 use predictor::{
-    CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS, Event, ObserveError, Predict, nearest_first,
+    CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS, Event, OutOfOrder, Predict, nearest_first,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -140,7 +140,7 @@ impl CrowFlies {
     fn observe(&mut self, event: Event<f64>) -> PyResult<()> {
         self.inner
             .observe(event)
-            .map_err(|err: ObserveError| PyValueError::new_err(err.to_string()))
+            .map_err(|err: OutOfOrder| PyValueError::new_err(err.to_string()))
     }
 }
 
