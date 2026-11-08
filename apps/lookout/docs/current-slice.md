@@ -555,6 +555,12 @@ code.
 - [ ] Check that no log line carries a session ID, a credential ID, or the redis URL. Include the
       redis client's errors, which the server and the CLI print.
 - [ ] Run `just test-no-docker` and the server's Docker tests.
+- [ ] Move each test helper and each piece of server code that sits in the wrong place.
+  - [ ] `tests/compression.rs` and `tests/version.rs` each define their own `relying_party()`
+        helper, which builds a relying party and has nothing to do with compression or the
+        version. Decide where a helper shared by the server's tests belongs.
+  - [ ] Look through the server's tests for others in an unexpected file or module.
+  - [ ] Look through the server's code for the same.
 
 #### Wrap-up
 
