@@ -566,7 +566,7 @@ code.
   - [x] Move the shared test helpers out of `tests/server/auth.rs` into `tests/server/support.rs`:
         `Browser`, `Approving`, `Reply`, `Server`, `get`, `post`, `send`, `register`, `sign_in`,
         and the origins. `ws_roundtrip.rs` imports them from the auth tests' file today.
-  - [ ] Move `tests/compression.rs` and `tests/version.rs` into the `tests/server/` binary, building
+  - [x] Move `tests/compression.rs` and `tests/version.rs` into the `tests/server/` binary, building
         their relying party through `support.rs`.
   - [ ] Split `tests/server/auth.rs`, at 1,121 lines, by what each test covers: `auth.rs` for
         ceremonies, sign-in, sessions, and sign-out, `gate.rs` for the `/record/` gate,

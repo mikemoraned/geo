@@ -1,39 +1,27 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
-use server::auth::RelyingParty;
-use server::{AppState, build_app};
-use tower::ServiceExt;
-use webauthn_rs::prelude::Url;
+use server::auth::Allowing;
 
-fn relying_party() -> RelyingParty {
-    let origin = Url::parse("https://lookout.example.com").expect("an origin");
-    RelyingParty::in_memory(&origin).expect("a relying party")
-}
+use crate::support::{Server, send};
 
 async fn fetch(path: &str, accept_encoding: Option<&str>) -> (StatusCode, Option<String>, usize) {
     let mut request = Request::builder().uri(path);
     if let Some(encoding) = accept_encoding {
         request = request.header(header::ACCEPT_ENCODING, encoding);
     }
-    let state = AppState {
-        sink: None,
-        relying_party: relying_party(),
-    };
-    let response = build_app(state, env!("CARGO_MANIFEST_DIR"))
-        .oneshot(request.body(Body::empty()).expect("build request"))
-        .await
-        .expect("router response");
+    let server = Server::hosted(Allowing::ByAdmin);
+    let reply = send(
+        &server.app,
+        request.body(Body::empty()).expect("build request"),
+    )
+    .await;
 
-    let status = response.status();
-    let encoding = response
-        .headers()
+    let encoding = reply
+        .headers
         .get(header::CONTENT_ENCODING)
         .map(|value| value.to_str().expect("an ascii encoding").to_string());
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("read body");
 
-    (status, encoding, body.len())
+    (reply.status, encoding, reply.body.len())
 }
 
 #[tokio::test]
