@@ -43,7 +43,7 @@ pub fn emit() {
     let workspace = workspace();
     println!("cargo:rustc-env={ENV}={}", version(workspace.as_deref()));
     if let Some(workspace) = workspace {
-        for path in CODE {
+        for path in tracked(&workspace) {
             println!("cargo:rerun-if-changed={}", workspace.join(path).display());
         }
         let branch = git(&workspace, &["symbolic-ref", "-q", "HEAD"]);
@@ -81,12 +81,22 @@ fn version(workspace: Option<&Path>) -> String {
     };
     let changed = git(
         workspace,
-        &[&["status", "--porcelain", "--"][..], &CODE[..]].concat(),
+        &[
+            &["status", "--porcelain", "--untracked-files=no", "--"][..],
+            &CODE[..],
+        ]
+        .concat(),
     );
     match changed {
         Some(changes) if changes.is_empty() => hashes.join("."),
         _ => format!("{}{DIRTY}", hashes.join(".")),
     }
+}
+
+fn tracked(workspace: &Path) -> Vec<String> {
+    git(workspace, &[&["ls-files", "--"][..], &CODE[..]].concat())
+        .map(|listed| listed.lines().map(str::to_string).collect())
+        .unwrap_or_default()
 }
 
 fn workspace() -> Option<PathBuf> {
