@@ -559,8 +559,26 @@ code.
   - [ ] `tests/compression.rs` and `tests/version.rs` each define their own `relying_party()`
         helper, which builds a relying party and has nothing to do with compression or the
         version. Decide where a helper shared by the server's tests belongs.
-  - [ ] Look through the server's tests for others in an unexpected file or module.
-  - [ ] Look through the server's code for the same.
+        Decided on 2026-11-08: in `tests/server/support.rs`, inside the one test binary, so each
+        test file shares it.
+  - [x] Look through the server's tests for others in an unexpected file or module.
+  - [x] Look through the server's code for the same.
+  - [ ] Move the shared test helpers out of `tests/server/auth.rs` into `tests/server/support.rs`:
+        `Browser`, `Approving`, `Reply`, `Server`, `get`, `post`, `send`, `register`, `sign_in`,
+        and the origins. `ws_roundtrip.rs` imports them from the auth tests' file today.
+  - [ ] Move `tests/compression.rs` and `tests/version.rs` into the `tests/server/` binary, building
+        their relying party through `support.rs`.
+  - [ ] Split `tests/server/auth.rs`, at 1,121 lines, by what each test covers: `auth.rs` for
+        ceremonies, sign-in, sessions, and sign-out, `gate.rs` for the `/record/` gate,
+        `caching.rs` for `Cache-Control` across the site, and `status.rs` for `/auth/status`.
+  - [ ] Move the websocket endpoint out of `src/lib.rs` into `src/ws.rs`, leaving `lib.rs` to
+        assemble the app.
+  - [ ] Add a `test-passkeys` crate, a dev-dependency as `test-redis` is, holding the authenticator
+        that approves every check. `src/auth/test_passkeys.rs` and `tests/server/auth.rs` each
+        hold a copy today, since integration tests cannot see `#[cfg(test)]` code.
+  - [ ] Replace `RevokedOnceFound` and the websocket tests' `Passkeys` with one `AuthStore` in
+        `support.rs`. Each wraps `MemoryAuthStore`, passes eight of its nine methods through, and
+        changes one.
 
 #### Wrap-up
 
