@@ -563,7 +563,7 @@ code.
         test file shares it.
   - [x] Look through the server's tests for others in an unexpected file or module.
   - [x] Look through the server's code for the same.
-  - [ ] Move the shared test helpers out of `tests/server/auth.rs` into `tests/server/support.rs`:
+  - [x] Move the shared test helpers out of `tests/server/auth.rs` into `tests/server/support.rs`:
         `Browser`, `Approving`, `Reply`, `Server`, `get`, `post`, `send`, `register`, `sign_in`,
         and the origins. `ws_roundtrip.rs` imports them from the auth tests' file today.
   - [ ] Move `tests/compression.rs` and `tests/version.rs` into the `tests/server/` binary, building

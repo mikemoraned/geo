@@ -3,16 +3,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use axum::Router;
 use axum::body::{Body, Bytes};
-use axum::http::{HeaderMap, Request, StatusCode, header, request};
-use passkey::authenticator::{Authenticator, UiHint, UserCheck, UserValidationMethod};
-use passkey::client::{Client, DefaultClientData};
-use passkey::crypto::AvailableBackend;
-use passkey::types::Passkey;
-use passkey::types::ctap2::{Aaguid, Ctap2Error};
-use passkey::types::webauthn::{
-    AuthenticatedPublicKeyCredential, CreatedPublicKeyCredential, CredentialCreationOptions,
-    CredentialRequestOptions, ResidentKeyRequirement,
-};
+use axum::http::{StatusCode, header};
+use passkey::types::webauthn::{CredentialCreationOptions, ResidentKeyRequirement};
 use server::auth::code::ShortCode;
 use server::auth::memory::MemoryAuthStore;
 use server::auth::redis::RedisAuthStore;
@@ -23,92 +15,19 @@ use server::auth::store::{
     AllowedPasskey, AuthStore, Ceremony, CeremonyId, Insertion, PendingPasskey, StoreError, Update,
 };
 use server::auth::{Allowing, AuthError, Finish, RelyingParty, Started};
-use server::{AppState, build_app};
 use std::str::FromStr;
 use test_redis::TestRedis;
-use tower::ServiceExt;
 
 use tower_sessions::cookie::time::Duration;
 use tower_sessions::cookie::{Cookie, SameSite};
 use tower_sessions::session::Id;
 use tower_sessions::{MemoryStore, SessionStore};
-use webauthn_rs::prelude::{CredentialID, RegisterPublicKeyCredential, Url, Uuid, WebauthnBuilder};
+use webauthn_rs::prelude::{CredentialID, RegisterPublicKeyCredential, Uuid, WebauthnBuilder};
 
-const ORIGIN: &str = "https://lookout.example.com";
-pub const LOCALHOST: &str = "http://localhost:3000";
-
-struct Approving;
-
-#[async_trait]
-impl UserValidationMethod for Approving {
-    type PasskeyItem = Passkey;
-
-    async fn check_user<'a>(
-        &self,
-        _hint: UiHint<'a, Self::PasskeyItem>,
-        presence: bool,
-        verification: bool,
-    ) -> Result<UserCheck, Ctap2Error> {
-        Ok(UserCheck {
-            presence,
-            verification,
-        })
-    }
-
-    fn is_presence_enabled(&self) -> bool {
-        true
-    }
-
-    fn is_verification_enabled(&self) -> Option<bool> {
-        Some(true)
-    }
-}
-
-pub struct Browser {
-    origin: Url,
-    passkey: Option<Passkey>,
-}
-
-impl Browser {
-    pub fn at(origin: &str) -> Self {
-        Self {
-            origin: url(origin),
-            passkey: None,
-        }
-    }
-
-    fn authenticator(&self) -> Authenticator<Option<Passkey>, Approving, AvailableBackend> {
-        Authenticator::new(
-            Aaguid::new_empty(),
-            self.passkey.clone(),
-            Approving,
-            AvailableBackend,
-        )
-    }
-
-    async fn register(&mut self, options: CredentialCreationOptions) -> CreatedPublicKeyCredential {
-        let mut client = Client::new(self.authenticator()).allows_insecure_localhost(true);
-        let created = client
-            .register(&self.origin, options, DefaultClientData)
-            .await
-            .expect("a credential");
-        self.passkey = client.authenticator().store().clone();
-        created
-    }
-
-    async fn authenticate(
-        &mut self,
-        options: CredentialRequestOptions,
-    ) -> AuthenticatedPublicKeyCredential {
-        let mut client = Client::new(self.authenticator()).allows_insecure_localhost(true);
-        let asserted = client
-            .authenticate(&self.origin, options, DefaultClientData)
-            .await
-            .expect("an assertion");
-        self.passkey = client.authenticator().store().clone();
-        asserted
-    }
-}
+use crate::support::{
+    Browser, LOCALHOST, ORIGIN, Reply, Server, app, finish_registration, finish_signin, get, post,
+    register, sign_in, start_registration, start_signin, url,
+};
 
 #[derive(Default)]
 struct RevokedOnceFound {
@@ -160,157 +79,6 @@ impl AuthStore for RevokedOnceFound {
     async fn remove_allowed(&self, code: &ShortCode) -> Result<Option<AllowedPasskey>, StoreError> {
         self.inner.remove_allowed(code).await
     }
-}
-
-pub struct Reply {
-    status: StatusCode,
-    headers: HeaderMap,
-    body: Bytes,
-}
-
-impl Reply {
-    pub fn session_cookie(&self) -> Option<Cookie<'static>> {
-        self.headers
-            .get_all(header::SET_COOKIE)
-            .iter()
-            .map(|value| {
-                Cookie::parse(value.to_str().expect("a header").to_string()).expect("a cookie")
-            })
-            .find(|cookie| cookie.name().contains("lookout-session"))
-    }
-}
-
-fn url(origin: &str) -> Url {
-    Url::parse(origin).expect("an origin")
-}
-
-fn app(relying_party: RelyingParty) -> Router {
-    build_app(
-        AppState {
-            sink: None,
-            relying_party,
-        },
-        env!("CARGO_MANIFEST_DIR"),
-    )
-}
-
-struct Server {
-    app: Router,
-    passkeys: Arc<MemoryAuthStore>,
-    sessions: MemoryStore,
-}
-
-impl Server {
-    fn hosted(allowing: Allowing) -> Self {
-        let passkeys = Arc::new(MemoryAuthStore::default());
-        let sessions = MemoryStore::default();
-        let relying_party = RelyingParty::new(
-            &url(ORIGIN),
-            passkeys.clone(),
-            SharedSessionStore::new(sessions.clone()),
-            allowing,
-        )
-        .expect("a relying party");
-        Self {
-            app: app(relying_party),
-            passkeys,
-            sessions,
-        }
-    }
-}
-
-fn with_cookie(request: request::Builder, cookie: Option<&Cookie<'_>>) -> request::Builder {
-    match cookie {
-        Some(cookie) => request.header(header::COOKIE, cookie.stripped().to_string()),
-        None => request,
-    }
-}
-
-async fn send(app: &Router, request: Request<Body>) -> Reply {
-    let response = app.clone().oneshot(request).await.expect("a response");
-    let status = response.status();
-    let headers = response.headers().clone();
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("the body");
-    Reply {
-        status,
-        headers,
-        body,
-    }
-}
-
-pub async fn post(app: &Router, path: &str, body: Body, cookie: Option<&Cookie<'_>>) -> Reply {
-    let request = Request::post(path).header(header::CONTENT_TYPE, "application/json");
-    send(
-        app,
-        with_cookie(request, cookie).body(body).expect("a request"),
-    )
-    .await
-}
-
-async fn get(app: &Router, path: &str, cookie: Option<&Cookie<'_>>) -> Reply {
-    let request = with_cookie(Request::get(path), cookie);
-    send(app, request.body(Body::empty()).expect("a request")).await
-}
-
-async fn start_registration(app: &Router) -> Started<CredentialCreationOptions> {
-    let reply = post(app, "/auth/register/start", Body::empty(), None).await;
-    assert_eq!(reply.status, StatusCode::OK, "{:?}", reply.body);
-    serde_json::from_slice(&reply.body).expect("a started registration")
-}
-
-async fn finish_registration(
-    app: &Router,
-    finish: &Finish<CreatedPublicKeyCredential>,
-) -> Result<Registered, StatusCode> {
-    let json = serde_json::to_vec(finish).expect("a finish");
-    let reply = post(app, "/auth/register/finish", Body::from(json), None).await;
-    match reply.status {
-        StatusCode::OK => Ok(serde_json::from_slice(&reply.body).expect("a registration")),
-        refused => Err(refused),
-    }
-}
-
-pub async fn register(app: &Router, browser: &mut Browser) -> (CredentialID, Registered) {
-    let started = start_registration(app).await;
-    let credential = browser.register(started.options).await;
-    let id = CredentialID::from(credential.raw_id.to_vec());
-    let finish = Finish {
-        ceremony: started.ceremony,
-        credential,
-    };
-    let registered = finish_registration(app, &finish)
-        .await
-        .expect("a registration");
-    (id, registered)
-}
-
-async fn start_signin(app: &Router) -> (Started<CredentialRequestOptions>, serde_json::Value) {
-    let reply = post(app, "/auth/signin/start", Body::empty(), None).await;
-    assert_eq!(reply.status, StatusCode::OK, "{:?}", reply.body);
-    let started = serde_json::from_slice(&reply.body).expect("a started sign-in");
-    let json = serde_json::from_slice(&reply.body).expect("json");
-    (started, json)
-}
-
-async fn finish_signin(
-    app: &Router,
-    finish: &Finish<AuthenticatedPublicKeyCredential>,
-    cookie: Option<&Cookie<'_>>,
-) -> Reply {
-    let json = serde_json::to_vec(finish).expect("a finish");
-    post(app, "/auth/signin/finish", Body::from(json), cookie).await
-}
-
-pub async fn sign_in(app: &Router, browser: &mut Browser, cookie: Option<&Cookie<'_>>) -> Reply {
-    let (started, _) = start_signin(app).await;
-    let credential = browser.authenticate(started.options).await;
-    let finish = Finish {
-        ceremony: started.ceremony,
-        credential,
-    };
-    finish_signin(app, &finish, cookie).await
 }
 
 #[tokio::test]

@@ -30,7 +30,7 @@ use tower_sessions::cookie::Cookie;
 use uuid::Uuid;
 use webauthn_rs::prelude::{CredentialID, Url};
 
-use crate::auth::{Browser, LOCALHOST, post, register, sign_in};
+use crate::support::{Browser, LOCALHOST, post, register, sign_in};
 
 struct RecordingSink {
     samples: Arc<Mutex<Vec<RawSample>>>,
