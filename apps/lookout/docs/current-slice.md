@@ -518,7 +518,36 @@ code.
           constant moved the test with it. They now state ten minutes and an hour.
         - A `CeremonyId`'s text names its redis key, so only the redis tests reached it. A
           proptest now checks that two ceremony IDs never show the same text.
-- [ ] Review the auth code as a whole, with `/security-review` over the slice's changes.
+- [x] Review the auth code as a whole, with `/security-review` over the slice's changes.
+      On 2026-11-08 the review found no vulnerability at HIGH or MEDIUM with a confidence of 0.8
+      or more. It found one gap below that bar: a path variant loads the `/record/` page without a
+      session. The gate wraps only the `/record` route, and the fallback `ServeDir` serves the same
+      files without the gate. `ServeDir` strips leading slashes and decodes percent-escapes, so
+      `GET //record/`, `/record%2Fapp.js`, and `/./record/index.html` miss the route and reach the
+      fallback. Nobody has sent these requests to a running server. The page holds no data, and
+      `/ws` checks the session itself, so a page loaded this way records nothing.
+      The review found these sound:
+      - Sign-in looks a passkey up only in `lookout-passkeys`, never among pending passkeys, and
+        checks the user handle against `account_handle()` first.
+      - Redis takes a ceremony out with `GETDEL`, and a registration ceremony cannot finish a
+        sign-in, or the reverse. Ceremony state never leaves the server.
+      - The configured origin decides the localhost allowance, not the request's `Host`. The redis
+        store always waits for the admin.
+      - `cycle_id()` runs before the session names a passkey, and sign-out runs `flush()`.
+      - The gate, `/auth/status`, the `/ws` upgrade, and the socket's recheck each look the passkey
+        up again. A Lua `HEXISTS` check stops a sign-in's write-back restoring a revoked passkey.
+      - Over HTTPS the cookie is `__Host-lookout-session`, with `Secure`, `HttpOnly`,
+        `SameSite=Strict`, and `Path=/`.
+      - The `/ws` `Origin` check is an exact match, and refuses a missing header.
+      - The finish endpoints need a JSON body, which forces a CORS preflight, so a cross-site page
+        cannot sign a browser in.
+      - Redis keys come from UUIDs, validated short codes, and tower-sessions IDs. Credential IDs
+        travel as binary-safe arguments.
+      - `signin.js` writes server data only through `textContent`, and `app.js` puts none into HTML.
+      - Sign-in sends an empty `allowCredentials`, and registration sends no exclusion list.
+      - Logs carry the short code, and no session ID, credential, or redis URL.
+- [ ] Keep `static/record/` out of the fallback `ServeDir`, so no path variant serves the page
+      without a session. Test each variant the review named.
 - [ ] Run `cargo audit` over the workspace, for advisories against the crates this slice adds:
       webauthn-rs, its vendored OpenSSL, tower-sessions, and their dependencies.
 - [ ] Check what an error tells a caller. A 400 carries webauthn-rs's reason for refusing a
