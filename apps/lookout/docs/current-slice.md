@@ -556,7 +556,7 @@ code.
       redis client's errors, which the server and the CLI print.
 - [ ] Run `just test-no-docker` and the server's Docker tests.
 - [x] Move each test helper and each piece of server code that sits in the wrong place.
-  - [ ] `tests/compression.rs` and `tests/version.rs` each define their own `relying_party()`
+  - [x] `tests/compression.rs` and `tests/version.rs` each define their own `relying_party()`
         helper, which builds a relying party and has nothing to do with compression or the
         version. Decide where a helper shared by the server's tests belongs.
         Decided on 2026-11-08: in `tests/server/support.rs`, inside the one test binary, so each
