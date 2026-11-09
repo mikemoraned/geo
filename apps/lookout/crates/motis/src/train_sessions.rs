@@ -54,7 +54,7 @@ struct Trip {
     source_label: Option<Label>,
     trip_id: TripId,
     legs: NormalisedLegs,
-    country: Option<Country>,
+    country: Country,
 }
 
 enum Normalised {
@@ -67,6 +67,7 @@ enum Drop {
     ArrivesBeforeDeparting,
     Overlapping,
     LeavesItsCountry,
+    Unplaceable,
 }
 
 struct Session {
@@ -89,7 +90,7 @@ pub async fn derive_train_sessions(
     let mut by_trip: HashMap<(MotisSourceId, TripId), Vec<ingest::Leg>> = HashMap::new();
     for leg in captured.legs {
         by_trip
-            .entry((leg.source_id.clone(), leg.trip_id.clone()))
+            .entry((leg.segment.source_id.clone(), leg.segment.trip_id.clone()))
             .or_default()
             .push(leg);
     }
@@ -117,6 +118,7 @@ pub async fn derive_train_sessions(
             }
             Normalised::Dropped(Drop::Overlapping) => outcome.dropped.overlapping += 1,
             Normalised::Dropped(Drop::LeavesItsCountry) => outcome.dropped.leaves_its_country += 1,
+            Normalised::Dropped(Drop::Unplaceable) => outcome.dropped.unplaceable += 1,
         }
     }
     trips.sort_by_key(|trip| trip.legs.departure());
@@ -126,26 +128,21 @@ pub async fn derive_train_sessions(
     let mut pending: Vec<GeometryRow<TrainSessionSampleRowV3, Point<f64>>> = Vec::new();
     let mut sessions: Vec<GeographyRow<TrainSessionRowV3, LineString<f64>>> = Vec::new();
     for trip in trips {
-        match trip.country {
-            None => outcome.dropped.unplaceable += 1,
-            Some(country) => {
-                let placed = trip.legs.sampled(interval)?;
-                let session = session_of(&trip, &placed, projectors.for_country(country)?)?;
-                if is_too_fast(&session) {
-                    outcome.dropped.too_fast += 1;
-                } else {
-                    pending.extend(session.samples);
-                    sessions.push(GeographyRow {
-                        row: session.row,
-                        geography: session.path,
-                        country,
-                    });
-                }
-                if pending.len() >= SAMPLES_PER_WRITE {
-                    sample_writer.write(&pending).await?;
-                    pending.clear();
-                }
-            }
+        let placed = trip.legs.sampled(interval)?;
+        let session = session_of(&trip, &placed, projectors.for_country(trip.country)?)?;
+        if is_too_fast(&session) {
+            outcome.dropped.too_fast += 1;
+        } else {
+            pending.extend(session.samples);
+            sessions.push(GeographyRow {
+                row: session.row,
+                geography: session.path,
+                country: trip.country,
+            });
+        }
+        if pending.len() >= SAMPLES_PER_WRITE {
+            sample_writer.write(&pending).await?;
+            pending.clear();
         }
     }
     sample_writer.write(&pending).await?;
@@ -183,7 +180,7 @@ fn normalised(
     let country = captured
         .iter()
         .zip(&placed_lines)
-        .min_by_key(|(leg, _)| (leg.departure, leg.arrival))
+        .min_by_key(|(leg, _)| (leg.segment.departure, leg.segment.arrival))
         .and_then(|(_, placed)| placed.country);
     if country.is_some_and(|country| {
         placed_lines
@@ -195,7 +192,14 @@ fn normalised(
     let legs = match captured
         .iter()
         .zip(placed_lines)
-        .map(|(leg, placed)| Leg::new(leg.departure, leg.arrival, time_source_of(leg), placed.line))
+        .map(|(leg, placed)| {
+            Leg::new(
+                leg.segment.departure,
+                leg.segment.arrival,
+                time_source_of(leg),
+                placed.line,
+            )
+        })
         .collect::<Result<Vec<Leg>, InvalidLeg>>()
     {
         Ok(legs) => legs,
@@ -206,16 +210,17 @@ fn normalised(
             return Err(IngestError::InvalidLeg { trip_id, source });
         }
     };
-    match NormalisedLegs::new(&legs) {
-        Ok(legs) => Ok(Normalised::Trip(Trip {
+    match (NormalisedLegs::new(&legs), country) {
+        (Ok(legs), Some(country)) => Ok(Normalised::Trip(Trip {
             source_id,
             source_label,
             trip_id,
             legs,
             country,
         })),
-        Err(InvalidLegs::Overlapping { .. }) => Ok(Normalised::Dropped(Drop::Overlapping)),
-        Err(source) => Err(IngestError::InvalidLegs { trip_id, source }),
+        (Ok(_), None) => Ok(Normalised::Dropped(Drop::Unplaceable)),
+        (Err(InvalidLegs::Overlapping { .. }), _) => Ok(Normalised::Dropped(Drop::Overlapping)),
+        (Err(source), _) => Err(IngestError::InvalidLegs { trip_id, source }),
     }
 }
 
@@ -237,7 +242,7 @@ fn realtime_percentage(placed: &[Placed]) -> Result<Percentage, NotAPercentage> 
 }
 
 fn time_source_of(leg: &ingest::Leg) -> TimeSource {
-    if leg.realtime {
+    if leg.segment.realtime {
         TimeSource::Realtime
     } else {
         TimeSource::Scheduled
