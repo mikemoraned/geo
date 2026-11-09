@@ -63,14 +63,18 @@ pub trait Dated: Row {
 }
 
 pub fn fields<T: Row>() -> Result<Vec<FieldRef>, RowError> {
+    fields_of(&T::example(), T::INSTANTS)
+}
+
+pub fn fields_of<T: Serialize>(example: &T, instants: &[&str]) -> Result<Vec<FieldRef>, RowError> {
     let options = tracing_options();
-    let options = T::INSTANTS.iter().try_fold(options, |options, &name| {
+    let options = instants.iter().try_fold(options, |options, &name| {
         options.overwrite(
             name,
             json!({"name": name, "data_type": INSTANT_TYPE, "nullable": true}),
         )
     })?;
-    Ok(Vec::<FieldRef>::from_samples(&[T::example()], options)?
+    Ok(Vec::<FieldRef>::from_samples([example], options)?
         .iter()
         .map(undictionary)
         .collect())

@@ -776,7 +776,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               and `Bbox` hold several fields, and `MotisSourceId` checks nothing. Moving the checks
               of `SessionId`, `CrossingId`, and `Label` changed only their hashes in eleven
               declaration snapshots, which were accepted as refactors no reader can see.
-        - [ ] Describe the table of `session-crossings-py` with medallion's fields. Its copy has
+        - [x] Describe the table of `session-crossings-py` with medallion's fields. Its copy has
               drifted, and leaves `crossed_at` non-nullable.
 
 #### Phase 3: CrowFlies through the skeleton

@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use arrow::array::{Array, ArrayRef, Int64Array, RecordBatch, StringArray};
 use arrow::compute::{cast, concat_batches};
-use arrow::datatypes::{DataType, Field, FieldRef, TimeUnit};
+use arrow::datatypes::{DataType, TimeUnit};
 use chrono::{DateTime, Utc};
 use domain::{CrossingId, Radius, SessionId};
 use geo_types::{Geometry, Point};
@@ -11,7 +9,6 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_arrow::PyTable;
 use serde::{Deserialize, Serialize};
-use serde_arrow::schema::{SchemaLike, TracingOptions};
 use session_crossings::matching::{self, Crossing, DEFAULT_RADIUS, Sample, Visit};
 
 /// The steps the session crossings matching takes for one session, as two tables.
@@ -163,6 +160,28 @@ struct PassRow {
     samples_within: u32,
 }
 
+impl NearRow {
+    fn example() -> Self {
+        Self {
+            crossing_id: "example".to_string(),
+            t: DateTime::UNIX_EPOCH,
+            distance_m: 0.0,
+            visit: 0,
+        }
+    }
+}
+
+impl PassRow {
+    fn example() -> Self {
+        Self {
+            crossing_id: "example".to_string(),
+            crossed_at: DateTime::UNIX_EPOCH,
+            distance_m: 0.0,
+            samples_within: 1,
+        }
+    }
+}
+
 fn near_batch(visits_by_crossing: &[Vec<Visit>]) -> PyResult<RecordBatch> {
     let rows: Vec<NearRow> = visits_by_crossing
         .iter()
@@ -177,7 +196,7 @@ fn near_batch(visits_by_crossing: &[Vec<Visit>]) -> PyResult<RecordBatch> {
             })
         })
         .collect();
-    batch(&rows, "t")
+    batch(&rows, &NearRow::example(), "t")
 }
 
 fn passes_batch(visits_by_crossing: &[Vec<Visit>]) -> PyResult<RecordBatch> {
@@ -191,28 +210,11 @@ fn passes_batch(visits_by_crossing: &[Vec<Visit>]) -> PyResult<RecordBatch> {
             samples_within: pass.samples_within,
         })
         .collect();
-    batch(&rows, "crossed_at")
+    batch(&rows, &PassRow::example(), "crossed_at")
 }
 
-fn batch<T: Serialize + for<'de> Deserialize<'de>>(
-    rows: &[T],
-    instant: &str,
-) -> PyResult<RecordBatch> {
-    let fields: Vec<FieldRef> = Vec::<FieldRef>::from_type::<T>(TracingOptions::default())
-        .map_err(runtime_error)?
-        .into_iter()
-        .map(|field| {
-            if field.name() == instant {
-                Arc::new(Field::new(
-                    instant,
-                    DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-                    false,
-                ))
-            } else {
-                field
-            }
-        })
-        .collect();
+fn batch<T: Serialize>(rows: &[T], example: &T, instant: &str) -> PyResult<RecordBatch> {
+    let fields = medallion::fields_of(example, &[instant]).map_err(runtime_error)?;
     serde_arrow::to_record_batch(&fields, &rows).map_err(runtime_error)
 }
 
