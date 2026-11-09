@@ -1,25 +1,23 @@
-use std::sync::Arc;
-
 use axum::body::{Body, Bytes};
 use axum::http::StatusCode;
 use passkey::types::webauthn::{CredentialCreationOptions, ResidentKeyRequirement};
 use server::auth::redis::RedisAuthStore;
 use server::auth::registration::Registered;
-use server::auth::sessions::SharedSessionStore;
 use server::auth::store::{AuthStore, CeremonyId, PendingPasskey};
 use server::auth::{Allowing, AuthError, Finish, RelyingParty, Started};
 use std::str::FromStr;
 use test_passkeys::registered_passkey;
 use test_redis::TestRedis;
 
+use tower_sessions::SessionStore;
 use tower_sessions::cookie::SameSite;
 use tower_sessions::cookie::time::Duration;
 use tower_sessions::session::Id;
-use tower_sessions::{MemoryStore, SessionStore};
 
 use crate::support::{
     Browser, LOCALHOST, Lookup, ORIGIN, ScriptedAuthStore, Server, app, finish_registration,
-    finish_signin, get, post, register, sign_in, start_registration, start_signin, url,
+    finish_signin, get, pending_code, post, register, sign_in, signed_in, start_registration,
+    start_signin, url,
 };
 
 #[tokio::test]
@@ -28,9 +26,7 @@ async fn a_registration_waits_under_its_code_for_the_admin() {
 
     let (id, registered) = register(&server.app, &mut Browser::at(ORIGIN)).await;
 
-    let Registered::Pending { code } = registered else {
-        panic!("{registered:?} is not pending");
-    };
+    let code = pending_code(registered);
     assert!(
         server
             .passkeys
@@ -102,9 +98,7 @@ async fn over_redis_a_signin_keeps_its_session_in_redis_docker() {
         app(RelyingParty::over_redis(&url(ORIGIN), redis.connection()).expect("a relying party"));
     let mut browser = Browser::at(ORIGIN);
     let (_, registered) = register(&app, &mut browser).await;
-    let Registered::Pending { code } = registered else {
-        panic!("{registered:?} is not pending");
-    };
+    let code = pending_code(registered);
     RedisAuthStore::new(redis.connection())
         .allow(&code, None)
         .await
@@ -257,9 +251,7 @@ async fn a_pending_passkey_signs_in_once_the_admin_allows_it() {
     let server = Server::hosted(Allowing::ByAdmin);
     let mut browser = Browser::at(ORIGIN);
     let (_, registered) = register(&server.app, &mut browser).await;
-    let Registered::Pending { code } = registered else {
-        panic!("{registered:?} is not pending");
-    };
+    let code = pending_code(registered);
 
     let waiting = sign_in(&server.app, &mut browser, None).await;
     server.passkeys.allow(&code, None).await.expect("allowed");
@@ -305,9 +297,7 @@ async fn a_revoked_passkey_cannot_sign_in() {
     let server = Server::hosted(Allowing::ByAdmin);
     let mut browser = Browser::at(ORIGIN);
     let (_, registered) = register(&server.app, &mut browser).await;
-    let Registered::Pending { code } = registered else {
-        panic!("{registered:?} is not pending");
-    };
+    let code = pending_code(registered);
     server.passkeys.allow(&code, None).await.expect("allowed");
     server
         .passkeys
@@ -323,20 +313,22 @@ async fn a_revoked_passkey_cannot_sign_in() {
 
 #[tokio::test]
 async fn a_passkey_revoked_during_its_signin_stays_revoked() {
-    let store = Arc::new(ScriptedAuthStore::new(Lookup::RevokeOnceFound));
-    let sessions = SharedSessionStore::new(MemoryStore::default());
-    let relying_party = RelyingParty::new(&url(ORIGIN), store.clone(), sessions, Allowing::AtOnce)
-        .expect("a relying party");
-    let app = app(relying_party);
+    let server = Server::with(
+        ORIGIN,
+        ScriptedAuthStore::new(Lookup::RevokeOnceFound),
+        Allowing::AtOnce,
+        None,
+    );
     let mut browser = Browser::at(ORIGIN);
-    let (id, _) = register(&app, &mut browser).await;
+    let (id, _) = register(&server.app, &mut browser).await;
 
-    let reply = sign_in(&app, &mut browser, None).await;
+    let reply = sign_in(&server.app, &mut browser, None).await;
 
     assert_eq!(reply.status, StatusCode::FORBIDDEN);
     assert!(reply.session_cookie().is_none(), "{:?}", reply.headers);
     assert!(
-        store
+        server
+            .passkeys
             .inner
             .find_allowed(&id)
             .await
@@ -418,12 +410,8 @@ async fn signing_in_records_when_the_passkey_was_used() {
 async fn signing_in_again_issues_a_fresh_session_id() {
     let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
-    register(&server.app, &mut browser).await;
 
-    let first = sign_in(&server.app, &mut browser, None)
-        .await
-        .session_cookie()
-        .expect("a session");
+    let (_, first) = signed_in(&server.app, &mut browser).await;
     let second = sign_in(&server.app, &mut browser, Some(&first))
         .await
         .session_cookie()
@@ -436,12 +424,8 @@ async fn signing_in_again_issues_a_fresh_session_id() {
 async fn a_hosted_session_cookie_is_host_only_and_strict() {
     let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
-    register(&server.app, &mut browser).await;
 
-    let cookie = sign_in(&server.app, &mut browser, None)
-        .await
-        .session_cookie()
-        .expect("a session");
+    let (_, cookie) = signed_in(&server.app, &mut browser).await;
 
     assert_eq!(cookie.name(), "__Host-lookout-session");
     assert_eq!(cookie.secure(), Some(true));
@@ -455,12 +439,8 @@ async fn a_hosted_session_cookie_is_host_only_and_strict() {
 async fn a_localhost_session_cookie_drops_the_secure_prefix() {
     let app = app(RelyingParty::in_memory(&url(LOCALHOST)).expect("a relying party"));
     let mut browser = Browser::at(LOCALHOST);
-    register(&app, &mut browser).await;
 
-    let cookie = sign_in(&app, &mut browser, None)
-        .await
-        .session_cookie()
-        .expect("a session");
+    let (_, cookie) = signed_in(&app, &mut browser).await;
 
     assert_eq!(cookie.name(), "lookout-session");
     assert_ne!(cookie.secure(), Some(true));
@@ -499,11 +479,7 @@ async fn registration_creates_no_session() {
 async fn each_request_renews_the_session() {
     let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
-    register(&server.app, &mut browser).await;
-    let cookie = sign_in(&server.app, &mut browser, None)
-        .await
-        .session_cookie()
-        .expect("a session");
+    let (_, cookie) = signed_in(&server.app, &mut browser).await;
     let id = Id::from_str(cookie.value()).expect("a session id");
     let expiry = async || {
         server
@@ -531,11 +507,7 @@ const UNGATED_PATHS: [&str; 3] = ["/index.html", "/signin/", "/version"];
 async fn a_request_outside_the_gate_leaves_the_session_alone() {
     let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
-    register(&server.app, &mut browser).await;
-    let cookie = sign_in(&server.app, &mut browser, None)
-        .await
-        .session_cookie()
-        .expect("a session");
+    let (_, cookie) = signed_in(&server.app, &mut browser).await;
     let id = Id::from_str(cookie.value()).expect("a session id");
     let stored = async || server.sessions.load(&id).await.expect("loaded");
     let signed_in = stored().await;
@@ -557,11 +529,7 @@ async fn a_request_outside_the_gate_leaves_the_session_alone() {
 async fn a_stale_cookie_outside_the_gate_starts_no_session() {
     let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
-    register(&server.app, &mut browser).await;
-    let stale = sign_in(&server.app, &mut browser, None)
-        .await
-        .session_cookie()
-        .expect("a session");
+    let (_, stale) = signed_in(&server.app, &mut browser).await;
     post(&server.app, "/auth/signout", Body::empty(), Some(&stale)).await;
 
     for path in UNGATED_PATHS {
@@ -580,21 +548,11 @@ async fn a_stale_cookie_outside_the_gate_starts_no_session() {
 async fn signing_out_ends_the_session() {
     let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
-    register(&server.app, &mut browser).await;
-    let signed_in = sign_in(&server.app, &mut browser, None)
-        .await
-        .session_cookie()
-        .expect("a session");
-    let id = Id::from_str(signed_in.value()).expect("a session id");
+    let (_, cookie) = signed_in(&server.app, &mut browser).await;
+    let id = Id::from_str(cookie.value()).expect("a session id");
     assert!(server.sessions.load(&id).await.expect("loaded").is_some());
 
-    let reply = post(
-        &server.app,
-        "/auth/signout",
-        Body::empty(),
-        Some(&signed_in),
-    )
-    .await;
+    let reply = post(&server.app, "/auth/signout", Body::empty(), Some(&cookie)).await;
 
     assert_eq!(reply.status, StatusCode::NO_CONTENT, "{:?}", reply.body);
     assert!(server.sessions.load(&id).await.expect("loaded").is_none());

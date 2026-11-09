@@ -2,16 +2,13 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use axum::Router;
 use axum::body::Body;
 use axum::http::{StatusCode, header};
 use domain::Gps;
 use futures_util::{SinkExt, StreamExt};
-use server::auth::sessions::SharedSessionStore;
+use server::auth::Allowing;
 use server::auth::store::AuthStore;
-use server::auth::{Allowing, RelyingParty};
 use server::queue::{PushError, SampleSink};
-use server::{AppState, build_app};
 use shared::{Accel, AccelReading, GpsReading, Message, V0Message, V1Message};
 use telemetry::RawSample;
 use tokio::net::{TcpListener, TcpStream};
@@ -20,12 +17,11 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::{Error as WsError, Message as WsMessage};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
-use tower_sessions::MemoryStore;
 use tower_sessions::cookie::Cookie;
 use uuid::Uuid;
-use webauthn_rs::prelude::{CredentialID, Url};
+use webauthn_rs::prelude::CredentialID;
 
-use crate::support::{Browser, LOCALHOST, Lookup, ScriptedAuthStore, post, register, sign_in};
+use crate::support::{Browser, LOCALHOST, Lookup, ScriptedAuthStore, Server, post, signed_in};
 
 struct RecordingSink {
     samples: Arc<Mutex<Vec<RawSample>>>,
@@ -43,53 +39,37 @@ impl SampleSink for RecordingSink {
 struct Running {
     addr: SocketAddr,
     recorded: Arc<Mutex<Vec<RawSample>>>,
-    app: Router,
-    passkeys: Arc<ScriptedAuthStore>,
+    server: Server<ScriptedAuthStore>,
+}
+
+impl Running {
+    async fn signed_in(&self) -> (CredentialID, Cookie<'static>) {
+        signed_in(&self.server.app, &mut Browser::at(LOCALHOST)).await
+    }
 }
 
 async fn spawn_app() -> Running {
     let recorded = Arc::new(Mutex::new(Vec::new()));
-    let origin = Url::parse(LOCALHOST).expect("an origin");
-    let passkeys = Arc::new(ScriptedAuthStore::new(Lookup::Find));
-    let relying_party = RelyingParty::new(
-        &origin,
-        passkeys.clone(),
-        SharedSessionStore::new(MemoryStore::default()),
+    let server = Server::with(
+        LOCALHOST,
+        ScriptedAuthStore::new(Lookup::Find),
         Allowing::AtOnce,
-    )
-    .expect("a relying party");
-    let app = build_app(
-        AppState {
-            sink: Some(Arc::new(RecordingSink {
-                samples: Arc::clone(&recorded),
-            })),
-            relying_party,
-        },
-        env!("CARGO_MANIFEST_DIR"),
+        Some(Arc::new(RecordingSink {
+            samples: Arc::clone(&recorded),
+        })),
     );
 
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let addr = listener.local_addr().expect("addr");
-    let served = app.clone();
+    let served = server.app.clone();
     tokio::spawn(async move {
         axum::serve(listener, served).await.expect("serve");
     });
     Running {
         addr,
         recorded,
-        app,
-        passkeys,
+        server,
     }
-}
-
-async fn signed_in(app: &Router) -> (CredentialID, Cookie<'static>) {
-    let mut browser = Browser::at(LOCALHOST);
-    let (passkey, _) = register(app, &mut browser).await;
-    let cookie = sign_in(app, &mut browser, None)
-        .await
-        .session_cookie()
-        .expect("a session");
-    (passkey, cookie)
 }
 
 async fn connect(
@@ -167,7 +147,7 @@ fn refused_status(
 #[tokio::test]
 async fn both_versions_enqueue_and_malformed_is_dropped() {
     let running = spawn_app().await;
-    let (_, cookie) = signed_in(&running.app).await;
+    let (_, cookie) = running.signed_in().await;
 
     let unversioned_from_the_archive = r#"{"id":"00000000-0000-0000-0000-000000000007","t":1700000000007,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5}}"#;
     let v0_expected = Message::Version0(V0Message::Gps(GpsReading {
@@ -235,7 +215,7 @@ async fn both_versions_enqueue_and_malformed_is_dropped() {
 #[tokio::test]
 async fn server_acks_accepted_message() {
     let running = spawn_app().await;
-    let (_, cookie) = signed_in(&running.app).await;
+    let (_, cookie) = running.signed_in().await;
 
     let mut ws = connect(running.addr, Some(&cookie)).await.expect("connect");
 
@@ -254,8 +234,14 @@ async fn an_upgrade_without_a_session_is_refused() {
 #[tokio::test]
 async fn an_upgrade_after_signing_out_is_refused() {
     let running = spawn_app().await;
-    let (_, cookie) = signed_in(&running.app).await;
-    post(&running.app, "/auth/signout", Body::empty(), Some(&cookie)).await;
+    let (_, cookie) = running.signed_in().await;
+    post(
+        &running.server.app,
+        "/auth/signout",
+        Body::empty(),
+        Some(&cookie),
+    )
+    .await;
 
     let refused = refused_status(connect(running.addr, Some(&cookie)).await);
 
@@ -265,7 +251,7 @@ async fn an_upgrade_after_signing_out_is_refused() {
 #[tokio::test]
 async fn an_upgrade_from_another_origin_is_refused_even_when_signed_in() {
     let running = spawn_app().await;
-    let (_, cookie) = signed_in(&running.app).await;
+    let (_, cookie) = running.signed_in().await;
     let others = [
         "https://localhost:3000",
         "http://localhost:3001",
@@ -287,7 +273,7 @@ async fn an_upgrade_from_another_origin_is_refused_even_when_signed_in() {
 #[tokio::test]
 async fn an_upgrade_without_an_origin_is_refused_even_when_signed_in() {
     let running = spawn_app().await;
-    let (_, cookie) = signed_in(&running.app).await;
+    let (_, cookie) = running.signed_in().await;
 
     let refused = refused_status(connect_from(running.addr, None, Some(&cookie)).await);
 
@@ -297,8 +283,8 @@ async fn an_upgrade_without_an_origin_is_refused_even_when_signed_in() {
 #[tokio::test(start_paused = true)]
 async fn revoking_a_passkey_closes_only_its_socket_within_a_minute() {
     let running = spawn_app().await;
-    let (revoked, revoked_cookie) = signed_in(&running.app).await;
-    let (_, kept_cookie) = signed_in(&running.app).await;
+    let (revoked, revoked_cookie) = running.signed_in().await;
+    let (_, kept_cookie) = running.signed_in().await;
     let mut revoked_ws = connect(running.addr, Some(&revoked_cookie))
         .await
         .expect("connect");
@@ -306,6 +292,7 @@ async fn revoking_a_passkey_closes_only_its_socket_within_a_minute() {
         .await
         .expect("connect");
     let code = running
+        .server
         .passkeys
         .find_allowed(&revoked)
         .await
@@ -314,6 +301,7 @@ async fn revoking_a_passkey_closes_only_its_socket_within_a_minute() {
         .code;
 
     running
+        .server
         .passkeys
         .remove_allowed(&code)
         .await
@@ -328,10 +316,10 @@ async fn revoking_a_passkey_closes_only_its_socket_within_a_minute() {
 #[tokio::test(start_paused = true)]
 async fn a_failed_recheck_closes_the_socket() {
     let running = spawn_app().await;
-    let (_, cookie) = signed_in(&running.app).await;
+    let (_, cookie) = running.signed_in().await;
     let mut ws = connect(running.addr, Some(&cookie)).await.expect("connect");
 
-    running.passkeys.script(Lookup::Fail);
+    running.server.passkeys.script(Lookup::Fail);
     advance(Duration::from_secs(60)).await;
     resume();
 
@@ -341,8 +329,8 @@ async fn a_failed_recheck_closes_the_socket() {
 #[tokio::test(start_paused = true)]
 async fn signing_out_closes_only_that_sessions_socket_within_a_minute() {
     let running = spawn_app().await;
-    let (_, signed_out_cookie) = signed_in(&running.app).await;
-    let (_, kept_cookie) = signed_in(&running.app).await;
+    let (_, signed_out_cookie) = running.signed_in().await;
+    let (_, kept_cookie) = running.signed_in().await;
     let mut signed_out_ws = connect(running.addr, Some(&signed_out_cookie))
         .await
         .expect("connect");
@@ -351,7 +339,7 @@ async fn signing_out_closes_only_that_sessions_socket_within_a_minute() {
         .expect("connect");
 
     post(
-        &running.app,
+        &running.server.app,
         "/auth/signout",
         Body::empty(),
         Some(&signed_out_cookie),

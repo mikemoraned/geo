@@ -19,6 +19,7 @@ use server::auth::store::{
     AllowedPasskey, AuthStore, Ceremony, CeremonyId, Insertion, PendingPasskey, StoreError, Update,
 };
 use server::auth::{Allowing, Finish, RelyingParty, Started};
+use server::queue::SampleSink;
 use server::{AppState, build_app};
 use test_passkeys::approving_authenticator;
 use tower::ServiceExt;
@@ -109,34 +110,49 @@ pub fn url(origin: &str) -> Url {
 }
 
 pub fn app(relying_party: RelyingParty) -> Router {
+    app_with(relying_party, None)
+}
+
+fn app_with(relying_party: RelyingParty, sink: Option<Arc<dyn SampleSink>>) -> Router {
     build_app(
         AppState {
-            sink: None,
+            sink,
             relying_party,
         },
         env!("CARGO_MANIFEST_DIR"),
     )
 }
 
-pub struct Server {
+pub struct Server<S = MemoryAuthStore> {
     pub app: Router,
-    pub passkeys: Arc<MemoryAuthStore>,
+    pub passkeys: Arc<S>,
     pub sessions: MemoryStore,
 }
 
 impl Server {
     pub fn hosted(allowing: Allowing) -> Self {
-        let passkeys = Arc::new(MemoryAuthStore::default());
+        Server::with(ORIGIN, MemoryAuthStore::default(), allowing, None)
+    }
+}
+
+impl<S: AuthStore + 'static> Server<S> {
+    pub fn with(
+        origin: &str,
+        passkeys: S,
+        allowing: Allowing,
+        sink: Option<Arc<dyn SampleSink>>,
+    ) -> Self {
+        let passkeys = Arc::new(passkeys);
         let sessions = MemoryStore::default();
         let relying_party = RelyingParty::new(
-            &url(ORIGIN),
+            &url(origin),
             passkeys.clone(),
             SharedSessionStore::new(sessions.clone()),
             allowing,
         )
         .expect("a relying party");
         Self {
-            app: app(relying_party),
+            app: app_with(relying_party, sink),
             passkeys,
             sessions,
         }
@@ -237,18 +253,31 @@ pub async fn sign_in(app: &Router, browser: &mut Browser, cookie: Option<&Cookie
     finish_signin(app, &finish, cookie).await
 }
 
-pub async fn signed_in_with_code(server: &Server) -> (ShortCode, Cookie<'static>) {
-    let mut browser = Browser::at(ORIGIN);
-    let (_, registered) = register(&server.app, &mut browser).await;
+pub fn pending_code(registered: Registered) -> ShortCode {
     let Registered::Pending { code } = registered else {
         panic!("{registered:?} is not pending");
     };
-    server.passkeys.allow(&code, None).await.expect("allowed");
-    let cookie = sign_in(&server.app, &mut browser, None)
+    code
+}
+
+pub async fn session(app: &Router, browser: &mut Browser) -> Cookie<'static> {
+    sign_in(app, browser, None)
         .await
         .session_cookie()
-        .expect("a session");
-    (code, cookie)
+        .expect("a session")
+}
+
+pub async fn signed_in(app: &Router, browser: &mut Browser) -> (CredentialID, Cookie<'static>) {
+    let (id, _) = register(app, browser).await;
+    (id, session(app, browser).await)
+}
+
+pub async fn signed_in_with_code(server: &Server) -> (ShortCode, Cookie<'static>) {
+    let mut browser = Browser::at(ORIGIN);
+    let (_, registered) = register(&server.app, &mut browser).await;
+    let code = pending_code(registered);
+    server.passkeys.allow(&code, None).await.expect("allowed");
+    (code, session(&server.app, &mut browser).await)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

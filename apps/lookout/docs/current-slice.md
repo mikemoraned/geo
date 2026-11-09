@@ -622,7 +622,7 @@ code.
           that fails on a rename guards the stored data.
     - [x] Move `registered_passkey`, with the user as a parameter, into `test-passkeys`, and use it
           in `a_passkey_for_another_account_cannot_sign_in`, which rebuilds it inline.
-    - [ ] Add `pending_code` and `signed_in` to `support.rs`, and let `Server` take a sink, so the
+    - [x] Add `pending_code` and `signed_in` to `support.rs`, and let `Server` take a sink, so the
           auth and websocket tests stop repeating their setup.
     - [ ] Make the small tidy-ups in one commit, whose message lists each change.
       - [ ] Collapse `Insertion` into `fresh::Claim`, and drop the `Duration` that `NoneFree` and
