@@ -5,7 +5,7 @@ use clap::Parser;
 
 use server::auth::RelyingParty;
 use server::queue::{RedisSink, SampleSink};
-use server::stores::{REDIS_URL_VAR, Store, Stores};
+use server::stores::{REDIS_URL_VAR, Store};
 use server::{AppState, build_app};
 use webauthn_rs::prelude::Url;
 
@@ -23,6 +23,10 @@ struct Args {
     /// restart.
     #[arg(long, value_enum)]
     store: Store,
+
+    /// The redis URL, which the `redis` store needs.
+    #[arg(long, env = REDIS_URL_VAR, hide_env_values = true, required_if_eq("store", "redis"))]
+    redis_url: Option<String>,
 
     /// The origin the site is served from, such as `https://lookout.example.com`. Passkeys work
     /// only on the origin they were registered on.
@@ -53,13 +57,8 @@ async fn main() {
 
     let origin = args.origin;
     tracing::info!(%origin, "serving passkeys for this origin");
-    let redis_url = std::env::var(REDIS_URL_VAR).ok();
-    if args.store == Store::InMemory && redis_url.is_some() {
-        tracing::warn!("ignoring {REDIS_URL_VAR}, since the store is in-memory");
-    }
-    let stores = Stores::choose(args.store, redis_url).unwrap_or_else(|err| fatal(&err));
-    let (sink, relying_party) = match stores {
-        Stores::Redis { url } => {
+    let (sink, relying_party) = match (args.store, args.redis_url) {
+        (Store::Redis, Some(url)) => {
             let conn = telemetry::connect(&url)
                 .await
                 .unwrap_or_else(|err| fatal(&format!("redis connect failed: {err}")));
@@ -67,7 +66,11 @@ async fn main() {
             let sink: Arc<dyn SampleSink> = Arc::new(RedisSink::new(conn.clone()));
             (Some(sink), RelyingParty::over_redis(&origin, conn))
         }
-        Stores::InMemory => {
+        (Store::Redis, None) => fatal(&format!("the redis store needs {REDIS_URL_VAR}")),
+        (Store::InMemory, redis_url) => {
+            if redis_url.is_some() {
+                tracing::warn!("ignoring {REDIS_URL_VAR}, since the store is in-memory");
+            }
             tracing::warn!("logging samples only, and keeping passkeys and sessions in memory");
             (None, RelyingParty::in_memory(&origin))
         }
@@ -95,6 +98,7 @@ async fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::CommandFactory;
 
     #[test]
     fn the_store_must_be_named() {
@@ -103,11 +107,47 @@ mod tests {
 
     #[test]
     fn the_store_is_redis_or_in_memory() {
-        let store = |name| Args::try_parse_from(["server", "--store", name]).map(|args| args.store);
+        let store = |name| {
+            Args::try_parse_from([
+                "server",
+                "--store",
+                name,
+                "--redis-url",
+                "redis://localhost",
+            ])
+            .map(|args| args.store)
+        };
 
         assert_eq!(store("redis").ok(), Some(Store::Redis));
         assert_eq!(store("in-memory").ok(), Some(Store::InMemory));
         assert!(store("valkey").is_err());
+    }
+
+    #[test]
+    fn the_redis_store_needs_a_redis_url() {
+        let redis = |args: &[&str]| {
+            Args::try_parse_from([&["server", "--store", "redis"], args].concat())
+                .map(|args| args.redis_url)
+        };
+
+        assert!(redis(&[]).is_err());
+        assert_eq!(
+            redis(&["--redis-url", "redis://localhost:6379"]).ok(),
+            Some(Some("redis://localhost:6379".to_string()))
+        );
+    }
+
+    #[test]
+    fn the_in_memory_store_needs_no_redis_url() {
+        assert!(Args::try_parse_from(["server", "--store", "in-memory"]).is_ok());
+    }
+
+    #[test]
+    fn the_redis_url_stays_out_of_the_help() {
+        let help = Args::command().render_long_help().to_string();
+
+        assert!(help.contains("LOOKOUT_REDIS_URL"), "{help}");
+        assert!(!help.contains("[env: LOOKOUT_REDIS_URL="), "{help}");
     }
 
     #[test]
@@ -120,7 +160,7 @@ mod tests {
     #[test]
     fn the_origin_can_be_named() {
         let origin = |origin| {
-            Args::try_parse_from(["server", "--store", "redis", "--origin", origin])
+            Args::try_parse_from(["server", "--store", "in-memory", "--origin", origin])
                 .map(|args| args.origin.to_string())
         };
 

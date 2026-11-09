@@ -9,6 +9,10 @@ use server::stores::REDIS_URL_VAR;
 struct Args {
     #[command(subcommand)]
     command: Command,
+
+    /// The redis URL of the store that holds the passkeys.
+    #[arg(long, env = REDIS_URL_VAR, hide_env_values = true)]
+    redis_url: String,
 }
 
 fn fatal(reason: &dyn std::fmt::Display) -> ! {
@@ -24,9 +28,7 @@ async fn main() {
         .install_default()
         .expect("install rustls crypto provider");
 
-    let url = std::env::var(REDIS_URL_VAR)
-        .unwrap_or_else(|_| fatal(&format!("{REDIS_URL_VAR} must be set")));
-    let conn = telemetry::connect(&url)
+    let conn = telemetry::connect(&args.redis_url)
         .await
         .unwrap_or_else(|err| fatal(&format!("redis connect failed: {err}")));
     match run(&RedisAuthStore::new(conn), args.command).await {

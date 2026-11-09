@@ -245,8 +245,8 @@ passkeys allow <code> [--label <name>]
 passkeys revoke <code>
 ```
 
-It reads `LOOKOUT_REDIS_URL` and works on redis alone, since no command can reach a server's
-memory. Whoever holds the redis URL can allow a passkey, as they can already push samples onto the
+It takes the redis URL from `--redis-url` or `LOOKOUT_REDIS_URL`, and works on redis alone, since
+no command can reach a server's memory. Whoever holds the redis URL can allow a passkey, as they can already push samples onto the
 queue.
 
 `allow` moves the pending passkey with that code into the allowed passkeys. The label tells devices
@@ -267,8 +267,11 @@ runs it against the redis that `just local-redis` starts.
 The server takes `--store redis` or `--store in-memory`, and starts with neither unnamed. A store
 chosen by whether `LOOKOUT_REDIS_URL` happened to be set would let a production server lose its
 secret and start quietly in memory, forgetting every passkey and session on restart. `redis` needs
-`LOOKOUT_REDIS_URL`, and refuses to start without it. `in-memory` ignores the URL, and logs a
-warning when it is set.
+a redis URL, from `--redis-url` or `LOOKOUT_REDIS_URL`, and refuses to start without one.
+`in-memory` ignores the URL, and logs a warning when it is set. Neither binary's `--help` shows the
+URL's value, since clap's
+[`hide_env_values`](https://docs.rs/clap/4.6.1/clap/struct.Arg.html#method.hide_env_values)
+keeps it out.
 
 With `redis`, the queue, the sign-in records, and the sessions share one connection, and every
 passkey waits for the admin, `localhost`'s included. A redis that is unreachable at startup is

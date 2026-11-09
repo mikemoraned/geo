@@ -607,7 +607,7 @@ code.
     - [x] Apply `session_layer()` only to a router holding `/ws`, `/record`, and `/auth/`. Over the
           whole app, a static file or `/version` sent with a cookie loads and saves the session, two
           redis round trips, and a stale cookie creates an empty session.
-    - [ ] Read the redis URL through clap, with `env`, `hide_env_values`, and
+    - [x] Read the redis URL through clap, with `env`, `hide_env_values`, and
           `required_if_eq("store", "redis")`, in place of `Stores`, `StoresError`, and the `Debug`
           that hides the URL.
     - [ ] Set `/record/`'s `Cache-Control` with a layer on its router in `build_app`, beside the
