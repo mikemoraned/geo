@@ -533,6 +533,13 @@ when `evaluation_run_v2` replaced the run row's four fingerprint columns with on
   the work of each phase while the rest waited. Placing polylines dominated the segments, through
   `geo`'s relate. In the sessions, encoding and compressing the samples took 54% of the main
   thread, building each session 22%, and sampling each trip 20%.
+- **Filtering a poll's legs takes most of the poll, but only 3–5 s of it** (2026-11-09). Five polls
+  of Germany from the local Motis server, a minute apart, each filtered about 1,100 legs in 3.1–5.0
+  s. That was 66% of the first poll, and 87–95% of the rest once trip details were cached. Each leg
+  takes about 3 ms, nearly all of it relating its polyline to the area and the country. The week's
+  capture in bronze averages about 1,160 legs per poll, so a 10-minute poll filters for about as
+  long. Its 2,742,313 legs share 26,995 polylines, so 99% of the relates repeat an earlier answer.
+  A memo would remove them, but it saves 3–5 s of every 10 minutes, and nothing waits on a poll.
 
 ### Tasks
 
@@ -726,9 +733,11 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               Moot: built and measured, then reverted. It saved 100 s of a 505 s re-derive, but
               raised the peak by 0.9 GB and made both derivations borrow a shared capture, as
               Observations records.
-        - [ ] Build capture's `Coverage` from the prepared outline of `CountryAreas`, and memoise
+        - [x] Build capture's `Coverage` from the prepared outline of `CountryAreas`, and memoise
               `keeps` by polyline. The two unions of a country disagree on a shape that is not a
-              polygon, and most of a poll's relates repeat an earlier answer.
+              polygon, and most of a poll's relates repeat an earlier answer. Only the outline was
+              built. The memo was left out, since it saves only 3–5 s of each 10-minute poll, as
+              Observations records.
         - [ ] Rank train samples by their stored `seq`, rather than by a `ROW_NUMBER()` window. The
               window takes 6.3 GB, most of the matching's peak.
         - [ ] Project each train sample once, close each day's samples once they are written, and

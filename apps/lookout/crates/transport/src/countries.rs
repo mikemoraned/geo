@@ -27,9 +27,30 @@ pub struct NewestExtract {
 }
 
 #[derive(Clone)]
-struct Outline {
+pub struct Outline {
     country: Country,
     prepared: PreparedGeometry<'static, MultiPolygon<f64>>,
+}
+
+impl Outline {
+    pub fn new(country: Country, areas: &[Geometry<f64>]) -> Result<Option<Self>, CountryError> {
+        let polygons = areas
+            .iter()
+            .map(|area| match area {
+                Geometry::Polygon(polygon) => Ok(MultiPolygon::new(vec![polygon.clone()])),
+                Geometry::MultiPolygon(polygons) => Ok(polygons.clone()),
+                _ => Err(CountryError::NotAnArea { country }),
+            })
+            .collect::<Result<Vec<MultiPolygon<f64>>, _>>()?;
+        Ok((!polygons.is_empty()).then(|| Self {
+            country,
+            prepared: PreparedGeometry::from(unary_union(&polygons)),
+        }))
+    }
+
+    pub fn covers(&self, line: &LineString<f64>) -> bool {
+        self.prepared.relate(line).is_covers()
+    }
 }
 
 impl fmt::Debug for Outline {
@@ -107,7 +128,7 @@ impl CountryAreas {
     ) -> Result<Self, CountryError> {
         let outlines = Country::ALL
             .into_iter()
-            .map(|country| outline_of(country, &areas))
+            .map(|country| Outline::new(country, &shapes_of(&areas, country)))
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .flatten()
@@ -124,31 +145,22 @@ impl CountryAreas {
     }
 
     pub fn shapes_of(&self, country: Country) -> Vec<Geometry<f64>> {
-        self.areas
+        shapes_of(&self.areas, country)
+    }
+
+    pub fn outline(&self, country: Country) -> Option<&Outline> {
+        self.outlines
             .iter()
-            .filter(|(of, _)| *of == country)
-            .map(|(_, area)| area.clone())
-            .collect()
+            .find(|outline| outline.country == country)
     }
 }
 
-fn outline_of(
-    country: Country,
-    areas: &[(Country, Geometry<f64>)],
-) -> Result<Option<Outline>, CountryError> {
-    let polygons = areas
+fn shapes_of(areas: &[(Country, Geometry<f64>)], country: Country) -> Vec<Geometry<f64>> {
+    areas
         .iter()
         .filter(|(of, _)| *of == country)
-        .map(|(_, area)| match area {
-            Geometry::Polygon(polygon) => Ok(MultiPolygon::new(vec![polygon.clone()])),
-            Geometry::MultiPolygon(polygons) => Ok(polygons.clone()),
-            _ => Err(CountryError::NotAnArea { country }),
-        })
-        .collect::<Result<Vec<MultiPolygon<f64>>, _>>()?;
-    Ok((!polygons.is_empty()).then(|| Outline {
-        country,
-        prepared: PreparedGeometry::from(unary_union(&polygons)),
-    }))
+        .map(|(_, area)| area.clone())
+        .collect()
 }
 
 impl Countries for CountryAreas {
@@ -162,7 +174,7 @@ impl Countries for CountryAreas {
     fn covering(&self, line: &LineString<f64>) -> Option<Country> {
         self.outlines
             .iter()
-            .find(|outline| outline.prepared.relate(line).is_covers())
+            .find(|outline| outline.covers(line))
             .map(|outline| outline.country)
     }
 }
