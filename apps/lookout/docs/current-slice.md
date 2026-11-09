@@ -563,8 +563,13 @@ code.
       admin reads the log. A credential that fails verification now answers 400 with
       `the credential failed verification` alone. The other refusals keep their text: an expired
       ceremony tells the user to start again, and the page reads a 403 as a passkey not allowed.
-- [ ] Check that no log line carries a session ID, a credential ID, or the redis URL. Include the
+- [x] Check that no log line carries a session ID, a credential ID, or the redis URL. Include the
       redis client's errors, which the server and the CLI print.
+      On 2026-11-09 none did, and nothing changed. The server's own log lines name a short code at
+      most. A redis error shows the error's kind and redis's reply, never the URL, and a malformed
+      URL fails with a fixed message. `Stores` prints a redis store without its URL. tower-sessions
+      logs no session ID, and `tower_http` logs requests only at `debug`, below the server's
+      default filter. webauthn-rs's errors name no credential ID.
 - [ ] Run `just test-no-docker` and the server's Docker tests.
 - [x] Move each test helper and each piece of server code that sits in the wrong place.
   - [x] `tests/compression.rs` and `tests/version.rs` each define their own `relying_party()`
