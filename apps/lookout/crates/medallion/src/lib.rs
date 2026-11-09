@@ -79,7 +79,8 @@ pub use path::{
 pub use query::{Query, QueryError, countries_of, rows_of_every_country, table_references};
 pub use read::Read;
 pub use rows::{
-    Dated, Geometry, Projection, Row, RowError, batch, fields, from_batches, projected_columns,
+    Dated, Geometry, Projection, Row, RowError, batch, fields, fields_of, from_batches,
+    projected_columns,
 };
 pub use run::{RUN_DATE, RUN_ID, RunError, RunId, write_run, write_run_table};
 pub use table::{GoldTarget, SilverTarget, TableError, TableWritten, write_table};
