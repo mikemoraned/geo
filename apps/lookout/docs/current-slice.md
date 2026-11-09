@@ -642,7 +642,22 @@ code.
     - [x] Retry `test-redis`'s readiness check with `backon`, in place of its own loop.
     - [x] Use redis's typed `AsyncCommands` methods across the workspace, in place of
           `redis::cmd`. The user accepted the change of convention.
-  - [ ] run `/security-review` again
+  - [x] run `/security-review` again
+        On 2026-11-09 the review found no vulnerability at HIGH or MEDIUM with a confidence of 0.7
+        or more. It read the commits since the first review as sound:
+        - `SET NX` keeps its meaning under `AsyncCommands`. A taken session ID or short code draws
+          again and overwrites nothing. `EXAT` sets a session key's expiry to the session's own.
+        - The `SignedIn` extractor checks `is_allowed` on each request, and a store error answers
+          500 rather than letting the request through.
+        - The session layer covers every route that reads the session.
+        - A short code deserialised in its dashed form compares equal to one stored without the
+          hyphen, and redis keys use the form without it.
+        - `gated/` sits outside the fallback `ServeDir`, so a percent-encoded `/%72ecord/` finds no
+          page.
+        It left one case unreported. Under `--store in-memory`, the server listens on `0.0.0.0`,
+        and a client on the local network can claim a `localhost` origin. That client's passkey is
+        then allowed at once. That mode logs samples and writes nothing, and production runs
+        `--store redis`.
 
 #### Wrap-up
 
