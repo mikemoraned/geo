@@ -1,14 +1,15 @@
 use std::time::Duration;
 
+use backon::{ConstantBuilder, Retryable};
 use redis::aio::MultiplexedConnection;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
 use testcontainers_modules::redis::{REDIS_PORT, Redis};
-use tokio::time::{Instant, sleep};
 
 const TAG: &str = "7-alpine";
 const READY_WITHIN: Duration = Duration::from_secs(30);
 const RETRY_EVERY: Duration = Duration::from_millis(100);
+const TRIES: usize = (READY_WITHIN.as_millis() / RETRY_EVERY.as_millis()) as usize;
 
 pub struct TestRedis {
     _container: ContainerAsync<Redis>,
@@ -56,20 +57,16 @@ impl TestRedis {
 
 async fn ready(url: &str) -> MultiplexedConnection {
     let client = redis::Client::open(url).expect("a redis URL");
-    let deadline = Instant::now() + READY_WITHIN;
-    loop {
-        if let Ok(mut conn) = client.get_multiplexed_async_connection().await
-            && redis::cmd("PING")
-                .query_async::<String>(&mut conn)
-                .await
-                .is_ok()
-        {
-            return conn;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "redis not ready in {READY_WITHIN:?}"
-        );
-        sleep(RETRY_EVERY).await;
-    }
+    let ping = || async {
+        let mut conn = client.get_multiplexed_async_connection().await?;
+        redis::cmd("PING").query_async::<String>(&mut conn).await?;
+        Ok::<_, redis::RedisError>(conn)
+    };
+    ping.retry(
+        ConstantBuilder::new()
+            .with_delay(RETRY_EVERY)
+            .with_max_times(TRIES),
+    )
+    .await
+    .unwrap_or_else(|err| panic!("redis not ready in {READY_WITHIN:?}: {err}"))
 }

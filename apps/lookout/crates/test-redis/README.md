@@ -8,7 +8,9 @@ defaults to [5.0][module], and [`GETDEL`][getdel], which the sign-in stores use,
 
 Docker maps the container's port before redis accepts connections, so a first connection can be
 refused. `start` therefore connects and sends `PING` every 100 ms, for up to 30 seconds, and
-returns once redis replies.
+returns once redis replies. [backon](https://docs.rs/backon/1.6.0/backon/)'s
+[`ConstantBuilder`](https://docs.rs/backon/1.6.0/backon/struct.ConstantBuilder.html) runs the
+retries, 300 of them, since it limits the number of tries rather than the total wait.
 
 Dropping a `TestRedis` stops its container. A test keeps it in scope until the test finishes.
 

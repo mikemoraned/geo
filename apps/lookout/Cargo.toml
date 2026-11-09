@@ -38,6 +38,7 @@ rustls = { version = "0.23", features = ["ring"] }
 async-trait = "0.1"
 passkey = { version = "0.6", features = ["rust-crypto"] }
 webauthn-rs = "0.5"
+backon = "1.6"
 clap = { version = "4", features = ["derive", "env"] }
 libtest-mimic = "0.8"
 geojson = "1.0"

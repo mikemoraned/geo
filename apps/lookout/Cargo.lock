@@ -8371,6 +8371,7 @@ dependencies = [
 name = "test-redis"
 version = "0.1.0"
 dependencies = [
+ "backon",
  "redis",
  "testcontainers",
  "testcontainers-modules",

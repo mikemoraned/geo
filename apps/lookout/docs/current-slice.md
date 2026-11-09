@@ -639,7 +639,7 @@ code.
       - [x] Share `fatal`, the rustls install, and the redis connect between the two binaries.
     - [x] Add a `SignedIn` extractor, and use it in the gate, `/ws`, and `/auth/status`, in place of
           the signed-in check each makes.
-    - [ ] Retry `test-redis`'s readiness check with `backon`, in place of its own loop.
+    - [x] Retry `test-redis`'s readiness check with `backon`, in place of its own loop.
     - [ ] Use redis's typed `AsyncCommands` methods across the workspace, in place of
           `redis::cmd`. The user accepted the change of convention.
   - [ ] run `/security-review` again
