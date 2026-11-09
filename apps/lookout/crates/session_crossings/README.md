@@ -32,16 +32,15 @@ the value is in the slice record.
 A distance is only a distance inside one projected zone, and the store chooses a zone per country,
 so both inputs are read a country at a time and subtracted in that country's metres. Each sample
 is looked up in an R-tree of the country's crossings, so a distance is computed only for the pairs
-that could be within the radius, not for every pair. One squared distance decides whether a
-crossing is within the radius, both in the tree and when one session's steps are inspected. A
-crossing exactly the radius away is therefore passed, and no pass records a distance beyond the
-radius.
+that could be within the radius, not for every pair. The tree's squared distance decides whether a
+crossing is within the radius. A crossing exactly the radius away is therefore passed, and no pass
+records a distance beyond the radius. Inspecting one session's visits to one crossing runs the
+same matching, over a tree of that crossing alone.
 
-The query ranks each sample by time within its session, and that ranking sorts every sample.
-Samples at the same time rank by easting and then by northing. Two samples alike in time and place
-are interchangeable to the matching, so every run finds the same passes. The ranked samples then
-stream through a batch at a time, and only those near a crossing are kept. A visit is a run of
-consecutive ranks within the radius of one crossing.
+Each sample carries `seq`, its place in its session, which the derivation of the session numbers
+in time order. No two samples of a session share an instant, so `seq` orders a session's samples
+the same way on every run. The samples stream through a batch at a time, and only those near a
+crossing are kept. A visit is a run of consecutive `seq` within the radius of one crossing.
 
 A match is a session, a crossing and an instant, with no geometry of its own, so the rows are
 partitioned by the date it happened and nothing else. A run derives the whole dataset from the
