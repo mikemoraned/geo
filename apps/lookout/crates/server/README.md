@@ -158,7 +158,9 @@ Registration creates no session.
 Over HTTPS the session cookie is `__Host-lookout-session`, with `Secure`. A browser accepts a
 [`__Host-` cookie][host] only from a secure origin, so over plain HTTP the cookie is
 `lookout-session`, without `Secure`. Both are `HttpOnly` and `SameSite=Strict`, with `Path=/`. A
-session ends 30 days after its last use, and [every request that carries it][always-save] renews it.
+session ends 30 days after its last use. A request to `/ws`, `/record/`, or `/auth/` that carries
+it [renews it][always-save]. Only those routes read sessions, so a request for any other page or
+file leaves its session alone, and a stale cookie sent there starts no session.
 
 A finish answers 400 as a registration's does: for a ceremony that expired, finished already, or
 never started, and for an assertion that fails verification.
@@ -223,8 +225,8 @@ the queue's redis connection.
 
 `RedisSessionStore` writes a session as JSON under `lookout-session:<id>`. Each write sets the key
 to expire with the session, through [`SET EXAT`][set], so redis removes a session 30 days after its
-last use without a sweep. Every request that carries a session renews it, so each such request
-writes to redis once.
+last use without a sweep. Every request to `/ws`, `/record/`, or `/auth/` that carries a session
+renews it, so each such request writes to redis once.
 
 Creating a session writes with `NX`. While another session holds the ID, the store draws a fresh
 one, within the 10-second limit on drawing a fresh ID. tower-sessions

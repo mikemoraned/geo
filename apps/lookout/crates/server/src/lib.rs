@@ -38,17 +38,19 @@ pub fn build_app(state: AppState, site_dir: impl AsRef<Path>) -> Router {
             state.relying_party.clone(),
             auth::gate::require_signin,
         ));
-    Router::new()
+    let with_sessions = Router::new()
         .route("/ws", any(ws::upgrade))
-        .route("/version", get(version))
         .merge(auth::routes(state.relying_party.clone()))
         .merge(record)
+        .layer(state.relying_party.session_layer());
+    Router::new()
+        .route("/version", get(version))
+        .merge(with_sessions)
         .fallback_service(SetResponseHeader::overriding(
             ServeDir::new(site_dir.join("static")),
             header::CACHE_CONTROL,
             HeaderValue::from_static(ASK_FIRST),
         ))
-        .layer(state.relying_party.session_layer())
         .layer(SetResponseHeaderLayer::if_not_present(
             header::CACHE_CONTROL,
             HeaderValue::from_static(NEVER_STORE),

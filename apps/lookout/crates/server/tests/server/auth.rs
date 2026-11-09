@@ -540,6 +540,57 @@ async fn each_request_renews_the_session() {
     );
 }
 
+const UNGATED_PATHS: [&str; 3] = ["/index.html", "/signin/", "/version"];
+
+#[tokio::test]
+async fn a_request_outside_the_gate_leaves_the_session_alone() {
+    let server = Server::hosted(Allowing::AtOnce);
+    let mut browser = Browser::at(ORIGIN);
+    register(&server.app, &mut browser).await;
+    let cookie = sign_in(&server.app, &mut browser, None)
+        .await
+        .session_cookie()
+        .expect("a session");
+    let id = Id::from_str(cookie.value()).expect("a session id");
+    let stored = async || server.sessions.load(&id).await.expect("loaded");
+    let signed_in = stored().await;
+
+    for path in UNGATED_PATHS {
+        let reply = get(&server.app, path, Some(&cookie)).await;
+
+        assert_eq!(reply.status, StatusCode::OK, "{path}");
+        assert!(
+            reply.session_cookie().is_none(),
+            "{path}: {:?}",
+            reply.headers
+        );
+        assert_eq!(stored().await, signed_in, "{path}");
+    }
+}
+
+#[tokio::test]
+async fn a_stale_cookie_outside_the_gate_starts_no_session() {
+    let server = Server::hosted(Allowing::AtOnce);
+    let mut browser = Browser::at(ORIGIN);
+    register(&server.app, &mut browser).await;
+    let stale = sign_in(&server.app, &mut browser, None)
+        .await
+        .session_cookie()
+        .expect("a session");
+    post(&server.app, "/auth/signout", Body::empty(), Some(&stale)).await;
+
+    for path in UNGATED_PATHS {
+        let reply = get(&server.app, path, Some(&stale)).await;
+
+        assert_eq!(reply.status, StatusCode::OK, "{path}");
+        assert!(
+            reply.session_cookie().is_none(),
+            "{path}: {:?}",
+            reply.headers
+        );
+    }
+}
+
 #[tokio::test]
 async fn signing_out_ends_the_session() {
     let server = Server::hosted(Allowing::AtOnce);

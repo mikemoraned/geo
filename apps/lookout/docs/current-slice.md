@@ -604,7 +604,7 @@ code.
         more were left: reusing one connection in `redis_end_to_end.rs`, one pipelined round trip
         for the minute's recheck, and one redis container per test binary.
   - [ ] Apply the accepted `/simplify` findings.
-    - [ ] Apply `session_layer()` only to a router holding `/ws`, `/record`, and `/auth/`. Over the
+    - [x] Apply `session_layer()` only to a router holding `/ws`, `/record`, and `/auth/`. Over the
           whole app, a static file or `/version` sent with a cookie loads and saves the session, two
           redis round trips, and a stale cookie creates an empty session.
     - [ ] Read the redis URL through clap, with `env`, `hide_env_values`, and
