@@ -17,9 +17,11 @@ What is here, and where to read about it:
 ## Running the recipes
 
 `just` recipes run from this directory, and `just --list` is the index. Setting up a machine is
-`just prerequisites`: `rerun`, `wasm-pack`, `cargo-insta`, and `cargo-mutants` from cargo, then
-DuckDB for the multi-engine test, PROJ and jq for `crs-definitions`, and the wasm target.
-`cargo-insta` reviews a changed snapshot, and `cargo-mutants` runs the mutation tests.
+`just prerequisites`: `rerun`, `wasm-pack`, `cargo-insta`, `cargo-mutants`, and `cargo-audit` from
+cargo, then DuckDB for the multi-engine test, PROJ and jq for `crs-definitions`, and the wasm
+target.
+`cargo-insta` reviews a changed snapshot, `cargo-mutants` runs the mutation tests, and
+`cargo-audit` checks the crates for advisories.
 
 A fresh worktree carries bronze and derives the rest: `just init` fills in the Overture extract
 and re-derives every silver dataset. The extract comes from a local mirror of the Overture bucket
@@ -85,3 +87,11 @@ The recipes diff with `git diff --relative`, run from this directory. cargo-muta
 diff's paths against the workspace's own, and a plain `git diff` names each file from the
 repository root, so none of its paths match. The base is `origin/main`, since a local `main`
 matches it only while it is pulled.
+
+`just audit` runs [cargo-audit](https://docs.rs/cargo-audit/) over `Cargo.lock`, and reports each
+crate that has an advisory in the [RustSec database](https://rustsec.org/). `just audit-update`
+runs [`cargo update`](https://doc.rust-lang.org/cargo/commands/cargo-update.html) on each flagged
+crate, which moves it to the newest release its dependents' version requirements allow. If the
+audit flags nothing, it updates nothing. It then audits again. A crate the second audit still
+flags needs a release outside those requirements, so a dependent's requirement in a `Cargo.toml`
+has to change first.

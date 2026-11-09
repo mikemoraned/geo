@@ -10,6 +10,7 @@ prerequisites:
     cargo install wasm-pack --locked
     cargo install cargo-insta --locked
     cargo install cargo-mutants --locked
+    cargo install cargo-audit --locked
     rustup target add wasm32-unknown-unknown
     brew install duckdb proj jq
 
@@ -118,6 +119,24 @@ test-python:
     uv run --directory crates/platform/rerun-py pytest -q
     uv run --directory crates/session-crossings-py pytest -q
     uv run --directory notebooks/water_crossings pytest -q
+
+# Check every crate in Cargo.lock against the RustSec advisory database.
+audit:
+    cargo audit
+
+flagged_update_args := '''
+    [.vulnerabilities.list[], .warnings[][]]
+    | map("\(.package.name)@\(.package.version)")
+    | unique
+    | map("-p", .)
+    | if . == [] then ["--workspace"] else . end
+    | .[]
+'''
+
+# Update each crate the audit flags to its newest compatible release, then list what still needs a bigger move.
+audit-update:
+    cargo update $(cargo audit --json | jq -r '{{ flagged_update_args }}')
+    cargo audit
 
 # Mutation-test the Rust this branch changes from origin/main. Extra arguments go to cargo-mutants.
 mutants-on-diff *args:
