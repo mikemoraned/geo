@@ -662,7 +662,7 @@ code.
 #### Wrap-up
 
 - [x] Describe the gate, the session store, and the CLI in `crates/server/README.md`.
-- [ ] Rewrite the capture paragraph of `docs/architecture.md`, which says the server runs without
+- [x] Rewrite the capture paragraph of `docs/architecture.md`, which says the server runs without
       redis by logging samples. The server now takes `--store redis` or `--store in-memory`, and
       redis also holds passkeys and sessions.
 - [ ] Describe signing in, and the signed-out state of `/record/`, in `docs/web.md`.
