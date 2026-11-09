@@ -570,7 +570,8 @@ code.
       URL fails with a fixed message. `Stores` prints a redis store without its URL. tower-sessions
       logs no session ID, and `tower_http` logs requests only at `debug`, below the server's
       default filter. webauthn-rs's errors name no credential ID.
-- [ ] Run `just test-no-docker` and the server's Docker tests.
+- [x] Run `just test-no-docker` and the server's Docker tests.
+      On 2026-11-09 `just test` ran both, and passed.
 - [x] Move each test helper and each piece of server code that sits in the wrong place.
   - [x] `tests/compression.rs` and `tests/version.rs` each define their own `relying_party()`
         helper, which builds a relying party and has nothing to do with compression or the
