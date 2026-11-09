@@ -17,6 +17,7 @@ futures = { workspace = true }
 geo = { workspace = true }
 geo-traits = { workspace = true }
 geo-types = { workspace = true }
+nutype = { workspace = true }
 object_store = { workspace = true }
 proj4rs = { workspace = true }
 sedona = { workspace = true }

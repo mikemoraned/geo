@@ -1,54 +1,30 @@
 use std::fmt::{self, Display};
-use std::str::FromStr;
 
 use geo_types::Point;
 use hashfn::hashfn;
+use nutype::nutype;
 use serde::{Deserialize, Serialize};
 
 use crate::name::{NameError, checked};
 use crate::position::{CoordinateError, degrees, position};
 use crate::precision::Precision;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String")]
+#[nutype(
+    validate(with = checked, error = NameError),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
 pub struct CrossingId(String);
 
 impl CrossingId {
-    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, NameError> {
-        Ok(Self(checked(id.into())?))
+        Self::try_new(id)
     }
 
     pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl FromStr for CrossingId {
-    type Err = NameError;
-
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        Self::new(id)
-    }
-}
-
-impl TryFrom<String> for CrossingId {
-    type Error = NameError;
-
-    fn try_from(id: String) -> Result<Self, Self::Error> {
-        Self::new(id)
-    }
-}
-
-impl From<CrossingId> for String {
-    fn from(id: CrossingId) -> Self {
-        id.0
-    }
-}
-
-impl Display for CrossingId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        self.as_ref()
     }
 }
 

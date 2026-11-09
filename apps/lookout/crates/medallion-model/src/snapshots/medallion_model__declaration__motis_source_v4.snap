@@ -47,7 +47,7 @@ columns:
     data_type: LargeUtf8
     nullable: true
     checks:
-      "Label::new": 567dfbcc1b09b18b3b4aa414f0b547ebd939419ed0514e8edba3c8b2adb28aa7
+      label_is_well_formed: e7600b77a8a89bb0623d5feda21124228fba6eebc48572d246c5fd02d7a3600e
   - name: registered_at
     data_type: "Timestamp(ms, \"UTC\")"
     nullable: true

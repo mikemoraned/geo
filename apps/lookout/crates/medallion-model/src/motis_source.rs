@@ -4,6 +4,7 @@ use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use hashfn::hashfn;
 use medallion::{Country, DatasetSpec, Row, layers};
+use nutype::nutype;
 use semver::Version;
 use serde::{Deserialize, Serialize, Serializer};
 use strum::{AsRefStr, EnumIter, EnumString, IntoEnumIterator};
@@ -155,8 +156,13 @@ impl Display for MotisBaseUrl {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(try_from = "String")]
+#[nutype(
+    validate(with = label_is_well_formed, error = NotALabel),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, Display, FromStr, TryFrom, Into, AsRef, Serialize,
+        Deserialize
+    )
+)]
 pub struct Label(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -168,53 +174,30 @@ pub struct NotALabel {
     text: String,
 }
 
+#[hashfn]
+pub fn label_is_well_formed(text: &str) -> Result<(), NotALabel> {
+    let words_ok = text.split(['-', '.']).all(|word| {
+        !word.is_empty()
+            && word
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+    });
+    if words_ok {
+        Ok(())
+    } else {
+        Err(NotALabel {
+            text: text.to_string(),
+        })
+    }
+}
+
 impl Label {
-    #[hashfn]
     pub fn new(text: impl Into<String>) -> Result<Self, NotALabel> {
-        let text = text.into();
-        let words_ok = text.split(['-', '.']).all(|word| {
-            !word.is_empty()
-                && word
-                    .chars()
-                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        });
-        if words_ok {
-            Ok(Self(text))
-        } else {
-            Err(NotALabel { text })
-        }
+        Self::try_new(text)
     }
 
     pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl FromStr for Label {
-    type Err = NotALabel;
-
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        Self::new(text)
-    }
-}
-
-impl TryFrom<String> for Label {
-    type Error = NotALabel;
-
-    fn try_from(text: String) -> Result<Self, Self::Error> {
-        Self::new(text)
-    }
-}
-
-impl From<Label> for String {
-    fn from(label: Label) -> Self {
-        label.0
-    }
-}
-
-impl Display for Label {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        self.as_ref()
     }
 }
 
@@ -360,7 +343,7 @@ impl Row for MotisSourceRowV4 {
             overture_release: Some(
                 OvertureRelease::new("2026-09-23.1").expect("a constant Overture release parses"),
             ),
-            label: Some(Label("example".to_string())),
+            label: Some(Label::new("example").expect("a label")),
             registered_at: DateTime::UNIX_EPOCH,
         }
     }

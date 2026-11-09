@@ -25,8 +25,7 @@ columns:
     data_type: LargeUtf8
     nullable: false
     checks:
-      "SessionId::new": 44f47e96890235a7505f5d1fd7c4ff32d6efb810bdf8188f6e509afeaf2e2761
-      "domain::name::checked": 595efce03785db8272f5b3751df76a43d9fc16f03ac6e5d815e263e9051f5d34
+      "domain::name::checked": adb6eaead74b5eb27fb75d5e90a525ccbef775a2d60f35da16ebefe5f88d8829
   - name: source_id
     data_type: LargeUtf8
     nullable: false
@@ -36,7 +35,7 @@ columns:
     data_type: LargeUtf8
     nullable: true
     checks:
-      "Label::new": 567dfbcc1b09b18b3b4aa414f0b547ebd939419ed0514e8edba3c8b2adb28aa7
+      label_is_well_formed: e7600b77a8a89bb0623d5feda21124228fba6eebc48572d246c5fd02d7a3600e
   - name: trip_id
     data_type: LargeUtf8
     nullable: false
