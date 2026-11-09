@@ -1,8 +1,8 @@
-use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 
 use arrow::array::RecordBatch;
 use chrono::NaiveDate;
+use nutype::nutype;
 
 use crate::dataset::DatasetSpec;
 use crate::layer::layers;
@@ -17,20 +17,19 @@ pub const RUN_ID: &str = "run_id";
 
 const BY_RUN: [&str; 2] = [RUN_DATE, RUN_ID];
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[nutype(
+    validate(with = partition_value, error = PathError),
+    derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display)
+)]
 pub struct RunId(String);
+
+fn partition_value(id: &str) -> Result<(), PathError> {
+    PartitionValue::new(id).map(|_| ())
+}
 
 impl RunId {
     pub fn new(id: impl Into<String>) -> Result<Self, PathError> {
-        let id = id.into();
-        PartitionValue::new(id.clone())?;
-        Ok(Self(id))
-    }
-}
-
-impl Display for RunId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        Self::try_new(id)
     }
 }
 

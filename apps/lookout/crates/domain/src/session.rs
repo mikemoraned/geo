@@ -1,8 +1,5 @@
-use std::fmt::{self, Display};
-use std::str::FromStr;
-
 use chrono::{DateTime, Utc};
-use hashfn::hashfn;
+use nutype::nutype;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -17,14 +14,18 @@ pub enum StartedBy {
     FirstSeen,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String")]
+#[nutype(
+    validate(with = checked, error = NameError),
+    derive(
+        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
+        Serialize, Deserialize
+    )
+)]
 pub struct SessionId(String);
 
 impl SessionId {
-    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, NameError> {
-        Ok(Self(checked(id.into())?))
+        Self::try_new(id)
     }
 
     pub fn of(device: &DeviceId, started_at: DateTime<Utc>) -> Self {
@@ -36,35 +37,7 @@ impl SessionId {
 
 impl From<Uuid> for SessionId {
     fn from(id: Uuid) -> Self {
-        Self(id.to_string())
-    }
-}
-
-impl FromStr for SessionId {
-    type Err = NameError;
-
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        Self::new(id)
-    }
-}
-
-impl TryFrom<String> for SessionId {
-    type Error = NameError;
-
-    fn try_from(id: String) -> Result<Self, Self::Error> {
-        Self::new(id)
-    }
-}
-
-impl From<SessionId> for String {
-    fn from(id: SessionId) -> Self {
-        id.0
-    }
-}
-
-impl Display for SessionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        Self::new(id.to_string()).expect("a UUID's text holds no reserved character")
     }
 }
 

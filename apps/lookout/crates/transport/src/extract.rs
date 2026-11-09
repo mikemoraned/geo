@@ -1,11 +1,9 @@
-use std::fmt::{self, Display};
-use std::str::FromStr;
-
 use arrow::array::{Array, Float64Array};
 use chrono::{DateTime, Utc};
 use geo_types::{Coord, Rect};
 use medallion::{Country, PartitionValue, Query, Root};
 use medallion_model::{DIVISION_ID, ExtractManifestRowV3, OvertureRelease};
+use nutype::nutype;
 
 use crate::overture::{Overture, OvertureError, OvertureType};
 
@@ -15,32 +13,24 @@ const COMPACT_UTC: &str = "%Y%m%dT%H%M%SZ";
 
 pub(crate) const RECORDED: &str = "SELECT * FROM extract_manifest_v3 ORDER BY extracted_at DESC";
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[nutype(
+    validate(with = partition_value, error = medallion::PathError),
+    derive(Debug, Clone, PartialEq, Eq, Hash, Display, FromStr)
+)]
 pub struct ExtractId(String);
+
+fn partition_value(id: &str) -> Result<(), medallion::PathError> {
+    PartitionValue::new(id).map(|_| ())
+}
 
 impl ExtractId {
     pub fn at(at: DateTime<Utc>) -> Self {
-        Self(at.format(COMPACT_UTC).to_string())
+        Self::new(at.format(COMPACT_UTC).to_string())
+            .expect("a compact UTC instant holds only digits and letters")
     }
 
     pub fn new(id: impl Into<String>) -> Result<Self, medallion::PathError> {
-        let id = id.into();
-        PartitionValue::new(id.clone())?;
-        Ok(Self(id))
-    }
-}
-
-impl FromStr for ExtractId {
-    type Err = medallion::PathError;
-
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        Self::new(id)
-    }
-}
-
-impl Display for ExtractId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        Self::try_new(id)
     }
 }
 

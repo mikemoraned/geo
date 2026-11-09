@@ -1,5 +1,6 @@
 use std::fmt::{self, Display};
-use std::str::FromStr;
+
+use nutype::nutype;
 
 pub(crate) const DATE_FORMAT: &str = "%Y-%m-%d";
 
@@ -13,62 +14,46 @@ pub enum PathError {
     Unpartitioned(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[nutype(
+    validate(with = snake_case_key, error = PathError),
+    derive(Debug, Clone, PartialEq, Eq, Hash, Display, FromStr, AsRef)
+)]
 pub struct PartitionKey(String);
+
+fn snake_case_key(key: &str) -> Result<(), PathError> {
+    let mut chars = key.chars();
+    let snake_case = chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+    if snake_case {
+        Ok(())
+    } else {
+        Err(PathError::Key(key.to_string()))
+    }
+}
 
 impl PartitionKey {
     pub fn new(key: impl Into<String>) -> Result<Self, PathError> {
-        let key = key.into();
-        let mut chars = key.chars();
-        let snake_case = chars.next().is_some_and(|c| c.is_ascii_lowercase())
-            && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
-        if snake_case {
-            Ok(Self(key))
-        } else {
-            Err(PathError::Key(key))
-        }
+        Self::try_new(key)
     }
 }
 
-impl FromStr for PartitionKey {
-    type Err = PathError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::new(s)
-    }
-}
-
-impl Display for PartitionKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[nutype(
+    validate(with = free_of_reserved_characters, error = PathError),
+    derive(Debug, Clone, PartialEq, Eq, Hash, Display, FromStr, AsRef)
+)]
 pub struct PartitionValue(String);
+
+fn free_of_reserved_characters(value: &str) -> Result<(), PathError> {
+    if value.is_empty() || value.contains(['/', ' ', '=']) {
+        Err(PathError::Value(value.to_string()))
+    } else {
+        Ok(())
+    }
+}
 
 impl PartitionValue {
     pub fn new(value: impl Into<String>) -> Result<Self, PathError> {
-        let value = value.into();
-        if value.is_empty() || value.contains(['/', ' ', '=']) {
-            Err(PathError::Value(value))
-        } else {
-            Ok(Self(value))
-        }
-    }
-}
-
-impl FromStr for PartitionValue {
-    type Err = PathError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::new(s)
-    }
-}
-
-impl Display for PartitionValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        Self::try_new(value)
     }
 }
 

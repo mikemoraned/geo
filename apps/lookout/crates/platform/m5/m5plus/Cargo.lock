@@ -1842,6 +1842,7 @@ dependencies = [
  "geo-types",
  "nmea",
  "num-traits",
+ "nutype",
  "serde",
  "thiserror 2.0.20",
 ]

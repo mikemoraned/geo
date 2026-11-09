@@ -1,13 +1,18 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use nutype::nutype;
+
 pub const ENV: &str = "BUILD_CODE_VERSION";
 
 const CODE: [&str; 3] = ["crates", "Cargo.toml", "Cargo.lock"];
 const DIRTY: &str = "-dirty";
 const UNKNOWN: &str = "unknown";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[nutype(
+    validate(with = committed, error = CodeVersionError),
+    derive(Debug, Clone, PartialEq, Eq, AsRef)
+)]
 pub struct CodeVersion(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -21,21 +26,25 @@ pub enum CodeVersionError {
     Unknown,
 }
 
+fn committed(hash: &str) -> Result<(), CodeVersionError> {
+    if hash.is_empty() || hash == UNKNOWN {
+        return Err(CodeVersionError::Unknown);
+    }
+    if hash.ends_with(DIRTY) {
+        return Err(CodeVersionError::Uncommitted {
+            hash: hash.to_string(),
+        });
+    }
+    Ok(())
+}
+
 impl CodeVersion {
     pub fn new(hash: &str) -> Result<Self, CodeVersionError> {
-        if hash.is_empty() || hash == UNKNOWN {
-            return Err(CodeVersionError::Unknown);
-        }
-        if hash.ends_with(DIRTY) {
-            return Err(CodeVersionError::Uncommitted {
-                hash: hash.to_string(),
-            });
-        }
-        Ok(Self(hash.to_string()))
+        Self::try_new(hash)
     }
 
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.as_ref()
     }
 }
 

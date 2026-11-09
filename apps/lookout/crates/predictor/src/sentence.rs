@@ -1,7 +1,4 @@
-use std::fmt;
-use std::str::FromStr;
-
-use serde::{Deserialize, Serialize};
+use nutype::nutype;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum SentenceError {
@@ -13,62 +10,43 @@ pub enum SentenceError {
     NotHexChecksum,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[nutype(
+    sanitize(trim),
+    validate(with = has_a_hex_checksum, error = SentenceError),
+    derive(
+        Debug, Clone, PartialEq, Eq, Display, FromStr, TryFrom, Into, AsRef, Serialize,
+        Deserialize
+    )
+)]
 pub struct Sentence(String);
+
+fn has_a_hex_checksum(sentence: &str) -> Result<(), SentenceError> {
+    let checksum = sentence
+        .strip_prefix('$')
+        .ok_or(SentenceError::NoStart)?
+        .rsplit_once('*')
+        .ok_or(SentenceError::NoChecksum)?
+        .1;
+
+    match checksum.len() == 2 && checksum.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        true => Ok(()),
+        false => Err(SentenceError::NotHexChecksum),
+    }
+}
 
 impl Sentence {
     pub fn new(sentence: impl Into<String>) -> Result<Self, SentenceError> {
-        let sentence = sentence.into().trim().to_string();
-        let checksum = sentence
-            .strip_prefix('$')
-            .ok_or(SentenceError::NoStart)?
-            .rsplit_once('*')
-            .ok_or(SentenceError::NoChecksum)?
-            .1;
-
-        match checksum.len() == 2 && checksum.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            true => Ok(Self(sentence)),
-            false => Err(SentenceError::NotHexChecksum),
-        }
+        Self::try_new(sentence)
     }
 
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.as_ref()
     }
 
     pub fn body(&self) -> &str {
-        let body = self.0.strip_prefix('$').unwrap_or(&self.0);
+        let body = self.as_str().strip_prefix('$').unwrap_or(self.as_str());
 
         body.rsplit_once('*').map_or(body, |(body, _)| body)
-    }
-}
-
-impl FromStr for Sentence {
-    type Err = SentenceError;
-
-    fn from_str(sentence: &str) -> Result<Self, Self::Err> {
-        Self::new(sentence)
-    }
-}
-
-impl TryFrom<String> for Sentence {
-    type Error = SentenceError;
-
-    fn try_from(sentence: String) -> Result<Self, Self::Error> {
-        Self::new(sentence)
-    }
-}
-
-impl From<Sentence> for String {
-    fn from(sentence: Sentence) -> Self {
-        sentence.0
-    }
-}
-
-impl fmt::Display for Sentence {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
     }
 }
 

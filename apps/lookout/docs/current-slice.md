@@ -768,8 +768,14 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               copies eleven fields by hand, and the `Option` exists only to count a drop.
         - [x] Give the division-area path one helper, and list landed files through the object
               store. Three places spell the path, and a second walk of the disk lists the files.
-        - [ ] Declare every validated newtype with `nutype`. Two idioms coexist, and each
-              hand-written type takes 25 to 60 lines.
+        - [x] Declare every validated newtype with `nutype`. Two idioms coexist, and each
+              hand-written type takes 25 to 60 lines. Eleven types were converted. The rest stay
+              hand-written. `Radius` and `Age` build values in `const fn`s, and `Score` builds them
+              by arithmetic it knows to be in range. `Span`, `GersId`, `MotisVersion`, and
+              `MotisBaseUrl` parse into another type with errors of their own. `OvertureRelease`
+              and `Bbox` hold several fields, and `MotisSourceId` checks nothing. Moving the checks
+              of `SessionId`, `CrossingId`, and `Label` changed only their hashes in eleven
+              declaration snapshots, which were accepted as refactors no reader can see.
         - [ ] Describe the table of `session-crossings-py` with medallion's fields. Its copy has
               drifted, and leaves `crossed_at` non-nullable.
 

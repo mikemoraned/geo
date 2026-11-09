@@ -3,9 +3,7 @@
 use std::collections::BTreeMap;
 
 use arrow::datatypes::{Field, SchemaRef};
-use domain::{
-    CrossingCompactId, CrossingId, DeviceType, SessionId, StartedBy, StateKind, TrainNumber,
-};
+use domain::{CrossingCompactId, DeviceType, StartedBy, StateKind, TrainNumber};
 use medallion::{Country, DatasetInfo, Row, file_schema};
 use serde::{Deserialize, Serialize};
 use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, TracerConfig};
@@ -13,12 +11,12 @@ use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, Trace
 use crate::{
     ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationOutcomeRowV1, EvaluationRunRowV2,
     EvaluationSessionRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1,
-    ExtractManifestRowV3, Feed, FloatType, GeometrySource, GersId, GpsReadingRowV2, Label,
-    MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId,
-    MotisSourceRowV4, MotisVersion, NotificationClass, OVERTURE_EXTRACT, OutcomeKind, OverlapKind,
-    OvertureRelease, PassDetectorName, PredictorName, RailMode, RawSampleRow, SessionCrossingRowV3,
-    SessionRowV3, SessionSampleRowV3, TrainSegmentRowV4, TrainSessionCrossingRowV1,
-    TrainSessionRowV3, TrainSessionSampleRowV3, WaterCrossingRowV2,
+    ExtractManifestRowV3, Feed, FloatType, GeometrySource, GersId, GpsReadingRowV2, MotisBaseUrl,
+    MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4,
+    MotisVersion, NotificationClass, OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease,
+    PassDetectorName, PredictorName, RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3,
+    SessionSampleRowV3, TrainSegmentRowV4, TrainSessionCrossingRowV1, TrainSessionRowV3,
+    TrainSessionSampleRowV3, WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -235,16 +233,19 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
             "CrossingCompactId",
             Checks::from([("CrossingCompactId::new", CrossingCompactId::NEW_HASH)]),
         ),
-        (
-            "CrossingId",
-            Checks::from([("CrossingId::new", CrossingId::NEW_HASH), name]),
-        ),
+        ("CrossingId", Checks::from([name])),
         (
             "DeviceId",
             Checks::from([("device_id_present", domain::device::DEVICE_ID_PRESENT_HASH)]),
         ),
         ("GersId", Checks::from([("GersId::new", GersId::NEW_HASH)])),
-        ("Label", Checks::from([("Label::new", Label::NEW_HASH)])),
+        (
+            "Label",
+            Checks::from([(
+                "label_is_well_formed",
+                crate::motis_source::LABEL_IS_WELL_FORMED_HASH,
+            )]),
+        ),
         (
             "MotisBaseUrl",
             Checks::from([("MotisBaseUrl::new", MotisBaseUrl::NEW_HASH)]),
@@ -279,10 +280,7 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
                 crate::motis::POLYLINE_ID_IS_A_UUID_HASH,
             )]),
         ),
-        (
-            "SessionId",
-            Checks::from([("SessionId::new", SessionId::NEW_HASH), name]),
-        ),
+        ("SessionId", Checks::from([name])),
         (
             "StopId",
             Checks::from([("stop_id_present", crate::motis::STOP_ID_PRESENT_HASH)]),

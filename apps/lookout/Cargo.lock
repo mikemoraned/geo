@@ -1773,6 +1773,7 @@ checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 name = "code_version"
 version = "0.1.0"
 dependencies = [
+ "nutype",
  "thiserror 2.0.18",
 ]
 
@@ -5164,6 +5165,7 @@ dependencies = [
  "geoarrow-array",
  "geoarrow-schema",
  "geoparquet",
+ "nutype",
  "object_store",
  "parquet",
  "proj4rs",
@@ -5307,6 +5309,7 @@ dependencies = [
  "geo-types",
  "medallion",
  "medallion-model",
+ "nutype",
  "openapiv3",
  "parquet",
  "prettyplease",
@@ -6183,6 +6186,7 @@ dependencies = [
  "geo-types",
  "nmea",
  "num-traits",
+ "nutype",
  "proptest",
  "serde",
  "serde_json",
@@ -9092,6 +9096,7 @@ dependencies = [
  "geo-types",
  "medallion",
  "medallion-model",
+ "nutype",
  "object_store",
  "sedona",
  "sedona-geoparquet",
