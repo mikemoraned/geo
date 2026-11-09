@@ -610,7 +610,7 @@ code.
     - [x] Read the redis URL through clap, with `env`, `hide_env_values`, and
           `required_if_eq("store", "redis")`, in place of `Stores`, `StoresError`, and the `Debug`
           that hides the URL.
-    - [ ] Set `/record/`'s `Cache-Control` with a layer on its router in `build_app`, beside the
+    - [x] Set `/record/`'s `Cache-Control` with a layer on its router in `build_app`, beside the
           static files' layer, so the gate only gates.
     - [ ] Add `AuthStore::is_allowed`, a `HEXISTS` in redis, for the signed-in check, which decodes
           the whole passkey today and discards it.

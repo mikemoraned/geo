@@ -28,12 +28,20 @@ pub struct AppState {
 
 const RECORD_PAGE: &str = "/record";
 const ASK_FIRST: &str = "no-cache";
+const ASK_FIRST_PRIVATELY: &str = "private, no-cache";
 const NEVER_STORE: &str = "no-store";
 
 pub fn build_app(state: AppState, site_dir: impl AsRef<Path>) -> Router {
     let site_dir = site_dir.as_ref();
     let record = Router::new()
-        .nest_service(RECORD_PAGE, ServeDir::new(site_dir.join("gated/record")))
+        .nest_service(
+            RECORD_PAGE,
+            SetResponseHeader::overriding(
+                ServeDir::new(site_dir.join("gated/record")),
+                header::CACHE_CONTROL,
+                HeaderValue::from_static(ASK_FIRST_PRIVATELY),
+            ),
+        )
         .layer(middleware::from_fn_with_state(
             state.relying_party.clone(),
             auth::gate::require_signin,
