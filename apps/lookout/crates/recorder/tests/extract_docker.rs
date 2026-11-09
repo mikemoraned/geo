@@ -2,6 +2,7 @@ use std::process::Command;
 
 use domain::Gps;
 use medallion::{Query, Root};
+use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use serde::Deserialize;
 use shared::{Accel, AccelReading, GpsReading, Message, V1Message};
@@ -13,12 +14,7 @@ async fn lpush(conn: &mut MultiplexedConnection, message: &Message) {
     let payload = serde_json::to_string(message).expect("serialize");
     let item = serde_json::to_string(&RawSample::new(1_700_000_050_000, payload))
         .expect("serialize envelope");
-    let _: i64 = redis::cmd("LPUSH")
-        .arg(QUEUE_KEY)
-        .arg(item)
-        .query_async(conn)
-        .await
-        .expect("lpush");
+    let _: i64 = conn.lpush(QUEUE_KEY, item).await.expect("lpush");
 }
 
 fn accel_sample(id: Uuid, t: i64) -> Message {

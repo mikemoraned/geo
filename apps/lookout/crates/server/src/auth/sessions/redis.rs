@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use redis::aio::MultiplexedConnection;
+use redis::{AsyncCommands, ExistenceCheck, SetExpiry, SetOptions};
 use tower_sessions::session::{Id, Record};
 use tower_sessions::session_store::{self, SessionStore};
 
@@ -13,15 +14,14 @@ fn backend(err: redis::RedisError) -> session_store::Error {
     session_store::Error::Backend(err.to_string())
 }
 
-fn set(record: &Record) -> session_store::Result<redis::Cmd> {
-    let json = serde_json::to_string(record)
+fn encoded(record: &Record) -> session_store::Result<String> {
+    serde_json::to_string(record).map_err(|err| session_store::Error::Encode(err.to_string()))
+}
+
+fn expiring(record: &Record) -> session_store::Result<SetOptions> {
+    let at = u64::try_from(record.expiry_date.unix_timestamp())
         .map_err(|err| session_store::Error::Encode(err.to_string()))?;
-    let mut cmd = redis::cmd("SET");
-    cmd.arg(session_key(&record.id))
-        .arg(json)
-        .arg("EXAT")
-        .arg(record.expiry_date.unix_timestamp());
-    Ok(cmd)
+    Ok(SetOptions::default().with_expiration(SetExpiry::EXAT(at)))
 }
 
 #[derive(Debug, Clone)]
@@ -46,9 +46,12 @@ impl SessionStore for RedisSessionStore {
             };
             let mut conn = self.conn.clone();
             async move {
-                let created: Option<String> = set(&candidate)?
-                    .arg("NX")
-                    .query_async(&mut conn)
+                let created: Option<String> = conn
+                    .set_options(
+                        session_key(&candidate.id),
+                        encoded(&candidate)?,
+                        expiring(&candidate)?.conditional_set(ExistenceCheck::NX),
+                    )
                     .await
                     .map_err(backend)?;
                 Ok(match created {
@@ -66,17 +69,20 @@ impl SessionStore for RedisSessionStore {
     }
 
     async fn save(&self, record: &Record) -> session_store::Result<()> {
-        let () = set(record)?
-            .query_async(&mut self.conn.clone())
+        let () = self
+            .conn
+            .clone()
+            .set_options(session_key(&record.id), encoded(record)?, expiring(record)?)
             .await
             .map_err(backend)?;
         Ok(())
     }
 
     async fn load(&self, id: &Id) -> session_store::Result<Option<Record>> {
-        let json: Option<String> = redis::cmd("GET")
-            .arg(session_key(id))
-            .query_async(&mut self.conn.clone())
+        let json: Option<String> = self
+            .conn
+            .clone()
+            .get(session_key(id))
             .await
             .map_err(backend)?;
         json.map(|json| serde_json::from_str(&json))
@@ -85,9 +91,10 @@ impl SessionStore for RedisSessionStore {
     }
 
     async fn delete(&self, id: &Id) -> session_store::Result<()> {
-        let _: i64 = redis::cmd("DEL")
-            .arg(session_key(id))
-            .query_async(&mut self.conn.clone())
+        let _: i64 = self
+            .conn
+            .clone()
+            .del(session_key(id))
             .await
             .map_err(backend)?;
         Ok(())

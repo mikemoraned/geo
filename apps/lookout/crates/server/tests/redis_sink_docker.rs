@@ -1,4 +1,5 @@
 use domain::Gps;
+use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use server::queue::{QUEUE_KEY, RedisSink, SampleSink};
 use shared::{Accel, AccelReading, GpsReading, Message, V1Message};
@@ -42,11 +43,7 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
     let depth_after_gps = sink.push(&gps_item).await.expect("push gps");
     assert_eq!((depth_after_accel, depth_after_gps), (1, 2));
 
-    let len: i64 = redis::cmd("LLEN")
-        .arg(QUEUE_KEY)
-        .query_async(&mut conn)
-        .await
-        .expect("llen");
+    let len: i64 = conn.llen(QUEUE_KEY).await.expect("llen");
     assert_eq!(len, 2);
 
     let oldest = rpop_sample(&mut conn).await;
@@ -63,10 +60,6 @@ fn wrap(message: &Message) -> RawSample {
 }
 
 async fn rpop_sample(conn: &mut MultiplexedConnection) -> RawSample {
-    let item: String = redis::cmd("RPOP")
-        .arg(QUEUE_KEY)
-        .query_async(conn)
-        .await
-        .expect("rpop");
+    let item: String = conn.rpop(QUEUE_KEY, None).await.expect("rpop");
     serde_json::from_str(&item).expect("deserialize envelope")
 }

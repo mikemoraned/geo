@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use redis::Script;
 use redis::aio::MultiplexedConnection;
+use redis::{AsyncCommands, ExistenceCheck, Script, SetExpiry, SetOptions};
 use serde::de::DeserializeOwned;
 use webauthn_rs::prelude::CredentialID;
 
@@ -47,22 +47,18 @@ impl RedisAuthStore {
     }
 
     async fn take(&self, key: String) -> Result<Option<String>, StoreError> {
-        Ok(redis::cmd("GETDEL")
-            .arg(key)
-            .query_async(&mut self.conn.clone())
-            .await?)
+        Ok(self.conn.clone().get_del(key).await?)
     }
 }
 
 #[async_trait]
 impl AuthStore for RedisAuthStore {
     async fn put_ceremony(&self, id: CeremonyId, ceremony: Ceremony) -> Result<(), StoreError> {
-        let () = redis::cmd("SET")
-            .arg(ceremony_key(id))
-            .arg(serde_json::to_string(&ceremony)?)
-            .arg("EX")
-            .arg(CEREMONY_LIFETIME.as_secs())
-            .query_async(&mut self.conn.clone())
+        let json = serde_json::to_string(&ceremony)?;
+        let () = self
+            .conn
+            .clone()
+            .set_ex(ceremony_key(id), json, CEREMONY_LIFETIME.as_secs())
             .await?;
         Ok(())
     }
@@ -76,13 +72,13 @@ impl AuthStore for RedisAuthStore {
         code: &ShortCode,
         passkey: PendingPasskey,
     ) -> Result<Claim, StoreError> {
-        let set: Option<String> = redis::cmd("SET")
-            .arg(pending_key(code))
-            .arg(serde_json::to_string(&passkey)?)
-            .arg("NX")
-            .arg("EX")
-            .arg(PENDING_LIFETIME.as_secs())
-            .query_async(&mut self.conn.clone())
+        let options = SetOptions::default()
+            .conditional_set(ExistenceCheck::NX)
+            .with_expiration(SetExpiry::EX(PENDING_LIFETIME.as_secs()));
+        let set: Option<String> = self
+            .conn
+            .clone()
+            .set_options(pending_key(code), serde_json::to_string(&passkey)?, options)
             .await?;
         Ok(match set {
             Some(_) => Claim::Claimed,
@@ -95,28 +91,20 @@ impl AuthStore for RedisAuthStore {
     }
 
     async fn find_allowed(&self, id: &CredentialID) -> Result<Option<AllowedPasskey>, StoreError> {
-        let record: Option<String> = redis::cmd("HGET")
-            .arg(PASSKEYS_KEY)
-            .arg(id.as_ref())
-            .query_async(&mut self.conn.clone())
-            .await?;
+        let record: Option<String> = self.conn.clone().hget(PASSKEYS_KEY, id.as_ref()).await?;
         decoded(record)
     }
 
     async fn is_allowed(&self, id: &CredentialID) -> Result<bool, StoreError> {
-        Ok(redis::cmd("HEXISTS")
-            .arg(PASSKEYS_KEY)
-            .arg(id.as_ref())
-            .query_async(&mut self.conn.clone())
-            .await?)
+        Ok(self.conn.clone().hexists(PASSKEYS_KEY, id.as_ref()).await?)
     }
 
     async fn put_allowed(&self, passkey: AllowedPasskey) -> Result<(), StoreError> {
-        let _: i64 = redis::cmd("HSET")
-            .arg(PASSKEYS_KEY)
-            .arg(passkey.passkey.cred_id().as_ref())
-            .arg(serde_json::to_string(&passkey)?)
-            .query_async(&mut self.conn.clone())
+        let json = serde_json::to_string(&passkey)?;
+        let _: i64 = self
+            .conn
+            .clone()
+            .hset(PASSKEYS_KEY, passkey.passkey.cred_id().as_ref(), json)
             .await?;
         Ok(())
     }
@@ -136,10 +124,7 @@ impl AuthStore for RedisAuthStore {
     }
 
     async fn list_allowed(&self) -> Result<Vec<AllowedPasskey>, StoreError> {
-        let records: Vec<String> = redis::cmd("HVALS")
-            .arg(PASSKEYS_KEY)
-            .query_async(&mut self.conn.clone())
-            .await?;
+        let records: Vec<String> = self.conn.clone().hvals(PASSKEYS_KEY).await?;
         Ok(records
             .iter()
             .map(|json| serde_json::from_str(json))
@@ -155,10 +140,10 @@ impl AuthStore for RedisAuthStore {
         else {
             return Ok(None);
         };
-        let removed: i64 = redis::cmd("HDEL")
-            .arg(PASSKEYS_KEY)
-            .arg(allowed.passkey.cred_id().as_ref())
-            .query_async(&mut self.conn.clone())
+        let removed: i64 = self
+            .conn
+            .clone()
+            .hdel(PASSKEYS_KEY, allowed.passkey.cred_id().as_ref())
             .await?;
         Ok((removed == 1).then_some(allowed))
     }

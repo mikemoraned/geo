@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use shared::{Accel, AccelReading, Message, V1Message};
 use telemetry::{QUEUE_KEY, RawSample, connect, peek_newest_samples, take_oldest_sample};
@@ -25,20 +26,11 @@ async fn push_as_a_receiver_does(conn: &mut MultiplexedConnection, sample: &Mess
     let payload = serde_json::to_string(sample).expect("serialize");
     let item = serde_json::to_string(&RawSample::new(1_700_000_050_000, payload))
         .expect("serialize envelope");
-    let _: i64 = redis::cmd("LPUSH")
-        .arg(QUEUE_KEY)
-        .arg(item)
-        .query_async(conn)
-        .await
-        .expect("lpush");
+    let _: i64 = conn.lpush(QUEUE_KEY, item).await.expect("lpush");
 }
 
 async fn queued_length(conn: &mut MultiplexedConnection) -> i64 {
-    redis::cmd("LLEN")
-        .arg(QUEUE_KEY)
-        .query_async(conn)
-        .await
-        .expect("llen")
+    conn.llen(QUEUE_KEY).await.expect("llen")
 }
 
 async fn peeking_answers_newest_first_and_removes_nothing(conn: &mut MultiplexedConnection) {

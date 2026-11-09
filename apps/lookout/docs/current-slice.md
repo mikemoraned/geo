@@ -603,7 +603,7 @@ code.
         `no-store`. Skipping `cycle_id` on a first sign-in saves one DEL, and sign-in is rare. Three
         more were left: reusing one connection in `redis_end_to_end.rs`, one pipelined round trip
         for the minute's recheck, and one redis container per test binary.
-  - [ ] Apply the accepted `/simplify` findings.
+  - [x] Apply the accepted `/simplify` findings.
     - [x] Apply `session_layer()` only to a router holding `/ws`, `/record`, and `/auth/`. Over the
           whole app, a static file or `/version` sent with a cookie loads and saves the session, two
           redis round trips, and a stale cookie creates an empty session.
@@ -640,7 +640,7 @@ code.
     - [x] Add a `SignedIn` extractor, and use it in the gate, `/ws`, and `/auth/status`, in place of
           the signed-in check each makes.
     - [x] Retry `test-redis`'s readiness check with `backon`, in place of its own loop.
-    - [ ] Use redis's typed `AsyncCommands` methods across the workspace, in place of
+    - [x] Use redis's typed `AsyncCommands` methods across the workspace, in place of
           `redis::cmd`. The user accepted the change of convention.
   - [ ] run `/security-review` again
 

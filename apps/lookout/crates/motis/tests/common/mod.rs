@@ -1,4 +1,5 @@
 use domain::Gps;
+use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use shared::{GpsReading, Message, V1Message};
 use telemetry::{QUEUE_KEY, RawSample};
@@ -28,12 +29,7 @@ pub async fn lpush(conn: &mut MultiplexedConnection, message: &Message) {
     let payload = serde_json::to_string(message).expect("serialize message");
     let item = serde_json::to_string(&RawSample::new(1_700_000_050_000, payload))
         .expect("serialize envelope");
-    let _: i64 = redis::cmd("LPUSH")
-        .arg(QUEUE_KEY)
-        .arg(item)
-        .query_async(conn)
-        .await
-        .expect("lpush");
+    let _: i64 = conn.lpush(QUEUE_KEY, item).await.expect("lpush");
 }
 
 #[derive(Debug, serde::Deserialize)]

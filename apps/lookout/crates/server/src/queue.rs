@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use redis::RedisError;
 use redis::aio::MultiplexedConnection;
+use redis::{AsyncCommands, RedisError};
 use telemetry::RawSample;
 
 pub use telemetry::QUEUE_KEY;
@@ -31,13 +31,7 @@ impl RedisSink {
 #[async_trait]
 impl SampleSink for RedisSink {
     async fn push(&self, sample: &RawSample) -> Result<i64, PushError> {
-        let mut conn = self.conn.clone();
         let item = serde_json::to_string(sample)?;
-        let depth: i64 = redis::cmd("LPUSH")
-            .arg(QUEUE_KEY)
-            .arg(item)
-            .query_async(&mut conn)
-            .await?;
-        Ok(depth)
+        Ok(self.conn.clone().lpush(QUEUE_KEY, item).await?)
     }
 }

@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use backon::{ConstantBuilder, Retryable};
+use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, ImageExt};
@@ -47,11 +48,7 @@ impl TestRedis {
     }
 
     pub async fn seconds_to_live(&self, key: &str) -> i64 {
-        redis::cmd("TTL")
-            .arg(key)
-            .query_async(&mut self.connection())
-            .await
-            .expect("a TTL")
+        self.connection().ttl(key).await.expect("a TTL")
     }
 }
 
@@ -59,7 +56,7 @@ async fn ready(url: &str) -> MultiplexedConnection {
     let client = redis::Client::open(url).expect("a redis URL");
     let ping = || async {
         let mut conn = client.get_multiplexed_async_connection().await?;
-        redis::cmd("PING").query_async::<String>(&mut conn).await?;
+        let _: String = conn.ping().await?;
         Ok::<_, redis::RedisError>(conn)
     };
     ping.retry(
