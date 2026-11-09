@@ -122,9 +122,10 @@ no admin can reach that memory. The finish then answers `{"status": "allowed"}`.
 origin's passkey stays pending, so a hosted server with its records in memory allows none.
 
 A finish answers 400 for a ceremony that expired, finished already, or never started. It also
-answers 400 for a credential that fails verification. The finish takes its ceremony out before
-verifying, so a failed finish uses the ceremony up. A failure to start a ceremony, or to read or
-write the records, answers 500.
+answers 400 for a credential that fails verification, with the body `the credential failed
+verification`. The server logs webauthn-rs's reason for the failure, and the answer leaves it out.
+The finish takes its ceremony out before verifying, so a failed finish uses the ceremony up. A
+failure to start a ceremony, or to read or write the records, answers 500.
 
 [create]: https://www.w3.org/TR/webauthn-3/#sctn-createCredential
 [user]: https://www.w3.org/TR/webauthn-3/#dom-publickeycredentialcreationoptions-user

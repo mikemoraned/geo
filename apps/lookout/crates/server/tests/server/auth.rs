@@ -219,6 +219,28 @@ async fn a_credential_answers_only_the_ceremony_that_challenged_it() {
 }
 
 #[tokio::test]
+async fn a_credential_that_fails_verification_is_refused_without_the_reason() {
+    let server = Server::hosted(Allowing::ByAdmin);
+    let challenger = start_registration(&server.app).await;
+    let other = start_registration(&server.app).await;
+    let misdirected = Finish {
+        ceremony: other.ceremony,
+        credential: Browser::at(ORIGIN).register(challenger.options).await,
+    };
+    let json = serde_json::to_vec(&misdirected).expect("a finish");
+
+    let refused = post(&server.app, "/auth/register/finish", Body::from(json), None).await;
+
+    assert_eq!(
+        (refused.status, refused.body),
+        (
+            StatusCode::BAD_REQUEST,
+            Bytes::from("the credential failed verification")
+        )
+    );
+}
+
+#[tokio::test]
 async fn an_allowed_passkey_signs_in_to_a_session() {
     let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);

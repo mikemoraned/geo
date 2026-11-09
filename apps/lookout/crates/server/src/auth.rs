@@ -172,7 +172,7 @@ pub struct Finish<Credential> {
 pub enum AuthError {
     #[error("the ceremony expired, finished already, or never started")]
     NoCeremony,
-    #[error("the credential failed verification: {0}")]
+    #[error("{UNVERIFIED}: {0}")]
     Unverified(WebauthnError),
     #[error("the passkey is not allowed")]
     NotAllowed,
@@ -184,12 +184,18 @@ pub enum AuthError {
     Session(#[from] tower_sessions::session::Error),
 }
 
+const UNVERIFIED: &str = "the credential failed verification";
+
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         match self {
-            AuthError::NoCeremony | AuthError::Unverified(_) => {
+            AuthError::NoCeremony => {
                 tracing::warn!(err = %self, "refused an auth request");
                 (StatusCode::BAD_REQUEST, self.to_string()).into_response()
+            }
+            AuthError::Unverified(_) => {
+                tracing::warn!(err = %self, "refused an auth request");
+                (StatusCode::BAD_REQUEST, UNVERIFIED).into_response()
             }
             AuthError::NotAllowed => {
                 tracing::warn!(err = %self, "refused an auth request");

@@ -557,8 +557,12 @@ code.
       outside the server the same way. The audit still flags arrow-data, which `arrow` pins
       exactly, five crates that need a major version (pyo3, quick-xml, rkyv, thrift, and zip), and
       eight unmaintained crates. None reaches the server, so they wait for an upgrades slice.
-- [ ] Check what an error tells a caller. A 400 carries webauthn-rs's reason for refusing a
+- [x] Check what an error tells a caller. A 400 carries webauthn-rs's reason for refusing a
       credential. Decide whether a caller needs it, or only the server's log.
+      Decided on 2026-11-09: only the log. A caller cannot act on webauthn-rs's reason, and the
+      admin reads the log. A credential that fails verification now answers 400 with
+      `the credential failed verification` alone. The other refusals keep their text: an expired
+      ceremony tells the user to start again, and the page reads a 403 as a passkey not allowed.
 - [ ] Check that no log line carries a session ID, a credential ID, or the redis URL. Include the
       redis client's errors, which the server and the CLI print.
 - [ ] Run `just test-no-docker` and the server's Docker tests.
