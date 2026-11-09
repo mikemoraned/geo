@@ -764,7 +764,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               additions to medallion, for about 1 GB, and was stopped before it was measured.
         - [x] Find passes one way, by building `steps` on `Matcher`, and point the geo test at that
               path. The store-backed test checks a path that production never runs.
-        - [ ] Flatten `TrainSegmentRowV4` into `Leg`, and make `Trip.country` a `Country`. `Leg`
+        - [x] Flatten `TrainSegmentRowV4` into `Leg`, and make `Trip.country` a `Country`. `Leg`
               copies eleven fields by hand, and the `Option` exists only to count a drop.
         - [ ] Give the division-area path one helper, and list landed files through the object
               store. Three places spell the path, and a second walk of the disk lists the files.

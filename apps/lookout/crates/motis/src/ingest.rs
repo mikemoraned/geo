@@ -1,13 +1,11 @@
-use chrono::{DateTime, Utc};
-use domain::TrainNumber;
 use geo_types::{Coord, LineString, Point};
 use medallion::{
     Countries, Country, Dated, GeoError, GeometryRow, GeometryRowWriter, Projectors, Query, Root,
     ZonedGeometry,
 };
 use medallion_model::{
-    AgencyId, MOTIS_POLYLINE_V2, MOTIS_SEGMENT_V3, MotisPolylineRowV2, MotisSourceId, PolylineId,
-    RailMode, StopId, TrainSegmentRowV4, TripId,
+    MOTIS_POLYLINE_V2, MOTIS_SEGMENT_V3, MotisPolylineRowV2, MotisSourceId, PolylineId, RailMode,
+    TrainSegmentRowV4, TripId,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -71,42 +69,13 @@ pub enum IngestError {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Leg {
-    pub(crate) source_id: MotisSourceId,
-    pub(crate) trip_id: TripId,
-    pub(crate) route_name: Option<String>,
-    pub(crate) train_number: Option<TrainNumber>,
-    pub(crate) agency_id: Option<AgencyId>,
-    pub(crate) agency_name: Option<String>,
-    pub(crate) mode: RailMode,
-    pub(crate) realtime: bool,
-    pub(crate) from_stop_id: Option<StopId>,
+    #[serde(flatten)]
+    pub(crate) segment: TrainSegmentRowV4,
     pub(crate) from_lat: f64,
     pub(crate) from_lon: f64,
     pub(crate) to_lat: f64,
     pub(crate) to_lon: f64,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub(crate) departure: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub(crate) arrival: DateTime<Utc>,
     pub(crate) polyline_id: PolylineId,
-}
-
-impl From<Leg> for TrainSegmentRowV4 {
-    fn from(leg: Leg) -> Self {
-        Self {
-            source_id: leg.source_id,
-            trip_id: leg.trip_id,
-            route_name: leg.route_name,
-            train_number: leg.train_number,
-            agency_id: leg.agency_id,
-            agency_name: leg.agency_name,
-            mode: leg.mode,
-            realtime: leg.realtime,
-            from_stop_id: leg.from_stop_id,
-            departure: leg.departure,
-            arrival: leg.arrival,
-        }
-    }
 }
 
 #[derive(Default)]
@@ -161,7 +130,7 @@ async fn ingest_in_writes_of(
                             .zoned(LineString::clone(&line))?,
                     };
                     pending.push(GeometryRow {
-                        row: TrainSegmentRowV4::from(leg),
+                        row: leg.segment,
                         geometry,
                     });
                 }
@@ -357,7 +326,7 @@ mod tests {
 
     use crate::api::types::{Mode, TripSegment};
     use arrow::array::RecordBatch;
-    use chrono::TimeZone;
+    use chrono::{DateTime, TimeZone, Utc};
     use medallion::{GEOMETRY, PROJECTED_GEOMETRY, Projector, Row};
     use medallion_model::{Feed, MotisPollRowV2, MotisSegmentRowV3, Polyline};
 
@@ -1019,21 +988,23 @@ mod tests {
 
     fn leg_naming(polyline: &Polyline) -> Leg {
         Leg {
-            source_id: source(Feed::Local).id(),
-            trip_id: TripId::new("a trip").expect("a trip id"),
-            route_name: None,
-            train_number: None,
-            agency_id: None,
-            agency_name: None,
-            mode: RailMode::RegionalRail,
-            realtime: false,
-            from_stop_id: None,
+            segment: TrainSegmentRowV4 {
+                source_id: source(Feed::Local).id(),
+                trip_id: TripId::new("a trip").expect("a trip id"),
+                route_name: None,
+                train_number: None,
+                agency_id: None,
+                agency_name: None,
+                mode: RailMode::RegionalRail,
+                realtime: false,
+                from_stop_id: None,
+                departure: DateTime::UNIX_EPOCH,
+                arrival: DateTime::UNIX_EPOCH,
+            },
             from_lat: 0.0,
             from_lon: 0.0,
             to_lat: 0.0,
             to_lon: 0.0,
-            departure: DateTime::UNIX_EPOCH,
-            arrival: DateTime::UNIX_EPOCH,
             polyline_id: PolylineId::of(polyline),
         }
     }
