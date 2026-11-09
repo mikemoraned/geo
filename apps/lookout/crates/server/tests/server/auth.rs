@@ -9,13 +9,13 @@ use server::auth::sessions::SharedSessionStore;
 use server::auth::store::{AuthStore, CeremonyId, PendingPasskey};
 use server::auth::{Allowing, AuthError, Finish, RelyingParty, Started};
 use std::str::FromStr;
+use test_passkeys::registered_passkey;
 use test_redis::TestRedis;
 
 use tower_sessions::cookie::SameSite;
 use tower_sessions::cookie::time::Duration;
 use tower_sessions::session::Id;
 use tower_sessions::{MemoryStore, SessionStore};
-use webauthn_rs::prelude::{RegisterPublicKeyCredential, Uuid, WebauthnBuilder};
 
 use crate::support::{
     Browser, LOCALHOST, Lookup, ORIGIN, ScriptedAuthStore, Server, app, finish_registration,
@@ -348,23 +348,8 @@ async fn a_passkey_revoked_during_its_signin_stays_revoked() {
 #[tokio::test]
 async fn a_passkey_for_another_account_cannot_sign_in() {
     let server = Server::hosted(Allowing::ByAdmin);
-    let mut browser = Browser::at(ORIGIN);
-    let webauthn = WebauthnBuilder::new("lookout.example.com", &url(ORIGIN))
-        .and_then(|builder| builder.build())
-        .expect("a relying party");
-    let (options, registration) = webauthn
-        .start_passkey_registration(Uuid::new_v4(), "another", "another", None)
-        .expect("a registration");
-    let created = browser
-        .register(
-            serde_json::from_value(serde_json::to_value(options).expect("json")).expect("options"),
-        )
-        .await;
-    let credential: RegisterPublicKeyCredential =
-        serde_json::from_value(serde_json::to_value(created).expect("json")).expect("a credential");
-    let passkey = webauthn
-        .finish_passkey_registration(&credential, &registration)
-        .expect("a passkey");
+    let (passkey, held) = registered_passkey(&url(ORIGIN), "another").await;
+    let mut browser = Browser::holding(ORIGIN, held);
     let code = server
         .passkeys
         .put_pending(PendingPasskey {

@@ -6,6 +6,9 @@ edition.workspace = true
 [dependencies]
 async-trait = { workspace = true }
 passkey = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+webauthn-rs = { workspace = true }
 
 [lints]
 workspace = true

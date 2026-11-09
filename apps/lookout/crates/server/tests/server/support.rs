@@ -50,6 +50,13 @@ impl Browser {
         }
     }
 
+    pub fn holding(origin: &str, passkey: Passkey) -> Self {
+        Self {
+            origin: url(origin),
+            passkey: Some(passkey),
+        }
+    }
+
     pub async fn register(
         &mut self,
         options: CredentialCreationOptions,

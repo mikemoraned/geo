@@ -18,7 +18,7 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 shared = { workspace = true }
 telemetry = { workspace = true }
-webauthn-rs = { version = "0.5", features = ["conditional-ui", "danger-allow-state-serialisation"] }
+webauthn-rs = { workspace = true, features = ["conditional-ui", "danger-allow-state-serialisation"] }
 webauthn-rs-proto = "0.5"
 tower-sessions = "0.15"
 # Builds the OpenSSL that webauthn-rs links into the binary. Without `vendored`, the build

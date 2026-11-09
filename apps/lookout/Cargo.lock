@@ -8362,6 +8362,9 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "passkey",
+ "serde",
+ "serde_json",
+ "webauthn-rs",
 ]
 
 [[package]]
