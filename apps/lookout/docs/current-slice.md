@@ -666,7 +666,7 @@ code.
       redis by logging samples. The server now takes `--store redis` or `--store in-memory`, and
       redis also holds passkeys and sessions.
 - [x] Describe signing in, and the signed-out state of `/record/`, in `docs/web.md`.
-- [ ] Describe who can record, how a passkey gains and loses access, and the risks the design
+- [x] Describe who can record, how a passkey gains and loses access, and the risks the design
       accepts, in `docs/access.md`, and index it in `CLAUDE.md`.
 - [ ] Before `/complete-slice`, record in `crates/server/README.md` every fact about the server
       that only this slice doc holds, with its sources.

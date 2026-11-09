@@ -46,7 +46,8 @@ for working practice and for the limits of this environment. Current notes:
 Lookout's own facts are in [`apps/lookout/docs/`](apps/lookout/docs/): `medallion.md` (the
 store), `architecture.md` (the pipeline), `telemetry.md` (the wire a device sends),
 `device.md` (the M5 board and its GNSS receiver), `motis.md` (the Motis API and the German
-timetable feed), `overture.md` (the reference source and what an extract takes).
+timetable feed), `overture.md` (the reference source and what an extract takes), `access.md` (who
+can record, and the risks the passkey gate accepts).
 
 ## Running Claude
 
