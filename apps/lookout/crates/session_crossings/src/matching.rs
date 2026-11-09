@@ -23,11 +23,6 @@ pub struct Sample {
 }
 
 impl Sample {
-    pub const SESSION_ORDER_SQL: &'static str = "OVER (
-        PARTITION BY session_id
-        ORDER BY t, ST_X(geometry_projected), ST_Y(geometry_projected)
-    )";
-
     pub fn session_order(&self, other: &Self) -> Ordering {
         self.t
             .cmp(&other.t)

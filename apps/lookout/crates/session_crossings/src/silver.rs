@@ -38,16 +38,16 @@ pub enum CrossingError {
 }
 
 #[derive(Debug, Deserialize)]
-struct RankedSample {
+struct StoredSample {
     session_id: SessionId,
-    rank: u64,
+    seq: u32,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     t: DateTime<Utc>,
     x: f64,
     y: f64,
 }
 
-impl RankedSample {
+impl StoredSample {
     fn sample(&self) -> Sample {
         Sample {
             t: self.t,
@@ -56,17 +56,12 @@ impl RankedSample {
     }
 }
 
-fn ranked_samples() -> String {
-    format!(
-        "SELECT session_id,
-            ROW_NUMBER() {order} AS rank,
-            t,
-            ST_X(geometry_projected) AS x,
-            ST_Y(geometry_projected) AS y
-        FROM samples",
-        order = Sample::SESSION_ORDER_SQL,
-    )
-}
+const STORED_SAMPLES: &str = "SELECT session_id,
+        seq,
+        t,
+        ST_X(geometry_projected) AS x,
+        ST_Y(geometry_projected) AS y
+    FROM samples";
 
 #[derive(Debug, Deserialize)]
 struct StoredDevice {
@@ -237,10 +232,10 @@ async fn matched_in(
     )?;
 
     let mut matcher = Matcher::new(&index, radius);
-    let mut batches = query.row_batches::<RankedSample>(&ranked_samples()).await?;
+    let mut batches = query.row_batches::<StoredSample>(STORED_SAMPLES).await?;
     while let Some(batch) = batches.next().await {
-        for ranked in batch? {
-            matcher.observe(&ranked.session_id, ranked.rank, &ranked.sample());
+        for stored in batch? {
+            matcher.observe(&stored.session_id, u64::from(stored.seq), &stored.sample());
         }
     }
     let matched = matcher.passes()?;
@@ -268,15 +263,15 @@ pub struct Inputs {
 
 pub async fn inputs(root: &Root, country: Country) -> Result<Inputs, CrossingError> {
     let query = registered(root, DEVICES, country).await?;
-    let ranked: Vec<RankedSample> = query
-        .rows(&format!("{} ORDER BY session_id, rank", ranked_samples()))
+    let stored: Vec<StoredSample> = query
+        .rows(&format!("{STORED_SAMPLES} ORDER BY session_id, seq"))
         .await?;
     Ok(Inputs {
-        sessions: ranked
+        sessions: stored
             .chunk_by(|a, b| a.session_id == b.session_id)
             .map(|samples| Session {
                 session_id: samples[0].session_id.clone(),
-                samples: samples.iter().map(RankedSample::sample).collect(),
+                samples: samples.iter().map(StoredSample::sample).collect(),
             })
             .collect(),
         crossings: crossings_in(&query).await?,

@@ -540,6 +540,12 @@ when `evaluation_run_v2` replaced the run row's four fingerprint columns with on
   capture in bronze averages about 1,160 legs per poll, so a 10-minute poll filters for about as
   long. Its 2,742,313 legs share 26,995 polylines, so 99% of the relates repeat an earlier answer.
   A memo would remove them, but it saves 3–5 s of every 10 minutes, and nothing waits on a poll.
+- **Reading each sample's `seq` cuts the matching's peak from 15.2 GB to 2.0 GB** (2026-11-09).
+  `match_crossings` ran in release builds over the same store, twice each way. Ranking samples by
+  a `ROW_NUMBER()` window took 88 s, and 195 s with other applications holding memory. Its peak
+  footprint was 15.2 GB both times, against a resident peak of 4.0 GB, since the window's sort
+  spilled into compressed memory and swap. Reading `seq` took 40–64 s, at a peak of 2.0–2.1 GB.
+  Both wrote 283 device passes, and 2,918,145 train passes over 143,089 sessions.
 
 ### Tasks
 
@@ -738,8 +744,10 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               polygon, and most of a poll's relates repeat an earlier answer. Only the outline was
               built. The memo was left out, since it saves only 3–5 s of each 10-minute poll, as
               Observations records.
-        - [ ] Rank train samples by their stored `seq`, rather than by a `ROW_NUMBER()` window. The
-              window takes 6.3 GB, most of the matching's peak.
+        - [x] Rank train samples by their stored `seq`, rather than by a `ROW_NUMBER()` window. The
+              window takes 6.3 GB, most of the matching's peak. Device samples rank by `seq` too.
+              Both writers number `seq` in time order, with no two samples of a session at one
+              instant, so ranking by position no longer breaks ties.
         - [ ] Project each train sample once, close each day's samples once they are written, and
               stop holding every session's path. All three feed the 4.7 GB peak of a re-derive.
         - [ ] Find passes one way, by building `steps` on `Matcher`, and point the geo test at that
