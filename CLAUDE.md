@@ -31,6 +31,9 @@ for working practice and for the limits of this environment. Current notes:
   written abstractly (no component names in rules) and in dry language, a README change cites
   the sources behind it, another project is linked at its first mention, and an interface is a
   trait, not a port
+- [`.claude/memory/test-expectations.md`](.claude/memory/test-expectations.md) — a test writes
+  its expected values as literals, never through the code's own constants or helpers, so a
+  mutated constant or a renamed key fails it
 - [`.claude/memory/testing-limits.md`](.claude/memory/testing-limits.md) — Docker tests
   don't run in the sandbox, so binaries need running directly
 - [`.claude/memory/working-with-claude.md`](.claude/memory/working-with-claude.md) —
