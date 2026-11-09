@@ -40,9 +40,10 @@ for working practice and for the limits of this environment. Current notes:
   committing only on explicit instruction, recording each step as a tree until it is
   committed, keeping a slice's decomposition to a plan the user can check, keeping formatting
   out of feature commits, tracing a repeat to its source before
-  memoising it, writing a store migration through the row types and medallion's interfaces, why
-  Claude cannot flash the device, keeping shell plain, fitting a workspace build into the free
-  disk, what `cargo remove` prunes, and clearing prose that states a rejected design
+  memoising it, keeping an optimisation only once a measurement justifies it, writing a store
+  migration through the row types and medallion's interfaces, why Claude cannot flash the device,
+  keeping shell plain, fitting a workspace build into the free disk, what `cargo remove` prunes,
+  and clearing prose that states a rejected design
 
 Lookout's own facts are in [`apps/lookout/docs/`](apps/lookout/docs/): `medallion.md` (the
 store), `architecture.md` (the pipeline), `telemetry.md` (the wire a device sends),
