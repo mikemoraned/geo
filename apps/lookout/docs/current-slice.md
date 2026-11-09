@@ -523,6 +523,16 @@ when `evaluation_run_v2` replaced the run row's four fingerprint columns with on
   through CrowFlies in `f32`, in a release build. Scanning every crossing took 3.66 s, and the
   R-tree took 0.54 s. Both gave the same 55,775 transitions. The 3 s saved did not justify the
   index, and it was removed.
+- **Reading and placing the capture once cuts a re-derive from 505 s to 405 s, and raises its peak
+  from 2.7 GB to 3.6 GB** (2026-11-09). Both runs used release builds over the same store, timed
+  without compiling, and wrote the same counts as the re-derive of 2026-11-05. Deriving the
+  segments took 156 s before and 163 s after. Deriving the sessions took 349 s before and 242 s
+  after, since they no longer read and place the capture again. The legs stayed in memory
+  through both derivations, which accounts for the higher peak. The gain did not justify the
+  memory or the shared capture, and the change was reverted. Sampling showed one thread doing
+  the work of each phase while the rest waited. Placing polylines dominated the segments, through
+  `geo`'s relate. In the sessions, encoding and compressing the samples took 54% of the main
+  thread, building each session 22%, and sampling each trip 20%.
 
 ### Tasks
 
@@ -711,8 +721,11 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               write under `crates/`. The binary's `clap` and `tracing-subscriber` go behind a
               feature.
       - **Derivation pipeline**
-        - [ ] Read the capture and place its polylines once per `motis_ingest`, and pass both to
+        - [-] Read the capture and place its polylines once per `motis_ingest`, and pass both to
               both derivations. A re-derive reads, deduplicates, and places the whole capture twice.
+              Moot: built and measured, then reverted. It saved 100 s of a 505 s re-derive, but
+              raised the peak by 0.9 GB and made both derivations borrow a shared capture, as
+              Observations records.
         - [ ] Build capture's `Coverage` from the prepared outline of `CountryAreas`, and memoise
               `keeps` by polyline. The two unions of a country disagree on a shape that is not a
               polygon, and most of a poll's relates repeat an earlier answer.
