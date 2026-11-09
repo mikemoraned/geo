@@ -546,6 +546,15 @@ when `evaluation_run_v2` replaced the run row's four fingerprint columns with on
   footprint was 15.2 GB both times, against a resident peak of 4.0 GB, since the window's sort
   spilled into compressed memory and swap. Reading `seq` took 40–64 s, at a peak of 2.0–2.1 GB.
   Both wrote 283 device passes, and 2,918,145 train passes over 143,089 sessions.
+- **A re-derive takes 225 s at a peak of 2.97 GB, once other applications release memory**
+  (2026-11-09). The same release build of `motis_ingest` took 505 s earlier that day, while other
+  applications held memory. The 505 s and 405 s of the read-once comparison were measured under
+  that pressure. Closing each day's sample file once no later trip writes to it took the peak to
+  2.70 GB and the time to 217 s, over one run each. The saving did not justify the change, and it
+  was reverted. Streaming the sessions would stop holding every session's path, about 62 million
+  coordinates or 1 GB, until the end. It needed two additions to medallion: a writer that checks
+  uniqueness across writes, and a path combined from its samples' projections. It was stopped
+  before it was measured.
 
 ### Tasks
 
@@ -748,8 +757,11 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               window takes 6.3 GB, most of the matching's peak. Device samples rank by `seq` too.
               Both writers number `seq` in time order, with no two samples of a session at one
               instant, so ranking by position no longer breaks ties.
-        - [ ] Project each train sample once, close each day's samples once they are written, and
+        - [-] Project each train sample once, close each day's samples once they are written, and
               stop holding every session's path. All three feed the 4.7 GB peak of a re-derive.
+              Moot: a re-derive now peaks at 2.97 GB. Closing each day early saved 0.27 GB of
+              that, and was reverted, as Observations records. Streaming the sessions needed two
+              additions to medallion, for about 1 GB, and was stopped before it was measured.
         - [ ] Find passes one way, by building `steps` on `Matcher`, and point the geo test at that
               path. The store-backed test checks a path that production never runs.
         - [ ] Flatten `TrainSegmentRowV4` into `Leg`, and make `Trip.country` a `Country`. `Leg`

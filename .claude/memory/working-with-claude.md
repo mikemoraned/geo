@@ -52,6 +52,17 @@ comes back, and remove the repeat there. Keep a memo only where no upstream chan
 repeat. On 1 November 2026, a memo of country lookups saved 156 s, and its repeats came from a read
 that joined each polyline's text onto every leg.
 
+## Optimisations
+
+Keep a speed or memory change only once a measurement shows it is worth its code. Before a change
+is proposed, time a release build of the old and new binaries over the real store, back to back,
+with `/usr/bin/time -l`, and compare the peak memory footprint as well as the time. Another
+application holding memory can double a run's time, so run the two versions under the same
+conditions. Then lay out the gain against the code it adds, and let the user decide. On
+9 November 2026, a change that saved 100 s of a re-derive but added 0.9 GB was reverted, as was
+one that saved 0.27 GB of 2.97 GB. A change that cut matching's peak from 15.2 GB to 2.0 GB, and
+removed code, was kept.
+
 ## Flashing the M5 device
 
 Claude cannot open the serial port: every `/dev/cu.*` open returns `EPERM` from its process
