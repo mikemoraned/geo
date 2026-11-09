@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
 use arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
 use datafusion::execution::SendableRecordBatchStream;
+use medallion::{Dataset, PathError, Root, layers};
 use medallion_model::OvertureRelease;
 use object_store::{ObjectStore, aws::AmazonS3Builder, path::Path as ObjectPath};
 use sedona::context::SedonaContext;
@@ -29,6 +31,17 @@ impl OvertureType {
     pub const WATER: Self = Self::new("base", "water");
     pub const DIVISION_AREA: Self = Self::new("divisions", "division_area");
     pub const DIVISION: Self = Self::new("divisions", "division");
+
+    pub fn in_extract(
+        self,
+        root: &Root,
+        extract_id: impl Display,
+    ) -> Result<Dataset<layers::Bronze>, PathError> {
+        root.dataset(medallion_model::OVERTURE_EXTRACT)
+            .for_id(extract_id)?
+            .partition("theme", self.theme)?
+            .partition("type", self.name)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

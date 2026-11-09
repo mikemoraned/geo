@@ -235,12 +235,8 @@ impl<'a> Extractor<'a> {
                 "SELECT *, '{id}' AS extract_id FROM {table} WHERE {predicate}"
             ))
             .await?;
-        Ok(self
-            .root
-            .dataset(medallion_model::OVERTURE_EXTRACT)
-            .for_id(id)?
-            .partition("theme", overture_type.theme)?
-            .partition("type", overture_type.name)?
+        Ok(overture_type
+            .in_extract(self.root, id)?
             .append_geo_stream(at, stream)
             .await?
             .rows)
@@ -537,14 +533,9 @@ mod tests {
         for (overture_type, rows) in &extraction.rows {
             assert_eq!(*rows, 1, "{}/{}", overture_type.theme, overture_type.name);
         }
-        let segments = root
-            .dataset(medallion_model::OVERTURE_EXTRACT)
-            .for_id(&extraction.id)
-            .expect("the id the manifest gave it")
-            .partition("theme", OvertureType::SEGMENT.theme)
-            .expect("the theme")
-            .partition("type", OvertureType::SEGMENT.name)
-            .expect("the type");
+        let segments = OvertureType::SEGMENT
+            .in_extract(&root, &extraction.id)
+            .expect("the extract's segments");
         assert!(segments.is_filled(), "{}", segments.dir().display());
     }
 

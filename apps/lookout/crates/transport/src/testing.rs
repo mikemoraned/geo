@@ -7,6 +7,8 @@ use geo_types::{Geometry, polygon};
 use medallion::{Country, Root};
 use medallion_model::ExtractManifestRowV3;
 
+use crate::overture::OvertureType;
+
 pub(crate) fn square_from(corner: f64, size: f64) -> Geometry<f64> {
     Geometry::Polygon(polygon![
         (x: corner, y: corner),
@@ -42,13 +44,9 @@ pub(crate) async fn record_extract(
         )
         .await
         .expect("record the extract");
-    root.dataset(medallion_model::OVERTURE_EXTRACT)
-        .for_id(id)
-        .expect("an extract id")
-        .partition("theme", "divisions")
-        .expect("the divisions theme")
-        .partition("type", "division_area")
-        .expect("the division_area type")
+    OvertureType::DIVISION_AREA
+        .in_extract(root, id)
+        .expect("the extract's division areas")
         .append_geo_stream(taken_at, stream_of(division_area).await)
         .await
         .expect("write the areas");
