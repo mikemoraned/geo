@@ -660,7 +660,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
       next task lists. Three of their suggestions conflict with a decision or a later phase, and are
       left out: replacing the typestate structs with `StateKind`, removing the `RecordedPass` trait,
       and removing `PassDetectorName::Online`.
-- [ ] Apply the refactors the `/simplify` pass found.
+- [x] Apply the refactors the `/simplify` pass found.
       A refactor that changes a crate the M5 compiles, `predictor`, `domain`, or `platform-core`, is
       checked on the device as well as by the tests. In `predictor`, those are CrowFlies' crossings
       query and the rule for the order of events. In `domain`, they are the moved enum, the `Span`
