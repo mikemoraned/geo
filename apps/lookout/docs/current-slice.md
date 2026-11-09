@@ -614,8 +614,12 @@ code.
           static files' layer, so the gate only gates.
     - [x] Add `AuthStore::is_allowed`, a `HEXISTS` in redis, for the signed-in check, which decodes
           the whole passkey today and discards it.
-    - [ ] Build redis keys in tests through `ceremony_key`, `pending_key`, and `session_key`, not by
-          hand.
+    - [-] Build redis keys in tests through `ceremony_key`, `pending_key`, and `session_key`, not by
+          hand. Moot on 2026-11-09: the hand-written keys are the check. A test that builds its key
+          through the store's helper follows a mutated helper, as the lifetime tests followed their
+          constants until mutation testing caught it. A renamed key also orphans what production
+          redis holds under the old name, every allowed passkey and session among it, so a test
+          that fails on a rename guards the stored data.
     - [ ] Move `registered_passkey`, with the user as a parameter, into `test-passkeys`, and use it
           in `a_passkey_for_another_account_cannot_sign_in`, which rebuilds it inline.
     - [ ] Add `pending_code` and `signed_in` to `support.rs`, and let `Server` take a sink, so the
