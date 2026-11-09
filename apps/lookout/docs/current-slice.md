@@ -766,7 +766,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               path. The store-backed test checks a path that production never runs.
         - [x] Flatten `TrainSegmentRowV4` into `Leg`, and make `Trip.country` a `Country`. `Leg`
               copies eleven fields by hand, and the `Option` exists only to count a drop.
-        - [ ] Give the division-area path one helper, and list landed files through the object
+        - [x] Give the division-area path one helper, and list landed files through the object
               store. Three places spell the path, and a second walk of the disk lists the files.
         - [ ] Declare every validated newtype with `nutype`. Two idioms coexist, and each
               hand-written type takes 25 to 60 lines.

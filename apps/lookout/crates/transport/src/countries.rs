@@ -7,6 +7,7 @@ use medallion::{Countries, Country, GEOMETRY, Query, Root};
 use medallion_model::{DIVISION_ID, ExtractManifestRowV3, OvertureRelease};
 
 use crate::extract::ExtractId;
+use crate::overture::OvertureType;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CountryError {
@@ -87,11 +88,7 @@ impl CountryAreas {
         let mut extracts = HashMap::new();
         for (country, extract) in newest_of_each_country {
             let id = ExtractId::new(extract.extract_id.clone())?;
-            let division_area = root
-                .dataset(medallion_model::OVERTURE_EXTRACT)
-                .for_id(&id)?
-                .partition("theme", "divisions")?
-                .partition("type", "division_area")?;
+            let division_area = OvertureType::DIVISION_AREA.in_extract(root, &id)?;
             let table = format!("division_area_{}", country.code().to_lowercase());
             query.register_at(&division_area, &table).await?;
 

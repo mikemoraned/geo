@@ -51,7 +51,7 @@ fn poll_of(row: &MotisPollRowV2) -> Poll {
 }
 
 pub async fn promote(root: &Root, at: DateTime<Utc>) -> Result<Promoted, PromotionError> {
-    let files = root.rows_of::<MotisPollRowV2>().landed_files()?;
+    let files = root.rows_of::<MotisPollRowV2>().landed_files().await?;
     if files.is_empty() {
         return Ok(Promoted::default());
     }
@@ -65,7 +65,7 @@ pub async fn promote(root: &Root, at: DateTime<Utc>) -> Result<Promoted, Promoti
         polylines: written.polylines,
     };
     for file in files {
-        file.delete()?;
+        file.delete().await?;
     }
     Ok(promoted)
 }
@@ -297,9 +297,10 @@ mod tests {
             .expect("read the polylines")
     }
 
-    fn landed_files(root: &Root) -> usize {
+    async fn landed_files(root: &Root) -> usize {
         root.rows_of::<MotisPollRowV2>()
             .landed_files()
+            .await
             .expect("list landing")
             .len()
     }
@@ -327,7 +328,7 @@ mod tests {
         assert_eq!(promoted.files, 2);
         assert_eq!(promoted.segments, rows * 2);
         assert_eq!(segments(&root).await.len(), rows * 2);
-        assert_eq!(landed_files(&root), 0);
+        assert_eq!(landed_files(&root).await, 0);
     }
 
     #[tokio::test]
@@ -415,7 +416,7 @@ mod tests {
         assert_eq!(second.segments, rows);
         assert_eq!(second.polylines, 0);
         assert_eq!(segments(&root).await.len(), rows * 2);
-        assert_eq!(landed_files(&root), 0);
+        assert_eq!(landed_files(&root).await, 0);
     }
 
     #[tokio::test]

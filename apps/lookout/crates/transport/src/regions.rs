@@ -7,6 +7,7 @@ use medallion_model::{DIVISION_ID, NotAGersId, OvertureRegion};
 use serde::Deserialize;
 
 use crate::extract::ExtractId;
+use crate::overture::OvertureType;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RegionCode(String);
@@ -106,11 +107,7 @@ pub async fn region_area(
         });
     }
     let query = Query::new(root.clone());
-    let division_area = root
-        .dataset(medallion_model::OVERTURE_EXTRACT)
-        .for_id(extract)?
-        .partition("theme", "divisions")?
-        .partition("type", "division_area")?;
+    let division_area = OvertureType::DIVISION_AREA.in_extract(root, extract)?;
     query
         .register_at_without_geometry(&division_area, "division_area")
         .await?;

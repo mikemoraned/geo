@@ -7,9 +7,10 @@ use arrow::array::RecordBatch;
 use arrow::datatypes::Schema;
 use chrono::{DateTime, NaiveDate, Utc};
 use datafusion::execution::SendableRecordBatchStream;
-use object_store::ObjectStore;
+use futures::TryStreamExt;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
+use object_store::{ObjectMeta, ObjectStore};
 
 use crate::dataset::DatasetSpec;
 use crate::geo::{GeoError, GeoParquetFile, write_geo_batches, write_geo_stream};
@@ -62,59 +63,40 @@ pub enum ReplaceError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LandingError {
-    #[error("listing the files of {path}: {source}")]
+    #[error("listing the files of {location}: {source}")]
     List {
-        path: String,
+        location: String,
         #[source]
-        source: std::io::Error,
+        source: object_store::Error,
     },
-    #[error("deleting {path}: {source}")]
+    #[error("deleting {location}: {source}")]
     Delete {
-        path: String,
+        location: String,
         #[source]
-        source: std::io::Error,
+        source: object_store::Error,
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct LandedFile(PathBuf);
+#[derive(Debug, Clone)]
+pub struct LandedFile {
+    store: Arc<dyn ObjectStore>,
+    location: ObjectPath,
+}
 
 impl LandedFile {
-    pub fn path(&self) -> &Path {
-        &self.0
+    pub fn location(&self) -> &ObjectPath {
+        &self.location
     }
 
-    pub fn delete(self) -> Result<(), LandingError> {
-        std::fs::remove_file(&self.0).map_err(|source| LandingError::Delete {
-            path: self.0.display().to_string(),
-            source,
-        })
+    pub async fn delete(self) -> Result<(), LandingError> {
+        self.store
+            .delete(&self.location)
+            .await
+            .map_err(|source| LandingError::Delete {
+                location: self.location.to_string(),
+                source,
+            })
     }
-}
-
-fn landed_files_under(dir: &Path) -> Result<Vec<LandedFile>, LandingError> {
-    let list_error = |source| LandingError::List {
-        path: dir.display().to_string(),
-        source,
-    };
-    let entries = match std::fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(source) => return Err(list_error(source)),
-    };
-    let mut files = Vec::new();
-    for entry in entries {
-        let path = entry.map_err(list_error)?.path();
-        if path.is_dir() {
-            files.extend(landed_files_under(&path)?);
-        } else if path
-            .extension()
-            .is_some_and(|extension| extension == "parquet")
-        {
-            files.push(LandedFile(path));
-        }
-    }
-    Ok(files)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -359,10 +341,30 @@ impl<L: LayerKind> Dataset<L> {
 }
 
 impl Dataset<layers::Landing> {
-    pub fn landed_files(&self) -> Result<Vec<LandedFile>, LandingError> {
-        let mut files = landed_files_under(&self.dir())?;
-        files.sort_unstable();
-        Ok(files)
+    pub async fn landed_files(&self) -> Result<Vec<LandedFile>, LandingError> {
+        let location = self.location();
+        let list_error = |source| LandingError::List {
+            location: location.to_string(),
+            source,
+        };
+        let store = self.root().object_store().map_err(list_error)?;
+        let listed: Vec<ObjectMeta> = match store.list(Some(&location)).try_collect().await {
+            Err(object_store::Error::NotFound { .. }) => Vec::new(),
+            listed => listed.map_err(list_error)?,
+        };
+        let mut locations: Vec<ObjectPath> = listed
+            .into_iter()
+            .map(|object| object.location)
+            .filter(|location| location.extension() == Some("parquet"))
+            .collect();
+        locations.sort_unstable();
+        Ok(locations
+            .into_iter()
+            .map(|location| LandedFile {
+                store: Arc::clone(&store),
+                location,
+            })
+            .collect())
     }
 }
 
@@ -512,21 +514,34 @@ mod tests {
         path
     }
 
-    fn paths(files: &[LandedFile]) -> Vec<&Path> {
-        files.iter().map(LandedFile::path).collect()
+    fn locations(files: &[LandedFile]) -> Vec<&ObjectPath> {
+        files.iter().map(LandedFile::location).collect()
     }
 
-    #[test]
-    fn a_landing_dataset_nothing_has_written_holds_no_files() {
+    fn location_of(tmp: &tempfile::TempDir, path: &Path) -> ObjectPath {
+        ObjectPath::from(
+            path.strip_prefix(tmp.path())
+                .unwrap()
+                .to_str()
+                .expect("a path in UTF-8"),
+        )
+    }
+
+    #[tokio::test]
+    async fn a_landing_dataset_nothing_has_written_holds_no_files() {
         let tmp = tempfile::tempdir().unwrap();
 
-        let files = Root::new(tmp.path()).dataset(POLL).landed_files().unwrap();
+        let files = Root::new(tmp.path())
+            .dataset(POLL)
+            .landed_files()
+            .await
+            .unwrap();
 
         assert!(files.is_empty());
     }
 
-    #[test]
-    fn landed_files_are_listed_across_partitions_oldest_first() {
+    #[tokio::test]
+    async fn landed_files_are_listed_across_partitions_oldest_first() {
         let tmp = tempfile::tempdir().unwrap();
         let dataset = Root::new(tmp.path()).dataset(POLL);
         let latest = land(
@@ -542,13 +557,18 @@ mod tests {
             Utc.with_ymd_and_hms(2026, 10, 1, 8, 0, 0).unwrap(),
         );
 
-        let files = dataset.landed_files().unwrap();
+        let files = dataset.landed_files().await.unwrap();
 
-        assert_eq!(paths(&files), [&earliest, &middle, &latest]);
+        assert_eq!(
+            locations(&files),
+            [&earliest, &middle, &latest]
+                .map(|path| location_of(&tmp, path))
+                .each_ref()
+        );
     }
 
-    #[test]
-    fn a_file_still_being_written_is_not_listed() {
+    #[tokio::test]
+    async fn a_file_still_being_written_is_not_listed() {
         let tmp = tempfile::tempdir().unwrap();
         let dataset = Root::new(tmp.path()).dataset(POLL);
         let finished = land(
@@ -558,13 +578,13 @@ mod tests {
         let staged = format!("{}#0", finished.display());
         std::fs::File::create(staged).unwrap();
 
-        let files = dataset.landed_files().unwrap();
+        let files = dataset.landed_files().await.unwrap();
 
-        assert_eq!(paths(&files), [&finished]);
+        assert_eq!(locations(&files), [&location_of(&tmp, &finished)]);
     }
 
-    #[test]
-    fn deleting_a_landed_file_leaves_the_others() {
+    #[tokio::test]
+    async fn deleting_a_landed_file_leaves_the_others() {
         let tmp = tempfile::tempdir().unwrap();
         let dataset = Root::new(tmp.path()).dataset(POLL);
         let first = land(
@@ -575,26 +595,29 @@ mod tests {
             &dataset,
             Utc.with_ymd_and_hms(2026, 10, 1, 9, 0, 0).unwrap(),
         );
-        let drained = dataset.landed_files().unwrap().remove(0);
+        let drained = dataset.landed_files().await.unwrap().remove(0);
 
-        drained.delete().unwrap();
+        drained.delete().await.unwrap();
 
         assert!(!first.exists());
-        assert_eq!(paths(&dataset.landed_files().unwrap()), [&second]);
+        assert_eq!(
+            locations(&dataset.landed_files().await.unwrap()),
+            [&location_of(&tmp, &second)]
+        );
     }
 
-    #[test]
-    fn deleting_a_file_already_gone_is_an_error() {
+    #[tokio::test]
+    async fn deleting_a_file_already_gone_is_an_error() {
         let tmp = tempfile::tempdir().unwrap();
         let dataset = Root::new(tmp.path()).dataset(POLL);
         let path = land(
             &dataset,
             Utc.with_ymd_and_hms(2026, 10, 1, 8, 0, 0).unwrap(),
         );
-        let file = dataset.landed_files().unwrap().remove(0);
+        let file = dataset.landed_files().await.unwrap().remove(0);
         std::fs::remove_file(path).unwrap();
 
-        let err = file.delete().unwrap_err();
+        let err = file.delete().await.unwrap_err();
 
         assert!(matches!(err, LandingError::Delete { .. }), "{err}");
     }
