@@ -184,7 +184,11 @@ not the request carries a session.
 in while the passkey it names is still allowed. The gate reads the credential ID from the session
 and checks that the allowed passkeys hold it, so revoking a passkey ends its sessions at their next
 request. The check reads no passkey: in redis it is one
-[`HEXISTS`](https://redis.io/docs/latest/commands/hexists/) on `lookout-passkeys`.
+[`HEXISTS`](https://redis.io/docs/latest/commands/hexists/) on `lookout-passkeys`. One extractor,
+`SignedIn`, makes the check for the gate, `/ws`, and `/auth/status`. A handler takes
+`Option<SignedIn>`, through axum's
+[`OptionalFromRequestParts`](https://docs.rs/axum/0.8.9/axum/extract/trait.OptionalFromRequestParts.html),
+and gets `Some` only for a signed-in session.
 
 A request for `/record/` without a signed-in session redirects to `/signin/`. A signed-in request
 gets `Cache-Control: private, no-cache` in place of the static files' `no-cache`. [`private`][private]

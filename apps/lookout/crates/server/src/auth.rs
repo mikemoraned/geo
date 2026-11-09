@@ -7,6 +7,7 @@ pub mod memory;
 pub mod redis;
 pub mod registration;
 pub mod sessions;
+pub mod signed_in;
 mod signin;
 mod signout;
 pub mod status;
@@ -111,7 +112,7 @@ impl RelyingParty {
         )
     }
 
-    pub async fn signed_in(&self, session: &Session) -> Result<bool, AuthError> {
+    pub(crate) async fn signed_in(&self, session: &Session) -> Result<bool, AuthError> {
         Ok(
             match session.get::<CredentialID>(SIGNED_IN_PASSKEY).await? {
                 Some(id) => self.store.is_allowed(&id).await?,

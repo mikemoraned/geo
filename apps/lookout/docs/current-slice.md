@@ -637,7 +637,7 @@ code.
       - [x] In `app.js`, have `persistOutbox` update the unsent count. In `signin.js`, disable the
             buttons through one helper, and look them up once.
       - [x] Share `fatal`, the rustls install, and the redis connect between the two binaries.
-    - [ ] Add a `SignedIn` extractor, and use it in the gate, `/ws`, and `/auth/status`, in place of
+    - [x] Add a `SignedIn` extractor, and use it in the gate, `/ws`, and `/auth/status`, in place of
           the signed-in check each makes.
     - [ ] Retry `test-redis`'s readiness check with `backon`, in place of its own loop.
     - [ ] Use redis's typed `AsyncCommands` methods across the workspace, in place of

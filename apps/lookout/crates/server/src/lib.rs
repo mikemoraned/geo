@@ -7,6 +7,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use axum::Router;
+use axum::extract::FromRef;
 use axum::http::{HeaderValue, header};
 use axum::middleware;
 use axum::routing::{any, get};
@@ -24,6 +25,12 @@ pub const GIT_HASH: &str = env!("BUILD_GIT_HASH");
 pub struct AppState {
     pub sink: Option<Arc<dyn SampleSink>>,
     pub relying_party: RelyingParty,
+}
+
+impl FromRef<AppState> for RelyingParty {
+    fn from_ref(state: &AppState) -> Self {
+        state.relying_party.clone()
+    }
 }
 
 const RECORD_PAGE: &str = "/record";

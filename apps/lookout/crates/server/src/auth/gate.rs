@@ -1,21 +1,14 @@
-use axum::extract::{Request, State};
+use axum::extract::Request;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Redirect, Response};
-use tower_sessions::Session;
 
-use crate::auth::{AuthError, RelyingParty};
+use crate::auth::signed_in::SignedIn;
 
 const SIGNIN_PAGE: &str = "/signin/";
 
-pub async fn require_signin(
-    State(relying_party): State<RelyingParty>,
-    session: Session,
-    request: Request,
-    next: Next,
-) -> Result<Response, AuthError> {
-    Ok(if relying_party.signed_in(&session).await? {
-        next.run(request).await
-    } else {
-        Redirect::to(SIGNIN_PAGE).into_response()
-    })
+pub async fn require_signin(signed_in: Option<SignedIn>, request: Request, next: Next) -> Response {
+    match signed_in {
+        Some(_) => next.run(request).await,
+        None => Redirect::to(SIGNIN_PAGE).into_response(),
+    }
 }

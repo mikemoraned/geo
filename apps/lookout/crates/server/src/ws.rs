@@ -6,29 +6,31 @@ use shared::Message as TelemetryMessage;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use telemetry::RawSample;
 use tokio::time::{Instant, interval_at};
-use tower_sessions::Session;
 use tower_sessions::session::Id;
 
 use crate::AppState;
-use crate::auth::{AuthError, RelyingParty};
+use crate::auth::RelyingParty;
+use crate::auth::signed_in::SignedIn;
 
 pub async fn upgrade(
     State(state): State<AppState>,
     headers: HeaderMap,
-    session: Session,
+    signed_in: Option<SignedIn>,
     upgrade: WebSocketUpgrade,
-) -> Result<Response, AuthError> {
+) -> Response {
     if !state.relying_party.serves(headers.get(header::ORIGIN)) {
         tracing::warn!("refused a websocket upgrade from another origin");
-        return Ok(StatusCode::FORBIDDEN.into_response());
+        return StatusCode::FORBIDDEN.into_response();
     }
-    if state.relying_party.signed_in(&session).await?
-        && let Some(id) = session.id()
-    {
-        return Ok(upgrade.on_upgrade(move |socket| handle_socket(socket, state, id)));
+    match signed_in {
+        Some(SignedIn { session }) => {
+            upgrade.on_upgrade(move |socket| handle_socket(socket, state, session))
+        }
+        None => {
+            tracing::info!("refused a websocket upgrade without a signed-in session");
+            StatusCode::UNAUTHORIZED.into_response()
+        }
     }
-    tracing::info!("refused a websocket upgrade without a signed-in session");
-    Ok(StatusCode::UNAUTHORIZED.into_response())
 }
 
 async fn handle_socket(mut socket: WebSocket, state: AppState, session: Id) {
