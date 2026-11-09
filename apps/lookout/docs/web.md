@@ -92,6 +92,35 @@ it is left open.
 Every page shows the git hash of the build serving it, so a reader can match what is running to
 the source it came from.
 
+## Signing in before recording
+
+`/record` and its websocket open only for a signed-in browser. Without a session, a request for
+`/record` goes to `/signin/`, and the websocket refuses the upgrade. Who can sign in, and how a
+passkey gains access, is in [access.md](access.md).
+
+`/signin/` registers a passkey or signs in with one. A registration that waits for the admin shows
+the short code to pass on. A sign-in asks the browser for the passkey it holds for the site, and
+continues to `/record` once the server accepts it. The page passes the server's options through
+`PublicKeyCredential.parseCreationOptionsFromJSON` or `parseRequestOptionsFromJSON`, and posts the
+credential's `toJSON()` back unchanged. A browser without those functions cannot sign in, and the
+page says so. Desktop Safari, desktop Chrome, and iOS Safari have them.
+
+## When a recording signs out
+
+A session ends when it signs out, when its passkey is revoked, or after 30 days without use. The
+server checks an open socket's session every minute. Once the session has ended, it closes the
+socket with code 1008, policy violation. The page reads a 1008 close as signed out. A browser hides
+why it refused an upgrade, so on any other close the page asks `/auth/status` instead.
+
+Once signed out, the page stops reconnecting, shows the status as signed out, and links to
+`/signin/`. It tries once more each time the page becomes visible again. Capture continues, and
+each sample waits in the outbox, which the page counts as unsent samples. The outbox keeps the
+latest 5,000 samples, so a long recording while signed out loses its oldest.
+
+Signing in leaves the page, so it ends the recording. On return, the page finds the waiting samples
+in the outbox and sends them. Recording again takes another press of the start button. The sign-in
+link opens in the same tab, since two tabs would share one outbox.
+
 ## What iOS Safari makes the recording page do
 
 The recording page runs on a phone, and most of its shape is that phone's:
