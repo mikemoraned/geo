@@ -1,7 +1,7 @@
 use axum::Json;
 use axum::extract::State;
 use chrono::Utc;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use webauthn_rs::prelude::{CreationChallengeResponse, RegisterPublicKeyCredential};
 use webauthn_rs_proto::ResidentKeyRequirement;
 
@@ -12,15 +12,8 @@ use crate::auth::{ACCOUNT, Allowing, AuthError, Finish, RelyingParty, Started, a
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum Registered {
-    Pending {
-        #[serde(serialize_with = "as_shown")]
-        code: ShortCode,
-    },
+    Pending { code: ShortCode },
     Allowed,
-}
-
-fn as_shown<S: Serializer>(code: &ShortCode, serializer: S) -> Result<S::Ok, S::Error> {
-    serializer.collect_str(code)
 }
 
 pub async fn start(

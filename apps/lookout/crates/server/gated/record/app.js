@@ -219,6 +219,7 @@ function showUnsent() {
 }
 
 function persistOutbox() {
+  showUnsent();
   try {
     localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox));
   } catch {
@@ -268,7 +269,6 @@ function onAck() {
   outbox.shift();
   inFlight = Math.max(0, inFlight - 1);
   persistOutbox();
-  showUnsent();
 }
 
 function flushOutbox() {
@@ -286,7 +286,6 @@ function sendSample(sample) {
     inFlight = Math.max(0, inFlight - dropped);
   }
   persistOutbox();
-  showUnsent();
   flushOutbox();
 }
 

@@ -12,11 +12,12 @@ use passkey::types::webauthn::{
     CredentialRequestOptions,
 };
 use server::auth::code::ShortCode;
+use server::auth::fresh::Claim;
 use server::auth::memory::MemoryAuthStore;
 use server::auth::registration::Registered;
 use server::auth::sessions::SharedSessionStore;
 use server::auth::store::{
-    AllowedPasskey, AuthStore, Ceremony, CeremonyId, Insertion, PendingPasskey, StoreError, Update,
+    AllowedPasskey, AuthStore, Ceremony, CeremonyId, PendingPasskey, StoreError, Update,
 };
 use server::auth::{Allowing, Finish, RelyingParty, Started};
 use server::queue::SampleSink;
@@ -94,6 +95,12 @@ pub struct Reply {
 }
 
 impl Reply {
+    pub fn cache_control(&self) -> Option<&str> {
+        self.headers
+            .get(header::CACHE_CONTROL)
+            .map(|value| value.to_str().expect("an ascii header"))
+    }
+
     pub fn session_cookie(&self) -> Option<Cookie<'static>> {
         self.headers
             .get_all(header::SET_COOKIE)
@@ -159,7 +166,7 @@ impl<S: AuthStore + 'static> Server<S> {
     }
 }
 
-pub fn with_cookie(request: request::Builder, cookie: Option<&Cookie<'_>>) -> request::Builder {
+fn with_cookie(request: request::Builder, cookie: Option<&Cookie<'_>>) -> request::Builder {
     match cookie {
         Some(cookie) => request.header(header::COOKIE, cookie.stripped().to_string()),
         None => request,
@@ -226,12 +233,10 @@ pub async fn register(app: &Router, browser: &mut Browser) -> (CredentialID, Reg
     (id, registered)
 }
 
-pub async fn start_signin(app: &Router) -> (Started<CredentialRequestOptions>, serde_json::Value) {
+pub async fn start_signin(app: &Router) -> Started<CredentialRequestOptions> {
     let reply = post(app, "/auth/signin/start", Body::empty(), None).await;
     assert_eq!(reply.status, StatusCode::OK, "{:?}", reply.body);
-    let started = serde_json::from_slice(&reply.body).expect("a started sign-in");
-    let json = serde_json::from_slice(&reply.body).expect("json");
-    (started, json)
+    serde_json::from_slice(&reply.body).expect("a started sign-in")
 }
 
 pub async fn finish_signin(
@@ -244,7 +249,7 @@ pub async fn finish_signin(
 }
 
 pub async fn sign_in(app: &Router, browser: &mut Browser, cookie: Option<&Cookie<'_>>) -> Reply {
-    let (started, _) = start_signin(app).await;
+    let started = start_signin(app).await;
     let credential = browser.authenticate(started.options).await;
     let finish = Finish {
         ceremony: started.ceremony,
@@ -319,7 +324,7 @@ impl AuthStore for ScriptedAuthStore {
         &self,
         code: &ShortCode,
         passkey: PendingPasskey,
-    ) -> Result<Insertion, StoreError> {
+    ) -> Result<Claim, StoreError> {
         self.inner.insert_pending(code, passkey).await
     }
 

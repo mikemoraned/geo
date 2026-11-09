@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use backon::{ExponentialBuilder, Retryable};
 
-pub const FIRST_WAIT: Duration = Duration::from_secs(1);
-pub const MOST_WAITING: Duration = Duration::from_secs(10);
+const FIRST_WAIT: Duration = Duration::from_secs(1);
+pub(crate) const MOST_WAITING: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Claim {
@@ -14,8 +14,8 @@ pub enum Claim {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClaimError<E> {
-    #[error("every fresh ID drawn was taken, after waiting up to {0:?} in all")]
-    NoneFree(Duration),
+    #[error("every fresh ID drawn was taken, after waiting up to {MOST_WAITING:?} in all")]
+    NoneFree,
     #[error(transparent)]
     Store(E),
 }
@@ -32,13 +32,13 @@ where
         let id = draw();
         match try_claim(id.clone()).await {
             Ok(Claim::Claimed) => Ok(id),
-            Ok(Claim::Taken) => Err(ClaimError::NoneFree(MOST_WAITING)),
+            Ok(Claim::Taken) => Err(ClaimError::NoneFree),
             Err(err) => Err(ClaimError::Store(err)),
         }
     };
     attempt
         .retry(backoff())
-        .when(|err| matches!(err, ClaimError::NoneFree(_)))
+        .when(|err| matches!(err, ClaimError::NoneFree))
         .await
 }
 
@@ -91,10 +91,7 @@ mod tests {
 
         let claimed = claim_fresh(|| (), |()| async { Ok::<_, StoreDown>(Claim::Taken) }).await;
 
-        assert!(
-            matches!(claimed, Err(ClaimError::NoneFree(_))),
-            "{claimed:?}"
-        );
+        assert!(matches!(claimed, Err(ClaimError::NoneFree)), "{claimed:?}");
         assert!(started.elapsed() <= MOST_WAITING, "{:?}", started.elapsed());
         assert!(started.elapsed() >= FIRST_WAIT, "{:?}", started.elapsed());
     }

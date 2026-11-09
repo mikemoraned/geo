@@ -5,7 +5,7 @@ use clap::Parser;
 
 use server::auth::RelyingParty;
 use server::queue::{RedisSink, SampleSink};
-use server::stores::{REDIS_URL_VAR, Store};
+use server::stores::{REDIS_URL_VAR, Store, connect_or_exit, fatal};
 use server::{AppState, build_app};
 use webauthn_rs::prelude::Url;
 
@@ -34,11 +34,6 @@ struct Args {
     origin: Url,
 }
 
-fn fatal(reason: &dyn std::fmt::Display) -> ! {
-    eprintln!("FATAL: {reason}");
-    std::process::exit(1);
-}
-
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -51,17 +46,11 @@ async fn main() {
 
     tracing::info!(git_hash = server::GIT_HASH, "server starting");
 
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .expect("install rustls crypto provider");
-
     let origin = args.origin;
     tracing::info!(%origin, "serving passkeys for this origin");
     let (sink, relying_party) = match (args.store, args.redis_url) {
         (Store::Redis, Some(url)) => {
-            let conn = telemetry::connect(&url)
-                .await
-                .unwrap_or_else(|err| fatal(&format!("redis connect failed: {err}")));
+            let conn = connect_or_exit(&url).await;
             tracing::info!("queuing samples in redis, and keeping passkeys and sessions there");
             let sink: Arc<dyn SampleSink> = Arc::new(RedisSink::new(conn.clone()));
             (Some(sink), RelyingParty::over_redis(&origin, conn))

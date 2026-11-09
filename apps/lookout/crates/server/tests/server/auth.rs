@@ -267,7 +267,7 @@ async fn a_refusal_answers_with_its_reason_alone() {
     let server = Server::hosted(Allowing::ByAdmin);
     let mut browser = Browser::at(ORIGIN);
     register(&server.app, &mut browser).await;
-    let (started, _) = start_signin(&server.app).await;
+    let started = start_signin(&server.app).await;
     let finish = Finish {
         ceremony: started.ceremony,
         credential: browser.authenticate(started.options).await,
@@ -363,7 +363,8 @@ async fn sign_in_names_no_passkey_and_asks_for_the_usual_prompt() {
     let server = Server::hosted(Allowing::AtOnce);
     register(&server.app, &mut Browser::at(ORIGIN)).await;
 
-    let (_, json) = start_signin(&server.app).await;
+    let reply = post(&server.app, "/auth/signin/start", Body::empty(), None).await;
+    let json: serde_json::Value = serde_json::from_slice(&reply.body).expect("json");
 
     let allowed = &json["options"]["publicKey"]["allowCredentials"];
     assert!(allowed.as_array().is_none_or(Vec::is_empty), "{allowed}");
@@ -375,7 +376,7 @@ async fn a_signin_ceremony_finishes_once() {
     let server = Server::hosted(Allowing::AtOnce);
     let mut browser = Browser::at(ORIGIN);
     register(&server.app, &mut browser).await;
-    let (started, _) = start_signin(&server.app).await;
+    let started = start_signin(&server.app).await;
     let credential = browser.authenticate(started.options).await;
     let finish = Finish {
         ceremony: started.ceremony,

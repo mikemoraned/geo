@@ -8,9 +8,10 @@ use tokio::time::Instant;
 use webauthn_rs::prelude::CredentialID;
 
 use crate::auth::code::ShortCode;
+use crate::auth::fresh::Claim;
 use crate::auth::store::{
-    AllowedPasskey, AuthStore, CEREMONY_LIFETIME, Ceremony, CeremonyId, Insertion,
-    PENDING_LIFETIME, PendingPasskey, StoreError, Update,
+    AllowedPasskey, AuthStore, CEREMONY_LIFETIME, Ceremony, CeremonyId, PENDING_LIFETIME,
+    PendingPasskey, StoreError, Update,
 };
 
 #[derive(Default)]
@@ -67,14 +68,14 @@ impl AuthStore for MemoryAuthStore {
         &self,
         code: &ShortCode,
         passkey: PendingPasskey,
-    ) -> Result<Insertion, StoreError> {
+    ) -> Result<Claim, StoreError> {
         let mut records = self.records.lock().await;
         records.pending.retain(|_, pending| pending.is_live());
         match records.pending.entry(code.clone()) {
-            Entry::Occupied(_) => Ok(Insertion::CodeTaken),
+            Entry::Occupied(_) => Ok(Claim::Taken),
             Entry::Vacant(slot) => {
                 slot.insert(Expiring::new(passkey, PENDING_LIFETIME));
-                Ok(Insertion::Inserted)
+                Ok(Claim::Claimed)
             }
         }
     }
@@ -266,7 +267,7 @@ mod tests {
             .await
             .expect("inserted");
 
-        assert_eq!(reinserted, Insertion::Inserted);
+        assert_eq!(reinserted, Claim::Claimed);
     }
 
     #[tokio::test(start_paused = true)]

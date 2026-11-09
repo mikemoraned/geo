@@ -63,7 +63,8 @@ then fails the request rather than holding it open.
 A short code is 8 characters of [Crockford's base32][crockford], 40 random bits, shown in two
 groups of four as `K7Q2-M9XD`. Reading a typed code follows Crockford's decoding rules: either
 case, hyphens ignored, `O` read as `0`, and `I` and `L` read as `1`. The server also ignores
-spaces.
+spaces. JSON carries a code in the same two groups, so a stored record and an answer show it as
+the admin types it. A record that holds the code as eight characters together still reads.
 
 In redis, each record is JSON. A ceremony sits under `lookout-ceremony:<id>`, and a pending passkey
 under `lookout-passkey-pending:<code>`. Each key expires with its record. [`GETDEL`][getdel] takes
@@ -116,7 +117,7 @@ show every caller the server's credential IDs. [§14.6.3 of WebAuthn][id-leak] d
 leak through a sign-in's allow list.
 
 A verified registration leaves a pending passkey under a fresh short code. The finish answers
-`{"status": "pending", "code": "K7Q2M9XD"}`, and the admin allows the passkey by that code. A
+`{"status": "pending", "code": "K7Q2-M9XD"}`, and the admin allows the passkey by that code. A
 server that keeps its records in memory allows a passkey registered for `localhost` at once, since
 no admin can reach that memory. The finish then answers `{"status": "allowed"}`. Any other
 origin's passkey stays pending, so a hosted server with its records in memory allows none.

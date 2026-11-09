@@ -5,9 +5,10 @@ use serde::de::DeserializeOwned;
 use webauthn_rs::prelude::CredentialID;
 
 use crate::auth::code::ShortCode;
+use crate::auth::fresh::Claim;
 use crate::auth::store::{
-    AllowedPasskey, AuthStore, CEREMONY_LIFETIME, Ceremony, CeremonyId, Insertion,
-    PENDING_LIFETIME, PendingPasskey, StoreError, Update,
+    AllowedPasskey, AuthStore, CEREMONY_LIFETIME, Ceremony, CeremonyId, PENDING_LIFETIME,
+    PendingPasskey, StoreError, Update,
 };
 
 const PASSKEYS_KEY: &str = "lookout-passkeys";
@@ -74,7 +75,7 @@ impl AuthStore for RedisAuthStore {
         &self,
         code: &ShortCode,
         passkey: PendingPasskey,
-    ) -> Result<Insertion, StoreError> {
+    ) -> Result<Claim, StoreError> {
         let set: Option<String> = redis::cmd("SET")
             .arg(pending_key(code))
             .arg(serde_json::to_string(&passkey)?)
@@ -84,8 +85,8 @@ impl AuthStore for RedisAuthStore {
             .query_async(&mut self.conn.clone())
             .await?;
         Ok(match set {
-            Some(_) => Insertion::Inserted,
-            None => Insertion::CodeTaken,
+            Some(_) => Claim::Claimed,
+            None => Claim::Taken,
         })
     }
 

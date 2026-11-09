@@ -59,7 +59,7 @@ impl TryFrom<String> for ShortCode {
 
 impl From<ShortCode> for String {
     fn from(code: ShortCode) -> Self {
-        code.0
+        code.to_string()
     }
 }
 
@@ -91,6 +91,24 @@ mod tests {
         let code = ShortCode::new("K7Q2M9XD").expect("a code");
 
         assert_eq!(code.to_string(), "K7Q2-M9XD");
+    }
+
+    #[test]
+    fn a_code_reaches_json_in_two_groups_of_four() {
+        let code = ShortCode::new("K7Q2M9XD").expect("a code");
+
+        assert_eq!(
+            serde_json::to_string(&code).expect("serialised"),
+            r#""K7Q2-M9XD""#
+        );
+    }
+
+    #[test]
+    fn a_code_stored_without_its_hyphen_still_reads() {
+        assert_eq!(
+            serde_json::from_str::<ShortCode>(r#""K7Q2M9XD""#).ok(),
+            ShortCode::new("K7Q2-M9XD").ok()
+        );
     }
 
     #[test]

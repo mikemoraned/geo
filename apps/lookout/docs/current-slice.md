@@ -624,19 +624,19 @@ code.
           in `a_passkey_for_another_account_cannot_sign_in`, which rebuilds it inline.
     - [x] Add `pending_code` and `signed_in` to `support.rs`, and let `Server` take a sink, so the
           auth and websocket tests stop repeating their setup.
-    - [ ] Make the small tidy-ups in one commit, whose message lists each change.
-      - [ ] Collapse `Insertion` into `fresh::Claim`, and drop the `Duration` that `NoneFree` and
+    - [x] Make the small tidy-ups in one commit, whose message lists each change.
+      - [x] Collapse `Insertion` into `fresh::Claim`, and drop the `Duration` that `NoneFree` and
             `NoFreeCode` always carry as the same constant.
-      - [ ] Log a refusal once in `AuthError::into_response`, not in each of three arms.
-      - [ ] Make private what only the crate uses: `serves`, `stored_session_signed_in`, the
+      - [x] Log a refusal once in `AuthError::into_response`, not in each of three arms.
+      - [x] Make private what only the crate uses: `serves`, `stored_session_signed_in`, the
             `gate`, `signin`, and `signout` modules, and `support::with_cookie`. Have
             `start_signin` parse its body once.
-      - [ ] Add `Reply::cache_control`, in place of four copies of the header lookup in `caching.rs`.
-      - [ ] Serialise a `ShortCode` in its dashed form everywhere, and drop `as_shown`. Stored
+      - [x] Add `Reply::cache_control`, in place of four copies of the header lookup in `caching.rs`.
+      - [x] Serialise a `ShortCode` in its dashed form everywhere, and drop `as_shown`. Stored
             records in compact form still parse.
-      - [ ] In `app.js`, have `persistOutbox` update the unsent count. In `signin.js`, disable the
+      - [x] In `app.js`, have `persistOutbox` update the unsent count. In `signin.js`, disable the
             buttons through one helper, and look them up once.
-      - [ ] Share `fatal`, the rustls install, and the redis connect between the two binaries.
+      - [x] Share `fatal`, the rustls install, and the redis connect between the two binaries.
     - [ ] Add a `SignedIn` extractor, and use it in the gate, `/ws`, and `/auth/status`, in place of
           the signed-in check each makes.
     - [ ] Retry `test-redis`'s readiness check with `backon`, in place of its own loop.

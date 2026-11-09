@@ -4,9 +4,8 @@ use chrono::Utc;
 use webauthn_rs::prelude::Passkey;
 
 use crate::auth::code::ShortCode;
-use crate::auth::store::{
-    AllowedPasskey, AuthStore, CeremonyId, Insertion, PendingPasskey, Update,
-};
+use crate::auth::fresh::Claim;
+use crate::auth::store::{AllowedPasskey, AuthStore, CeremonyId, PendingPasskey, Update};
 use crate::auth::test_passkeys::{registered_passkey, registration_ceremony};
 
 pub fn pending(passkey: Passkey) -> PendingPasskey {
@@ -58,10 +57,7 @@ pub async fn a_held_code_refuses_another_pending_passkey(store: &dyn AuthStore) 
     let inserted = store.insert_pending(&code, first).await.expect("inserted");
     let refused = store.insert_pending(&code, second).await.expect("refused");
 
-    assert_eq!(
-        (inserted, refused),
-        (Insertion::Inserted, Insertion::CodeTaken)
-    );
+    assert_eq!((inserted, refused), (Claim::Claimed, Claim::Taken));
     let held = store.take_pending(&code).await.expect("taken");
     assert_eq!(held.map(|p| p.passkey.cred_id().clone()), Some(first_id));
 }

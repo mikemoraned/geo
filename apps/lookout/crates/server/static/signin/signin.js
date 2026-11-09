@@ -1,6 +1,12 @@
 const statusEl = document.getElementById("status");
 const codeEl = document.getElementById("code");
-const buttons = [document.getElementById("signin"), document.getElementById("register")];
+const signinButton = document.getElementById("signin");
+const registerButton = document.getElementById("register");
+
+function disableButtons(disabled) {
+  signinButton.disabled = disabled;
+  registerButton.disabled = disabled;
+}
 
 class Refusal extends Error {
   constructor(status, reason) {
@@ -66,7 +72,7 @@ function explain(error) {
 
 function whileWaiting(action) {
   return async () => {
-    buttons.forEach((button) => (button.disabled = true));
+    disableButtons(true);
     show("Waiting for the passkey…");
     showCode(undefined);
     try {
@@ -74,15 +80,15 @@ function whileWaiting(action) {
     } catch (error) {
       show(explain(error));
     } finally {
-      buttons.forEach((button) => (button.disabled = false));
+      disableButtons(false);
     }
   };
 }
 
 if (typeof window.PublicKeyCredential?.parseCreationOptionsFromJSON === "function") {
-  document.getElementById("signin").addEventListener("click", whileWaiting(signIn));
-  document.getElementById("register").addEventListener("click", whileWaiting(register));
+  signinButton.addEventListener("click", whileWaiting(signIn));
+  registerButton.addEventListener("click", whileWaiting(register));
 } else {
-  buttons.forEach((button) => (button.disabled = true));
+  disableButtons(true);
   show("This browser cannot read passkey options, so it cannot sign in here.");
 }

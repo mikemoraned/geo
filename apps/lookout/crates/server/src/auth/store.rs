@@ -9,7 +9,7 @@ use webauthn_rs::prelude::{
 };
 
 use crate::auth::code::ShortCode;
-use crate::auth::fresh::{Claim, ClaimError, claim_fresh};
+use crate::auth::fresh::{Claim, ClaimError, MOST_WAITING, claim_fresh};
 
 pub const CEREMONY_LIFETIME: Duration = Duration::from_secs(10 * 60);
 pub const PENDING_LIFETIME: Duration = Duration::from_secs(60 * 60);
@@ -58,23 +58,17 @@ pub enum StoreError {
     Redis(#[from] redis::RedisError),
     #[error("a stored record failed to encode or decode: {0}")]
     Record(#[from] serde_json::Error),
-    #[error("every short code drawn was taken, after waiting up to {0:?} in all")]
-    NoFreeCode(Duration),
+    #[error("every short code drawn was taken, after waiting up to {MOST_WAITING:?} in all")]
+    NoFreeCode,
 }
 
 impl From<ClaimError<StoreError>> for StoreError {
     fn from(err: ClaimError<StoreError>) -> Self {
         match err {
-            ClaimError::NoneFree(waited) => Self::NoFreeCode(waited),
+            ClaimError::NoneFree => Self::NoFreeCode,
             ClaimError::Store(err) => err,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Insertion {
-    Inserted,
-    CodeTaken,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,7 +85,7 @@ pub trait AuthStore: Send + Sync {
         &self,
         code: &ShortCode,
         passkey: PendingPasskey,
-    ) -> Result<Insertion, StoreError>;
+    ) -> Result<Claim, StoreError>;
     async fn take_pending(&self, code: &ShortCode) -> Result<Option<PendingPasskey>, StoreError>;
     async fn find_allowed(&self, id: &CredentialID) -> Result<Option<AllowedPasskey>, StoreError>;
     async fn is_allowed(&self, id: &CredentialID) -> Result<bool, StoreError>;
@@ -103,12 +97,7 @@ pub trait AuthStore: Send + Sync {
     async fn put_pending(&self, passkey: PendingPasskey) -> Result<ShortCode, StoreError> {
         Ok(claim_fresh(ShortCode::random, |code| {
             let passkey = passkey.clone();
-            async move {
-                Ok(match self.insert_pending(&code, passkey).await? {
-                    Insertion::Inserted => Claim::Claimed,
-                    Insertion::CodeTaken => Claim::Taken,
-                })
-            }
+            async move { self.insert_pending(&code, passkey).await }
         })
         .await?)
     }

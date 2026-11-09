@@ -2,13 +2,13 @@ pub mod admin;
 pub mod code;
 mod contract;
 pub mod fresh;
-pub mod gate;
+pub(crate) mod gate;
 pub mod memory;
 pub mod redis;
 pub mod registration;
 pub mod sessions;
-pub mod signin;
-pub mod signout;
+mod signin;
+mod signout;
 pub mod status;
 pub mod store;
 mod test_passkeys;
@@ -120,12 +120,12 @@ impl RelyingParty {
         )
     }
 
-    pub async fn stored_session_signed_in(&self, session: &Id) -> Result<bool, AuthError> {
+    pub(crate) async fn stored_session_signed_in(&self, session: &Id) -> Result<bool, AuthError> {
         let stored = Session::new(Some(*session), Arc::new(self.sessions.clone()), None);
         self.signed_in(&stored).await
     }
 
-    pub fn serves(&self, origin: Option<&HeaderValue>) -> bool {
+    pub(crate) fn serves(&self, origin: Option<&HeaderValue>) -> bool {
         origin.is_some_and(|origin| origin == self.origin.origin().ascii_serialization().as_str())
     }
 
@@ -187,23 +187,16 @@ const UNVERIFIED: &str = "the credential failed verification";
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
-        match self {
-            AuthError::NoCeremony => {
-                tracing::warn!(err = %self, "refused an auth request");
-                (StatusCode::BAD_REQUEST, self.to_string()).into_response()
-            }
-            AuthError::Unverified(_) => {
-                tracing::warn!(err = %self, "refused an auth request");
-                (StatusCode::BAD_REQUEST, UNVERIFIED).into_response()
-            }
-            AuthError::NotAllowed => {
-                tracing::warn!(err = %self, "refused an auth request");
-                (StatusCode::FORBIDDEN, self.to_string()).into_response()
-            }
+        let (status, reason) = match &self {
+            AuthError::NoCeremony => (StatusCode::BAD_REQUEST, self.to_string()),
+            AuthError::Unverified(_) => (StatusCode::BAD_REQUEST, UNVERIFIED.to_string()),
+            AuthError::NotAllowed => (StatusCode::FORBIDDEN, self.to_string()),
             AuthError::Unstarted(_) | AuthError::Store(_) | AuthError::Session(_) => {
                 tracing::error!(err = %self, "an auth request failed");
-                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
-        }
+        };
+        tracing::warn!(err = %self, "refused an auth request");
+        (status, reason).into_response()
     }
 }
