@@ -762,7 +762,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
               Moot: a re-derive now peaks at 2.97 GB. Closing each day early saved 0.27 GB of
               that, and was reverted, as Observations records. Streaming the sessions needed two
               additions to medallion, for about 1 GB, and was stopped before it was measured.
-        - [ ] Find passes one way, by building `steps` on `Matcher`, and point the geo test at that
+        - [x] Find passes one way, by building `steps` on `Matcher`, and point the geo test at that
               path. The store-backed test checks a path that production never runs.
         - [ ] Flatten `TrainSegmentRowV4` into `Leg`, and make `Trip.country` a `Country`. `Leg`
               copies eleven fields by hand, and the `Option` exists only to count a drop.

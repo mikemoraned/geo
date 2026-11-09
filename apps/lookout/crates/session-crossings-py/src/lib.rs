@@ -4,7 +4,7 @@ use arrow::array::{Array, ArrayRef, Int64Array, RecordBatch, StringArray};
 use arrow::compute::{cast, concat_batches};
 use arrow::datatypes::{DataType, Field, FieldRef, TimeUnit};
 use chrono::{DateTime, Utc};
-use domain::{CrossingId, Pass, Radius, SessionId};
+use domain::{CrossingId, Radius, SessionId};
 use geo_types::{Geometry, Point};
 use py_common::{runtime_error, table_of_batch, value_error};
 use pyo3::prelude::*;
@@ -12,7 +12,7 @@ use pyo3::types::PyDict;
 use pyo3_arrow::PyTable;
 use serde::{Deserialize, Serialize};
 use serde_arrow::schema::{SchemaLike, TracingOptions};
-use session_crossings::matching::{self, Crossing, DEFAULT_RADIUS, Near, Sample};
+use session_crossings::matching::{self, Crossing, DEFAULT_RADIUS, Sample, Visit};
 
 /// The steps the session crossings matching takes for one session, as two tables.
 ///
@@ -39,23 +39,19 @@ fn steps<'py>(
     let crossings = crossings_of(&one_batch(crossings)?)?;
     let radius = Radius::new(radius_metres).map_err(value_error)?;
 
-    let mut near: Vec<(CrossingId, Near)> = Vec::new();
-    let mut passes = Vec::new();
-    for crossing in &crossings {
-        let steps =
-            matching::steps(&session_id, &samples, crossing, radius).map_err(runtime_error)?;
-        near.extend(
-            steps
-                .near
-                .into_iter()
-                .map(|one| (crossing.crossing.id.clone(), one)),
-        );
-        passes.extend(steps.passes);
-    }
+    let visits_by_crossing = crossings
+        .iter()
+        .map(|crossing| {
+            matching::visits(&session_id, &samples, crossing, radius).map_err(runtime_error)
+        })
+        .collect::<PyResult<Vec<Vec<Visit>>>>()?;
 
     let answer = PyDict::new(py);
-    answer.set_item("near", table_of_batch(near_batch(&near)?)?)?;
-    answer.set_item("passes", table_of_batch(passes_batch(&passes)?)?)?;
+    answer.set_item("near", table_of_batch(near_batch(&visits_by_crossing)?)?)?;
+    answer.set_item(
+        "passes",
+        table_of_batch(passes_batch(&visits_by_crossing)?)?,
+    )?;
     Ok(answer)
 }
 
@@ -167,30 +163,28 @@ struct PassRow {
     samples_within: u32,
 }
 
-fn near_batch(near: &[(CrossingId, Near)]) -> PyResult<RecordBatch> {
-    let rows = near
+fn near_batch(visits_by_crossing: &[Vec<Visit>]) -> PyResult<RecordBatch> {
+    let rows: Vec<NearRow> = visits_by_crossing
         .iter()
-        .map(|(crossing_id, one)| {
-            Ok(NearRow {
-                crossing_id: crossing_id.to_string(),
-                t: one.sample.t,
-                distance_m: one.distance_metres,
-                visit: one.visit.try_into().map_err(|_| {
-                    runtime_error(format!(
-                        "visit {} is more than the `visit` column can number",
-                        one.visit
-                    ))
-                })?,
+        .flat_map(|visits| {
+            (0..).zip(visits).flat_map(|(number, visit)| {
+                visit.near.iter().map(move |near| NearRow {
+                    crossing_id: visit.pass.crossing_id.to_string(),
+                    t: near.sample.t,
+                    distance_m: near.distance_metres,
+                    visit: number,
+                })
             })
         })
-        .collect::<PyResult<Vec<_>>>()?;
+        .collect();
     batch(&rows, "t")
 }
 
-fn passes_batch(passes: &[Pass]) -> PyResult<RecordBatch> {
-    let rows: Vec<PassRow> = passes
+fn passes_batch(visits_by_crossing: &[Vec<Visit>]) -> PyResult<RecordBatch> {
+    let rows: Vec<PassRow> = visits_by_crossing
         .iter()
-        .map(|pass| PassRow {
+        .flatten()
+        .map(|Visit { pass, .. }| PassRow {
             crossing_id: pass.crossing_id.to_string(),
             crossed_at: pass.crossed_at,
             distance_m: pass.distance_metres,

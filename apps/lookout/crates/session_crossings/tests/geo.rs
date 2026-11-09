@@ -7,7 +7,7 @@ use domain::{CrossingId, SessionId};
 use geojson::{Feature, FeatureCollection, GeoJson};
 use libtest_mimic::{Arguments, Failed, Trial};
 use medallion::{Country, Root};
-use session_crossings::matching::{DEFAULT_RADIUS, steps};
+use session_crossings::matching::{DEFAULT_RADIUS, visits};
 use session_crossings::silver::{Inputs, inputs};
 
 const CASES: &str = "tests/passes.geojson";
@@ -56,14 +56,13 @@ fn passes_found(case: &Case, inputs: &Inputs) -> Result<usize, String> {
         .iter()
         .find(|crossing| crossing.crossing.id == case.crossing_id)
         .ok_or_else(|| format!("the store holds no crossing {}", case.crossing_id.as_str()))?;
-    Ok(steps(
+    Ok(visits(
         &session.session_id,
         &session.samples,
         crossing,
         DEFAULT_RADIUS,
     )
     .map_err(|err| err.to_string())?
-    .passes
     .len())
 }
 
