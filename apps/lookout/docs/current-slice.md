@@ -596,7 +596,48 @@ code.
   - [x] Replace `RevokedOnceFound` and the websocket tests' `Passkeys` with one `AuthStore` in
         `support.rs`. Each wraps `MemoryAuthStore`, passes eight of its nine methods through, and
         changes one.
-  - [ ] run `/simplify`, review with user, and then gather any todos accepted for changes under as a new group of todos after this
+  - [x] run `/simplify`, review with user, and then gather any todos accepted for changes under as a new group of todos after this
+        On 2026-11-09 four passes, for reuse, simplification, efficiency, and altitude, raised 22
+        findings. The user accepted the 17 below. Two were rejected. Dropping `cache: "no-store"`
+        from `app.js` would let a phone reuse an `/auth/status` answer stored before the server sent
+        `no-store`. Skipping `cycle_id` on a first sign-in saves one DEL, and sign-in is rare. Three
+        more were left: reusing one connection in `redis_end_to_end.rs`, one pipelined round trip
+        for the minute's recheck, and one redis container per test binary.
+  - [ ] Apply the accepted `/simplify` findings.
+    - [ ] Apply `session_layer()` only to a router holding `/ws`, `/record`, and `/auth/`. Over the
+          whole app, a static file or `/version` sent with a cookie loads and saves the session, two
+          redis round trips, and a stale cookie creates an empty session.
+    - [ ] Read the redis URL through clap, with `env`, `hide_env_values`, and
+          `required_if_eq("store", "redis")`, in place of `Stores`, `StoresError`, and the `Debug`
+          that hides the URL.
+    - [ ] Set `/record/`'s `Cache-Control` with a layer on its router in `build_app`, beside the
+          static files' layer, so the gate only gates.
+    - [ ] Add `AuthStore::is_allowed`, a `HEXISTS` in redis, for the signed-in check, which decodes
+          the whole passkey today and discards it.
+    - [ ] Build redis keys in tests through `ceremony_key`, `pending_key`, and `session_key`, not by
+          hand.
+    - [ ] Move `registered_passkey`, with the user as a parameter, into `test-passkeys`, and use it
+          in `a_passkey_for_another_account_cannot_sign_in`, which rebuilds it inline.
+    - [ ] Add `pending_code` and `signed_in` to `support.rs`, and let `Server` take a sink, so the
+          auth and websocket tests stop repeating their setup.
+    - [ ] Make the small tidy-ups in one commit, whose message lists each change.
+      - [ ] Collapse `Insertion` into `fresh::Claim`, and drop the `Duration` that `NoneFree` and
+            `NoFreeCode` always carry as the same constant.
+      - [ ] Log a refusal once in `AuthError::into_response`, not in each of three arms.
+      - [ ] Make private what only the crate uses: `serves`, `stored_session_signed_in`, the
+            `gate`, `signin`, and `signout` modules, and `support::with_cookie`. Have
+            `start_signin` parse its body once.
+      - [ ] Add `Reply::cache_control`, in place of four copies of the header lookup in `caching.rs`.
+      - [ ] Serialise a `ShortCode` in its dashed form everywhere, and drop `as_shown`. Stored
+            records in compact form still parse.
+      - [ ] In `app.js`, have `persistOutbox` update the unsent count. In `signin.js`, disable the
+            buttons through one helper, and look them up once.
+      - [ ] Share `fatal`, the rustls install, and the redis connect between the two binaries.
+    - [ ] Add a `SignedIn` extractor, and use it in the gate, `/ws`, and `/auth/status`, in place of
+          the signed-in check each makes.
+    - [ ] Retry `test-redis`'s readiness check with `backon`, in place of its own loop.
+    - [ ] Use redis's typed `AsyncCommands` methods across the workspace, in place of
+          `redis::cmd`. The user accepted the change of convention.
   - [ ] run `/security-review` again
 
 #### Wrap-up
