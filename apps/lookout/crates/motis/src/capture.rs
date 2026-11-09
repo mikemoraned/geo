@@ -7,6 +7,7 @@ use geo::{BoundingRect, PreparedGeometry, Relate, unary_union};
 use geo_types::{Geometry, GeometryCollection, LineString, MultiPolygon, Rect};
 use medallion_model::{RailMode, TripId};
 use tokio::time::Instant;
+use transport::countries::Outline;
 
 use crate::api::types::{Mode, TripSegment};
 use crate::client::{MotisClient, MotisError};
@@ -29,7 +30,7 @@ pub struct Capture {
 pub struct Coverage {
     bbox: Rect<f64>,
     area: PreparedGeometry<'static, Geometry<f64>>,
-    country: Option<PreparedGeometry<'static, Geometry<f64>>>,
+    country: Option<Outline>,
 }
 
 impl Coverage {
@@ -41,12 +42,12 @@ impl Coverage {
         }
     }
 
-    pub fn area(area: Vec<Geometry<f64>>, country: Vec<Geometry<f64>>) -> Option<Self> {
+    pub fn area(area: Vec<Geometry<f64>>, country: Outline) -> Option<Self> {
         let bbox = GeometryCollection::new_from(area.clone()).bounding_rect()?;
         Some(Self {
             bbox,
             area: union(area),
-            country: Some(union(country)),
+            country: Some(country),
         })
     }
 
@@ -55,7 +56,7 @@ impl Coverage {
             && self
                 .country
                 .as_ref()
-                .is_none_or(|country| country.relate(line).is_covers())
+                .is_none_or(|country| country.covers(line))
     }
 }
 
@@ -204,7 +205,7 @@ fn is_rail(mode: &Mode) -> bool {
 mod tests {
     use chrono::TimeDelta;
     use geo_types::{Coord, polygon};
-    use medallion::Root;
+    use medallion::{Country, Root};
     use medallion_model::{Feed, MotisSource};
     use url::Url;
     use wiremock::matchers::{method, path};
@@ -253,8 +254,14 @@ mod tests {
         ])
     }
 
+    fn outline(shapes: &[Geometry<f64>]) -> Outline {
+        Outline::new(Country::Germany, shapes)
+            .expect("polygons")
+            .expect("shapes")
+    }
+
     fn whole_country(shapes: Vec<Geometry<f64>>) -> Coverage {
-        Coverage::area(shapes.clone(), shapes).expect("shapes")
+        Coverage::area(shapes.clone(), outline(&shapes)).expect("shapes")
     }
 
     async fn categorised_by(coverage: &Coverage) -> (usize, usize) {
@@ -271,7 +278,7 @@ mod tests {
     fn a_coverage_of_an_area_queries_its_bounding_box() {
         let coverage = Coverage::area(
             vec![square(8.0, 50.0, 1.0), square(10.0, 52.0, 1.0)],
-            vec![square(0.0, 40.0, 20.0)],
+            outline(&[square(0.0, 40.0, 20.0)]),
         )
         .expect("shapes");
 
@@ -283,7 +290,7 @@ mod tests {
 
     #[test]
     fn no_area_covers_nothing() {
-        assert!(Coverage::area(Vec::new(), vec![square(0.0, 40.0, 20.0)]).is_none());
+        assert!(Coverage::area(Vec::new(), outline(&[square(0.0, 40.0, 20.0)])).is_none());
     }
 
     #[tokio::test]
@@ -383,9 +390,11 @@ mod tests {
 
     #[tokio::test]
     async fn a_leg_leaving_a_region_but_within_its_country_is_captured() {
-        let frankfurt_in_germany =
-            Coverage::area(vec![square(8.0, 49.5, 1.0)], vec![square(5.0, 47.0, 10.0)])
-                .expect("shapes");
+        let frankfurt_in_germany = Coverage::area(
+            vec![square(8.0, 49.5, 1.0)],
+            outline(&[square(5.0, 47.0, 10.0)]),
+        )
+        .expect("shapes");
 
         assert_eq!(categorised_by(&frankfurt_in_germany).await, (1, 0));
     }
@@ -401,7 +410,7 @@ mod tests {
     async fn a_leg_within_the_country_but_clear_of_the_area_is_outside() {
         let elsewhere_in_the_country = Coverage::area(
             vec![square(0.0, 0.0, 1.0)],
-            vec![square(-10.0, -10.0, 80.0)],
+            outline(&[square(-10.0, -10.0, 80.0)]),
         )
         .expect("shapes");
 

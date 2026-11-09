@@ -63,7 +63,10 @@ async fn fixed_area(
         .newest_extract(country)
         .expect("the store holds an Overture extract of the country to capture");
     let release = extract.release;
-    let country_shapes = areas.shapes_of(country);
+    let outline = areas
+        .outline(country)
+        .expect("the newest Overture extract holds a shape for the country to capture")
+        .clone();
     let (region, area_shapes) = match region {
         Some(code) => {
             let found = region_area(root, &extract.id, country, code)
@@ -71,9 +74,9 @@ async fn fixed_area(
                 .expect("find the region in the country's newest Overture extract");
             (Some(found.region), found.shapes)
         }
-        None => (None, country_shapes.clone()),
+        None => (None, areas.shapes_of(country)),
     };
-    let coverage = Coverage::area(area_shapes, country_shapes)
+    let coverage = Coverage::area(area_shapes, outline)
         .expect("the newest Overture extract holds a shape for the area to capture");
     tracing::info!(
         country = country.code(),
