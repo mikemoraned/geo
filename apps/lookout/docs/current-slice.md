@@ -548,8 +548,15 @@ code.
       - Logs carry the short code, and no session ID, credential, or redis URL.
 - [x] Keep `static/record/` out of the fallback `ServeDir`, so no path variant serves the page
       without a session. Test each variant the review named.
-- [ ] Run `cargo audit` over the workspace, for advisories against the crates this slice adds:
+- [x] Run `cargo audit` over the workspace, for advisories against the crates this slice adds:
       webauthn-rs, its vendored OpenSSL, tower-sessions, and their dependencies.
+      On 2026-11-09 no advisory named webauthn-rs, openssl 0.10.81, openssl-src 300.6.1 (OpenSSL
+      3.6.3), tower-sessions, or their dependencies. Four flagged crates reach the server: rustls,
+      rustls-webpki, and webpki-roots through the redis client's TLS, and tokio. A compatible
+      release fixes each, and `cargo update` moved them. `just audit-update` then moved ten crates
+      outside the server the same way. The audit still flags arrow-data, which `arrow` pins
+      exactly, five crates that need a major version (pyo3, quick-xml, rkyv, thrift, and zip), and
+      eight unmaintained crates. None reaches the server, so they wait for an upgrades slice.
 - [ ] Check what an error tells a caller. A 400 carries webauthn-rs's reason for refusing a
       credential. Decide whether a caller needs it, or only the server's log.
 - [ ] Check that no log line carries a session ID, a credential ID, or the redis URL. Include the
