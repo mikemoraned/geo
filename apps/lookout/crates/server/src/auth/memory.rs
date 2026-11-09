@@ -88,6 +88,10 @@ impl AuthStore for MemoryAuthStore {
         Ok(self.records.lock().await.allowed.get(id).cloned())
     }
 
+    async fn is_allowed(&self, id: &CredentialID) -> Result<bool, StoreError> {
+        Ok(self.records.lock().await.allowed.contains_key(id))
+    }
+
     async fn put_allowed(&self, passkey: AllowedPasskey) -> Result<(), StoreError> {
         let id = passkey.passkey.cred_id().clone();
         self.records.lock().await.allowed.insert(id, passkey);
@@ -183,6 +187,11 @@ mod tests {
     async fn revoking_removes_only_the_passkey_with_that_code() {
         contract::revoking_removes_only_the_passkey_with_that_code(&MemoryAuthStore::default())
             .await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn only_an_allowed_passkey_is_allowed() {
+        contract::only_an_allowed_passkey_is_allowed(&MemoryAuthStore::default()).await;
     }
 
     #[tokio::test(start_paused = true)]

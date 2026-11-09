@@ -308,6 +308,10 @@ impl AuthStore for ScriptedAuthStore {
         }
     }
 
+    async fn is_allowed(&self, id: &CredentialID) -> Result<bool, StoreError> {
+        Ok(self.find_allowed(id).await?.is_some())
+    }
+
     async fn put_allowed(&self, passkey: AllowedPasskey) -> Result<(), StoreError> {
         self.inner.put_allowed(passkey).await
     }

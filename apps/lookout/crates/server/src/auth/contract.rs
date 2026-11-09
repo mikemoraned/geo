@@ -148,6 +148,23 @@ pub async fn revoking_removes_only_the_passkey_with_that_code(store: &dyn AuthSt
     );
 }
 
+pub async fn only_an_allowed_passkey_is_allowed(store: &dyn AuthStore) {
+    let allowed = allowed_passkey(store).await;
+    let revoked = allowed_passkey(store).await;
+    store.remove_allowed(&revoked.code).await.expect("removed");
+    let waiting = registered_passkey().await;
+    store
+        .put_pending(pending(waiting.clone()))
+        .await
+        .expect("stored");
+
+    let is_allowed = async |id| store.is_allowed(id).await.expect("checked");
+
+    assert!(is_allowed(allowed.passkey.cred_id()).await);
+    assert!(!is_allowed(revoked.passkey.cred_id()).await);
+    assert!(!is_allowed(waiting.cred_id()).await);
+}
+
 pub async fn revoking_an_unknown_code_removes_nothing(store: &dyn AuthStore) {
     let kept = allowed_passkey(store).await;
 

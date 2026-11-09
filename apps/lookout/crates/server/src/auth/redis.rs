@@ -102,6 +102,14 @@ impl AuthStore for RedisAuthStore {
         decoded(record)
     }
 
+    async fn is_allowed(&self, id: &CredentialID) -> Result<bool, StoreError> {
+        Ok(redis::cmd("HEXISTS")
+            .arg(PASSKEYS_KEY)
+            .arg(id.as_ref())
+            .query_async(&mut self.conn.clone())
+            .await?)
+    }
+
     async fn put_allowed(&self, passkey: AllowedPasskey) -> Result<(), StoreError> {
         let _: i64 = redis::cmd("HSET")
             .arg(PASSKEYS_KEY)
@@ -222,6 +230,11 @@ mod tests {
     #[tokio::test]
     async fn revoking_removes_only_the_passkey_with_that_code_docker() {
         contract::revoking_removes_only_the_passkey_with_that_code(&running().await.store).await;
+    }
+
+    #[tokio::test]
+    async fn only_an_allowed_passkey_is_allowed_docker() {
+        contract::only_an_allowed_passkey_is_allowed(&running().await.store).await;
     }
 
     #[tokio::test]

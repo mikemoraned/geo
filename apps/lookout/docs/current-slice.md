@@ -612,7 +612,7 @@ code.
           that hides the URL.
     - [x] Set `/record/`'s `Cache-Control` with a layer on its router in `build_app`, beside the
           static files' layer, so the gate only gates.
-    - [ ] Add `AuthStore::is_allowed`, a `HEXISTS` in redis, for the signed-in check, which decodes
+    - [x] Add `AuthStore::is_allowed`, a `HEXISTS` in redis, for the signed-in check, which decodes
           the whole passkey today and discards it.
     - [ ] Build redis keys in tests through `ceremony_key`, `pending_key`, and `session_key`, not by
           hand.

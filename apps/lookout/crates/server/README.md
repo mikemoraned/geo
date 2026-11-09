@@ -181,8 +181,9 @@ not the request carries a session.
 
 `/record/` and `/ws` need a signed-in session, and the other pages stay open. A session is signed
 in while the passkey it names is still allowed. The gate reads the credential ID from the session
-and looks it up in the allowed passkeys, so revoking a passkey ends its sessions at their next
-request.
+and checks that the allowed passkeys hold it, so revoking a passkey ends its sessions at their next
+request. The check reads no passkey: in redis it is one
+[`HEXISTS`](https://redis.io/docs/latest/commands/hexists/) on `lookout-passkeys`.
 
 A request for `/record/` without a signed-in session redirects to `/signin/`. A signed-in request
 gets `Cache-Control: private, no-cache` in place of the static files' `no-cache`. [`private`][private]

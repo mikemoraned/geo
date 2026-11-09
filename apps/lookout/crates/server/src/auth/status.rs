@@ -16,9 +16,10 @@ pub async fn status(
     State(relying_party): State<RelyingParty>,
     session: Session,
 ) -> Result<Json<SignInStatus>, AuthError> {
-    let status = match relying_party.signed_in(&session).await? {
-        Some(_) => SignInStatus::SignedIn,
-        None => SignInStatus::SignedOut,
+    let status = if relying_party.signed_in(&session).await? {
+        SignInStatus::SignedIn
+    } else {
+        SignInStatus::SignedOut
     };
     tracing::info!(?status, "answered a sign-in status");
     Ok(Json(status))

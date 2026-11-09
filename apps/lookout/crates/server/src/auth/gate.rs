@@ -13,8 +13,9 @@ pub async fn require_signin(
     request: Request,
     next: Next,
 ) -> Result<Response, AuthError> {
-    Ok(match relying_party.signed_in(&session).await? {
-        Some(_) => next.run(request).await,
-        None => Redirect::to(SIGNIN_PAGE).into_response(),
+    Ok(if relying_party.signed_in(&session).await? {
+        next.run(request).await
+    } else {
+        Redirect::to(SIGNIN_PAGE).into_response()
     })
 }

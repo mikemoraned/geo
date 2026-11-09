@@ -94,6 +94,7 @@ pub trait AuthStore: Send + Sync {
     ) -> Result<Insertion, StoreError>;
     async fn take_pending(&self, code: &ShortCode) -> Result<Option<PendingPasskey>, StoreError>;
     async fn find_allowed(&self, id: &CredentialID) -> Result<Option<AllowedPasskey>, StoreError>;
+    async fn is_allowed(&self, id: &CredentialID) -> Result<bool, StoreError>;
     async fn put_allowed(&self, passkey: AllowedPasskey) -> Result<(), StoreError>;
     async fn update_allowed(&self, passkey: AllowedPasskey) -> Result<Update, StoreError>;
     async fn list_allowed(&self) -> Result<Vec<AllowedPasskey>, StoreError>;

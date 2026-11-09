@@ -31,7 +31,7 @@ use crate::auth::memory::MemoryAuthStore;
 use crate::auth::redis::RedisAuthStore;
 use crate::auth::sessions::redis::RedisSessionStore;
 use crate::auth::sessions::{SIGNED_IN_PASSKEY, SharedSessionStore, session_layer};
-use crate::auth::store::{AllowedPasskey, AuthStore, CeremonyId, StoreError};
+use crate::auth::store::{AuthStore, CeremonyId, StoreError};
 
 const ACCOUNT: &str = "recording";
 
@@ -111,17 +111,16 @@ impl RelyingParty {
         )
     }
 
-    pub async fn signed_in(&self, session: &Session) -> Result<Option<AllowedPasskey>, AuthError> {
-        let Some(id) = session.get::<CredentialID>(SIGNED_IN_PASSKEY).await? else {
-            return Ok(None);
-        };
-        Ok(self.store.find_allowed(&id).await?)
+    pub async fn signed_in(&self, session: &Session) -> Result<bool, AuthError> {
+        Ok(
+            match session.get::<CredentialID>(SIGNED_IN_PASSKEY).await? {
+                Some(id) => self.store.is_allowed(&id).await?,
+                None => false,
+            },
+        )
     }
 
-    pub async fn stored_session_signed_in(
-        &self,
-        session: &Id,
-    ) -> Result<Option<AllowedPasskey>, AuthError> {
+    pub async fn stored_session_signed_in(&self, session: &Id) -> Result<bool, AuthError> {
         let stored = Session::new(Some(*session), Arc::new(self.sessions.clone()), None);
         self.signed_in(&stored).await
     }

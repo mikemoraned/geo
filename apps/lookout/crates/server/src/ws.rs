@@ -22,14 +22,13 @@ pub async fn upgrade(
         tracing::warn!("refused a websocket upgrade from another origin");
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
-    let signed_in = state.relying_party.signed_in(&session).await?;
-    Ok(match (signed_in, session.id()) {
-        (Some(_), Some(id)) => upgrade.on_upgrade(move |socket| handle_socket(socket, state, id)),
-        _ => {
-            tracing::info!("refused a websocket upgrade without a signed-in session");
-            StatusCode::UNAUTHORIZED.into_response()
-        }
-    })
+    if state.relying_party.signed_in(&session).await?
+        && let Some(id) = session.id()
+    {
+        return Ok(upgrade.on_upgrade(move |socket| handle_socket(socket, state, id)));
+    }
+    tracing::info!("refused a websocket upgrade without a signed-in session");
+    Ok(StatusCode::UNAUTHORIZED.into_response())
 }
 
 async fn handle_socket(mut socket: WebSocket, state: AppState, session: Id) {
@@ -67,8 +66,8 @@ const UNCHECKED: &str = "the session could not be rechecked";
 
 async fn closing(relying_party: &RelyingParty, session: &Id) -> Option<CloseFrame> {
     match relying_party.stored_session_signed_in(session).await {
-        Ok(Some(_)) => None,
-        Ok(None) => {
+        Ok(true) => None,
+        Ok(false) => {
             tracing::info!("closing a socket whose session is no longer signed in");
             Some(CloseFrame {
                 code: close_code::POLICY,
