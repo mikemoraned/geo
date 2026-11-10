@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use redis::aio::MultiplexedConnection;
-use redis::{AsyncConnectionConfig, Client, RedisError};
+use redis::{AsyncCommands, AsyncConnectionConfig, Client, RedisError};
 use serde::{Deserialize, Serialize};
 use shared::Message;
 
@@ -49,8 +49,8 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 pub async fn connect(url: &str) -> Result<MultiplexedConnection, RedisError> {
     let client = Client::open(url)?;
     let config = AsyncConnectionConfig::new()
-        .set_connection_timeout(TIMEOUT)
-        .set_response_timeout(TIMEOUT);
+        .set_connection_timeout(Some(TIMEOUT))
+        .set_response_timeout(Some(TIMEOUT));
     client
         .get_multiplexed_async_connection_with_config(&config)
         .await
@@ -60,11 +60,7 @@ pub async fn take_oldest_sample(
     conn: &mut MultiplexedConnection,
     timeout: Duration,
 ) -> Result<Option<RawSample>, QueueError> {
-    let taken: Option<(String, String)> = redis::cmd("BRPOP")
-        .arg(QUEUE_KEY)
-        .arg(timeout.as_secs_f64())
-        .query_async(conn)
-        .await?;
+    let taken: Option<(String, String)> = conn.brpop(QUEUE_KEY, timeout.as_secs_f64()).await?;
     taken
         .map(|(_key, item)| serde_json::from_str(&item))
         .transpose()
@@ -76,11 +72,7 @@ pub async fn requeue_as_oldest(
     sample: &RawSample,
 ) -> Result<(), QueueError> {
     let item = serde_json::to_string(sample)?;
-    let _: i64 = redis::cmd("RPUSH")
-        .arg(QUEUE_KEY)
-        .arg(item)
-        .query_async(conn)
-        .await?;
+    let _: i64 = conn.rpush(QUEUE_KEY, item).await?;
     Ok(())
 }
 
@@ -92,12 +84,7 @@ pub async fn peek_newest_samples(
         return Ok(Vec::new());
     }
     let last_index = limit as isize - 1;
-    let items: Vec<String> = redis::cmd("LRANGE")
-        .arg(QUEUE_KEY)
-        .arg(0)
-        .arg(last_index)
-        .query_async(conn)
-        .await?;
+    let items: Vec<String> = conn.lrange(QUEUE_KEY, 0, last_index).await?;
     items
         .iter()
         .map(|item| serde_json::from_str(item))

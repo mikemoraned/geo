@@ -1,0 +1,14 @@
+[package]
+name = "test-redis"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+backon = { workspace = true }
+redis = { workspace = true }
+testcontainers = "0.27"
+testcontainers-modules = { version = "0.15", features = ["redis"] }
+tokio = { workspace = true }
+
+[lints]
+workspace = true

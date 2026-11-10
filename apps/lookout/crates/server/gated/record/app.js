@@ -1,5 +1,7 @@
 const el = (id) => document.getElementById(id);
 const statusEl = el("status");
+const signedOutEl = el("signed-out");
+const unsentEl = el("unsent");
 const wakeLockEl = el("wakelock");
 const idEl = el("id");
 const accelEl = el("accel");
@@ -197,6 +199,7 @@ const MAX_OUTBOX = 5000;
 const INITIAL_RECONNECT_MS = 1000;
 const MAX_RECONNECT_MS = 30000;
 const OUTBOX_KEY = "lookout_outbox";
+const SIGNED_OUT_CLOSE = 1008;
 
 let ws = null;
 let outbox = loadOutbox();
@@ -211,7 +214,12 @@ function loadOutbox() {
   }
 }
 
+function showUnsent() {
+  unsentEl.textContent = String(outbox.length);
+}
+
 function persistOutbox() {
+  showUnsent();
   try {
     localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox));
   } catch {
@@ -226,17 +234,34 @@ function connectWs() {
   ws = new WebSocket(WS_URL);
   ws.addEventListener("open", () => {
     reconnectMs = INITIAL_RECONNECT_MS;
+    signedOutEl.hidden = true;
     setStatus("gathering — connected");
     inFlight = 0;
     flushOutbox();
   });
   ws.addEventListener("message", onAck);
-  ws.addEventListener("close", () => {
+  ws.addEventListener("close", async (event) => {
+    const signedOut =
+      event.code === SIGNED_OUT_CLOSE || (await signInStatus()) === "signed_out";
+    signedOutEl.hidden = !signedOut;
+    if (signedOut) {
+      setStatus("gathering — signed out");
+      return;
+    }
     setStatus("gathering — reconnecting…");
     setTimeout(connectWs, reconnectMs);
     reconnectMs = Math.min(reconnectMs * 2, MAX_RECONNECT_MS);
   });
   ws.addEventListener("error", () => ws.close());
+}
+
+async function signInStatus() {
+  try {
+    const response = await fetch("/auth/status", { cache: "no-store" });
+    return response.ok ? (await response.json()).status : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function onAck() {
@@ -334,5 +359,6 @@ async function start() {
 
 startBtn.addEventListener("click", start);
 
+showUnsent();
 if (outbox.length) ensureWs();
 

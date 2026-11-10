@@ -12,7 +12,7 @@ ENV BUILD_GIT_HASH=$BUILD_GIT_HASH
 # `just prerequisites` installs, so a deploy compiles the core the same way a laptop does.
 ARG WASM_PACK_VERSION=0.15.0
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && apt-get install -y --no-install-recommends ca-certificates curl make perl \
     && rm -rf /var/lib/apt/lists/* \
     && curl -sSfL "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-$(uname -m)-unknown-linux-musl.tar.gz" \
        | tar xz -C /usr/local/bin --strip-components=1 --wildcards "*/wasm-pack" \
@@ -45,9 +45,10 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=builder /prod/target/release/server /usr/local/bin/server
 COPY --from=builder /prod/crates/server/static /app/static
+COPY --from=builder /prod/crates/server/gated /app/gated
 
-ENV LOOKOUT_STATIC_DIR=/app/static
+ENV LOOKOUT_SITE_DIR=/app
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["server"]
+CMD ["server", "--store", "redis"]

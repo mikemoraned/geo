@@ -1,3 +1,4 @@
+use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use server::queue::{QUEUE_KEY, RedisSink, SampleSink};
 use shared::{Accel, AccelReading, Message, V1Message};
@@ -12,9 +13,11 @@ async fn redis_round_trip_end_to_end() {
 
     let url = std::env::var("LOOKOUT_REDIS_URL").expect("LOOKOUT_REDIS_URL must be set");
 
-    let sink = RedisSink::connect(&url)
-        .await
-        .expect("connect to real upstash redis (parse + TLS + auth)");
+    let sink = RedisSink::new(
+        telemetry::connect(&url)
+            .await
+            .expect("connect to real upstash redis (parse + TLS + auth)"),
+    );
 
     let sample = Message::Version1(V1Message::Acceleration(AccelReading {
         id: Uuid::new_v4(),
@@ -36,13 +39,7 @@ async fn redis_round_trip_end_to_end() {
     assert!(depth >= 1, "queue depth should be >= 1 after push");
 
     let mut conn = raw_connection(&url).await;
-    let removed: i64 = redis::cmd("LREM")
-        .arg(QUEUE_KEY)
-        .arg(1)
-        .arg(&item)
-        .query_async(&mut conn)
-        .await
-        .expect("LREM");
+    let removed: i64 = conn.lrem(QUEUE_KEY, 1, &item).await.expect("LREM");
     assert_eq!(removed, 1, "the pushed sample must be found on the queue");
 }
 

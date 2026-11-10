@@ -1,19 +1,22 @@
+pub mod auth;
 pub mod queue;
+pub mod stores;
+mod ws;
 
+use std::path::Path;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::extract::State;
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::response::Response;
+use axum::extract::FromRef;
+use axum::http::{HeaderValue, header};
+use axum::middleware;
 use axum::routing::{any, get};
-use shared::Message as TelemetryMessage;
-use std::time::{SystemTime, UNIX_EPOCH};
-use telemetry::RawSample;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
+use tower_http::set_header::{SetResponseHeader, SetResponseHeaderLayer};
 use tower_http::trace::TraceLayer;
 
+use crate::auth::RelyingParty;
 use crate::queue::SampleSink;
 
 pub const GIT_HASH: &str = env!("BUILD_GIT_HASH");
@@ -21,13 +24,52 @@ pub const GIT_HASH: &str = env!("BUILD_GIT_HASH");
 #[derive(Clone)]
 pub struct AppState {
     pub sink: Option<Arc<dyn SampleSink>>,
+    pub relying_party: RelyingParty,
 }
 
-pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
+impl FromRef<AppState> for RelyingParty {
+    fn from_ref(state: &AppState) -> Self {
+        state.relying_party.clone()
+    }
+}
+
+const RECORD_PAGE: &str = "/record";
+const ASK_FIRST: &str = "no-cache";
+const ASK_FIRST_PRIVATELY: &str = "private, no-cache";
+const NEVER_STORE: &str = "no-store";
+
+pub fn build_app(state: AppState, site_dir: impl AsRef<Path>) -> Router {
+    let site_dir = site_dir.as_ref();
+    let record = Router::new()
+        .nest_service(
+            RECORD_PAGE,
+            SetResponseHeader::overriding(
+                ServeDir::new(site_dir.join("gated/record")),
+                header::CACHE_CONTROL,
+                HeaderValue::from_static(ASK_FIRST_PRIVATELY),
+            ),
+        )
+        .layer(middleware::from_fn_with_state(
+            state.relying_party.clone(),
+            auth::gate::require_signin,
+        ));
+    let with_sessions = Router::new()
+        .route("/ws", any(ws::upgrade))
+        .merge(auth::routes(state.relying_party.clone()))
+        .merge(record)
+        .layer(state.relying_party.session_layer());
     Router::new()
-        .route("/ws", any(ws_upgrade))
         .route("/version", get(version))
-        .fallback_service(ServeDir::new(static_dir.into()))
+        .merge(with_sessions)
+        .fallback_service(SetResponseHeader::overriding(
+            ServeDir::new(site_dir.join("static")),
+            header::CACHE_CONTROL,
+            HeaderValue::from_static(ASK_FIRST),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static(NEVER_STORE),
+        ))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -35,68 +77,4 @@ pub fn build_app(state: AppState, static_dir: impl Into<String>) -> Router {
 
 async fn version() -> &'static str {
     GIT_HASH
-}
-
-async fn ws_upgrade(State(state): State<AppState>, upgrade: WebSocketUpgrade) -> Response {
-    upgrade.on_upgrade(move |socket| handle_socket(socket, state))
-}
-
-async fn handle_socket(mut socket: WebSocket, state: AppState) {
-    tracing::info!("websocket connected");
-    while let Some(Ok(msg)) = socket.recv().await {
-        match msg {
-            Message::Text(text) => {
-                if let Ingest::Accepted = handle_sample(&state, &text).await
-                    && socket.send(Message::Text(ACK.into())).await.is_err()
-                {
-                    break;
-                }
-            }
-            Message::Close(_) => break,
-            _ => {}
-        }
-    }
-    tracing::info!("websocket disconnected");
-}
-
-const ACK: &str = "ack";
-
-enum Ingest {
-    Accepted,
-    Retry,
-}
-
-async fn handle_sample(state: &AppState, text: &str) -> Ingest {
-    let message: TelemetryMessage = match serde_json::from_str(text) {
-        Ok(message) => message,
-        Err(err) => {
-            tracing::warn!(%err, %text, "discarding malformed sample; a re-send cannot fix it");
-            return Ingest::Accepted;
-        }
-    };
-
-    let sample = RawSample::new(received_at_millis(), text);
-    match &state.sink {
-        Some(sink) => match sink.push(&sample).await {
-            Ok(depth) => {
-                tracing::info!(id = %message.device_id(), t = message.captured_at_millis(), depth, "queued sample");
-                Ingest::Accepted
-            }
-            Err(err) => {
-                tracing::error!(%err, "failed to queue sample");
-                Ingest::Retry
-            }
-        },
-        None => {
-            tracing::info!(id = %message.device_id(), t = message.captured_at_millis(), "sample (not queued)");
-            Ingest::Accepted
-        }
-    }
-}
-
-fn received_at_millis() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
 }

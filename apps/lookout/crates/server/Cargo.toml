@@ -2,8 +2,10 @@
 name = "server"
 version = "0.1.0"
 edition.workspace = true
+default-run = "server"
 
 [dependencies]
+clap = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
 tower-http = { workspace = true }
@@ -16,12 +18,26 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 shared = { workspace = true }
 telemetry = { workspace = true }
+webauthn-rs = { workspace = true, features = ["conditional-ui", "danger-allow-state-serialisation"] }
+webauthn-rs-proto = "0.5"
+tower-sessions = "0.15"
+# Builds the OpenSSL that webauthn-rs links into the binary. Without `vendored`, the build
+# needs a system OpenSSL, and so does the runtime image.
+openssl = { version = "0.10", features = ["vendored"] }
+rand = "0.9"
+base32 = "0.5"
+backon = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 domain = { workspace = true }
 tokio-tungstenite = "0.29"
 futures-util = "0.3"
 tower = { version = "0.5", features = ["util"] }
-uuid = { workspace = true }
-testcontainers = "0.27"
-testcontainers-modules = { version = "0.15", features = ["redis"] }
+test-passkeys = { workspace = true }
+test-redis = { workspace = true }
+passkey = { workspace = true }
+proptest = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }

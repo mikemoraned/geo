@@ -1,0 +1,353 @@
+use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use axum::body::Body;
+use axum::http::{StatusCode, header};
+use domain::Gps;
+use futures_util::{SinkExt, StreamExt};
+use server::auth::Allowing;
+use server::auth::store::AuthStore;
+use server::queue::{PushError, SampleSink};
+use shared::{Accel, AccelReading, GpsReading, Message, V0Message, V1Message};
+use telemetry::RawSample;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::time::{Instant, advance, resume, sleep, timeout};
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use tokio_tungstenite::tungstenite::{Error as WsError, Message as WsMessage};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
+use tower_sessions::cookie::Cookie;
+use uuid::Uuid;
+use webauthn_rs::prelude::CredentialID;
+
+use crate::support::{Browser, LOCALHOST, Lookup, ScriptedAuthStore, Server, post, signed_in};
+
+struct RecordingSink {
+    samples: Arc<Mutex<Vec<RawSample>>>,
+}
+
+#[async_trait::async_trait]
+impl SampleSink for RecordingSink {
+    async fn push(&self, sample: &RawSample) -> Result<i64, PushError> {
+        let mut samples = self.samples.lock().expect("lock");
+        samples.push(sample.clone());
+        Ok(samples.len() as i64)
+    }
+}
+
+struct Running {
+    addr: SocketAddr,
+    recorded: Arc<Mutex<Vec<RawSample>>>,
+    server: Server<ScriptedAuthStore>,
+}
+
+impl Running {
+    async fn signed_in(&self) -> (CredentialID, Cookie<'static>) {
+        signed_in(&self.server.app, &mut Browser::at(LOCALHOST)).await
+    }
+}
+
+async fn spawn_app() -> Running {
+    let recorded = Arc::new(Mutex::new(Vec::new()));
+    let server = Server::with(
+        LOCALHOST,
+        ScriptedAuthStore::new(Lookup::Find),
+        Allowing::AtOnce,
+        Some(Arc::new(RecordingSink {
+            samples: Arc::clone(&recorded),
+        })),
+    );
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let served = server.app.clone();
+    tokio::spawn(async move {
+        axum::serve(listener, served).await.expect("serve");
+    });
+    Running {
+        addr,
+        recorded,
+        server,
+    }
+}
+
+async fn connect(
+    addr: SocketAddr,
+    cookie: Option<&Cookie<'_>>,
+) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, WsError> {
+    connect_from(addr, Some(LOCALHOST), cookie).await
+}
+
+async fn connect_from(
+    addr: SocketAddr,
+    origin: Option<&str>,
+    cookie: Option<&Cookie<'_>>,
+) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, WsError> {
+    let mut request = format!("ws://{addr}/ws")
+        .into_client_request()
+        .expect("a request");
+    if let Some(origin) = origin {
+        request
+            .headers_mut()
+            .insert(header::ORIGIN, origin.parse().expect("a header"));
+    }
+    if let Some(cookie) = cookie {
+        request.headers_mut().insert(
+            header::COOKIE,
+            cookie.stripped().to_string().parse().expect("a header"),
+        );
+    }
+    connect_async(request).await.map(|(ws, _)| ws)
+}
+
+async fn acked(ws: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> WsMessage {
+    let sample = Message::Version1(V1Message::Acceleration(AccelReading {
+        id: Uuid::from_u128(99),
+        t: 1_700_000_000_099,
+        accel: Accel {
+            rms: 0.0,
+            peak: 0.0,
+            n: 1,
+            x: Some(0.0),
+            y: Some(0.0),
+            z: Some(0.0),
+        },
+    }));
+    let json = serde_json::to_string(&sample).expect("serialize");
+    ws.send(WsMessage::Text(json.into())).await.expect("send");
+    timeout(Duration::from_secs(5), ws.next())
+        .await
+        .expect("a reply within 5s")
+        .expect("stream open")
+        .expect("frame")
+}
+
+async fn close_code(ws: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> CloseCode {
+    let closed = timeout(Duration::from_secs(5), ws.next())
+        .await
+        .expect("closed within 5s")
+        .expect("a close frame")
+        .expect("frame");
+    let WsMessage::Close(Some(frame)) = closed else {
+        panic!("{closed:?} is not a close frame");
+    };
+    frame.code
+}
+
+fn refused_status(
+    connected: Result<WebSocketStream<MaybeTlsStream<TcpStream>>, WsError>,
+) -> Option<StatusCode> {
+    match connected {
+        Err(WsError::Http(response)) => Some(response.status()),
+        _ => None,
+    }
+}
+
+#[tokio::test]
+async fn both_versions_enqueue_and_malformed_is_dropped() {
+    let running = spawn_app().await;
+    let (_, cookie) = running.signed_in().await;
+
+    let unversioned_from_the_archive = r#"{"id":"00000000-0000-0000-0000-000000000007","t":1700000000007,"gps":{"lat":55.95,"lon":-3.19,"alt":null,"acc":8.5}}"#;
+    let v0_expected = Message::Version0(V0Message::Gps(GpsReading {
+        id: Uuid::from_u128(7),
+        t: 1_700_000_000_007,
+        gps: Gps::at(55.95, -3.19)
+            .expect("on the globe")
+            .with_accuracy_metres(Some(8.5)),
+    }));
+
+    let v1 = Message::Version1(V1Message::Acceleration(AccelReading {
+        id: Uuid::from_u128(42),
+        t: 1_700_000_000_042,
+        accel: Accel {
+            rms: 0.42,
+            peak: 1.7,
+            n: 600,
+            x: Some(0.1),
+            y: Some(-9.8),
+            z: Some(0.3),
+        },
+    }));
+    let v1_json = serde_json::to_string(&v1).expect("serialize");
+
+    let mut ws = connect(running.addr, Some(&cookie)).await.expect("connect");
+    ws.send(WsMessage::Text("not-a-sample".into()))
+        .await
+        .expect("send malformed");
+    ws.send(WsMessage::Text(unversioned_from_the_archive.into()))
+        .await
+        .expect("send v0");
+    ws.send(WsMessage::Text(v1_json.into()))
+        .await
+        .expect("send v1");
+    ws.close(None).await.expect("close");
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        {
+            let samples = running.recorded.lock().expect("lock");
+            if samples.len() >= 2 {
+                assert_eq!(
+                    samples.len(),
+                    2,
+                    "the malformed sample was sent before both valid ones, so two recorded \
+                     means the handler reached it and dropped it"
+                );
+                assert_eq!(samples[0].parse().expect("parse v0"), v0_expected);
+                assert_eq!(samples[1].parse().expect("parse v1"), v1);
+                assert!(
+                    samples[0].received_at() > 0,
+                    "server stamps received_at at handling time"
+                );
+                return;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "samples never reached the sink within 5s"
+        );
+        sleep(Duration::from_millis(50)).await;
+    }
+}
+
+#[tokio::test]
+async fn server_acks_accepted_message() {
+    let running = spawn_app().await;
+    let (_, cookie) = running.signed_in().await;
+
+    let mut ws = connect(running.addr, Some(&cookie)).await.expect("connect");
+
+    assert_eq!(acked(&mut ws).await, WsMessage::Text("ack".into()));
+}
+
+#[tokio::test]
+async fn an_upgrade_without_a_session_is_refused() {
+    let running = spawn_app().await;
+
+    let refused = refused_status(connect(running.addr, None).await);
+
+    assert_eq!(refused, Some(StatusCode::UNAUTHORIZED));
+}
+
+#[tokio::test]
+async fn an_upgrade_after_signing_out_is_refused() {
+    let running = spawn_app().await;
+    let (_, cookie) = running.signed_in().await;
+    post(
+        &running.server.app,
+        "/auth/signout",
+        Body::empty(),
+        Some(&cookie),
+    )
+    .await;
+
+    let refused = refused_status(connect(running.addr, Some(&cookie)).await);
+
+    assert_eq!(refused, Some(StatusCode::UNAUTHORIZED));
+}
+
+#[tokio::test]
+async fn an_upgrade_from_another_origin_is_refused_even_when_signed_in() {
+    let running = spawn_app().await;
+    let (_, cookie) = running.signed_in().await;
+    let others = [
+        "https://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost.example.com:3000",
+        "http://evil.example.com",
+        "null",
+    ];
+
+    let mut refusals = Vec::new();
+    for other in others {
+        refusals.push(refused_status(
+            connect_from(running.addr, Some(other), Some(&cookie)).await,
+        ));
+    }
+
+    assert_eq!(refusals, vec![Some(StatusCode::FORBIDDEN); others.len()]);
+}
+
+#[tokio::test]
+async fn an_upgrade_without_an_origin_is_refused_even_when_signed_in() {
+    let running = spawn_app().await;
+    let (_, cookie) = running.signed_in().await;
+
+    let refused = refused_status(connect_from(running.addr, None, Some(&cookie)).await);
+
+    assert_eq!(refused, Some(StatusCode::FORBIDDEN));
+}
+
+#[tokio::test(start_paused = true)]
+async fn revoking_a_passkey_closes_only_its_socket_within_a_minute() {
+    let running = spawn_app().await;
+    let (revoked, revoked_cookie) = running.signed_in().await;
+    let (_, kept_cookie) = running.signed_in().await;
+    let mut revoked_ws = connect(running.addr, Some(&revoked_cookie))
+        .await
+        .expect("connect");
+    let mut kept_ws = connect(running.addr, Some(&kept_cookie))
+        .await
+        .expect("connect");
+    let code = running
+        .server
+        .passkeys
+        .find_allowed(&revoked)
+        .await
+        .expect("found")
+        .expect("allowed")
+        .code;
+
+    running
+        .server
+        .passkeys
+        .remove_allowed(&code)
+        .await
+        .expect("revoked");
+    advance(Duration::from_secs(60)).await;
+    resume();
+
+    assert_eq!(close_code(&mut revoked_ws).await, CloseCode::Policy);
+    assert_eq!(acked(&mut kept_ws).await, WsMessage::Text("ack".into()));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_recheck_closes_the_socket() {
+    let running = spawn_app().await;
+    let (_, cookie) = running.signed_in().await;
+    let mut ws = connect(running.addr, Some(&cookie)).await.expect("connect");
+
+    running.server.passkeys.script(Lookup::Fail);
+    advance(Duration::from_secs(60)).await;
+    resume();
+
+    assert_eq!(close_code(&mut ws).await, CloseCode::Error);
+}
+
+#[tokio::test(start_paused = true)]
+async fn signing_out_closes_only_that_sessions_socket_within_a_minute() {
+    let running = spawn_app().await;
+    let (_, signed_out_cookie) = running.signed_in().await;
+    let (_, kept_cookie) = running.signed_in().await;
+    let mut signed_out_ws = connect(running.addr, Some(&signed_out_cookie))
+        .await
+        .expect("connect");
+    let mut kept_ws = connect(running.addr, Some(&kept_cookie))
+        .await
+        .expect("connect");
+
+    post(
+        &running.server.app,
+        "/auth/signout",
+        Body::empty(),
+        Some(&signed_out_cookie),
+    )
+    .await;
+    advance(Duration::from_secs(60)).await;
+    resume();
+
+    assert_eq!(close_code(&mut signed_out_ws).await, CloseCode::Policy);
+    assert_eq!(acked(&mut kept_ws).await, WsMessage::Text("ack".into()));
+}

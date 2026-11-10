@@ -1,12 +1,8 @@
-use std::time::Duration;
-
 use domain::Gps;
+use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use shared::{GpsReading, Message, V1Message};
 use telemetry::{QUEUE_KEY, RawSample};
-use testcontainers::runners::AsyncRunner;
-use testcontainers::{ContainerAsync, ImageExt};
-use testcontainers_modules::redis::{REDIS_PORT, Redis};
 use url::Url;
 use uuid::Uuid;
 
@@ -18,40 +14,6 @@ pub const RAIL_MODES: [&str; 6] = [
     "REGIONAL_RAIL",
     "RAIL",
 ];
-
-pub async fn start_redis() -> (ContainerAsync<Redis>, String) {
-    let container = Redis::default()
-        .with_tag("7-alpine")
-        .start()
-        .await
-        .expect("start redis");
-    let host = container.get_host().await.expect("host");
-    let port = container
-        .get_host_port_ipv4(REDIS_PORT)
-        .await
-        .expect("port");
-    (container, format!("redis://{host}:{port}"))
-}
-
-pub async fn wait_ready(url: &str) -> MultiplexedConnection {
-    let client = redis::Client::open(url).expect("open client");
-    let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    loop {
-        if let Ok(mut conn) = client.get_multiplexed_async_connection().await
-            && redis::cmd("PING")
-                .query_async::<String>(&mut conn)
-                .await
-                .is_ok()
-        {
-            return conn;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "redis not ready in 30s"
-        );
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
 
 pub fn gps(id: u128, t: i64, lat: f64, lon: f64) -> Message {
     Message::Version1(V1Message::Gps(GpsReading {
@@ -67,12 +29,7 @@ pub async fn lpush(conn: &mut MultiplexedConnection, message: &Message) {
     let payload = serde_json::to_string(message).expect("serialize message");
     let item = serde_json::to_string(&RawSample::new(1_700_000_050_000, payload))
         .expect("serialize envelope");
-    let _: i64 = redis::cmd("LPUSH")
-        .arg(QUEUE_KEY)
-        .arg(item)
-        .query_async(conn)
-        .await
-        .expect("lpush");
+    let _: i64 = conn.lpush(QUEUE_KEY, item).await.expect("lpush");
 }
 
 #[derive(Debug, serde::Deserialize)]

@@ -21,7 +21,7 @@ tokio = { version = "1", features = ["full"] }
 axum = { version = "0.8", features = ["ws"] }
 # `compression-br` and `-gzip`: the site serves the crossings as JSON, which is large and
 # compresses well.
-tower-http = { version = "0.6", features = ["compression-br", "compression-gzip", "fs", "trace"] }
+tower-http = { version = "0.7", features = ["compression-br", "compression-gzip", "fs", "set-header", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1", features = ["derive"] }
@@ -31,14 +31,15 @@ thiserror = "2"
 hashfn = "0.2"
 nutype = { version = "0.8", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "v5", "serde"] }
-# `tokio-rustls-comp` gives async TLS streams, but redis 0.27 only parses a
-# `rediss://` URL when `tls-rustls` is also enabled (otherwise `Client::open`
-# fails with InvalidClientConfig). `tls-rustls-webpki-roots` bundles CA roots so
-# TLS to upstash doesn't depend on the runtime image's system cert store.
-redis = { version = "0.27", features = ["tokio-rustls-comp", "tls-rustls", "tls-rustls-webpki-roots"] }
+# `tokio-rustls-comp` opens `rediss://` URLs over rustls. `tls-rustls-webpki-roots`
+# bundles the CA roots, so TLS to Upstash works without the runtime image's cert store.
+redis = { version = "1.7", features = ["tokio-rustls-comp", "tls-rustls-webpki-roots"] }
 rustls = { version = "0.23", features = ["ring"] }
 async-trait = "0.1"
-clap = { version = "4", features = ["derive"] }
+passkey = { version = "0.6", features = ["rust-crypto"] }
+webauthn-rs = "0.5"
+backon = "1.6"
+clap = { version = "4", features = ["derive", "env"] }
 libtest-mimic = "0.8"
 geojson = "1.0"
 # SedonaDB: a Rust-native, DataFusion/GeoArrow spatial engine used in-process to read
@@ -96,6 +97,8 @@ recorder = { path = "crates/recorder" }
 session_crossings = { path = "crates/session_crossings" }
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
+test-passkeys = { path = "crates/test-passkeys" }
+test-redis = { path = "crates/test-redis" }
 web-core = { path = "crates/platform/web/core" }
 transport = { path = "crates/transport" }
 

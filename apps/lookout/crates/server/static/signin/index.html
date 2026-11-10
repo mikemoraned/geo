@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lookout — sign in</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.5; }
+      h1 a { color: inherit; text-decoration: none; }
+      button { font-size: 1.1rem; padding: 0.6rem 1.2rem; margin-right: 0.5rem; }
+      #status { font-weight: bold; }
+      #code { font-family: ui-monospace, monospace; font-size: 2rem; letter-spacing: 0.1em; user-select: all; }
+      footer { margin-top: 2rem; color: #888; font-size: 0.85rem; }
+      #version { font-family: ui-monospace, monospace; }
+    </style>
+  </head>
+  <body>
+    <h1><a href="/">Lookout</a> — sign in</h1>
+    <p>Recording needs a passkey that the admin has allowed.</p>
+    <button id="signin">Sign in with a passkey</button>
+    <button id="register">Register this device</button>
+    <p id="status"></p>
+    <p id="code" hidden></p>
+    <footer>version: <span id="version">…</span></footer>
+    <script src="/signin/signin.js"></script>
+    <script type="module" src="/version.js"></script>
+  </body>
+</html>

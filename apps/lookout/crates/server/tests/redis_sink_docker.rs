@@ -1,55 +1,18 @@
-use std::time::Duration;
-
 use domain::Gps;
+use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use server::queue::{QUEUE_KEY, RedisSink, SampleSink};
 use shared::{Accel, AccelReading, GpsReading, Message, V1Message};
 use telemetry::RawSample;
-use testcontainers::ContainerAsync;
-use testcontainers::runners::AsyncRunner;
-use testcontainers_modules::redis::{REDIS_PORT, Redis};
-use tokio::time::{Instant, sleep};
+use test_redis::TestRedis;
 use uuid::Uuid;
-
-async fn start_redis() -> (ContainerAsync<Redis>, String) {
-    let container = Redis::default()
-        .start()
-        .await
-        .expect("start redis container");
-    let host = container.get_host().await.expect("get host");
-    let port = container
-        .get_host_port_ipv4(REDIS_PORT)
-        .await
-        .expect("get mapped port");
-    (container, format!("redis://{host}:{port}"))
-}
-
-async fn wait_for_redis(url: &str) -> MultiplexedConnection {
-    let client = redis::Client::open(url).expect("open redis client");
-    let deadline = Instant::now() + Duration::from_secs(30);
-    loop {
-        if let Ok(mut conn) = client.get_multiplexed_async_connection().await
-            && redis::cmd("PING")
-                .query_async::<String>(&mut conn)
-                .await
-                .is_ok()
-        {
-            return conn;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "redis did not accept connections within 30s"
-        );
-        sleep(Duration::from_millis(100)).await;
-    }
-}
 
 #[tokio::test]
 async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
-    let (_container, url) = start_redis().await;
-    let mut conn = wait_for_redis(&url).await;
+    let redis = TestRedis::start().await;
+    let mut conn = redis.connection();
 
-    let sink = RedisSink::connect(&url).await.expect("connect sink");
+    let sink = RedisSink::new(redis.connection());
 
     let accel_sample = Message::Version1(V1Message::Acceleration(AccelReading {
         id: Uuid::from_u128(1),
@@ -80,11 +43,7 @@ async fn redis_sink_lpushes_samples_in_fifo_order_docker() {
     let depth_after_gps = sink.push(&gps_item).await.expect("push gps");
     assert_eq!((depth_after_accel, depth_after_gps), (1, 2));
 
-    let len: i64 = redis::cmd("LLEN")
-        .arg(QUEUE_KEY)
-        .query_async(&mut conn)
-        .await
-        .expect("llen");
+    let len: i64 = conn.llen(QUEUE_KEY).await.expect("llen");
     assert_eq!(len, 2);
 
     let oldest = rpop_sample(&mut conn).await;
@@ -101,10 +60,6 @@ fn wrap(message: &Message) -> RawSample {
 }
 
 async fn rpop_sample(conn: &mut MultiplexedConnection) -> RawSample {
-    let item: String = redis::cmd("RPOP")
-        .arg(QUEUE_KEY)
-        .query_async(conn)
-        .await
-        .expect("rpop");
+    let item: String = conn.rpop(QUEUE_KEY, None).await.expect("rpop");
     serde_json::from_str(&item).expect("deserialize envelope")
 }

@@ -1,5 +1,6 @@
 import '../../tools/overture-mirror/mirror.just'
 
+local_redis_url := "redis://localhost:6379"
 git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git diff --quiet 2>/dev/null || echo -dirty)"`
 
 # Install the tools every other recipe needs. See README.md for what each is for.
@@ -8,6 +9,8 @@ prerequisites:
     cargo install rerun-cli --locked
     cargo install wasm-pack --locked
     cargo install cargo-insta --locked
+    cargo install cargo-mutants --locked
+    cargo install cargo-audit --locked
     rustup target add wasm32-unknown-unknown
     brew install duckdb proj jq
 
@@ -41,13 +44,25 @@ crs-definitions:
     projinfo -o PROJJSON -q "EPSG:25832" | jq . > crates/medallion/src/etrs89_utm32n.projjson.json
     projinfo -o PROJJSON -q "EPSG:25830" | jq . > crates/medallion/src/etrs89_utm30n.projjson.json
 
-# Serve on http://localhost:3000 (override with PORT). No redis, so samples are logged, not queued.
+# Serve on http://localhost:3000 (override with PORT), logging samples and keeping sign-ins in memory.
 serve:
-    BUILD_GIT_HASH={{git_hash}} cargo run -p server
+    BUILD_GIT_HASH={{git_hash}} cargo run -p server -- --store in-memory
 
-# As `serve`, with the redis URL from 1Password, so samples are queued.
-serve-redis:
-    BUILD_GIT_HASH={{git_hash}} op run --env-file=deploy/lookout.env -- cargo run -p server
+# List, allow or revoke the passkeys that can sign in, with the redis URL from 1Password.
+passkeys *args:
+    op run --env-file=deploy/lookout.env -- cargo run -q -p server --bin passkeys -- {{args}}
+
+# Run an empty redis in Docker on localhost:6379, for `serve-local-redis` and `passkeys-local`. Ctrl-C stops it.
+local-redis:
+    docker run --rm --name lookout-redis -p 6379:6379 redis:7-alpine
+
+# As `serve`, with the redis `local-redis` runs, so passkeys wait for `passkeys-local allow`.
+serve-local-redis:
+    BUILD_GIT_HASH={{git_hash}} LOOKOUT_REDIS_URL={{local_redis_url}} cargo run -p server -- --store redis
+
+# As `passkeys`, against the redis `local-redis` runs.
+passkeys-local *args:
+    LOOKOUT_REDIS_URL={{local_redis_url}} cargo run -q -p server --bin passkeys -- {{args}}
 
 # Build the release binary.
 build:
@@ -105,11 +120,39 @@ test-python:
     uv run --directory crates/session-crossings-py pytest -q
     uv run --directory notebooks/water_crossings pytest -q
 
+# Check every crate in Cargo.lock against the RustSec advisory database.
+audit:
+    cargo audit
+
+flagged_update_args := '''
+    [.vulnerabilities.list[], .warnings[][]]
+    | map("\(.package.name)@\(.package.version)")
+    | unique
+    | map("-p", .)
+    | if . == [] then ["--workspace"] else . end
+    | .[]
+'''
+
+# Update each crate the audit flags to its newest compatible release, then list what still needs a bigger move.
+audit-update:
+    cargo update $(cargo audit --json | jq -r '{{ flagged_update_args }}')
+    cargo audit
+
+# Mutation-test the Rust this branch changes from origin/main. Extra arguments go to cargo-mutants.
+mutants-on-diff *args:
+    git diff --relative origin/main > target/mutants.diff
+    cargo mutants --in-diff target/mutants.diff {{args}}
+
+# As `mutants-on-diff`, but each test run skips the Docker tests. The sandbox-safe run.
+mutants-on-diff-no-docker *args:
+    git diff --relative origin/main > target/mutants.diff
+    cargo mutants --in-diff target/mutants.diff {{args}} -- --profile no-docker
+
 # Tests against real services, in release, with credentials from 1Password. Hits the real redis.
 end_to_end_test:
     op run --env-file=deploy/lookout.env -- cargo nextest run --release --workspace --profile end-to-end
 
-# Deploy the server to fly.io (lookout.fly.dev), with the git hash and the crossings baked in.
+# Deploy the server to fly.io (lookout-hom.fly.dev), with the git hash and the crossings baked in.
 deploy:
     fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}" \
         --build-arg CROSSINGS_VERSION="{{crossings_version}}" \
