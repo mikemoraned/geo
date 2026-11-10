@@ -321,9 +321,9 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   1000 sessions do. This beats a paired bootstrap of the difference, which needs a step and a
   dataset of its own.
 - **A person chooses the apps' predictor and its settings from a report a skill writes.** The
-  skill, `choose-predictor`, reports the runs in gold as a dated doc in `docs/`, so the review sits
-  in a diff. The discussion it opens ends in a predictor and settings, which a code change puts in
-  `platform-core`. The choice weighs what the numbers alone leave open, such as recall against false
+  skill, `choose-predictor`, reports the runs in gold as a dated doc in `docs/evaluations/`, so the
+  review sits in a diff. The discussion it opens ends in a predictor and settings, which a code
+  change puts in `platform-core`. The choice weighs what the numbers alone leave open, such as recall against false
   alarms per hour. The report shows every run, so the choice stands beside the runs it passed over.
   A later predictor goes through the same review. A hook starts the skill after each run of
   `just evaluate`, so every run reaches a review, and a later run can overturn an earlier choice.
@@ -788,9 +788,9 @@ tracker meets that can be wrong.
 
 - [x] Give each of `CrowFlies`' predictions a confidence: low within its radius, and high while the
       crossing arrives within N.
-- [ ] Write the skill `choose-predictor` in the repo's `.claude/skills/`, which reports the runs
+- [x] Write the skill `choose-predictor` in the repo's `.claude/skills/`, which reports the runs
       in gold as a dated doc in `docs/`. Add a hook that starts it after each run of
-      `just evaluate`.
+      `just evaluate`. The reports go in `docs/evaluations/`.
 - [ ] Run CrowFlies over the oracle's sessions and seed with `just evaluate`.
 - [ ] Sweep the radius. Choose CrowFlies' settings from recall
       plotted against false alarms per hour.
