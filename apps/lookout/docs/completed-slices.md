@@ -555,3 +555,47 @@ resolving, against 99.98% on 17 October. High-speed realtime stays low even befo
 - **Rows name geography and geometry.** A `GeographyRow` holds lat/lon, and a `GeometryRow` holds a
   projection only `Projector` builds. The stored columns keep their names, which a later slice
   addresses.
+
+## Slice: Gate /record to avoid accidental misuse
+
+Gated `/record/` and its websocket behind passkeys, so only a device the admin allows can record.
+Anyone can register, but a registration grants nothing until the admin allows it.
+
+### The gate
+
+- **Passkeys run on webauthn-rs, on the existing axum server, with a vendored OpenSSL.** cot.rs was
+  not chosen for this: its auth has no passkeys, and adopting it rewrites the server.
+- **The gate covers `/record/` and `/ws`, and checks the passkey on every request.** Revoking a
+  passkey ends its sessions at their next request, and an open socket closes within a minute.
+- **Sign-in is discoverable, and every passkey belongs to one account, `recording`.** No credential
+  ID leaves the server before sign-in, and registering again replaces a device's passkey.
+- **Only a sign-in creates a session.** A ceremony waits under its own ID for 10 minutes and
+  finishes once. Sessions use tower-sessions over the existing redis client, and last 30 days from
+  their last use.
+
+### Registration and the admin
+
+- **A registration waits under an 8-character short code for an hour, and the admin allows it with
+  a CLI.** Invites before registration lost.
+- **The server takes `--store redis` or `--store in-memory`, and refuses to start without one.** The
+  gate stays on in memory, where a passkey for `localhost` is allowed at once.
+
+### What the manual test found
+
+- **Browsers reused answers without `Cache-Control`.** Every answer now sets one, `no-store` by
+  default. The iPhone kept a stale `app.js` until its site data was cleared.
+- **`/record/` shows a revoked or signed-out recording as signed out**, with the count of samples
+  it keeps.
+- **iOS Safari passes the server's JSON options straight through**, and a 1Password passkey made on
+  the laptop signs in from the iPhone.
+
+### Hardening
+
+- **cargo-mutants runs over the branch's diff, with Docker and without.** Each survivor gained a
+  test, and two unbounded ID loops are now bounded with `backon`.
+- **Two security reviews found nothing at HIGH or MEDIUM.** The first found path variants such as
+  `//record/` served the page past the gate, which no longer happens.
+- **A caller no longer sees webauthn-rs's reason for refusing a credential**, and only the log
+  carries it.
+- **`test-passkeys` is a new crate**, holding the test authenticator, and Rust moved to 1.99.1.
+- **`access.md` is a new doc**, on who can record and the risks the gate accepts.
