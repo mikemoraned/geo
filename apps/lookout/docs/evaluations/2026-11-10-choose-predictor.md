@@ -12,7 +12,7 @@ it. Its run is marked *(apps)* below.
 
 | Setting | Value |
 | --- | --- |
-| Runs | `09f24e97-2e2c-56f3-8c71-7f9e8ff48eb6`, `71643c94-e994-5e24-b441-8f894005b6a2` |
+| Runs | `09f24e97-2e2c-56f3-8c71-7f9e8ff48eb6`, `dde3b0ed-5380-5bef-aa52-7a9878f7c4d5`, `0d1df184-cb23-524d-bac0-631aa685d823`, `2201a262-a0fc-5a69-a78a-b2576b9f6bc9`, `71643c94-e994-5e24-b441-8f894005b6a2`, `903347e0-fb5b-5fdf-a5e8-ae34113d329c`, `fc0f0c49-bfb6-57fb-871a-095dff0d2b57`, `22d7d4cf-21ae-5fbb-8474-186a25939144`, `0a27ba0f-d395-5439-8733-a63f9ea7df8b`, in the order of the table below |
 | Evaluation version | `replay-v1` |
 | Sessions | 1000 in DE, `realtime_percentage` ≥ 90, pick seed 1, 904.6 hours |
 | Pass detector | offline |
@@ -22,28 +22,56 @@ it. Its run is marked *(apps)* below.
 | Predictor | Float | Precision | Recall | False alarms / h | Lead p10 / median / p90 | Passes | Notifications | False alarms | Repeats | Misses |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | oracle, horizon 5 min | f32 | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 0.000 [0.000, 0.000] | 300 / 300 / 300 s | 12,082 | 12,082 | 0 | 0 | 0 |
+| CrowFlies, radius 1 km, horizon 5 min | f32 | 0.323 [0.313, 0.332] | 0.844 [0.816, 0.868] | 19.7 [18.4, 21.1] | 20 / 40 / 90 s | 12,082 | 31,593 | 17,847 | 1,664 | 0 |
+| CrowFlies, radius 2 km, horizon 5 min | f32 | 0.270 [0.261, 0.278] | 0.899 [0.888, 0.911] | 27.9 [26.1, 29.6] | 40 / 80 / 210 s | 12,082 | 40,284 | 25,269 | 2,933 | 0 |
+| CrowFlies, radius 3 km, horizon 5 min | f32 | 0.215 [0.206, 0.224] | 0.860 [0.845, 0.874] | 35.7 [33.4, 37.7] | 60 / 130 / 320 s | 12,082 | 48,281 | 32,279 | 3,920 | 0 |
 | CrowFlies, radius 5 km, horizon 5 min *(apps)* | f32 | 0.137 [0.127, 0.146] | 0.711 [0.686, 0.734] | 49.5 [46.4, 52.4] | 110 / 240 / 490 s | 12,082 | 62,791 | 44,802 | 5,907 | 0 |
+| CrowFlies, radius 7.5 km, horizon 5 min | f32 | 0.083 [0.076, 0.091] | 0.514 [0.483, 0.547] | 60.7 [56.9, 64.1] | 170 / 330 / 600 s | 12,082 | 74,455 | 54,882 | 7,491 | 0 |
+| CrowFlies, radius 10 km, horizon 5 min | f32 | 0.069 [0.063, 0.074] | 0.444 [0.416, 0.472] | 64.4 [60.4, 68.2] | 220 / 360 / 620 s | 12,082 | 78,285 | 58,291 | 7,912 | 0 |
+| CrowFlies, radius 15 km, horizon 5 min | f32 | 0.066 [0.061, 0.071] | 0.431 [0.405, 0.456] | 65.3 [61.1, 69.3] | 230 / 360 / 630 s | 12,082 | 79,085 | 59,053 | 7,950 | 0 |
+| CrowFlies, radius 20 km, horizon 5 min | f32 | 0.066 [0.060, 0.071] | 0.431 [0.405, 0.456] | 65.4 [61.2, 69.4] | 230 / 360 / 630 s | 12,082 | 79,228 | 59,196 | 7,950 | 0 |
 
 The oracle reads ground truth, which the apps cannot, so it can never be chosen. It shows the best
 score the data and the rules allow.
 
 ## Comparison
 
-The group holds one predictor the apps can run, so no two candidates compare.
+Eight runs of CrowFlies differ only in radius. Against the oracle, every one of them falls short on
+every measure, and no interval overlaps the oracle's.
 
-Against the oracle, CrowFlies falls short on every measure, and no interval overlaps the oracle's.
-CrowFlies notifies five times for each pass, and 71% of its notifications are false alarms. It
-misses no pass outright. Its lead times spread from 110 s to 490 s around the 5-minute horizon,
-so many passes earn only part of their credit.
+- **Recall:** 2 km scores highest, above every other radius. 1 km and 3 km cannot be told apart.
+  Each radius from 3 km to 10 km scores below the one before it. 10 km, 15 km, and 20 km cannot be
+  told apart.
+- **False alarms per hour:** each radius up to 7.5 km raises false alarms above the one before
+  it. 7.5 km, 10 km, 15 km, and 20 km overlap where they meet, so the runs cannot order them.
+- **Precision:** each radius up to 10 km lowers precision below the one before it. 10 km, 15 km,
+  and 20 km cannot be told apart.
+
+Past 10 km the radius barely matters. CrowFlies alerts only a crossing it expects within the
+5-minute horizon, and only a train above 120 km/h covers 10 km in 5 minutes, so the horizon
+decides first.
 
 ## Trade-offs
 
-At 49.5 false alarms per hour, CrowFlies alerts a rider almost once a minute about a crossing the
-train never passes. Its recall of 0.71 comes at that cost. A radius sweep trades the two against
-each other. A smaller radius cuts false alarms, and a larger one reaches further ahead at speed.
+No larger radius beats 1 km or 2 km on any measure. 2 km is better than 3 km on all three measures. 1 km
+matches 3 km on recall and beats it on precision and false alarms.
 
-I recommend keeping CrowFlies at 5 km and 5 minutes until the sweep gives settings to choose
-between. No other candidate has a run yet.
+Between 1 km and 2 km, the choice trades recall against false alarms. 2 km raises recall from 0.844
+to 0.899, and adds 8 false alarms per hour, from 19.7 to 27.9. It also doubles the median lead
+time, from 40 s to 80 s. At 1 km, a rider hears of half the passes 40 s or less ahead, which leaves
+little time to act.
+
+A larger radius loses recall as well as precision. It alerts a crossing sooner. From 7.5 km up, a
+tenth of the notifications the passes credit come 10 minutes or more before their pass. A pass
+credits its worst notification, so an alert too early lowers recall even when a later one comes on
+time. The radius cannot buy lead time without that cost.
+
+Every radius leaves about 20 or more false alarms per hour, one every three minutes at best. No
+setting of CrowFlies makes an alert a rider can trust. The map of false alarms in the next task
+shows whether they lie off the train's track or behind it, which a heading would rule out.
+
+I recommend CrowFlies at 2 km and 5 minutes. It has the highest recall of any radius, and a lead
+time a rider can act on.
 
 ## Choice
 
@@ -53,3 +81,7 @@ run then measured a predictor the apps can run, so nothing argued for a change.
 After the CrowFlies run, the apps keep CrowFlies, with a radius of 5 km and a horizon of 5
 minutes. It is the only candidate with a run, and the radius sweep gives the settings to choose
 between.
+
+After the radius sweep, the apps change to CrowFlies with a radius of 2 km and a horizon of 5
+minutes. It has the highest recall of any radius, at 0.899, and a median lead time of 80 s. It
+costs 27.9 false alarms per hour, against 49.5 at 5 km.

@@ -792,8 +792,11 @@ tracker meets that can be wrong.
       in gold as a dated doc in `docs/`. Add a hook that starts it after each run of
       `just evaluate`. The reports go in `docs/evaluations/`.
 - [x] Run CrowFlies over the oracle's sessions and seed with `just evaluate`.
-- [ ] Sweep the radius. Choose CrowFlies' settings from recall
-      plotted against false alarms per hour.
+- [x] Sweep the radius. Choose CrowFlies' settings from recall
+      plotted against false alarms per hour. Chosen from the table of runs in
+      `evaluations/2026-11-10-choose-predictor.md`, without a plot: 2 km beats every larger radius
+      on all three measures, leaving only 1 km and 2 km to weigh.
+- [ ] Set the radius the apps' CrowFlies uses to 2 km, as the sweep chose.
 - [ ] Draw CrowFlies' false alarms and misses on a map in a new `explore4.py` with the user, and one
       session's transitions over time.
 
