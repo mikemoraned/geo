@@ -49,6 +49,11 @@ timeout range][timeouts], so a ceremony lasts 10 minutes. The browser gets the [
 default][default-timeout], which it can lengthen for accessibility. webauthn-rs records no time in
 a ceremony, so the store expires it.
 
+webauthn-rs refuses by default to serialise a ceremony's state, since a client holding that state
+can [replay a sign-in][state-serialisation] without the authenticator. The
+`danger-allow-state-serialisation` feature allows it. The store keeps the state on the server and
+answers with a random ceremony ID alone, so no client sees the state.
+
 A pending passkey waits an hour under its short code. No two pending passkeys hold the same code,
 so allowing a code allows exactly one passkey. Allowing moves the passkey into the allowed
 passkeys, which stay until revoked.
@@ -80,11 +85,14 @@ authenticator in one. They hand its credentials to webauthn-rs as JSON, the form
 crate's [`MemoryStore`][memory-store] finds a passkey only by a credential ID it is given. A store
 of one passkey, `Option<Passkey>`, [finds it with none given][option-store], as a discoverable
 sign-in needs. The endpoint tests give each browser that store. Both kinds of test build their
-authenticator through [`test-passkeys`](../test-passkeys/README.md).
+authenticator through [`test-passkeys`](../test-passkeys/README.md). webauthn-rs's own test
+authenticator, `SoftPasskey`, cannot sign in discoverably. It [refuses a resident
+key][soft-resident], and its assertion [carries no user handle][soft-handle].
 
 [challenges]: https://www.w3.org/TR/webauthn-3/#sctn-cryptographic-challenges
 [timeouts]: https://www.w3.org/TR/webauthn-3/#sctn-timeout-recommended-range
 [default-timeout]: https://docs.rs/webauthn-rs/0.5.5/webauthn_rs/constant.DEFAULT_AUTHENTICATOR_TIMEOUT.html
+[state-serialisation]: https://docs.rs/webauthn-rs/0.5.5/webauthn_rs/#allow-serialising-registration-and-authentication-state
 [crockford]: https://www.crockford.com/base32.html
 [backon]: https://docs.rs/backon/1.6.0/backon/
 [total-delay]: https://docs.rs/backon/1.6.0/backon/struct.ExponentialBuilder.html#method.with_total_delay
@@ -94,6 +102,8 @@ authenticator through [`test-passkeys`](../test-passkeys/README.md).
 [passkey]: https://docs.rs/passkey/0.6.0/passkey/
 [memory-store]: https://docs.rs/passkey-authenticator/0.6.0/src/passkey_authenticator/credential_store.rs.html#90
 [option-store]: https://docs.rs/passkey-authenticator/0.6.0/src/passkey_authenticator/credential_store.rs.html#136
+[soft-resident]: https://docs.rs/webauthn-authenticator-rs/0.6.2/src/webauthn_authenticator_rs/softpasskey.rs.html#204-207
+[soft-handle]: https://docs.rs/webauthn-authenticator-rs/0.6.2/src/webauthn_authenticator_rs/softpasskey.rs.html#415
 
 ## Anyone can register a passkey, and the admin allows it
 
@@ -140,8 +150,10 @@ failure to start a ceremony, or to read or write the records, answers 500.
 Sign-in takes two requests, as registration does. `POST /auth/signin/start` answers with a ceremony
 ID and the options for [`navigator.credentials.get()`][get]. The options carry an empty allow list,
 so the authenticator offers the passkey it holds for the site, and no caller learns a credential ID.
-webauthn-rs asks for [conditional mediation][conditional-set], which offers passkeys [through
-autofill][conditional] on a username field. The site has no such field, so the server removes the
+webauthn-rs starts a sign-in without an allow list only under its `conditional-ui` feature, through
+[`start_discoverable_authentication`][discoverable]. It then asks for [conditional
+mediation][conditional-set], which offers passkeys [through autofill][conditional] on a username
+field. The site has no such field, so the server removes the
 mediation, and the browser shows its usual prompt.
 
 `POST /auth/signin/finish` takes back the ceremony ID with the browser's assertion. The server reads
@@ -151,7 +163,10 @@ a credential ID that no allowed passkey holds. It then verifies the assertion ag
 public key.
 
 A verified sign-in writes the passkey back with its [updated counter and backup state][update] and
-the time of its use. The write replaces only a passkey that is still allowed. A passkey the admin
+the time of its use. A synced passkey usually reports a signature counter of 0, and the counter
+check [applies only when a counter is nonzero][sign-counter]. The write-back therefore records the
+backup state and the time of use, and detects no clone. The write replaces only a passkey that is
+still allowed. A passkey the admin
 revokes during a sign-in therefore stays revoked, and the finish answers 403. Otherwise the finish
 gives the session a [fresh ID][renew], records the passkey's credential ID in it, and answers 204.
 Registration creates no session.
@@ -170,6 +185,8 @@ never started, and for an assertion that fails verification.
 not the request carries a session.
 
 [get]: https://www.w3.org/TR/webauthn-3/#sctn-getAssertion
+[discoverable]: https://docs.rs/webauthn-rs/0.5.5/webauthn_rs/struct.Webauthn.html#method.start_discoverable_authentication
+[sign-counter]: https://www.w3.org/TR/webauthn-3/#sctn-sign-counter
 [conditional-set]: https://docs.rs/webauthn-rs/0.5.5/src/webauthn_rs/lib.rs.html#1341
 [conditional]: https://w3c.github.io/webappsec-credential-management/#dom-credentialmediationrequirement-conditional
 [verifying]: https://www.w3.org/TR/webauthn-3/#sctn-verifying-assertion
@@ -190,7 +207,9 @@ request. The check reads no passkey: in redis it is one
 [`OptionalFromRequestParts`](https://docs.rs/axum/0.8.9/axum/extract/trait.OptionalFromRequestParts.html),
 and gets `Some` only for a signed-in session.
 
-A request for `/record/` without a signed-in session redirects to `/signin/`. A signed-in request
+A request for `/record/` without a signed-in session redirects to `/signin/`. A sign-in always
+continues to `/record/`. A redirect target taken from the request is an [open
+redirect][open-redirect] unless the server validates it, and `/record/` is the only gated page. A signed-in request
 gets `Cache-Control: private, no-cache` in place of the static files' `no-cache`. [`private`][private]
 keeps the page out of shared caches, and `no-cache` makes a browser ask the server before showing a
 stored copy. A browser that has signed out therefore gets the redirect, not its stored page.
@@ -218,6 +237,7 @@ check. A page uses it to tell a signed-out session from a dropped connection.
 No route under `/auth/` sets `Cache-Control`, so every answer there carries the server's default,
 `no-store`. A stored status would show a revoked session as signed in.
 
+[open-redirect]: https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html
 [private]: https://www.rfc-editor.org/rfc/rfc9111#name-private
 [serve-dir]: https://docs.rs/tower-http/0.7.1/tower_http/services/struct.ServeDir.html
 [ws-origin]: https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html#origin-header-validation
@@ -280,12 +300,40 @@ URL's value, since clap's
 keeps it out.
 
 With `redis`, the queue, the sign-in records, and the sessions share one connection, and every
-passkey waits for the admin, `localhost`'s included. A redis that is unreachable at startup is
+passkey waits for the admin, `localhost`'s included. The allowed passkeys' hash has no expiry, so
+the redis instance runs with eviction off. Under memory pressure, eviction would delete the hash,
+and every device would register again. A redis that is unreachable at startup is
 fatal. That failure prints to stderr, which ships reliably even when the boot burst of tracing does
 not.
 
 With `in-memory`, the server logs the samples it receives rather than queuing them, and keeps
 passkeys and sessions in memory.
+
+## Passkeys belong to the server's origin
+
+The relying party comes from `--origin` or `LOOKOUT_ORIGIN`, which defaults to
+`http://localhost:3000`. A browser [binds a credential to its origin][origin], so a passkey signs
+in only on the origin it was registered on. WebAuthn needs a secure context, and a browser treats
+[`localhost` as one][localhost] over plain HTTP. A phone cannot reach the laptop as `localhost`, so
+a phone signs in only over HTTPS, against a hosted server or a tunnel.
+
+## Logs name a short code at most
+
+A log line about sign-in names at most a short code, never a session ID, a credential ID, or the
+redis URL. A redis error shows the error's kind and redis's reply, never the URL. tower-sessions
+logs no session ID, and `tower_http` logs requests only at `debug`, below the server's default
+filter.
+
+## webauthn-rs builds its own OpenSSL
+
+webauthn-rs depends on OpenSSL and has no feature to drop it. The `openssl` crate's
+[`vendored`][vendored] feature compiles OpenSSL into the binary, so neither the build host nor the
+runtime image needs a system OpenSSL. The build needs `make` and `perl`, which the Docker builder
+installs.
+
+[origin]: https://www.w3.org/TR/webauthn-3/#sctn-verifying-assertion
+[localhost]: https://www.w3.org/TR/secure-contexts/#localhost
+[vendored]: https://docs.rs/openssl/0.10.81/openssl/#vendored
 
 ## The git hash comes from the build, not from `.git`
 
