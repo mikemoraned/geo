@@ -796,7 +796,10 @@ tracker meets that can be wrong.
       plotted against false alarms per hour. Chosen from the table of runs in
       `evaluations/2026-11-10-choose-predictor.md`, without a plot: 2 km beats every larger radius
       on all three measures, leaving only 1 km and 2 km to weigh.
-- [ ] Set the radius the apps' CrowFlies uses to 2 km, as the sweep chose.
+- [ ] Set the radius the apps' CrowFlies uses to 1 km, as the runs over every session chose.
+- [ ] Nice to have: let `--sessions` take `all`, which picks every session the filter keeps.
+      `pick` resolves it to the count of those sessions before the run begins, so the run's row
+      records that count and a run's id never hashes `all`.
 - [ ] Draw CrowFlies' false alarms and misses on a map in a new `explore4.py` with the user, and one
       session's transitions over time.
 
@@ -844,6 +847,10 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 
 A person chooses the apps' predictor and its settings from the runs of CrowFlies and LightCone.
 
+- [ ] Add to `summarise` a measure that weighs precision above recall, such as Fβ with β below 1,
+      with an interval from its bootstrap, and report it in `/choose-predictor`. Choose β with the
+      user, so that the measure ranks the runs so far as the user's choices did. The choice of
+      1 km over 2 km on 2026-11-10 favoured precision and few false alarms over recall.
 - [ ] Choose the apps' predictor and settings with the user, through `/choose-predictor` over the
       runs of Phases 3 and 6.
 - [ ] Replace `CrowFlies` in `platform-core` with the chosen predictor and settings.
