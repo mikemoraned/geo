@@ -865,6 +865,20 @@ so a debounced predictor can replace the one Phase 7 chose.
 - [ ] Run each predictor with and without its debouncing, over the same sessions and seed, and
       compare precision, recall, and false alarms per hour.
 
+#### Phase 9: the size of a run on disk
+
+A run over every session takes 15–21 MB in gold, nearly all of it transitions and outcomes, and
+gold is committed. The slice cuts that size before it closes, so its runs do not swell the repo.
+
+- [ ] Measure each gold dataset's share of a run's size, and what each column takes.
+- [ ] Try each way to shrink a run, and measure what it saves: rewriting the files with other
+      encodings and compression, storing rows by reference to silver rather than copying them,
+      and holding a run in `landing` until it is promoted through bronze and silver to gold.
+- [ ] Choose a way with the user, and apply it to the runs already in gold.
+- [ ] Decide with the user whether to rewrite the branch's history before it merges, so that the
+      commits which added runs at full size leave the repo. Applying a way to the runs in gold
+      shrinks only the files from then on, and each earlier commit keeps its runs as written.
+
 #### Wrap-up
 
 - [ ] Fold what held of `2026-08-01-evaluation.md` into `docs/evaluation.md`, repoint the links to
