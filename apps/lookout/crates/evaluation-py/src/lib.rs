@@ -447,7 +447,7 @@ fn sessions_of(picked: PyTable) -> PyResult<Vec<EvaluationSessionRowV1>> {
 
 fn pick_error(err: PickError) -> PyErr {
     match err {
-        PickError::TooFew { .. } => value_error(err),
+        PickError::TooFew { .. } | PickError::NoneEligible => value_error(err),
         PickError::Query(err) => query_error(err),
     }
 }

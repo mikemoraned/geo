@@ -801,7 +801,7 @@ tracker meets that can be wrong.
       at all, and `Alerting`, the radius and horizon within which it alerts one. The apps watch
       5 km and alert within 1 km, so the M5 panel and the web radar still show crossings out to
       5 km. A run watches and alerts within one radius, since scoring counts only alerts.
-- [ ] Nice to have: let `--sessions` take `all`, which picks every session the filter keeps.
+- [x] Nice to have: let `--sessions` take `all`, which picks every session the filter keeps.
       `pick` resolves it to the count of those sessions before the run begins, so the run's row
       records that count and a run's id never hashes `all`.
 - [ ] Draw CrowFlies' false alarms and misses on a map in a new `explore4.py` with the user, and one
