@@ -557,6 +557,13 @@ when `evaluation_run_v2` replaced the run row's four fingerprint columns with on
   coordinates or 1 GB, until the end. It needed two additions to medallion: a writer that checks
   uniqueness across writes, and a path combined from its samples' projections. It was stopped
   before it was measured.
+- **Most of CrowFlies' false alarms come after the train passes the crossing** (2026-11-10). In the
+  1 km run over all 34,521 sessions, 476,905 of 621,220 false alarms (77%) came after the last pass
+  of their crossing. CrowFlies alerts a crossing again as the train moves away from it, while the
+  crossing stays within the alerting radius. The other 144,315 fell on crossings the session never
+  passes. In the session with the most false alarms, 391 in 8.05 hours, 312 of its 369 crossings
+  were credited and then raised a false alarm. `explore4.py` maps both kinds. A heading rules out
+  the first kind, and so does a cooldown on a crossing alerted or passed a moment before.
 
 ### Tasks
 
@@ -804,8 +811,13 @@ tracker meets that can be wrong.
 - [x] Nice to have: let `--sessions` take `all`, which picks every session the filter keeps.
       `pick` resolves it to the count of those sessions before the run begins, so the run's row
       records that count and a run's id never hashes `all`.
-- [ ] Draw CrowFlies' false alarms and misses on a map in a new `explore4.py` with the user, and one
-      session's transitions over time.
+- [x] Draw CrowFlies' false alarms and misses on a map in a new `explore4.py` with the user, and one
+      session's transitions over time. CrowFlies misses no pass, so the maps show the passes
+      alerted too early or at the last moment instead. One session's map also draws each alert as
+      an arc from the train to its crossing.
+- [ ] Add a cooldown to `CrowFlies`, as a setting: a crossing alerted within the last N is not
+      alerted again. Run it at 1 km over every session, and compare it with the 1 km run without
+      one. This is a quick, simple form of Phase 8's debouncing.
 
 #### Phase 4: the online pass detector
 
