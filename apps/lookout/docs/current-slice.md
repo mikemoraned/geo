@@ -325,8 +325,10 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   in a diff. The discussion it opens ends in a predictor and settings, which a code change puts in
   `platform-core`. The choice weighs what the numbers alone leave open, such as recall against false
   alarms per hour. The report shows every run, so the choice stands beside the runs it passed over.
-  A later predictor goes through the same review. This beats a rule fixed before the results, which
-  cannot weigh a trade-off nobody foresaw.
+  A later predictor goes through the same review. A hook starts the skill after each run of
+  `just evaluate`, so every run reaches a review, and a later run can overturn an earlier choice.
+  This beats a rule fixed before the results, which cannot weigh a trade-off nobody foresaw.
+  Changed on 2026-11-10: the skill ran once, after LightCone.
 - **The cleaning rule discards a whole session that fails either of two checks.** A session fails
   if any sample lies outside its country, or if any sample implies a speed over 100 m/s.
   `motis::train_sessions` applies both in Rust, as drop reasons beside its existing four, and counts
@@ -786,13 +788,39 @@ tracker meets that can be wrong.
 
 - [x] Give each of `CrowFlies`' predictions a confidence: low within its radius, and high while the
       crossing arrives within N.
+- [ ] Write the skill `choose-predictor` in the repo's `.claude/skills/`, which reports the runs
+      in gold as a dated doc in `docs/`. Add a hook that starts it after each run of
+      `just evaluate`.
 - [ ] Run CrowFlies over the oracle's sessions and seed with `just evaluate`.
 - [ ] Sweep the radius. Choose CrowFlies' settings from recall
       plotted against false alarms per hour.
 - [ ] Draw CrowFlies' false alarms and misses on a map in a new `explore4.py` with the user, and one
       session's transitions over time.
 
-#### Phase 4: LightCone
+#### Phase 4: the online pass detector
+
+The apps cannot read ground truth, so they detect each pass from the samples alone.
+
+- [ ] Add the online implementation of `DetectPasses` to `predictor`: a crossing within a pass
+      radius of the latest sample.
+- [ ] Evaluate the online detector against the offline one over the same sessions and seed,
+      sweeping the pass radius, and choose the radius with the user.
+
+#### Phase 5: states in the apps
+
+The apps show each crossing's state from CrowFlies, the predictor they already run, so the states
+appear before LightCone exists.
+
+- [ ] Hold the `Tracker` in `platform-core`'s model, around `CrowFlies` and the online pass
+      detector, and expose each crossing's state.
+- [ ] Carry each crossing's state in `web-core`'s `Predicted`, and draw one shape per state in
+      `lookout-predictor.js`.
+- [ ] Prefix each crossing's line in `m5-core`'s `panel.rs` with one character per state, within 13
+      characters.
+- [ ] Build with `just wasm` and `just m5plus-build`. Hand over `just m5plus-flash`, and a look at
+      `/kiosk`.
+
+#### Phase 6: LightCone
 
 LightCone is the improvement the Target asks for, measured against CrowFlies on the same sessions.
 
@@ -809,40 +837,23 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 - [ ] Run both predictors over every session the filter keeps. If their intervals still overlap,
       widen the filter to every session.
 
-#### Phase 5: debouncing, an optional experiment
+#### Phase 7: choosing the predictor
+
+A person chooses the apps' predictor and its settings from the runs of CrowFlies and LightCone.
+
+- [ ] Choose the apps' predictor and settings with the user, through `/choose-predictor` over the
+      runs of Phases 3 and 6.
+- [ ] Replace `CrowFlies` in `platform-core` with the chosen predictor and settings.
+
+#### Phase 8: debouncing, an optional experiment
 
 A run shows whether debouncing a predictor's predictions improves its precision and recall. The apps
-can take a predictor without it, so this phase can be skipped.
+can take a predictor without it, so this phase can be skipped. Each run starts `/choose-predictor`,
+so a debounced predictor can replace the one Phase 7 chose.
 
 - [ ] Debounce `LightCone`'s predictions and `CrowFlies`', each as a setting of its predictor.
 - [ ] Run each predictor with and without its debouncing, over the same sessions and seed, and
       compare precision, recall, and false alarms per hour.
-
-#### Phase 6: the online pass detector
-
-The apps cannot read ground truth, so they detect each pass from the samples alone.
-
-- [ ] Add the online implementation of `DetectPasses` to `predictor`: a crossing within a pass
-      radius of the latest sample.
-- [ ] Evaluate the online detector against the offline one over the same sessions and seed,
-      sweeping the pass radius, and choose the radius with the user.
-
-#### Phase 7: states in the apps
-
-The apps come last, since they show the states of the predictor a person chooses from the runs.
-
-- [ ] Write the skill `choose-predictor` in the repo's `.claude/skills/`, which reports the runs
-      in gold as a dated doc in `docs/`.
-- [ ] Choose the apps' predictor and settings with the user, through `/choose-predictor` over the
-      runs of Phases 4 and 5.
-- [ ] Hold the `Tracker` in `platform-core`'s model, around the chosen predictor and settings and
-      the online pass detector, and expose each crossing's state.
-- [ ] Carry each crossing's state in `web-core`'s `Predicted`, and draw one shape per state in
-      `lookout-predictor.js`.
-- [ ] Prefix each crossing's line in `m5-core`'s `panel.rs` with one character per state, within 13
-      characters.
-- [ ] Build with `just wasm` and `just m5plus-build`. Hand over `just m5plus-flash`, and a look at
-      `/kiosk`.
 
 #### Wrap-up
 
