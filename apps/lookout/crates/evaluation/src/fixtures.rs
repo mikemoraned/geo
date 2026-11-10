@@ -18,6 +18,7 @@ use medallion_model::{
 
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};
+use crate::settings::OracleSettings;
 use crate::steps::{Predictor, Run};
 use crate::summarise::Bootstrap;
 
@@ -134,7 +135,7 @@ pub fn run_of(predictor: Predictor) -> Run {
 }
 
 pub fn oracle() -> Predictor {
-    Predictor::Oracle {
+    Predictor::Oracle(OracleSettings {
         horizon: Span::new("5m").expect("a span"),
-    }
+    })
 }

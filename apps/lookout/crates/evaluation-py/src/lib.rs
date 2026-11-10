@@ -8,7 +8,7 @@ use evaluation::gold::{self, GoldError};
 use evaluation::record::session_rows;
 use evaluation::runs::RunsError;
 use evaluation::steps::{self, Predictor, Run, StepError};
-use evaluation::{Pick, PickError, Score, Seed};
+use evaluation::{CrowFliesSettings, OracleSettings, Pick, PickError, Score, Seed};
 use medallion::Country;
 use medallion_model::{
     EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationTransitionRowV1, FloatType,
@@ -357,7 +357,7 @@ fn evaluate<'py>(
 /// Record a run over the sessions `picked`, as a dict of its id, its date, and its first two tables.
 ///
 /// The dict's `"run_id"` and `"run_date"` are the text `write_gold` takes. Its `"run"` and
-/// `"sessions"` are the run's tables of gold `evaluation_run_v2` and `evaluation_session_v1`. The
+/// `"sessions"` are the run's tables of gold `evaluation_run_v3` and `evaluation_session_v1`. The
 /// run names `BUILD_CODE_VERSION`, the code this extension was built from, and a fingerprint of each
 /// silver dataset it reads. Its id hashes those with its settings, so the same settings over the
 /// same code and data record the same run. If the extension was built from uncommitted code, a
@@ -416,15 +416,15 @@ fn picking(country: &str, realtime_at_least: f64, sessions: usize, seed: u64) ->
 
 fn predictor_of(predictor: &Bound<'_, PyAny>) -> PyResult<Predictor> {
     if let Ok(oracle) = predictor.extract::<PyRef<'_, Oracle>>() {
-        return Ok(Predictor::Oracle {
+        return Ok(Predictor::Oracle(OracleSettings {
             horizon: oracle.horizon,
-        });
+        }));
     }
     if let Ok(crow_flies) = predictor.extract::<PyRef<'_, CrowFlies>>() {
-        return Ok(Predictor::CrowFlies {
+        return Ok(Predictor::CrowFlies(CrowFliesSettings {
             radius: crow_flies.radius,
             horizon: crow_flies.horizon,
-        });
+        }));
     }
     Err(value_error("`predictor` must be an Oracle or a CrowFlies"))
 }

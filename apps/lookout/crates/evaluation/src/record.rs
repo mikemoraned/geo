@@ -2,16 +2,17 @@ use std::num::NonZeroUsize;
 
 use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use code_version::CodeVersion;
-use domain::{Radius, Span};
+use domain::Span;
 use medallion::{FingerprintError, Root, RunId};
 use medallion_model::{
-    EvaluationRunRowV2, EvaluationSessionRowV1, PassDetectorName, PredictorName, TrainSessionRowV3,
+    EvaluationRunRowV3, EvaluationSessionRowV1, PassDetectorName, TrainSessionRowV3,
 };
 use uuid::Uuid;
 
 use crate::fingerprints::Fingerprints;
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};
+use crate::settings::SettingsError;
 use crate::steps::{Predictor, Run};
 use crate::summarise::Bootstrap;
 
@@ -29,7 +30,7 @@ pub struct Inputs {
 pub struct Recorded {
     pub run_id: RunId,
     pub date: NaiveDate,
-    pub row: EvaluationRunRowV2,
+    pub row: EvaluationRunRowV3,
     pub sessions: Vec<EvaluationSessionRowV1>,
 }
 
@@ -37,6 +38,8 @@ pub struct Recorded {
 pub enum RecordError {
     #[error(transparent)]
     Fingerprint(#[from] FingerprintError),
+    #[error("the run's predictor settings cannot be read back: {0}")]
+    PredictorSettings(#[from] SettingsError),
     #[error("the run's `{column}` cannot be read back as a setting: {reason}")]
     Setting {
         column: &'static str,
@@ -67,16 +70,8 @@ pub async fn record(
     })
 }
 
-pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> EvaluationRunRowV2 {
-    let (predictor, predictor_horizon_ms, predictor_radius_m) = match run.predictor {
-        Predictor::Oracle { horizon } => (PredictorName::Oracle, Some(milliseconds(horizon)), None),
-        Predictor::CrowFlies { radius, horizon } => (
-            PredictorName::CrowFlies,
-            Some(milliseconds(horizon)),
-            Some(radius.as_metres()),
-        ),
-    };
-    EvaluationRunRowV2 {
+pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> EvaluationRunRowV3 {
+    EvaluationRunRowV3 {
         started_at,
         evaluation_version: EVALUATION_VERSION.to_string(),
         code_version: inputs.code_version.clone(),
@@ -84,9 +79,8 @@ pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> Evaluat
         realtime_at_least: run.pick.realtime_at_least,
         sessions: run.pick.sessions.get() as u64,
         pick_seed: run.pick.seed.0,
-        predictor,
-        predictor_horizon_ms,
-        predictor_radius_m,
+        predictor: run.predictor.name(),
+        predictor_settings: run.predictor.settings(),
         pass_detector: PassDetectorName::Offline,
         float_type: run.float_type,
         horizon_ms: milliseconds(run.scoring.horizon),
@@ -101,8 +95,8 @@ pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> Evaluat
     }
 }
 
-pub fn run_id(row: &EvaluationRunRowV2) -> RunId {
-    let unstarted = EvaluationRunRowV2 {
+pub fn run_id(row: &EvaluationRunRowV3) -> RunId {
+    let unstarted = EvaluationRunRowV3 {
         started_at: DateTime::UNIX_EPOCH,
         ..row.clone()
     };
@@ -113,10 +107,10 @@ pub fn run_id(row: &EvaluationRunRowV2) -> RunId {
     RunId::new(id.to_string()).expect("a UUID names a partition")
 }
 
-impl TryFrom<&EvaluationRunRowV2> for Run {
+impl TryFrom<&EvaluationRunRowV3> for Run {
     type Error = RecordError;
 
-    fn try_from(row: &EvaluationRunRowV2) -> Result<Self, Self::Error> {
+    fn try_from(row: &EvaluationRunRowV3) -> Result<Self, Self::Error> {
         Ok(Run {
             pick: Pick {
                 country: row.country.parse().map_err(|err| setting("country", err))?,
@@ -124,29 +118,7 @@ impl TryFrom<&EvaluationRunRowV2> for Run {
                 sessions: count("sessions", row.sessions)?,
                 seed: Seed(row.pick_seed),
             },
-            predictor: match row.predictor {
-                PredictorName::Oracle => Predictor::Oracle {
-                    horizon: span_of(
-                        "predictor_horizon_ms",
-                        row.predictor_horizon_ms.ok_or_else(|| {
-                            setting("predictor_horizon_ms", "an oracle needs one")
-                        })?,
-                    )?,
-                },
-                PredictorName::CrowFlies => Predictor::CrowFlies {
-                    radius: Radius::new(
-                        row.predictor_radius_m
-                            .ok_or_else(|| setting("predictor_radius_m", "CrowFlies needs one"))?,
-                    )
-                    .map_err(|err| setting("predictor_radius_m", err))?,
-                    horizon: span_of(
-                        "predictor_horizon_ms",
-                        row.predictor_horizon_ms.ok_or_else(|| {
-                            setting("predictor_horizon_ms", "CrowFlies needs one")
-                        })?,
-                    )?,
-                },
-            },
+            predictor: Predictor::read(row.predictor, &row.predictor_settings)?,
             float_type: row.float_type,
             scoring: Scoring {
                 horizon: span_of("horizon_ms", row.horizon_ms)?,
@@ -205,11 +177,12 @@ mod tests {
     use std::collections::BTreeMap;
     use std::num::NonZeroUsize;
 
-    use domain::Percentage;
+    use domain::{Percentage, Radius};
     use medallion::Country;
 
     use super::*;
     use crate::fixtures::instant;
+    use crate::settings::{CrowFliesSettings, OracleSettings};
 
     fn span(text: &str) -> Span {
         Span::new(text).expect("a span")
@@ -223,9 +196,9 @@ mod tests {
                 sessions: NonZeroUsize::new(1000).expect("not zero"),
                 seed: Seed(1),
             },
-            predictor: Predictor::Oracle {
+            predictor: Predictor::Oracle(OracleSettings {
                 horizon: span("5m"),
-            },
+            }),
             float_type: FloatType::F32,
             scoring: Scoring {
                 horizon: span("5m"),
@@ -244,10 +217,10 @@ mod tests {
 
     fn crow_flies_run() -> Run {
         Run {
-            predictor: Predictor::CrowFlies {
+            predictor: Predictor::CrowFlies(CrowFliesSettings {
                 radius: Radius::new(5_000.0).expect("a radius"),
                 horizon: span("5m"),
-            },
+            }),
             float_type: FloatType::F64,
             ..oracle_run()
         }
@@ -328,18 +301,17 @@ mod tests {
 
     #[test]
     fn an_oracle_row_without_its_horizon_is_refused() {
-        let row = EvaluationRunRowV2 {
-            predictor_horizon_ms: None,
+        let row = EvaluationRunRowV3 {
+            predictor_settings: BTreeMap::new(),
             ..run_row(&oracle_run(), &inputs(), instant(0))
         };
 
         assert!(
             matches!(
                 Run::try_from(&row),
-                Err(RecordError::Setting {
-                    column: "predictor_horizon_ms",
-                    ..
-                })
+                Err(RecordError::PredictorSettings(SettingsError::Missing(
+                    "horizon"
+                )))
             ),
             "{:?}",
             Run::try_from(&row)
