@@ -668,5 +668,6 @@ code.
 - [x] Describe signing in, and the signed-out state of `/record/`, in `docs/web.md`.
 - [x] Describe who can record, how a passkey gains and loses access, and the risks the design
       accepts, in `docs/access.md`, and index it in `CLAUDE.md`.
+- [x] add a small sentence to home page saying `/record` only works for registered users.
 - [ ] Before `/complete-slice`, record in `crates/server/README.md` every fact about the server
       that only this slice doc holds, with its sources.
