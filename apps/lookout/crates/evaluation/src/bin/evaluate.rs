@@ -6,8 +6,8 @@ use code_version::CodeVersion;
 use domain::{Percentage, Radius, Span};
 use evaluation::gold;
 use evaluation::steps::{Predictor, Run};
-use evaluation::{Bootstrap, Pick, Score, Scoring, Seed};
-use medallion::{Country, MedallionArgs, RunId};
+use evaluation::{Bootstrap, Pick, Score, Scoring, Seed, Sessions, resolve};
+use medallion::{Country, MedallionArgs, Root, RunId};
 use medallion_model::{EvaluationSummaryRowV1, FloatType, PredictorName};
 
 const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
@@ -50,9 +50,9 @@ struct Settings {
     /// The least share of a session's samples that come from realtime data, in percent.
     #[arg(long)]
     realtime_at_least: Percentage,
-    /// How many sessions to pick.
+    /// How many sessions to pick, or `all` for every session the filter keeps.
     #[arg(long)]
-    sessions: NonZeroUsize,
+    sessions: Sessions,
     /// The seed the sessions are picked under.
     #[arg(long)]
     seed: u64,
@@ -95,7 +95,12 @@ struct Settings {
 }
 
 impl Settings {
-    fn run(&self) -> Result<Run, &'static str> {
+    async fn resolved(&self, root: &Root) -> Result<Run, Box<dyn Error>> {
+        let sessions = resolve(root, self.country, self.realtime_at_least, self.sessions).await?;
+        Ok(self.run(sessions)?)
+    }
+
+    fn run(&self, sessions: NonZeroUsize) -> Result<Run, &'static str> {
         let horizon = self.predictor_horizon;
         let predictor = match (self.predictor, self.radius_metres) {
             (PredictorName::Oracle, _) => Predictor::Oracle { horizon },
@@ -106,7 +111,7 @@ impl Settings {
             pick: Pick {
                 country: self.country,
                 realtime_at_least: self.realtime_at_least,
-                sessions: self.sessions,
+                sessions,
                 seed: Seed(self.seed),
             },
             predictor,
@@ -142,12 +147,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     match cli.command {
         Command::Run(settings) => {
-            let (run_id, ran) = gold::run(&root, &settings.run()?, &code).await?;
+            let (run_id, ran) = gold::run(&root, &settings.resolved(&root).await?, &code).await?;
             println!("run {run_id}");
             print_summary(&ran.summary);
         }
         Command::Pick(settings) => {
-            let run_id = gold::pick(&root, &settings.run()?, &code).await?;
+            let run_id = gold::pick(&root, &settings.resolved(&root).await?, &code).await?;
             println!("run {run_id}");
         }
         Command::Replay(begun) => gold::replay(&root, &begun.run_id()?, &code).await?,

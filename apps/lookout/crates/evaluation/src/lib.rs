@@ -15,7 +15,7 @@ pub mod summarise;
 
 pub use offline::{OfflineDetector, OfflineError, RecordedPass};
 pub use oracle::{Oracle, OracleError};
-pub use pick::{Pick, PickError, Seed, pick};
+pub use pick::{NotSessions, Pick, PickError, Seed, Sessions, pick, resolve};
 pub use replay::{ReplayError, replay, replay_session};
 pub use rows::{RowsError, outcome_rows, replayed_from, scored_from, summary_row, transition_rows};
 pub use score::{

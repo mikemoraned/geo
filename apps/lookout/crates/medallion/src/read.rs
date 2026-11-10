@@ -33,6 +33,10 @@ impl<T: Row> Read<T> {
         Ok(Self::new(self.frame.limit(0, Some(rows))?))
     }
 
+    pub async fn count(self) -> Result<usize, QueryError> {
+        Ok(self.frame.count().await?)
+    }
+
     pub async fn rows(self) -> Result<Vec<T>, QueryError> {
         rows_of(self.projected()?).await
     }
@@ -249,6 +253,22 @@ mod tests {
         kept.sort_by(|one, other| one.reading_id.cmp(&other.reading_id));
 
         assert_eq!(ids(&kept), ["reading-4", "reading-5", "reading-6"]);
+    }
+
+    #[tokio::test]
+    async fn a_count_is_of_the_rows_a_filter_keeps() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = stored(tmp.path(), &readings(6)).await;
+
+        let counted = read(root)
+            .await
+            .filter(col("level").gt_eq(lit(4.0)))
+            .expect("a filter")
+            .count()
+            .await
+            .expect("a count");
+
+        assert_eq!(counted, 3);
     }
 
     #[tokio::test]

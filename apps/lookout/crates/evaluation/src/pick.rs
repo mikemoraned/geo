@@ -1,8 +1,9 @@
 use std::num::NonZeroUsize;
+use std::str::FromStr;
 
 use datafusion::prelude::{Expr, col, concat, lit, sha256};
 use domain::Percentage;
-use medallion::{Country, Query, QueryError, Root};
+use medallion::{Country, Query, QueryError, Read, Root};
 use medallion_model::TrainSessionRowV3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -16,10 +17,43 @@ pub struct Pick {
     pub seed: Seed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sessions {
+    Count(NonZeroUsize),
+    All,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("`{text}` is neither `all` nor a count of sessions above zero")]
+pub struct NotSessions {
+    text: String,
+}
+
+impl Sessions {
+    pub fn new(text: &str) -> Result<Self, NotSessions> {
+        if text == "all" {
+            return Ok(Self::All);
+        }
+        text.parse().map(Self::Count).map_err(|_| NotSessions {
+            text: text.to_string(),
+        })
+    }
+}
+
+impl FromStr for Sessions {
+    type Err = NotSessions;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::new(text)
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum PickError {
     #[error("reading the train sessions: {0}")]
     Query(#[from] QueryError),
+    #[error("no session passes the filter")]
+    NoneEligible,
     #[error("{wanted} sessions were wanted, and only {eligible} pass the filter")]
     TooFew {
         wanted: NonZeroUsize,
@@ -27,12 +61,39 @@ pub enum PickError {
     },
 }
 
+pub async fn resolve(
+    root: &Root,
+    country: Country,
+    realtime_at_least: Percentage,
+    sessions: Sessions,
+) -> Result<NonZeroUsize, PickError> {
+    match sessions {
+        Sessions::Count(count) => Ok(count),
+        Sessions::All => NonZeroUsize::new(
+            eligible(root, country, realtime_at_least)
+                .await?
+                .count()
+                .await?,
+        )
+        .ok_or(PickError::NoneEligible),
+    }
+}
+
+async fn eligible(
+    root: &Root,
+    country: Country,
+    realtime_at_least: Percentage,
+) -> Result<Read<TrainSessionRowV3>, PickError> {
+    Ok(Query::new(root.clone())
+        .read_of_country::<TrainSessionRowV3>(country)
+        .await?
+        .filter(col("realtime_percentage").gt_eq(lit(f64::from(realtime_at_least))))?)
+}
+
 pub async fn pick(root: &Root, asked: &Pick) -> Result<Vec<TrainSessionRowV3>, PickError> {
     let wanted = asked.sessions.get();
-    let picked = Query::new(root.clone())
-        .read_of_country::<TrainSessionRowV3>(asked.country)
+    let picked = eligible(root, asked.country, asked.realtime_at_least)
         .await?
-        .filter(col("realtime_percentage").gt_eq(lit(f64::from(asked.realtime_at_least))))?
         .sort(vec![
             pick_order(asked.seed).sort(true, false),
             col("session_id").sort(true, false),
@@ -170,6 +231,79 @@ mod tests {
             ),
             "{refused:?}"
         );
+    }
+
+    #[test]
+    fn sessions_read_as_all_or_as_a_count() {
+        assert_eq!(Sessions::new("all"), Ok(Sessions::All));
+        assert_eq!(
+            Sessions::new("25"),
+            Ok(Sessions::Count(NonZeroUsize::new(25).expect("not zero")))
+        );
+    }
+
+    #[test]
+    fn sessions_that_are_neither_all_nor_a_count_above_zero_are_refused() {
+        for text in ["0", "-3", "some", "ALL", ""] {
+            assert!(Sessions::new(text).is_err(), "{text}");
+        }
+    }
+
+    #[tokio::test]
+    async fn all_resolves_to_every_session_the_filter_keeps() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let candidates = (0..10)
+            .map(|n| session(n, if n < 3 { 100.0 } else { 0.0 }, 0))
+            .collect();
+        let root = stored(tmp.path(), candidates).await;
+
+        let resolved = resolve(
+            &root,
+            Country::Germany,
+            Percentage::new(90.0).expect("a percentage"),
+            Sessions::All,
+        )
+        .await
+        .expect("eligible sessions");
+
+        assert_eq!(resolved.get(), 3);
+    }
+
+    #[tokio::test]
+    async fn all_is_refused_when_no_session_passes_the_filter() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = stored(tmp.path(), vec![session(0, 0.0, 0)]).await;
+
+        let refused = resolve(
+            &root,
+            Country::Germany,
+            Percentage::new(90.0).expect("a percentage"),
+            Sessions::All,
+        )
+        .await;
+
+        assert!(
+            matches!(refused, Err(PickError::NoneEligible)),
+            "{refused:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_count_resolves_to_itself() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = stored(tmp.path(), sessions(10)).await;
+        let count = NonZeroUsize::new(4).expect("not zero");
+
+        let resolved = resolve(
+            &root,
+            Country::Germany,
+            Percentage::new(90.0).expect("a percentage"),
+            Sessions::Count(count),
+        )
+        .await
+        .expect("a count");
+
+        assert_eq!(resolved, count);
     }
 
     #[tokio::test]
