@@ -24,7 +24,7 @@ use crate::summarise::{Bootstrap, SummariseError};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Predictor {
     Oracle { horizon: Span },
-    CrowFlies { radius: Radius },
+    CrowFlies { radius: Radius, horizon: Span },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -154,13 +154,13 @@ async fn replayed<F: Precision + Send + Sync>(
             )
             .await?
         }
-        Predictor::CrowFlies { radius } => {
+        Predictor::CrowFlies { radius, horizon } => {
             crate::replay::replay(
                 root,
                 country,
                 sessions,
                 &crossings_and_passes.passes,
-                |_| CrowFlies::new(compact.clone(), radius),
+                |_| CrowFlies::new(compact.clone(), radius, horizon),
             )
             .await?
         }
@@ -266,6 +266,7 @@ mod tests {
             &root,
             &run_of(Predictor::CrowFlies {
                 radius: Radius::new(5_000.0).expect("a radius"),
+                horizon: Span::new("5m").expect("a span"),
             }),
         )
         .await

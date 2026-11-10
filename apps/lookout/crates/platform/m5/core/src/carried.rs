@@ -19,7 +19,7 @@ mod tests {
     use geo::Contains;
     use geo_types::Point;
     use medallion::Country;
-    use predictor::{CrowFlies, DEFAULT_RADIUS, Event, Predict, nearest_first};
+    use predictor::{CrowFlies, DEFAULT_HORIZON, DEFAULT_RADIUS, Event, Predict, nearest_first};
 
     use super::*;
 
@@ -59,7 +59,7 @@ mod tests {
     const TOLERANCE_M: f32 = 1.0;
 
     fn at_dresden() -> CrowFlies<f32, PointSet<'static>> {
-        let mut predictor = CrowFlies::new(crossings(), DEFAULT_RADIUS);
+        let mut predictor = CrowFlies::new(crossings(), DEFAULT_RADIUS, DEFAULT_HORIZON);
         let t = DateTime::<Utc>::from_timestamp_millis(1_785_098_609_000).expect("an instant");
         predictor
             .observe(Event::Sampled(

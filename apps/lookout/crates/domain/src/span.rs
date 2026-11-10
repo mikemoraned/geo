@@ -1,4 +1,5 @@
 use std::fmt::{self, Display};
+use std::num::NonZeroU32;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -38,6 +39,10 @@ impl Span {
             });
         }
         Ok(Self(duration))
+    }
+
+    pub const fn minutes(minutes: NonZeroU32) -> Self {
+        Self(Duration::from_secs(minutes.get() as u64 * 60))
     }
 
     pub fn duration(self) -> Duration {
@@ -111,6 +116,14 @@ mod tests {
                 "{text}"
             );
         }
+    }
+
+    #[test]
+    fn a_span_of_minutes_is_the_span_written_in_minutes() {
+        assert_eq!(
+            Span::minutes(NonZeroU32::new(5).expect("not zero")),
+            span("5m")
+        );
     }
 
     #[test]

@@ -70,9 +70,11 @@ pub async fn record(
 pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> EvaluationRunRowV2 {
     let (predictor, predictor_horizon_ms, predictor_radius_m) = match run.predictor {
         Predictor::Oracle { horizon } => (PredictorName::Oracle, Some(milliseconds(horizon)), None),
-        Predictor::CrowFlies { radius } => {
-            (PredictorName::CrowFlies, None, Some(radius.as_metres()))
-        }
+        Predictor::CrowFlies { radius, horizon } => (
+            PredictorName::CrowFlies,
+            Some(milliseconds(horizon)),
+            Some(radius.as_metres()),
+        ),
     };
     EvaluationRunRowV2 {
         started_at,
@@ -137,6 +139,12 @@ impl TryFrom<&EvaluationRunRowV2> for Run {
                             .ok_or_else(|| setting("predictor_radius_m", "CrowFlies needs one"))?,
                     )
                     .map_err(|err| setting("predictor_radius_m", err))?,
+                    horizon: span_of(
+                        "predictor_horizon_ms",
+                        row.predictor_horizon_ms.ok_or_else(|| {
+                            setting("predictor_horizon_ms", "CrowFlies needs one")
+                        })?,
+                    )?,
                 },
             },
             float_type: row.float_type,
@@ -238,6 +246,7 @@ mod tests {
         Run {
             predictor: Predictor::CrowFlies {
                 radius: Radius::new(5_000.0).expect("a radius"),
+                horizon: span("5m"),
             },
             float_type: FloatType::F64,
             ..oracle_run()
