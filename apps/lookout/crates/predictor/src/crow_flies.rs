@@ -9,16 +9,42 @@ use crate::clock::{Clock, OutOfOrder};
 use crate::crossings::Crossings;
 use crate::predict::{Confidence, Event, Predict, Prediction, Predictions};
 
-pub const DEFAULT_RADIUS: Radius =
-    Radius::metres(NonZeroU32::new(5_000).expect("five thousand is not zero"));
+pub const DEFAULT_WATCHING: Watching = Watching {
+    radius: Radius::metres(NonZeroU32::new(5_000).expect("five thousand is not zero")),
+};
 
-pub const DEFAULT_HORIZON: Span = Span::minutes(NonZeroU32::new(5).expect("five is not zero"));
+pub const DEFAULT_ALERTING: Alerting = Alerting {
+    radius: Radius::metres(NonZeroU32::new(1_000).expect("one thousand is not zero")),
+    horizon: Span::minutes(NonZeroU32::new(5).expect("five is not zero")),
+};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Watching {
+    pub radius: Radius,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Alerting {
+    pub radius: Radius,
+    pub horizon: Span,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
+#[error(
+    "an alerting radius of {} m reaches beyond the watching radius of {} m",
+    .alerting.as_metres(),
+    .watching.as_metres()
+)]
+pub struct AlertingBeyondWatching {
+    pub watching: Radius,
+    pub alerting: Radius,
+}
 
 #[derive(Debug, Clone)]
 pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
     crossings: C,
-    radius_metres: P,
-    horizon: TimeDelta,
+    watching: Watching,
+    alerting: Alerting,
     clock: Clock,
     latest: Option<Sample<P>>,
     speed_mps: Option<P>,
@@ -26,19 +52,26 @@ pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
 }
 
 impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
-    pub fn new(crossings: C, radius: Radius, horizon: Span) -> Self {
-        // Infallible: `from_f64` only declines a value the target cannot represent, and a
-        // radius in metres is an ordinary magnitude in any float.
-        let radius_metres = P::from_f64(radius.as_metres()).expect("a radius fits in any float");
-        Self {
+    pub fn new(
+        crossings: C,
+        watching: Watching,
+        alerting: Alerting,
+    ) -> Result<Self, AlertingBeyondWatching> {
+        if alerting.radius.as_metres() > watching.radius.as_metres() {
+            return Err(AlertingBeyondWatching {
+                watching: watching.radius,
+                alerting: alerting.radius,
+            });
+        }
+        Ok(Self {
             crossings,
-            radius_metres,
-            horizon: horizon.time_delta(),
+            watching,
+            alerting,
             clock: Clock::default(),
             latest: None,
             speed_mps: None,
             predictions: Predictions::new(),
-        }
+        })
     }
 
     pub fn now(&self) -> Option<DateTime<Utc>> {
@@ -53,8 +86,8 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
         self.speed_mps
     }
 
-    pub fn radius_metres(&self) -> P {
-        self.radius_metres
+    pub fn watching_radius_metres(&self) -> P {
+        metres(self.watching.radius)
     }
 
     pub fn crossings(&self) -> &C {
@@ -64,22 +97,29 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
     fn predict(&mut self, sample: Sample<P>) {
         let speed = speed_mps(&sample, self.latest.as_ref());
         let from = sample.gps.position;
-        let radius_metres = self.radius_metres;
-        let horizon = self.horizon;
+        let watching_metres: P = metres(self.watching.radius);
+        let alerting_metres: P = metres(self.alerting.radius);
+        let horizon = self.alerting.horizon.time_delta();
 
         self.predictions = self
             .crossings
             .all()
             .filter_map(|crossing| {
                 let metres = Haversine.distance(from, crossing.position);
-                (metres <= radius_metres).then(|| {
+                (metres <= watching_metres).then(|| {
                     let at = speed.and_then(|speed| arrival(sample.t, metres, speed));
+                    let alerted =
+                        metres <= alerting_metres && arrives_within(sample.t, at, horizon);
                     (
                         crossing.id,
                         Prediction {
                             metres,
                             at,
-                            confidence: confidence(sample.t, at, horizon),
+                            confidence: if alerted {
+                                Confidence::High
+                            } else {
+                                Confidence::Low
+                            },
                         },
                     )
                 })
@@ -90,11 +130,14 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
     }
 }
 
-fn confidence(now: DateTime<Utc>, at: Option<DateTime<Utc>>, horizon: TimeDelta) -> Confidence {
-    match at {
-        Some(at) if at - now <= horizon => Confidence::High,
-        _ => Confidence::Low,
-    }
+fn metres<P: Precision>(radius: Radius) -> P {
+    // Infallible: `from_f64` only declines a value the target cannot represent, and a radius in
+    // metres is an ordinary magnitude in any float.
+    P::from_f64(radius.as_metres()).expect("a radius fits in any float")
+}
+
+fn arrives_within(now: DateTime<Utc>, at: Option<DateTime<Utc>>, horizon: TimeDelta) -> bool {
+    at.is_some_and(|at| at - now <= horizon)
 }
 
 fn speed_mps<P: Precision>(sample: &Sample<P>, previous: Option<&Sample<P>>) -> Option<P> {
@@ -156,8 +199,26 @@ mod tests {
         ]
     }
 
+    fn radius(metres: f64) -> Radius {
+        Radius::new(metres).expect("a radius")
+    }
+
+    fn watching(radius_metres: f64) -> Watching {
+        Watching {
+            radius: radius(radius_metres),
+        }
+    }
+
+    fn alerting(radius_metres: f64, horizon: &str) -> Alerting {
+        Alerting {
+            radius: radius(radius_metres),
+            horizon: Span::new(horizon).expect("a span"),
+        }
+    }
+
     fn predictor() -> CrowFlies<f64> {
-        CrowFlies::new(crossings(), DEFAULT_RADIUS, DEFAULT_HORIZON)
+        CrowFlies::new(crossings(), watching(5_000.0), alerting(5_000.0, "5m"))
+            .expect("alerting within what it watches")
     }
 
     fn fix_at(latitude: f64, after: i64) -> Sample<f64> {
@@ -210,11 +271,8 @@ mod tests {
 
     #[test]
     fn a_crossing_outside_the_radius_is_not_predicted() {
-        let mut predictor = CrowFlies::new(
-            crossings(),
-            Radius::new(2_000.0).expect("a radius"),
-            DEFAULT_HORIZON,
-        );
+        let mut predictor = CrowFlies::new(crossings(), watching(2_000.0), alerting(2_000.0, "5m"))
+            .expect("alerting within what it watches");
 
         predictor
             .observe(Event::Sampled(fix()))
@@ -272,11 +330,8 @@ mod tests {
 
     #[test]
     fn a_shorter_horizon_holds_fewer_crossings_with_high_confidence() {
-        let mut predictor = CrowFlies::new(
-            crossings(),
-            DEFAULT_RADIUS,
-            Span::new("2m").expect("a span"),
-        );
+        let mut predictor = CrowFlies::new(crossings(), watching(5_000.0), alerting(5_000.0, "2m"))
+            .expect("alerting within what it watches");
 
         predictor
             .observe(Event::Sampled(fix().with_speed_mps(Some(10.0))))
@@ -290,6 +345,48 @@ mod tests {
                 (3, Confidence::Low)
             ],
         );
+    }
+
+    #[test]
+    fn a_crossing_beyond_the_alerting_radius_is_predicted_with_low_confidence() {
+        let mut predictor = CrowFlies::new(crossings(), watching(5_000.0), alerting(2_000.0, "5m"))
+            .expect("alerting within what it watches");
+
+        predictor
+            .observe(Event::Sampled(fix().with_speed_mps(Some(10.0))))
+            .expect("an event in order");
+
+        assert_eq!(
+            confidences(&predictor),
+            vec![
+                (1, Confidence::High),
+                (2, Confidence::Low),
+                (3, Confidence::Low)
+            ],
+            "every crossing arrives within 5m at 10m/s, but only the first lies within 2km",
+        );
+    }
+
+    #[test]
+    fn an_alerting_radius_beyond_the_watching_radius_is_refused() {
+        let refused =
+            CrowFlies::<f64>::new(crossings(), watching(1_000.0), alerting(2_000.0, "5m"));
+
+        assert_eq!(
+            refused.err(),
+            Some(AlertingBeyondWatching {
+                watching: radius(1_000.0),
+                alerting: radius(2_000.0),
+            })
+        );
+    }
+
+    #[test]
+    fn an_alerting_radius_equal_to_the_watching_radius_is_accepted() {
+        let accepted =
+            CrowFlies::<f64>::new(crossings(), watching(1_000.0), alerting(1_000.0, "5m"));
+
+        assert!(accepted.is_ok());
     }
 
     #[test]
@@ -519,7 +616,8 @@ mod tests {
     #[test]
     fn the_whole_prediction_runs_at_the_precision_the_device_uses() {
         let mut predictor: CrowFlies<f32> =
-            CrowFlies::new(crossings(), DEFAULT_RADIUS, DEFAULT_HORIZON);
+            CrowFlies::new(crossings(), watching(5_000.0), alerting(5_000.0, "5m"))
+                .expect("alerting within what it watches");
         let fix = Sample::<f32>::at(instant(), 50.0, 0.0)
             .expect("on the globe")
             .with_speed_mps(Some(10.0));
@@ -541,7 +639,8 @@ mod tests {
 
     #[test]
     fn an_empty_set_of_crossings_predicts_nothing() {
-        let mut predictor = CrowFlies::new(Vec::new(), DEFAULT_RADIUS, DEFAULT_HORIZON);
+        let mut predictor = CrowFlies::new(Vec::new(), watching(5_000.0), alerting(5_000.0, "5m"))
+            .expect("alerting within what it watches");
 
         predictor
             .observe(Event::Sampled(fix()))

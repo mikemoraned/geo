@@ -796,7 +796,11 @@ tracker meets that can be wrong.
       plotted against false alarms per hour. Chosen from the table of runs in
       `evaluations/2026-11-10-choose-predictor.md`, without a plot: 2 km beats every larger radius
       on all three measures, leaving only 1 km and 2 km to weigh.
-- [ ] Set the radius the apps' CrowFlies uses to 1 km, as the runs over every session chose.
+- [x] Set the radius the apps' CrowFlies uses to 1 km, as the runs over every session chose.
+      CrowFlies now holds two settings: `Watching`, the radius within which it predicts a crossing
+      at all, and `Alerting`, the radius and horizon within which it alerts one. The apps watch
+      5 km and alert within 1 km, so the M5 panel and the web radar still show crossings out to
+      5 km. A run watches and alerts within one radius, since scoring counts only alerts.
 - [ ] Nice to have: let `--sessions` take `all`, which picks every session the filter keeps.
       `pick` resolves it to the count of those sessions before the run begins, so the run's row
       records that count and a run's id never hashes `all`.

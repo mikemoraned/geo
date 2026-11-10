@@ -114,12 +114,13 @@ mod tests {
     use std::collections::BTreeMap;
 
     use chrono::{DateTime, Utc};
+    use domain::Span;
     use domain::StateKind;
     use domain::{CrossingCompact, CrossingCompactId, CrossingId, Radius, SessionId};
     use geo_types::Point;
     use medallion::{GeographyRow, Row, write_geography_rows};
     use medallion_model::{TrainSessionCrossingRowV1, TrainSessionSampleRowV3};
-    use predictor::{Confidence, CrowFlies, DEFAULT_HORIZON, Prediction, Predictions};
+    use predictor::{Alerting, Confidence, CrowFlies, Prediction, Predictions, Watching};
 
     use super::*;
     use crate::fixtures::{crossing, instant};
@@ -233,9 +234,15 @@ mod tests {
         ];
         let predictor = CrowFlies::new(
             crossings,
-            Radius::new(1_000.0).expect("a radius"),
-            DEFAULT_HORIZON,
-        );
+            Watching {
+                radius: Radius::new(1_000.0).expect("a radius"),
+            },
+            Alerting {
+                radius: Radius::new(1_000.0).expect("a radius"),
+                horizon: Span::new("5m").expect("a span"),
+            },
+        )
+        .expect("alerting within what it watches");
         let samples =
             (0..50).map(|step| sample::<f32>(step * 10, DRESDEN_HBF.y() + 0.002 * step as f64));
 
@@ -263,9 +270,15 @@ mod tests {
         ];
         let predictor = CrowFlies::new(
             crossings,
-            Radius::new(1_000.0).expect("a radius"),
-            DEFAULT_HORIZON,
-        );
+            Watching {
+                radius: Radius::new(1_000.0).expect("a radius"),
+            },
+            Alerting {
+                radius: Radius::new(1_000.0).expect("a radius"),
+                horizon: Span::new("5m").expect("a span"),
+            },
+        )
+        .expect("alerting within what it watches");
         let samples = [sample(10, DRESDEN_HBF.y()), sample(0, DRESDEN_HBF.y())];
 
         let refused = replay_session(samples, predictor, detector(&[]));

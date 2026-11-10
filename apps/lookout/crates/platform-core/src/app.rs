@@ -10,7 +10,7 @@ use crux_core::{
 use domain::{Bbox, CrossingCompact, Sample};
 use geo_types::Point;
 use predictor::{
-    Crossings, CrowFlies, DEFAULT_HORIZON, DEFAULT_RADIUS, Event as Observed, Parser, Predict,
+    Crossings, CrowFlies, DEFAULT_ALERTING, DEFAULT_WATCHING, Event as Observed, Parser, Predict,
     Predictions, Sentence,
 };
 use serde::{Deserialize, Serialize};
@@ -49,15 +49,18 @@ enum Predicting<S: Shell> {
     Ready(CrowFlies<Float, S::Crossings>),
 }
 
+fn default_crow_flies<C: Crossings<Float>>(crossings: C) -> CrowFlies<Float, C> {
+    CrowFlies::new(crossings, DEFAULT_WATCHING, DEFAULT_ALERTING)
+        .expect("the default alerting radius lies within the default watching radius")
+}
+
 impl<S: Shell> Default for Model<S> {
     fn default() -> Self {
         Self {
             parser: Parser::new(),
             battery: Battery::default(),
             predictor: match S::carried() {
-                Some(crossings) => {
-                    Predicting::Ready(CrowFlies::new(crossings, DEFAULT_RADIUS, DEFAULT_HORIZON))
-                }
+                Some(crossings) => Predicting::Ready(default_crow_flies(crossings)),
                 None => Predicting::Waiting,
             },
             nearby: Nearby::default(),
@@ -84,7 +87,7 @@ impl<S: Shell> Model<S> {
     }
 
     pub fn radius_metres(&self) -> Option<Float> {
-        self.ready().map(CrowFlies::radius_metres)
+        self.ready().map(CrowFlies::watching_radius_metres)
     }
 
     pub fn crossings(&self) -> Option<&S::Crossings> {
@@ -223,11 +226,7 @@ impl<S: Shell> App for Lookout<S> {
             }
             Event::Crossings(points) => match (&model.predictor, S::received(points)) {
                 (Predicting::Waiting, Some(crossings)) => {
-                    model.predictor = Predicting::Ready(CrowFlies::new(
-                        crossings,
-                        DEFAULT_RADIUS,
-                        DEFAULT_HORIZON,
-                    ));
+                    model.predictor = Predicting::Ready(default_crow_flies(crossings));
                     Change::Moved
                 }
                 _ => Change::Unchanged,
