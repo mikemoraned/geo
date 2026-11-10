@@ -791,7 +791,7 @@ tracker meets that can be wrong.
 - [x] Write the skill `choose-predictor` in the repo's `.claude/skills/`, which reports the runs
       in gold as a dated doc in `docs/`. Add a hook that starts it after each run of
       `just evaluate`. The reports go in `docs/evaluations/`.
-- [ ] Run CrowFlies over the oracle's sessions and seed with `just evaluate`.
+- [x] Run CrowFlies over the oracle's sessions and seed with `just evaluate`.
 - [ ] Sweep the radius. Choose CrowFlies' settings from recall
       plotted against false alarms per hour.
 - [ ] Draw CrowFlies' false alarms and misses on a map in a new `explore4.py` with the user, and one

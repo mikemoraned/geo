@@ -6,7 +6,8 @@ user-invocable: true
 
 This skill reports every evaluation run in lookout's gold, and opens a discussion with the user
 that ends in a choice of predictor and settings for the apps. The report is a dated doc in
-`docs/evaluations/`, so the review sits in a diff beside the runs it weighed. Run it from `apps/lookout`.
+`docs/evaluations/`, so the review sits in a diff beside the runs it weighed. Run it from
+`apps/lookout`.
 
 ## Steps
 
@@ -26,8 +27,8 @@ that ends in a choice of predictor and settings for the apps. The report is a da
    The oracle reads ground truth, which the apps cannot, so it can never be chosen. Its runs are a
    reference, showing the best score the data and the rules allow, and the report says so.
 
-5. **Write the report** as `docs/evaluations/<today>-choose-predictor.md`. If today's report exists, add the
-   new runs to it rather than starting another. Write it through the two writing skills, as
+5. **Write the report** as `docs/evaluations/<today>-choose-predictor.md`. If today's report
+   exists, add the new runs to it rather than starting another. Write it through the two writing skills, as
    `CLAUDE.md` requires. It holds these sections, in order:
    - **Runs:** one table per group, one row per run. Each row gives the predictor and its
      settings, the float type, and precision, recall, and false alarms per hour, each with its
