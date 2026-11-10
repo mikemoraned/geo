@@ -34,6 +34,25 @@ it. Its run is marked *(apps)* below.
 The oracle reads ground truth, which the apps cannot, so it can never be chosen. It shows the best
 score the data and the rules allow.
 
+### All 34,521 sessions in DE
+
+| Setting | Value |
+| --- | --- |
+| Runs | `27013fff-1ae7-58c3-81ee-0098a4461cbd`, `35d02716-001e-5aab-b004-62fd02642d53`, `8d19431d-16ad-5baf-bdc6-aa5f58a68510`, in the order of the table below |
+| Evaluation version | `replay-v1` |
+| Sessions | all 34,521 in DE with `realtime_percentage` ≥ 90, 30,653.9 hours |
+| Pass detector | offline |
+| Scoring | horizon 5 min, last moment 30 s, ramp 1 min, last-moment score 0.25, floor 0.05, warm-up 1 min |
+| Bootstrap | 1000 resamples, seed 1 |
+
+| Predictor | Float | Precision | Recall | False alarms / h | Lead p10 / median / p90 | Passes | Notifications | False alarms | Repeats | Misses |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| CrowFlies, radius 1 km, horizon 5 min | f32 | 0.327 [0.326, 0.329] | 0.862 [0.858, 0.866] | 20.3 [20.0, 20.5] | 20 / 40 / 80 s | 415,707 | 1,094,457 | 621,220 | 57,530 | 0 |
+| CrowFlies, radius 2 km, horizon 5 min | f32 | 0.269 [0.268, 0.271] | 0.903 [0.901, 0.905] | 28.6 [28.3, 28.9] | 40 / 90 / 210 s | 415,707 | 1,393,957 | 877,225 | 101,025 | 0 |
+| CrowFlies, radius 3 km, horizon 5 min | f32 | 0.212 [0.210, 0.213] | 0.859 [0.857, 0.861] | 36.9 [36.5, 37.3] | 70 / 140 / 320 s | 415,707 | 1,684,952 | 1,131,825 | 137,420 | 0 |
+
+Every session the filter keeps is in these runs, so the pick seed chooses nothing.
+
 ## Comparison
 
 Eight runs of CrowFlies differ only in radius. Against the oracle, every one of them falls short on
@@ -50,6 +69,11 @@ every measure, and no interval overlaps the oracle's.
 Past 10 km the radius barely matters. CrowFlies alerts only a crossing it expects within the
 5-minute horizon, and only a train above 120 km/h covers 10 km in 5 minutes, so the horizon
 decides first.
+
+Over all 34,521 sessions, the three radii keep the order the 1000 sessions gave. 2 km scores the
+highest recall, and 1 km and 3 km still cannot be told apart on it. Each larger radius raises false
+alarms and lowers precision. Every value lies inside the interval its run over 1000 sessions gave,
+and each interval is about six times narrower.
 
 ## Trade-offs
 
@@ -71,7 +95,8 @@ setting of CrowFlies makes an alert a rider can trust. The map of false alarms i
 shows whether they lie off the train's track or behind it, which a heading would rule out.
 
 I recommend CrowFlies at 2 km and 5 minutes. It has the highest recall of any radius, and a lead
-time a rider can act on.
+time a rider can act on. The runs over every session confirm it: 2 km raises recall from 0.862 to
+0.903 over 1 km, at 28.6 false alarms per hour against 20.3.
 
 ## Choice
 
@@ -85,3 +110,9 @@ between.
 After the radius sweep, the apps change to CrowFlies with a radius of 2 km and a horizon of 5
 minutes. It has the highest recall of any radius, at 0.899, and a median lead time of 80 s. It
 costs 27.9 false alarms per hour, against 49.5 at 5 km.
+
+After the runs over every session, the apps change to CrowFlies with a radius of 1 km and a
+horizon of 5 minutes, in place of the 2 km chosen after the sweep. The user favours precision and
+few false alarms over recall. 1 km scores the highest precision of any radius, at 0.327 against
+0.269 at 2 km, and the fewest false alarms, at 20.3 per hour against 28.6. It gives up recall, from
+0.903 to 0.862, and median lead time, from 90 s to 40 s.
