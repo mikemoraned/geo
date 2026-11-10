@@ -1,7 +1,8 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use domain::{CrossingCompact, Radius, Sample};
 use predictor::{
-    CrowFlies as CrowFliesPredictor, DEFAULT_HORIZON, DEFAULT_RADIUS, Event, OutOfOrder, Predict, nearest_first,
+    CrowFlies as CrowFliesPredictor, DEFAULT_ALERTING, DEFAULT_WATCHING, Event, OutOfOrder,
+    Predict, Watching, nearest_first,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -54,7 +55,7 @@ impl CrowFlies {
     /// Raises where a crossing is not on the globe, or where `radius_metres` is not a positive,
     /// finite number.
     #[new]
-    #[pyo3(signature = (crossings, *, radius_metres=DEFAULT_RADIUS.as_metres()))]
+    #[pyo3(signature = (crossings, *, radius_metres=DEFAULT_WATCHING.radius.as_metres()))]
     fn new(crossings: Vec<(u32, f64, f64)>, radius_metres: f64) -> PyResult<Self> {
         let crossings = crossings
             .into_iter()
@@ -67,7 +68,8 @@ impl CrowFlies {
             Radius::new(radius_metres).map_err(|err| PyValueError::new_err(err.to_string()))?;
 
         Ok(Self {
-            inner: CrowFliesPredictor::new(crossings, radius, DEFAULT_HORIZON),
+            inner: CrowFliesPredictor::new(crossings, Watching { radius }, DEFAULT_ALERTING)
+                .map_err(|err| PyValueError::new_err(err.to_string()))?,
         })
     }
 
@@ -161,6 +163,6 @@ fn lookout_predictor(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<CrowFlies>()?;
     module.add_class::<Prediction>()?;
     module.add_function(wrap_pyfunction!(radius_metres, module)?)?;
-    module.add("DEFAULT_RADIUS_METRES", DEFAULT_RADIUS.as_metres())?;
+    module.add("DEFAULT_RADIUS_METRES", DEFAULT_WATCHING.radius.as_metres())?;
     Ok(())
 }

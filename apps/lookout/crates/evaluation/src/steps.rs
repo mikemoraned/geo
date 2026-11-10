@@ -7,7 +7,7 @@ use medallion_model::{
     EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationSummaryRowV1,
     EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
 };
-use predictor::{CrowFlies, Transition};
+use predictor::{Alerting, AlertingBeyondWatching, CrowFlies, Transition, Watching};
 
 use crate::offline::{OfflineError, PassesBySession, passes_by_session};
 use crate::oracle::{Oracle, OracleError};
@@ -58,6 +58,8 @@ pub enum StepError {
     Position(#[from] CoordinateError),
     #[error(transparent)]
     Oracle(#[from] OracleError),
+    #[error(transparent)]
+    CrowFlies(#[from] AlertingBeyondWatching),
     #[error(transparent)]
     Replay(#[from] ReplayError),
     #[error(transparent)]
@@ -155,12 +157,14 @@ async fn replayed<F: Precision + Send + Sync>(
             .await?
         }
         Predictor::CrowFlies { radius, horizon } => {
+            let crow_flies =
+                CrowFlies::new(compact, Watching { radius }, Alerting { radius, horizon })?;
             crate::replay::replay(
                 root,
                 country,
                 sessions,
                 &crossings_and_passes.passes,
-                |_| CrowFlies::new(compact.clone(), radius, horizon),
+                |_| crow_flies.clone(),
             )
             .await?
         }
