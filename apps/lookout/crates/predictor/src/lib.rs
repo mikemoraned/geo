@@ -11,7 +11,7 @@ pub mod tracker;
 
 pub use clock::{Clock, OutOfOrder};
 pub use crossings::Crossings;
-pub use crow_flies::{CrowFlies, DEFAULT_RADIUS};
+pub use crow_flies::{CrowFlies, DEFAULT_HORIZON, DEFAULT_RADIUS};
 pub use detect::{DetectPasses, Passes};
 pub use parser::Parser;
 pub use predict::{Confidence, Event, Predict, Prediction, Predictions, nearest_first};

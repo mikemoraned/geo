@@ -10,7 +10,8 @@ use crux_core::{
 use domain::{Bbox, CrossingCompact, Sample};
 use geo_types::Point;
 use predictor::{
-    Crossings, CrowFlies, DEFAULT_RADIUS, Event as Observed, Parser, Predict, Predictions, Sentence,
+    Crossings, CrowFlies, DEFAULT_HORIZON, DEFAULT_RADIUS, Event as Observed, Parser, Predict,
+    Predictions, Sentence,
 };
 use serde::{Deserialize, Serialize};
 
@@ -54,7 +55,9 @@ impl<S: Shell> Default for Model<S> {
             parser: Parser::new(),
             battery: Battery::default(),
             predictor: match S::carried() {
-                Some(crossings) => Predicting::Ready(CrowFlies::new(crossings, DEFAULT_RADIUS)),
+                Some(crossings) => {
+                    Predicting::Ready(CrowFlies::new(crossings, DEFAULT_RADIUS, DEFAULT_HORIZON))
+                }
                 None => Predicting::Waiting,
             },
             nearby: Nearby::default(),
@@ -220,7 +223,11 @@ impl<S: Shell> App for Lookout<S> {
             }
             Event::Crossings(points) => match (&model.predictor, S::received(points)) {
                 (Predicting::Waiting, Some(crossings)) => {
-                    model.predictor = Predicting::Ready(CrowFlies::new(crossings, DEFAULT_RADIUS));
+                    model.predictor = Predicting::Ready(CrowFlies::new(
+                        crossings,
+                        DEFAULT_RADIUS,
+                        DEFAULT_HORIZON,
+                    ));
                     Change::Moved
                 }
                 _ => Change::Unchanged,

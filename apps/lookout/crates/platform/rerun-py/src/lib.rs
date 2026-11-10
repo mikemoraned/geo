@@ -1,7 +1,7 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use domain::{CrossingCompact, Radius, Sample};
 use predictor::{
-    CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS, Event, OutOfOrder, Predict, nearest_first,
+    CrowFlies as CrowFliesPredictor, DEFAULT_HORIZON, DEFAULT_RADIUS, Event, OutOfOrder, Predict, nearest_first,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -67,7 +67,7 @@ impl CrowFlies {
             Radius::new(radius_metres).map_err(|err| PyValueError::new_err(err.to_string()))?;
 
         Ok(Self {
-            inner: CrowFliesPredictor::new(crossings, radius),
+            inner: CrowFliesPredictor::new(crossings, radius, DEFAULT_HORIZON),
         })
     }
 

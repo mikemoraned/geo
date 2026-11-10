@@ -784,7 +784,7 @@ run of it tests every new part, from the tracker to gold, before a real predicto
 CrowFlies is the baseline that later predictors are measured against, and the first predictor the
 tracker meets that can be wrong.
 
-- [ ] Give each of `CrowFlies`' predictions a confidence: low within its radius, and high while the
+- [x] Give each of `CrowFlies`' predictions a confidence: low within its radius, and high while the
       crossing arrives within N.
 - [ ] Run CrowFlies over the oracle's sessions and seed with `just evaluate`.
 - [ ] Sweep the radius. Choose CrowFlies' settings from recall

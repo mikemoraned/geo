@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
-use domain::{CrossingCompact, Precision, Radius, Sample};
+use domain::{CrossingCompact, Precision, Radius, Sample, Span};
 
 use crate::clock::{Clock, OutOfOrder};
 use crate::crossings::Crossings;
@@ -12,10 +12,13 @@ use crate::predict::{Confidence, Event, Predict, Prediction, Predictions};
 pub const DEFAULT_RADIUS: Radius =
     Radius::metres(NonZeroU32::new(5_000).expect("five thousand is not zero"));
 
+pub const DEFAULT_HORIZON: Span = Span::minutes(NonZeroU32::new(5).expect("five is not zero"));
+
 #[derive(Debug, Clone)]
 pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
     crossings: C,
     radius_metres: P,
+    horizon: TimeDelta,
     clock: Clock,
     latest: Option<Sample<P>>,
     speed_mps: Option<P>,
@@ -23,13 +26,14 @@ pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
 }
 
 impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
-    pub fn new(crossings: C, radius: Radius) -> Self {
+    pub fn new(crossings: C, radius: Radius, horizon: Span) -> Self {
         // Infallible: `from_f64` only declines a value the target cannot represent, and a
         // radius in metres is an ordinary magnitude in any float.
         let radius_metres = P::from_f64(radius.as_metres()).expect("a radius fits in any float");
         Self {
             crossings,
             radius_metres,
+            horizon: horizon.time_delta(),
             clock: Clock::default(),
             latest: None,
             speed_mps: None,
@@ -61,6 +65,7 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
         let speed = speed_mps(&sample, self.latest.as_ref());
         let from = sample.gps.position;
         let radius_metres = self.radius_metres;
+        let horizon = self.horizon;
 
         self.predictions = self
             .crossings
@@ -68,12 +73,13 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
             .filter_map(|crossing| {
                 let metres = Haversine.distance(from, crossing.position);
                 (metres <= radius_metres).then(|| {
+                    let at = speed.and_then(|speed| arrival(sample.t, metres, speed));
                     (
                         crossing.id,
                         Prediction {
                             metres,
-                            at: speed.and_then(|speed| arrival(sample.t, metres, speed)),
-                            confidence: Confidence::Low,
+                            at,
+                            confidence: confidence(sample.t, at, horizon),
                         },
                     )
                 })
@@ -81,6 +87,13 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
             .collect();
         self.speed_mps = speed;
         self.latest = Some(sample);
+    }
+}
+
+fn confidence(now: DateTime<Utc>, at: Option<DateTime<Utc>>, horizon: TimeDelta) -> Confidence {
+    match at {
+        Some(at) if at - now <= horizon => Confidence::High,
+        _ => Confidence::Low,
     }
 }
 
@@ -144,7 +157,7 @@ mod tests {
     }
 
     fn predictor() -> CrowFlies<f64> {
-        CrowFlies::new(crossings(), DEFAULT_RADIUS)
+        CrowFlies::new(crossings(), DEFAULT_RADIUS, DEFAULT_HORIZON)
     }
 
     fn fix_at(latitude: f64, after: i64) -> Sample<f64> {
@@ -170,6 +183,15 @@ mod tests {
         *nearest_first(predictor.predictions())[rank].1
     }
 
+    fn confidences<P: Precision + TotalOrder>(predictor: &CrowFlies<P>) -> Vec<(u32, Confidence)> {
+        nearest_first(predictor.predictions())
+            .into_iter()
+            .map(|(crossing_compact_id, prediction)| {
+                (crossing_compact_id.get(), prediction.confidence)
+            })
+            .collect()
+    }
+
     #[test]
     fn nothing_is_predicted_before_a_fix() {
         assert!(predictor().predictions().is_empty());
@@ -188,7 +210,11 @@ mod tests {
 
     #[test]
     fn a_crossing_outside_the_radius_is_not_predicted() {
-        let mut predictor = CrowFlies::new(crossings(), Radius::new(2_000.0).expect("a radius"));
+        let mut predictor = CrowFlies::new(
+            crossings(),
+            Radius::new(2_000.0).expect("a radius"),
+            DEFAULT_HORIZON,
+        );
 
         predictor
             .observe(Event::Sampled(fix()))
@@ -222,6 +248,65 @@ mod tests {
         assert!(
             (seconds - HUNDREDTH_DEGREE_M / 10.0).abs() < 1.0,
             "{seconds}s is not the time to cover {HUNDREDTH_DEGREE_M}m at 10m/s",
+        );
+    }
+
+    #[test]
+    fn a_crossing_arriving_within_the_horizon_is_predicted_with_high_confidence() {
+        let mut predictor = predictor();
+
+        predictor
+            .observe(Event::Sampled(fix().with_speed_mps(Some(10.0))))
+            .expect("an event in order");
+
+        assert_eq!(
+            confidences(&predictor),
+            vec![
+                (1, Confidence::High),
+                (2, Confidence::High),
+                (3, Confidence::Low)
+            ],
+            "at 10m/s the crossings arrive in about 111s, 222s, and 334s, against a 5m horizon",
+        );
+    }
+
+    #[test]
+    fn a_shorter_horizon_holds_fewer_crossings_with_high_confidence() {
+        let mut predictor = CrowFlies::new(
+            crossings(),
+            DEFAULT_RADIUS,
+            Span::new("2m").expect("a span"),
+        );
+
+        predictor
+            .observe(Event::Sampled(fix().with_speed_mps(Some(10.0))))
+            .expect("an event in order");
+
+        assert_eq!(
+            confidences(&predictor),
+            vec![
+                (1, Confidence::High),
+                (2, Confidence::Low),
+                (3, Confidence::Low)
+            ],
+        );
+    }
+
+    #[test]
+    fn a_crossing_with_no_time_of_arrival_is_predicted_with_low_confidence() {
+        let mut predictor = predictor();
+
+        predictor
+            .observe(Event::Sampled(fix().with_speed_mps(Some(0.0))))
+            .expect("an event in order");
+
+        assert_eq!(
+            confidences(&predictor),
+            vec![
+                (1, Confidence::Low),
+                (2, Confidence::Low),
+                (3, Confidence::Low)
+            ],
         );
     }
 
@@ -433,7 +518,8 @@ mod tests {
 
     #[test]
     fn the_whole_prediction_runs_at_the_precision_the_device_uses() {
-        let mut predictor: CrowFlies<f32> = CrowFlies::new(crossings(), DEFAULT_RADIUS);
+        let mut predictor: CrowFlies<f32> =
+            CrowFlies::new(crossings(), DEFAULT_RADIUS, DEFAULT_HORIZON);
         let fix = Sample::<f32>::at(instant(), 50.0, 0.0)
             .expect("on the globe")
             .with_speed_mps(Some(10.0));
@@ -455,7 +541,7 @@ mod tests {
 
     #[test]
     fn an_empty_set_of_crossings_predicts_nothing() {
-        let mut predictor = CrowFlies::new(Vec::new(), DEFAULT_RADIUS);
+        let mut predictor = CrowFlies::new(Vec::new(), DEFAULT_RADIUS, DEFAULT_HORIZON);
 
         predictor
             .observe(Event::Sampled(fix()))

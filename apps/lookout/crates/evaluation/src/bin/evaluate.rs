@@ -59,9 +59,9 @@ struct Settings {
     /// The predictor the sessions are replayed through: `oracle` or `crow_flies`.
     #[arg(long)]
     predictor: PredictorName,
-    /// How far ahead of each pass the oracle alerts, such as `5m`.
-    #[arg(long, required_if_eq("predictor", "oracle"))]
-    oracle_horizon: Option<Span>,
+    /// How far ahead the predictor alerts a pass, such as `5m`.
+    #[arg(long)]
+    predictor_horizon: Span,
     /// How far from the latest sample CrowFlies predicts crossings, in metres.
     #[arg(long, required_if_eq("predictor", "crow_flies"))]
     radius_metres: Option<Radius>,
@@ -96,11 +96,11 @@ struct Settings {
 
 impl Settings {
     fn run(&self) -> Result<Run, &'static str> {
-        let predictor = match (self.predictor, self.oracle_horizon, self.radius_metres) {
-            (PredictorName::Oracle, Some(horizon), _) => Predictor::Oracle { horizon },
-            (PredictorName::CrowFlies, _, Some(radius)) => Predictor::CrowFlies { radius },
-            (PredictorName::Oracle, None, _) => return Err("the oracle needs --oracle-horizon"),
-            (PredictorName::CrowFlies, _, None) => return Err("CrowFlies needs --radius-metres"),
+        let horizon = self.predictor_horizon;
+        let predictor = match (self.predictor, self.radius_metres) {
+            (PredictorName::Oracle, _) => Predictor::Oracle { horizon },
+            (PredictorName::CrowFlies, Some(radius)) => Predictor::CrowFlies { radius, horizon },
+            (PredictorName::CrowFlies, None) => return Err("CrowFlies needs --radius-metres"),
         };
         Ok(Run {
             pick: Pick {

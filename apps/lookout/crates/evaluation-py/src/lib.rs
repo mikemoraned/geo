@@ -44,24 +44,31 @@ impl Oracle {
     }
 }
 
-/// CrowFlies, which predicts each crossing within `radius_metres` of the latest sample.
+/// CrowFlies, which predicts each crossing within `radius_metres` of the latest sample, and
+/// alerts each that arrives within `horizon`, as text such as `"5m"`.
 #[pyclass(frozen)]
 struct CrowFlies {
     radius: Radius,
+    horizon: Span,
 }
 
 #[pymethods]
 impl CrowFlies {
     #[new]
-    #[pyo3(signature = (*, radius_metres))]
-    fn new(radius_metres: f64) -> PyResult<Self> {
+    #[pyo3(signature = (*, radius_metres, horizon))]
+    fn new(radius_metres: f64, horizon: &str) -> PyResult<Self> {
         Ok(Self {
             radius: Radius::new(radius_metres).map_err(value_error)?,
+            horizon: span(horizon)?,
         })
     }
 
     fn __repr__(&self) -> String {
-        format!("CrowFlies(radius_metres={:?})", self.radius.as_metres())
+        format!(
+            "CrowFlies(radius_metres={:?}, horizon=\"{}\")",
+            self.radius.as_metres(),
+            self.horizon
+        )
     }
 }
 
@@ -416,6 +423,7 @@ fn predictor_of(predictor: &Bound<'_, PyAny>) -> PyResult<Predictor> {
     if let Ok(crow_flies) = predictor.extract::<PyRef<'_, CrowFlies>>() {
         return Ok(Predictor::CrowFlies {
             radius: crow_flies.radius,
+            horizon: crow_flies.horizon,
         });
     }
     Err(value_error("`predictor` must be an Oracle or a CrowFlies"))

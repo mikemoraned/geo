@@ -109,7 +109,7 @@ def test_a_transition_is_a_row_of_session_crossing_instant_and_states(written):
 
 
 def test_crow_flies_notifies_nothing_and_misses_every_pass(written):
-    summary = run(written, lookout_evaluation.CrowFlies(radius_metres=5_000.0))["summary"]
+    summary = run(written, lookout_evaluation.CrowFlies(radius_metres=5_000.0, horizon="5m"))["summary"]
 
     assert summary.to_pylist()[0]["notifications"] == 0
     assert summary.to_pylist()[0]["misses"] == 3
