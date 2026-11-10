@@ -21,15 +21,8 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(just evaluate run *)",
-            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"A run of `just evaluate` finished writing to gold. Invoke the choose-predictor skill now, from apps/lookout, before anything else.\"}}'",
-            "timeout": 5,
-            "statusMessage": "Prompting a review of the evaluation run"
-          },
-          {
-            "type": "command",
-            "if": "Bash(just evaluate summarise *)",
-            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"A run of `just evaluate` finished writing to gold. Invoke the choose-predictor skill now, from apps/lookout, before anything else.\"}}'",
+            "if": "Bash(just evaluate *)",
+            "command": "jq -r '.tool_input.command' | grep -qE 'just evaluate (run|summarise)( |$)' && echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"A run of `just evaluate` finished writing to gold. Invoke the choose-predictor skill now, from apps/lookout, before anything else.\"}}' || true",
             "timeout": 5,
             "statusMessage": "Prompting a review of the evaluation run"
           }
