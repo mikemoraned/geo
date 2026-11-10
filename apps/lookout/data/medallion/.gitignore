@@ -5,7 +5,7 @@
 /gold/*
 !/gold/artifact=crossings/
 !/gold/artifact=sessions/
-!/gold/evaluation_run_v1/
+!/gold/evaluation_run_v2/
 !/gold/evaluation_session_v1/
 !/gold/evaluation_transition_v1/
 !/gold/evaluation_outcome_v1/
