@@ -6,7 +6,9 @@ use code_version::CodeVersion;
 use domain::{Percentage, Radius, Span};
 use evaluation::gold;
 use evaluation::steps::{Predictor, Run};
-use evaluation::{Bootstrap, Pick, Score, Scoring, Seed, Sessions, resolve};
+use evaluation::{
+    Bootstrap, CrowFliesSettings, OracleSettings, Pick, Score, Scoring, Seed, Sessions, resolve,
+};
 use medallion::{Country, MedallionArgs, Root, RunId};
 use medallion_model::{EvaluationSummaryRowV1, FloatType, PredictorName};
 
@@ -103,8 +105,10 @@ impl Settings {
     fn run(&self, sessions: NonZeroUsize) -> Result<Run, &'static str> {
         let horizon = self.predictor_horizon;
         let predictor = match (self.predictor, self.radius_metres) {
-            (PredictorName::Oracle, _) => Predictor::Oracle { horizon },
-            (PredictorName::CrowFlies, Some(radius)) => Predictor::CrowFlies { radius, horizon },
+            (PredictorName::Oracle, _) => Predictor::Oracle(OracleSettings { horizon }),
+            (PredictorName::CrowFlies, Some(radius)) => {
+                Predictor::CrowFlies(CrowFliesSettings { radius, horizon })
+            }
             (PredictorName::CrowFlies, None) => return Err("CrowFlies needs --radius-metres"),
         };
         Ok(Run {

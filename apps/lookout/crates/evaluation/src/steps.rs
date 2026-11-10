@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crossings::silver::{Crossing, ReadError, read_of_country};
-use domain::{CoordinateError, Precision, Radius, SessionId, Span};
+use domain::{CoordinateError, Precision, SessionId};
 use medallion::{Country, QueryError, Root};
 use medallion_model::{
     EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationSummaryRowV1,
@@ -18,13 +18,14 @@ use crate::rows::{
     RowsError, outcome_rows, replayed_from, scored_from, summary_row, transition_rows,
 };
 use crate::score::{ScoreError, Scoring};
+use crate::settings::{CrowFliesSettings, OracleSettings};
 use crate::store::{compact_ids, read_passes};
 use crate::summarise::{Bootstrap, SummariseError};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Predictor {
-    Oracle { horizon: Span },
-    CrowFlies { radius: Radius, horizon: Span },
+    Oracle(OracleSettings),
+    CrowFlies(CrowFliesSettings),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -141,7 +142,7 @@ async fn replayed<F: Precision + Send + Sync>(
         .map(crossings::compacted::<F>)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(match predictor {
-        Predictor::Oracle { horizon } => {
+        Predictor::Oracle(OracleSettings { horizon }) => {
             let oracles = Oracle::per_session(&crossings_and_passes.passes, &compact, horizon)?;
             crate::replay::replay(
                 root,
@@ -156,7 +157,7 @@ async fn replayed<F: Precision + Send + Sync>(
             )
             .await?
         }
-        Predictor::CrowFlies { radius, horizon } => {
+        Predictor::CrowFlies(CrowFliesSettings { radius, horizon }) => {
             let crow_flies =
                 CrowFlies::new(compact, Watching { radius }, Alerting { radius, horizon })?;
             crate::replay::replay(
@@ -229,6 +230,8 @@ pub async fn run(root: &Root, run: &Run) -> Result<Ran, StepError> {
 }
 #[cfg(test)]
 mod tests {
+    use domain::{Radius, Span};
+
     use super::*;
     use crate::fixtures::{oracle, run_of, store};
 
@@ -268,10 +271,10 @@ mod tests {
 
         let ran = run(
             &root,
-            &run_of(Predictor::CrowFlies {
+            &run_of(Predictor::CrowFlies(CrowFliesSettings {
                 radius: Radius::new(5_000.0).expect("a radius"),
                 horizon: Span::new("5m").expect("a span"),
-            }),
+            })),
         )
         .await
         .expect("a run");

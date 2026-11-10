@@ -129,21 +129,23 @@ erDiagram
     train_session_v3 ||--|{ train_session_sample_v3 : "sampled as"
     train_session_v3 ||--o{ train_session_crossing_v1 : "passes"
     water_crossing_v2 ||--o{ train_session_crossing_v1 : "passed in"
-    evaluation_run_v2 ||--|{ evaluation_session_v1 : "replays"
+    evaluation_run_v3 ||--|{ evaluation_session_v1 : "replays"
     train_session_v3 ||--o{ evaluation_session_v1 : "picked for"
     evaluation_session_v1 ||--o{ evaluation_transition_v1 : "records"
     evaluation_transition_v1 ||--o| evaluation_outcome_v1 : "notification scored as"
     train_session_crossing_v1 ||--o{ evaluation_outcome_v1 : "scored in"
-    evaluation_run_v2 ||--|| evaluation_summary_v1 : "sums up"
+    evaluation_run_v3 ||--|| evaluation_summary_v1 : "sums up"
 ```
 
 - `train_session_v3` and `train_session_sample_v3` are the v2 datasets with
   `realtime_percentage` and `realtime` added.
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
-- `evaluation_run_v2` holds a run's predictor and settings, pass detector, float type, scores and
-  ramp, evaluation version, country, filter, sample size, seed, and bootstrap resamples. It also
-  holds the run's code version, and a map from each silver dataset the run reads to its
+- `evaluation_run_v3` holds a run's predictor, pass detector, float type, scores and ramp,
+  evaluation version, country, filter, sample size, seed, and bootstrap resamples. The predictor's
+  settings are a map from each setting's name to its value as text, which that predictor parses
+  into its own typed settings. A predictor that takes a new setting needs no new column. The row
+  also holds the run's code version, and a map from each silver dataset the run reads to its
   fingerprint. A dataset added to or removed from the run's inputs needs no new column.
 - `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
   transitions still counts.
@@ -815,9 +817,17 @@ tracker meets that can be wrong.
       session's transitions over time. CrowFlies misses no pass, so the maps show the passes
       alerted too early or at the last moment instead. One session's map also draws each alert as
       an arc from the train to its crossing.
-- [ ] Add a cooldown to `CrowFlies`, as a setting: a crossing alerted within the last N is not
-      alerted again. Run it at 1 km over every session, and compare it with the 1 km run without
-      one. This is a quick, simple form of Phase 8's debouncing.
+- [ ] Refactor: replace the run row's predictor settings, `predictor_horizon_ms` and
+      `predictor_radius_m`, with one map, `predictor_settings`, in a new `evaluation_run_v3`. A new
+      setting then needs no new column. Each predictor parses the map into its own typed settings,
+      and refuses a key it does not know or a value it cannot read. Migrate the v2 rows, keeping
+      their run ids, and read the map in `/choose-predictor`'s `runs.sql`.
+- [ ] Add a cooldown to `CrowFlies`, as a setting: a crossing alerts for at most N, and alerts
+      again only once it leaves the watching radius. CrowFlies alerts a crossing through its pass
+      and after it, and the tracker re-alerts a passed crossing on its next alert. A cooldown that
+      starts at the last alert would therefore never start. Run it at 1 km over every session, and
+      compare it with the 1 km run without one. This is a quick, simple form of Phase 8's
+      debouncing.
 
 #### Phase 4: the online pass detector
 

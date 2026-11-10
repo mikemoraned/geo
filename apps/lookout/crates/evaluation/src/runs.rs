@@ -1,6 +1,6 @@
 use datafusion::prelude::{col, lit};
 use medallion::{Query, QueryError, RUN_ID, Root, Row, RunId, layers};
-use medallion_model::EvaluationRunRowV2;
+use medallion_model::EvaluationRunRowV3;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunsError {
@@ -10,8 +10,8 @@ pub enum RunsError {
     Query(#[from] QueryError),
 }
 
-pub async fn read_run_row(root: &Root, run_id: &RunId) -> Result<EvaluationRunRowV2, RunsError> {
-    read_run_rows::<EvaluationRunRowV2>(root, run_id)
+pub async fn read_run_row(root: &Root, run_id: &RunId) -> Result<EvaluationRunRowV3, RunsError> {
+    read_run_rows::<EvaluationRunRowV3>(root, run_id)
         .await?
         .into_iter()
         .next()
@@ -59,10 +59,10 @@ mod tests {
         SessionId::new(format!("session-{name}")).expect("a session id")
     }
 
-    fn run_row(code: &str) -> EvaluationRunRowV2 {
-        EvaluationRunRowV2 {
+    fn run_row(code: &str) -> EvaluationRunRowV3 {
+        EvaluationRunRowV3 {
             code_version: code.to_string(),
-            ..EvaluationRunRowV2::example()
+            ..EvaluationRunRowV3::example()
         }
     }
 

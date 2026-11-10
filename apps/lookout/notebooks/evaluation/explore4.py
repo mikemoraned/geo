@@ -55,11 +55,12 @@ def intro(mo):
 def runs(lookout_medallion, pa):
     runs = pa.table(
         lookout_medallion.query_gold(
-            "SELECT run.run_id, run.sessions, run.predictor_radius_m, summary.precision, "
-            "summary.recall, summary.false_alarms_per_hour "
-            "FROM evaluation_run_v2 AS run JOIN evaluation_summary_v1 AS summary USING (run_id) "
+            "SELECT run.run_id, run.sessions, "
+            "CAST(run.predictor_settings['radius_metres'] AS DOUBLE) AS radius_metres, "
+            "summary.precision, summary.recall, summary.false_alarms_per_hour "
+            "FROM evaluation_run_v3 AS run JOIN evaluation_summary_v1 AS summary USING (run_id) "
             "WHERE run.predictor = 'crow_flies' "
-            "ORDER BY run.sessions DESC, run.predictor_radius_m"
+            "ORDER BY run.sessions DESC, radius_metres"
         )
     ).to_pandas()
     runs
@@ -70,7 +71,7 @@ def runs(lookout_medallion, pa):
 def run_choice(mo, runs):
     run_choice = mo.ui.dropdown(
         options={
-            f"{_run.predictor_radius_m / 1000:g} km over {_run.sessions:,} sessions": _run.run_id
+            f"{_run.radius_metres / 1000:g} km over {_run.sessions:,} sessions": _run.run_id
             for _run in runs.itertuples()
         },
         value="1 km over 34,521 sessions",
