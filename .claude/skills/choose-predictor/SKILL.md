@@ -35,6 +35,13 @@ that ends in a choice of predictor and settings for the apps. The report is a da
      interval as `value [low, high]`. It also gives the lead time's p10, median, and p90, and the
      counts of passes, notifications, false alarms, repeats, and misses. The group's shared
      settings and its run ids head the table.
+   - **Skew:** one table, one row per run that measured skew. Skew is how far the passes the apps
+     can see depart from ground truth. It describes the detectors and the data, not the
+     predictor, so it plays no part in the comparison or the choice, and the section says so.
+     Each row gives the run id, the online pass radius, and seen and unmatched, each with its
+     interval as `value [low, high]`. It also gives the offset's p10, median, and p90, and the
+     counts of passes, passes seen, visits, and visits unmatched. A run without skew is listed
+     as not measuring it.
    - **Comparison:** for each pair of predictors in a group, which measures differ. Two
      predictors differ on a measure only where their intervals do not overlap. Where intervals
      overlap, the runs cannot tell the predictors apart.
