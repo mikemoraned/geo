@@ -232,8 +232,8 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 
   Seen and unmatched each carry an interval, from the same bootstrap over sessions as the
   predictor's measures. Each run records the online pass radius. Ground truth matches within
-  100 m, and takes the nearest sample's instant. At 100 m, seen therefore comes out near 1 and
-  unmatched near 0. The offset falls below zero, since the online detector reports a pass at the
+  250 m, and takes the nearest sample's instant. At 250 m, seen therefore comes out near 1 and
+  unmatched near 0. A smaller radius sees fewer passes. The offset falls below zero, since the online detector reports a pass at the
   first sample within the radius. Simulated GPS error would move all three. This beats evaluating
   the online detector as a predictor is evaluated, which scores the detector rather than showing
   how far the apps' view departs from the truth every run is scored against. Decided on
@@ -591,6 +591,15 @@ when `evaluation_run_v2` replaced the run row's four fingerprint columns with on
   passes. In the session with the most false alarms, 391 in 8.05 hours, 312 of its 369 crossings
   were credited and then raised a false alarm. `explore4.py` maps both kinds. A heading rules out
   the first kind, and so does a cooldown on a crossing alerted or passed a moment before.
+- **The online detector sees every pass at ground truth's radius, and a quarter fewer at 100 m**
+  (2026-11-11). Two runs of CrowFlies at 1 km over all 34,521 sessions measured the skew of the
+  online pass detector. Ground truth holds 438,917 passes there, matched within 250 m. With an online
+  pass radius of 250 m, the detector saw all but one, and 40 of its 438,956 visits matched no pass.
+  Its median offset was −10 s: it reports a pass at the first sample within the radius, one sample
+  before ground truth's nearest sample. With 100 m, it saw 336,161 passes (0.766 [0.762, 0.769]),
+  each at ground truth's own sample. It missed the passes whose nearest sample lies from 100 m to
+  250 m from the crossing. Both runs scored the predictor exactly as the apps' run without skew did.
+  [`2026-11-11-choose-predictor.md`](evaluations/2026-11-11-choose-predictor.md) records both.
 
 ### Tasks
 
@@ -876,8 +885,9 @@ measures how far that departs from ground truth, as the decision on skew sets ou
       takes the online pass radius, and prints the skew apart from the predictor's measures.
 - [x] Report each run's skew in `/choose-predictor`, in a section of its own that says the skew
       measures the detectors, not the predictor.
-- [ ] Run CrowFlies at 1 km over every session with a pass radius of 100 m, and record its skew
-      under Observations.
+- [x] Run CrowFlies at 1 km over every session with a pass radius of 100 m, and record its skew
+      under Observations. A second run at 250 m, ground truth's match radius, gives the skew's
+      floor.
 
 #### Phase 5: states in the apps
 
