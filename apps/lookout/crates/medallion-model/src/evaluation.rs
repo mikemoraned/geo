@@ -8,9 +8,6 @@ use strum::{AsRefStr, EnumIter, EnumString};
 
 use crate::TrainSessionRowV3;
 
-pub const EVALUATION_RUN_V2: DatasetSpec<layers::Gold> =
-    DatasetSpec::partitioned_within("evaluation_run_v2", RUN_DATE, &[RUN_ID]);
-
 pub const EVALUATION_RUN_V3: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_run_v3", RUN_DATE, &[RUN_ID]);
 
@@ -180,64 +177,6 @@ pub enum PassDetectorName {
 pub enum FloatType {
     F32,
     F64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EvaluationRunRowV2 {
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub started_at: DateTime<Utc>,
-    pub evaluation_version: String,
-    pub code_version: String,
-    pub country: String,
-    pub realtime_at_least: Percentage,
-    pub sessions: u64,
-    pub pick_seed: u64,
-    pub predictor: PredictorName,
-    pub predictor_horizon_ms: Option<i64>,
-    pub predictor_radius_m: Option<f64>,
-    pub pass_detector: PassDetectorName,
-    pub float_type: FloatType,
-    pub horizon_ms: i64,
-    pub last_moment_ms: i64,
-    pub ramp_ms: i64,
-    pub last_moment_score: f64,
-    pub floor: f64,
-    pub warm_up_ms: i64,
-    pub resamples: u64,
-    pub bootstrap_seed: u64,
-    pub fingerprints: BTreeMap<String, String>,
-}
-
-impl Row for EvaluationRunRowV2 {
-    type Layer = layers::Gold;
-    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_RUN_V2;
-    const INSTANTS: &'static [&'static str] = &["started_at"];
-
-    fn example() -> Self {
-        Self {
-            started_at: DateTime::UNIX_EPOCH,
-            evaluation_version: "replay-v1".to_string(),
-            code_version: "0000000000000000000000000000000000000000".to_string(),
-            country: "DE".to_string(),
-            realtime_at_least: Percentage::new(90.0).expect("90 is a percentage"),
-            sessions: 1000,
-            pick_seed: 1,
-            predictor: PredictorName::Oracle,
-            predictor_horizon_ms: Some(300_000),
-            predictor_radius_m: Some(5_000.0),
-            pass_detector: PassDetectorName::Offline,
-            float_type: FloatType::F32,
-            horizon_ms: 300_000,
-            last_moment_ms: 30_000,
-            ramp_ms: 60_000,
-            last_moment_score: 0.25,
-            floor: 0.05,
-            warm_up_ms: 60_000,
-            resamples: 1000,
-            bootstrap_seed: 1,
-            fingerprints: BTreeMap::from([("example".to_string(), "example".to_string())]),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
