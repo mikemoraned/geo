@@ -9,14 +9,14 @@ use serde::{Deserialize, Serialize};
 use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, TracerConfig};
 
 use crate::{
-    ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationOutcomeRowV1, EvaluationRunRowV3,
-    EvaluationRunRowV4, EvaluationSessionRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1,
+    ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationOutcomeRowV1, EvaluationRunRowV4,
+    EvaluationSessionRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1,
     ExtractManifestRowV3, Feed, FloatType, GeometrySource, GersId, GpsReadingRowV2, MotisBaseUrl,
     MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4,
     MotisVersion, NotificationClass, OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease,
-    PassDetectorName, PredictorName, RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3,
-    SessionSampleRowV3, TrainSegmentRowV4, TrainSessionCrossingRowV1, TrainSessionRowV3,
-    TrainSessionSampleRowV3, WaterCrossingRowV2,
+    PredictorName, RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3,
+    TrainSegmentRowV4, TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3,
+    WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -214,7 +214,6 @@ fn enums() -> BTreeMap<String, Vec<String>> {
         variants::<NotificationClass>(),
         variants::<OutcomeKind>(),
         variants::<OverlapKind>(),
-        variants::<PassDetectorName>(),
         variants::<PredictorName>(),
         variants::<RailMode>(),
         variants::<StartedBy>(),
@@ -323,7 +322,6 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<EvaluationTransitionRowV1>(&known),
         declaration::<EvaluationOutcomeRowV1>(&known),
         declaration::<EvaluationSummaryRowV1>(&known),
-        declaration::<EvaluationRunRowV3>(&known),
         declaration::<EvaluationRunRowV4>(&known),
         declaration::<EvaluationSessionRowV1>(&known),
         rowless(OVERTURE_EXTRACT.info()),

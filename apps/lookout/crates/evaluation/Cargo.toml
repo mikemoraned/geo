@@ -7,10 +7,6 @@ edition.workspace = true
 name = "evaluate"
 required-features = ["cli"]
 
-[[bin]]
-name = "evaluation_migrate_run"
-required-features = ["cli"]
-
 [dependencies]
 chrono = { workspace = true }
 clap = { workspace = true, optional = true }
@@ -28,7 +24,6 @@ predictor = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 statrs = { workspace = true }
 thiserror = { workspace = true }

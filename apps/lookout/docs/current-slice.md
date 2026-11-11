@@ -866,7 +866,7 @@ measures how far that departs from ground truth, as the decision on skew sets ou
 
 - [x] Add the online implementation of `DetectPasses` to `predictor`: a crossing within a pass
       radius of the latest sample.
-- [ ] Refactor: replace the run row's `pass_detector` with a map, `online_detector_settings`, in
+- [x] Refactor: replace the run row's `pass_detector` with a map, `online_detector_settings`, in
       a new `evaluation_run_v4`. Scoring always uses the offline detector, so the column chooses
       nothing, and `PassDetectorName` goes. The online detector's settings parse into typed
       settings, as a predictor's do. Migrate the V3 rows with an empty map, keeping their run ids, and read the map in
