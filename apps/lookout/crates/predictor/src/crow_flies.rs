@@ -130,7 +130,7 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
     }
 }
 
-fn metres<P: Precision>(radius: Radius) -> P {
+pub(crate) fn metres<P: Precision>(radius: Radius) -> P {
     // Infallible: `from_f64` only declines a value the target cannot represent, and a radius in
     // metres is an ordinary magnitude in any float.
     P::from_f64(radius.as_metres()).expect("a radius fits in any float")
