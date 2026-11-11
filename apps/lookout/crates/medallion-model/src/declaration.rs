@@ -10,7 +10,7 @@ use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, Trace
 
 use crate::{
     ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationOutcomeRowV1, EvaluationRunRowV4,
-    EvaluationSessionRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1,
+    EvaluationSessionRowV1, EvaluationSkewRowV1, EvaluationSummaryRowV1, EvaluationTransitionRowV1,
     ExtractManifestRowV3, Feed, FloatType, GeometrySource, GersId, GpsReadingRowV2, MotisBaseUrl,
     MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4,
     MotisVersion, NotificationClass, OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease,
@@ -322,6 +322,7 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<EvaluationTransitionRowV1>(&known),
         declaration::<EvaluationOutcomeRowV1>(&known),
         declaration::<EvaluationSummaryRowV1>(&known),
+        declaration::<EvaluationSkewRowV1>(&known),
         declaration::<EvaluationRunRowV4>(&known),
         declaration::<EvaluationSessionRowV1>(&known),
         rowless(OVERTURE_EXTRACT.info()),

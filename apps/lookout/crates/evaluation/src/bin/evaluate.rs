@@ -7,10 +7,11 @@ use domain::{Percentage, Radius, Span};
 use evaluation::gold;
 use evaluation::steps::{Predictor, Run};
 use evaluation::{
-    Bootstrap, CrowFliesSettings, OracleSettings, Pick, Score, Scoring, Seed, Sessions, resolve,
+    Bootstrap, CrowFliesSettings, OnlineDetectorSettings, OracleSettings, Pick, Score, Scoring,
+    Seed, Sessions, resolve,
 };
 use medallion::{Country, MedallionArgs, Root, RunId};
-use medallion_model::{EvaluationSummaryRowV1, FloatType, PredictorName};
+use medallion_model::{EvaluationSkewRowV1, EvaluationSummaryRowV1, FloatType, PredictorName};
 
 const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
 
@@ -67,6 +68,10 @@ struct Settings {
     /// How far from the latest sample CrowFlies predicts crossings, in metres.
     #[arg(long, required_if_eq("predictor", "crow_flies"))]
     radius_metres: Option<Radius>,
+    /// How near a sample the online pass detector reports a crossing as passing, in metres. The
+    /// run measures how far the passes it reports skew from ground truth.
+    #[arg(long)]
+    online_pass_radius_metres: Radius,
     /// The float type the replay runs in: `f32` or `f64`.
     #[arg(long)]
     float_type: FloatType,
@@ -119,7 +124,9 @@ impl Settings {
                 seed: Seed(self.seed),
             },
             predictor,
-            online_detector: None,
+            online_detector: Some(OnlineDetectorSettings {
+                pass_radius: self.online_pass_radius_metres,
+            }),
             float_type: self.float_type,
             scoring: Scoring {
                 horizon: self.horizon,
@@ -155,12 +162,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let (run_id, ran) = gold::run(&root, &settings.resolved(&root).await?, &code).await?;
             println!("run {run_id}");
             print_summary(&ran.summary);
+            print_skew(ran.skew.as_ref());
         }
         Command::Pick(settings) => {
             let run_id = gold::pick(&root, &settings.resolved(&root).await?, &code).await?;
             println!("run {run_id}");
         }
-        Command::Replay(begun) => gold::replay(&root, &begun.run_id()?, &code).await?,
+        Command::Replay(begun) => {
+            print_skew(gold::replay(&root, &begun.run_id()?, &code).await?.as_ref())
+        }
         Command::Score(begun) => gold::score(&root, &begun.run_id()?, &code).await?,
         Command::Summarise(begun) => {
             print_summary(&gold::summarise(&root, &begun.run_id()?, &code).await?);
@@ -175,17 +185,46 @@ impl Begun {
     }
 }
 
-fn print_summary(summary: &EvaluationSummaryRowV1) {
-    let estimate =
-        |value: Option<f64>, low: Option<f64>, high: Option<f64>| match (value, low, high) {
-            (Some(value), Some(low), Some(high)) => format!("{value:.3} [{low:.3}, {high:.3}]"),
-            _ => "none".to_string(),
-        };
-    let lead = |milliseconds: Option<i64>| {
-        milliseconds.map_or("none".to_string(), |milliseconds| {
-            format!("{:.0} s", milliseconds as f64 / 1_000.0)
-        })
+fn estimate(value: Option<f64>, low: Option<f64>, high: Option<f64>) -> String {
+    match (value, low, high) {
+        (Some(value), Some(low), Some(high)) => format!("{value:.3} [{low:.3}, {high:.3}]"),
+        _ => "none".to_string(),
+    }
+}
+
+fn seconds(milliseconds: Option<i64>) -> String {
+    milliseconds.map_or("none".to_string(), |milliseconds| {
+        format!("{:.0} s", milliseconds as f64 / 1_000.0)
+    })
+}
+
+fn print_skew(skew: Option<&EvaluationSkewRowV1>) {
+    let Some(skew) = skew else {
+        println!("skew not measured: the run has no online pass detector");
+        return;
     };
+    println!("skew of the online pass detector from ground truth, apart from the predictor:");
+    println!(
+        "  {} passes, {} seen; {} visits, {} unmatched",
+        skew.passes, skew.seen_passes, skew.visits, skew.unmatched_visits
+    );
+    println!(
+        "  seen {}",
+        estimate(skew.seen, skew.seen_low, skew.seen_high)
+    );
+    println!(
+        "  unmatched {}",
+        estimate(skew.unmatched, skew.unmatched_low, skew.unmatched_high)
+    );
+    println!(
+        "  offset p10 {}, median {}, p90 {}",
+        seconds(skew.offset_p10_ms),
+        seconds(skew.offset_median_ms),
+        seconds(skew.offset_p90_ms)
+    );
+}
+
+fn print_summary(summary: &EvaluationSummaryRowV1) {
     println!(
         "sessions {}, {:.1} hours, {} passes, {} notifications",
         summary.sessions, summary.hours, summary.passes, summary.notifications
@@ -216,8 +255,8 @@ fn print_summary(summary: &EvaluationSummaryRowV1) {
     );
     println!(
         "lead time p10 {}, median {}, p90 {}",
-        lead(summary.lead_p10_ms),
-        lead(summary.lead_median_ms),
-        lead(summary.lead_p90_ms)
+        seconds(summary.lead_p10_ms),
+        seconds(summary.lead_median_ms),
+        seconds(summary.lead_p90_ms)
     );
 }

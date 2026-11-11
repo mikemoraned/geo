@@ -871,7 +871,7 @@ measures how far that departs from ground truth, as the decision on skew sets ou
       nothing, and `PassDetectorName` goes. The online detector's settings parse into typed
       settings, as a predictor's do. Migrate the V3 rows with an empty map, keeping their run ids, and read the map in
       `/choose-predictor`'s `runs.sql`.
-- [ ] Measure the skew in `replay`, as the decision on skew sets out. Each sample goes to the online
+- [x] Measure the skew in `replay`, as the decision on skew sets out. Each sample goes to the online
       detector beside the offline one, and the run's skew goes to `evaluation_skew_v1`. `evaluate`
       takes the online pass radius, and prints the skew apart from the predictor's measures.
 - [ ] Report each run's skew in `/choose-predictor`, in a section of its own that says the skew

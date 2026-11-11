@@ -23,6 +23,9 @@ pub const EVALUATION_OUTCOME_V1: DatasetSpec<layers::Gold> =
 pub const EVALUATION_SUMMARY_V1: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_summary_v1", RUN_DATE, &[RUN_ID]);
 
+pub const EVALUATION_SKEW_V1: DatasetSpec<layers::Gold> =
+    DatasetSpec::partitioned_within("evaluation_skew_v1", RUN_DATE, &[RUN_ID]);
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvaluationTransitionRowV1 {
     pub session_id: SessionId,
@@ -148,6 +151,48 @@ impl Row for EvaluationSummaryRowV1 {
             lead_p10_ms: Some(300_000),
             lead_median_ms: Some(300_000),
             lead_p90_ms: Some(300_000),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EvaluationSkewRowV1 {
+    pub sessions: u64,
+    pub passes: u64,
+    pub visits: u64,
+    pub seen_passes: u64,
+    pub unmatched_visits: u64,
+    pub seen: Option<f64>,
+    pub seen_low: Option<f64>,
+    pub seen_high: Option<f64>,
+    pub unmatched: Option<f64>,
+    pub unmatched_low: Option<f64>,
+    pub unmatched_high: Option<f64>,
+    pub offset_p10_ms: Option<i64>,
+    pub offset_median_ms: Option<i64>,
+    pub offset_p90_ms: Option<i64>,
+}
+
+impl Row for EvaluationSkewRowV1 {
+    type Layer = layers::Gold;
+    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_SKEW_V1;
+
+    fn example() -> Self {
+        Self {
+            sessions: 1,
+            passes: 1,
+            visits: 1,
+            seen_passes: 1,
+            unmatched_visits: 0,
+            seen: Some(1.0),
+            seen_low: Some(1.0),
+            seen_high: Some(1.0),
+            unmatched: Some(0.0),
+            unmatched_low: Some(0.0),
+            unmatched_high: Some(0.0),
+            offset_p10_ms: Some(-10_000),
+            offset_median_ms: Some(-5_000),
+            offset_p90_ms: Some(0),
         }
     }
 }

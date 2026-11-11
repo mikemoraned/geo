@@ -28,7 +28,7 @@ pub struct Estimate {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LeadTimes {
+pub struct Spread {
     pub p10: TimeDelta,
     pub median: TimeDelta,
     pub p90: TimeDelta,
@@ -46,7 +46,7 @@ pub struct Summary {
     pub precision: Option<Estimate>,
     pub recall: Option<Estimate>,
     pub false_alarms_per_hour: Option<Estimate>,
-    pub lead_times: Option<LeadTimes>,
+    pub lead_times: Option<Spread>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -98,7 +98,7 @@ pub fn summarise(
         precision: estimate(&whole, &resamples, Tally::precision),
         recall: estimate(&whole, &resamples, Tally::recall),
         false_alarms_per_hour: estimate(&whole, &resamples, Tally::false_alarms_per_hour),
-        lead_times: lead_times(leads),
+        lead_times: spread(leads),
     })
 }
 
@@ -186,7 +186,7 @@ impl Sum for Tally {
 
 const INTERVAL: (f64, f64) = (0.025, 0.975);
 
-fn resampled(tallies: &[Tally], bootstrap: &Bootstrap) -> Vec<Tally> {
+pub(crate) fn resampled<T: Copy + Sum>(tallies: &[T], bootstrap: &Bootstrap) -> Vec<T> {
     if tallies.is_empty() {
         return Vec::new();
     }
@@ -200,10 +200,10 @@ fn resampled(tallies: &[Tally], bootstrap: &Bootstrap) -> Vec<Tally> {
         .collect()
 }
 
-fn estimate(
-    whole: &Tally,
-    resamples: &[Tally],
-    measure: fn(&Tally) -> Option<f64>,
+pub(crate) fn estimate<T>(
+    whole: &T,
+    resamples: &[T],
+    measure: fn(&T) -> Option<f64>,
 ) -> Option<Estimate> {
     let value = measure(whole)?;
     let values: Vec<f64> = resamples.iter().filter_map(measure).collect();
@@ -218,13 +218,13 @@ fn estimate(
     })
 }
 
-fn lead_times(leads: Vec<f64>) -> Option<LeadTimes> {
-    if leads.is_empty() {
+pub(crate) fn spread(seconds: Vec<f64>) -> Option<Spread> {
+    if seconds.is_empty() {
         return None;
     }
-    let mut data = Data::new(leads);
+    let mut data = Data::new(seconds);
     let at = |seconds: f64| TimeDelta::milliseconds((seconds * 1_000.0).round() as i64);
-    Some(LeadTimes {
+    Some(Spread {
         p10: at(data.quantile(0.1)),
         median: at(data.quantile(0.5)),
         p90: at(data.quantile(0.9)),
@@ -345,7 +345,7 @@ mod tests {
                 precision: exact(0.375),
                 recall: exact(0.5),
                 false_alarms_per_hour: exact(1.0),
-                lead_times: Some(LeadTimes {
+                lead_times: Some(Spread {
                     p10: TimeDelta::seconds(120),
                     median: TimeDelta::seconds(225),
                     p90: TimeDelta::seconds(330),

@@ -10,6 +10,7 @@ pub mod rows;
 pub mod runs;
 pub mod score;
 pub mod settings;
+pub mod skew;
 pub mod steps;
 pub mod store;
 pub mod summarise;
@@ -27,4 +28,4 @@ pub use settings::{
     read_online_detector, write_online_detector,
 };
 pub use store::{compact_ids, read_passes};
-pub use summarise::{Bootstrap, Estimate, LeadTimes, SummariseError, Summary, summarise};
+pub use summarise::{Bootstrap, Estimate, Spread, SummariseError, Summary, summarise};
