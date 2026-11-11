@@ -817,7 +817,7 @@ tracker meets that can be wrong.
       session's transitions over time. CrowFlies misses no pass, so the maps show the passes
       alerted too early or at the last moment instead. One session's map also draws each alert as
       an arc from the train to its crossing.
-- [ ] Refactor: replace the run row's predictor settings, `predictor_horizon_ms` and
+- [x] Refactor: replace the run row's predictor settings, `predictor_horizon_ms` and
       `predictor_radius_m`, with one map, `predictor_settings`, in a new `evaluation_run_v3`. A new
       setting then needs no new column. Each predictor parses the map into its own typed settings,
       and refuses a key it does not know or a value it cannot read. Migrate the v2 rows, keeping
