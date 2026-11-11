@@ -1,10 +1,9 @@
-use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
-use domain::{CrossingCompact, CrossingCompactId, Precision, Radius, Sample, Span};
+use domain::{CrossingCompact, Precision, Radius, Sample, Span};
 
 use crate::clock::{Clock, OutOfOrder};
 use crate::crossings::Crossings;
@@ -17,7 +16,6 @@ pub const DEFAULT_WATCHING: Watching = Watching {
 pub const DEFAULT_ALERTING: Alerting = Alerting {
     radius: Radius::metres(NonZeroU32::new(1_000).expect("one thousand is not zero")),
     horizon: Span::minutes(NonZeroU32::new(5).expect("five is not zero")),
-    cooldown: None,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -29,7 +27,6 @@ pub struct Watching {
 pub struct Alerting {
     pub radius: Radius,
     pub horizon: Span,
-    pub cooldown: Option<Span>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
@@ -52,7 +49,6 @@ pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
     latest: Option<Sample<P>>,
     speed_mps: Option<P>,
     predictions: Predictions<P>,
-    alerting_since: BTreeMap<CrossingCompactId, DateTime<Utc>>,
 }
 
 impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
@@ -75,7 +71,6 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
             latest: None,
             speed_mps: None,
             predictions: Predictions::new(),
-            alerting_since: BTreeMap::new(),
         })
     }
 
@@ -105,8 +100,6 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
         let watching_metres: P = metres(self.watching.radius);
         let alerting_metres: P = metres(self.alerting.radius);
         let horizon = self.alerting.horizon.time_delta();
-        let cooldown = self.alerting.cooldown.map(Span::time_delta);
-        let alerting_since = &mut self.alerting_since;
 
         self.predictions = self
             .crossings
@@ -115,9 +108,8 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
                 let metres = Haversine.distance(from, crossing.position);
                 (metres <= watching_metres).then(|| {
                     let at = speed.and_then(|speed| arrival(sample.t, metres, speed));
-                    let alerted = metres <= alerting_metres
-                        && arrives_within(sample.t, at, horizon)
-                        && !cooled(alerting_since, crossing.id, sample.t, cooldown);
+                    let alerted =
+                        metres <= alerting_metres && arrives_within(sample.t, at, horizon);
                     (
                         crossing.id,
                         Prediction {
@@ -133,21 +125,9 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
                 })
             })
             .collect();
-        self.alerting_since
-            .retain(|crossing_compact_id, _| self.predictions.contains_key(crossing_compact_id));
         self.speed_mps = speed;
         self.latest = Some(sample);
     }
-}
-
-fn cooled(
-    alerting_since: &mut BTreeMap<CrossingCompactId, DateTime<Utc>>,
-    crossing_compact_id: CrossingCompactId,
-    now: DateTime<Utc>,
-    cooldown: Option<TimeDelta>,
-) -> bool {
-    let since = *alerting_since.entry(crossing_compact_id).or_insert(now);
-    cooldown.is_some_and(|cooldown| now - since > cooldown)
 }
 
 fn metres<P: Precision>(radius: Radius) -> P {
@@ -233,7 +213,6 @@ mod tests {
         Alerting {
             radius: radius(radius_metres),
             horizon: Span::new(horizon).expect("a span"),
-            cooldown: None,
         }
     }
 
@@ -272,100 +251,6 @@ mod tests {
                 (crossing_compact_id.get(), prediction.confidence)
             })
             .collect()
-    }
-
-    fn cooling_after(cooldown: Option<&str>) -> CrowFlies<f64> {
-        CrowFlies::new(
-            crossings(),
-            watching(2_000.0),
-            Alerting {
-                cooldown: cooldown.map(|cooldown| Span::new(cooldown).expect("a span")),
-                ..alerting(2_000.0, "5m")
-            },
-        )
-        .expect("alerting within what it watches")
-    }
-
-    fn first_crossing_after(
-        predictor: &mut CrowFlies<f64>,
-        latitude: f64,
-        after: i64,
-        speed_mps: f64,
-    ) -> Option<Confidence> {
-        predictor
-            .observe(Event::Sampled(
-                fix_at(latitude, after).with_speed_mps(Some(speed_mps)),
-            ))
-            .expect("an event in order");
-        predictor
-            .predictions()
-            .get(&CrossingCompactId::from(1))
-            .map(|prediction| prediction.confidence)
-    }
-
-    #[test]
-    fn a_crossing_alerts_for_no_longer_than_the_cooldown() {
-        let mut predictor = cooling_after(Some("1m"));
-
-        let confidences =
-            [0, 60, 61].map(|after| first_crossing_after(&mut predictor, 50.0, after, 10.0));
-
-        assert_eq!(
-            confidences,
-            [
-                Some(Confidence::High),
-                Some(Confidence::High),
-                Some(Confidence::Low)
-            ]
-        );
-    }
-
-    #[test]
-    fn a_crossing_that_leaves_the_watching_radius_alerts_again() {
-        let mut predictor = cooling_after(Some("1m"));
-
-        let confidences = [(50.0, 0), (50.0, 61), (49.9, 62), (50.0, 63)]
-            .map(|(latitude, after)| first_crossing_after(&mut predictor, latitude, after, 10.0));
-
-        assert_eq!(
-            confidences,
-            [
-                Some(Confidence::High),
-                Some(Confidence::Low),
-                None,
-                Some(Confidence::High)
-            ]
-        );
-    }
-
-    #[test]
-    fn a_crossing_that_falls_quiet_within_the_watching_radius_keeps_its_cooldown() {
-        let mut predictor = cooling_after(Some("1m"));
-
-        let confidences = [(0, 10.0), (30, 0.0), (61, 10.0)]
-            .map(|(after, speed)| first_crossing_after(&mut predictor, 50.0, after, speed));
-
-        assert_eq!(
-            confidences,
-            [
-                Some(Confidence::High),
-                Some(Confidence::Low),
-                Some(Confidence::Low)
-            ]
-        );
-    }
-
-    #[test]
-    fn without_a_cooldown_a_crossing_alerts_for_as_long_as_it_arrives_within_the_horizon() {
-        let mut predictor = cooling_after(None);
-
-        let confidences =
-            [0, 600].map(|after| first_crossing_after(&mut predictor, 50.0, after, 10.0));
-
-        assert_eq!(
-            confidences,
-            [Some(Confidence::High), Some(Confidence::High)]
-        );
     }
 
     #[test]

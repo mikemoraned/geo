@@ -67,10 +67,6 @@ struct Settings {
     /// How far from the latest sample CrowFlies predicts crossings, in metres.
     #[arg(long, required_if_eq("predictor", "crow_flies"))]
     radius_metres: Option<Radius>,
-    /// The longest CrowFlies alerts a crossing, such as `2m`. The crossing alerts again only once
-    /// it leaves the radius. Without it, CrowFlies alerts while the crossing is within the horizon.
-    #[arg(long)]
-    cooldown: Option<Span>,
     /// The float type the replay runs in: `f32` or `f64`.
     #[arg(long)]
     float_type: FloatType,
@@ -110,11 +106,9 @@ impl Settings {
         let horizon = self.predictor_horizon;
         let predictor = match (self.predictor, self.radius_metres) {
             (PredictorName::Oracle, _) => Predictor::Oracle(OracleSettings { horizon }),
-            (PredictorName::CrowFlies, Some(radius)) => Predictor::CrowFlies(CrowFliesSettings {
-                radius,
-                horizon,
-                cooldown: self.cooldown,
-            }),
+            (PredictorName::CrowFlies, Some(radius)) => {
+                Predictor::CrowFlies(CrowFliesSettings { radius, horizon })
+            }
             (PredictorName::CrowFlies, None) => return Err("CrowFlies needs --radius-metres"),
         };
         Ok(Run {

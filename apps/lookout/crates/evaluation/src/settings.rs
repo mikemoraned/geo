@@ -31,7 +31,6 @@ pub struct OracleSettings {
 pub struct CrowFliesSettings {
     pub radius: Radius,
     pub horizon: Span,
-    pub cooldown: Option<Span>,
 }
 
 impl PredictorSettings for OracleSettings {
@@ -51,17 +50,10 @@ impl PredictorSettings for OracleSettings {
 
 impl PredictorSettings for CrowFliesSettings {
     fn write(&self) -> BTreeMap<String, String> {
-        [
-            ("radius_metres", Some(self.radius.to_string())),
-            ("horizon", Some(self.horizon.to_string())),
-            (
-                "cooldown",
-                self.cooldown.map(|cooldown| cooldown.to_string()),
-            ),
-        ]
-        .into_iter()
-        .filter_map(|(key, value)| Some((key.to_string(), value?)))
-        .collect()
+        BTreeMap::from([
+            ("radius_metres".to_string(), self.radius.to_string()),
+            ("horizon".to_string(), self.horizon.to_string()),
+        ])
     }
 
     fn read(settings: &BTreeMap<String, String>) -> Result<Self, SettingsError> {
@@ -69,7 +61,6 @@ impl PredictorSettings for CrowFliesSettings {
         let read = Self {
             radius: reading.take("radius_metres")?,
             horizon: reading.take("horizon")?,
-            cooldown: reading.take_optional("cooldown")?,
         };
         reading.finish()?;
         Ok(read)
@@ -120,25 +111,13 @@ impl<'a> Reading<'a> {
         T: FromStr,
         T::Err: Display,
     {
-        self.take_optional(key)?.ok_or(SettingsError::Missing(key))
-    }
-
-    fn take_optional<T>(&mut self, key: &'static str) -> Result<Option<T>, SettingsError>
-    where
-        T: FromStr,
-        T::Err: Display,
-    {
         self.read.push(key);
-        self.settings
-            .get(key)
-            .map(|text| {
-                text.parse()
-                    .map_err(|err: T::Err| SettingsError::Unreadable {
-                        key,
-                        reason: err.to_string(),
-                    })
+        let text = self.settings.get(key).ok_or(SettingsError::Missing(key))?;
+        text.parse()
+            .map_err(|err: T::Err| SettingsError::Unreadable {
+                key,
+                reason: err.to_string(),
             })
-            .transpose()
     }
 
     fn finish(self) -> Result<(), SettingsError> {
@@ -171,15 +150,6 @@ mod tests {
         Predictor::CrowFlies(CrowFliesSettings {
             radius: Radius::new(1_000.0).expect("a radius"),
             horizon: Span::new("5m").expect("a span"),
-            cooldown: None,
-        })
-    }
-
-    fn cooling_crow_flies() -> Predictor {
-        Predictor::CrowFlies(CrowFliesSettings {
-            radius: Radius::new(1_000.0).expect("a radius"),
-            horizon: Span::new("5m").expect("a span"),
-            cooldown: Some(Span::new("2m").expect("a span")),
         })
     }
 
@@ -201,18 +171,6 @@ mod tests {
     }
 
     #[test]
-    fn crow_flies_writes_its_cooldown_as_a_span() {
-        assert_eq!(
-            cooling_crow_flies().settings(),
-            map(&[
-                ("cooldown", "2m"),
-                ("horizon", "5m"),
-                ("radius_metres", "1000")
-            ])
-        );
-    }
-
-    #[test]
     fn the_oracle_writes_its_horizon_alone() {
         assert_eq!(
             (oracle().name(), oracle().settings()),
@@ -222,7 +180,7 @@ mod tests {
 
     #[test]
     fn each_predictors_settings_survive_a_round_trip_through_the_map() {
-        for predictor in [oracle(), crow_flies(), cooling_crow_flies()] {
+        for predictor in [oracle(), crow_flies()] {
             assert_eq!(
                 Predictor::read(predictor.name(), &predictor.settings()),
                 Ok(predictor)

@@ -157,20 +157,9 @@ async fn replayed<F: Precision + Send + Sync>(
             )
             .await?
         }
-        Predictor::CrowFlies(CrowFliesSettings {
-            radius,
-            horizon,
-            cooldown,
-        }) => {
-            let crow_flies = CrowFlies::new(
-                compact,
-                Watching { radius },
-                Alerting {
-                    radius,
-                    horizon,
-                    cooldown,
-                },
-            )?;
+        Predictor::CrowFlies(CrowFliesSettings { radius, horizon }) => {
+            let crow_flies =
+                CrowFlies::new(compact, Watching { radius }, Alerting { radius, horizon })?;
             crate::replay::replay(
                 root,
                 country,
@@ -285,7 +274,6 @@ mod tests {
             &run_of(Predictor::CrowFlies(CrowFliesSettings {
                 radius: Radius::new(5_000.0).expect("a radius"),
                 horizon: Span::new("5m").expect("a span"),
-                cooldown: None,
             })),
         )
         .await
