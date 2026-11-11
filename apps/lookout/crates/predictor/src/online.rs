@@ -12,7 +12,7 @@ pub struct OnlineDetector<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>
     crossings: C,
     pass_metres: P,
     clock: Clock,
-    passed: Passes,
+    passing: Passes,
 }
 
 impl<P: Precision, C: Crossings<P>> OnlineDetector<P, C> {
@@ -21,7 +21,7 @@ impl<P: Precision, C: Crossings<P>> OnlineDetector<P, C> {
             crossings,
             pass_metres: metres(pass_radius),
             clock: Clock::default(),
-            passed: Passes::new(),
+            passing: Passes::new(),
         }
     }
 }
@@ -30,7 +30,7 @@ impl<P: Precision, C: Crossings<P>> DetectPasses<P> for OnlineDetector<P, C> {
     fn observe(&mut self, event: Event<P>) -> Result<(), OutOfOrder> {
         self.clock.observe(&event)?;
         if let Event::Sampled(sample) = event {
-            self.passed = self
+            self.passing = self
                 .crossings
                 .all()
                 .filter(|crossing| {
@@ -42,8 +42,8 @@ impl<P: Precision, C: Crossings<P>> DetectPasses<P> for OnlineDetector<P, C> {
         Ok(())
     }
 
-    fn passed(&self) -> &Passes {
-        &self.passed
+    fn passing(&self) -> &Passes {
+        &self.passing
     }
 }
 
@@ -81,7 +81,7 @@ mod tests {
     fn passed_at(detector: &mut OnlineDetector<f64>, event: Event<f64>) -> Vec<u32> {
         detector.observe(event).expect("an event in order");
         detector
-            .passed()
+            .passing()
             .iter()
             .map(|crossing_compact_id| crossing_compact_id.get())
             .collect()
@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn nothing_is_reported_before_the_first_sample() {
-        assert!(detector(500.0).passed().is_empty());
+        assert!(detector(500.0).passing().is_empty());
     }
 
     #[test]
@@ -160,7 +160,7 @@ mod tests {
 
         assert_eq!(
             detector
-                .passed()
+                .passing()
                 .iter()
                 .map(|crossing_compact_id| crossing_compact_id.get())
                 .collect::<Vec<_>>(),
