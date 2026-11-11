@@ -18,7 +18,7 @@ use crate::rows::{
     RowsError, outcome_rows, replayed_from, scored_from, summary_row, transition_rows,
 };
 use crate::score::{ScoreError, Scoring};
-use crate::settings::{CrowFliesSettings, OracleSettings};
+use crate::settings::{CrowFliesSettings, OnlineDetectorSettings, OracleSettings};
 use crate::store::{compact_ids, read_passes};
 use crate::summarise::{Bootstrap, SummariseError};
 
@@ -32,6 +32,7 @@ pub enum Predictor {
 pub struct Run {
     pub pick: Pick,
     pub predictor: Predictor,
+    pub online_detector: Option<OnlineDetectorSettings>,
     pub float_type: FloatType,
     pub scoring: Scoring,
     pub bootstrap: Bootstrap,

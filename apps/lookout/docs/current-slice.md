@@ -142,11 +142,12 @@ erDiagram
   `realtime_percentage` and `realtime` added.
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
-- `evaluation_run_v4` holds a run's predictor, skew settings, float type, scores and ramp,
+- `evaluation_run_v4` holds a run's predictor, online detector, float type, scores and ramp,
   evaluation version, country, filter, sample size, seed, and bootstrap resamples. The predictor's
   settings are a map from each setting's name to its value as text, which that predictor parses
-  into its own typed settings. A predictor that takes a new setting needs no new column. The skew
-  settings are a map read the same way, and an empty map is a run that measured no skew. The row
+  into its own typed settings. A predictor that takes a new setting needs no new column. The
+  online detector's settings are a map read the same way. An empty map is a run that ran no online
+  detector, and so measured no skew. The row
   also holds the run's code version, and a map from each silver dataset the run reads to its
   fingerprint. A dataset added to or removed from the run's inputs needs no new column.
 - `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
@@ -865,10 +866,10 @@ measures how far that departs from ground truth, as the decision on skew sets ou
 
 - [x] Add the online implementation of `DetectPasses` to `predictor`: a crossing within a pass
       radius of the latest sample.
-- [ ] Refactor: replace the run row's `pass_detector` with a map, `skew_settings`, in a new
-      `evaluation_run_v4`. Scoring always uses the offline detector, so the column chooses nothing,
-      and `PassDetectorName` goes. The skew settings parse into typed settings, as a predictor's
-      do. Migrate the V3 rows with an empty map, keeping their run ids, and read the map in
+- [ ] Refactor: replace the run row's `pass_detector` with a map, `online_detector_settings`, in
+      a new `evaluation_run_v4`. Scoring always uses the offline detector, so the column chooses
+      nothing, and `PassDetectorName` goes. The online detector's settings parse into typed
+      settings, as a predictor's do. Migrate the V3 rows with an empty map, keeping their run ids, and read the map in
       `/choose-predictor`'s `runs.sql`.
 - [ ] Measure the skew in `replay`, as the decision on skew sets out. Each sample goes to the online
       detector beside the offline one, and the run's skew goes to `evaluation_skew_v1`. `evaluate`

@@ -289,6 +289,7 @@ fn run<'py>(
     let settings = Run {
         pick: picking(country, realtime_at_least, sessions, seed)?,
         predictor: predictor_of(predictor)?,
+        online_detector: None,
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
@@ -334,6 +335,7 @@ fn evaluate<'py>(
     let settings = Run {
         pick: picking(country, realtime_at_least, sessions, seed)?,
         predictor: predictor_of(predictor)?,
+        online_detector: None,
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
@@ -357,7 +359,7 @@ fn evaluate<'py>(
 /// Record a run over the sessions `picked`, as a dict of its id, its date, and its first two tables.
 ///
 /// The dict's `"run_id"` and `"run_date"` are the text `write_gold` takes. Its `"run"` and
-/// `"sessions"` are the run's tables of gold `evaluation_run_v3` and `evaluation_session_v1`. The
+/// `"sessions"` are the run's tables of gold `evaluation_run_v4` and `evaluation_session_v1`. The
 /// run names `BUILD_CODE_VERSION`, the code this extension was built from, and a fingerprint of each
 /// silver dataset it reads. Its id hashes those with its settings, so the same settings over the
 /// same code and data record the same run. If the extension was built from uncommitted code, a
@@ -384,6 +386,7 @@ fn record<'py>(
     let settings = Run {
         pick: picking(country, realtime_at_least, sessions, seed)?,
         predictor: predictor_of(predictor)?,
+        online_detector: None,
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
