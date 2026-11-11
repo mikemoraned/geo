@@ -10,5 +10,5 @@ pub type Passes = BTreeSet<CrossingCompactId>;
 pub trait DetectPasses<P: Precision> {
     fn observe(&mut self, event: Event<P>) -> Result<(), OutOfOrder>;
 
-    fn passed(&self) -> &Passes;
+    fn passing(&self) -> &Passes;
 }

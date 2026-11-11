@@ -36,7 +36,7 @@ impl Tracker {
         &mut self,
         at: DateTime<Utc>,
         predictions: &Predictions<P>,
-        passed: &Passes,
+        passing: &Passes,
     ) -> Result<Vec<Transition>, OutOfOrder> {
         self.clock.elapsed(at)?;
 
@@ -57,7 +57,7 @@ impl Tracker {
                     predictions
                         .get(&crossing_compact_id)
                         .map(|prediction| prediction.confidence),
-                    passed.contains(&crossing_compact_id),
+                    passing.contains(&crossing_compact_id),
                 );
                 let to = CrossingState::kind_of(after.as_ref());
                 if let Some(state) = after {
@@ -84,19 +84,19 @@ impl Tracker {
 fn next(
     state: Option<CrossingState>,
     confidence: Option<Confidence>,
-    passed: bool,
+    passing: bool,
 ) -> (Option<StateKind>, Option<CrossingState>) {
-    match (state, passed) {
+    match (state, passing) {
         (Some(CrossingState::Alerted(state)), true) => {
             (None, Some(CrossingState::Actual(state.pass())))
         }
         (Some(passing @ CrossingState::Actual(_)), true) => (None, Some(passing)),
-        (state, passed) => {
+        (state, passing) => {
             let predicted = confidence.map(|confidence| match state {
                 Some(state) => predicted(state, confidence),
                 None => entered(confidence),
             });
-            match (predicted, passed) {
+            match (predicted, passing) {
                 (Some(CrossingState::Alerted(state)), true) => (
                     Some(StateKind::AlertedPass),
                     Some(CrossingState::Actual(state.pass())),
@@ -162,11 +162,11 @@ mod tests {
             .collect()
     }
 
-    fn passed(crossings: &[u32]) -> BTreeSet<CrossingCompactId> {
+    fn passing(crossings: &[u32]) -> BTreeSet<CrossingCompactId> {
         crossings.iter().copied().map(id).collect()
     }
 
-    fn none_passed() -> BTreeSet<CrossingCompactId> {
+    fn none_passing() -> BTreeSet<CrossingCompactId> {
         BTreeSet::new()
     }
 
@@ -188,7 +188,7 @@ mod tests {
                 .track(
                     later(10 * round),
                     &predictions(predicted),
-                    &passed(crossings),
+                    &passing(crossings),
                 )
                 .expect("in order");
         }
@@ -208,7 +208,7 @@ mod tests {
             .track(
                 instant(),
                 &predictions(&[(1, Confidence::Low)]),
-                &none_passed(),
+                &none_passing(),
             )
             .expect("in order");
 
@@ -231,7 +231,7 @@ mod tests {
             .track(
                 instant(),
                 &predictions(&[(1, Confidence::High)]),
-                &none_passed(),
+                &none_passing(),
             )
             .expect("in order");
 
@@ -254,7 +254,7 @@ mod tests {
             .track(
                 later(10),
                 &predictions(&[(1, Confidence::High)]),
-                &none_passed(),
+                &none_passing(),
             )
             .expect("in order");
 
@@ -270,7 +270,7 @@ mod tests {
             .track(
                 later(10),
                 &predictions(&[(1, Confidence::High)]),
-                &passed(&[1]),
+                &passing(&[1]),
             )
             .expect("in order");
 
@@ -293,7 +293,7 @@ mod tests {
             .track(
                 instant(),
                 &predictions(&[(1, Confidence::High)]),
-                &passed(&[1]),
+                &passing(&[1]),
             )
             .expect("in order");
 
@@ -315,7 +315,7 @@ mod tests {
             .track(
                 later(10),
                 &predictions(&[(1, Confidence::High)]),
-                &passed(&[1]),
+                &passing(&[1]),
             )
             .expect("in order");
 
@@ -336,7 +336,7 @@ mod tests {
             .track(
                 later(10),
                 &predictions(&[(1, Confidence::Low)]),
-                &passed(&[1]),
+                &passing(&[1]),
             )
             .expect("in order");
 
@@ -349,7 +349,7 @@ mod tests {
         let mut tracker = Tracker::new();
 
         let transitions = tracker
-            .track(instant(), &predictions(&[]), &passed(&[1]))
+            .track(instant(), &predictions(&[]), &passing(&[1]))
             .expect("in order");
 
         assert!(transitions.is_empty());
@@ -364,7 +364,7 @@ mod tests {
         ]);
 
         let transitions = tracker
-            .track(later(20), &predictions(&[]), &passed(&[1]))
+            .track(later(20), &predictions(&[]), &passing(&[1]))
             .expect("in order");
 
         assert!(transitions.is_empty());
@@ -382,7 +382,7 @@ mod tests {
             .track(
                 later(20),
                 &predictions(&[(1, Confidence::High)]),
-                &none_passed(),
+                &none_passing(),
             )
             .expect("in order");
 
@@ -408,7 +408,7 @@ mod tests {
             .track(
                 later(20),
                 &predictions(&[(1, Confidence::Low)]),
-                &none_passed(),
+                &none_passing(),
             )
             .expect("in order");
 
@@ -428,7 +428,7 @@ mod tests {
         let mut tracker = tracker_through(&[(&[(1, Confidence::High)], &[])]);
 
         let transitions = tracker
-            .track(later(10), &predictions(&[]), &none_passed())
+            .track(later(10), &predictions(&[]), &none_passing())
             .expect("in order");
 
         assert_eq!(
@@ -451,7 +451,7 @@ mod tests {
             .track(
                 later(10),
                 &predictions(&[(1, Confidence::High), (2, Confidence::High)]),
-                &none_passed(),
+                &none_passing(),
             )
             .expect("in order");
 
@@ -474,11 +474,11 @@ mod tests {
             .track(
                 later(10),
                 &predictions(&[(1, Confidence::High)]),
-                &none_passed(),
+                &none_passing(),
             )
             .expect("in order");
 
-        let refused = tracker.track(instant(), &predictions(&[]), &none_passed());
+        let refused = tracker.track(instant(), &predictions(&[]), &none_passing());
 
         assert_eq!(
             refused,
@@ -524,9 +524,9 @@ mod tests {
             let mut tracker = Tracker::new();
             let mut last: BTreeMap<CrossingCompactId, StateKind> = BTreeMap::new();
 
-            for (round, (predictions, passed)) in (0i64..).zip(&rounds) {
+            for (round, (predictions, passing)) in (0i64..).zip(&rounds) {
                 let transitions = tracker
-                    .track(later(10 * round), predictions, passed)
+                    .track(later(10 * round), predictions, passing)
                     .expect("in order");
                 for transition in transitions {
                     let before = last
@@ -536,7 +536,7 @@ mod tests {
                     prop_assert_eq!(transition.from, before);
                     prop_assert!(legal(transition.from, transition.to), "{:?}", transition);
                     if transition.to == StateKind::ActualPass {
-                        prop_assert!(passed.contains(&transition.crossing_compact_id));
+                        prop_assert!(passing.contains(&transition.crossing_compact_id));
                     }
                     last.insert(transition.crossing_compact_id, transition.to);
                 }

@@ -50,7 +50,7 @@ where
             .map_err(ReplayError::Detecting)?;
         transitions.extend(
             tracker
-                .track(sample.t, predictor.predictions(), detector.passed())
+                .track(sample.t, predictor.predictions(), detector.passing())
                 .map_err(ReplayError::Tracking)?,
         );
     }

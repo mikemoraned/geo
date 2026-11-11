@@ -29,7 +29,7 @@ impl RecordedPass for TrainSessionCrossingRowV1 {
 pub struct OfflineDetector {
     passes: SessionPasses,
     clock: Clock,
-    passed: Passes,
+    passing: Passes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -52,7 +52,7 @@ impl OfflineDetector {
         Self {
             passes,
             clock: Clock::default(),
-            passed: Passes::new(),
+            passing: Passes::new(),
         }
     }
 }
@@ -92,7 +92,7 @@ impl<P: Precision> DetectPasses<P> for OfflineDetector {
         let before = self.clock.now();
         self.clock.observe(&event)?;
         let now = self.clock.now();
-        self.passed = self
+        self.passing = self
             .passes
             .iter()
             .filter(|&&(crossed_at, _)| {
@@ -104,8 +104,8 @@ impl<P: Precision> DetectPasses<P> for OfflineDetector {
         Ok(())
     }
 
-    fn passed(&self) -> &Passes {
-        &self.passed
+    fn passing(&self) -> &Passes {
+        &self.passing
     }
 }
 
@@ -179,7 +179,7 @@ mod tests {
 
     fn passed_at(detector: &mut OfflineDetector, event: Event<f64>) -> Vec<u32> {
         detector.observe(event).expect("events in order");
-        DetectPasses::<f64>::passed(detector)
+        DetectPasses::<f64>::passing(detector)
             .iter()
             .map(CrossingCompactId::get)
             .collect()
@@ -229,7 +229,7 @@ mod tests {
     fn nothing_is_reported_before_the_first_event() {
         let detector = detector(vec![pass(1, -5)]);
 
-        assert!(DetectPasses::<f64>::passed(&detector).is_empty());
+        assert!(DetectPasses::<f64>::passing(&detector).is_empty());
     }
 
     #[test]
