@@ -822,12 +822,17 @@ tracker meets that can be wrong.
       setting then needs no new column. Each predictor parses the map into its own typed settings,
       and refuses a key it does not know or a value it cannot read. Migrate the v2 rows, keeping
       their run ids, and read the map in `/choose-predictor`'s `runs.sql`.
-- [ ] Add a cooldown to `CrowFlies`, as a setting: a crossing alerts for at most N, and alerts
+- [x] Add a cooldown to `CrowFlies`, as a setting: a crossing alerts for at most N, and alerts
       again only once it leaves the watching radius. CrowFlies alerts a crossing through its pass
       and after it, and the tracker re-alerts a passed crossing on its next alert. A cooldown that
       starts at the last alert would therefore never start. Run it at 1 km over every session, and
       compare it with the 1 km run without one. This is a quick, simple form of Phase 8's
       debouncing.
+      A 2-minute cooldown raised precision from 0.327 to 0.374 and recall from 0.862 to 0.883, and
+      cut false alarms from 20.3 to 17.4 per hour. It added 236 misses. The apps keep no cooldown,
+      since the gain does not justify the code, and the cooldown is removed again.
+      [`2026-11-11-choose-predictor.md`](evaluations/2026-11-11-choose-predictor.md) records the
+      run.
 
 #### Phase 4: the online pass detector
 

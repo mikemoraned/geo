@@ -1,0 +1,78 @@
+# Choosing the predictor
+
+*Report of 2026-11-11, from the evaluation runs in gold. It records the first run of CrowFlies with
+a cooldown, compares it with the runs it shares settings with, and records the predictor and
+settings the apps run as a result.*
+
+The apps run CrowFlies with an alerting radius of 1 km, a horizon of 5 minutes, and no cooldown,
+as `platform-core` builds it. They watch crossings within 5 km. Without a cooldown, the watching
+radius changes no alert, so the 1 km run without one measures what the apps do. That run is marked
+*(apps)* below.
+
+## Runs
+
+### All 34,521 sessions in DE
+
+| Setting | Value |
+| --- | --- |
+| Runs | `27013fff-1ae7-58c3-81ee-0098a4461cbd`, `adc72dc8-02c4-57cf-a431-53031612a5d9`, `35d02716-001e-5aab-b004-62fd02642d53`, `8d19431d-16ad-5baf-bdc6-aa5f58a68510`, in the order of the table below |
+| Evaluation version | `replay-v1` |
+| Sessions | all 34,521 in DE with `realtime_percentage` ≥ 90, 30,653.9 hours |
+| Pass detector | offline |
+| Scoring | horizon 5 min, last moment 30 s, ramp 1 min, last-moment score 0.25, floor 0.05, warm-up 1 min |
+| Bootstrap | 1000 resamples, seed 1 |
+
+| Predictor | Float | Precision | Recall | False alarms / h | Lead p10 / median / p90 | Passes | Notifications | False alarms | Repeats | Misses |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| CrowFlies, radius 1 km, horizon 5 min *(apps)* | f32 | 0.327 [0.326, 0.329] | 0.862 [0.858, 0.866] | 20.3 [20.0, 20.5] | 20 / 40 / 80 s | 415,707 | 1,094,457 | 621,220 | 57,530 | 0 |
+| CrowFlies, radius 1 km, horizon 5 min, cooldown 2 min | f32 | 0.374 [0.372, 0.376] | 0.883 [0.880, 0.887] | 17.4 [17.2, 17.6] | 20 / 40 / 110 s | 415,707 | 981,888 | 534,298 | 32,119 | 236 |
+| CrowFlies, radius 2 km, horizon 5 min | f32 | 0.269 [0.268, 0.271] | 0.903 [0.901, 0.905] | 28.6 [28.3, 28.9] | 40 / 90 / 210 s | 415,707 | 1,393,957 | 877,225 | 101,025 | 0 |
+| CrowFlies, radius 3 km, horizon 5 min | f32 | 0.212 [0.210, 0.213] | 0.859 [0.857, 0.861] | 36.9 [36.5, 37.3] | 70 / 140 / 320 s | 415,707 | 1,684,952 | 1,131,825 | 137,420 | 0 |
+
+Every session the filter keeps is in these runs, so the pick seed chooses nothing. Each run watches
+crossings within its alerting radius, so the cooldown run lets a crossing alert again once the
+train is 1 km from it. The report of 2026-11-10 compares the runs without a cooldown.
+
+## Comparison
+
+The cooldown run differs from the 1 km run without one on all three measures, and is better on
+each:
+
+- **Precision** rises from 0.327 to 0.374.
+- **Recall** rises from 0.862 to 0.883.
+- **False alarms per hour** fall from 20.3 to 17.4.
+
+Against 2 km, the cooldown run scores lower recall, at 0.883 against 0.903. It scores higher
+precision and fewer false alarms per hour. Against 3 km, it is better on all three measures.
+
+The cooldown cuts false alarms by 14%, from 621,220 to 534,298, and repeats by 44%, from 57,530 to
+32,119. Before the cooldown, 77% of false alarms came after the train's last pass of the crossing,
+so most of those remain.
+
+The cooldown run misses 236 passes, where every run without a cooldown misses none. That is 0.06%
+of passes. These runs do not show the cause.
+
+## Trade-offs
+
+At 1 km, the cooldown gains on every measure and gives up nothing the intervals can see. The
+misses are the one cost, and they are too few to move recall.
+
+The run differs from the apps in one setting that a cooldown makes matter. The apps watch 5 km, and
+a crossing alerts again only once it leaves the watching radius. In the apps, a cooled crossing
+would stay quiet until the train is 5 km from it, not 1 km. No run measures that. A wider watching
+radius holds a crossing quiet for longer, which can cut more false alarms and can add misses.
+
+The cooldown leaves 17.4 false alarms per hour, one every three and a half minutes. It is a step
+towards an alert a rider can trust, not the whole way.
+
+I recommend the 2-minute cooldown at 1 km, with the apps watching 1 km so that they run what was
+measured. Watching 5 km instead needs a run that watches 5 km first, and `evaluate` takes no
+watching radius of its own yet.
+
+## Choice
+
+After the cooldown run, the apps keep CrowFlies with an alerting radius of 1 km, a horizon of 5
+minutes, no cooldown, and a watching radius of 5 km. The user judged the gain too small for the
+code it adds. The run was meant to keep a later comparison from facing an needlessly weak CrowFlies,
+and a cooldown does not make CrowFlies much stronger. The cooldown is removed from the code, so
+`evaluate` can no longer read this run's settings.
