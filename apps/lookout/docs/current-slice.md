@@ -838,7 +838,7 @@ tracker meets that can be wrong.
 
 The apps cannot read ground truth, so they detect each pass from the samples alone.
 
-- [ ] Add the online implementation of `DetectPasses` to `predictor`: a crossing within a pass
+- [x] Add the online implementation of `DetectPasses` to `predictor`: a crossing within a pass
       radius of the latest sample.
 - [ ] Evaluate the online detector against the offline one over the same sessions and seed,
       sweeping the pass radius, and choose the radius with the user.
