@@ -874,7 +874,7 @@ measures how far that departs from ground truth, as the decision on skew sets ou
 - [x] Measure the skew in `replay`, as the decision on skew sets out. Each sample goes to the online
       detector beside the offline one, and the run's skew goes to `evaluation_skew_v1`. `evaluate`
       takes the online pass radius, and prints the skew apart from the predictor's measures.
-- [ ] Report each run's skew in `/choose-predictor`, in a section of its own that says the skew
+- [x] Report each run's skew in `/choose-predictor`, in a section of its own that says the skew
       measures the detectors, not the predictor.
 - [ ] Run CrowFlies at 1 km over every session with a pass radius of 100 m, and record its skew
       under Observations.
