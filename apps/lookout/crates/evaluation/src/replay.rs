@@ -240,6 +240,7 @@ mod tests {
             Alerting {
                 radius: Radius::new(1_000.0).expect("a radius"),
                 horizon: Span::new("5m").expect("a span"),
+                cooldown: None,
             },
         )
         .expect("alerting within what it watches");
@@ -276,6 +277,7 @@ mod tests {
             Alerting {
                 radius: Radius::new(1_000.0).expect("a radius"),
                 horizon: Span::new("5m").expect("a span"),
+                cooldown: None,
             },
         )
         .expect("alerting within what it watches");

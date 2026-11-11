@@ -220,6 +220,7 @@ mod tests {
             predictor: Predictor::CrowFlies(CrowFliesSettings {
                 radius: Radius::new(5_000.0).expect("a radius"),
                 horizon: span("5m"),
+                cooldown: None,
             }),
             float_type: FloatType::F64,
             ..oracle_run()
