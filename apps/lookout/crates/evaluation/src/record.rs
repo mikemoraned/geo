@@ -4,15 +4,13 @@ use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use code_version::CodeVersion;
 use domain::Span;
 use medallion::{FingerprintError, Root, RunId};
-use medallion_model::{
-    EvaluationRunRowV3, EvaluationSessionRowV1, PassDetectorName, TrainSessionRowV3,
-};
+use medallion_model::{EvaluationRunRowV4, EvaluationSessionRowV1, TrainSessionRowV3};
 use uuid::Uuid;
 
 use crate::fingerprints::Fingerprints;
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};
-use crate::settings::SettingsError;
+use crate::settings::{SettingsError, read_online_detector, write_online_detector};
 use crate::steps::{Predictor, Run};
 use crate::summarise::Bootstrap;
 
@@ -30,7 +28,7 @@ pub struct Inputs {
 pub struct Recorded {
     pub run_id: RunId,
     pub date: NaiveDate,
-    pub row: EvaluationRunRowV3,
+    pub row: EvaluationRunRowV4,
     pub sessions: Vec<EvaluationSessionRowV1>,
 }
 
@@ -39,7 +37,9 @@ pub enum RecordError {
     #[error(transparent)]
     Fingerprint(#[from] FingerprintError),
     #[error("the run's predictor settings cannot be read back: {0}")]
-    PredictorSettings(#[from] SettingsError),
+    PredictorSettings(SettingsError),
+    #[error("the run's online detector settings cannot be read back: {0}")]
+    OnlineDetectorSettings(SettingsError),
     #[error("the run's `{column}` cannot be read back as a setting: {reason}")]
     Setting {
         column: &'static str,
@@ -70,8 +70,8 @@ pub async fn record(
     })
 }
 
-pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> EvaluationRunRowV3 {
-    EvaluationRunRowV3 {
+pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> EvaluationRunRowV4 {
+    EvaluationRunRowV4 {
         started_at,
         evaluation_version: EVALUATION_VERSION.to_string(),
         code_version: inputs.code_version.clone(),
@@ -81,7 +81,7 @@ pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> Evaluat
         pick_seed: run.pick.seed.0,
         predictor: run.predictor.name(),
         predictor_settings: run.predictor.settings(),
-        pass_detector: PassDetectorName::Offline,
+        online_detector_settings: write_online_detector(run.online_detector),
         float_type: run.float_type,
         horizon_ms: milliseconds(run.scoring.horizon),
         last_moment_ms: milliseconds(run.scoring.last_moment),
@@ -95,8 +95,8 @@ pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> Evaluat
     }
 }
 
-pub fn run_id(row: &EvaluationRunRowV3) -> RunId {
-    let unstarted = EvaluationRunRowV3 {
+pub fn run_id(row: &EvaluationRunRowV4) -> RunId {
+    let unstarted = EvaluationRunRowV4 {
         started_at: DateTime::UNIX_EPOCH,
         ..row.clone()
     };
@@ -107,10 +107,10 @@ pub fn run_id(row: &EvaluationRunRowV3) -> RunId {
     RunId::new(id.to_string()).expect("a UUID names a partition")
 }
 
-impl TryFrom<&EvaluationRunRowV3> for Run {
+impl TryFrom<&EvaluationRunRowV4> for Run {
     type Error = RecordError;
 
-    fn try_from(row: &EvaluationRunRowV3) -> Result<Self, Self::Error> {
+    fn try_from(row: &EvaluationRunRowV4) -> Result<Self, Self::Error> {
         Ok(Run {
             pick: Pick {
                 country: row.country.parse().map_err(|err| setting("country", err))?,
@@ -118,7 +118,10 @@ impl TryFrom<&EvaluationRunRowV3> for Run {
                 sessions: count("sessions", row.sessions)?,
                 seed: Seed(row.pick_seed),
             },
-            predictor: Predictor::read(row.predictor, &row.predictor_settings)?,
+            predictor: Predictor::read(row.predictor, &row.predictor_settings)
+                .map_err(RecordError::PredictorSettings)?,
+            online_detector: read_online_detector(&row.online_detector_settings)
+                .map_err(RecordError::OnlineDetectorSettings)?,
             float_type: row.float_type,
             scoring: Scoring {
                 horizon: span_of("horizon_ms", row.horizon_ms)?,
@@ -182,7 +185,7 @@ mod tests {
 
     use super::*;
     use crate::fixtures::instant;
-    use crate::settings::{CrowFliesSettings, OracleSettings};
+    use crate::settings::{CrowFliesSettings, OnlineDetectorSettings, OracleSettings};
 
     fn span(text: &str) -> Span {
         Span::new(text).expect("a span")
@@ -199,6 +202,7 @@ mod tests {
             predictor: Predictor::Oracle(OracleSettings {
                 horizon: span("5m"),
             }),
+            online_detector: None,
             float_type: FloatType::F32,
             scoring: Scoring {
                 horizon: span("5m"),
@@ -220,6 +224,9 @@ mod tests {
             predictor: Predictor::CrowFlies(CrowFliesSettings {
                 radius: Radius::new(5_000.0).expect("a radius"),
                 horizon: span("5m"),
+            }),
+            online_detector: Some(OnlineDetectorSettings {
+                pass_radius: Radius::new(100.0).expect("a radius"),
             }),
             float_type: FloatType::F64,
             ..oracle_run()
@@ -301,7 +308,7 @@ mod tests {
 
     #[test]
     fn an_oracle_row_without_its_horizon_is_refused() {
-        let row = EvaluationRunRowV3 {
+        let row = EvaluationRunRowV4 {
             predictor_settings: BTreeMap::new(),
             ..run_row(&oracle_run(), &inputs(), instant(0))
         };

@@ -17,7 +17,7 @@ pub enum SettingsError {
     Unknown(Vec<String>),
 }
 
-pub trait PredictorSettings: Sized {
+pub trait TypedSettings: Sized {
     fn write(&self) -> BTreeMap<String, String>;
     fn read(settings: &BTreeMap<String, String>) -> Result<Self, SettingsError>;
 }
@@ -33,7 +33,12 @@ pub struct CrowFliesSettings {
     pub horizon: Span,
 }
 
-impl PredictorSettings for OracleSettings {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OnlineDetectorSettings {
+    pub pass_radius: Radius,
+}
+
+impl TypedSettings for OracleSettings {
     fn write(&self) -> BTreeMap<String, String> {
         BTreeMap::from([("horizon".to_string(), self.horizon.to_string())])
     }
@@ -48,7 +53,7 @@ impl PredictorSettings for OracleSettings {
     }
 }
 
-impl PredictorSettings for CrowFliesSettings {
+impl TypedSettings for CrowFliesSettings {
     fn write(&self) -> BTreeMap<String, String> {
         BTreeMap::from([
             ("radius_metres".to_string(), self.radius.to_string()),
@@ -65,6 +70,40 @@ impl PredictorSettings for CrowFliesSettings {
         reading.finish()?;
         Ok(read)
     }
+}
+
+impl TypedSettings for OnlineDetectorSettings {
+    fn write(&self) -> BTreeMap<String, String> {
+        BTreeMap::from([(
+            "pass_radius_metres".to_string(),
+            self.pass_radius.to_string(),
+        )])
+    }
+
+    fn read(settings: &BTreeMap<String, String>) -> Result<Self, SettingsError> {
+        let mut reading = Reading::new(settings);
+        let read = Self {
+            pass_radius: reading.take("pass_radius_metres")?,
+        };
+        reading.finish()?;
+        Ok(read)
+    }
+}
+
+pub fn write_online_detector(
+    online_detector: Option<OnlineDetectorSettings>,
+) -> BTreeMap<String, String> {
+    online_detector
+        .map(|online_detector| online_detector.write())
+        .unwrap_or_default()
+}
+
+pub fn read_online_detector(
+    settings: &BTreeMap<String, String>,
+) -> Result<Option<OnlineDetectorSettings>, SettingsError> {
+    (!settings.is_empty())
+        .then(|| OnlineDetectorSettings::read(settings))
+        .transpose()
 }
 
 impl Predictor {
@@ -186,6 +225,43 @@ mod tests {
                 Ok(predictor)
             );
         }
+    }
+
+    fn online_detector() -> OnlineDetectorSettings {
+        OnlineDetectorSettings {
+            pass_radius: Radius::new(100.0).expect("a radius"),
+        }
+    }
+
+    #[test]
+    fn the_online_detector_writes_its_pass_radius_in_metres() {
+        assert_eq!(
+            write_online_detector(Some(online_detector())),
+            map(&[("pass_radius_metres", "100")])
+        );
+    }
+
+    #[test]
+    fn a_run_without_an_online_detector_writes_an_empty_map() {
+        assert_eq!(write_online_detector(None), BTreeMap::new());
+    }
+
+    #[test]
+    fn the_online_detectors_settings_survive_a_round_trip_through_the_map() {
+        for online_detector in [None, Some(online_detector())] {
+            assert_eq!(
+                read_online_detector(&write_online_detector(online_detector)),
+                Ok(online_detector)
+            );
+        }
+    }
+
+    #[test]
+    fn online_detector_settings_without_a_pass_radius_are_refused() {
+        assert_eq!(
+            read_online_detector(&map(&[("radius_metres", "100")])),
+            Err(SettingsError::Missing("pass_radius_metres"))
+        );
     }
 
     #[test]

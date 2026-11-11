@@ -58,7 +58,7 @@ def runs(lookout_medallion, pa):
             "SELECT run.run_id, run.sessions, "
             "CAST(run.predictor_settings['radius_metres'] AS DOUBLE) AS radius_metres, "
             "summary.precision, summary.recall, summary.false_alarms_per_hour "
-            "FROM evaluation_run_v3 AS run JOIN evaluation_summary_v1 AS summary USING (run_id) "
+            "FROM evaluation_run_v4 AS run JOIN evaluation_summary_v1 AS summary USING (run_id) "
             "WHERE run.predictor = 'crow_flies' "
             "ORDER BY run.sessions DESC, radius_metres"
         )

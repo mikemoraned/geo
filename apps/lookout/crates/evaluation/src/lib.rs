@@ -22,6 +22,9 @@ pub use rows::{RowsError, outcome_rows, replayed_from, scored_from, summary_row,
 pub use score::{
     Class, Credit, NotAScore, Outcome, Score, ScoreError, Scoring, UnreadableScore, Verdict, score,
 };
-pub use settings::{CrowFliesSettings, OracleSettings, PredictorSettings, SettingsError};
+pub use settings::{
+    CrowFliesSettings, OnlineDetectorSettings, OracleSettings, SettingsError, TypedSettings,
+    read_online_detector, write_online_detector,
+};
 pub use store::{compact_ids, read_passes};
 pub use summarise::{Bootstrap, Estimate, LeadTimes, SummariseError, Summary, summarise};

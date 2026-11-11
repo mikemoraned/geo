@@ -21,7 +21,7 @@ that ends in a choice of predictor and settings for the apps. The report is a da
    settings it passes, from the code. Mark that predictor's runs in the report.
 
 4. **Group the comparable runs.** Two runs are comparable when they share `evaluation_version`,
-   `country`, `realtime_at_least`, `sessions`, `pick_seed`, `pass_detector`, and every scoring
+   `country`, `realtime_at_least`, `sessions`, `pick_seed`, and every scoring
    setting: `horizon_ms`, `last_moment_ms`, `ramp_ms`, `last_moment_score`, `floor`, and
    `warm_up_ms`. A run outside every group of two or more goes in a list of its own.
    The oracle reads ground truth, which the apps cannot, so it can never be chosen. Its runs are a

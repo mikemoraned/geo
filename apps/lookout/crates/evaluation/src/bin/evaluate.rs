@@ -119,6 +119,7 @@ impl Settings {
                 seed: Seed(self.seed),
             },
             predictor,
+            online_detector: None,
             float_type: self.float_type,
             scoring: Scoring {
                 horizon: self.horizon,

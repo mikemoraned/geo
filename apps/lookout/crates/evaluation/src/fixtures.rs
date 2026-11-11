@@ -125,6 +125,7 @@ pub fn run_of(predictor: Predictor) -> Run {
             seed: Seed(1),
         },
         predictor,
+        online_detector: None,
         float_type: FloatType::F32,
         scoring: first_runs(),
         bootstrap: Bootstrap {
