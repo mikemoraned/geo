@@ -25,12 +25,14 @@ summary = pa.table(evaluation.summarise(sessions=sessions, outcomes=outcomes, bo
 
 Each step takes the tables of the steps before it, so a notebook can inspect or change a table
 between steps. `run` takes the arguments of every step, and returns the four tables in a dict.
+Given an `OnlineDetector`, `run` also returns a fifth table, `skew`: how far the passes the online
+detector reports depart from ground truth. Skew describes the detectors, not the predictor.
 
 A step's table crosses as Arrow, through the PyCapsule interface. A table of transitions, outcomes,
-or a summary has the columns of the gold dataset of that name, `evaluation_transition_v1`,
-`evaluation_outcome_v1`, or `evaluation_summary_v1`. A table handed back to a step is read through
-those columns. A table that lacks one, or that names a session the step was not given, raises a
-`ValueError`.
+a summary, or a skew has the columns of the gold dataset of that name, `evaluation_transition_v1`,
+`evaluation_outcome_v1`, `evaluation_summary_v1`, or `evaluation_skew_v1`. A table handed back to
+a step is read through those columns. A table that lacks one, or that names a session the step was
+not given, raises a `ValueError`.
 
 ## Using it from a notebook
 

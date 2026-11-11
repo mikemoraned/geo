@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use medallion::{Root, RunError, RunId, write_run};
 use medallion_model::{
-    EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationSummaryRowV1,
+    EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationSkewRowV1, EvaluationSummaryRowV1,
     EvaluationTransitionRowV1, TrainSessionRowV3,
 };
 
@@ -11,7 +11,7 @@ use code_version::CodeVersion;
 
 use crate::record::{RecordError, Recorded, record};
 use crate::runs::{RunsError, read_run_row, read_run_rows};
-use crate::steps::{self, Ran, Run, StepError};
+use crate::steps::{self, Ran, Replayed, Run, StepError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum GoldError {
@@ -43,18 +43,37 @@ pub async fn pick(root: &Root, run: &Run, code: &CodeVersion) -> Result<RunId, G
     Ok(begin(root, run, code, &picked).await?.run_id)
 }
 
-pub async fn replay(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<(), GoldError> {
+pub async fn replay(
+    root: &Root,
+    run_id: &RunId,
+    code: &CodeVersion,
+) -> Result<Option<EvaluationSkewRowV1>, GoldError> {
     let begun = resume(root, run_id, code).await?;
-    let transitions = steps::replay(
+    let replayed = steps::replay(
         root,
         begun.run.pick.country,
         &begun.sessions,
         begun.run.predictor,
         begun.run.float_type,
+        begun.run.skewing(),
     )
     .await?;
-    tracing::info!(%run_id, transitions = transitions.len(), "replayed");
-    write_run(root, begun.date, run_id, &transitions).await?;
+    write_replayed(root, begun.date, run_id, &replayed).await?;
+    Ok(replayed.skew)
+}
+
+async fn write_replayed(
+    root: &Root,
+    date: NaiveDate,
+    run_id: &RunId,
+    replayed: &Replayed,
+) -> Result<(), GoldError> {
+    tracing::info!(%run_id, transitions = replayed.transitions.len(), "replayed");
+    write_run(root, date, run_id, &replayed.transitions).await?;
+    if let Some(skew) = &replayed.skew {
+        tracing::info!(%run_id, "measured the skew");
+        write_run(root, date, run_id, std::slice::from_ref(skew)).await?;
+    }
     Ok(())
 }
 
@@ -98,17 +117,18 @@ pub async fn run(root: &Root, run: &Run, code: &CodeVersion) -> Result<(RunId, R
     } = begin(root, run, code, &picked).await?;
 
     let crossings_and_passes = steps::read_crossings_and_passes(root, country, &sessions).await?;
-    let transitions = steps::replay_against(
+    let replayed = steps::replay_against(
         root,
         country,
         &sessions,
         &crossings_and_passes,
         run.predictor,
         run.float_type,
+        run.skewing(),
     )
     .await?;
-    tracing::info!(%run_id, transitions = transitions.len(), "replayed");
-    write_run(root, date, &run_id, &transitions).await?;
+    write_replayed(root, date, &run_id, &replayed).await?;
+    let Replayed { transitions, skew } = replayed;
 
     let outcomes =
         steps::score_against(&sessions, &crossings_and_passes, &transitions, &run.scoring)?;
@@ -124,6 +144,7 @@ pub async fn run(root: &Root, run: &Run, code: &CodeVersion) -> Result<(RunId, R
         Ran {
             picked,
             transitions,
+            skew,
             outcomes,
             summary,
         },

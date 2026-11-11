@@ -50,7 +50,7 @@ def oracle():
     return lookout_evaluation.Oracle(horizon="5m")
 
 
-def run(root, predictor):
+def run(root, predictor, **settings):
     ran = lookout_evaluation.run(
         country="DE",
         realtime_at_least=90.0,
@@ -60,6 +60,7 @@ def run(root, predictor):
         scoring=first_runs(),
         bootstrap=bootstrap(),
         root=root,
+        **settings,
     )
     return {name: pa.table(table) for name, table in ran.items()}
 
@@ -70,6 +71,25 @@ def test_the_oracle_run_scores_perfectly(written):
     assert (summary["passes"], summary["notifications"], summary["misses"]) == (3, 3, 0)
     assert (summary["precision"], summary["recall"]) == (1.0, 1.0)
     assert (summary["precision_low"], summary["recall_low"]) == (1.0, 1.0)
+
+
+def test_a_run_with_an_online_detector_measures_its_skew(written):
+    online_detector = lookout_evaluation.OnlineDetector(pass_radius_metres=100.0)
+
+    skew = run(written, oracle(), online_detector=online_detector)["skew"].to_pylist()[0]
+
+    assert (skew["passes"], skew["seen_passes"], skew["visits"], skew["unmatched_visits"]) == (
+        3,
+        3,
+        6,
+        3,
+    )
+    assert (skew["seen"], skew["unmatched"]) == (1.0, 0.5)
+    assert skew["offset_median_ms"] == -300_000
+
+
+def test_a_run_without_an_online_detector_measures_no_skew(written):
+    assert "skew" not in run(written, oracle())
 
 
 def test_the_steps_run_one_by_one_give_what_the_run_gives(written):

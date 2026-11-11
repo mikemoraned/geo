@@ -3,13 +3,14 @@ use std::collections::BTreeMap;
 use chrono::TimeDelta;
 use domain::{CrossingCompactId, SessionId};
 use medallion_model::{
-    EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationSummaryRowV1,
+    EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationSkewRowV1, EvaluationSummaryRowV1,
     EvaluationTransitionRowV1, NotificationClass, OutcomeKind,
 };
 use predictor::Transition;
 
 use crate::score::{Class, Credit, NotAScore, Outcome, Score, Verdict};
-use crate::summarise::{Estimate, LeadTimes, Summary};
+use crate::skew::Skew;
+use crate::summarise::{Estimate, Spread, Summary};
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum RowsError {
@@ -90,7 +91,7 @@ pub fn summary_row(summary: &Summary) -> EvaluationSummaryRowV1 {
     let value = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.value);
     let low = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.low);
     let high = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.high);
-    let lead = |pick: fn(&LeadTimes) -> TimeDelta| {
+    let lead = |pick: fn(&Spread) -> TimeDelta| {
         summary
             .lead_times
             .as_ref()
@@ -116,6 +117,33 @@ pub fn summary_row(summary: &Summary) -> EvaluationSummaryRowV1 {
         lead_p10_ms: lead(|lead_times| lead_times.p10),
         lead_median_ms: lead(|lead_times| lead_times.median),
         lead_p90_ms: lead(|lead_times| lead_times.p90),
+    }
+}
+
+pub fn skew_row(skew: &Skew) -> EvaluationSkewRowV1 {
+    let value = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.value);
+    let low = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.low);
+    let high = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.high);
+    let offset = |pick: fn(&Spread) -> TimeDelta| {
+        skew.offsets
+            .as_ref()
+            .map(|offsets| pick(offsets).num_milliseconds())
+    };
+    EvaluationSkewRowV1 {
+        sessions: skew.sessions as u64,
+        passes: skew.passes as u64,
+        visits: skew.visits as u64,
+        seen_passes: skew.seen_passes as u64,
+        unmatched_visits: skew.unmatched_visits as u64,
+        seen: value(skew.seen),
+        seen_low: low(skew.seen),
+        seen_high: high(skew.seen),
+        unmatched: value(skew.unmatched),
+        unmatched_low: low(skew.unmatched),
+        unmatched_high: high(skew.unmatched),
+        offset_p10_ms: offset(|offsets| offsets.p10),
+        offset_median_ms: offset(|offsets| offsets.median),
+        offset_p90_ms: offset(|offsets| offsets.p90),
     }
 }
 
@@ -455,7 +483,7 @@ mod tests {
             precision: estimate(0.4),
             recall: estimate(0.5),
             false_alarms_per_hour: None,
-            lead_times: Some(LeadTimes {
+            lead_times: Some(Spread {
                 p10: TimeDelta::seconds(60),
                 median: TimeDelta::seconds(120),
                 p90: TimeDelta::seconds(300),

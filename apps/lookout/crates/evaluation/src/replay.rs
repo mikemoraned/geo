@@ -6,10 +6,11 @@ use medallion::{Country, Query, QueryError, Root};
 use medallion_model::{
     EvaluationSessionRowV1, TrainSessionSamplePositionV3, TrainSessionSampleRowV3,
 };
-use predictor::{DetectPasses, Event, OutOfOrder, Predict, Tracker, Transition};
+use predictor::{DetectPasses, Event, OnlineDetector, OutOfOrder, Predict, Tracker, Transition};
 use rayon::prelude::*;
 
 use crate::offline::{OfflineDetector, PassesBySession};
+use crate::skew::{Visit, visits};
 use crate::store::picked;
 
 #[derive(Debug, thiserror::Error)]
@@ -57,15 +58,22 @@ where
     Ok(transitions)
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionReplay {
+    pub transitions: Vec<Transition>,
+    pub visits: Option<Vec<Visit>>,
+}
+
 pub async fn replay<F, Pr>(
     root: &Root,
     country: Country,
     sessions: &[EvaluationSessionRowV1],
     passes: &PassesBySession,
     predictor: impl Fn(&SessionId) -> Pr + Sync,
-) -> Result<BTreeMap<SessionId, Vec<Transition>>, ReplayError>
+    online_detector: Option<&OnlineDetector<F>>,
+) -> Result<BTreeMap<SessionId, SessionReplay>, ReplayError>
 where
-    F: Precision + Send,
+    F: Precision + Send + Sync,
     Pr: Predict<F> + Send,
 {
     let sample_rows = Query::new(root.clone())
@@ -103,8 +111,18 @@ where
     sessions
         .into_par_iter()
         .map(|(session_id, samples, detector)| {
+            let visits = online_detector
+                .map(|online_detector| visits(samples.iter().copied(), online_detector.clone()))
+                .transpose()
+                .map_err(ReplayError::Detecting)?;
             let transitions = replay_session(samples, predictor(&session_id), detector)?;
-            Ok((session_id, transitions))
+            Ok((
+                session_id,
+                SessionReplay {
+                    transitions,
+                    visits,
+                },
+            ))
         })
         .collect()
 }
@@ -380,18 +398,23 @@ mod tests {
             &[stored_pass("a", 1, 15), stored_pass("c", 1, 25)],
         );
 
-        let replayed = replay(&root, Country::Germany, &sessions, &passes, |_| {
-            Scripted::alerting(1, &[0, 10, 20, 30])
-        })
+        let replayed = replay(
+            &root,
+            Country::Germany,
+            &sessions,
+            &passes,
+            |_| Scripted::alerting(1, &[0, 10, 20, 30]),
+            None,
+        )
         .await
         .expect("a replay");
 
         let actual_at: BTreeMap<SessionId, Vec<i64>> = replayed
             .iter()
-            .map(|(session_id, transitions)| {
+            .map(|(session_id, replayed)| {
                 (
                     session_id.clone(),
-                    kinds(transitions)
+                    kinds(&replayed.transitions)
                         .into_iter()
                         .filter(|&(_, _, _, to)| to == StateKind::ActualPass)
                         .map(|(seconds, ..)| seconds)
@@ -414,14 +437,19 @@ mod tests {
         let sessions = picked(&["a"]);
         let passes = resolved(&sessions, &[stored_pass("a", 1, 15)]);
 
-        let replayed = replay(&root, Country::Germany, &sessions, &passes, |_| {
-            Scripted::alerting(1, &[0, 10, 20, 30])
-        })
+        let replayed = replay(
+            &root,
+            Country::Germany,
+            &sessions,
+            &passes,
+            |_| Scripted::alerting(1, &[0, 10, 20, 30]),
+            None,
+        )
         .await
         .expect("a replay in order");
 
         assert_eq!(
-            kinds(&replayed[&named("a")]),
+            kinds(&replayed[&named("a")].transitions),
             [
                 (0, 1, StateKind::OutOfReach, StateKind::AlertedPass),
                 (20, 1, StateKind::AlertedPass, StateKind::ActualPass),
@@ -437,12 +465,78 @@ mod tests {
         let sessions = picked(&["a", "z"]);
         let passes = resolved(&sessions, &[stored_pass("a", 1, 15)]);
 
-        let replayed = replay(&root, Country::Germany, &sessions, &passes, |_| {
-            Scripted::alerting(1, &[0, 10, 20, 30])
-        })
+        let replayed = replay(
+            &root,
+            Country::Germany,
+            &sessions,
+            &passes,
+            |_| Scripted::alerting(1, &[0, 10, 20, 30]),
+            None,
+        )
         .await
         .expect("a replay");
 
-        assert_eq!(replayed.get(&named("z")), Some(&Vec::new()));
+        assert_eq!(
+            replayed
+                .get(&named("z"))
+                .map(|replayed| &replayed.transitions),
+            Some(&Vec::new())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_replay_with_an_online_detector_gathers_each_sessions_visits() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = stored(tmp.path(), &every_session_samples(&["a"])).await;
+        let sessions = picked(&["a"]);
+        let passes = resolved(&sessions, &[stored_pass("a", 1, 10)]);
+        let online_detector = OnlineDetector::new(
+            vec![
+                CrossingCompact::at(1, DRESDEN_HBF.y() + 0.002, DRESDEN_HBF.x())
+                    .expect("a crossing"),
+            ],
+            Radius::new(300.0).expect("a radius"),
+        );
+
+        let replayed = replay(
+            &root,
+            Country::Germany,
+            &sessions,
+            &passes,
+            |_| Scripted::alerting(1, &[0, 10, 20, 30]),
+            Some(&online_detector),
+        )
+        .await
+        .expect("a replay");
+
+        assert_eq!(
+            replayed[&named("a")].visits,
+            Some(vec![Visit {
+                first: instant(0),
+                last: instant(20),
+                crossing_compact_id: CrossingCompactId::new(1),
+            }])
+        );
+    }
+
+    #[tokio::test]
+    async fn a_replay_without_an_online_detector_gathers_no_visits() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = stored(tmp.path(), &every_session_samples(&["a"])).await;
+        let sessions = picked(&["a"]);
+        let passes = resolved(&sessions, &[stored_pass("a", 1, 10)]);
+
+        let replayed = replay(
+            &root,
+            Country::Germany,
+            &sessions,
+            &passes,
+            |_| Scripted::alerting(1, &[0, 10, 20, 30]),
+            None,
+        )
+        .await
+        .expect("a replay");
+
+        assert_eq!(replayed[&named("a")].visits, None);
     }
 }

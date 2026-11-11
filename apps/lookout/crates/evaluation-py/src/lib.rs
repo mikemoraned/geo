@@ -8,7 +8,9 @@ use evaluation::gold::{self, GoldError};
 use evaluation::record::session_rows;
 use evaluation::runs::RunsError;
 use evaluation::steps::{self, Predictor, Run, StepError};
-use evaluation::{CrowFliesSettings, OracleSettings, Pick, PickError, Score, Seed};
+use evaluation::{
+    CrowFliesSettings, OnlineDetectorSettings, OracleSettings, Pick, PickError, Score, Seed,
+};
 use medallion::Country;
 use medallion_model::{
     EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationTransitionRowV1, FloatType,
@@ -68,6 +70,33 @@ impl CrowFlies {
             "CrowFlies(radius_metres={:?}, horizon=\"{}\")",
             self.radius.as_metres(),
             self.horizon
+        )
+    }
+}
+
+/// The online pass detector, which reports each crossing within `pass_radius_metres` of the latest
+/// sample as passing. A run that has one measures how far its passes skew from ground truth.
+#[pyclass(frozen)]
+struct OnlineDetector {
+    settings: OnlineDetectorSettings,
+}
+
+#[pymethods]
+impl OnlineDetector {
+    #[new]
+    #[pyo3(signature = (*, pass_radius_metres))]
+    fn new(pass_radius_metres: f64) -> PyResult<Self> {
+        Ok(Self {
+            settings: OnlineDetectorSettings {
+                pass_radius: Radius::new(pass_radius_metres).map_err(value_error)?,
+            },
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "OnlineDetector(pass_radius_metres={:?})",
+            self.settings.pass_radius.as_metres()
         )
     }
 }
@@ -201,12 +230,12 @@ fn replay(
     let transitions = py
         .detach(|| {
             runtime().block_on(steps::replay(
-                &root, country, &sessions, predictor, float_type,
+                &root, country, &sessions, predictor, float_type, None,
             ))
         })
         .map_err(step_error)?;
 
-    table_of(&transitions)
+    table_of(&transitions.transitions)
 }
 
 /// Score the notifications in `transitions` against each session's passes, as an Arrow table.
@@ -267,11 +296,13 @@ fn summarise(
 /// Pick sessions, then replay, score, and summarise them, as a dict of the four steps' tables.
 ///
 /// The dict's keys are `"picked"`, `"transitions"`, `"outcomes"`, and `"summary"`. The arguments
-/// are those of the steps.
+/// are those of the steps. If `online_detector` is an `OnlineDetector`, the run also measures how
+/// far its passes skew from ground truth, under the key `"skew"`, with the columns of gold
+/// `evaluation_skew_v1`.
 #[pyfunction]
 #[pyo3(signature = (
     *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap,
-    float_type="f32", root=None
+    online_detector=None, float_type="f32", root=None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn run<'py>(
@@ -283,13 +314,14 @@ fn run<'py>(
     predictor: &Bound<'py, PyAny>,
     scoring: PyRef<'py, Scoring>,
     bootstrap: PyRef<'py, Bootstrap>,
+    online_detector: Option<PyRef<'py, OnlineDetector>>,
     float_type: &str,
     root: Option<PathBuf>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let settings = Run {
         pick: picking(country, realtime_at_least, sessions, seed)?,
         predictor: predictor_of(predictor)?,
-        online_detector: None,
+        online_detector: online_detector.map(|online_detector| online_detector.settings),
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
@@ -303,6 +335,9 @@ fn run<'py>(
     let tables = PyDict::new(py);
     tables.set_item("picked", table_of(&ran.picked)?)?;
     tables.set_item("transitions", table_of(&ran.transitions)?)?;
+    if let Some(skew) = ran.skew {
+        tables.set_item("skew", table_of(&[skew])?)?;
+    }
     tables.set_item("outcomes", table_of(&ran.outcomes)?)?;
     tables.set_item("summary", table_of(&[ran.summary])?)?;
     Ok(tables)
@@ -317,7 +352,7 @@ fn run<'py>(
 #[pyfunction]
 #[pyo3(signature = (
     *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap,
-    float_type="f32", root=None
+    online_detector=None, float_type="f32", root=None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn evaluate<'py>(
@@ -329,13 +364,14 @@ fn evaluate<'py>(
     predictor: &Bound<'py, PyAny>,
     scoring: PyRef<'py, Scoring>,
     bootstrap: PyRef<'py, Bootstrap>,
+    online_detector: Option<PyRef<'py, OnlineDetector>>,
     float_type: &str,
     root: Option<PathBuf>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let settings = Run {
         pick: picking(country, realtime_at_least, sessions, seed)?,
         predictor: predictor_of(predictor)?,
-        online_detector: None,
+        online_detector: online_detector.map(|online_detector| online_detector.settings),
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
@@ -351,6 +387,9 @@ fn evaluate<'py>(
     tables.set_item("run_id", run_id.to_string())?;
     tables.set_item("picked", table_of(&ran.picked)?)?;
     tables.set_item("transitions", table_of(&ran.transitions)?)?;
+    if let Some(skew) = ran.skew {
+        tables.set_item("skew", table_of(&[skew])?)?;
+    }
     tables.set_item("outcomes", table_of(&ran.outcomes)?)?;
     tables.set_item("summary", table_of(&[ran.summary])?)?;
     Ok(tables)
@@ -367,7 +406,7 @@ fn evaluate<'py>(
 #[pyfunction]
 #[pyo3(signature = (
     *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap, picked,
-    float_type="f32", root=None
+    online_detector=None, float_type="f32", root=None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn record<'py>(
@@ -380,13 +419,14 @@ fn record<'py>(
     scoring: PyRef<'py, Scoring>,
     bootstrap: PyRef<'py, Bootstrap>,
     picked: PyTable,
+    online_detector: Option<PyRef<'py, OnlineDetector>>,
     float_type: &str,
     root: Option<PathBuf>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let settings = Run {
         pick: picking(country, realtime_at_least, sessions, seed)?,
         predictor: predictor_of(predictor)?,
-        online_detector: None,
+        online_detector: online_detector.map(|online_detector| online_detector.settings),
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
@@ -478,6 +518,7 @@ fn gold_error(err: GoldError) -> PyErr {
 fn lookout_evaluation(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<Oracle>()?;
     module.add_class::<CrowFlies>()?;
+    module.add_class::<OnlineDetector>()?;
     module.add_class::<Scoring>()?;
     module.add_class::<Bootstrap>()?;
     module.add_function(wrap_pyfunction!(pick, module)?)?;
