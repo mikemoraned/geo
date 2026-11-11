@@ -121,7 +121,7 @@ are among them, since the ground truth decides whether a pass happened.
 
 ### The datasets
 
-The slice adds three silver datasets and five gold ones. Gold partitions by `run_date` and then
+The slice adds three silver datasets and six gold ones. Gold partitions by `run_date` and then
 `run_id`, as [medallion.md](medallion.md#partitioning) lays out evaluation results.
 
 ```mermaid
@@ -129,22 +129,24 @@ erDiagram
     train_session_v3 ||--|{ train_session_sample_v3 : "sampled as"
     train_session_v3 ||--o{ train_session_crossing_v1 : "passes"
     water_crossing_v2 ||--o{ train_session_crossing_v1 : "passed in"
-    evaluation_run_v3 ||--|{ evaluation_session_v1 : "replays"
+    evaluation_run_v4 ||--|{ evaluation_session_v1 : "replays"
     train_session_v3 ||--o{ evaluation_session_v1 : "picked for"
     evaluation_session_v1 ||--o{ evaluation_transition_v1 : "records"
     evaluation_transition_v1 ||--o| evaluation_outcome_v1 : "notification scored as"
     train_session_crossing_v1 ||--o{ evaluation_outcome_v1 : "scored in"
-    evaluation_run_v3 ||--|| evaluation_summary_v1 : "sums up"
+    evaluation_run_v4 ||--|| evaluation_summary_v1 : "sums up"
+    evaluation_run_v4 ||--o| evaluation_skew_v1 : "measures the skew of"
 ```
 
 - `train_session_v3` and `train_session_sample_v3` are the v2 datasets with
   `realtime_percentage` and `realtime` added.
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
-- `evaluation_run_v3` holds a run's predictor, pass detector, float type, scores and ramp,
+- `evaluation_run_v4` holds a run's predictor, skew settings, float type, scores and ramp,
   evaluation version, country, filter, sample size, seed, and bootstrap resamples. The predictor's
   settings are a map from each setting's name to its value as text, which that predictor parses
-  into its own typed settings. A predictor that takes a new setting needs no new column. The row
+  into its own typed settings. A predictor that takes a new setting needs no new column. The skew
+  settings are a map read the same way, and an empty map is a run that measured no skew. The row
   also holds the run's code version, and a map from each silver dataset the run reads to its
   fingerprint. A dataset added to or removed from the run's inputs needs no new column.
 - `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
@@ -154,6 +156,8 @@ erDiagram
 - `evaluation_outcome_v1` holds each notification with its class and score, and each miss.
 - `evaluation_summary_v1` holds a run's measures and their intervals, with its counts of sessions,
   passes, and notifications.
+- `evaluation_skew_v1` holds a run's skew and its intervals, with its counts of offline passes and
+  online visits.
 
 ### Decisions
 
@@ -208,11 +212,31 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   on 2026-11-05, when the tracker was built.
 - **A pass detector, not a predictor, reports each pass.** One trait has two implementations. The
   apps run the online one, which reports a crossing within a pass radius of the latest sample. A
-  replay runs the offline one, which reports the passes in `train_session_crossing_v1`. An
-  evaluation of its own compares the two. A crossing stays in `ActualPass` while the detector
-  reports it, and leaves on the next prediction after that. A pass in ground truth lasts one
-  sample, so `ActualPass` lasts one round. This beats a predictor reporting the pass, which mixes
-  forecasting a pass with observing one. Changed on 2026-11-05, when the tracker was built.
+  replay scores against the offline one, which reports the passes in `train_session_crossing_v1`,
+  and runs the online one beside it to measure the skew between the two. A crossing stays in
+  `ActualPass` while the detector reports it, and leaves on the next prediction after that. A pass
+  in ground truth lasts one sample, so `ActualPass` lasts one round. This beats a predictor
+  reporting the pass, which mixes forecasting a pass with observing one. Changed on 2026-11-05,
+  when the tracker was built. Changed again on 2026-11-11: an evaluation of its own compared the
+  two detectors until then.
+- **Every run measures the skew between the two detectors, beside the predictor.** Skew is how far
+  the passes the apps can see depart from ground truth. It describes the data and the detectors,
+  not the predictor, so a run and its report keep it apart from the predictor's measures. An
+  online visit is a run of rounds that report one crossing. It matches an offline pass of that
+  crossing when the pass's instant falls within the visit. Three measures make up the skew:
+  - **Seen** is the share of offline passes that an online visit matches.
+  - **Unmatched** is the share of online visits that match no offline pass.
+  - **Offset** runs from each matched pass's instant to its visit's first round, reported as p10,
+    median, and p90.
+
+  Seen and unmatched each carry an interval, from the same bootstrap over sessions as the
+  predictor's measures. Each run records the online pass radius. Ground truth matches within
+  100 m, and takes the nearest sample's instant. At 100 m, seen therefore comes out near 1 and
+  unmatched near 0. The offset falls below zero, since the online detector reports a pass at the
+  first sample within the radius. Simulated GPS error would move all three. This beats evaluating
+  the online detector as a predictor is evaluated, which scores the detector rather than showing
+  how far the apps' view departs from the truth every run is scored against. Decided on
+  2026-11-11.
 - **A predictor debounces its own predictions.** The predictor knows how it predicts, so it knows
   which debouncing suits it, and a predictor can need none. The tracker applies each prediction as
   it arrives. This beats debouncing in the tracker, which imposes one rule on every predictor.
@@ -836,12 +860,23 @@ tracker meets that can be wrong.
 
 #### Phase 4: the online pass detector
 
-The apps cannot read ground truth, so they detect each pass from the samples alone.
+The apps cannot read ground truth, so they detect each pass from the samples alone. Every run
+measures how far that departs from ground truth, as the decision on skew sets out.
 
 - [x] Add the online implementation of `DetectPasses` to `predictor`: a crossing within a pass
       radius of the latest sample.
-- [ ] Evaluate the online detector against the offline one over the same sessions and seed,
-      sweeping the pass radius, and choose the radius with the user.
+- [ ] Refactor: replace the run row's `pass_detector` with a map, `skew_settings`, in a new
+      `evaluation_run_v4`. Scoring always uses the offline detector, so the column chooses nothing,
+      and `PassDetectorName` goes. The skew settings parse into typed settings, as a predictor's
+      do. Migrate the V3 rows with an empty map, keeping their run ids, and read the map in
+      `/choose-predictor`'s `runs.sql`.
+- [ ] Measure the skew in `replay`, as the decision on skew sets out. Each sample goes to the online
+      detector beside the offline one, and the run's skew goes to `evaluation_skew_v1`. `evaluate`
+      takes the online pass radius, and prints the skew apart from the predictor's measures.
+- [ ] Report each run's skew in `/choose-predictor`, in a section of its own that says the skew
+      measures the detectors, not the predictor.
+- [ ] Run CrowFlies at 1 km over every session with a pass radius of 100 m, and record its skew
+      under Observations.
 
 #### Phase 5: states in the apps
 
