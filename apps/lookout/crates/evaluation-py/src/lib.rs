@@ -424,6 +424,7 @@ fn predictor_of(predictor: &Bound<'_, PyAny>) -> PyResult<Predictor> {
         return Ok(Predictor::CrowFlies(CrowFliesSettings {
             radius: crow_flies.radius,
             horizon: crow_flies.horizon,
+            cooldown: None,
         }));
     }
     Err(value_error("`predictor` must be an Oracle or a CrowFlies"))
