@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use domain::CrossingCompact;
+use domain::{CrossingCompact, CrossingCompactId, StateKind};
 use geo_types::{LineString, Point};
 use platform_core::lines::Wkb;
 use platform_core::{Float, Model, Shell};
@@ -17,6 +17,7 @@ pub struct Predicted {
     pub position: Point<Float>,
     pub metres: Float,
     pub at: Option<DateTime<Utc>>,
+    pub state: StateKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,7 +80,7 @@ impl Shell for Browser {
             }),
             predicted: model
                 .crossings()
-                .map(|crossings| located(crossings, model.predictions()))
+                .map(|crossings| located(crossings, model.predictions(), |id| model.state(id)))
                 .unwrap_or_default(),
             lines: drawn(model),
         }
@@ -102,7 +103,11 @@ fn drawn(model: &Model<Browser>) -> Vec<Line> {
     rail.chain(traced).collect()
 }
 
-fn located(crossings: &impl Crossings<Float>, predictions: &Predictions<Float>) -> Vec<Predicted> {
+fn located(
+    crossings: &impl Crossings<Float>,
+    predictions: &Predictions<Float>,
+    state: impl Fn(CrossingCompactId) -> StateKind,
+) -> Vec<Predicted> {
     let mut located: Vec<Predicted> = crossings
         .all()
         .filter_map(|crossing_compact| {
@@ -111,6 +116,7 @@ fn located(crossings: &impl Crossings<Float>, predictions: &Predictions<Float>) 
                 position: crossing_compact.position,
                 metres: prediction.metres,
                 at: prediction.at,
+                state: state(crossing_compact.id),
             })
         })
         .collect();
@@ -127,7 +133,7 @@ mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
     use crux_core::Core;
     use domain::places::DRESDEN_HBF;
-    use domain::{CrossingCompactId, Gps, Precision, Sample};
+    use domain::{Gps, Precision, Sample};
     use platform_core::{Effect, Event, Lookout};
     use predictor::{Confidence, Prediction};
 
@@ -175,11 +181,56 @@ mod tests {
         )
     }
 
+    fn candidates(_: CrossingCompactId) -> StateKind {
+        StateKind::CandidatePass
+    }
+
+    #[test]
+    fn a_prediction_carries_the_state_of_its_crossing() {
+        let placed = located(
+            &crossings(),
+            &Predictions::from([prediction(0, 1_000.0, None), prediction(1, 2_000.0, None)]),
+            |id| {
+                if id == CrossingCompactId::new(0) {
+                    StateKind::ActualPass
+                } else {
+                    StateKind::AlertedPass
+                }
+            },
+        );
+
+        let states: Vec<StateKind> = placed.iter().map(|one| one.state).collect();
+        assert_eq!(states, vec![StateKind::ActualPass, StateKind::AlertedPass]);
+    }
+
+    #[test]
+    fn each_crossing_shown_carries_the_state_its_fix_gives() {
+        let core: Core<Lookout<Browser>> = Core::new();
+        core.process_event(Event::Crossings(vec![
+            crossing(1, north_of_the_station(0.01)),
+            crossing(2, north_of_the_station(0.005)),
+            crossing(3, north_of_the_station(0.0)),
+        ]));
+
+        core.process_event(Event::Position(Sample::new(instant(), at_the_station())));
+
+        let states: Vec<StateKind> = core.view().predicted.iter().map(|one| one.state).collect();
+        assert_eq!(
+            states,
+            vec![
+                StateKind::ActualPass,
+                StateKind::AlertedPass,
+                StateKind::CandidatePass
+            ]
+        );
+    }
+
     #[test]
     fn a_prediction_is_placed_where_its_crossing_is() {
         let placed = located(
             &crossings(),
             &Predictions::from([prediction(1, 2_000.0, None)]),
+            candidates,
         );
 
         assert_eq!(placed.len(), 1);
@@ -197,6 +248,7 @@ mod tests {
                 prediction(2, 3_000.0, None),
                 prediction(1, 2_000.0, None),
             ]),
+            candidates,
         );
 
         let metres: Vec<Float> = placed.iter().map(|one| one.metres).collect();
@@ -208,6 +260,7 @@ mod tests {
         let placed = located(
             &crossings(),
             &Predictions::from([prediction(99, 1_000.0, None)]),
+            candidates,
         );
 
         assert!(placed.is_empty());
@@ -220,6 +273,7 @@ mod tests {
         let placed = located(
             &crossings(),
             &Predictions::from([prediction(0, 1_000.0, Some(at))]),
+            candidates,
         );
 
         assert_eq!(placed[0].at, Some(at));
