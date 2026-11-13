@@ -7,10 +7,10 @@ use crux_core::{
     macros::effect,
     render::{self, RenderOperation},
 };
-use domain::{CrossingCompact, Sample};
+use domain::{CrossingCompact, CrossingCompactId, Sample, StateKind};
 use predictor::{
-    Crossings, CrowFlies, DEFAULT_ALERTING, DEFAULT_WATCHING, Event as Observed, Parser, Predict,
-    Predictions, Sentence,
+    Crossings, CrowFlies, DEFAULT_ALERTING, DEFAULT_PASS_RADIUS, DEFAULT_WATCHING, DetectPasses,
+    Event as Observed, OnlineDetector, OutOfOrder, Parser, Predict, Predictions, Sentence, Tracker,
 };
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +22,7 @@ static NO_PREDICTIONS: Predictions<Float> = Predictions::new();
 pub trait Shell: Sized + 'static {
     type ViewModel;
 
-    type Crossings: Crossings<Float> + Default;
+    type Crossings: Crossings<Float> + Clone + Default;
 
     fn carried() -> Option<Self::Crossings>;
 
@@ -39,12 +39,36 @@ pub struct Model<S: Shell> {
 
 enum Predicting<S: Shell> {
     Waiting,
-    Ready(CrowFlies<Float, S::Crossings>),
+    Ready(Box<Tracking<S::Crossings>>),
 }
 
-fn default_crow_flies<C: Crossings<Float>>(crossings: C) -> CrowFlies<Float, C> {
-    CrowFlies::new(crossings, DEFAULT_WATCHING, DEFAULT_ALERTING)
-        .expect("the default alerting radius lies within the default watching radius")
+struct Tracking<C: Crossings<Float>> {
+    predictor: CrowFlies<Float, C>,
+    detector: OnlineDetector<Float, C>,
+    tracker: Tracker,
+}
+
+impl<C: Crossings<Float> + Clone> Tracking<C> {
+    fn new(crossings: C) -> Self {
+        Self {
+            predictor: CrowFlies::new(crossings.clone(), DEFAULT_WATCHING, DEFAULT_ALERTING)
+                .expect("the default alerting radius lies within the default watching radius"),
+            detector: OnlineDetector::new(crossings, DEFAULT_PASS_RADIUS),
+            tracker: Tracker::new(),
+        }
+    }
+
+    fn observe(&mut self, event: Observed<Float>) -> Result<(), OutOfOrder> {
+        let at = match event {
+            Observed::Sampled(sample) => sample.t,
+            Observed::Elapsed(now) => now,
+        };
+        self.predictor.observe(event)?;
+        self.detector.observe(event)?;
+        self.tracker
+            .track(at, self.predictor.predictions(), self.detector.passing())?;
+        Ok(())
+    }
 }
 
 impl<S: Shell> Default for Model<S> {
@@ -53,7 +77,7 @@ impl<S: Shell> Default for Model<S> {
             parser: Parser::new(),
             battery: Battery::default(),
             predictor: match S::carried() {
-                Some(crossings) => Predicting::Ready(default_crow_flies(crossings)),
+                Some(crossings) => Predicting::Ready(Box::new(Tracking::new(crossings))),
                 None => Predicting::Waiting,
             },
         }
@@ -85,9 +109,16 @@ impl<S: Shell> Model<S> {
         self.ready().map(CrowFlies::crossings)
     }
 
+    pub fn state(&self, crossing_compact_id: CrossingCompactId) -> StateKind {
+        match &self.predictor {
+            Predicting::Ready(tracking) => tracking.tracker.kind(crossing_compact_id),
+            Predicting::Waiting => StateKind::OutOfReach,
+        }
+    }
+
     fn ready(&self) -> Option<&CrowFlies<Float, S::Crossings>> {
         match &self.predictor {
-            Predicting::Ready(predictor) => Some(predictor),
+            Predicting::Ready(tracking) => Some(&tracking.predictor),
             Predicting::Waiting => None,
         }
     }
@@ -143,10 +174,10 @@ impl<S: Shell> Lookout<S> {
     }
 
     fn observe(&self, event: Observed<Float>, model: &mut Model<S>) -> Change {
-        let Predicting::Ready(predictor) = &mut model.predictor else {
+        let Predicting::Ready(tracking) = &mut model.predictor else {
             return Change::Unchanged;
         };
-        match predictor.observe(event) {
+        match tracking.observe(event) {
             Ok(()) => Change::Moved,
             Err(_) => Change::Unchanged,
         }
@@ -172,7 +203,7 @@ impl<S: Shell> App for Lookout<S> {
             }
             Event::Crossings(points) => match (&model.predictor, S::received(points)) {
                 (Predicting::Waiting, Some(crossings)) => {
-                    model.predictor = Predicting::Ready(default_crow_flies(crossings));
+                    model.predictor = Predicting::Ready(Box::new(Tracking::new(crossings)));
                     Change::Moved
                 }
                 _ => Change::Unchanged,
@@ -231,6 +262,7 @@ mod tests {
         speed_mps: Option<Float>,
         charge: Option<Charge>,
         predicted: usize,
+        states: Vec<(u32, StateKind)>,
     }
 
     impl Shell for Bare {
@@ -252,6 +284,7 @@ mod tests {
                 speed_mps: model.speed_mps(),
                 charge: model.charge(),
                 predicted: model.predictions().len(),
+                states: states(model),
             }
         }
     }
@@ -275,8 +308,20 @@ mod tests {
                 speed_mps: model.speed_mps(),
                 charge: model.charge(),
                 predicted: model.predictions().len(),
+                states: states(model),
             }
         }
+    }
+
+    fn states<S: Shell<Crossings = Vec<CrossingCompact<Float>>>>(
+        model: &Model<S>,
+    ) -> Vec<(u32, StateKind)> {
+        model
+            .crossings()
+            .into_iter()
+            .flatten()
+            .map(|crossing| (crossing.id.get(), model.state(crossing.id)))
+            .collect()
     }
 
     fn taken(points: Vec<CrossingCompact<f64>>) -> Vec<CrossingCompact<Float>> {
@@ -333,6 +378,66 @@ mod tests {
 
     fn reported(t: DateTime<Utc>, gps: Gps<f64>) -> Event {
         Event::Position(domain::Sample::new(t, gps))
+    }
+
+    #[test]
+    fn each_crossing_takes_the_state_its_distance_gives() {
+        let core = waiting();
+        core.process_event(Event::Reset);
+        core.process_event(Event::Crossings(vec![
+            crossing(1, DRESDEN_HBF),
+            crossing(2, north_of_the_station(0.005)),
+            crossing(3, near_the_station()),
+            crossing(4, up_the_line()),
+        ]));
+
+        core.process_event(reported(instant(), at_the_station()));
+
+        assert_eq!(
+            core.view().states,
+            vec![
+                (1, StateKind::ActualPass),
+                (2, StateKind::AlertedPass),
+                (3, StateKind::CandidatePass),
+                (4, StateKind::OutOfReach),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_crossing_left_behind_leaves_its_pass() {
+        let core = waiting();
+        core.process_event(Event::Reset);
+        core.process_event(Event::Crossings(vec![crossing(1, DRESDEN_HBF)]));
+        core.process_event(reported(instant(), at_the_station()));
+        let passing = core.view().states;
+
+        core.process_event(reported(
+            instant() + TimeDelta::seconds(10),
+            Gps::at(up_the_line().y(), up_the_line().x())
+                .expect("on the globe")
+                .with_speed_mps(Some(27.8)),
+        ));
+
+        assert_eq!(
+            [passing, core.view().states],
+            [
+                vec![(1, StateKind::ActualPass)],
+                vec![(1, StateKind::OutOfReach)]
+            ]
+        );
+    }
+
+    #[test]
+    fn a_crossing_stays_passed_while_time_passes_at_it() {
+        let core = waiting();
+        core.process_event(Event::Reset);
+        core.process_event(Event::Crossings(vec![crossing(1, DRESDEN_HBF)]));
+        core.process_event(reported(instant(), at_the_station()));
+
+        core.process_event(Event::Tick(instant() + TimeDelta::seconds(5)));
+
+        assert_eq!(core.view().states, vec![(1, StateKind::ActualPass)]);
     }
 
     #[test]
@@ -445,6 +550,7 @@ mod tests {
                 speed_mps: None,
                 charge: None,
                 predicted: 0,
+                states: Vec::new(),
             }
         );
     }
