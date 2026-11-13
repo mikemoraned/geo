@@ -894,10 +894,13 @@ measures how far that departs from ground truth, as the decision on skew sets ou
 The apps show each crossing's state from CrowFlies, the predictor they already run, so the states
 appear before LightCone exists.
 
-- [ ] Hold the `Tracker` in `platform-core`'s model, around `CrowFlies` and the online pass
+- [x] Hold the `Tracker` in `platform-core`'s model, around `CrowFlies` and the online pass
       detector, and expose each crossing's state.
 - [ ] Carry each crossing's state in `web-core`'s `Predicted`, and draw one shape per state in
-      `lookout-predictor.js`.
+      `lookout-predictor.js`:
+      - `CandidatePass`: the circle every crossing has now.
+      - `AlertedPass`: that circle, ringed by a small dashed or dotted circle.
+      - `ActualPass`: that circle, ringed by a small solid circle.
 - [ ] Prefix each crossing's line in `m5-core`'s `panel.rs` with one character per state, within 13
       characters.
 - [ ] Build with `just wasm` and `just m5plus-build`. Hand over `just m5plus-flash`, and a look at
