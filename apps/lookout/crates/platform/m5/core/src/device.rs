@@ -55,7 +55,7 @@ impl Shell for Device {
             nearest: nearest_first(predictions)
                 .into_iter()
                 .take(NEAREST_ON_SCREEN)
-                .map(|(_, prediction)| panel::line(prediction, now))
+                .map(|(id, prediction)| panel::line(prediction, model.state(id), now))
                 .collect(),
         }
     }
@@ -210,7 +210,7 @@ mod tests {
     fn a_line_says_how_far_and_how_long() {
         let core = fixed();
 
-        assert_eq!(core.view().nearest[0], "2.3km 1:24");
+        assert_eq!(core.view().nearest[0], " 2.3km 1:24");
     }
 
     #[test]
@@ -219,7 +219,7 @@ mod tests {
 
         core.process_event(Event::Tick(fix_instant() + TimeDelta::seconds(30)));
 
-        assert_eq!(core.view().nearest[0], "2.3km 0:54");
+        assert_eq!(core.view().nearest[0], " 2.3km 0:54");
     }
 
     #[test]
@@ -228,7 +228,7 @@ mod tests {
 
         core.process_event(Event::Sentence(stopped().rmc()));
 
-        assert_eq!(core.view().nearest[0], format!("2.3km {NO_ARRIVAL}"));
+        assert_eq!(core.view().nearest[0], format!(" 2.3km {NO_ARRIVAL}"));
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use domain::StateKind;
 use predictor::{DEFAULT_WATCHING, Prediction};
 
 use platform_core::Float;
@@ -26,12 +27,25 @@ pub struct ViewModel {
     pub nearest: Vec<String>,
 }
 
-pub(crate) fn line(prediction: &Prediction<Float>, now: Option<DateTime<Utc>>) -> String {
+pub(crate) fn line(
+    prediction: &Prediction<Float>,
+    state: StateKind,
+    now: Option<DateTime<Utc>>,
+) -> String {
     format!(
-        "{} {}",
+        "{}{} {}",
+        mark(state),
         distance(prediction.metres),
         countdown(prediction.at, now)
     )
+}
+
+fn mark(state: StateKind) -> char {
+    match state {
+        StateKind::OutOfReach | StateKind::CandidatePass => ' ',
+        StateKind::AlertedPass => '!',
+        StateKind::ActualPass => '*',
+    }
 }
 
 pub(crate) fn bars(charge: Charge) -> &'static str {
@@ -79,6 +93,29 @@ mod tests {
         Utc.with_ymd_and_hms(2026, 7, 29, 20, 43, 29)
             .single()
             .expect("an instant")
+    }
+
+    #[test]
+    fn each_state_is_marked_by_a_character_of_its_own() {
+        assert_eq!(mark(StateKind::OutOfReach), ' ');
+        assert_eq!(mark(StateKind::CandidatePass), ' ');
+        assert_eq!(mark(StateKind::AlertedPass), '!');
+        assert_eq!(mark(StateKind::ActualPass), '*');
+    }
+
+    #[test]
+    fn a_line_opens_with_its_crossings_mark() {
+        let line = line(
+            &Prediction {
+                metres: 942.0,
+                at: Some(instant() + TimeDelta::seconds(84)),
+                confidence: Confidence::High,
+            },
+            StateKind::AlertedPass,
+            Some(instant()),
+        );
+
+        assert_eq!(line, "!942m 1:24");
     }
 
     #[test]
@@ -132,6 +169,7 @@ mod tests {
                         at: Some(now + TimeDelta::seconds(seconds)),
                         confidence: Confidence::Low,
                     },
+                    StateKind::AlertedPass,
                     Some(now),
                 );
                 assert!(
@@ -151,6 +189,7 @@ mod tests {
                 at: None,
                 confidence: Confidence::Low,
             },
+            StateKind::AlertedPass,
             Some(instant()),
         );
 

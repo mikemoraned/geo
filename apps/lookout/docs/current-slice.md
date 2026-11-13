@@ -901,10 +901,13 @@ appear before LightCone exists.
       - `CandidatePass`: the circle every crossing has now.
       - `AlertedPass`: that circle, ringed by a small dashed or dotted circle.
       - `ActualPass`: that circle, ringed by a small solid circle.
-- [ ] Prefix each crossing's line in `m5-core`'s `panel.rs` with one character per state, within 13
-      characters.
+- [x] Prefix each crossing's line in `m5-core`'s `panel.rs` with one character per state, within 13
+      characters: a space for `CandidatePass`, `!` for `AlertedPass`, and `*` for `ActualPass`.
+- [ ] Make a crossing that becomes a `CandidatePass` stand out more in `lookout-predictor.js` than
+      the plain circle it has now.
 - [ ] Build with `just wasm` and `just m5plus-build`. Hand over `just m5plus-flash`, and a look at
       `/kiosk`.
+- [ ] Check on the device that each crossing's line on the M5 panel shows its state's mark.
 
 #### Phase 6: LightCone
 
