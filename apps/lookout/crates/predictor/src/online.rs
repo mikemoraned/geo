@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use domain::{CrossingCompact, Precision, Radius};
 use geo::{Distance, Haversine};
 
@@ -6,6 +8,9 @@ use crate::crossings::Crossings;
 use crate::crow_flies::metres;
 use crate::detect::{DetectPasses, Passes};
 use crate::predict::Event;
+
+pub const DEFAULT_PASS_RADIUS: Radius =
+    Radius::metres(NonZeroU32::new(250).expect("two hundred and fifty is not zero"));
 
 #[derive(Debug, Clone)]
 pub struct OnlineDetector<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
