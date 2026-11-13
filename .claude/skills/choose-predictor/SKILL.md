@@ -27,9 +27,12 @@ that ends in a choice of predictor and settings for the apps. The report is a da
    The oracle reads ground truth, which the apps cannot, so it can never be chosen. Its runs are a
    reference, showing the best score the data and the rules allow, and the report says so.
 
-5. **Write the report** as `docs/evaluations/<today>-choose-predictor.md`. If today's report
-   exists, add the new runs to it rather than starting another. Write it through the two writing skills, as
-   `CLAUDE.md` requires. It holds these sections, in order:
+5. **Write the report** as `docs/evaluations/<today>-<topic>.md`, where the topic names what the
+   runs evaluate, such as `cooldown`. If a report of today's covers the same evaluation, add the
+   new runs to it. If the new runs make an evaluation of their own, such as the first measure of
+   something new, give them a report of their own. A report names and links no notebook, since a
+   notebook can be deleted. Write it through the two writing skills, as `CLAUDE.md` requires. It
+   holds these sections, in order:
    - **Runs:** one table per group, one row per run. Each row gives the predictor and its
      settings, the float type, and precision, recall, and false alarms per hour, each with its
      interval as `value [low, high]`. It also gives the lead time's p10, median, and p90, and the

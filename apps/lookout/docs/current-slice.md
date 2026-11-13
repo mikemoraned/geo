@@ -599,7 +599,7 @@ when `evaluation_run_v2` replaced the run row's four fingerprint columns with on
   before ground truth's nearest sample. With 100 m, it saw 336,161 passes (0.766 [0.762, 0.769]),
   each at ground truth's own sample. It missed the passes whose nearest sample lies from 100 m to
   250 m from the crossing. Both runs scored the predictor exactly as the apps' run without skew did.
-  [`2026-11-11-choose-predictor.md`](evaluations/2026-11-11-choose-predictor.md) records both.
+  [`2026-11-11-skew.md`](evaluations/2026-11-11-skew.md) records both.
 
 ### Tasks
 
@@ -837,7 +837,7 @@ tracker meets that can be wrong.
 - [x] Run CrowFlies over the oracle's sessions and seed with `just evaluate`.
 - [x] Sweep the radius. Choose CrowFlies' settings from recall
       plotted against false alarms per hour. Chosen from the table of runs in
-      `evaluations/2026-11-10-choose-predictor.md`, without a plot: 2 km beats every larger radius
+      `evaluations/2026-11-10-crow-flies-radius.md`, without a plot: 2 km beats every larger radius
       on all three measures, leaving only 1 km and 2 km to weigh.
 - [x] Set the radius the apps' CrowFlies uses to 1 km, as the runs over every session chose.
       CrowFlies now holds two settings: `Watching`, the radius within which it predicts a crossing
@@ -865,7 +865,7 @@ tracker meets that can be wrong.
       A 2-minute cooldown raised precision from 0.327 to 0.374 and recall from 0.862 to 0.883, and
       cut false alarms from 20.3 to 17.4 per hour. It added 236 misses. The apps keep no cooldown,
       since the gain does not justify the code, and the cooldown is removed again.
-      [`2026-11-11-choose-predictor.md`](evaluations/2026-11-11-choose-predictor.md) records the
+      [`2026-11-11-cooldown.md`](evaluations/2026-11-11-cooldown.md) records the
       run.
 
 #### Phase 4: the online pass detector
