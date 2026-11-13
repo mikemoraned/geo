@@ -896,7 +896,7 @@ appear before LightCone exists.
 
 - [x] Hold the `Tracker` in `platform-core`'s model, around `CrowFlies` and the online pass
       detector, and expose each crossing's state.
-- [ ] Carry each crossing's state in `web-core`'s `Predicted`, and draw one shape per state in
+- [x] Carry each crossing's state in `web-core`'s `Predicted`, and draw one shape per state in
       `lookout-predictor.js`:
       - `CandidatePass`: the circle every crossing has now.
       - `AlertedPass`: that circle, ringed by a small dashed or dotted circle.

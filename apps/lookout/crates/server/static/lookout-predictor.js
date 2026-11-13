@@ -8,6 +8,7 @@ const CROSSINGS = "/crossings.json";
 const LINEAR_WITHIN_METRES = 500;
 const CANVAS_SIZE = 320;
 const TAU = Math.PI * 2;
+const RING_DASHES = { alerted_pass: [2, 2], actual_pass: [] };
 
 function speed(metres_per_second) {
   if (metres_per_second === null || metres_per_second === undefined) return "no speed yet";
@@ -100,14 +101,25 @@ class LookoutPredictor extends HTMLElement {
       .clamp(true);
 
     context.fillStyle = "#7f8";
+    context.strokeStyle = "#7f8";
     for (const crossing of predicted) {
       const [x, y] = project([crossing.position.x, crossing.position.y]);
       const angle = Math.atan2(x, -y);
       const out = reach(crossing.metres);
+      const across = middle + out * Math.sin(angle);
+      const down = middle - out * Math.cos(angle);
       context.beginPath();
-      context.arc(middle + out * Math.sin(angle), middle - out * Math.cos(angle), 3, 0, TAU);
+      context.arc(across, down, 3, 0, TAU);
       context.fill();
+      const dashes = RING_DASHES[crossing.state];
+      if (dashes) {
+        context.setLineDash(dashes);
+        context.beginPath();
+        context.arc(across, down, 6, 0, TAU);
+        context.stroke();
+      }
     }
+    context.setLineDash([]);
 
     context.fillStyle = "#cfd";
     context.beginPath();
