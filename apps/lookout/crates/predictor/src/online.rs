@@ -29,6 +29,10 @@ impl<P: Precision, C: Crossings<P>> OnlineDetector<P, C> {
             passing: Passes::new(),
         }
     }
+
+    pub fn pass_radius_metres(&self) -> P {
+        self.pass_metres
+    }
 }
 
 impl<P: Precision, C: Crossings<P>> DetectPasses<P> for OnlineDetector<P, C> {
@@ -90,6 +94,11 @@ mod tests {
             .iter()
             .map(|crossing_compact_id| crossing_compact_id.get())
             .collect()
+    }
+
+    #[test]
+    fn the_pass_radius_is_given_back_in_metres() {
+        assert_eq!(detector(250.0).pass_radius_metres(), 250.0);
     }
 
     #[test]

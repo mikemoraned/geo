@@ -24,6 +24,7 @@ pub struct ViewModel {
     pub now: Option<DateTime<Utc>>,
     pub crossings: usize,
     pub radius_metres: Float,
+    pub pass_radius_metres: Float,
     pub here: Option<Here>,
     pub predicted: Vec<Predicted>,
 }
@@ -55,6 +56,7 @@ impl Shell for Browser {
             now: model.now(),
             crossings: model.crossings().map_or(0, Vec::len),
             radius_metres: model.radius_metres().unwrap_or_default(),
+            pass_radius_metres: model.pass_radius_metres().unwrap_or_default(),
             here: model.fix().map(|fix| Here {
                 position: fix.gps.position,
                 speed_mps: model.speed_mps(),
@@ -241,6 +243,18 @@ mod tests {
         );
 
         assert_eq!(placed[0].at, Some(at));
+    }
+
+    #[test]
+    fn the_pass_radius_is_shown_once_there_are_crossings() {
+        let core: Core<Lookout<Browser>> = Core::new();
+
+        core.process_event(Event::Crossings(vec![crossing(
+            1,
+            north_of_the_station(0.01),
+        )]));
+
+        assert_eq!(core.view().pass_radius_metres, 250.0);
     }
 
     #[test]

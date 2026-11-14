@@ -1,7 +1,7 @@
 import "/lookout-predictor.js";
 
 const SESSIONS = "/sessions.json";
-const WATCH_EACH_SESSION_MS = 60_000;
+const WATCH_EACH_SESSION_MS = 120_000;
 
 function introduce(count) {
   const each = WATCH_EACH_SESSION_MS % 60_000 === 0

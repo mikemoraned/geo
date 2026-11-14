@@ -105,6 +105,13 @@ impl<S: Shell> Model<S> {
         self.ready().map(CrowFlies::watching_radius_metres)
     }
 
+    pub fn pass_radius_metres(&self) -> Option<Float> {
+        match &self.predictor {
+            Predicting::Ready(tracking) => Some(tracking.detector.pass_radius_metres()),
+            Predicting::Waiting => None,
+        }
+    }
+
     pub fn crossings(&self) -> Option<&S::Crossings> {
         self.ready().map(CrowFlies::crossings)
     }
