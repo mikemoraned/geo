@@ -52,6 +52,30 @@ Germany alone.
 - Has a predictor that takes into account reachability of a crossing and not just distance,
   either through observational data, or through route connectivity.
 
+## Slice: an observational predictor
+
+### Target
+
+Build the predictor that
+[the observational predictor notes](2026-10-03-observational-predictor.md) describe: a map from
+(speed, direction, cell) to the crossings reached, learned from recorded journeys. Measure it
+against the predictor the apps run, through the evaluation that LightCone's slice built.
+
+The map holds the journeys it was built from. A test on those journeys measures how well it
+recalls them, not how well it predicts.
+[Splitting sessions for tuning and testing](2026-11-14-train-test-split.md) sets out how the
+evaluation splits sessions for LightCone, whose few settings claim to work on any track. This
+slice revisits that doc's choices for a map, which claims to predict later trains over track it
+has seen:
+
+- **Split by time.** The test set holds journeys captured after those the map was built from.
+  The German capture holds two usable days under one timetable, so this needs a later capture.
+- **A third set.** The map learns a distribution in every bucket, and a sweep then chooses its
+  resolution, buckets, and back-off. Building the map and choosing those settings each need
+  journeys the other has not read.
+- **Staleness.** A test set captured weeks after the build measures how fast the map goes stale
+  as the network and its services change.
+
 # Unassigned
 
 Anything that doesn't clearly fit in V1 or V2.

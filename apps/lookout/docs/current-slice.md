@@ -918,8 +918,14 @@ appear before LightCone exists.
 
 LightCone is the improvement the Target asks for, measured against CrowFlies on the same sessions.
 
+- [x] Write up how to keep the sessions LightCone is tuned on apart from those it is tested on, in
+      [`2026-11-14-train-test-split.md`](2026-11-14-train-test-split.md).
+- [ ] Run that doc's experiments, and choose a group key and the bounds of each set with the user.
+- [ ] Add the chosen split to `pick`, and record it in `evaluation_run_v5`.
 - [ ] Measure in a new `explore5.py` the angle between a train's heading and its positions up to N
       later.
+      The notebook is `explore6.py`, since Phase 4 already added `explore5_skew.py`. It reads the
+      tune set alone.
 - [ ] Read ballpark odds for the extremes of that angle, and bound the cone's angle by them.
 - [ ] Add `LightCone` to `predictor`: a velocity from the last two samples, and high confidence
       inside the cone it reaches within N.
@@ -971,6 +977,8 @@ gold is committed. The slice cuts that size before it closes, so its runs do not
 
 - [ ] Fold what held of `2026-08-01-evaluation.md` into `docs/evaluation.md`, repoint the links to
       it, and delete it.
+- [ ] Fold what held of `2026-11-14-train-test-split.md` into `docs/evaluation.md`, repoint the
+      links to it, and delete it.
 - [ ] Add `train_session_crossing_v1` and the gold datasets to the derivation graph in
       `docs/architecture.md`.
 - [ ] Describe gold datasets of rows, and writing them from Python, in the gold sections of
