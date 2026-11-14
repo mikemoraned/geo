@@ -94,24 +94,97 @@ split than the key before it.
 
 ### Trip
 
-`trip_id` keeps one trip's two days together. It leaves the 10:00 and 10:20 trains of one line in
-different sets, so it removes the least leakage. Every session carries it.
+A trip keeps one trip's two days together. It leaves the 10:00 and 10:20 trains of one line in
+different sets, so it removes the least leakage. Motis prefixes each `trip_id` with its date, as in
+`20261019_14:05_germanygtfs_3440430398`. A key that holds a trip across days therefore drops that
+prefix.
 
 ### Line
 
-A line keeps a line's trains together. `train_segment_v4` carries a `route_name` for each leg,
-which nobody has yet checked as the name of a line. A name such as `RE 1` can repeat across regions,
-so experiment 1 checks whether the key needs the agency beside it. A line still shares track with
-other lines.
+A line keeps a line's trains together. A line still shares track with other lines.
+`train_segment_v4` carries a `route_name` for each leg. On 2026-11-14, over the 34,521 sessions
+with `realtime_percentage` ≥ 90, experiment 1 found:
+
+- **`route_name` names a train, not a line.** It joins the line and the train number, as in
+  `RB71 (19589)`, and takes 23,232 values. The line is the part before ` (`, which takes 409 values.
+- **A line's name repeats across operators.** 144 of the 409 names belong to more than one agency.
+  `RB41` names six lines, from Bremen to Bavaria. (agency, line) gives 929 pairs.
+- **Some legs carry no agency.** 227 sessions from July have none.
+
+Whether each (agency, line) pair draws one line rests on inspecting a map, pair by pair. The key
+also rests on how each country's feed names its lines. Both rule the line out as the key.
 
 ### Block of space
 
-A block keeps together the sessions that run over the same ground. A session falls in the block of
-a chosen point, such as its first sample or the centre of its bbox. A long session crosses many
-blocks, so some of its track lies in blocks of the other set.
+A block keeps together the sessions that run over the same ground. A whole session falls in the
+block of a chosen point, such as its first sample. A long session crosses many blocks, so some of
+its track then lies in blocks of the other set.
 [Valavi et al.](https://doi.org/10.1111/2041-210X.13107) size blocks from the range over which the
 data stays correlated. Here that range is about the distance a train covers within N, up to about
 25 km at 300 km/h.
+
+## Splitting by cell of a global grid
+
+A split by cell of a global grid is disjoint by construction, and it needs nothing from a feed but
+positions. It therefore works the same in every country. The split runs as follows:
+
+1. A split chooses one resolution. A sample's **chunk** is the cell at that resolution that holds
+   it.
+2. A **sub-session** is a run of one session's consecutive samples in one chunk.
+3. The hash of a salt and each chunk's id assigns the chunk to the tune set or the test set.
+
+The cells at one resolution cover the globe without overlap. Every sample therefore lies in exactly
+one chunk, and every chunk in exactly one set. No sample can then fall in both sets.
+[blockCV](https://rdrr.io/cran/blockCV/man/cv_spatial.html) splits by hexagonal block by default,
+and [spatialsample](https://cloud.r-project.org/web/packages/spatialsample/refman/spatialsample.html)
+by a grid of blocks, so a grid of cells follows common practice.
+
+### A5 rather than H3
+
+[A5](https://a5geo.org/) tiles the globe in pentagons, and [H3](https://h3geo.org/) in hexagons.
+A5 suits this split better, since its cells at one resolution have equal area. A chunk then covers
+the same ground in every country. [H3's cells](https://a5geo.org/examples/area) vary in area by a
+factor of about 2 across the globe.
+
+Each grid has the libraries the split needs. A5 has `pya5` 1.0.0 and the Rust crate `a5` 1.0.0.
+H3 has `h3` 4.5.0 and the pure-Rust crate `h3o` 0.11.1. Apache Sedona's Spark API has
+`ST_H3CellIDs`, which the SedonaDB this repo runs lacks.
+
+Drawing an A5 cell on a map takes two precautions:
+
+- **lonboard 0.17.0's `A5Layer` draws `pya5` 1.0.0's cells in the wrong place.** Chunks over Germany
+  appeared over the North Sea, and some routes had no chunk under them. `pya5`'s `migrate` rewrites
+  a cell's id, as from `0x63f8a…` to `0x63f4a…`. A change of numbering at A5 1.0 would explain the
+  error, though nobody has yet checked lonboard's copy of A5. A polygon from `pya5`'s
+  `cell_to_boundary`, drawn in a `PolygonLayer`, lands in the right place.
+- **`cell_to_boundary` returns a cell's five corners alone by default.** An A5 cell's edges curve in
+  longitude and latitude, so 358 of 326,656 samples fell outside their own cell's drawn outline. With
+  `{"segments": 50}`, each edge takes 50 segments, and every sample falls inside.
+
+An A5 cell's area falls by a factor of 4 per resolution:
+
+| Resolution | Area | About |
+| --- | --- | --- |
+| 7 | 2,075 km² | 45 km across |
+| 8 | 519 km² | 23 km across |
+| 9 | 130 km² | 11 km across |
+
+### What a sub-session's edges cost
+
+A sub-session starts and ends at a chunk's edge, not at a stop, and that costs the evaluation in
+three ways:
+
+- **A predictor needs samples to measure a speed.** Scoring already skips each session's first
+  minute, and a sub-session loses that minute again at every chunk it enters.
+- **A crossing ahead can lie in the next chunk.** A notification in a sub-session's last N then
+  has its pass in another sub-session, perhaps in the other set. It counts as a false alarm.
+- **Track runs on across an edge.** The track a tune chunk ends with continues into a test chunk.
+  blockCV and spatialsample both drop a buffer around the test set for this reason. A buffer of
+  cells one N wide removes it, at the cost of the sessions it drops.
+
+A chunk much wider than a train travels in N keeps these costs small. Another way avoids the
+first two altogether: replay whole sessions, and score only the passes and notifications whose
+crossing lies in the set's chunks.
 
 ### Uneven sets
 
@@ -119,12 +192,45 @@ Every key above splits by group, so a set's share of sessions differs from its s
 busy line or a block around a large hub moves hundreds of sessions at once. The sets therefore come
 out uneven, and more so for a coarse key than for a fine one.
 
+## Invariants of a split by cell
+
+On 2026-11-14 the first split by A5 chunk in a notebook went wrong three times. Each time, the
+result looked plausible:
+
+- lonboard drew the chunks in the wrong place, as [A5 rather than H3](#a5-rather-than-h3) sets out.
+- Pentagons drawn from their corners alone left 358 samples outside their own chunk.
+- A merge renumbered the sub-sessions, so 46% of samples took another sub-session's set. The shares
+  of each set still came out near 70/30.
+
+A simple invariant caught each error, where inspection had not. A split by cell holds these:
+
+1. **Disjoint.** No sample, and no chunk, lies in both sets.
+2. **Complete.** Every sample of a picked session lies in exactly one sub-session. The samples out
+   number the samples in.
+3. **One chunk per sub-session.** A sub-session's samples share one chunk, and the sub-session's set
+   is that chunk's set.
+4. **Contiguous.** A sub-session's samples run consecutively through one session. A new
+   sub-session starts exactly where the chunk changes.
+5. **Within the country.** Every chunk lies in the cells that overlap the country's land and
+   maritime areas, found by `polygon_to_cells` with `'overlapping'` containment. That cover shares
+   no code with placing a sample in a cell.
+6. **Stable.** One salt, resolution, and chunk give one set on every run.
+
+Property tests over generated sessions hold invariants 1 to 4 and 6. A test of 6 states the
+expected set as a literal, so a changed hash or salt fails it.
+
+Every run of the evaluation also checks invariants 1, 2, 3, and 5 against the store, before it
+replays a session. A run that fails a check is refused, as a run from uncommitted code is. A fixture
+shows the split holds on the fixture, and the check shows it holds on the data the run scores. The
+run records the counts each check compared, so its report shows the split was checked.
+
 ## Experiments
 
 Each experiment below runs in a notebook against the sessions the filter keeps.
 
 1. **Is `route_name` a line?** Count the sessions per `route_name`, and per agency and `route_name`.
    Draw the paths of a few names on a map, and check that each draws one line.
+   [Line](#line) gives the answer, which rules the line out as a key.
 2. **How much does each key leak?** Assign sets under each key. For each test session, measure the
    share of its samples that lie within 1 km of a tune session's path. The key with the lowest share
    leaks least. A random split by session gives the baseline.
@@ -133,6 +239,8 @@ Each experiment below runs in a notebook against the sessions the filter keeps.
 4. **Do the sets differ in difficulty?** Run CrowFlies at 1 km over the tune and test sets of each
    key. CrowFlies reads nothing from the sessions, so a gap between its two scores comes from the
    sets alone. A coarse key can put most of a hard region into one set.
+5. **What does a chunk's resolution cost?** Split by A5 chunk at resolutions 7, 8, and 9. Count the
+   sub-sessions and their lengths, and the share of passes within N of a sub-session's edge.
 
 ## What the choice decides
 
@@ -168,5 +276,13 @@ not trains on track it lacks. This doc's choices need revisiting for it:
   chapter 6 — repeatable splitting by a hash of a grouping column
 - [blockCV](https://doi.org/10.1111/2041-210X.13107) — sizing spatial blocks from the range of
   autocorrelation
+- [blockCV's `cv_spatial`](https://rdrr.io/cran/blockCV/man/cv_spatial.html) and
+  [spatialsample](https://cloud.r-project.org/web/packages/spatialsample/refman/spatialsample.html)
+  — hexagonal and grid blocks, and a buffer around the test set
+- [A5](https://a5geo.org/) — a global grid of equal-area pentagons
+- [H3](https://h3geo.org/) and [h3o](https://github.com/HydroniumLabs/h3o) — a global grid of
+  hexagons, and its Rust implementation
+- [Apache Sedona's `ST_H3CellIDs`](https://sedona.apache.org/1.9.0/api/sql/Spatial-Indexing/ST_H3CellIDs/)
+  — covering a geometry with H3 cells in SQL
 - [scikit-learn: cross-validation iterators for grouped data](https://scikit-learn.org/stable/modules/cross_validation.html#cross-validation-iterators-for-grouped-data)
   — `GroupShuffleSplit` and `GroupKFold`

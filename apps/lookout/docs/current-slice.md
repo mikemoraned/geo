@@ -922,6 +922,11 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
       [`2026-11-14-train-test-split.md`](2026-11-14-train-test-split.md).
 - [ ] Run that doc's experiments, and choose a group key and the bounds of each set with the user.
 - [ ] Add the chosen split to `pick`, and record it in `evaluation_run_v5`.
+      - [ ] Hold the split's invariants 1 to 4 and 6, as
+            [the split doc](2026-11-14-train-test-split.md#invariants-of-a-split-by-cell) numbers
+            them, in property tests over generated sessions.
+      - [ ] Check invariants 1, 2, 3, and 5 against the store in every run, before it replays a
+            session. Refuse a run that fails a check, and record the counts each check compared.
 - [ ] Measure in a new `explore5.py` the angle between a train's heading and its positions up to N
       later.
       The notebook is `explore6.py`, since Phase 4 already added `explore5_skew.py`. It reads the
