@@ -364,6 +364,15 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   [Investigation](#investigation) gives the evidence for both. Discarding fits the Straw Man's bias
   towards discarding invalid data, and the checks cost 2% of sessions. This beats marking rows for
   `pick` to filter, which adds a v3 column that every reader has to know to apply.
+- **Tune and test sets split by A5 cell, and each scored unit takes its crossing's set.** A run
+  replays whole sessions. Each notification, pass, false alarm, and miss falls in the set of the A5
+  cell at resolution 8 that holds its crossing. A hash of the salt `tune-test-1` and the cell's id
+  puts 70 of 100 buckets in tune. Tuning reads only windows that lie wholly in tune cells. A split
+  by cell is disjoint by construction and works in every country, since it reads only positions.
+  This beats a split by session, whose sets share track, and a split by line, which rests on how
+  each feed names its lines. It also beats cutting sessions at cells' edges, which lowered
+  CrowFlies' precision from 0.328 to 0.299. [The split doc](2026-11-14-train-test-split.md#the-choice)
+  gives the evidence. Decided on 2026-11-14.
 
 #### Consequences elsewhere
 
@@ -920,8 +929,21 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 
 - [x] Write up how to keep the sessions LightCone is tuned on apart from those it is tested on, in
       [`2026-11-14-train-test-split.md`](2026-11-14-train-test-split.md).
-- [ ] Run that doc's experiments, and choose a group key and the bounds of each set with the user.
+- [x] Run that doc's experiments, and choose a group key and the bounds of each set with the user.
+      - [x] Experiment 1: whether `route_name` names a line.
+      - [-] Experiments 2 to 4, on the trip and line keys: moot. Experiment 1 ruled the line out,
+            and a split by A5 chunk is disjoint by construction.
+      - [x] Split 1,000 sessions by A5 chunk in `explore6.py`, and check the chunks against
+            Germany's cover and each sample's drawn set against its chunk's.
+      - [x] Experiment 5: what cutting sessions at a chunk's edge costs, at resolutions 7, 8, and 9.
+      - [x] Experiment 6: whether the sets share a shape of track, under 21 salts.
+      - [x] Experiment 7: score CrowFlies at 1 km over one set, as cut sub-sessions and as whole
+            sessions scored by each crossing's chunk.
+      - [x] Choose with the user between cutting sessions and scoring by each crossing's chunk, and
+            the chunk's resolution and the salt.
 - [ ] Add the chosen split to `pick`, and record it in `evaluation_run_v5`.
+      The split lands in scoring and tuning rather than in `pick`, since a run replays whole
+      sessions.
       - [ ] Hold the split's invariants 1 to 4 and 6, as
             [the split doc](2026-11-14-train-test-split.md#invariants-of-a-split-by-cell) numbers
             them, in property tests over generated sessions.
@@ -941,6 +963,28 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
       CrowFlies and where it loses.
 - [ ] Run both predictors over every session the filter keeps. If their intervals still overlap,
       widen the filter to every session.
+
+##### Phase 6 observations
+
+Each comes from `explore6.py`, over 1,000 sessions picked under seed 1, and
+[the split doc](2026-11-14-train-test-split.md) gives the evidence.
+
+- **2026-11-14: `route_name` names a train, not a line.** It joins the line and the train number.
+  144 of the 409 line names belong to more than one agency.
+- **2026-11-14: cutting sessions at a chunk's edge is costly.** At resolution 7, 28% of passes fall
+  under N after their sub-session starts, against 14% for whole sessions. Resolution 9 raises it to
+  63%.
+- **2026-11-14: the sets share a shape of track, except at the extremes.** Straightness and heading
+  angle match between the sets under every salt tried. The heading angle's p99 differs by up to 17°,
+  since a few chunks hold most reversals.
+- **2026-11-14: three errors in drawing and joining looked plausible**, and only an invariant
+  caught each. The split doc's invariants come from them.
+- **2026-11-14: cutting sessions lowers CrowFlies' precision, and scoring by chunk does not.** On
+  the test set, cut sub-sessions score 0.299 [0.288, 0.310], and whole sessions scored by each
+  crossing's chunk 0.328 [0.316, 0.341]. The latter matches the run over 12,082 whole sessions.
+- **2026-11-14: no chunk resolution steadies the heading angle's p99.** Over 21 salts, the gap
+  between the sets spans 26° at resolution 7, 30° at 8, and 23° at 9. Resolution 9 drops a quarter
+  of the windows, since more of them cross from one set into the other.
 
 #### Phase 7: choosing the predictor
 

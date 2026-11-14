@@ -182,9 +182,114 @@ three ways:
   blockCV and spatialsample both drop a buffer around the test set for this reason. A buffer of
   cells one N wide removes it, at the cost of the sessions it drops.
 
-A chunk much wider than a train travels in N keeps these costs small. Another way avoids the
-first two altogether: replay whole sessions, and score only the passes and notifications whose
-crossing lies in the set's chunks.
+On 2026-11-14, experiment 5 cut 1,000 sessions, picked under seed 1, at three resolutions. It
+matched each of their 12,672 passes to its sub-session:
+
+| Pieces | Count | Passes in the piece's first minute | Passes under N after the piece starts |
+| --- | --- | --- | --- |
+| Whole sessions | 1,000 | 4.7% | 13.7% |
+| Resolution 7 | 2,663 | 8.4% | 28.2% |
+| Resolution 8 | 4,319 | 12.6% | 44.6% |
+| Resolution 9 | 7,690 | 19.4% | 62.9% |
+
+A pass under N after its piece starts has an alert window that reaches into the piece before. Even
+at resolution 7, cutting doubles the share of such passes. The cost grows with every finer
+resolution.
+
+## Scoring by each crossing's chunk
+
+Another way avoids cutting sessions: replay whole sessions, and score each notification and pass in
+the set of its crossing's chunk. It follows a rule that both fields below apply: hold out what a
+predictor is scored on, and what tuning reads, but not what the predictor reads as it predicts.
+
+- **Forecasting.** [Evaluation on a rolling forecasting origin](https://otexts.com/fpp3/tscv.html)
+  forecasts each target from all the history before it. It scores only the targets in the test
+  period, though that history overlaps the training data.
+- **Spatial cross-validation.** [Roberts et al.](https://doi.org/10.1111/ecog.02881) and blockCV
+  assign each observation, the thing predicted, to a block by its location. A model still reads
+  what lies around a test observation.
+
+Each scored unit here belongs to one crossing: a notification, a pass, a false alarm, or a miss. A
+crossing lies in exactly one chunk, so each scored unit falls in exactly one set. The predictor
+reads whole sessions, so its warm-up and its alert windows match those of a real journey. Cutting
+sessions instead changes the task: a real train meets no chunk's edge. The rule holds for any
+predictor of events at known places.
+
+The rule needs care in three cases:
+
+- **A predictor that learns as it replays.** Its input becomes its training data, so the test set's
+  input leaks. Neither CrowFlies nor LightCone learns as it replays.
+- **Tuning near a chunk's edge.** A window in a tune chunk can reach track that runs on into a test
+  chunk. Dropping each tune window that ends within N of a test chunk removes that. This buffer
+  costs the test set nothing.
+- **A predictor that holds its data.** [When a predictor holds its data](#when-a-predictor-holds-its-data)
+  sets out why it needs a split by time.
+
+## Whether the sets share a shape of track
+
+LightCone reads how far trains turn, so the tune set and the test set need track of the same shape.
+Movement ecology calls a path's departure from a straight line its tortuosity.
+[Benhamou](https://doi.org/10.1016/j.jtbi.2004.03.016) recommends the **straightness index** for
+oriented paths, such as a train's: the distance between a path's ends over the distance travelled.
+It runs from 0 to 1, and its value depends on the path's length.
+[trajr](https://doi.org/10.1111/eth.12739) computes it, among other measures.
+
+Experiment 6 measures two things over a window of N from each sample:
+
+- **Straightness**, as above. Every window spans N, so windows compare at one scale.
+- **Heading angle**: the angle between a sample's heading, from the sample before it, and the
+  bearing to its position N later. LightCone's cone bounds this angle.
+
+A window counts towards a set only when all its samples lie in that set's chunks. A window whose
+train travels under 500 m is dwelling, and is left out. The windows overlap, so they are not
+independent. The two-sample Kolmogorov–Smirnov statistic serves as an effect size, and its p-value
+goes unused.
+
+On 2026-11-14, 1,000 sessions split at resolution 8 gave 217,181 windows within one set. Under the
+salt `tune-test-1`:
+
+| | Tune | Test |
+| --- | --- | --- |
+| Straightness p10 / p50 / p90 | 0.812 / 0.957 / 0.998 | 0.808 / 0.959 / 0.998 |
+| Heading angle p10 / p50 / p90 | 1.8° / 16.7° / 58.6° | 1.6° / 16.7° / 60.9° |
+| Heading angle p99 | 145.0° | 155.8° |
+
+The Kolmogorov–Smirnov statistic is 0.025 for straightness and 0.010 for heading angle. Twenty other
+salts show how much any split by chunk varies:
+
+| Measure | `tune-test-1` | Min over 21 salts | Median | Max |
+| --- | --- | --- | --- | --- |
+| Straightness KS statistic | 0.025 | 0.012 | 0.026 | 0.075 |
+| Heading angle KS statistic | 0.010 | 0.007 | 0.016 | 0.037 |
+| Heading angle p90, test minus tune | +2.3° | −4.3° | +0.3° | +3.6° |
+| Heading angle p99, test minus tune | +10.8° | −12.9° | +5.7° | +17.2° |
+
+The bulk of each distribution matches under every salt. The p99 does not, under any salt. 2,172
+windows turn through 148° or more, the p99, and only 151 chunks hold them. The five busiest chunks
+hold 20%, and the chunk centred at 8.81° E, 49.90° N holds 8%. A turn that large is a reversal, as
+at a terminus. Where those few chunks fall decides a set's p99.
+
+A cone's angle bounded by the tune set's p99 therefore misses the test set's by up to 17°. The
+extremes serve to bound the sweep of angles, and the sweep chooses the angle.
+
+The same 21 salts split the chunks at three resolutions. A finer resolution spreads the reversals
+over more chunks. A window that crosses from one set into the other is dropped, though, and a finer
+resolution drops more:
+
+| Measure | Resolution 7 | Resolution 8 | Resolution 9 |
+| --- | --- | --- | --- |
+| Chunks | 196 | 649 | 1,759 |
+| Chunks holding a window over the p99 | 103 | 163 | 194 |
+| The busiest five chunks' share of those windows | 23% | 18% | 15% |
+| Windows kept, median over salts | 93% | 87% | 76% |
+| Test share of windows, min to max | 0.23 to 0.39 | 0.22 to 0.36 | 0.21 to 0.28 |
+| Heading angle KS statistic, median | 0.023 | 0.016 | 0.016 |
+| Heading angle p99, test minus tune, min to max | −14.1° to +12.4° | −12.9° to +17.2° | −9.3° to +13.3° |
+
+No resolution steadies the p99. Its range spans 26° at resolution 7, 30° at 8, and 23° at 9, and
+resolution 9 costs a quarter of the windows. The reversals lie at a few places, such as termini, and no grid
+spreads them further. The bulk of each distribution matches at every resolution, from 8 on as
+closely as at 9.
 
 ### Uneven sets
 
@@ -202,27 +307,27 @@ result looked plausible:
 - A merge renumbered the sub-sessions, so 46% of samples took another sub-session's set. The shares
   of each set still came out near 70/30.
 
-A simple invariant caught each error, where inspection had not. A split by cell holds these:
+A simple invariant caught each error, where inspection had not. A split scored by each crossing's
+chunk holds these:
 
-1. **Disjoint.** No sample, and no chunk, lies in both sets.
-2. **Complete.** Every sample of a picked session lies in exactly one sub-session. The samples out
-   number the samples in.
-3. **One chunk per sub-session.** A sub-session's samples share one chunk, and the sub-session's set
-   is that chunk's set.
-4. **Contiguous.** A sub-session's samples run consecutively through one session. A new
-   sub-session starts exactly where the chunk changes.
-5. **Within the country.** Every chunk lies in the cells that overlap the country's land and
-   maritime areas, found by `polygon_to_cells` with `'overlapping'` containment. That cover shares
-   no code with placing a sample in a cell.
+1. **Disjoint.** No chunk lies in both sets.
+2. **Complete.** Every scored unit of a run falls in exactly one set. The units of the two sets sum
+   to the units of the run.
+3. **One chunk per crossing.** Each crossing lies in one chunk, and every scored unit of the
+   crossing takes that chunk's set.
+4. **One set per tuning window.** A window that tuning reads lies wholly in the tune set's chunks.
+5. **Within the country.** Every chunk that holds a crossing or a sample lies in the cells that
+   overlap the country's land and maritime areas. `polygon_to_cells` finds those cells with
+   `'overlapping'` containment, which shares no code with placing a point in a cell.
 6. **Stable.** One salt, resolution, and chunk give one set on every run.
 
 Property tests over generated sessions hold invariants 1 to 4 and 6. A test of 6 states the
 expected set as a literal, so a changed hash or salt fails it.
 
-Every run of the evaluation also checks invariants 1, 2, 3, and 5 against the store, before it
-replays a session. A run that fails a check is refused, as a run from uncommitted code is. A fixture
-shows the split holds on the fixture, and the check shows it holds on the data the run scores. The
-run records the counts each check compared, so its report shows the split was checked.
+Every run of the evaluation also checks invariants 1, 2, 3, and 5 against the store, and every
+tuning step checks 4. A run that fails a check is refused, as a run from uncommitted code is. A
+fixture shows the split holds on the fixture, and the check shows it holds on the data the run
+scores. The run records the counts each check compared, so its report shows the split was checked.
 
 ## Experiments
 
@@ -241,12 +346,64 @@ Each experiment below runs in a notebook against the sessions the filter keeps.
    sets alone. A coarse key can put most of a hard region into one set.
 5. **What does a chunk's resolution cost?** Split by A5 chunk at resolutions 7, 8, and 9. Count the
    sub-sessions and their lengths, and the share of passes within N of a sub-session's edge.
+   [What a sub-session's edges cost](#what-a-sub-sessions-edges-cost) gives the answer.
+6. **Do the sets share a shape of track?** Compare straightness and heading angle between the sets,
+   under the chosen salt and 20 others.
+   [Whether the sets share a shape of track](#whether-the-sets-share-a-shape-of-track) gives the
+   answer.
+7. **Does cutting sessions change a predictor's score?** Score CrowFlies at 1 km over one set of
+   sessions twice: replayed as cut sub-sessions, and replayed whole and scored by each crossing's
+   chunk. CrowFlies tunes nothing, so any gap comes from the method alone.
+   [Cutting against scoring by chunk](#cutting-against-scoring-by-chunk) gives the answer.
 
-## What the choice decides
+## Cutting against scoring by chunk
 
-The group key, the salt, and the bounds of each set become settings `pick` records. Once LightCone
-reads the tune set, the split stays fixed for the rest of the slice. A change after that puts
-sessions LightCone was tuned on into its test set.
+On 2026-11-14, experiment 7 ran CrowFlies at 1 km over the test set of 1,000 sessions, split at
+resolution 8 under `tune-test-1`. The cut replay read its sub-sessions from a scratch store. Both
+divide false alarms by the 266.4 hours spent in test chunks:
+
+| | Cut sub-sessions | Whole sessions, by crossing's chunk |
+| --- | --- | --- |
+| Sessions replayed | 1,289 sub-sessions | 1,000 |
+| Passes scored | 3,294 | 3,625 |
+| Notifications | 9,461 | 9,450 |
+| False alarms | 5,718 | 5,333 |
+| Precision | 0.299 [0.288, 0.310] | 0.328 [0.316, 0.341] |
+| Recall | 0.860 [0.838, 0.881] | 0.855 [0.826, 0.880] |
+| False alarms per test hour | 21.5 | 20.0 |
+| Lead time p10 / p50 / p90 | 20 / 40 / 80 s | 20 / 40 / 90 s |
+
+Cutting lowers precision, and the two intervals do not overlap. It adds 385 false alarms, from
+notifications whose pass falls past a chunk's edge. It also scores 331 fewer passes, lost to the
+warm-up at each sub-session's start and to sub-sessions of one sample.
+
+Scoring by chunk reproduces CrowFlies' run at 1 km over 12,082 whole sessions: precision 0.323,
+recall 0.844, and 19.7 false alarms per hour. Cutting moves the score away from it. Cutting
+therefore measures the cuts as well as the predictor, and scoring by chunk measures the predictor
+alone.
+
+## The choice
+
+Chosen with the user on 2026-11-14:
+
+- **The key is the A5 cell at resolution 8, about 23 km across.** A split by cell is disjoint by
+  construction and needs nothing from a feed but positions, so it works in every country. Resolution
+  8 matches the sets' shape of track as closely as resolution 9 does, and keeps 87% of the windows
+  within one set rather than 76%. Resolution 7 gives lumpier sets.
+- **Sessions replay whole, and each scored unit takes the set of its crossing's chunk.** Cutting
+  sessions at chunks' edges lowered CrowFlies' precision from 0.328 to 0.299. Scoring by chunk
+  reproduced the score of whole sessions. It holds out what a predictor is scored on, not what it
+  reads, as forecasting and spatial cross-validation do.
+- **Tuning reads only windows wholly in tune chunks.** A tuning window then reads no test track.
+- **The salt is `tune-test-1`, and 70 of 100 buckets go to tune.** The salt's sets fall within the
+  spread of 21 salts. Choosing a salt by its sets' scores would tune on the test set.
+- **The extremes of the heading angle set only the range of the sweep.** Under every salt and
+  resolution, the p99 differs between the sets by up to 17°, since a few places hold most
+  reversals. The sweep over the tune set chooses the cone's angle.
+
+The key, the resolution, the salt, and the bounds become settings each run records. Once LightCone
+reads the tune set, the split stays fixed for the rest of the slice. A change after that puts track
+LightCone was tuned on into its test set.
 
 ## When a predictor holds its data
 
@@ -284,5 +441,11 @@ not trains on track it lacks. This doc's choices need revisiting for it:
   hexagons, and its Rust implementation
 - [Apache Sedona's `ST_H3CellIDs`](https://sedona.apache.org/1.9.0/api/sql/Spatial-Indexing/ST_H3CellIDs/)
   — covering a geometry with H3 cells in SQL
+- [Evaluation on a rolling forecasting origin](https://otexts.com/fpp3/tscv.html) — forecasting
+  from all prior history, and scoring only the test period
+- [How to reliably estimate the tortuosity of an animal's path](https://doi.org/10.1016/j.jtbi.2004.03.016)
+  — the straightness index for oriented paths, and sinuosity for random search
+- [trajr](https://doi.org/10.1111/eth.12739) — straightness, sinuosity, and other measures of a
+  path
 - [scikit-learn: cross-validation iterators for grouped data](https://scikit-learn.org/stable/modules/cross_validation.html#cross-validation-iterators-for-grouped-data)
   — `GroupShuffleSplit` and `GroupKFold`
