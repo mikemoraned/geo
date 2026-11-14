@@ -9,7 +9,8 @@ A shell reads a receiver, a browser's geolocation, a battery pin or a clock. Dec
 that means happens here, where a laptop can test it: the same test on the board costs a cold start
 under open sky, or an hour and a half of discharge. The prediction itself is
 [`predictor`](../predictor/README.md)'s, and this crate holds the state a shell drives it with —
-the parser, the predictor and the battery.
+the parser, the predictor, the pass detector, the tracker of each crossing's state, and the
+battery.
 
 ## One core, a view each
 
@@ -35,6 +36,14 @@ A sentence that completes no fix changes nothing: one emitted before the receive
 whose checksum fails, one repeating what is known. Nor does a voltage landing in the charge step
 already showing, a set arriving for a predictor that already has one, or an event the predictor
 refuses as out of order.
+
+## Each crossing has a state
+
+Every event the predictor accepts also reaches a pass detector and a tracker. The detector reports
+each crossing within its pass radius of the latest fix. The tracker turns the predictions and those
+passes into each crossing's state: out of reach, a candidate, alerted on, or being passed. A view
+reads a crossing's state and the pass radius through the model. The transitions between states
+stay in the core, since a view shows only where each crossing is now.
 
 ## A core with no crossings has no predictor
 

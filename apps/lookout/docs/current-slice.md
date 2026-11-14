@@ -908,9 +908,11 @@ appear before LightCone exists.
         space around it.
       - Carry the online pass radius in `web-core`'s view, and draw it as an inner circle.
       - Replay each journey on `/kiosk` over 120 s rather than 60 s.
-- [ ] Build with `just wasm` and `just m5plus-build`. Hand over `just m5plus-flash`, and a look at
+- [x] Build with `just wasm` and `just m5plus-build`. Hand over `just m5plus-flash`, and a look at
       `/kiosk`.
 - [ ] Check on the device that each crossing's line on the M5 panel shows its state's mark.
+      On 2026-11-14 the flashed device showed only distant crossings, each marked as a candidate.
+      Seeing `!` and `*` needs a journey past water.
 
 #### Phase 6: LightCone
 

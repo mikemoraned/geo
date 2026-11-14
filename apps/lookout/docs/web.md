@@ -36,11 +36,13 @@ We are in the middle, and what is about to be crossed is around us.
              .   /           .          *   a crossing the core predicts,
            .   /  . - - .      .            drawn where it really lies
           .  /  .    *    .     .
-          . /   .    ●    .     .       ●   us, sized by the speed the core
-          ./    .    :    .     .           reckons we are going
-           .      . - - .      .
-             .          *    .          the outer ring is the furthest the
-                . - - - - .             core looks; nothing is drawn past it
+          . /   .   (●)   .     .       ●   us
+          ./    .    :    .     .
+           .      . - - .      .        ( ) the pass radius: a crossing
+             .          *    .              inside it is being passed
+                . - - - - .
+                                        the outer ring is the furthest the
+                                        core looks; nothing is drawn past it
                                         /   rail near us, cut at the outer ring
                                         :   where we have been lately
 ```
@@ -62,7 +64,9 @@ km, a crossing sits this far out from the centre:
 | --- | --- | --- | --- | --- | --- |
 | of the way to the rim | 17% | 29% | 46% | 67% | 100% |
 
-The inner ring is drawn half way out, which under those settings is a crossing about 1.2 km away.
+The middle ring is drawn half way out, which under those settings is a crossing about 1.2 km away.
+The innermost ring is the core's pass radius, inside which it counts a crossing as being passed.
+At 250 m, it sits 17% of the way out.
 
 The rail near us, and where we have been lately, lie under the crossings. The rail is dashed, and
 where we have been is one line through the fixes of the last two minutes. Each point of either line
@@ -71,9 +75,13 @@ straight track therefore bends where the scale compresses. A line running past t
 cut there.
 The map holds only the rail a water crossing lies on, so track far from water is not drawn.
 
-The centre dot is sized by how fast the core reckons we are going. The core measures in metres a
-second, which is what a distance divided by a time comes out in, and a page shows km/h, which is
-how a train's speed is read.
+Each crossing's state, as the core tracks it, decides what is drawn around its dot. A crossing
+the core alerts on has a dashed ring, and a crossing being passed has a solid ring. A crossing
+that is neither has its dot alone.
+
+The centre dot has one size, so the space around it goes to the crossings nearest us. The speed
+is written beneath the picture. The core measures in metres a second, which is what a distance
+divided by a time comes out in, and a page shows km/h, which is how a train's speed is read.
 
 The screen shows what the core believes rather than what the browser could say for itself: the
 clock is the latest instant anything reported, and the speed is the one the arrivals were worked
