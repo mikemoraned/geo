@@ -944,15 +944,67 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 - [ ] Add the chosen split to `pick`, and record it in `evaluation_run_v5`.
       The split lands in scoring and tuning rather than in `pick`, since a run replays whole
       sessions.
-      - [ ] Hold the split's invariants 1 to 4 and 6, as
+      The steps below carry the choices made with the user on 2026-11-14. Each step ends with its
+      tests passing and a proposed commit message, then stops for the user's review. The
+      invariants' numbers are
+      [the split doc's](2026-11-14-train-test-split.md#invariants-of-a-split-by-cell).
+      - [-] Hold the split's invariants 1 to 4 and 6, as
             [the split doc](2026-11-14-train-test-split.md#invariants-of-a-split-by-cell) numbers
-            them, in property tests over generated sessions.
-      - [ ] Check invariants 1, 2, 3, and 5 against the store in every run, before it replays a
+            them, in property tests over generated sessions. Moot: steps 1 and 2 below hold them,
+            and invariant 4 moves to the measurement of LightCone's angle.
+      - [-] Check invariants 1, 2, 3, and 5 against the store in every run, before it replays a
             session. Refuse a run that fails a check, and record the counts each check compared.
+            Moot: step 4 below does this.
+      - [ ] Step 1: add the split to `evaluation`.
+            - A `Split` holds a resolution, a salt, and the tune buckets. A `Set` is tune or test.
+            - A point's cell is `a5::lonlat_to_cell` at the split's resolution. Add the crate `a5`
+              at `=1.0.0` to the workspace.
+            - A cell's bucket is the SHA-256 of `"{salt}:{hex}"`, where `hex` is `a5::u64_to_hex`
+              of the cell. Read the digest's first 8 bytes big-endian, modulo 100. A bucket below
+              the tune buckets is tune, and any other is test. This matches `chunk_bucket` in
+              `explore6.py`.
+            - Property tests hold invariants 1 and 6. A literal anchors 6: Dresden Hbf
+              (13.7322° E, 51.0403° N) at resolution 8 lies in cell `5156880000000000`, whose
+              bucket under `tune-test-1` is 72, so it is test.
+      - [ ] Step 2: score each unit by its crossing's cell.
+            - A run with a set scores only the units whose crossing lies in that set's cells: each
+              notification, pass, repeat, false alarm, and miss. A run without a set scores every
+              unit, as now.
+            - The run replays every picked session whole. `pick` stays as it is.
+            - False alarms per hour divide by the hours in the set's cells. Replay measures them:
+              each step between two samples counts towards the set of its first sample's cell.
+              `evaluation_session_v2` carries them as `scored_hours`, beside `hours`, which keeps
+              its meaning.
+            - The skew between the detectors counts only passes and visits whose crossing lies in
+              the set's cells, so every measure a run reports covers one set.
+            - Property tests hold invariants 2 and 3.
+      - [ ] Step 3: record the split in `evaluation_run_v5`.
+            - Add a map `split_settings`, as `online_detector_settings` was added in v4: the set,
+              the resolution, the salt, and the tune buckets. A run without a split has an empty
+              map. The run's id hashes the map with its other settings.
+            - Migrate the v4 rows into v5 under their ids, with an empty map, through a one-off
+              binary. Commit the binary with the data it rewrote, and remove it in a later commit,
+              as the note on migrating the store sets out.
+            - Read v5 in `/choose-predictor`'s `runs.sql`, and show each run's set in its report.
+      - [ ] Step 4: check the split against the store before every run.
+            - Check invariants 1, 2, 3, and 5 before the run replays a session, and refuse a run
+              that fails one.
+            - Invariant 5 reads the country's land and maritime areas, as `transport`'s
+              `countries.rs` does for the cleaning rule. `a5::polygon_to_cells` with
+              `Containment` overlapping covers them.
+            - Record each check's counts in a new gold dataset, `evaluation_split_v1`, with one row
+              per run: the cells, the cells in the set, the crossings, the units in the set and
+              outside it, and the cells outside the country's cover.
+      - [ ] Step 5: take the split in `evaluate` and in `evaluation-py`.
+            - `evaluate` takes `--set`, `--split-resolution`, `--split-salt`, and `--tune-buckets`,
+              with no defaults, so every run states its split. The chosen split is
+              `--split-resolution 8 --split-salt tune-test-1 --tune-buckets 70`. The recipe
+              `just evaluate` passes its arguments through, so each run names these.
+            - `evaluation-py` gains a `Split`, which its steps and `run` take.
 - [ ] Measure in a new `explore5.py` the angle between a train's heading and its positions up to N
       later.
       The notebook is `explore6.py`, since Phase 4 already added `explore5_skew.py`. It reads the
-      tune set alone.
+      tune set alone. Hold invariant 4 here: a window counts only when it lies wholly in tune cells.
 - [ ] Read ballpark odds for the extremes of that angle, and bound the cone's angle by them.
 - [ ] Add `LightCone` to `predictor`: a velocity from the last two samples, and high confidence
       inside the cone it reaches within N.
