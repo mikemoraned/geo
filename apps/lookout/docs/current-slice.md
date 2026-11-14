@@ -910,7 +910,7 @@ appear before LightCone exists.
       - Replay each journey on `/kiosk` over 120 s rather than 60 s.
 - [x] Build with `just wasm` and `just m5plus-build`. Hand over `just m5plus-flash`, and a look at
       `/kiosk`.
-- [ ] Check on the device that each crossing's line on the M5 panel shows its state's mark.
+- [x] Check on the device that each crossing's line on the M5 panel shows its state's mark.
       On 2026-11-14 the flashed device showed only distant crossings, each marked as a candidate.
       Seeing `!` and `*` needs a journey past water.
 
