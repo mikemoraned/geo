@@ -318,7 +318,7 @@ mod tests {
     use crate::fixtures::{oracle, run_of, store};
 
     #[tokio::test]
-    async fn the_oracle_run_end_to_end_scores_perfectly() {
+    async fn a_whole_oracle_run_scores_perfectly() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = store(tmp.path(), 3).await;
 
@@ -347,7 +347,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn crow_flies_run_end_to_end_notifies_nothing_and_misses_every_pass() {
+    async fn a_whole_crow_flies_run_notifies_nothing_and_misses_every_pass() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = store(tmp.path(), 3).await;
 
