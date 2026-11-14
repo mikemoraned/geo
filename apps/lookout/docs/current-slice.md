@@ -903,8 +903,11 @@ appear before LightCone exists.
       - `ActualPass`: that circle, ringed by a small solid circle.
 - [x] Prefix each crossing's line in `m5-core`'s `panel.rs` with one character per state, within 13
       characters: a space for `CandidatePass`, `!` for `AlertedPass`, and `*` for `ActualPass`.
-- [ ] Make a crossing that becomes a `CandidatePass` stand out more in `lookout-predictor.js` than
-      the plain circle it has now.
+- [x] Make the states easier to see in `lookout-predictor.js` and on `/kiosk`:
+      - Draw the dot at the centre at one size, rather than one that grows with speed, to free the
+        space around it.
+      - Carry the online pass radius in `web-core`'s view, and draw it as an inner circle.
+      - Replay each journey on `/kiosk` over 120 s rather than 60 s.
 - [ ] Build with `just wasm` and `just m5plus-build`. Hand over `just m5plus-flash`, and a look at
       `/kiosk`.
 - [ ] Check on the device that each crossing's line on the M5 panel shows its state's mark.

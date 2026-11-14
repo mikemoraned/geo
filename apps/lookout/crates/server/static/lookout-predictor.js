@@ -33,6 +33,7 @@ function geometry(wkb) {
 function polylines({ type, coordinates }) {
   return type === "MultiLineString" ? coordinates : [coordinates];
 }
+const HERE_RADIUS = 3;
 const RING_DASHES = { alerted_pass: [2, 2], actual_pass: [] };
 
 function speed(metres_per_second) {
@@ -107,8 +108,9 @@ class LookoutPredictor extends HTMLElement {
   }
 
   #paint() {
-    const { now, crossings, radius_metres, here, predicted, lines } = JSON.parse(view());
-    this.#draw(here, predicted, lines, radius_metres);
+    const { now, crossings, radius_metres, pass_radius_metres, here, predicted, lines } =
+      JSON.parse(view());
+    this.#draw(here, predicted, lines, radius_metres, pass_radius_metres);
     this.#screen.textContent = [
       now ? new Date(now).toLocaleTimeString() : "no time yet",
       here ? speed(here.speed_mps) : "no position yet",
@@ -118,7 +120,7 @@ class LookoutPredictor extends HTMLElement {
     ].join("\n");
   }
 
-  #draw(here, predicted, lines, maximum) {
+  #draw(here, predicted, lines, maximum, passing) {
     const context = this.#canvas.getContext("2d");
     const middle = CANVAS_SIZE / 2;
     const radius = middle - 4;
@@ -170,6 +172,10 @@ class LookoutPredictor extends HTMLElement {
     }
     context.restore();
 
+    context.beginPath();
+    context.arc(middle, middle, reach(passing), 0, TAU);
+    context.stroke();
+
     context.fillStyle = "#7f8";
     context.strokeStyle = "#7f8";
     for (const crossing of predicted) {
@@ -193,7 +199,7 @@ class LookoutPredictor extends HTMLElement {
 
     context.fillStyle = "#cfd";
     context.beginPath();
-    context.arc(middle, middle, 3 + Math.min(here.speed_mps ?? 0, 30) / 3, 0, TAU);
+    context.arc(middle, middle, HERE_RADIUS, 0, TAU);
     context.fill();
   }
 }
