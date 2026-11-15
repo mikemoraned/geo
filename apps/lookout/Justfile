@@ -73,12 +73,21 @@ build:
 wasm:
     wasm-pack build crates/platform/web/bridge --target web --out-dir ../../../server/static/wasm --out-name lookout
 
-mlt_version := "1.3.0"
+vendor_dir := "crates/server/static/vendor"
+d3_geo_version := "3.1.1"
+d3_scale_version := "4.0.2"
+maplibre_mlt_version := "1.3.0"
 
-# Fetch MapLibre's MLT decoder as one browser-ready module, into the dir `server` serves it from.
-mlt-decoder:
-    curl -sSfL "https://esm.sh/@maplibre/mlt@{{mlt_version}}/es2022/mlt.bundle.mjs" \
-        -o crates/server/static/vendor/maplibre-mlt.js
+# Replace the browser libraries in the vendor dir with esm.sh's bundles at the pinned versions. Run after changing one.
+vendor:
+    rm -f {{vendor_dir}}/*.js
+    just _vendor d3-geo {{d3_geo_version}} d3-geo d3-geo
+    just _vendor d3-scale {{d3_scale_version}} d3-scale d3-scale
+    just _vendor @maplibre/mlt {{maplibre_mlt_version}} mlt maplibre-mlt
+
+_vendor package version bundle file:
+    curl -sSfL "https://esm.sh/{{package}}@{{version}}/es2022/{{bundle}}.bundle.mjs" \
+        -o "{{vendor_dir}}/{{file}}-{{version}}.js"
 
 crossings_version := trim(`cat crossings.version`)
 
@@ -100,7 +109,7 @@ kiosk-sessions:
         crates/server/static/sessions.json
 
 # Serve on http://localhost:3000 with the wasm and the data freshly copied.
-serve-web: wasm mlt-decoder crossings kiosk-sessions serve
+serve-web: wasm crossings kiosk-sessions serve
 
 # Every test: the Rust workspace, Docker ones included, and the Python ones.
 test: test-python test-rust
@@ -163,7 +172,6 @@ end_to_end_test:
 # Deploy the server to fly.io (lookout-hom.fly.dev), with the git hash and the crossings baked in.
 deploy:
     fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}" \
-        --build-arg MLT_VERSION="{{mlt_version}}" \
         --build-arg CROSSINGS_VERSION="{{crossings_version}}" \
         --build-arg SESSIONS_VERSION="{{sessions_version}}"
 

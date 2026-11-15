@@ -77,14 +77,12 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   page creates no map and lays out as it does now.
 - **Each journey fits the map to its session's bounding box.** A GeoJSON source moves the current
   position's dot, one update for each sample sent.
-- **The page vendors MapLibre GL JS and `pmtiles` into `static/vendor`, each with its version in
-  the file name, as d3 is vendored, and generates `@maplibre/mlt` there.** The pages have no build step. MapLibre
+- **The page vendors MapLibre GL JS, `pmtiles`, and `@maplibre/mlt` into `static/vendor` through
+  `just vendor`, each with its version in the file name, as d3 is vendored.** The pages have no build step. MapLibre
   decodes tiles for drawing but gives a page no way to read a tile's features, so the replay
   decodes its tiles with `@maplibre/mlt`'s `decodeTile`. The alternative, `@mapbox/vector-tile`
-  with `pbf`, reads only MVT. The published package is not importable without a bundler, so `just
-  mlt-decoder` fetches esm.sh's bundle of it into `static/vendor/maplibre-mlt.js`. The web build
-  runs that recipe, as it runs `just wasm`, and git ignores the file. `mlt_version` in the
-  Justfile pins the version, and the Dockerfile receives it as `MLT_VERSION`.
+  with `pbf`, reads only MVT. The published package is not importable without a bundler, so the
+  vendored file is esm.sh's bundle of it, `maplibre-mlt-1.3.0.js`.
 - **The slice upgrades no dependency.** The `map` crate reads through the `Query` that
   `session_crossings` already uses, and none of what it adds appears in the `just outdated`
   report.
@@ -156,7 +154,7 @@ pipeline sits behind it.
 - [ ] Add a server test in `crates/server/tests/server` asserting that a range request for a
       `.pmtiles` file returns 206 with no `Content-Encoding`. Make it pass in
       `crates/server/src/lib.rs`.
-- [ ] Vendor MapLibre GL JS and `pmtiles` into `static/vendor`.
+- [ ] Add MapLibre GL JS and `pmtiles` to `just vendor`, and run it.
 - [ ] In `kiosk.js`, read the throwaway file's samples for that session, deduplicate them, sort
       them, and replay them through `lookout-predictor` in place of `sessions.json`.
 - [ ] Check that the replayed samples equal that session's samples in `sessions.json`, field by

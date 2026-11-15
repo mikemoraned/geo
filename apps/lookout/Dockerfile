@@ -24,11 +24,6 @@ RUN cargo build --release -p server
 # Into the static dir, which is then copied from the builder rather than from the context: the
 # wasm is generated, so a checkout does not carry it.
 RUN wasm-pack build crates/platform/web/bridge --target web --out-dir ../../../server/static/wasm --out-name lookout
-# MapLibre's MLT decoder, fetched as `just mlt-decoder` fetches it, at the version `just deploy` names.
-ARG MLT_VERSION
-RUN test -n "$MLT_VERSION" || { echo "MLT_VERSION is required" >&2; exit 1; }; \
-    curl -sSfL "https://esm.sh/@maplibre/mlt@$MLT_VERSION/es2022/mlt.bundle.mjs" \
-        -o crates/server/static/vendor/maplibre-mlt.js
 # The crossings a browser fetches and the sessions a kiosk replays, beside it. Which versions
 # is `just deploy`'s to say, from the same files the device's build script reads, so a deploy
 # and a board are never carrying different sets.
