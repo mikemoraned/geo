@@ -43,10 +43,15 @@ The wasm module, and the crossings and sessions a page fetches, are copied into 
 commands for a deploy, so what is served is built rather than committed.
 
 The browser libraries in `crates/server/static/vendor` are generated too, but committed. `just
-vendor` replaces them with [esm.sh](https://esm.sh)'s bundle of each package at the version the
-Justfile pins. A bundle is one module a page imports without a bundler. Each file is named for its
-package and version, such as `d3-geo-3.1.1.js`, and a page imports it by that name. Run `just
-vendor` after changing a version or adding a library, and update the imports to match.
+vendor` replaces them with each package at the version the Justfile pins. A package that ships
+modules a page can import, such as MapLibre GL JS, comes as its own files, through
+[jsDelivr](https://www.jsdelivr.com). Any other comes as [esm.sh](https://esm.sh)'s bundle of it:
+one module a page imports without a bundler. Each file is named for its package and version, such
+as `d3-geo-3.1.1.js`, and a page imports it by that name. Run `just vendor` after changing a
+version or adding a library, and update the imports to match.
+
+MapLibre GL JS looks for its worker beside itself under the worker's unversioned name, so a page
+that uses it names the worker's versioned file through `setWorkerUrl`.
 
 ## The python extensions
 

@@ -130,6 +130,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   uncompressed, even to a client that takes gzip.** tower-http's `CompressionLayer` skips any
   response that carries `Content-Range`. A whole-file request is compressed, and loses its
   `Accept-Ranges` header.
+- **MapLibre GL JS 6.18.0 ships ES modules a page can import, and `pmtiles` 4.5.0 does not.**
+  MapLibre's main module and its worker module are self-contained, and it exports
+  `setWorkerUrl`. `pmtiles` imports `fflate` by package name, so it is vendored as esm.sh's
+  bundle. `pmtiles` names tile type 6 `Mlt`, and its MapLibre protocol passes such a tile's bytes
+  through unchanged.
 - **`mlt convert` writes a `.pmtiles` input only to a `.pmtiles` or `.mbtiles` output.** Loose
   `.mlt` tiles come from converting tippecanoe's directory output (`-e`).
 
@@ -156,7 +161,7 @@ pipeline sits behind it.
       `.pmtiles` file returns 206 with no `Content-Encoding`. Make it pass in
       `crates/server/src/lib.rs`. It passed unchanged: `CompressionLayer` leaves a response with
       `Content-Range` uncompressed.
-- [ ] Add MapLibre GL JS and `pmtiles` to `just vendor`, and run it.
+- [x] Add MapLibre GL JS and `pmtiles` to `just vendor`, and run it.
 - [ ] In `kiosk.js`, read the throwaway file's samples for that session, deduplicate them, sort
       them, and replay them through `lookout-predictor` in place of `sessions.json`.
 - [ ] Check that the replayed samples equal that session's samples in `sessions.json`, field by
