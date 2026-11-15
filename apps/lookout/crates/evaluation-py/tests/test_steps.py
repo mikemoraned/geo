@@ -52,6 +52,16 @@ def oracle():
     return lookout_evaluation.Oracle(horizon="5m")
 
 
+def splitter():
+    return lookout_evaluation.Splitter(resolution=8, salt="tune-test-1", tune_buckets=70)
+
+
+def sessions_of(root, picked, split=None):
+    return pa.table(
+        lookout_evaluation.session_rows(country="DE", picked=picked, split=split, root=root)
+    )
+
+
 def run(root, predictor, **settings):
     ran = lookout_evaluation.run(
         country="DE",
@@ -96,22 +106,22 @@ def test_a_run_without_an_online_detector_measures_no_skew(written):
 
 def test_the_steps_run_one_by_one_give_what_the_run_gives(written):
     ran = run(written, oracle())
-    picked = ran["picked"]
+    sessions = sessions_of(written, ran["picked"])
 
     transitions = pa.table(
-        lookout_evaluation.replay(country="DE", sessions=picked, predictor=oracle(), root=written)
+        lookout_evaluation.replay(country="DE", sessions=sessions, predictor=oracle(), root=written)
     )
     outcomes = pa.table(
         lookout_evaluation.score(
             country="DE",
-            sessions=picked,
+            sessions=sessions,
             transitions=transitions,
             scoring=first_runs(),
             root=written,
         )
     )
     summary = pa.table(
-        lookout_evaluation.summarise(sessions=picked, outcomes=outcomes, bootstrap=bootstrap())
+        lookout_evaluation.summarise(sessions=sessions, outcomes=outcomes, bootstrap=bootstrap())
     )
 
     assert transitions.equals(ran["transitions"])
@@ -138,24 +148,60 @@ def test_crow_flies_notifies_nothing_and_misses_every_pass(written):
 
 
 def test_an_unknown_float_type_is_refused(written):
-    picked = run(written, oracle())["picked"]
+    sessions = sessions_of(written, run(written, oracle())["picked"])
 
     with pytest.raises(ValueError, match="float_type"):
         lookout_evaluation.replay(
-            country="DE", sessions=picked, predictor=oracle(), float_type="f16", root=written
+            country="DE", sessions=sessions, predictor=oracle(), float_type="f16", root=written
         )
 
 
 def test_a_predictor_that_is_neither_an_oracle_nor_crow_flies_is_refused(written):
-    picked = run(written, oracle())["picked"]
+    sessions = sessions_of(written, run(written, oracle())["picked"])
 
     with pytest.raises(ValueError, match="predictor"):
-        lookout_evaluation.replay(country="DE", sessions=picked, predictor="oracle", root=written)
+        lookout_evaluation.replay(country="DE", sessions=sessions, predictor="oracle", root=written)
+
+
+def test_a_session_without_a_split_scores_its_whole_duration(written):
+    sessions = sessions_of(written, run(written, oracle())["picked"]).to_pylist()
+
+    assert {(row["duration"], row["scored_duration"]) for row in sessions} == {
+        (datetime.timedelta(minutes=10), datetime.timedelta(minutes=10))
+    }
+
+
+def test_a_session_scores_its_whole_duration_in_one_split_and_none_in_the_other(written):
+    picked = run(written, oracle())["picked"]
+    scored = {
+        split: sessions_of(
+            written,
+            picked,
+            lookout_evaluation.ScoredSplit(splitter=splitter(), split=split),
+        ).column("scored_duration").to_pylist()
+        for split in ["tune", "test"]
+    }
+
+    assert [sorted(pair) for pair in zip(scored["tune"], scored["test"])] == [
+        [datetime.timedelta(0), datetime.timedelta(minutes=10)]
+    ] * 3
+
+
+def test_a_run_with_a_split_over_a_store_holding_no_country_is_refused(written):
+    split = lookout_evaluation.ScoredSplit(splitter=splitter(), split="test")
+
+    with pytest.raises(ValueError, match="extract"):
+        run(written, oracle(), split=split)
+
+
+def test_a_split_other_than_tune_or_test_is_refused():
+    with pytest.raises(ValueError, match="split"):
+        lookout_evaluation.ScoredSplit(splitter=splitter(), split="train")
 
 
 def test_transitions_of_a_session_not_picked_are_refused(written):
     ran = run(written, oracle())
-    fewer = ran["picked"].slice(0, 1)
+    fewer = sessions_of(written, ran["picked"]).slice(0, 1)
 
     with pytest.raises(ValueError, match="session-b"):
         lookout_evaluation.score(

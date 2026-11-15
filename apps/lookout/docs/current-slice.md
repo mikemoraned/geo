@@ -949,7 +949,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             sessions scored by each crossing's chunk.
       - [x] Choose with the user between cutting sessions and scoring by each crossing's chunk, and
             the chunk's resolution and the salt.
-- [ ] Add the chosen split to `pick`, and record it in `evaluation_run_v5`.
+- [x] Add the chosen split to `pick`, and record it in `evaluation_run_v5`.
       The split lands in scoring and tuning rather than in `pick`, since a run replays whole
       sessions.
       The steps below carry the choices made with the user on 2026-11-14. Each step ends with its
@@ -1062,7 +1062,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
               writing. A run of the steps one by one checks again at the start of replay, and
               writes the row at scoring.
             - A run with a split over a store that holds no extract of its country is refused.
-      - [ ] Step 6: take the split and its splitter in `evaluate` and in `evaluation-py`.
+      - [x] Step 6: take the split and its splitter in `evaluate` and in `evaluation-py`.
             - `evaluate` takes `--split`, `--split-resolution`, `--split-salt`, and
               `--tune-buckets`, with no defaults, so every run states them. The chosen splitter is
               `--split-resolution 8 --split-salt tune-test-1 --tune-buckets 70`. The recipe
@@ -1070,6 +1070,11 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             - `evaluation-py` gains a `Splitter` and a `Split`, which its steps and `run` take.
               Its steps build session rows from the picked table, which holds no scored hours, so
               they take the session rows `record` returns instead.
+            - Built with `--split every` for a run that scores every crossing, which refuses a
+              splitter, so a run without a split still states its choice.
+            - Built with Python's pair named `ScoredSplit`, as in Rust, where `Split` is tune or
+              test alone. A new step, `session_rows`, makes the session rows the later steps take,
+              since `record` refuses a build from uncommitted code, as a notebook's usually is.
 - [ ] Measure in a new `explore5.py` the angle between a train's heading and its positions up to N
       later.
       The notebook is `explore6.py`, since Phase 4 already added `explore5_skew.py`. It reads the

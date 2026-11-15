@@ -78,7 +78,10 @@ def tallies(outcomes):
 def summary(outcomes):
     return pa.table(
         lookout_evaluation.summarise(
-            sessions=train_session_table(SESSIONS, [100.0] * len(SESSIONS), lasting=3_600),
+            sessions=lookout_evaluation.session_rows(
+                country="DE",
+                picked=train_session_table(SESSIONS, [100.0] * len(SESSIONS), lasting=3_600),
+            ),
             outcomes=outcomes,
             bootstrap=lookout_evaluation.Bootstrap(resamples=RESAMPLES, seed=1),
         )

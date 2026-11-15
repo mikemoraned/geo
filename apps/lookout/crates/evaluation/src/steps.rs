@@ -374,7 +374,7 @@ pub fn summarise(
 pub async fn run(root: &Root, run: &EvaluationSettings) -> Result<EvaluationResults, StepError> {
     let country = run.pick.country;
     let picked = pick(root, &run.pick).await?;
-    let sessions = run_session_rows(root, run, &picked).await?;
+    let sessions = run_session_rows(root, run.pick.country, run.split.as_ref(), &picked).await?;
     let crossings_and_passes =
         read_crossings_and_passes(root, country, &sessions, run.split.as_ref()).await?;
     let ReplayResults { transitions, skew } = replay_against(

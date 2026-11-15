@@ -3,7 +3,7 @@ use std::num::NonZeroUsize;
 use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use code_version::CodeVersion;
 use domain::{SessionId, Span};
-use medallion::{FingerprintError, QueryError, Root, RunId};
+use medallion::{Country, FingerprintError, QueryError, Root, RunId};
 use medallion_model::{EvaluationRunRowV5, EvaluationSessionRowV2, TrainSessionRowV3};
 use uuid::Uuid;
 
@@ -86,7 +86,7 @@ pub async fn record(
         run_id: run_id(&row),
         date: row.started_at.date_naive(),
         row,
-        sessions: run_session_rows(root, run, picked).await?,
+        sessions: run_session_rows(root, run.pick.country, run.split.as_ref(), picked).await?,
     })
 }
 
@@ -178,24 +178,25 @@ pub fn session_rows(picked: &[TrainSessionRowV3]) -> Vec<EvaluationSessionRowV2>
 
 pub async fn run_session_rows(
     root: &Root,
-    run: &EvaluationSettings,
+    country: Country,
+    split: Option<&ScoredSplit>,
     picked: &[TrainSessionRowV3],
 ) -> Result<Vec<EvaluationSessionRowV2>, SessionRowsError> {
-    match &run.split {
+    match split {
         None => Ok(session_rows(picked)),
-        Some(split) => split_session_rows(root, run, picked, split).await,
+        Some(split) => split_session_rows(root, country, picked, split).await,
     }
 }
 
 async fn split_session_rows(
     root: &Root,
-    run: &EvaluationSettings,
+    country: Country,
     picked: &[TrainSessionRowV3],
     split: &ScoredSplit,
 ) -> Result<Vec<EvaluationSessionRowV2>, SessionRowsError> {
     let samples = read_samples(
         root,
-        run.pick.country,
+        country,
         picked.iter().map(|session| &session.session_id),
     )
     .await?;

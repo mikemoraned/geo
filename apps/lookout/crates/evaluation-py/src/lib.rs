@@ -5,11 +5,12 @@ use code_version::CodeVersion;
 use crossings::silver::ReadError;
 use domain::{Percentage, Radius, Span};
 use evaluation::gold::{self, GoldError};
-use evaluation::record::session_rows;
+use evaluation::record::run_session_rows;
 use evaluation::runs::RunsError;
 use evaluation::steps::{self, EvaluationSettings, Predictor, StepError};
 use evaluation::{
-    CrowFliesSettings, OnlineDetectorSettings, OracleSettings, Pick, PickError, Score, Seed,
+    A5Resolution, CrowFliesSettings, OnlineDetectorSettings, OracleSettings, Pick, PickError, Salt,
+    Score, Seed, Split, TuneBuckets,
 };
 use medallion::Country;
 use medallion_model::{
@@ -176,6 +177,69 @@ impl Bootstrap {
     }
 }
 
+/// A splitter, which puts each A5 cell at `resolution` in the tune or the test split by the SHA-256
+/// of `salt` and the cell. `tune_buckets` of a hundred buckets fall in the tune split.
+#[pyclass(frozen)]
+struct Splitter {
+    splitter: evaluation::Splitter,
+}
+
+#[pymethods]
+impl Splitter {
+    #[new]
+    #[pyo3(signature = (*, resolution, salt, tune_buckets))]
+    fn new(resolution: u8, salt: &str, tune_buckets: u8) -> PyResult<Self> {
+        Ok(Self {
+            splitter: evaluation::Splitter {
+                resolution: A5Resolution::new(resolution).map_err(value_error)?,
+                salt: Salt::new(salt).map_err(value_error)?,
+                tune_buckets: TuneBuckets::new(tune_buckets).map_err(value_error)?,
+            },
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Splitter(resolution={}, salt=\"{}\", tune_buckets={})",
+            self.splitter.resolution, self.splitter.salt, self.splitter.tune_buckets
+        )
+    }
+}
+
+/// The split a run scores, `"tune"` or `"test"`, of the cells `splitter` assigns. A run with a split
+/// scores only the crossings in that split's cells.
+#[pyclass(frozen)]
+struct ScoredSplit {
+    split: evaluation::ScoredSplit,
+}
+
+#[pymethods]
+impl ScoredSplit {
+    #[new]
+    #[pyo3(signature = (*, splitter, split))]
+    fn new(splitter: PyRef<'_, Splitter>, split: &str) -> PyResult<Self> {
+        Ok(Self {
+            split: evaluation::ScoredSplit {
+                splitter: splitter.splitter.clone(),
+                split: split.parse::<Split>().map_err(|_| {
+                    value_error(format!(
+                        "`split` must be \"tune\" or \"test\", not {split:?}"
+                    ))
+                })?,
+            },
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        let splitter = &self.split.splitter;
+        format!(
+            "ScoredSplit(splitter=Splitter(resolution={}, salt=\"{}\", tune_buckets={}), \
+             split=\"{}\")",
+            splitter.resolution, splitter.salt, splitter.tune_buckets, self.split.split
+        )
+    }
+}
+
 /// Pick `sessions` train sessions of `country` at random under `seed`, as an Arrow table.
 ///
 /// The pick keeps the sessions whose `realtime_percentage` is at least `realtime_at_least`, and
@@ -206,31 +270,67 @@ fn pick(
     table_of(&picked)
 }
 
+/// The rows of the sessions `picked` a run replays, as an Arrow table.
+///
+/// `picked` is a table of `pick`'s columns. Each row has the columns of gold
+/// `evaluation_session_v2`: the session's duration, and its scored duration, the time it spends in
+/// the cells of `split`, a `ScoredSplit`. Without a split, the scored duration is the duration.
+#[pyfunction]
+#[pyo3(signature = (*, country, picked, split=None, root=None))]
+fn session_rows(
+    py: Python<'_>,
+    country: &str,
+    picked: PyTable,
+    split: Option<PyRef<'_, ScoredSplit>>,
+    root: Option<PathBuf>,
+) -> PyResult<PyTable> {
+    let country = country.parse::<Country>().map_err(value_error)?;
+    let picked = rows_of::<TrainSessionRowV3>(picked)?;
+    let split = split.map(|split| split.split.clone());
+    let root = root_or_default(root)?;
+
+    let sessions = py
+        .detach(|| runtime().block_on(run_session_rows(&root, country, split.as_ref(), &picked)))
+        .map_err(runtime_error)?;
+
+    table_of(&sessions)
+}
+
 /// Replay each session in `sessions` through `predictor`, as an Arrow table of transitions.
 ///
-/// `sessions` is a table of `pick`'s columns, and `predictor` an `Oracle` or a `CrowFlies`. The
-/// replay runs in `float_type`, `"f32"` or `"f64"`. Each row is one crossing's change of state at
-/// one sample, with the columns of gold `evaluation_transition_v1`.
+/// `sessions` is a table of `session_rows`' columns, and `predictor` an `Oracle` or a `CrowFlies`.
+/// The replay runs in `float_type`, `"f32"` or `"f64"`. Each row is one crossing's change of state
+/// at one sample, with the columns of gold `evaluation_transition_v1`. Given `split`, a
+/// `ScoredSplit`, the replay first checks the split against the store, and a split that fails a
+/// check raises a `ValueError`.
 #[pyfunction]
-#[pyo3(signature = (*, country, sessions, predictor, float_type="f32", root=None))]
+#[pyo3(signature = (*, country, sessions, predictor, float_type="f32", split=None, root=None))]
 fn replay(
     py: Python<'_>,
     country: &str,
     sessions: PyTable,
     predictor: &Bound<'_, PyAny>,
     float_type: &str,
+    split: Option<PyRef<'_, ScoredSplit>>,
     root: Option<PathBuf>,
 ) -> PyResult<PyTable> {
     let country = country.parse::<Country>().map_err(value_error)?;
     let sessions = sessions_of(sessions)?;
     let predictor = predictor_of(predictor)?;
     let float_type = float_type_of(float_type)?;
+    let split = split.map(|split| split.split.clone());
     let root = root_or_default(root)?;
 
     let transitions = py
         .detach(|| {
             runtime().block_on(steps::replay(
-                &root, country, &sessions, predictor, float_type, None, None,
+                &root,
+                country,
+                &sessions,
+                predictor,
+                float_type,
+                None,
+                split.as_ref(),
             ))
         })
         .map_err(step_error)?;
@@ -241,21 +341,25 @@ fn replay(
 /// Score the notifications in `transitions` against each session's passes, as an Arrow table.
 ///
 /// `transitions` is a table of `replay`'s columns for the sessions in `sessions`. Each row is one
-/// notification or one missed pass, with the columns of gold `evaluation_outcome_v2`.
+/// notification or one missed pass, with the columns of gold `evaluation_outcome_v2`. Given
+/// `split`, a `ScoredSplit`, the table holds only the outcomes of crossings in that split, and a
+/// split that fails a check against the store raises a `ValueError`.
 #[pyfunction]
-#[pyo3(signature = (*, country, sessions, transitions, scoring, root=None))]
+#[pyo3(signature = (*, country, sessions, transitions, scoring, split=None, root=None))]
 fn score(
     py: Python<'_>,
     country: &str,
     sessions: PyTable,
     transitions: PyTable,
     scoring: PyRef<'_, Scoring>,
+    split: Option<PyRef<'_, ScoredSplit>>,
     root: Option<PathBuf>,
 ) -> PyResult<PyTable> {
     let country = country.parse::<Country>().map_err(value_error)?;
     let sessions = sessions_of(sessions)?;
     let transitions = rows_of::<EvaluationTransitionRowV1>(transitions)?;
     let scoring = scoring.scoring;
+    let split = split.map(|split| split.split.clone());
     let root = root_or_default(root)?;
 
     let scored = py
@@ -266,7 +370,7 @@ fn score(
                 &sessions,
                 &transitions,
                 &scoring,
-                None,
+                split.as_ref(),
             ))
         })
         .map_err(step_error)?;
@@ -276,8 +380,9 @@ fn score(
 
 /// Sum `outcomes` into the run's measures and their intervals, as a one-row Arrow table.
 ///
-/// `outcomes` is a table of `score`'s columns for the sessions in `sessions`. The row has the
-/// columns of gold `evaluation_summary_v2`.
+/// `outcomes` is a table of `score`'s columns for the sessions in `sessions`, a table of
+/// `session_rows`' columns. False alarms per hour divide by the sessions' scored durations. The row
+/// has the columns of gold `evaluation_summary_v2`.
 #[pyfunction]
 #[pyo3(signature = (*, sessions, outcomes, bootstrap))]
 fn summarise(
@@ -299,11 +404,13 @@ fn summarise(
 /// The dict's keys are `"picked"`, `"transitions"`, `"outcomes"`, and `"summary"`. The arguments
 /// are those of the steps. If `online_detector` is an `OnlineDetector`, the run also measures how
 /// far its passes skew from ground truth, under the key `"skew"`, with the columns of gold
-/// `evaluation_skew_v2`.
+/// `evaluation_skew_v2`. If `split` is a `ScoredSplit`, the run scores only that split, and the
+/// counts its checks of the split compared go under the key `"split"`, with the columns of gold
+/// `evaluation_split_v1`.
 #[pyfunction]
 #[pyo3(signature = (
     *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap,
-    online_detector=None, float_type="f32", root=None
+    online_detector=None, float_type="f32", split=None, root=None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn run<'py>(
@@ -317,6 +424,7 @@ fn run<'py>(
     bootstrap: PyRef<'py, Bootstrap>,
     online_detector: Option<PyRef<'py, OnlineDetector>>,
     float_type: &str,
+    split: Option<PyRef<'py, ScoredSplit>>,
     root: Option<PathBuf>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let settings = EvaluationSettings {
@@ -326,7 +434,7 @@ fn run<'py>(
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
-        split: None,
+        split: split.map(|split| split.split.clone()),
     };
     let root = root_or_default(root)?;
 
@@ -341,6 +449,9 @@ fn run<'py>(
         tables.set_item("skew", table_of(&[skew])?)?;
     }
     tables.set_item("outcomes", table_of(&results.outcomes)?)?;
+    if let Some(split) = results.split {
+        tables.set_item("split", table_of(&[split])?)?;
+    }
     tables.set_item("summary", table_of(&[results.summary])?)?;
     Ok(tables)
 }
@@ -354,7 +465,7 @@ fn run<'py>(
 #[pyfunction]
 #[pyo3(signature = (
     *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap,
-    online_detector=None, float_type="f32", root=None
+    online_detector=None, float_type="f32", split=None, root=None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn evaluate<'py>(
@@ -368,6 +479,7 @@ fn evaluate<'py>(
     bootstrap: PyRef<'py, Bootstrap>,
     online_detector: Option<PyRef<'py, OnlineDetector>>,
     float_type: &str,
+    split: Option<PyRef<'py, ScoredSplit>>,
     root: Option<PathBuf>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let settings = EvaluationSettings {
@@ -377,7 +489,7 @@ fn evaluate<'py>(
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
-        split: None,
+        split: split.map(|split| split.split.clone()),
     };
     let code = CodeVersion::new(BUILD_CODE_VERSION).map_err(value_error)?;
     let root = root_or_default(root)?;
@@ -394,6 +506,9 @@ fn evaluate<'py>(
         tables.set_item("skew", table_of(&[skew])?)?;
     }
     tables.set_item("outcomes", table_of(&results.outcomes)?)?;
+    if let Some(split) = results.split {
+        tables.set_item("split", table_of(&[split])?)?;
+    }
     tables.set_item("summary", table_of(&[results.summary])?)?;
     Ok(tables)
 }
@@ -403,13 +518,13 @@ fn evaluate<'py>(
 /// The dict's `"run_id"` and `"run_date"` are the text `write_gold` takes. Its `"run"` and
 /// `"sessions"` are the run's tables of gold `evaluation_run_v5` and `evaluation_session_v2`. The
 /// run names `BUILD_CODE_VERSION`, the code this extension was built from, and a fingerprint of each
-/// silver dataset it reads. Its id hashes those with its settings, so the same settings over the
-/// same code and data record the same run. If the extension was built from uncommitted code, a
-/// `ValueError` is raised.
+/// silver dataset it reads. Its id hashes those with its settings, `split` among them, so the same
+/// settings over the same code and data record the same run. If the extension was built from
+/// uncommitted code, a `ValueError` is raised.
 #[pyfunction]
 #[pyo3(signature = (
     *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap, picked,
-    online_detector=None, float_type="f32", root=None
+    online_detector=None, float_type="f32", split=None, root=None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn record<'py>(
@@ -424,6 +539,7 @@ fn record<'py>(
     picked: PyTable,
     online_detector: Option<PyRef<'py, OnlineDetector>>,
     float_type: &str,
+    split: Option<PyRef<'py, ScoredSplit>>,
     root: Option<PathBuf>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let settings = EvaluationSettings {
@@ -433,7 +549,7 @@ fn record<'py>(
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
-        split: None,
+        split: split.map(|split| split.split.clone()),
     };
     let picked = rows_of::<TrainSessionRowV3>(picked)?;
     let code = CodeVersion::new(BUILD_CODE_VERSION).map_err(value_error)?;
@@ -488,8 +604,8 @@ fn span(text: &str) -> PyResult<Span> {
     Span::new(text).map_err(value_error)
 }
 
-fn sessions_of(picked: PyTable) -> PyResult<Vec<EvaluationSessionRowV2>> {
-    Ok(session_rows(&rows_of::<TrainSessionRowV3>(picked)?))
+fn sessions_of(sessions: PyTable) -> PyResult<Vec<EvaluationSessionRowV2>> {
+    rows_of::<EvaluationSessionRowV2>(sessions)
 }
 
 fn pick_error(err: PickError) -> PyErr {
@@ -503,7 +619,9 @@ fn step_error(err: StepError) -> PyErr {
     match err {
         StepError::Pick(err) => pick_error(err),
         StepError::Query(err) | StepError::Crossings(ReadError::Query(err)) => query_error(err),
-        StepError::Rows(_) => value_error(err),
+        StepError::Rows(_) | StepError::SplitCheck(_) | StepError::SplitBroken(_) => {
+            value_error(err)
+        }
         _ => runtime_error(err),
     }
 }
@@ -525,7 +643,10 @@ fn lookout_evaluation(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<OnlineDetector>()?;
     module.add_class::<Scoring>()?;
     module.add_class::<Bootstrap>()?;
+    module.add_class::<Splitter>()?;
+    module.add_class::<ScoredSplit>()?;
     module.add_function(wrap_pyfunction!(pick, module)?)?;
+    module.add_function(wrap_pyfunction!(session_rows, module)?)?;
     module.add_function(wrap_pyfunction!(replay, module)?)?;
     module.add_function(wrap_pyfunction!(score, module)?)?;
     module.add_function(wrap_pyfunction!(summarise, module)?)?;
