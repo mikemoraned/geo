@@ -1,4 +1,5 @@
 pub mod a5;
+pub mod check;
 pub mod fingerprints;
 pub mod fixtures;
 pub mod gold;

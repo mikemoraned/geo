@@ -121,7 +121,7 @@ are among them, since the ground truth decides whether a pass happened.
 
 ### The datasets
 
-The slice adds three silver datasets and six gold ones. Gold partitions by `run_date` and then
+The slice adds three silver datasets and seven gold ones. Gold partitions by `run_date` and then
 `run_id`, as [medallion.md](medallion.md#partitioning) lays out evaluation results.
 
 ```mermaid
@@ -136,6 +136,7 @@ erDiagram
     train_session_crossing_v1 ||--o{ evaluation_outcome_v2 : "scored in"
     evaluation_run_v5 ||--|| evaluation_summary_v2 : "sums up"
     evaluation_run_v5 ||--o| evaluation_skew_v2 : "measures the skew of"
+    evaluation_run_v5 ||--o| evaluation_split_v1 : "checks the split of"
 ```
 
 - `train_session_v3` and `train_session_sample_v3` are the v2 datasets with
@@ -163,6 +164,9 @@ erDiagram
   passes, and notifications. Its scored duration is the sum of the sessions' scored durations.
 - `evaluation_skew_v2` holds a run's skew and its intervals, with its counts of offline passes and
   online visits.
+- `evaluation_split_v1` holds the counts a run's checks of its split compared: the cells and
+  crossings, those in the split, the passes and outcomes in the split and outside it, and the
+  cells outside the country's cover. A run without a split writes no row.
 
 ### Decisions
 
@@ -1035,7 +1039,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             - A run resumed from gold reads its split back from `split_settings`.
             - `/choose-predictor` groups runs by `split_settings` with the scoring settings, and
               names each group's split in its table.
-      - [ ] Step 5: check the splitter against the store before every run.
+      - [x] Step 5: check the splitter against the store before every run.
             - Check invariants 1, 2, 3, and 5 before the run replays a session, and refuse a run
               that fails one.
             - Invariant 5 reads the country's land and maritime areas, as the `countries` crate
@@ -1053,6 +1057,11 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
               - The tests write a small country of their own, as an extract with its areas, into
                 the fixture store.
               - A run without a split writes no `evaluation_split_v1` row.
+            - Built with the row written at scoring, once every count is known, since gold refuses
+              a second write of a run's row. The check before replay refuses a run without
+              writing. A run of the steps one by one checks again at the start of replay, and
+              writes the row at scoring.
+            - A run with a split over a store that holds no extract of its country is refused.
       - [ ] Step 6: take the split and its splitter in `evaluate` and in `evaluation-py`.
             - `evaluate` takes `--split`, `--split-resolution`, `--split-salt`, and
               `--tune-buckets`, with no defaults, so every run states them. The chosen splitter is
@@ -1133,6 +1142,15 @@ gold is committed. The slice cuts that size before it closes, so its runs do not
 - [ ] Decide with the user whether to rewrite the branch's history before it merges, so that the
       commits which added runs at full size leave the repo. Applying a way to the runs in gold
       shrinks only the files from then on, and each earlier commit keeps its runs as written.
+
+#### Things to consider
+
+- [ ] Consider tracing each dataset back to what it was derived from, such as the Overture release
+      behind a silver dataset. A disparity between the newest Overture extract and a silver
+      dataset could then be told apart from the two reading different releases, which would guide
+      what to do and where to debug. The split checks read the newest extract of a country, while
+      the crossings they check came from whichever extract built them. Tracing is more than the
+      split needs, so this phase records the question for a later slice rather than answering it.
 
 #### Wrap-up
 

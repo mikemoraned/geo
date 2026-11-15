@@ -258,7 +258,7 @@ fn score(
     let scoring = scoring.scoring;
     let root = root_or_default(root)?;
 
-    let outcomes = py
+    let scored = py
         .detach(|| {
             runtime().block_on(steps::score(
                 &root,
@@ -271,7 +271,7 @@ fn score(
         })
         .map_err(step_error)?;
 
-    table_of(&outcomes)
+    table_of(&scored.outcomes)
 }
 
 /// Sum `outcomes` into the run's measures and their intervals, as a one-row Arrow table.

@@ -4,12 +4,13 @@ use crossings::silver::{Crossing, ReadError, read_of_country};
 use domain::{CoordinateError, Precision, SessionId};
 use medallion::{Country, QueryError, Root};
 use medallion_model::{
-    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSummaryRowV2,
-    EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
+    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSplitRowV1,
+    EvaluationSummaryRowV2, EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
 };
 use predictor::{Alerting, AlertingBeyondWatching, CrowFlies, OnlineDetector, Watching};
 
 use crate::a5::NoA5Cell;
+use crate::check::{SplitBroken, SplitCheck, SplitCheckError, SplitCounts};
 use crate::offline::{OfflineError, PassesBySession, passes_by_session};
 use crate::oracle::{Oracle, OracleError};
 use crate::pick::{Pick, PickError, pick};
@@ -23,7 +24,7 @@ use crate::scored::ScoredCrossings;
 use crate::settings::{CrowFliesSettings, OnlineDetectorSettings, OracleSettings};
 use crate::skew::{SkewError, Visit, skew};
 use crate::split::ScoredSplit;
-use crate::store::{compact_ids, read_passes};
+use crate::store::{compact_ids, read_passes, read_samples};
 use crate::summarise::{Bootstrap, SummariseError};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -70,7 +71,14 @@ pub struct EvaluationResults {
     pub transitions: Vec<EvaluationTransitionRowV1>,
     pub skew: Option<EvaluationSkewRowV2>,
     pub outcomes: Vec<EvaluationOutcomeRowV2>,
+    pub split: Option<EvaluationSplitRowV1>,
     pub summary: EvaluationSummaryRowV2,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScoreResults {
+    pub outcomes: Vec<EvaluationOutcomeRowV2>,
+    pub split: Option<EvaluationSplitRowV1>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -81,6 +89,10 @@ pub enum StepError {
     Sessions(#[from] SessionRowsError),
     #[error("placing a crossing in the split: {0}")]
     Split(#[from] NoA5Cell),
+    #[error("checking the split: {0}")]
+    SplitCheck(#[from] SplitCheckError),
+    #[error("refusing the run: {0}")]
+    SplitBroken(#[from] SplitBroken),
     #[error("reading the store: {0}")]
     Query(#[from] QueryError),
     #[error("reading the crossings: {0}")]
@@ -110,6 +122,13 @@ pub struct CrossingsAndPasses {
     pub crossings: Vec<Crossing>,
     pub passes: PassesBySession,
     pub scored: ScoredCrossings,
+    pub checked: Option<CheckedSplit>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckedSplit {
+    pub check: SplitCheck,
+    pub counts: SplitCounts,
 }
 
 pub async fn read_crossings_and_passes(
@@ -125,10 +144,25 @@ pub async fn read_crossings_and_passes(
         &compact_ids(&crossings),
     )?;
     let scored = ScoredCrossings::of(&crossings, split)?;
+    let checked = match split {
+        None => None,
+        Some(split) => {
+            let check = SplitCheck::read(root, country, split).await?;
+            let samples = read_samples(
+                root,
+                country,
+                sessions.iter().map(|session| &session.session_id),
+            )
+            .await?;
+            let counts = check.before_replay(&crossings, &passes, &samples)?;
+            Some(CheckedSplit { check, counts })
+        }
+    };
     Ok(CrossingsAndPasses {
         crossings,
         passes,
         scored,
+        checked,
     })
 }
 
@@ -286,7 +320,7 @@ pub async fn score(
     transitions: &[EvaluationTransitionRowV1],
     scoring: &Scoring,
     split: Option<&ScoredSplit>,
-) -> Result<Vec<EvaluationOutcomeRowV2>, StepError> {
+) -> Result<ScoreResults, StepError> {
     let crossings_and_passes = read_crossings_and_passes(root, country, sessions, split).await?;
     score_against(sessions, &crossings_and_passes, transitions, scoring)
 }
@@ -296,9 +330,20 @@ pub fn score_against(
     crossings_and_passes: &CrossingsAndPasses,
     transitions: &[EvaluationTransitionRowV1],
     scoring: &Scoring,
-) -> Result<Vec<EvaluationOutcomeRowV2>, StepError> {
+) -> Result<ScoreResults, StepError> {
     let replayed = replayed_from(sessions, transitions)?;
-    let scored = crate::score::score(sessions, &replayed, &crossings_and_passes.passes, scoring)?
+    let every = crate::score::score(sessions, &replayed, &crossings_and_passes.passes, scoring)?;
+    let split = crossings_and_passes
+        .checked
+        .as_ref()
+        .map(|checked| {
+            checked
+                .check
+                .of_outcomes(&crossings_and_passes.crossings, &every)
+                .map(|outcomes| checked.counts.row(outcomes))
+        })
+        .transpose()?;
+    let scored = every
         .into_iter()
         .map(|(session_id, outcomes)| {
             (
@@ -309,7 +354,10 @@ pub fn score_against(
             )
         })
         .collect();
-    Ok(outcome_rows(&scored))
+    Ok(ScoreResults {
+        outcomes: outcome_rows(&scored),
+        split,
+    })
 }
 
 pub fn summarise(
@@ -339,13 +387,15 @@ pub async fn run(root: &Root, run: &EvaluationSettings) -> Result<EvaluationResu
         run.skew_settings(),
     )
     .await?;
-    let outcomes = score_against(&sessions, &crossings_and_passes, &transitions, &run.scoring)?;
+    let ScoreResults { outcomes, split } =
+        score_against(&sessions, &crossings_and_passes, &transitions, &run.scoring)?;
     let summary = summarise(&sessions, &outcomes, &run.bootstrap)?;
     Ok(EvaluationResults {
         picked,
         transitions,
         skew,
         outcomes,
+        split,
         summary,
     })
 }
@@ -355,7 +405,7 @@ mod tests {
     use domain::{Radius, Span};
 
     use super::*;
-    use crate::fixtures::{oracle, run_of, store};
+    use crate::fixtures::{around_dresden_hbf, oracle, run_of, store, write_country};
     use crate::record::session_rows;
     use crate::split::{Split, Splitter};
 
@@ -418,6 +468,7 @@ mod tests {
     async fn the_tune_and_test_runs_sum_to_the_run_without_a_split() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = store(tmp.path(), 3).await;
+        write_country(&root, around_dresden_hbf(1.0)).await;
         let whole = EvaluationSettings {
             online_detector: Some(OnlineDetectorSettings {
                 pass_radius: Radius::new(100.0).expect("a radius"),
@@ -470,6 +521,88 @@ mod tests {
                 TimeDelta::minutes(30)
             )
         );
+        assert_eq!(
+            (all.split, tune.split, test.split),
+            (
+                None,
+                Some(EvaluationSplitRowV1 {
+                    cells: 2,
+                    cells_in_split: 1,
+                    crossings: 2,
+                    crossings_in_split: 1,
+                    passes_in_split: 0,
+                    passes_outside: 3,
+                    outcomes_in_split: 0,
+                    outcomes_outside: 3,
+                    cells_outside_cover: 0,
+                }),
+                Some(EvaluationSplitRowV1 {
+                    cells: 2,
+                    cells_in_split: 1,
+                    crossings: 2,
+                    crossings_in_split: 1,
+                    passes_in_split: 3,
+                    passes_outside: 0,
+                    outcomes_in_split: 3,
+                    outcomes_outside: 0,
+                    cells_outside_cover: 0,
+                })
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn a_run_whose_crossings_reach_beyond_the_countrys_cover_is_refused() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = store(tmp.path(), 3).await;
+        write_country(&root, around_dresden_hbf(0.1)).await;
+        let settings = EvaluationSettings {
+            split: Some(ScoredSplit {
+                splitter: Splitter {
+                    resolution: "8".parse().expect("a resolution"),
+                    salt: "tune-test-1".parse().expect("a salt"),
+                    tune_buckets: "70".parse().expect("tune buckets"),
+                },
+                split: Split::Test,
+            }),
+            ..run_of(oracle())
+        };
+
+        let refused = run(&root, &settings).await;
+
+        assert!(
+            matches!(
+                refused,
+                Err(StepError::SplitBroken(SplitBroken::OutsideTheCountry {
+                    cells: 1
+                }))
+            ),
+            "{refused:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_run_with_a_split_over_a_store_holding_no_country_is_refused() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = store(tmp.path(), 3).await;
+        let settings = EvaluationSettings {
+            split: Some(ScoredSplit {
+                splitter: Splitter {
+                    resolution: "8".parse().expect("a resolution"),
+                    salt: "tune-test-1".parse().expect("a salt"),
+                    tune_buckets: "70".parse().expect("tune buckets"),
+                },
+                split: Split::Test,
+            }),
+            ..run_of(oracle())
+        };
+
+        let refused = run(&root, &settings).await;
+
+        assert!(
+            matches!(refused, Err(StepError::SplitCheck(_))),
+            "{refused:?}"
+        );
     }
 
     #[tokio::test]
@@ -496,7 +629,7 @@ mod tests {
         )
         .await
         .expect("a replay");
-        let outcomes = score(
+        let ScoreResults { outcomes, .. } = score(
             &root,
             Country::Germany,
             &sessions,

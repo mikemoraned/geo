@@ -11,7 +11,9 @@ use code_version::CodeVersion;
 
 use crate::record::{RecordError, RecordResults, record};
 use crate::runs::{RunsError, read_run_row, read_run_rows};
-use crate::steps::{self, EvaluationResults, EvaluationSettings, ReplayResults, StepError};
+use crate::steps::{
+    self, EvaluationResults, EvaluationSettings, ReplayResults, ScoreResults, StepError,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum GoldError {
@@ -85,7 +87,7 @@ async fn write_replayed(
 pub async fn score(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<(), GoldError> {
     let begun = resume(root, run_id, code).await?;
     let transitions = read_run_rows::<EvaluationTransitionRowV1>(root, run_id).await?;
-    let outcomes = steps::score(
+    let scored = steps::score(
         root,
         begun.run.pick.country,
         &begun.sessions,
@@ -94,8 +96,21 @@ pub async fn score(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<()
         begun.run.split.as_ref(),
     )
     .await?;
-    tracing::info!(%run_id, outcomes = outcomes.len(), "scored");
-    write_run(root, begun.date, run_id, &outcomes).await?;
+    write_scored(root, begun.date, run_id, &scored).await
+}
+
+async fn write_scored(
+    root: &Root,
+    date: NaiveDate,
+    run_id: &RunId,
+    scored: &ScoreResults,
+) -> Result<(), GoldError> {
+    tracing::info!(%run_id, outcomes = scored.outcomes.len(), "scored");
+    write_run(root, date, run_id, &scored.outcomes).await?;
+    if let Some(split) = &scored.split {
+        tracing::info!(%run_id, "checked the split");
+        write_run(root, date, run_id, std::slice::from_ref(split)).await?;
+    }
     Ok(())
 }
 
@@ -141,10 +156,10 @@ pub async fn run(
     write_replayed(root, date, &run_id, &replayed).await?;
     let ReplayResults { transitions, skew } = replayed;
 
-    let outcomes =
+    let scored =
         steps::score_against(&sessions, &crossings_and_passes, &transitions, &run.scoring)?;
-    tracing::info!(%run_id, outcomes = outcomes.len(), "scored");
-    write_run(root, date, &run_id, &outcomes).await?;
+    write_scored(root, date, &run_id, &scored).await?;
+    let ScoreResults { outcomes, split } = scored;
 
     let summary = steps::summarise(&sessions, &outcomes, &run.bootstrap)?;
     tracing::info!(%run_id, "summarised");
@@ -157,6 +172,7 @@ pub async fn run(
             transitions,
             skew,
             outcomes,
+            split,
             summary,
         },
     ))
@@ -221,10 +237,11 @@ mod tests {
     use std::path::Path;
 
     use medallion::write_rows;
-    use medallion_model::{EvaluationRunRowV5, TrainSessionCrossingRowV1};
+    use medallion_model::{EvaluationRunRowV5, EvaluationSplitRowV1, TrainSessionCrossingRowV1};
 
     use super::*;
-    use crate::fixtures::{instant, oracle, run_of, store};
+    use crate::fixtures::{around_dresden_hbf, instant, oracle, run_of, store, write_country};
+    use crate::split::{ScoredSplit, Split, Splitter};
 
     fn code(hash: &str) -> CodeVersion {
         CodeVersion::new(hash).expect("a clean code version")
@@ -318,6 +335,60 @@ mod tests {
         assert_eq!(
             written::<EvaluationSummaryRowV2>(&stepwise_root, &stepwise_id).await,
             written::<EvaluationSummaryRowV2>(&whole_root, &whole_id).await
+        );
+    }
+
+    #[tokio::test]
+    async fn a_run_with_a_split_writes_its_checks_counts_whether_run_whole_or_step_by_step() {
+        let whole = tempfile::tempdir().expect("a temporary directory");
+        let stepwise = tempfile::tempdir().expect("a temporary directory");
+        let whole_root = stored(whole.path()).await;
+        let stepwise_root = stored(stepwise.path()).await;
+        write_country(&whole_root, around_dresden_hbf(1.0)).await;
+        write_country(&stepwise_root, around_dresden_hbf(1.0)).await;
+        let settings = EvaluationSettings {
+            split: Some(ScoredSplit {
+                splitter: Splitter {
+                    resolution: "8".parse().expect("a resolution"),
+                    salt: "tune-test-1".parse().expect("a salt"),
+                    tune_buckets: "70".parse().expect("tune buckets"),
+                },
+                split: Split::Test,
+            }),
+            ..run_of(oracle())
+        };
+        let (whole_id, _) = run(&whole_root, &settings, &code("abc1234"))
+            .await
+            .expect("a run");
+
+        let stepwise_id = pick(&stepwise_root, &settings, &code("abc1234"))
+            .await
+            .expect("a pick");
+        replay(&stepwise_root, &stepwise_id, &code("abc1234"))
+            .await
+            .expect("a replay");
+        score(&stepwise_root, &stepwise_id, &code("abc1234"))
+            .await
+            .expect("scores");
+
+        let expected = [EvaluationSplitRowV1 {
+            cells: 2,
+            cells_in_split: 1,
+            crossings: 2,
+            crossings_in_split: 1,
+            passes_in_split: 3,
+            passes_outside: 0,
+            outcomes_in_split: 3,
+            outcomes_outside: 0,
+            cells_outside_cover: 0,
+        }];
+        assert_eq!(
+            written::<EvaluationSplitRowV1>(&whole_root, &whole_id).await,
+            expected
+        );
+        assert_eq!(
+            written::<EvaluationSplitRowV1>(&stepwise_root, &stepwise_id).await,
+            expected
         );
     }
 

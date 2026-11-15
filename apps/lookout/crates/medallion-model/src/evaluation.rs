@@ -26,6 +26,9 @@ pub const EVALUATION_SUMMARY_V2: DatasetSpec<layers::Gold> =
 pub const EVALUATION_SKEW_V2: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_skew_v2", RUN_DATE, &[RUN_ID]);
 
+pub const EVALUATION_SPLIT_V1: DatasetSpec<layers::Gold> =
+    DatasetSpec::partitioned_within("evaluation_split_v1", RUN_DATE, &[RUN_ID]);
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvaluationTransitionRowV1 {
     pub session_id: SessionId,
@@ -205,6 +208,38 @@ impl Row for EvaluationSkewRowV2 {
             offset_p10: Some(TimeDelta::seconds(-10)),
             offset_median: Some(TimeDelta::seconds(-5)),
             offset_p90: Some(TimeDelta::zero()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EvaluationSplitRowV1 {
+    pub cells: u64,
+    pub cells_in_split: u64,
+    pub crossings: u64,
+    pub crossings_in_split: u64,
+    pub passes_in_split: u64,
+    pub passes_outside: u64,
+    pub outcomes_in_split: u64,
+    pub outcomes_outside: u64,
+    pub cells_outside_cover: u64,
+}
+
+impl Row for EvaluationSplitRowV1 {
+    type Layer = layers::Gold;
+    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_SPLIT_V1;
+
+    fn example() -> Self {
+        Self {
+            cells: 2,
+            cells_in_split: 1,
+            crossings: 2,
+            crossings_in_split: 1,
+            passes_in_split: 2,
+            passes_outside: 1,
+            outcomes_in_split: 2,
+            outcomes_outside: 1,
+            cells_outside_cover: 0,
         }
     }
 }
