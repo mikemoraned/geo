@@ -1,11 +1,11 @@
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
+use countries::CountryAreas;
 use domain::Span;
 use medallion::MedallionArgs;
 use motis::ingest::ingest;
 use motis::train_sessions::derive_train_sessions;
-use transport::countries::CountryAreas;
 
 #[derive(Parser)]
 #[command(

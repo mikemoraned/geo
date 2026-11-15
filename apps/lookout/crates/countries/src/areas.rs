@@ -4,10 +4,9 @@ use std::fmt;
 use geo::{Contains, PreparedGeometry, Relate, unary_union};
 use geo_types::{Geometry, LineString, MultiPolygon, Point};
 use medallion::{Countries, Country, GEOMETRY, Query, Root};
-use medallion_model::{DIVISION_ID, ExtractManifestRowV3, OvertureRelease};
-
-use crate::extract::ExtractId;
-use crate::overture::OvertureType;
+use medallion_model::{
+    DIVISION_ID, ExtractId, ExtractManifestRowV3, OvertureRelease, OvertureType, RECORDED,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CountryError {
@@ -75,7 +74,7 @@ impl CountryAreas {
         query
             .register_by_name(medallion_model::EXTRACT_MANIFEST_V3)
             .await?;
-        let recorded: Vec<ExtractManifestRowV3> = query.rows(crate::extract::RECORDED).await?;
+        let recorded: Vec<ExtractManifestRowV3> = query.rows(RECORDED).await?;
 
         let newest_of_each_country = Country::ALL.into_iter().filter_map(|country| {
             recorded
@@ -186,7 +185,7 @@ mod tests {
     use geo_types::{Geometry, line_string, polygon};
 
     use super::*;
-    use crate::testing::{record_extract, square_from};
+    use crate::fixtures::{record_extract, square_from};
 
     fn square(size: f64) -> Geometry<f64> {
         square_from(0.0, size)

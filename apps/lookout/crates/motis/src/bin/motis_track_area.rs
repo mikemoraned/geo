@@ -1,11 +1,11 @@
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
+use countries::CountryAreas;
 use medallion::{Country, Root};
 use medallion_model::Area;
 use motis::capture::Coverage;
 use motis::polling::{PollArgs, Poller};
-use transport::countries::CountryAreas;
 use transport::regions::{RegionCode, region_area};
 
 #[derive(Parser)]

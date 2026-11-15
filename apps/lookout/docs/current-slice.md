@@ -1038,8 +1038,8 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
       - [ ] Step 5: check the splitter against the store before every run.
             - Check invariants 1, 2, 3, and 5 before the run replays a session, and refuse a run
               that fails one.
-            - Invariant 5 reads the country's land and maritime areas, as `transport`'s
-              `countries.rs` does for the cleaning rule. `a5::polygon_to_cells` with
+            - Invariant 5 reads the country's land and maritime areas, as the `countries` crate
+              does for the cleaning rule. `a5::polygon_to_cells` with
               `Containment` overlapping covers them.
             - Record each check's counts in a new gold dataset, `evaluation_split_v1`, with one row
               per run: the cells, the cells in the split, the crossings, the units in the split and

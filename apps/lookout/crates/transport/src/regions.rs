@@ -1,11 +1,8 @@
 use geo_types::Geometry;
 use medallion::{Country, GEOMETRY, Query, Root};
-use medallion_model::{DIVISION_ID, NotAGersId, OvertureRegion};
+use medallion_model::{DIVISION_ID, ExtractId, NotAGersId, OvertureRegion, OvertureType};
 use nutype::nutype;
 use serde::Deserialize;
-
-use crate::extract::ExtractId;
-use crate::overture::OvertureType;
 
 #[nutype(
     validate(with = iso_3166_2, error = NotARegionCode),
@@ -155,7 +152,7 @@ mod tests {
     use chrono::{DateTime, TimeZone, Utc};
 
     use super::*;
-    use crate::testing::{record_extract, square_from};
+    use countries::fixtures::{record_extract, square_from};
 
     const THURINGIA: &str = "e0ff5492-5758-4335-aabd-af1747925cd1";
     const SAXONY: &str = "3e1aa55a-1b9b-4d9b-8072-38ba413f6d2b";

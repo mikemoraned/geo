@@ -25,6 +25,7 @@ thiserror = { workspace = true }
 md5 = { workspace = true }
 shared = { workspace = true }
 telemetry = { workspace = true }
+countries = { workspace = true }
 transport = { workspace = true }
 
 [dev-dependencies]

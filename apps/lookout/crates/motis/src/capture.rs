@@ -2,12 +2,12 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use countries::Outline;
 use domain::Span;
 use geo::{BoundingRect, PreparedGeometry, Relate, unary_union};
 use geo_types::{Geometry, GeometryCollection, LineString, MultiPolygon, Rect};
 use medallion_model::{RailMode, TripId};
 use tokio::time::Instant;
-use transport::countries::Outline;
 
 use crate::api::types::{Mode, TripSegment};
 use crate::client::{MotisClient, MotisError};

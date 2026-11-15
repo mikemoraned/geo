@@ -1,38 +1,14 @@
 use arrow::array::{Array, Float64Array};
 use chrono::{DateTime, Utc};
 use geo_types::{Coord, Rect};
-use medallion::{Country, PartitionValue, Query, Root};
-use medallion_model::{DIVISION_ID, ExtractManifestRowV3, OvertureRelease};
-use nutype::nutype;
+use medallion::{Country, Query, Root};
+use medallion_model::{
+    DIVISION_ID, ExtractId, ExtractManifestRowV3, OvertureRelease, OvertureType, RECORDED,
+};
 
-use crate::overture::{Overture, OvertureError, OvertureType};
+use crate::overture::{Overture, OvertureError};
 
 const EXCLUDED_CLASSES: &[&str] = &["tram"];
-
-const COMPACT_UTC: &str = "%Y%m%dT%H%M%SZ";
-
-pub(crate) const RECORDED: &str = "SELECT * FROM extract_manifest_v3 ORDER BY extracted_at DESC";
-
-#[nutype(
-    validate(with = partition_value, error = medallion::PathError),
-    derive(Debug, Clone, PartialEq, Eq, Hash, Display, FromStr)
-)]
-pub struct ExtractId(String);
-
-fn partition_value(id: &str) -> Result<(), medallion::PathError> {
-    PartitionValue::new(id).map(|_| ())
-}
-
-impl ExtractId {
-    pub fn at(at: DateTime<Utc>) -> Self {
-        Self::new(at.format(COMPACT_UTC).to_string())
-            .expect("a compact UTC instant holds only digits and letters")
-    }
-
-    pub fn new(id: impl Into<String>) -> Result<Self, medallion::PathError> {
-        Self::try_new(id)
-    }
-}
 
 pub async fn recorded(root: &Root) -> Result<Vec<ExtractManifestRowV3>, ExtractError> {
     let query = Query::new(root.clone());

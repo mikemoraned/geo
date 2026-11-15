@@ -40,8 +40,8 @@ pub use motis_source::{
     MotisVersion, NotALabel, NotAMotisBaseUrl, NotAMotisVersion, UnknownFeed,
 };
 pub use overture::{
-    DIVISION_ID, EXTRACT_MANIFEST_V3, ExtractManifestRowV3, OVERTURE_EXTRACT, OvertureRegion,
-    division_id,
+    DIVISION_ID, EXTRACT_MANIFEST_V3, ExtractId, ExtractManifestRowV3, OVERTURE_EXTRACT,
+    OvertureRegion, OvertureType, RECORDED, division_id,
 };
 pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
 pub use session::{SESSION_SAMPLE_V3, SESSION_V3, SessionRowV3, SessionSampleRowV3};

@@ -34,7 +34,9 @@ through the landing dataset `motis_poll_v2`.
 
 `overture_extract` holds upstream reference rows in the upstream's own shape and layout, so those
 rows have no row type here: they keep whatever columns the release gives them, plus the
-`extract_id` joining them to `extract_manifest_v3`.
+`extract_id` joining them to `extract_manifest_v3`. An `ExtractId` is the instant the extract was
+taken, in compact UTC. Within an extract, each Overture type lies under its theme and type, which
+`OvertureType` names, so every crate that reads an extract finds a type in the same place.
 
 The manifest is one row per extraction, and its bbox is four bounds — `xmin`, `ymin`, `xmax`,
 `ymax` — rather than a geometry column in a Simple Features encoding. It is provenance, answering

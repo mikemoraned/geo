@@ -4,9 +4,9 @@ use std::process::ExitCode;
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use medallion::{Country, MedallionArgs, Root};
-use medallion_model::{ExtractManifestRowV3, OvertureRelease};
+use medallion_model::{ExtractId, ExtractManifestRowV3, OvertureRelease};
 use transport::{
-    extract::{self, ExtractId, Extraction, Extractor},
+    extract::{self, Extraction, Extractor},
     overture::{Overture, Release, ReleaseChoice},
 };
 

@@ -1985,6 +1985,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "countries"
+version = "0.1.0"
+dependencies = [
+ "arrow 57.3.1",
+ "chrono",
+ "datafusion",
+ "geo 0.32.0",
+ "geo-types",
+ "medallion",
+ "medallion-model",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "cpubits"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5341,6 +5357,7 @@ dependencies = [
  "chrono",
  "clap",
  "code_version",
+ "countries",
  "domain",
  "geo 0.32.0",
  "geo-traits",
@@ -6838,6 +6855,7 @@ dependencies = [
  "arrow 57.3.1",
  "chrono",
  "clap",
+ "countries",
  "domain",
  "geo 0.32.0",
  "geo-traits",
@@ -9133,6 +9151,7 @@ dependencies = [
  "arrow 57.3.1",
  "chrono",
  "clap",
+ "countries",
  "datafusion",
  "geo 0.32.0",
  "geo-types",

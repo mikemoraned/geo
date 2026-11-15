@@ -1,15 +1,11 @@
-#![cfg(test)]
-
 use arrow::array::RecordBatch;
 use chrono::{DateTime, Utc};
 use datafusion::execution::SendableRecordBatchStream;
 use geo_types::{Geometry, polygon};
 use medallion::{Country, Root};
-use medallion_model::ExtractManifestRowV3;
+use medallion_model::{ExtractManifestRowV3, OvertureType};
 
-use crate::overture::OvertureType;
-
-pub(crate) fn square_from(corner: f64, size: f64) -> Geometry<f64> {
+pub fn square_from(corner: f64, size: f64) -> Geometry<f64> {
     Geometry::Polygon(polygon![
         (x: corner, y: corner),
         (x: corner + size, y: corner),
@@ -18,7 +14,7 @@ pub(crate) fn square_from(corner: f64, size: f64) -> Geometry<f64> {
     ])
 }
 
-pub(crate) async fn record_extract(
+pub async fn record_extract(
     root: &Root,
     id: &str,
     country: Country,

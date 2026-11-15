@@ -95,6 +95,7 @@ pyo3 = "0.28"
 # python are our `RecordBatch`.
 pyo3-arrow = "0.16"
 code_version = { path = "crates/code_version" }
+countries = { path = "crates/countries" }
 crossings = { path = "crates/crossings" }
 platform-core = { path = "crates/platform-core" }
 m5-core = { path = "crates/platform/m5/core" }
