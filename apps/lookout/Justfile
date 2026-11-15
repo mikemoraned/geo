@@ -11,6 +11,7 @@ prerequisites:
     cargo install cargo-insta --locked
     cargo install cargo-mutants --locked
     cargo install cargo-audit --locked
+    cargo install --git https://github.com/maplibre/maplibre-tile-spec mlt --locked
     rustup target add wasm32-unknown-unknown
     brew install duckdb proj jq tippecanoe
 

@@ -56,11 +56,19 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   tile buffer, which the kiosk deduplicates on the sample's position in the session. The
   alternative is to put the sessions in the file's metadata, which is also inside the PMTiles but
   bypasses the tile format the spike is meant to test.
-- **`tippecanoe` builds the tiles, and Rust writes its input.** A new crate, `map`, reads the
-  chosen sessions and the Overture rail and water through medallion's `Query`, and writes them as
-  GeoJSON Text Sequences (one feature per line). It then runs `tippecanoe`, which writes
-  `map.pmtiles` into `gold/artifact=map/version=<run>/`. The alternative was the Rust `pmtiles`
-  crate with our own MVT encoding, which would mean writing our own tile clipping and simplification.
+- **The tiles are MapLibre Tile (MLT) v1, read by MapLibre's own libraries.** The project prefers
+  MapLibre's libraries and formats to Mapbox's. v1 is the stable version, and MapLibre GL JS reads
+  it from 5.12.0 with `"encoding": "mlt"` on the source. v2 is experimental and no renderer reads
+  it. [2026-11-15-maplibre-tile.md](2026-11-15-maplibre-tile.md) compares MLT with Mapbox Vector
+  Tile (MVT).
+- **`tippecanoe` tiles, `mlt convert` encodes, and Rust writes the input.** A new crate, `map`,
+  reads the chosen sessions and the Overture rail and water through medallion's `Query`, and
+  writes them as GeoJSON Text Sequences (one feature per line). `tippecanoe` tiles them into an MVT
+  PMTiles file in a temporary directory. `mlt convert` turns that into `map.pmtiles` in
+  `gold/artifact=map/version=<run>/`. The MVT file is never kept or served. The alternatives were
+  Planetiler, which writes MLT directly but adds a JVM and a second tiling tool, and the Rust
+  `pmtiles` crate with our own encoding, which would mean writing our own tile clipping and
+  simplification.
 - **`pack_map` picks its sessions by calling `session_crossings::gold::choose`, with the
   thresholds `gold-pack-sessions` passes.** The map artefact replaces the sessions artefact as
   what the kiosk replays.
@@ -69,10 +77,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   page creates no map and lays out as it does now.
 - **Each journey fits the map to its session's bounding box.** A GeoJSON source moves the current
   position's dot, one update for each sample sent.
-- **The page vendors MapLibre GL JS, `pmtiles`, `@mapbox/vector-tile`, and `pbf` into
-  `static/vendor`, each with its version in the file name, as d3 is vendored.** The pages have no
-  build step. MapLibre decodes tiles for drawing but gives a page no way to read a tile's
-  features, so the replay decodes its tiles with `@mapbox/vector-tile`.
+- **The page vendors MapLibre GL JS, `pmtiles`, and `@maplibre/mlt` into `static/vendor`, each
+  with its version in the file name, as d3 is vendored.** The pages have no build step. MapLibre
+  decodes tiles for drawing but gives a page no way to read a tile's features, so the replay
+  decodes its tiles with `@maplibre/mlt`'s `decodeTile`. The alternative, `@mapbox/vector-tile`
+  with `pbf`, reads only MVT.
 - **The slice upgrades no dependency.** The `map` crate reads through the `Query` that
   `session_crossings` already uses, and none of what it adds appears in the `just outdated`
   report.
@@ -84,8 +93,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   has to serve `.pmtiles` uncompressed.
 - `sessions.version`, `gold-pack-sessions`, `kiosk-sessions`, and the Dockerfile's
   `SESSIONS_VERSION` lose their only consumer once the kiosk reads the map.
-- Building tiles needs `tippecanoe` on the machine that packs gold. The deploy needs no
-  `tippecanoe`, as it copies the committed artefact.
+- Building tiles needs `tippecanoe` and the `mlt` CLI on the machine that packs gold. The deploy
+  needs neither, as it copies the committed artefact.
 
 #### Rejected / deferred
 
@@ -96,6 +105,12 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   each zoom level.
 
 #### Open questions
+
+- Whether a page without a bundler can import `@maplibre/mlt`. Its `package.json` names a `tsc`
+  build with no `module` or `exports` field. If it cannot, the replay needs another way to decode
+  MLT, and the choice goes back to the user.
+- What a feature decoded by `decodeTile` looks like, and so how the replay reads a sample's
+  attributes.
 
 - The zoom range of `rail` and `water`, and the `samples` zoom level. Sizes measured during the
   work settle both, as well as whether the artefact stays small enough to commit beside the
@@ -110,15 +125,19 @@ requests through the server. This phase takes one session through a hand-built f
 pipeline sits behind it.
 
 - [x] Add `tippecanoe` to `just prerequisites` and to the README's list of what it installs.
-- [ ] Install `tippecanoe` outside the sandbox with `just prerequisites`. The user runs this.
+- [x] Add the `mlt` CLI to `just prerequisites` and to the README's list of what it installs.
+- [ ] Install `tippecanoe` and the `mlt` CLI outside the sandbox with `just prerequisites`. The
+      user runs this.
+- [ ] Vendor `@maplibre/mlt` and decode one MLT tile with it in a page that has no bundler. Do this
+      first, as the remaining phase 1 tasks depend on it.
 - [ ] Write one session from `sessions.json` as a GeoJSON Text Sequence of sample points, by hand
       with `jq`, into the scratchpad. This is throwaway.
-- [ ] Build a throwaway `map.pmtiles` from it with `tippecanoe`, with the samples at a single zoom
-      level and their values as attributes.
+- [ ] Build a throwaway MVT file from it with `tippecanoe`, with the samples at a single zoom level
+      and their values as attributes. Convert it to `map.pmtiles` with `mlt convert`.
 - [ ] Add a server test in `crates/server/tests/server` asserting that a range request for a
       `.pmtiles` file returns 206 with no `Content-Encoding`. Make it pass in
       `crates/server/src/lib.rs`.
-- [ ] Vendor MapLibre GL JS, `pmtiles`, `@mapbox/vector-tile`, and `pbf` into `static/vendor`.
+- [ ] Vendor MapLibre GL JS and `pmtiles` into `static/vendor`.
 - [ ] In `kiosk.js`, read the throwaway file's samples for that session, deduplicate them, sort
       them, and replay them through `lookout-predictor` in place of `sessions.json`.
 - [ ] Check that the replayed samples equal that session's samples in `sessions.json`, field by
@@ -129,7 +148,8 @@ pipeline sits behind it.
 #### Phase 2: the map on a wide screen
 
 - [ ] In `kiosk/index.html` and `kiosk.js`, create a MapLibre map over the full viewport when
-      `(min-width: 768px)` matches, with `lookout-predictor` placed over it at the top right.
+      `(min-width: 768px)` matches, with `lookout-predictor` placed over it at the top right. Give
+      its source `"encoding": "mlt"`.
 - [ ] Draw the session's route from its samples as a line, and fit the map to its bounding box at
       each journey's `begin`.
 - [ ] Move a dot along the route from a GeoJSON source, updated as each sample is sent.
@@ -147,8 +167,9 @@ pipeline sits behind it.
       extract for its country, and write them as `rail` and `water`.
 - [ ] Measure the artefact's size against the `rail` and `water` maximum zoom level, and choose
       the level from those sizes.
-- [ ] Run `tippecanoe` from `pack_map` into `gold/artifact=map/version=<run>/map.pmtiles`, with the
-      session list in its metadata.
+- [ ] Run `tippecanoe` from `pack_map` into a temporary MVT file, with the session list in its
+      metadata. Run `mlt convert` on it into `gold/artifact=map/version=<run>/map.pmtiles`, and
+      check that the metadata survives the conversion.
 - [ ] Add `map.version`, and the Justfile recipes `gold-pack-map` and `kiosk-map`, and make
       `serve-web` depend on `kiosk-map`.
 - [ ] Copy the map artefact in the Dockerfile from a `MAP_VERSION` build argument, and allow
