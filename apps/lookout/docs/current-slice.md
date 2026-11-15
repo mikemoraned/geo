@@ -276,7 +276,7 @@ features live, so silver gains no datasets.
 
 #### Phase 4: the `map` artefact from the store
 
-- [ ] Create the `map` crate with a `pack_map` binary, with arguments shaped like
+- [x] Create the `map` crate with a `pack_map` binary, with arguments shaped like
       `pack_sessions`: `MedallionArgs`, `--min-crossings`, `--max-sessions`, `--output`, and
       `--version-file`.
 - [ ] Write the chosen sessions' samples, as points, and their routes, as lines, as GeoJSON Text

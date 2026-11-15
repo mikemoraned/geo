@@ -5010,6 +5010,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "map"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "medallion",
+ "session_crossings",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "marrow"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
