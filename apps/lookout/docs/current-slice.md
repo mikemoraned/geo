@@ -283,7 +283,7 @@ features live, so silver gains no datasets.
       Sequences, with each feature's zoom range set in its `tippecanoe` member.
 - [x] For every country, join `water_crossing_v2` to the bronze extract's segments and water on
       the Overture id and `extract_id`. Write the result as `rail` and `water`, from zoom level 7.
-- [ ] Test that `pack_map` writes every rail and water id `water_crossing_v2` names exactly once,
+- [x] Test that `pack_map` writes every rail and water id `water_crossing_v2` names exactly once,
       and fails when an extract lacks one.
 - [ ] Measure the artefact's size against the `rail` and `water` maximum zoom level, and choose
       the level from those sizes.
