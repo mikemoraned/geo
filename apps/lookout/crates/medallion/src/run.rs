@@ -170,6 +170,27 @@ mod tests {
     }
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    struct Led {
+        notification_id: String,
+        #[serde(with = "crate::duration::milliseconds_option")]
+        lead: Option<chrono::TimeDelta>,
+    }
+
+    impl Row for Led {
+        type Layer = layers::Gold;
+        const DATASET: DatasetSpec<Self::Layer> =
+            DatasetSpec::partitioned_within("led", RUN_DATE, &[RUN_ID]);
+        const DURATIONS: &'static [&'static str] = &["lead"];
+
+        fn example() -> Self {
+            Led {
+                notification_id: "example".to_string(),
+                lead: Some(chrono::TimeDelta::zero()),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct Exported {
         name: String,
     }
@@ -331,6 +352,43 @@ mod tests {
             .expect("the rows");
         rows.sort_by(|one, other| one.notification_id.cmp(&other.notification_id));
         rows
+    }
+
+    #[tokio::test]
+    async fn a_duration_is_read_back_through_a_query_as_a_millisecond_duration() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = Root::new(tmp.path());
+        let led = vec![
+            Led {
+                notification_id: "notification-1".to_string(),
+                lead: Some(chrono::TimeDelta::milliseconds(300_250)),
+            },
+            Led {
+                notification_id: "notification-2".to_string(),
+                lead: None,
+            },
+        ];
+        write_run(&root, day(6), &run("abc"), &led)
+            .await
+            .expect("a written run");
+        let query = Query::new(root.clone());
+        query.register_gold(Led::DATASET).await.expect("the runs");
+
+        let batches = query.sql("SELECT lead FROM led").await.expect("the leads");
+        let mut read: Vec<Led> = query
+            .read::<Led>()
+            .await
+            .expect("a read of the runs")
+            .rows()
+            .await
+            .expect("the rows");
+        read.sort_by(|one, other| one.notification_id.cmp(&other.notification_id));
+
+        assert_eq!(
+            batches[0].schema().field(0).data_type(),
+            &arrow::datatypes::DataType::Duration(arrow::datatypes::TimeUnit::Millisecond)
+        );
+        assert_eq!(read, led);
     }
 
     #[tokio::test]

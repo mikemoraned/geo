@@ -1,3 +1,4 @@
+use chrono::TimeDelta;
 use std::error::Error;
 use std::num::NonZeroUsize;
 
@@ -11,7 +12,7 @@ use evaluation::{
     Seed, Sessions, resolve,
 };
 use medallion::{Country, MedallionArgs, Root, RunId};
-use medallion_model::{EvaluationSkewRowV1, EvaluationSummaryRowV1, FloatType, PredictorName};
+use medallion_model::{EvaluationSkewRowV2, EvaluationSummaryRowV2, FloatType, PredictorName};
 
 const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
 
@@ -194,13 +195,13 @@ fn estimate(value: Option<f64>, low: Option<f64>, high: Option<f64>) -> String {
     }
 }
 
-fn seconds(milliseconds: Option<i64>) -> String {
-    milliseconds.map_or("none".to_string(), |milliseconds| {
-        format!("{:.0} s", milliseconds as f64 / 1_000.0)
+fn seconds(duration: Option<TimeDelta>) -> String {
+    duration.map_or("none".to_string(), |duration| {
+        format!("{:.0} s", duration.as_seconds_f64())
     })
 }
 
-fn print_skew(skew: Option<&EvaluationSkewRowV1>) {
+fn print_skew(skew: Option<&EvaluationSkewRowV2>) {
     let Some(skew) = skew else {
         println!("skew not measured: the run has no online pass detector");
         return;
@@ -220,16 +221,19 @@ fn print_skew(skew: Option<&EvaluationSkewRowV1>) {
     );
     println!(
         "  offset p10 {}, median {}, p90 {}",
-        seconds(skew.offset_p10_ms),
-        seconds(skew.offset_median_ms),
-        seconds(skew.offset_p90_ms)
+        seconds(skew.offset_p10),
+        seconds(skew.offset_median),
+        seconds(skew.offset_p90)
     );
 }
 
-fn print_summary(summary: &EvaluationSummaryRowV1) {
+fn print_summary(summary: &EvaluationSummaryRowV2) {
     println!(
         "sessions {}, {:.1} hours, {} passes, {} notifications",
-        summary.sessions, summary.hours, summary.passes, summary.notifications
+        summary.sessions,
+        summary.scored_duration.as_seconds_f64() / 3_600.0,
+        summary.passes,
+        summary.notifications
     );
     println!(
         "false alarms {}, repeats {}, misses {}",
@@ -257,8 +261,8 @@ fn print_summary(summary: &EvaluationSummaryRowV1) {
     );
     println!(
         "lead time p10 {}, median {}, p90 {}",
-        seconds(summary.lead_p10_ms),
-        seconds(summary.lead_median_ms),
-        seconds(summary.lead_p90_ms)
+        seconds(summary.lead_p10),
+        seconds(summary.lead_median),
+        seconds(summary.lead_p90)
     );
 }

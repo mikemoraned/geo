@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use medallion::{Root, RunError, RunId, write_run};
 use medallion_model::{
-    EvaluationOutcomeRowV1, EvaluationSessionRowV2, EvaluationSkewRowV1, EvaluationSummaryRowV1,
+    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSummaryRowV2,
     EvaluationTransitionRowV1, TrainSessionRowV3,
 };
 
@@ -51,7 +51,7 @@ pub async fn replay(
     root: &Root,
     run_id: &RunId,
     code: &CodeVersion,
-) -> Result<Option<EvaluationSkewRowV1>, GoldError> {
+) -> Result<Option<EvaluationSkewRowV2>, GoldError> {
     let begun = resume(root, run_id, code).await?;
     let replayed = steps::replay(
         root,
@@ -103,9 +103,9 @@ pub async fn summarise(
     root: &Root,
     run_id: &RunId,
     code: &CodeVersion,
-) -> Result<EvaluationSummaryRowV1, GoldError> {
+) -> Result<EvaluationSummaryRowV2, GoldError> {
     let begun = resume(root, run_id, code).await?;
-    let outcomes = read_run_rows::<EvaluationOutcomeRowV1>(root, run_id).await?;
+    let outcomes = read_run_rows::<EvaluationOutcomeRowV2>(root, run_id).await?;
     let summary = steps::summarise(&begun.sessions, &outcomes, &begun.run.bootstrap)?;
     tracing::info!(%run_id, "summarised");
     write_run(root, begun.date, run_id, std::slice::from_ref(&summary)).await?;
@@ -274,11 +274,11 @@ mod tests {
         );
         assert_eq!(results.outcomes.len(), 3);
         assert_eq!(
-            written::<EvaluationOutcomeRowV1>(&root, &run_id).await,
+            written::<EvaluationOutcomeRowV2>(&root, &run_id).await,
             results.outcomes
         );
         assert_eq!(
-            written::<EvaluationSummaryRowV1>(&root, &run_id).await,
+            written::<EvaluationSummaryRowV2>(&root, &run_id).await,
             [results.summary]
         );
     }
@@ -312,12 +312,12 @@ mod tests {
             written::<EvaluationTransitionRowV1>(&whole_root, &whole_id).await
         );
         assert_eq!(
-            written::<EvaluationOutcomeRowV1>(&stepwise_root, &stepwise_id).await,
-            written::<EvaluationOutcomeRowV1>(&whole_root, &whole_id).await
+            written::<EvaluationOutcomeRowV2>(&stepwise_root, &stepwise_id).await,
+            written::<EvaluationOutcomeRowV2>(&whole_root, &whole_id).await
         );
         assert_eq!(
-            written::<EvaluationSummaryRowV1>(&stepwise_root, &stepwise_id).await,
-            written::<EvaluationSummaryRowV1>(&whole_root, &whole_id).await
+            written::<EvaluationSummaryRowV2>(&stepwise_root, &stepwise_id).await,
+            written::<EvaluationSummaryRowV2>(&whole_root, &whole_id).await
         );
     }
 

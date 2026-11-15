@@ -4,7 +4,7 @@ use crossings::silver::{Crossing, ReadError, read_of_country};
 use domain::{CoordinateError, Precision, SessionId};
 use medallion::{Country, QueryError, Root};
 use medallion_model::{
-    EvaluationOutcomeRowV1, EvaluationSessionRowV2, EvaluationSkewRowV1, EvaluationSummaryRowV1,
+    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSummaryRowV2,
     EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
 };
 use predictor::{Alerting, AlertingBeyondWatching, CrowFlies, OnlineDetector, Watching};
@@ -61,16 +61,16 @@ pub struct SkewSettings {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReplayResults {
     pub transitions: Vec<EvaluationTransitionRowV1>,
-    pub skew: Option<EvaluationSkewRowV1>,
+    pub skew: Option<EvaluationSkewRowV2>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluationResults {
     pub picked: Vec<TrainSessionRowV3>,
     pub transitions: Vec<EvaluationTransitionRowV1>,
-    pub skew: Option<EvaluationSkewRowV1>,
-    pub outcomes: Vec<EvaluationOutcomeRowV1>,
-    pub summary: EvaluationSummaryRowV1,
+    pub skew: Option<EvaluationSkewRowV2>,
+    pub outcomes: Vec<EvaluationOutcomeRowV2>,
+    pub summary: EvaluationSummaryRowV2,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -286,7 +286,7 @@ pub async fn score(
     transitions: &[EvaluationTransitionRowV1],
     scoring: &Scoring,
     split: Option<&ScoredSplit>,
-) -> Result<Vec<EvaluationOutcomeRowV1>, StepError> {
+) -> Result<Vec<EvaluationOutcomeRowV2>, StepError> {
     let crossings_and_passes = read_crossings_and_passes(root, country, sessions, split).await?;
     score_against(sessions, &crossings_and_passes, transitions, scoring)
 }
@@ -296,7 +296,7 @@ pub fn score_against(
     crossings_and_passes: &CrossingsAndPasses,
     transitions: &[EvaluationTransitionRowV1],
     scoring: &Scoring,
-) -> Result<Vec<EvaluationOutcomeRowV1>, StepError> {
+) -> Result<Vec<EvaluationOutcomeRowV2>, StepError> {
     let replayed = replayed_from(sessions, transitions)?;
     let scored = crate::score::score(sessions, &replayed, &crossings_and_passes.passes, scoring)?
         .into_iter()
@@ -314,9 +314,9 @@ pub fn score_against(
 
 pub fn summarise(
     sessions: &[EvaluationSessionRowV2],
-    outcomes: &[EvaluationOutcomeRowV1],
+    outcomes: &[EvaluationOutcomeRowV2],
     bootstrap: &Bootstrap,
-) -> Result<EvaluationSummaryRowV1, StepError> {
+) -> Result<EvaluationSummaryRowV2, StepError> {
     let scored = scored_from(sessions, outcomes)?;
     Ok(summary_row(&crate::summarise::summarise(
         sessions, &scored, bootstrap,
@@ -351,6 +351,7 @@ pub async fn run(root: &Root, run: &EvaluationSettings) -> Result<EvaluationResu
 }
 #[cfg(test)]
 mod tests {
+    use chrono::TimeDelta;
     use domain::{Radius, Span};
 
     use super::*;
@@ -458,8 +459,16 @@ mod tests {
             .collect();
         assert_eq!(summed, counts(&all));
         assert_eq!(
-            (all.summary.hours, tune.summary.hours, test.summary.hours),
-            (0.5, 0.0, 0.5)
+            (
+                all.summary.scored_duration,
+                tune.summary.scored_duration,
+                test.summary.scored_duration
+            ),
+            (
+                TimeDelta::minutes(30),
+                TimeDelta::zero(),
+                TimeDelta::minutes(30)
+            )
         );
     }
 

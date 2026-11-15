@@ -132,10 +132,10 @@ erDiagram
     evaluation_run_v4 ||--|{ evaluation_session_v2 : "replays"
     train_session_v3 ||--o{ evaluation_session_v2 : "picked for"
     evaluation_session_v2 ||--o{ evaluation_transition_v1 : "records"
-    evaluation_transition_v1 ||--o| evaluation_outcome_v1 : "notification scored as"
-    train_session_crossing_v1 ||--o{ evaluation_outcome_v1 : "scored in"
-    evaluation_run_v4 ||--|| evaluation_summary_v1 : "sums up"
-    evaluation_run_v4 ||--o| evaluation_skew_v1 : "measures the skew of"
+    evaluation_transition_v1 ||--o| evaluation_outcome_v2 : "notification scored as"
+    train_session_crossing_v1 ||--o{ evaluation_outcome_v2 : "scored in"
+    evaluation_run_v4 ||--|| evaluation_summary_v2 : "sums up"
+    evaluation_run_v4 ||--o| evaluation_skew_v2 : "measures the skew of"
 ```
 
 - `train_session_v3` and `train_session_sample_v3` are the v2 datasets with
@@ -155,11 +155,11 @@ erDiagram
   its hours in a run without one.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
   two samples writes nothing.
-- `evaluation_outcome_v1` holds each notification with its class and score, and each miss, of the
-  crossings in the run's split.
-- `evaluation_summary_v1` holds a run's measures and their intervals, with its counts of sessions,
-  passes, and notifications. Its hours are the sessions' scored hours.
-- `evaluation_skew_v1` holds a run's skew and its intervals, with its counts of offline passes and
+- `evaluation_outcome_v2` holds each notification with its class, score, and lead, and each
+  miss, of the crossings in the run's split.
+- `evaluation_summary_v2` holds a run's measures and their intervals, with its counts of sessions,
+  passes, and notifications. Its scored duration is the sum of the sessions' scored hours.
+- `evaluation_skew_v2` holds a run's skew and its intervals, with its counts of offline passes and
   online visits.
 
 ### Decisions
@@ -987,7 +987,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
               pick writes the session rows before replay runs, and scored hours depend on the
               session and the split, not the predictor. A run without a split takes its hours.
               The migration of `evaluation_session_v1` joins Step 4's.
-      - [ ] Step 3: store time spans as durations, and migrate the existing evaluation datasets to
+      - [x] Step 3: store time spans as durations, and migrate the existing evaluation datasets to
             them.
             - Add `DURATIONS` to medallion's `Row`, beside `INSTANTS`. It types each column it
               names as `Duration(Millisecond)`, and the row holds each as a `TimeDelta`.
@@ -1000,6 +1000,14 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
                 `lead_median`, and `lead_p90`.
               - `evaluation_skew_v2`: `offset_p10`, `offset_median`, and `offset_p90`.
             - `runs.sql` and the code that reads these datasets read the new versions.
+            - Built with the migration run on 2026-11-15. Every v2 run matches its v1 run: 15 runs
+              of outcomes and summaries, and 2 of skews. The v1 datasets stay until the user has
+              checked the copy.
+            - DuckDB reads a duration column as an integer of milliseconds, so `runs.sql` turns
+              each into an interval with `to_milliseconds`.
+            - The notebooks still read the v1 datasets and columns. `explore6.py` reads the
+              summary's `lead_p10_ms`, `lead_median_ms`, and `lead_p90_ms` from `summarise`, so its
+              cut-or-chunk cell fails until a live session moves it to the durations.
       - [ ] Step 4: record the split and its splitter in `evaluation_run_v5`.
             - Add a map `split_settings`, as `online_detector_settings` was added in v4: the split,
               the resolution, the salt, and the tune buckets. A run without a split has an empty

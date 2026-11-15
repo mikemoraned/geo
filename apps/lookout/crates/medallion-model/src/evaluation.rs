@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use domain::{CrossingCompactId, Percentage, SessionId, StateKind};
 use medallion::{DatasetSpec, RUN_DATE, RUN_ID, Row, layers};
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,15 @@ pub const EVALUATION_SUMMARY_V1: DatasetSpec<layers::Gold> =
 
 pub const EVALUATION_SKEW_V1: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_skew_v1", RUN_DATE, &[RUN_ID]);
+
+pub const EVALUATION_OUTCOME_V2: DatasetSpec<layers::Gold> =
+    DatasetSpec::partitioned_within("evaluation_outcome_v2", RUN_DATE, &[RUN_ID]);
+
+pub const EVALUATION_SUMMARY_V2: DatasetSpec<layers::Gold> =
+    DatasetSpec::partitioned_within("evaluation_summary_v2", RUN_DATE, &[RUN_ID]);
+
+pub const EVALUATION_SKEW_V2: DatasetSpec<layers::Gold> =
+    DatasetSpec::partitioned_within("evaluation_skew_v2", RUN_DATE, &[RUN_ID]);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvaluationTransitionRowV1 {
@@ -196,6 +205,145 @@ impl Row for EvaluationSkewRowV1 {
             offset_p10_ms: Some(-10_000),
             offset_median_ms: Some(-5_000),
             offset_p90_ms: Some(0),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EvaluationOutcomeRowV2 {
+    pub session_id: SessionId,
+    pub crossing_compact_id: CrossingCompactId,
+    pub outcome: OutcomeKind,
+    #[serde(with = "chrono::serde::ts_milliseconds_option")]
+    pub notified_at: Option<DateTime<Utc>>,
+    #[serde(with = "chrono::serde::ts_milliseconds_option")]
+    pub crossed_at: Option<DateTime<Utc>>,
+    #[serde(with = "medallion::duration::milliseconds_option")]
+    pub lead: Option<TimeDelta>,
+    pub class: Option<NotificationClass>,
+    pub score: Option<f64>,
+}
+
+impl Row for EvaluationOutcomeRowV2 {
+    type Layer = layers::Gold;
+    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_OUTCOME_V2;
+    const INSTANTS: &'static [&'static str] = &["notified_at", "crossed_at"];
+    const DURATIONS: &'static [&'static str] = &["lead"];
+
+    fn example() -> Self {
+        Self {
+            session_id: TrainSessionRowV3::example().session_id,
+            crossing_compact_id: CrossingCompactId::new(1),
+            outcome: OutcomeKind::Credited,
+            notified_at: Some(DateTime::UNIX_EPOCH),
+            crossed_at: Some(DateTime::UNIX_EPOCH),
+            lead: Some(TimeDelta::zero()),
+            class: Some(NotificationClass::Hit),
+            score: Some(1.0),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EvaluationSummaryRowV2 {
+    pub sessions: u64,
+    #[serde(with = "medallion::duration::milliseconds")]
+    pub scored_duration: TimeDelta,
+    pub passes: u64,
+    pub notifications: u64,
+    pub false_alarms: u64,
+    pub repeats: u64,
+    pub misses: u64,
+    pub precision: Option<f64>,
+    pub precision_low: Option<f64>,
+    pub precision_high: Option<f64>,
+    pub recall: Option<f64>,
+    pub recall_low: Option<f64>,
+    pub recall_high: Option<f64>,
+    pub false_alarms_per_hour: Option<f64>,
+    pub false_alarms_per_hour_low: Option<f64>,
+    pub false_alarms_per_hour_high: Option<f64>,
+    #[serde(with = "medallion::duration::milliseconds_option")]
+    pub lead_p10: Option<TimeDelta>,
+    #[serde(with = "medallion::duration::milliseconds_option")]
+    pub lead_median: Option<TimeDelta>,
+    #[serde(with = "medallion::duration::milliseconds_option")]
+    pub lead_p90: Option<TimeDelta>,
+}
+
+impl Row for EvaluationSummaryRowV2 {
+    type Layer = layers::Gold;
+    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_SUMMARY_V2;
+    const DURATIONS: &'static [&'static str] =
+        &["scored_duration", "lead_p10", "lead_median", "lead_p90"];
+
+    fn example() -> Self {
+        Self {
+            sessions: 1,
+            scored_duration: TimeDelta::hours(1),
+            passes: 1,
+            notifications: 1,
+            false_alarms: 0,
+            repeats: 0,
+            misses: 0,
+            precision: Some(1.0),
+            precision_low: Some(1.0),
+            precision_high: Some(1.0),
+            recall: Some(1.0),
+            recall_low: Some(1.0),
+            recall_high: Some(1.0),
+            false_alarms_per_hour: Some(0.0),
+            false_alarms_per_hour_low: Some(0.0),
+            false_alarms_per_hour_high: Some(0.0),
+            lead_p10: Some(TimeDelta::minutes(5)),
+            lead_median: Some(TimeDelta::minutes(5)),
+            lead_p90: Some(TimeDelta::minutes(5)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EvaluationSkewRowV2 {
+    pub sessions: u64,
+    pub passes: u64,
+    pub visits: u64,
+    pub seen_passes: u64,
+    pub unmatched_visits: u64,
+    pub seen: Option<f64>,
+    pub seen_low: Option<f64>,
+    pub seen_high: Option<f64>,
+    pub unmatched: Option<f64>,
+    pub unmatched_low: Option<f64>,
+    pub unmatched_high: Option<f64>,
+    #[serde(with = "medallion::duration::milliseconds_option")]
+    pub offset_p10: Option<TimeDelta>,
+    #[serde(with = "medallion::duration::milliseconds_option")]
+    pub offset_median: Option<TimeDelta>,
+    #[serde(with = "medallion::duration::milliseconds_option")]
+    pub offset_p90: Option<TimeDelta>,
+}
+
+impl Row for EvaluationSkewRowV2 {
+    type Layer = layers::Gold;
+    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_SKEW_V2;
+    const DURATIONS: &'static [&'static str] = &["offset_p10", "offset_median", "offset_p90"];
+
+    fn example() -> Self {
+        Self {
+            sessions: 1,
+            passes: 1,
+            visits: 1,
+            seen_passes: 1,
+            unmatched_visits: 0,
+            seen: Some(1.0),
+            seen_low: Some(1.0),
+            seen_high: Some(1.0),
+            unmatched: Some(0.0),
+            unmatched_low: Some(0.0),
+            unmatched_high: Some(0.0),
+            offset_p10: Some(TimeDelta::seconds(-10)),
+            offset_median: Some(TimeDelta::seconds(-5)),
+            offset_p90: Some(TimeDelta::zero()),
         }
     }
 }

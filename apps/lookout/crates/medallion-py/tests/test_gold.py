@@ -109,3 +109,43 @@ def test_a_table_holding_a_column_the_dataset_does_not_define_is_refused(store):
 def test_a_query_of_a_gold_dataset_never_written_is_refused(store):
     with pytest.raises(ValueError, match="evaluation_summary_v1"):
         query(store, "SELECT * FROM evaluation_summary_v1")
+
+
+def test_a_duration_is_read_back_as_a_millisecond_duration(store):
+    lookout_medallion.write_gold(
+        "evaluation_skew_v2",
+        pa.table(
+            {
+                "sessions": pa.array([1], pa.uint64()),
+                "passes": pa.array([1], pa.uint64()),
+                "visits": pa.array([1], pa.uint64()),
+                "seen_passes": pa.array([1], pa.uint64()),
+                "unmatched_visits": pa.array([0], pa.uint64()),
+                "seen": pa.array([1.0], pa.float64()),
+                "seen_low": pa.array([1.0], pa.float64()),
+                "seen_high": pa.array([1.0], pa.float64()),
+                "unmatched": pa.array([0.0], pa.float64()),
+                "unmatched_low": pa.array([0.0], pa.float64()),
+                "unmatched_high": pa.array([0.0], pa.float64()),
+                "offset_p10": pa.array([datetime.timedelta(seconds=-10)], pa.duration("ms")),
+                "offset_median": pa.array(
+                    [datetime.timedelta(milliseconds=-5_250)], pa.duration("ms")
+                ),
+                "offset_p90": pa.array([None], pa.duration("ms")),
+            }
+        ),
+        run_date="2026-11-06",
+        run_id="abc",
+        root=str(store),
+    )
+
+    read = query(store, "SELECT offset_p10, offset_median, offset_p90 FROM evaluation_skew_v2")
+
+    assert read.schema.field("offset_median").type == pa.duration("ms")
+    assert read.to_pylist() == [
+        {
+            "offset_p10": datetime.timedelta(seconds=-10),
+            "offset_median": datetime.timedelta(milliseconds=-5_250),
+            "offset_p90": None,
+        }
+    ]

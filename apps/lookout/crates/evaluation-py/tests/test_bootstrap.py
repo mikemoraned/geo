@@ -19,7 +19,7 @@ OUTCOME = pa.schema(
         ("outcome", pa.string()),
         ("notified_at", pa.timestamp("ms", tz="UTC")),
         ("crossed_at", pa.timestamp("ms", tz="UTC")),
-        ("lead_ms", pa.int64()),
+        ("lead", pa.duration("ms")),
         ("class", pa.string()),
         ("score", pa.float64()),
     ]
@@ -43,7 +43,7 @@ def outcomes():
                     "outcome": kind,
                     "notified_at": None if kind == "miss" else NOON,
                     "crossed_at": None if kind == "false_alarm" else NOON,
-                    "lead_ms": 120_000 if kind == "credited" else None,
+                    "lead": datetime.timedelta(minutes=2) if kind == "credited" else None,
                     "class": "hit" if kind == "credited" else None,
                     "score": generator.choice([1.0, 0.525, 0.25, 0.05])
                     if kind == "credited"

@@ -44,6 +44,7 @@ mod args;
 mod country;
 mod dataset;
 mod derive;
+pub mod duration;
 mod fingerprint;
 mod geo;
 mod layer;

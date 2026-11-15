@@ -1,3 +1,5 @@
+import datetime
+
 import pyarrow as pa
 import pytest
 
@@ -85,7 +87,7 @@ def test_a_run_with_an_online_detector_measures_its_skew(written):
         3,
     )
     assert (skew["seen"], skew["unmatched"]) == (1.0, 0.5)
-    assert skew["offset_median_ms"] == -300_000
+    assert skew["offset_median"] == datetime.timedelta(minutes=-5)
 
 
 def test_a_run_without_an_online_detector_measures_no_skew(written):
@@ -229,8 +231,8 @@ def test_an_evaluation_writes_to_gold_the_tables_it_returns(written):
 
     for dataset, name in [
         ("evaluation_transition_v1", "transitions"),
-        ("evaluation_outcome_v1", "outcomes"),
-        ("evaluation_summary_v1", "summary"),
+        ("evaluation_outcome_v2", "outcomes"),
+        ("evaluation_summary_v2", "summary"),
     ]:
         stored = pa.table(
             lookout_medallion.query_gold(

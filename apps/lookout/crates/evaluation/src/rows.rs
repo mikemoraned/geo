@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use chrono::TimeDelta;
 use domain::{CrossingCompactId, SessionId};
 use medallion_model::{
-    EvaluationOutcomeRowV1, EvaluationSessionRowV2, EvaluationSkewRowV1, EvaluationSummaryRowV1,
+    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSummaryRowV2,
     EvaluationTransitionRowV1, NotificationClass, OutcomeKind,
 };
 use predictor::Transition;
@@ -64,7 +64,7 @@ pub fn replayed_from(
     Ok(replayed)
 }
 
-pub fn outcome_rows(scored: &BTreeMap<SessionId, Vec<Outcome>>) -> Vec<EvaluationOutcomeRowV1> {
+pub fn outcome_rows(scored: &BTreeMap<SessionId, Vec<Outcome>>) -> Vec<EvaluationOutcomeRowV2> {
     scored
         .iter()
         .flat_map(|(session_id, outcomes)| {
@@ -77,7 +77,7 @@ pub fn outcome_rows(scored: &BTreeMap<SessionId, Vec<Outcome>>) -> Vec<Evaluatio
 
 pub fn scored_from(
     sessions: &[EvaluationSessionRowV2],
-    rows: &[EvaluationOutcomeRowV1],
+    rows: &[EvaluationOutcomeRowV2],
 ) -> Result<BTreeMap<SessionId, Vec<Outcome>>, RowsError> {
     let mut scored = every_session(sessions);
     for row in rows {
@@ -87,19 +87,14 @@ pub fn scored_from(
     Ok(scored)
 }
 
-pub fn summary_row(summary: &Summary) -> EvaluationSummaryRowV1 {
+pub fn summary_row(summary: &Summary) -> EvaluationSummaryRowV2 {
     let value = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.value);
     let low = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.low);
     let high = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.high);
-    let lead = |pick: fn(&Spread) -> TimeDelta| {
-        summary
-            .lead_times
-            .as_ref()
-            .map(|lead_times| pick(lead_times).num_milliseconds())
-    };
-    EvaluationSummaryRowV1 {
+    let lead = |pick: fn(&Spread) -> TimeDelta| summary.lead_times.as_ref().map(pick);
+    EvaluationSummaryRowV2 {
         sessions: summary.sessions as u64,
-        hours: summary.hours,
+        scored_duration: summary.scored_duration,
         passes: summary.passes as u64,
         notifications: summary.notifications as u64,
         false_alarms: summary.false_alarms as u64,
@@ -114,22 +109,18 @@ pub fn summary_row(summary: &Summary) -> EvaluationSummaryRowV1 {
         false_alarms_per_hour: value(summary.false_alarms_per_hour),
         false_alarms_per_hour_low: low(summary.false_alarms_per_hour),
         false_alarms_per_hour_high: high(summary.false_alarms_per_hour),
-        lead_p10_ms: lead(|lead_times| lead_times.p10),
-        lead_median_ms: lead(|lead_times| lead_times.median),
-        lead_p90_ms: lead(|lead_times| lead_times.p90),
+        lead_p10: lead(|lead_times| lead_times.p10),
+        lead_median: lead(|lead_times| lead_times.median),
+        lead_p90: lead(|lead_times| lead_times.p90),
     }
 }
 
-pub fn skew_row(skew: &Skew) -> EvaluationSkewRowV1 {
+pub fn skew_row(skew: &Skew) -> EvaluationSkewRowV2 {
     let value = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.value);
     let low = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.low);
     let high = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.high);
-    let offset = |pick: fn(&Spread) -> TimeDelta| {
-        skew.offsets
-            .as_ref()
-            .map(|offsets| pick(offsets).num_milliseconds())
-    };
-    EvaluationSkewRowV1 {
+    let offset = |pick: fn(&Spread) -> TimeDelta| skew.offsets.as_ref().map(pick);
+    EvaluationSkewRowV2 {
         sessions: skew.sessions as u64,
         passes: skew.passes as u64,
         visits: skew.visits as u64,
@@ -141,9 +132,9 @@ pub fn skew_row(skew: &Skew) -> EvaluationSkewRowV1 {
         unmatched: value(skew.unmatched),
         unmatched_low: low(skew.unmatched),
         unmatched_high: high(skew.unmatched),
-        offset_p10_ms: offset(|offsets| offsets.p10),
-        offset_median_ms: offset(|offsets| offsets.median),
-        offset_p90_ms: offset(|offsets| offsets.p90),
+        offset_p10: offset(|offsets| offsets.p10),
+        offset_median: offset(|offsets| offsets.median),
+        offset_p90: offset(|offsets| offsets.p90),
     }
 }
 
@@ -165,7 +156,7 @@ fn session_of<'a, T>(
         })
 }
 
-fn outcome_row(session_id: SessionId, outcome: &Outcome) -> EvaluationOutcomeRowV1 {
+fn outcome_row(session_id: SessionId, outcome: &Outcome) -> EvaluationOutcomeRowV2 {
     match *outcome {
         Outcome::Notification {
             crossing_compact_id,
@@ -180,13 +171,13 @@ fn outcome_row(session_id: SessionId, outcome: &Outcome) -> EvaluationOutcomeRow
                 Verdict::FalseAlarm => (OutcomeKind::FalseAlarm, None, Some(0.0)),
                 Verdict::Unscored(credit) => (OutcomeKind::Unscored, Some(credit), None),
             };
-            EvaluationOutcomeRowV1 {
+            EvaluationOutcomeRowV2 {
                 session_id,
                 crossing_compact_id,
                 outcome: kind,
                 notified_at: Some(notified_at),
                 crossed_at: credit.map(|credit| credit.crossed_at),
-                lead_ms: credit.map(|credit| credit.lead.num_milliseconds()),
+                lead: credit.map(|credit| credit.lead),
                 class: credit.map(|credit| class_name(credit.class)),
                 score,
             }
@@ -194,20 +185,20 @@ fn outcome_row(session_id: SessionId, outcome: &Outcome) -> EvaluationOutcomeRow
         Outcome::Miss {
             crossing_compact_id,
             crossed_at,
-        } => EvaluationOutcomeRowV1 {
+        } => EvaluationOutcomeRowV2 {
             session_id,
             crossing_compact_id,
             outcome: OutcomeKind::Miss,
             notified_at: None,
             crossed_at: Some(crossed_at),
-            lead_ms: None,
+            lead: None,
             class: None,
             score: Some(0.0),
         },
     }
 }
 
-fn outcome_of(row: &EvaluationOutcomeRowV1) -> Result<Outcome, RowsError> {
+fn outcome_of(row: &EvaluationOutcomeRowV2) -> Result<Outcome, RowsError> {
     let needs = |missing: &'static str| RowsError::Incomplete {
         session_id: row.session_id.clone(),
         crossing_compact_id: row.crossing_compact_id,
@@ -218,7 +209,7 @@ fn outcome_of(row: &EvaluationOutcomeRowV1) -> Result<Outcome, RowsError> {
     let credit = || -> Result<Credit, RowsError> {
         Ok(Credit {
             crossed_at: crossed_at()?,
-            lead: TimeDelta::milliseconds(row.lead_ms.ok_or_else(|| needs("lead_ms"))?),
+            lead: row.lead.ok_or_else(|| needs("lead"))?,
             class: class_kind(row.class.ok_or_else(|| needs("class"))?),
         })
     };
@@ -421,7 +412,7 @@ mod tests {
                 (OutcomeKind::Miss, None, Some(0.0)),
             ]
         );
-        assert_eq!(rows[0].lead_ms, Some(330_000));
+        assert_eq!(rows[0].lead, Some(TimeDelta::seconds(330)));
     }
 
     #[test]
@@ -474,7 +465,7 @@ mod tests {
         };
         let summary = Summary {
             sessions: 2,
-            hours: 1.5,
+            scored_duration: TimeDelta::minutes(90),
             passes: 3,
             notifications: 4,
             false_alarms: 1,
@@ -492,9 +483,9 @@ mod tests {
 
         assert_eq!(
             summary_row(&summary),
-            EvaluationSummaryRowV1 {
+            EvaluationSummaryRowV2 {
                 sessions: 2,
-                hours: 1.5,
+                scored_duration: TimeDelta::minutes(90),
                 passes: 3,
                 notifications: 4,
                 false_alarms: 1,
@@ -509,9 +500,9 @@ mod tests {
                 false_alarms_per_hour: None,
                 false_alarms_per_hour_low: None,
                 false_alarms_per_hour_high: None,
-                lead_p10_ms: Some(60_000),
-                lead_median_ms: Some(120_000),
-                lead_p90_ms: Some(300_000),
+                lead_p10: Some(TimeDelta::seconds(60)),
+                lead_median: Some(TimeDelta::seconds(120)),
+                lead_p90: Some(TimeDelta::seconds(300)),
             }
         );
     }

@@ -57,8 +57,10 @@ example, with `enum Colour { Red, Green, Blue }`:
    key.
 2. Define its row type beside it, with one field per column, deriving `Serialize` and `Deserialize`.
 3. Implement `Row` for the row type, setting `DATASET` to the dataset.
-4. Set `GEOMETRY` for rows written with a geometry, `INSTANTS` for fields holding instants, and
-   `UNIQUE` for identifying columns.
+4. Set `GEOMETRY` for rows written with a geometry, `INSTANTS` for fields holding instants,
+   `DURATIONS` for fields holding spans of time, and `UNIQUE` for identifying columns. A field
+   named in `DURATIONS` holds a `TimeDelta`, serialised with `medallion::duration::milliseconds`,
+   or `milliseconds_option` for an `Option<TimeDelta>`.
 5. If the dataset is partitioned by date, implement `Dated` to give the date each row is stored
    under.
 6. Implement `example`, returning a row that follows the two rules for an example.

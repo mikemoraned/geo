@@ -37,7 +37,7 @@ pub struct Spread {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Summary {
     pub sessions: usize,
-    pub hours: f64,
+    pub scored_duration: TimeDelta,
     pub passes: usize,
     pub notifications: usize,
     pub false_alarms: usize,
@@ -69,7 +69,7 @@ pub fn summarise(
                     .ok_or_else(|| SummariseError::NotScored {
                         session_id: session.session_id.clone(),
                     })?;
-            Ok(Tally::of(outcomes, session.scored_hours))
+            Ok(Tally::of(outcomes, duration_of(session.scored_hours)))
         })
         .collect::<Result<_, SummariseError>>()?;
     let whole: Tally = tallies.iter().copied().sum();
@@ -89,7 +89,7 @@ pub fn summarise(
 
     Ok(Summary {
         sessions: sessions.len(),
-        hours: whole.hours,
+        scored_duration: whole.scored_duration,
         passes: whole.passes,
         notifications: whole.notifications,
         false_alarms: whole.false_alarms,
@@ -102,6 +102,10 @@ pub fn summarise(
     })
 }
 
+fn duration_of(hours: f64) -> TimeDelta {
+    TimeDelta::milliseconds((hours * 3_600_000.0).round() as i64)
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct Tally {
     credited_score: f64,
@@ -110,14 +114,14 @@ struct Tally {
     false_alarms: usize,
     repeats: usize,
     misses: usize,
-    hours: f64,
+    scored_duration: TimeDelta,
 }
 
 impl Tally {
-    fn of(outcomes: &[Outcome], hours: f64) -> Self {
+    fn of(outcomes: &[Outcome], scored_duration: TimeDelta) -> Self {
         outcomes.iter().fold(
             Self {
-                hours,
+                scored_duration,
                 ..Self::default()
             },
             |tally, outcome| match outcome {
@@ -158,7 +162,8 @@ impl Tally {
     }
 
     fn false_alarms_per_hour(&self) -> Option<f64> {
-        (self.hours > 0.0).then(|| self.false_alarms as f64 / self.hours)
+        let hours = self.scored_duration.as_seconds_f64() / 3_600.0;
+        (hours > 0.0).then(|| self.false_alarms as f64 / hours)
     }
 }
 
@@ -173,7 +178,7 @@ impl Add for Tally {
             false_alarms: self.false_alarms + other.false_alarms,
             repeats: self.repeats + other.repeats,
             misses: self.misses + other.misses,
-            hours: self.hours + other.hours,
+            scored_duration: self.scored_duration + other.scored_duration,
         }
     }
 }
@@ -336,7 +341,7 @@ mod tests {
             summary,
             Summary {
                 sessions: 1,
-                hours: 1.0,
+                scored_duration: TimeDelta::hours(1),
                 passes: 3,
                 notifications: 4,
                 false_alarms: 1,

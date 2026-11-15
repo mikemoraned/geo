@@ -420,6 +420,12 @@ that knowing one dataset's columns is knowing them all.
 - **Instants are UTC timestamps at millisecond precision**, whatever integer form they
   travel in on the way here. A column holding a time is stored as a time, never as a number
   a reader has to be told the unit and epoch of.
+- **Spans of time are durations at millisecond precision.** A column holding a lead, an offset,
+  or any other span of time is stored as a duration, never as a number whose name carries its
+  unit. Parquet has no duration type, so a file stores the column as a 64-bit integer and records
+  the duration type in its Arrow schema. DataFusion and pyarrow read that schema and return a
+  duration. DuckDB ignores it and returns the integer, which `to_milliseconds` turns into an
+  interval.
 - **A value drawn from a closed set of names is stored as the name**, in a string column. It
   is not stored as a code to be resolved elsewhere, and not as a union type whose reading the
   engines disagree on.

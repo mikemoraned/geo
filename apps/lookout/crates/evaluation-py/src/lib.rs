@@ -13,7 +13,7 @@ use evaluation::{
 };
 use medallion::Country;
 use medallion_model::{
-    EvaluationOutcomeRowV1, EvaluationSessionRowV2, EvaluationTransitionRowV1, FloatType,
+    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationTransitionRowV1, FloatType,
     TrainSessionRowV3,
 };
 use py_common::{
@@ -241,7 +241,7 @@ fn replay(
 /// Score the notifications in `transitions` against each session's passes, as an Arrow table.
 ///
 /// `transitions` is a table of `replay`'s columns for the sessions in `sessions`. Each row is one
-/// notification or one missed pass, with the columns of gold `evaluation_outcome_v1`.
+/// notification or one missed pass, with the columns of gold `evaluation_outcome_v2`.
 #[pyfunction]
 #[pyo3(signature = (*, country, sessions, transitions, scoring, root=None))]
 fn score(
@@ -277,7 +277,7 @@ fn score(
 /// Sum `outcomes` into the run's measures and their intervals, as a one-row Arrow table.
 ///
 /// `outcomes` is a table of `score`'s columns for the sessions in `sessions`. The row has the
-/// columns of gold `evaluation_summary_v1`.
+/// columns of gold `evaluation_summary_v2`.
 #[pyfunction]
 #[pyo3(signature = (*, sessions, outcomes, bootstrap))]
 fn summarise(
@@ -286,7 +286,7 @@ fn summarise(
     bootstrap: PyRef<'_, Bootstrap>,
 ) -> PyResult<PyTable> {
     let sessions = sessions_of(sessions)?;
-    let outcomes = rows_of::<EvaluationOutcomeRowV1>(outcomes)?;
+    let outcomes = rows_of::<EvaluationOutcomeRowV2>(outcomes)?;
 
     let summary =
         steps::summarise(&sessions, &outcomes, &bootstrap.bootstrap).map_err(step_error)?;
@@ -299,7 +299,7 @@ fn summarise(
 /// The dict's keys are `"picked"`, `"transitions"`, `"outcomes"`, and `"summary"`. The arguments
 /// are those of the steps. If `online_detector` is an `OnlineDetector`, the run also measures how
 /// far its passes skew from ground truth, under the key `"skew"`, with the columns of gold
-/// `evaluation_skew_v1`.
+/// `evaluation_skew_v2`.
 #[pyfunction]
 #[pyo3(signature = (
     *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap,

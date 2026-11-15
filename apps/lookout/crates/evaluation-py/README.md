@@ -30,7 +30,7 @@ detector reports depart from ground truth. Skew describes the detectors, not the
 
 A step's table crosses as Arrow, through the PyCapsule interface. A table of transitions, outcomes,
 a summary, or a skew has the columns of the gold dataset of that name, `evaluation_transition_v1`,
-`evaluation_outcome_v1`, `evaluation_summary_v1`, or `evaluation_skew_v1`. A table handed back to
+`evaluation_outcome_v2`, `evaluation_summary_v2`, or `evaluation_skew_v2`. A table handed back to
 a step is read through those columns. A table that lacks one, or that names a session the step was
 not given, raises a `ValueError`.
 
