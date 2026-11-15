@@ -318,12 +318,12 @@ features live, so silver gains no datasets.
       the level from those sizes.
 - [x] Run `tippecanoe` from `pack_map` into a temporary MVT file, and `mlt convert` on it into
       `gold/artifact=map/version=<run>/map.pmtiles`.
-- [ ] Add `map.version`, and the Justfile recipes `gold-pack-map` and `kiosk-map`, and make
+- [x] Add `map.version`, and the Justfile recipes `gold-pack-map` and `kiosk-map`, and make
       `serve-web` depend on `kiosk-map`.
 - [ ] Copy the map artefact in the Dockerfile from a `MAP_VERSION` build argument, and allow
       `gold/artifact=map` in `.dockerignore`.
-- [ ] Copy the packed artefact over the throwaway `map.pmtiles` in `static`.
-- [ ] Style `rail` and `water` in the kiosk's MapLibre style.
+- [x] Copy the packed artefact over the throwaway `map.pmtiles` in `static`.
+- [x] Style `rail` and `water` in the kiosk's MapLibre style.
 - [ ] Pack the map artefact, commit its version, and check the kiosk on a deploy at both widths.
 
 #### Wrap-up

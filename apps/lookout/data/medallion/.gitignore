@@ -4,5 +4,6 @@
 /silver/
 /gold/*
 !/gold/artifact=crossings/
+!/gold/artifact=map/
 !/gold/artifact=sessions/
 /bronze/overture_extract/

@@ -118,8 +118,20 @@ kiosk-sessions:
     cp "data/medallion/gold/artifact=sessions/version={{sessions_version}}/sessions.json" \
         crates/server/static/sessions.json
 
+map_version := trim(`cat map.version`)
+
+# Pack the sessions worth replaying, with the rail and water the crossings name, into gold, and adopt what was written.
+gold-pack-map *args:
+    cargo run --release -p map --bin pack_map -- \
+        --version-file map.version --min-crossings 5 --max-sessions 3 {{args}}
+
+# Copy the map a kiosk draws and replays into the dir `server` serves it from.
+kiosk-map:
+    cp "data/medallion/gold/artifact=map/version={{map_version}}/map.pmtiles" \
+        crates/server/static/map.pmtiles
+
 # Serve on http://localhost:3000 with the wasm and the data freshly copied.
-serve-web: wasm crossings kiosk-sessions serve
+serve-web: wasm crossings kiosk-sessions kiosk-map serve
 
 # Every test: the Rust workspace, Docker ones included, and the Python ones.
 test: test-python test-rust
