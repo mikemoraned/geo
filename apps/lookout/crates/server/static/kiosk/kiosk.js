@@ -1,6 +1,7 @@
 import "/lookout-predictor.js";
+import { readJourneys } from "/kiosk/journeys.js";
 
-const SESSIONS = "/sessions.json";
+const JOURNEYS = "/map.pmtiles";
 const WATCH_EACH_SESSION_MS = 60_000;
 
 function introduce(count) {
@@ -26,17 +27,16 @@ const said = (message) => {
 
 await predictor.ready;
 
-const response = await fetch(SESSIONS);
-if (!response.ok) {
-  said(`could not load ${SESSIONS}: ${response.status} ${response.statusText}`);
-} else {
-  const sessions = (await response.json()).filter((session) => session.samples.length > 0);
+try {
+  const sessions = (await readJourneys(JOURNEYS)).filter((session) => session.samples.length > 0);
   if (sessions.length === 0) {
-    said(`${SESSIONS} holds no sessions to replay`);
+    said(`${JOURNEYS} holds no journeys to replay`);
   } else {
     introduce(sessions.length);
     replay(sessions);
   }
+} catch (error) {
+  said(`could not read ${JOURNEYS}: ${error.message}`);
 }
 
 function replay(sessions) {

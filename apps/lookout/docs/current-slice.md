@@ -22,12 +22,11 @@ layers:
 
 - `rail` and `water`: Overture's rail and water within a corridor around each replayed route,
   drawn as the base map.
-- `route`: each replayed session as one line, drawn on the base map.
+- `route`: each replayed session as one line, drawn on the base map. A line carries its session's
+  id, its crossings count, its bounding box, and the zoom level its samples sit at. The kiosk
+  lists the sessions from these lines at the file's lowest zoom level.
 - `samples`: each replayed sample as a point, at one zoom level only, read by the kiosk rather
   than drawn.
-
-The file's metadata lists the sessions it holds: the id, the crossings count, the bounding box,
-and the sample count.
 
 The artefact holds no land, roads, or place labels, and no crossings. The browser still fetches
 `crossings.json` for the predictor.
@@ -51,6 +50,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   session, `t`, `lat`, `lon`, `alt`, `acc`, `speed`, and `heading`. A vector tile quantises its
   geometry to the tile grid, so position read back from the geometry loses precision. The
   attributes keep the six decimal places gold writes.
+- **The `route` layer lists the sessions.** Neither `tippecanoe` nor `mlt convert` writes metadata
+  beyond a name, a description, and an attribution, so the list goes in the tiles, as attributes
+  of the line each session already has. The alternatives were JSON in the description field, which
+  misuses a free-text field, and rewriting the file's metadata after `mlt convert`, which means
+  writing the archive's header and directories ourselves.
 - **The samples sit at a single zoom level, and the kiosk fetches every tile that covers a session's
   bounding box at that level.** At one level, each sample sits in exactly one tile, apart from the
   tile buffer, which the kiosk deduplicates on the sample's position in the session. The
@@ -135,6 +139,13 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   `setWorkerUrl`. `pmtiles` imports `fflate` by package name, so it is vendored as esm.sh's
   bundle. `pmtiles` names tile type 6 `Mlt`, and its MapLibre protocol passes such a tile's bytes
   through unchanged.
+- **Safari reads every sample back from the tiles exactly.** In a throwaway file holding the five
+  sessions of sessions version `20261031T152101325Z`, 1,841 samples, the kiosk's reader returned
+  each session's crossings count and every sample identical to `sessions.json`. The file holds 28
+  tiles in 171 KB, against 105 KB for tippecanoe's gzipped MVT file.
+- **Sessions version `20261031T152101325Z` gives every journey a new id.** The journey `0db3e8fd…`
+  in earlier versions is `533c9d61…` there, with the same 41 crossings and 300 samples. Why the
+  ids changed is not established.
 - **`mlt convert` writes a `.pmtiles` input only to a `.pmtiles` or `.mbtiles` output.** Loose
   `.mlt` tiles come from converting tippecanoe's directory output (`-e`).
 
@@ -162,9 +173,10 @@ pipeline sits behind it.
       `crates/server/src/lib.rs`. It passed unchanged: `CompressionLayer` leaves a response with
       `Content-Range` uncompressed.
 - [x] Add MapLibre GL JS and `pmtiles` to `just vendor`, and run it.
-- [ ] In `kiosk.js`, read the throwaway file's samples for that session, deduplicate them, sort
-      them, and replay them through `lookout-predictor` in place of `sessions.json`.
-- [ ] Check that the replayed samples equal that session's samples in `sessions.json`, field by
+- [x] In `kiosk.js`, read the throwaway file's samples for that session, deduplicate them, sort
+      them, and replay them through `lookout-predictor` in place of `sessions.json`. The
+      throwaway holds all five sessions of the sessions version being served.
+- [x] Check that the replayed samples equal that session's samples in `sessions.json`, field by
       field.
 - [ ] Measure the file's size, and the time the kiosk takes to read the session's samples, at
       zoom levels 6, 8, and 10. Choose the `samples` zoom level from those.
@@ -191,15 +203,13 @@ pipeline sits behind it.
       extract for its country, and write them as `rail` and `water`.
 - [ ] Measure the artefact's size against the `rail` and `water` maximum zoom level, and choose
       the level from those sizes.
-- [ ] Run `tippecanoe` from `pack_map` into a temporary MVT file, with the session list in its
-      metadata. Run `mlt convert` on it into `gold/artifact=map/version=<run>/map.pmtiles`, and
-      check that the metadata survives the conversion.
+- [ ] Run `tippecanoe` from `pack_map` into a temporary MVT file, and `mlt convert` on it into
+      `gold/artifact=map/version=<run>/map.pmtiles`.
 - [ ] Add `map.version`, and the Justfile recipes `gold-pack-map` and `kiosk-map`, and make
       `serve-web` depend on `kiosk-map`.
 - [ ] Copy the map artefact in the Dockerfile from a `MAP_VERSION` build argument, and allow
       `gold/artifact=map` in `.dockerignore`.
-- [ ] Point `kiosk.js` at `/map.pmtiles`, read the session list from the metadata, and delete the
-      throwaway file.
+- [ ] Copy the packed artefact over the throwaway `map.pmtiles` in `static`.
 - [ ] Style `rail` and `water` in the kiosk's MapLibre style.
 - [ ] Pack the map artefact, commit its version, and check the kiosk on a deploy at both widths.
 
