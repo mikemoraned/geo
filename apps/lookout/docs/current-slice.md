@@ -49,6 +49,18 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   repeating the filters on bronze, and so does any later reader of the same features. The
   alternative was one dataset with a `kind` column, which would give rail and water one schema
   where their columns differ.
+- **`crossings` derives `rail_v1` and `water_v1`, in a binary beside `pack_crossings`.** The crate
+  already reads `water_crossing_v2`, and a crossing row names the extract its features come from,
+  which the store addresses by id. The alternative was `transport`, which takes the extracts but
+  reads no silver.
+- **The derivation writes `rail_v1` and `water_v1` through `medallion::write_table`, from Arrow
+  batches it builds itself.** This is a workaround, and tech debt. `medallion`'s typed writer,
+  `write_geography_rows`, accepts only datasets partitioned by country and date, and these two are
+  partitioned by country alone. Branch `lookout-slice-workstream2` adds a typed writer for that
+  layout, `write_geography_rows_by_country`, in commit `964e28ec`. This branch is expected to
+  merge first, so that branch removes the debt when it rebases: the derivation then writes typed
+  rows through its writer, and the hand-built batches go. Copying the writer here was rejected, as
+  it would leave two copies to reconcile.
 - **The base map shows each feature whole, across the whole country.** The crossings already
   limit the features to rail meeting water, so no corridor around the replayed routes applies. The
   alternatives were clipping to a 5 km corridor around each route, and keeping whole features that
@@ -133,8 +145,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - The maximum zoom level of `rail` and `water`. Sizes measured during the work settle it, as well
   as whether the artefact stays small enough to commit beside the other gold artefacts. The base
   map now spans both countries, so its size is the larger unknown.
-- Which crate derives `rail_v1` and `water_v1`. `transport` already reads the Overture extracts and
-  finds each country's newest, and `crossings` already reads `water_crossing_v2`.
 
 ### Observations
 
@@ -238,11 +248,11 @@ The map reads its base layers from silver, so these datasets land before `pack_m
       sandbox cannot install. The user runs this.
 - [ ] Count the distinct rail and water ids `water_crossing_v2` names per country, and their WKB
       bytes in the extract, before choosing the map's zoom levels.
-- [ ] Choose the crate that derives `rail_v1` and `water_v1`, and record the choice under
+- [x] Choose the crate that derives `rail_v1` and `water_v1`, and record the choice under
       Decisions.
 - [ ] Add `RailRowV1` and `WaterRowV1` to `medallion-model`, with their declaration snapshots.
 - [ ] Add a binary that reads `water_crossing_v2`, takes each named rail segment and water feature
-      from the crossing's extract, and writes `rail_v1` and `water_v1`.
+      from the crossing's extract, and writes `rail_v1` and `water_v1` through `write_table`.
 - [ ] Test that every rail and water id `water_crossing_v2` names appears exactly once in
       `rail_v1` or `water_v1`.
 - [ ] Add a `silver-crossed-features` recipe, and run it from `silver-crossings` after
@@ -273,6 +283,8 @@ The map reads its base layers from silver, so these datasets land before `pack_m
 
 #### Wrap-up
 
+- [ ] Name the `write_table` workaround, and the writer that replaces it, in this slice's entry in
+      `completed-slices.md`, so that a branch rebasing onto this one finds the debt.
 - [ ] Remove `sessions.version`, `gold-pack-sessions`, `kiosk-sessions`, the Dockerfile's
       `SESSIONS_VERSION`, and the `sessions` line in `.dockerignore`. Do this only after the
       kiosk replays from the map on a deploy.
