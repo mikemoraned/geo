@@ -18,8 +18,8 @@ What is here, and where to read about it:
 
 `just` recipes run from this directory, and `just --list` is the index. Setting up a machine is
 `just prerequisites`: `rerun`, `wasm-pack`, `cargo-insta`, `cargo-mutants`, and `cargo-audit` from
-cargo, then DuckDB for the multi-engine test, PROJ and jq for `crs-definitions`, and the wasm
-target.
+cargo, then DuckDB for the multi-engine test, PROJ and jq for `crs-definitions`,
+[tippecanoe](https://github.com/felt/tippecanoe) for the map's tiles, and the wasm target.
 `cargo-insta` reviews a changed snapshot, `cargo-mutants` runs the mutation tests, and
 `cargo-audit` checks the crates for advisories.
 

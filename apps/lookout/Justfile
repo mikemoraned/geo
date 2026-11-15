@@ -12,7 +12,7 @@ prerequisites:
     cargo install cargo-mutants --locked
     cargo install cargo-audit --locked
     rustup target add wasm32-unknown-unknown
-    brew install duckdb proj jq
+    brew install duckdb proj jq tippecanoe
 
 # Report every pinned version with a newer release: crates, uv projects, SedonaDB, and the ESP toolchain.
 outdated:
