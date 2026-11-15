@@ -1,3 +1,4 @@
+pub mod a5;
 pub mod fingerprints;
 pub mod fixtures;
 pub mod gold;
@@ -11,10 +12,12 @@ pub mod runs;
 pub mod score;
 pub mod settings;
 pub mod skew;
+pub mod split;
 pub mod steps;
 pub mod store;
 pub mod summarise;
 
+pub use self::a5::{A5CellId, A5Resolution, NoA5Cell, NotAnA5Resolution};
 pub use offline::{OfflineDetector, OfflineError, RecordedPass};
 pub use oracle::{Oracle, OracleError};
 pub use pick::{NotSessions, Pick, PickError, Seed, Sessions, pick, resolve};
@@ -27,5 +30,6 @@ pub use settings::{
     CrowFliesSettings, OnlineDetectorSettings, OracleSettings, SettingsError, TypedSettings,
     read_online_detector, write_online_detector,
 };
+pub use split::{EmptySalt, NotTuneBuckets, Salt, Split, Splitter, SplitterBucket, TuneBuckets};
 pub use store::{compact_ids, read_passes};
 pub use summarise::{Bootstrap, Estimate, Spread, SummariseError, Summary, summarise};

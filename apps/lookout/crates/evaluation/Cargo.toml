@@ -8,6 +8,7 @@ name = "evaluate"
 required-features = ["cli"]
 
 [dependencies]
+a5 = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, optional = true }
 code_version = { workspace = true }
@@ -17,14 +18,17 @@ domain = { workspace = true }
 futures = { workspace = true }
 geo = { workspace = true }
 geo-types = { workspace = true }
+hashfn = { workspace = true }
 itertools = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }
+nutype = { workspace = true }
 predictor = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 statrs = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }

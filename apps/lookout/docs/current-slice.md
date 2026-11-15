@@ -955,7 +955,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
       - [-] Check invariants 1, 2, 3, and 5 against the store in every run, before it replays a
             session. Refuse a run that fails a check, and record the counts each check compared.
             Moot: step 4 below does this.
-      - [ ] Step 1: add the split to `evaluation`.
+      - [x] Step 1: add the split to `evaluation`.
             - A `Split` holds a resolution, a salt, and the tune buckets. A `Set` is tune or test.
             - A point's cell is `a5::lonlat_to_cell` at the split's resolution. Add the crate `a5`
               at `=1.0.0` to the workspace.
@@ -966,41 +966,44 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             - Property tests hold invariants 1 and 6. A literal anchors 6: Dresden Hbf
               (13.7322° E, 51.0403° N) at resolution 8 lies in cell `5156880000000000`, whose
               bucket under `tune-test-1` is 72, so it is test.
+            - Built under the names ML datasets use: a `Splitter` assigns each cell a `Split`,
+              tune or test, as `tfds.Split` and scikit-learn's splitters name them. A bucket is a
+              `SplitterBucket`. The module `a5` holds the A5 types, `A5Resolution` and `A5CellId`.
       - [ ] Step 2: score each unit by its crossing's cell.
-            - A run with a set scores only the units whose crossing lies in that set's cells: each
-              notification, pass, repeat, false alarm, and miss. A run without a set scores every
-              unit, as now.
+            - A run with a split scores only the units whose crossing lies in that split's cells:
+              each notification, pass, repeat, false alarm, and miss. A run without a split scores
+              every unit, as now.
             - The run replays every picked session whole. `pick` stays as it is.
-            - False alarms per hour divide by the hours in the set's cells. Replay measures them:
-              each step between two samples counts towards the set of its first sample's cell.
+            - False alarms per hour divide by the hours in the split's cells. Replay measures them:
+              each step between two samples counts towards the split of its first sample's cell.
               `evaluation_session_v2` carries them as `scored_hours`, beside `hours`, which keeps
               its meaning.
             - The skew between the detectors counts only passes and visits whose crossing lies in
-              the set's cells, so every measure a run reports covers one set.
+              the split's cells, so every measure a run reports covers one split.
             - Property tests hold invariants 2 and 3.
-      - [ ] Step 3: record the split in `evaluation_run_v5`.
-            - Add a map `split_settings`, as `online_detector_settings` was added in v4: the set,
+      - [ ] Step 3: record the split and its splitter in `evaluation_run_v5`.
+            - Add a map `split_settings`, as `online_detector_settings` was added in v4: the split,
               the resolution, the salt, and the tune buckets. A run without a split has an empty
               map. The run's id hashes the map with its other settings.
             - Migrate the v4 rows into v5 under their ids, with an empty map, through a one-off
               binary. Commit the binary with the data it rewrote, and remove it in a later commit,
               as the note on migrating the store sets out.
-            - Read v5 in `/choose-predictor`'s `runs.sql`, and show each run's set in its report.
-      - [ ] Step 4: check the split against the store before every run.
+            - Read v5 in `/choose-predictor`'s `runs.sql`, and show each run's split in its report.
+      - [ ] Step 4: check the splitter against the store before every run.
             - Check invariants 1, 2, 3, and 5 before the run replays a session, and refuse a run
               that fails one.
             - Invariant 5 reads the country's land and maritime areas, as `transport`'s
               `countries.rs` does for the cleaning rule. `a5::polygon_to_cells` with
               `Containment` overlapping covers them.
             - Record each check's counts in a new gold dataset, `evaluation_split_v1`, with one row
-              per run: the cells, the cells in the set, the crossings, the units in the set and
+              per run: the cells, the cells in the split, the crossings, the units in the split and
               outside it, and the cells outside the country's cover.
-      - [ ] Step 5: take the split in `evaluate` and in `evaluation-py`.
-            - `evaluate` takes `--set`, `--split-resolution`, `--split-salt`, and `--tune-buckets`,
-              with no defaults, so every run states its split. The chosen split is
+      - [ ] Step 5: take the split and its splitter in `evaluate` and in `evaluation-py`.
+            - `evaluate` takes `--split`, `--split-resolution`, `--split-salt`, and
+              `--tune-buckets`, with no defaults, so every run states them. The chosen splitter is
               `--split-resolution 8 --split-salt tune-test-1 --tune-buckets 70`. The recipe
               `just evaluate` passes its arguments through, so each run names these.
-            - `evaluation-py` gains a `Split`, which its steps and `run` take.
+            - `evaluation-py` gains a `Splitter` and a `Split`, which its steps and `run` take.
 - [ ] Measure in a new `explore5.py` the angle between a train's heading and its positions up to N
       later.
       The notebook is `explore6.py`, since Phase 4 already added `explore5_skew.py`. It reads the
