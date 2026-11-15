@@ -1,12 +1,13 @@
 use std::error::Error;
-use std::fs::File;
-use std::io::BufWriter;
+use std::fs::{self, File};
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
 use chrono::Utc;
 use clap::Parser;
 use map::base::write_base_map;
 use map::journeys::write_journeys;
+use map::tiles::{encode, tile};
 use medallion::MedallionArgs;
 use session_crossings::gold::{Choosing, choose};
 
@@ -14,6 +15,8 @@ const ARTIFACT: &str = "map";
 const FILE: &str = "map.pmtiles";
 const JOURNEYS: &str = "journeys.geojsonseq";
 const BASE_MAP: &str = "base.geojsonseq";
+const MVT: &str = "map.mvt.pmtiles";
+const MAX_ZOOM: u8 = 12;
 
 #[derive(Parser)]
 #[command(
@@ -74,7 +77,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let replays = choose(&root, choosing).await?;
     let features = tempfile::tempdir()?;
     let journeys = features.path().join(JOURNEYS);
-    let written = write_journeys(&replays, BufWriter::new(File::create(&journeys)?))?;
+    let mut writing = BufWriter::new(File::create(&journeys)?);
+    let written = write_journeys(&replays, &mut writing)?;
+    writing.flush()?;
 
     tracing::info!(
         sessions = replays.len(),
@@ -87,13 +92,36 @@ async fn main() -> Result<(), Box<dyn Error>> {
     );
 
     let base_map = features.path().join(BASE_MAP);
-    let written = write_base_map(&root, BufWriter::new(File::create(&base_map)?)).await?;
+    let mut writing = BufWriter::new(File::create(&base_map)?);
+    let written = write_base_map(&root, &mut writing).await?;
+    writing.flush()?;
 
     tracing::info!(
         rail = written.rail,
         water = written.water,
         bytes = base_map.metadata()?.len(),
         "wrote the base map",
+    );
+
+    let mvt = features.path().join(MVT);
+    tile(&[&journeys, &base_map], MAX_ZOOM, &mvt)?;
+    fs::create_dir_all(&output)?;
+    let packed = output.join(FILE);
+    encode(&mvt, &packed)?;
+
+    let version = medallion::gold_version(run);
+    if let Some(file) = &args.version_file {
+        fs::write(file, format!("{version}\n"))?;
+    }
+
+    tracing::info!(
+        path = %packed.display(),
+        max_zoom = MAX_ZOOM,
+        mvt_bytes = mvt.metadata()?.len(),
+        bytes = packed.metadata()?.len(),
+        %version,
+        adopted = args.version_file.as_ref().map(|file| file.display().to_string()),
+        "packed the map",
     );
 
     Ok(())

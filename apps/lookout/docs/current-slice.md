@@ -78,6 +78,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   a journey fetches no base map. At zoom level 6 each of the five sessions reads one tile. Zoom
   levels 8 and 10 read 12 and 64 tiles in all, for the same 15–22 ms on localhost. Below zoom
   level 7 the map shows routes alone, which a map fitted to one journey does not reach.
+- **The map's maximum zoom level is 12.** The kiosk fetches single tiles through range requests,
+  so the file's total size costs only git, at 13.9 MB per committed version. Zoom level 12 is
+  where the routes already stop. The alternatives were zoom level 10, at 5.2 MB, which caps the
+  routes, and zoom level 14, at 33.4 MB, which adds detail a map fitted to a journey rarely
+  reaches.
 - **`tippecanoe` tiles, `mlt convert` encodes, and Rust writes the input.** A new crate, `map`,
   reads the chosen sessions and the crossings' rail and water through medallion's `Query`, and
   writes them as GeoJSON Text Sequences (one feature per line). `tippecanoe` tiles them into an MVT
@@ -137,12 +142,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   ocean. It changes little elsewhere, and it empties 16 rail segments and 18 water features that
   crossings name. Clipping to the maritime area saves almost nothing. It comes back if the ocean
   polygons make the artefact too large.
-
-#### Open questions
-
-- The maximum zoom level of `rail` and `water`. Sizes measured during the work settle it, as well
-  as whether the artefact stays small enough to commit beside the other gold artefacts. The base
-  map now spans both countries, so its size is the larger unknown.
 
 ### Observations
 
@@ -204,6 +203,36 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - **A few ocean polygons hold most of the water's bytes.** GB's 36 ocean polygons take 18.9 MB,
   and the largest is 3.2 MB. Rivers take 8.9 MB in DE and 5.2 MB in GB.
+
+2026-11-15, from `pack_map` over the five sessions, 5,923 rail segments, and 5,329 water
+features:
+
+- **Each zoom level beyond 10 adds about 60% to the file.**
+
+  | Maximum zoom level | MVT file, gzipped | MLT file |
+  | --- | --- | --- |
+  | 10 | 4.2 MB | 5.2 MB |
+  | 11 | 7.1 MB | 8.6 MB |
+  | 12 | 11.7 MB | 13.9 MB |
+  | 13 | 19.0 MB | 21.6 MB |
+  | 14 | 30.5 MB | 33.4 MB |
+
+- **No tile a client fetches exceeds 108 KB.** Measured in `notebooks/maps/map_tiles.py`, over
+  the zoom level 12 file's 17,862 tiles:
+
+  | Zoom level | Tiles | Median | Largest |
+  | --- | --- | --- | --- |
+  | 0–5 | 13 | 0.4 KB | 0.8 KB |
+  | 6 | 2 | 66.2 KB | 107.6 KB |
+  | 7 | 39 | 11.5 KB | 31.8 KB |
+  | 8 | 119 | 6.6 KB | 31.2 KB |
+  | 9 | 403 | 2.6 KB | 52.6 KB |
+  | 10 | 1,374 | 1.0 KB | 50.5 KB |
+  | 11 | 4,228 | 0.5 KB | 53.1 KB |
+  | 12 | 11,684 | 0.2 KB | 54.5 KB |
+
+  The zoom level 6 tiles hold every sample of the sessions they cover, so reading a journey
+  fetches at most 108 KB.
 
 ### Tasks
 
@@ -285,9 +314,9 @@ features live, so silver gains no datasets.
       the Overture id and `extract_id`. Write the result as `rail` and `water`, from zoom level 7.
 - [x] Test that `pack_map` writes every rail and water id `water_crossing_v2` names exactly once,
       and fails when an extract lacks one.
-- [ ] Measure the artefact's size against the `rail` and `water` maximum zoom level, and choose
+- [x] Measure the artefact's size against the `rail` and `water` maximum zoom level, and choose
       the level from those sizes.
-- [ ] Run `tippecanoe` from `pack_map` into a temporary MVT file, and `mlt convert` on it into
+- [x] Run `tippecanoe` from `pack_map` into a temporary MVT file, and `mlt convert` on it into
       `gold/artifact=map/version=<run>/map.pmtiles`.
 - [ ] Add `map.version`, and the Justfile recipes `gold-pack-map` and `kiosk-map`, and make
       `serve-web` depend on `kiosk-map`.
