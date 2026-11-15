@@ -17,8 +17,7 @@ use medallion::DatasetInfo;
 
 pub use bronze::{NoSuchBronzeDataset, bronze_dataset};
 pub use crossing::{
-    OverlapKind, RAIL_V1, RailRowV1, SESSION_CROSSING_V3, SessionCrossingRowV3, WATER_CROSSING_V2,
-    WATER_V1, WaterCrossingRowV2, WaterRowV1,
+    OverlapKind, SESSION_CROSSING_V3, SessionCrossingRowV3, WATER_CROSSING_V2, WaterCrossingRowV2,
 };
 pub use gers::{GersId, NotAGersId};
 pub use motis::{
@@ -47,7 +46,7 @@ pub use train_session::{
     TrainSessionSampleRowV2, train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 19] = [
+pub const ALL: [DatasetInfo; 17] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
@@ -63,8 +62,6 @@ pub const ALL: [DatasetInfo; 19] = [
     TRAIN_SESSION_SAMPLE_V2.info(),
     WATER_CROSSING_V2.info(),
     SESSION_CROSSING_V3.info(),
-    RAIL_V1.info(),
-    WATER_V1.info(),
     OVERTURE_EXTRACT.info(),
     EXTRACT_MANIFEST_V3.info(),
 ];
@@ -103,15 +100,13 @@ mod tests {
         assert_eq!(
             replaceable,
             [
-                "rail_v1",
                 "session_crossing_v3",
                 "session_sample_v3",
                 "session_v3",
                 "train_segment_v4",
                 "train_session_sample_v2",
                 "train_session_v2",
-                "water_crossing_v2",
-                "water_v1"
+                "water_crossing_v2"
             ]
         );
     }

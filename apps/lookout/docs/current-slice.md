@@ -41,26 +41,12 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   extracts, and the App will later want the same two layers on the M5. The alternatives were a
   Protomaps planet extract (larger, and none of it our own data) and hosted tiles (these test
   nothing about embedding).
-- **Silver holds those features as two datasets, `rail_v1` and `water_v1`.** Each row is one
-  Overture rail segment or water feature that a row of `water_crossing_v2` names, read from that
-  crossing's own extract by its Overture id. Each dataset is partitioned by country, with
-  `geometry` and `geometry_projected` as the other silver datasets have, and carries the Overture
-  id, the class, the water's subtype, and the extract id. `pack_map` reads silver rather than
-  repeating the filters on bronze, and so does any later reader of the same features. The
-  alternative was one dataset with a `kind` column, which would give rail and water one schema
-  where their columns differ.
-- **`crossings` derives `rail_v1` and `water_v1`, in a binary beside `pack_crossings`.** The crate
-  already reads `water_crossing_v2`, and a crossing row names the extract its features come from,
-  which the store addresses by id. The alternative was `transport`, which takes the extracts but
-  reads no silver.
-- **The derivation writes `rail_v1` and `water_v1` through `medallion::write_table`, from Arrow
-  batches it builds itself.** This is a workaround, and tech debt. `medallion`'s typed writer,
-  `write_geography_rows`, accepts only datasets partitioned by country and date, and these two are
-  partitioned by country alone. Branch `lookout-slice-workstream2` adds a typed writer for that
-  layout, `write_geography_rows_by_country`, in commit `964e28ec`. This branch is expected to
-  merge first, so that branch removes the debt when it rebases: the derivation then writes typed
-  rows through its writer, and the hand-built batches go. Copying the writer here was rejected, as
-  it would leave two copies to reconcile.
+- **`pack_map` reads the base map live: the features from `water_crossing_v2`, and their shapes
+  from the bronze extract each crossing came from.** A crossing row carries the Overture ids of its
+  rail and water, their class and the water's subtype, and the extract's id, which together pin
+  the bronze file and the row within it. One SQL join per country, on the Overture id and
+  `extract_id`, selects the shapes. `water_crossing_v2` holds the filtering decisions, so the map
+  repeats none of them. The alternative was a silver copy of the shapes, under Rejected / deferred.
 - **The base map shows each feature whole, across the whole country.** The crossings already
   limit the features to rail meeting water, so no corridor around the replayed routes applies. The
   alternatives were clipping to a 5 km corridor around each route, and keeping whole features that
@@ -93,7 +79,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   levels 8 and 10 read 12 and 64 tiles in all, for the same 15–22 ms on localhost. Below zoom
   level 7 the map shows routes alone, which a map fitted to one journey does not reach.
 - **`tippecanoe` tiles, `mlt convert` encodes, and Rust writes the input.** A new crate, `map`,
-  reads the chosen sessions and silver `rail_v1` and `water_v1` through medallion's `Query`, and
+  reads the chosen sessions and the crossings' rail and water through medallion's `Query`, and
   writes them as GeoJSON Text Sequences (one feature per line). `tippecanoe` tiles them into an MVT
   PMTiles file in a temporary directory. `mlt convert` turns that into `map.pmtiles` in
   `gold/artifact=map/version=<run>/`. The MVT file is never kept or served. The alternatives were
@@ -120,10 +106,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Consequences elsewhere
 
-- Deriving `water_crossing_v2` again leaves `rail_v1` and `water_v1` stale until they are derived
-  from it in turn, so `silver-crossings` runs the two together.
-- The derivation graph in `docs/architecture.md` gains `rail_v1` and `water_v1` between
-  `water_crossing_v2` and the map, and `docs/medallion.md` names them among silver's datasets.
+- `docs/medallion.md` describes gold as derived from silver. The map artefact also reads an
+  upstream reference extract in bronze, for the shapes of the features silver names.
+- The derivation graph in `docs/architecture.md` gains edges from `water_crossing_v2` and the
+  Overture extract to the map.
 - `sessions.version`, `gold-pack-sessions`, `kiosk-sessions`, and the Dockerfile's
   `SESSIONS_VERSION` lose their only consumer once the kiosk reads the map.
 - Building tiles needs `tippecanoe` and the `mlt` CLI on the machine that packs gold. The deploy
@@ -139,18 +125,18 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **Reading samples through MapLibre's `querySourceFeatures`.** It returns only the features in the
   tiles MapLibre has loaded for display, clipped to them, so a journey would read differently at
   each zoom level.
-- **`rail_v1` and `water_v1` without `geometry_projected`.** The map reads only lat/lon, and
-  `medallion.md` makes the projected column optional. A row's `Geometry` is either `Absent` or
-  `LatLonAndProjected`, though, and a lat/lon-only variant would change medallion's `rows.rs`,
-  `geo.rs`, and `table.rs`. `lookout-slice-workstream2` rewrites `rows.rs` and `table.rs`. It
-  comes back once that branch's writer has landed.
-- **Clipping `rail_v1` and `water_v1` to each country's boundary.** `rail_v1` and `water_v1` exist
-  so the map reuses the crossings' choice of features rather than repeating it, and a clip adds a
-  second choice. Measured in `notebooks/maps/base_map_size.py`, clipping to the land area takes
-  GB's water from 26.4 MB to 15.0 MB of WKB, nearly all of it ocean. It changes little elsewhere,
-  and it empties 16 rail segments and 18 water features that crossings name. Clipping to the
-  maritime area saves almost nothing. Silver is not committed, so its size matters only through
-  the artefact's. It comes back if the ocean polygons make the artefact too large.
+- **Silver datasets `rail_v1` and `water_v1` holding the features the crossings name.** They would
+  copy bronze's shapes, filtered by ids that `water_crossing_v2` already holds, so the filtering
+  decisions live in silver either way. They cost two row types, a recipe, and a write through
+  `medallion::write_table` from hand-built batches, since the typed writer takes only datasets
+  partitioned by country and date. They come back if a second reader, such as the App, needs the
+  same features and a shared function over the join does not serve it.
+- **Clipping the base map to each country's boundary.** The map reuses the crossings' choice of
+  features, and a clip adds a second choice. Measured in `notebooks/maps/base_map_size.py`,
+  clipping to the land area takes GB's water from 26.4 MB to 15.0 MB of WKB, nearly all of it
+  ocean. It changes little elsewhere, and it empties 16 rail segments and 18 water features that
+  crossings name. Clipping to the maritime area saves almost nothing. It comes back if the ocean
+  polygons make the artefact too large.
 
 #### Open questions
 
@@ -264,26 +250,29 @@ pipeline sits behind it.
 - [x] Check below 768 px that the page creates no map and lays out as it does now, and that
       crossing the width while open moves between the two layouts.
 
-#### Phase 3: silver rail and water from the crossings
+#### Phase 3: the rail and water the crossings name
 
-The map reads its base layers from silver, so these datasets land before `pack_map` reads them.
+What the crossings name, measured before the map's zoom levels are chosen. The map reads these
+features live, so silver gains no datasets.
 
 - [x] Derive silver in this worktree with `just init`, outside the sandbox. Its silver predates
       `water_crossing_v2`, and the crossings notebook needs DuckDB's spatial extension, which the
       sandbox cannot install. The user runs this.
 - [x] Count the distinct rail and water ids `water_crossing_v2` names per country, and their WKB
       bytes in the extract, before choosing the map's zoom levels.
-- [x] Choose the crate that derives `rail_v1` and `water_v1`, and record the choice under
-      Decisions.
-- [x] Add `RailRowV1` and `WaterRowV1` to `medallion-model`, with their declaration snapshots.
-- [ ] Add a binary that reads `water_crossing_v2`, takes each named rail segment and water feature
+- [-] Choose the crate that derives `rail_v1` and `water_v1`, and record the choice under
+      Decisions. Moot: the map reads the features live.
+- [-] Add `RailRowV1` and `WaterRowV1` to `medallion-model`, with their declaration snapshots.
+      Added, then removed once the map read the features live.
+- [-] Add a binary that reads `water_crossing_v2`, takes each named rail segment and water feature
       from the crossing's extract, and writes `rail_v1` and `water_v1` through `write_table`.
-- [ ] Test that every rail and water id `water_crossing_v2` names appears exactly once in
-      `rail_v1` or `water_v1`.
-- [ ] Add a `silver-crossed-features` recipe, and run it from `silver-crossings` after
-      `silver-water-crossings`.
-- [ ] Add `rail_v1` and `water_v1` to the derivation graph in `docs/architecture.md`, and to
-      silver's datasets in `docs/medallion.md`.
+      Moot: `pack_map` does the join.
+- [-] Test that every rail and water id `water_crossing_v2` names appears exactly once in
+      `rail_v1` or `water_v1`. Moved to phase 4, against `pack_map`'s output.
+- [-] Add a `silver-crossed-features` recipe, and run it from `silver-crossings` after
+      `silver-water-crossings`. Moot: no silver datasets.
+- [-] Add `rail_v1` and `water_v1` to the derivation graph in `docs/architecture.md`, and to
+      silver's datasets in `docs/medallion.md`. Moot: the wrap-up's doc tasks cover the live read.
 
 #### Phase 4: the `map` artefact from the store
 
@@ -292,8 +281,10 @@ The map reads its base layers from silver, so these datasets land before `pack_m
       `--version-file`.
 - [ ] Write the chosen sessions' samples, as points, and their routes, as lines, as GeoJSON Text
       Sequences, with each feature's zoom range set in its `tippecanoe` member.
-- [ ] Read `rail_v1` and `water_v1` for every country, and write them as `rail` and `water`,
-      starting at zoom level 7.
+- [ ] For every country, join `water_crossing_v2` to the bronze extract's segments and water on
+      the Overture id and `extract_id`. Write the result as `rail` and `water`, from zoom level 7.
+- [ ] Test that `pack_map` writes every rail and water id `water_crossing_v2` names exactly once,
+      and fails when an extract lacks one.
 - [ ] Measure the artefact's size against the `rail` and `water` maximum zoom level, and choose
       the level from those sizes.
 - [ ] Run `tippecanoe` from `pack_map` into a temporary MVT file, and `mlt convert` on it into
@@ -308,8 +299,9 @@ The map reads its base layers from silver, so these datasets land before `pack_m
 
 #### Wrap-up
 
-- [ ] Name the `write_table` workaround, and the writer that replaces it, in this slice's entry in
-      `completed-slices.md`, so that a branch rebasing onto this one finds the debt.
+- [-] Name the `write_table` workaround, and the writer that replaces it, in this slice's entry in
+      `completed-slices.md`, so that a branch rebasing onto this one finds the debt. Moot: no
+      workaround remains.
 - [ ] Remove `sessions.version`, `gold-pack-sessions`, `kiosk-sessions`, the Dockerfile's
       `SESSIONS_VERSION`, and the `sessions` line in `.dockerignore`. Do this only after the
       kiosk replays from the map on a deploy.
@@ -318,6 +310,10 @@ The map reads its base layers from silver, so these datasets land before `pack_m
 - [ ] Update `docs/web.md` on what `/kiosk` feeds the element and the map it draws.
 - [ ] Update the derivation graph and the gold consumers in `docs/architecture.md`.
 - [ ] Update the gold exceptions in `docs/medallion.md`, naming the map artefact and `map.version`.
+- [ ] State in `docs/medallion.md`'s gold section that an artefact may read an upstream reference
+      extract in bronze, such as Overture's, selecting rows by the ids a silver dataset names. The
+      allowance covers external reference data only. Observations in bronze still reach gold
+      through silver.
 - [ ] Write `crates/map/README.md`.
 - [ ] Record under Observations what the spike measured: the file size, the read time, and the
       zoom levels chosen. This is what the App slice needs to know.
