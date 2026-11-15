@@ -21,9 +21,9 @@ that ends in a choice of predictor and settings for the apps. The report is a da
    settings it passes, from the code. Mark that predictor's runs in the report.
 
 4. **Group the comparable runs.** Two runs are comparable when they share `evaluation_version`,
-   `country`, `realtime_at_least`, `sessions`, `pick_seed`, and every scoring
-   setting: `horizon_ms`, `last_moment_ms`, `ramp_ms`, `last_moment_score`, `floor`, and
-   `warm_up_ms`. A run outside every group of two or more goes in a list of its own.
+   `country`, `realtime_at_least`, `sessions`, `pick_seed`, `split_settings`, and every scoring
+   setting: `horizon`, `last_moment`, `ramp`, `last_moment_score`, `floor`, and `warm_up`. A run
+   outside every group of two or more goes in a list of its own.
    The oracle reads ground truth, which the apps cannot, so it can never be chosen. Its runs are a
    reference, showing the best score the data and the rules allow, and the report says so.
 
@@ -37,7 +37,9 @@ that ends in a choice of predictor and settings for the apps. The report is a da
      settings, the float type, and precision, recall, and false alarms per hour, each with its
      interval as `value [low, high]`. It also gives the lead time's p10, median, and p90, and the
      counts of passes, notifications, false alarms, repeats, and misses. The group's shared
-     settings and its run ids head the table.
+     settings and its run ids head the table. The shared settings name the split the group
+     scores, tune or test, with its resolution, salt, and tune buckets, or say that it scores
+     every crossing.
    - **Skew:** one table, one row per run that measured skew. Skew is how far the passes the apps
      can see depart from ground truth. It describes the detectors and the data, not the
      predictor, so it plays no part in the comparison or the choice, and the section says so.

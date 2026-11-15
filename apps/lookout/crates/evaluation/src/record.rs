@@ -4,15 +4,17 @@ use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use code_version::CodeVersion;
 use domain::{SessionId, Span};
 use medallion::{FingerprintError, QueryError, Root, RunId};
-use medallion_model::{EvaluationRunRowV4, EvaluationSessionRowV2, TrainSessionRowV3};
+use medallion_model::{EvaluationRunRowV5, EvaluationSessionRowV2, TrainSessionRowV3};
 use uuid::Uuid;
 
 use crate::a5::NoA5Cell;
 use crate::fingerprints::Fingerprints;
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};
-use crate::scored::scored_hours;
-use crate::settings::{SettingsError, read_online_detector, write_online_detector};
+use crate::scored::scored_duration;
+use crate::settings::{
+    SettingsError, read_online_detector, read_split, write_online_detector, write_split,
+};
 use crate::split::ScoredSplit;
 use crate::steps::{EvaluationSettings, Predictor};
 use crate::store::read_samples;
@@ -32,7 +34,7 @@ pub struct Inputs {
 pub struct RecordResults {
     pub run_id: RunId,
     pub date: NaiveDate,
-    pub row: EvaluationRunRowV4,
+    pub row: EvaluationRunRowV5,
     pub sessions: Vec<EvaluationSessionRowV2>,
 }
 
@@ -56,6 +58,8 @@ pub enum RecordError {
     PredictorSettings(SettingsError),
     #[error("the run's online detector settings cannot be read back: {0}")]
     OnlineDetectorSettings(SettingsError),
+    #[error("the run's split settings cannot be read back: {0}")]
+    SplitSettings(SettingsError),
     #[error("the run's `{column}` cannot be read back as a setting: {reason}")]
     Setting {
         column: &'static str,
@@ -90,8 +94,8 @@ pub fn run_row(
     run: &EvaluationSettings,
     inputs: &Inputs,
     started_at: DateTime<Utc>,
-) -> EvaluationRunRowV4 {
-    EvaluationRunRowV4 {
+) -> EvaluationRunRowV5 {
+    EvaluationRunRowV5 {
         started_at,
         evaluation_version: EVALUATION_VERSION.to_string(),
         code_version: inputs.code_version.clone(),
@@ -102,21 +106,22 @@ pub fn run_row(
         predictor: run.predictor.name(),
         predictor_settings: run.predictor.settings(),
         online_detector_settings: write_online_detector(run.online_detector),
+        split_settings: write_split(run.split.as_ref()),
         float_type: run.float_type,
-        horizon_ms: milliseconds(run.scoring.horizon),
-        last_moment_ms: milliseconds(run.scoring.last_moment),
-        ramp_ms: milliseconds(run.scoring.ramp),
+        horizon: run.scoring.horizon.time_delta(),
+        last_moment: run.scoring.last_moment.time_delta(),
+        ramp: run.scoring.ramp.time_delta(),
         last_moment_score: run.scoring.last_moment_score.get(),
         floor: run.scoring.floor.get(),
-        warm_up_ms: milliseconds(run.scoring.warm_up),
+        warm_up: run.scoring.warm_up.time_delta(),
         resamples: run.bootstrap.resamples.get() as u64,
         bootstrap_seed: run.bootstrap.seed.0,
         fingerprints: inputs.fingerprints.clone().into(),
     }
 }
 
-pub fn run_id(row: &EvaluationRunRowV4) -> RunId {
-    let unstarted = EvaluationRunRowV4 {
+pub fn run_id(row: &EvaluationRunRowV5) -> RunId {
+    let unstarted = EvaluationRunRowV5 {
         started_at: DateTime::UNIX_EPOCH,
         ..row.clone()
     };
@@ -127,10 +132,10 @@ pub fn run_id(row: &EvaluationRunRowV4) -> RunId {
     RunId::new(id.to_string()).expect("a UUID names a partition")
 }
 
-impl TryFrom<&EvaluationRunRowV4> for EvaluationSettings {
+impl TryFrom<&EvaluationRunRowV5> for EvaluationSettings {
     type Error = RecordError;
 
-    fn try_from(row: &EvaluationRunRowV4) -> Result<Self, Self::Error> {
+    fn try_from(row: &EvaluationRunRowV5) -> Result<Self, Self::Error> {
         Ok(EvaluationSettings {
             pick: Pick {
                 country: row.country.parse().map_err(|err| setting("country", err))?,
@@ -144,19 +149,19 @@ impl TryFrom<&EvaluationRunRowV4> for EvaluationSettings {
                 .map_err(RecordError::OnlineDetectorSettings)?,
             float_type: row.float_type,
             scoring: Scoring {
-                horizon: span_of("horizon_ms", row.horizon_ms)?,
-                last_moment: span_of("last_moment_ms", row.last_moment_ms)?,
-                ramp: span_of("ramp_ms", row.ramp_ms)?,
+                horizon: span_of("horizon", row.horizon)?,
+                last_moment: span_of("last_moment", row.last_moment)?,
+                ramp: span_of("ramp", row.ramp)?,
                 last_moment_score: Score::new(row.last_moment_score)
                     .map_err(|err| setting("last_moment_score", err))?,
                 floor: Score::new(row.floor).map_err(|err| setting("floor", err))?,
-                warm_up: span_of("warm_up_ms", row.warm_up_ms)?,
+                warm_up: span_of("warm_up", row.warm_up)?,
             },
             bootstrap: Bootstrap {
                 resamples: count("resamples", row.resamples)?,
                 seed: Seed(row.bootstrap_seed),
             },
-            split: None,
+            split: read_split(&row.split_settings).map_err(RecordError::SplitSettings)?,
         })
     }
 }
@@ -165,8 +170,8 @@ pub fn session_rows(picked: &[TrainSessionRowV3]) -> Vec<EvaluationSessionRowV2>
     picked
         .iter()
         .map(|session| {
-            let hours = hours(session);
-            session_row(session, hours, hours)
+            let duration = duration(session);
+            session_row(session, duration, duration)
         })
         .collect()
 }
@@ -205,37 +210,33 @@ async fn split_session_rows(
                     })?;
             Ok(session_row(
                 session,
-                hours(session),
-                scored_hours(samples, split)?,
+                duration(session),
+                scored_duration(samples, split)?,
             ))
         })
         .collect()
 }
 
-fn hours(session: &TrainSessionRowV3) -> f64 {
-    (session.ended_at - session.started_at).as_seconds_f64() / 3_600.0
+fn duration(session: &TrainSessionRowV3) -> TimeDelta {
+    session.ended_at - session.started_at
 }
 
 fn session_row(
     session: &TrainSessionRowV3,
-    hours: f64,
-    scored_hours: f64,
+    duration: TimeDelta,
+    scored_duration: TimeDelta,
 ) -> EvaluationSessionRowV2 {
     EvaluationSessionRowV2 {
         session_id: session.session_id.clone(),
         started_at: session.started_at,
         ended_at: session.ended_at,
-        hours,
-        scored_hours,
+        duration,
+        scored_duration,
     }
 }
 
-fn milliseconds(span: Span) -> i64 {
-    span.time_delta().num_milliseconds()
-}
-
-fn span_of(column: &'static str, milliseconds: i64) -> Result<Span, RecordError> {
-    Span::try_from(TimeDelta::milliseconds(milliseconds)).map_err(|err| setting(column, err))
+fn span_of(column: &'static str, duration: TimeDelta) -> Result<Span, RecordError> {
+    Span::try_from(duration).map_err(|err| setting(column, err))
 }
 
 fn count(column: &'static str, value: u64) -> Result<NonZeroUsize, RecordError> {
@@ -262,8 +263,10 @@ mod tests {
     use medallion::Country;
 
     use super::*;
+    use crate::a5::A5Resolution;
     use crate::fixtures::instant;
     use crate::settings::{CrowFliesSettings, OnlineDetectorSettings, OracleSettings};
+    use crate::split::{Salt, Split, Splitter, TuneBuckets};
 
     fn span(text: &str) -> Span {
         Span::new(text).expect("a span")
@@ -312,6 +315,20 @@ mod tests {
         }
     }
 
+    fn split_run() -> EvaluationSettings {
+        EvaluationSettings {
+            split: Some(ScoredSplit {
+                splitter: Splitter {
+                    resolution: A5Resolution::new(8).expect("a resolution"),
+                    salt: Salt::new("tune-test-1").expect("a salt"),
+                    tune_buckets: TuneBuckets::new(70).expect("tune buckets"),
+                },
+                split: Split::Test,
+            }),
+            ..oracle_run()
+        }
+    }
+
     fn inputs() -> Inputs {
         Inputs {
             code_version: "abc1234".to_string(),
@@ -324,7 +341,7 @@ mod tests {
 
     #[test]
     fn a_runs_settings_survive_a_round_trip_through_its_row() {
-        for run in [oracle_run(), crow_flies_run()] {
+        for run in [oracle_run(), crow_flies_run(), split_run()] {
             let row = run_row(&run, &inputs(), instant(0));
 
             assert_eq!(
@@ -374,11 +391,34 @@ mod tests {
 
         for other in [
             run_row(&crow_flies_run(), &inputs(), instant(0)),
+            run_row(&split_run(), &inputs(), instant(0)),
             run_row(&oracle_run(), &recoded, instant(0)),
             run_row(&oracle_run(), &rederived, instant(0)),
         ] {
             assert_ne!(run_id(&other), id);
         }
+    }
+
+    #[test]
+    fn a_run_row_records_the_split_it_scores_and_its_splitter() {
+        let row = run_row(&split_run(), &inputs(), instant(0));
+
+        assert_eq!(
+            row.split_settings,
+            BTreeMap::from([
+                ("resolution".to_string(), "8".to_string()),
+                ("salt".to_string(), "tune-test-1".to_string()),
+                ("split".to_string(), "test".to_string()),
+                ("tune_buckets".to_string(), "70".to_string()),
+            ])
+        );
+    }
+
+    #[test]
+    fn a_run_without_a_split_records_no_split_settings() {
+        let row = run_row(&oracle_run(), &inputs(), instant(0));
+
+        assert!(row.split_settings.is_empty(), "{:?}", row.split_settings);
     }
 
     #[test]
@@ -390,7 +430,7 @@ mod tests {
 
     #[test]
     fn an_oracle_row_without_its_horizon_is_refused() {
-        let row = EvaluationRunRowV4 {
+        let row = EvaluationRunRowV5 {
             predictor_settings: BTreeMap::new(),
             ..run_row(&oracle_run(), &inputs(), instant(0))
         };

@@ -52,11 +52,11 @@ impl ScoredCrossings {
     }
 }
 
-pub fn scored_hours(
+pub fn scored_duration(
     samples: &[TrainSessionSamplePositionV3],
     split: &ScoredSplit,
-) -> Result<f64, NoA5Cell> {
-    let scored = samples
+) -> Result<TimeDelta, NoA5Cell> {
+    samples
         .iter()
         .tuple_windows()
         .map(|(first, next)| {
@@ -70,8 +70,7 @@ pub fn scored_hours(
                     }
                 })
         })
-        .sum::<Result<TimeDelta, NoA5Cell>>()?;
-    Ok(scored.as_seconds_f64() / 3_600.0)
+        .sum()
 }
 
 #[cfg(test)]
@@ -133,10 +132,10 @@ mod tests {
             .collect()
     }
 
-    fn hours_between(samples: &[TrainSessionSamplePositionV3]) -> f64 {
+    fn duration_between(samples: &[TrainSessionSamplePositionV3]) -> TimeDelta {
         match (samples.first(), samples.last()) {
-            (Some(first), Some(last)) => (last.t - first.t).as_seconds_f64() / 3_600.0,
-            _ => 0.0,
+            (Some(first), Some(last)) => last.t - first.t,
+            _ => TimeDelta::zero(),
         }
     }
 
@@ -169,8 +168,14 @@ mod tests {
         let dresden = Point::new(13.7322, 51.0403);
         let samples = samples(&[(dresden, 600), (dresden, 1_200), (dresden, 0)]);
 
-        assert_eq!(scored_hours(&samples, &scored(Split::Test)), Ok(0.5));
-        assert_eq!(scored_hours(&samples, &scored(Split::Tune)), Ok(0.0));
+        assert_eq!(
+            scored_duration(&samples, &scored(Split::Test)),
+            Ok(TimeDelta::minutes(30))
+        );
+        assert_eq!(
+            scored_duration(&samples, &scored(Split::Tune)),
+            Ok(TimeDelta::zero())
+        );
     }
 
     proptest! {
@@ -216,15 +221,15 @@ mod tests {
         }
 
         #[test]
-        fn the_scored_hours_of_both_splits_sum_to_the_sessions_hours(
+        fn the_scored_durations_of_both_splits_sum_to_the_sessions_duration(
             steps in prop::collection::vec((germany(), 1..3_600u16), 0..50),
         ) {
             let samples = samples(&steps);
-            let tune = scored_hours(&samples, &scored(Split::Tune)).unwrap();
-            let test = scored_hours(&samples, &scored(Split::Test)).unwrap();
+            let tune = scored_duration(&samples, &scored(Split::Tune)).unwrap();
+            let test = scored_duration(&samples, &scored(Split::Test)).unwrap();
 
-            prop_assert!((tune + test - hours_between(&samples)).abs() < 1e-9);
-            prop_assert!(tune >= 0.0 && test >= 0.0);
+            prop_assert_eq!(tune + test, duration_between(&samples));
+            prop_assert!(tune >= TimeDelta::zero() && test >= TimeDelta::zero());
         }
     }
 }

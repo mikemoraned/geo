@@ -5,6 +5,7 @@ use std::str::FromStr;
 use domain::{Radius, Span};
 use medallion_model::PredictorName;
 
+use crate::split::{ScoredSplit, Splitter};
 use crate::steps::Predictor;
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -103,6 +104,49 @@ pub fn read_online_detector(
 ) -> Result<Option<OnlineDetectorSettings>, SettingsError> {
     (!settings.is_empty())
         .then(|| OnlineDetectorSettings::read(settings))
+        .transpose()
+}
+
+impl TypedSettings for ScoredSplit {
+    fn write(&self) -> BTreeMap<String, String> {
+        BTreeMap::from([
+            ("split".to_string(), self.split.to_string()),
+            (
+                "resolution".to_string(),
+                self.splitter.resolution.to_string(),
+            ),
+            ("salt".to_string(), self.splitter.salt.to_string()),
+            (
+                "tune_buckets".to_string(),
+                self.splitter.tune_buckets.to_string(),
+            ),
+        ])
+    }
+
+    fn read(settings: &BTreeMap<String, String>) -> Result<Self, SettingsError> {
+        let mut reading = Reading::new(settings);
+        let read = Self {
+            split: reading.take("split")?,
+            splitter: Splitter {
+                resolution: reading.take("resolution")?,
+                salt: reading.take("salt")?,
+                tune_buckets: reading.take("tune_buckets")?,
+            },
+        };
+        reading.finish()?;
+        Ok(read)
+    }
+}
+
+pub fn write_split(split: Option<&ScoredSplit>) -> BTreeMap<String, String> {
+    split.map(ScoredSplit::write).unwrap_or_default()
+}
+
+pub fn read_split(
+    settings: &BTreeMap<String, String>,
+) -> Result<Option<ScoredSplit>, SettingsError> {
+    (!settings.is_empty())
+        .then(|| ScoredSplit::read(settings))
         .transpose()
 }
 

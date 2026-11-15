@@ -69,7 +69,7 @@ pub fn summarise(
                     .ok_or_else(|| SummariseError::NotScored {
                         session_id: session.session_id.clone(),
                     })?;
-            Ok(Tally::of(outcomes, duration_of(session.scored_hours)))
+            Ok(Tally::of(outcomes, session.scored_duration))
         })
         .collect::<Result<_, SummariseError>>()?;
     let whole: Tally = tallies.iter().copied().sum();
@@ -100,10 +100,6 @@ pub fn summarise(
         false_alarms_per_hour: estimate(&whole, &resamples, Tally::false_alarms_per_hour),
         lead_times: spread(leads),
     })
-}
-
-fn duration_of(hours: f64) -> TimeDelta {
-    TimeDelta::milliseconds((hours * 3_600_000.0).round() as i64)
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]

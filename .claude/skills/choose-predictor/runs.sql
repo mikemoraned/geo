@@ -1,5 +1,10 @@
 SELECT
-    run.* EXCLUDE (fingerprints),
+    run.* EXCLUDE (fingerprints) REPLACE (
+        to_milliseconds(run.horizon) AS horizon,
+        to_milliseconds(run.last_moment) AS last_moment,
+        to_milliseconds(run.ramp) AS ramp,
+        to_milliseconds(run.warm_up) AS warm_up
+    ),
     summary.sessions AS sessions_replayed,
     summary.* EXCLUDE (run_date, run_id, sessions) REPLACE (
         to_milliseconds(summary.scored_duration) AS scored_duration,
@@ -20,7 +25,7 @@ SELECT
     to_milliseconds(skew.offset_p10) AS skew_offset_p10,
     to_milliseconds(skew.offset_median) AS skew_offset_median,
     to_milliseconds(skew.offset_p90) AS skew_offset_p90
-FROM read_parquet('data/medallion/gold/evaluation_run_v4/**/*.parquet', hive_partitioning = true) AS run
+FROM read_parquet('data/medallion/gold/evaluation_run_v5/**/*.parquet', hive_partitioning = true) AS run
 JOIN read_parquet('data/medallion/gold/evaluation_summary_v2/**/*.parquet', hive_partitioning = true) AS summary
     USING (run_id)
 LEFT JOIN read_parquet('data/medallion/gold/evaluation_skew_v2/**/*.parquet', hive_partitioning = true) AS skew

@@ -27,7 +27,7 @@ pub use rows::{RowsError, outcome_rows, replayed_from, scored_from, summary_row,
 pub use score::{
     Class, Credit, NotAScore, Outcome, Score, ScoreError, Scoring, UnreadableScore, Verdict, score,
 };
-pub use scored::{ScoredCrossings, scored_hours};
+pub use scored::{ScoredCrossings, scored_duration};
 pub use settings::{
     CrowFliesSettings, OnlineDetectorSettings, OracleSettings, SettingsError, TypedSettings,
     read_online_detector, write_online_detector,

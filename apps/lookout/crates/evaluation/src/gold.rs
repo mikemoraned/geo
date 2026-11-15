@@ -221,7 +221,7 @@ mod tests {
     use std::path::Path;
 
     use medallion::write_rows;
-    use medallion_model::{EvaluationRunRowV4, TrainSessionCrossingRowV1};
+    use medallion_model::{EvaluationRunRowV5, TrainSessionCrossingRowV1};
 
     use super::*;
     use crate::fixtures::{instant, oracle, run_of, store};
@@ -260,7 +260,7 @@ mod tests {
             ),
             (Some(1.0), Some(1.0), 3)
         );
-        assert_eq!(written::<EvaluationRunRowV4>(&root, &run_id).await.len(), 1);
+        assert_eq!(written::<EvaluationRunRowV5>(&root, &run_id).await.len(), 1);
         assert_eq!(
             written::<EvaluationSessionRowV2>(&root, &run_id)
                 .await

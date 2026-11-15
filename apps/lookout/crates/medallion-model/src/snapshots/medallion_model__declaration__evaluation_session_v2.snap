@@ -17,9 +17,9 @@ columns:
   - name: ended_at
     data_type: "Timestamp(ms, \"UTC\")"
     nullable: true
-  - name: hours
-    data_type: Float64
-    nullable: false
-  - name: scored_hours
-    data_type: Float64
-    nullable: false
+  - name: duration
+    data_type: Duration(ms)
+    nullable: true
+  - name: scored_duration
+    data_type: Duration(ms)
+    nullable: true

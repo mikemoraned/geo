@@ -2,6 +2,7 @@ use geo_types::Point;
 use hashfn::hashfn;
 use nutype::nutype;
 use sha2::{Digest, Sha256};
+use strum::{Display, EnumString};
 
 use crate::a5::{A5CellId, A5Resolution, NoA5Cell};
 
@@ -12,7 +13,8 @@ pub struct Splitter {
     pub tune_buckets: TuneBuckets,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum Split {
     Tune,
     Test,

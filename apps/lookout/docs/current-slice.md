@@ -129,36 +129,38 @@ erDiagram
     train_session_v3 ||--|{ train_session_sample_v3 : "sampled as"
     train_session_v3 ||--o{ train_session_crossing_v1 : "passes"
     water_crossing_v2 ||--o{ train_session_crossing_v1 : "passed in"
-    evaluation_run_v4 ||--|{ evaluation_session_v2 : "replays"
+    evaluation_run_v5 ||--|{ evaluation_session_v2 : "replays"
     train_session_v3 ||--o{ evaluation_session_v2 : "picked for"
     evaluation_session_v2 ||--o{ evaluation_transition_v1 : "records"
     evaluation_transition_v1 ||--o| evaluation_outcome_v2 : "notification scored as"
     train_session_crossing_v1 ||--o{ evaluation_outcome_v2 : "scored in"
-    evaluation_run_v4 ||--|| evaluation_summary_v2 : "sums up"
-    evaluation_run_v4 ||--o| evaluation_skew_v2 : "measures the skew of"
+    evaluation_run_v5 ||--|| evaluation_summary_v2 : "sums up"
+    evaluation_run_v5 ||--o| evaluation_skew_v2 : "measures the skew of"
 ```
 
 - `train_session_v3` and `train_session_sample_v3` are the v2 datasets with
   `realtime_percentage` and `realtime` added.
 - `train_session_crossing_v1` holds each pass of a train session, one per visit within the match
   radius.
-- `evaluation_run_v4` holds a run's predictor, online detector, float type, scores and ramp,
+- `evaluation_run_v5` holds a run's predictor, online detector, split, float type, scores and ramp,
   evaluation version, country, filter, sample size, seed, and bootstrap resamples. The predictor's
   settings are a map from each setting's name to its value as text, which that predictor parses
   into its own typed settings. A predictor that takes a new setting needs no new column. The
   online detector's settings are a map read the same way. An empty map is a run that ran no online
-  detector, and so measured no skew. The row
+  detector, and so measured no skew. The split's settings are a third map, of the split the run
+  scores and its splitter's resolution, salt, and tune buckets. An empty map is a run that scored
+  every crossing. Each span of time in the row is a duration. The row
   also holds the run's code version, and a map from each silver dataset the run reads to its
   fingerprint. A dataset added to or removed from the run's inputs needs no new column.
-- `evaluation_session_v2` holds each session a run replays, with its hours, so a session with no
-  transitions still counts. Its scored hours are the hours that lie in the run's split, and equal
-  its hours in a run without one.
+- `evaluation_session_v2` holds each session a run replays, with its duration, so a session with
+  no transitions still counts. Its scored duration is the time that lies in the run's split, and
+  equals its duration in a run without one.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
   two samples writes nothing.
 - `evaluation_outcome_v2` holds each notification with its class, score, and lead, and each
   miss, of the crossings in the run's split.
 - `evaluation_summary_v2` holds a run's measures and their intervals, with its counts of sessions,
-  passes, and notifications. Its scored duration is the sum of the sessions' scored hours.
+  passes, and notifications. Its scored duration is the sum of the sessions' scored durations.
 - `evaluation_skew_v2` holds a run's skew and its intervals, with its counts of offline passes and
   online visits.
 
@@ -1010,7 +1012,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
                   datasets. `explore6.py` reads the summary's `lead_p10_ms`, `lead_median_ms`, and
                   `lead_p90_ms` from `summarise`. Moot: the Wrap-up removes the notebooks, so they
                   stay broken until then.
-      - [ ] Step 4: record the split and its splitter in `evaluation_run_v5`.
+      - [x] Step 4: record the split and its splitter in `evaluation_run_v5`.
             - Add a map `split_settings`, as `online_detector_settings` was added in v4: the split,
               the resolution, the salt, and the tune buckets. A run without a split has an empty
               map. The run's id hashes the map with its other settings.
@@ -1025,6 +1027,14 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
                 `scored_hours`. It holds no rows until this step's binary migrates v1 into it.
                 `scored_duration` sums the steps' `TimeDelta`s, and summarise converts to hours
                 only to divide false alarms by them.
+            - Built with the migration run on 2026-11-15. Every v5 run matches its v4 run, with an
+              empty `split_settings`, and every v2 session matches its v1 session: 15 runs of each.
+              A session's duration is its `ended_at` less its `started_at`, which v1's hours
+              equal to the millisecond. The v4 and v1 datasets, their row types, and the migration
+              binary are removed in the commit after the copy's.
+            - A run resumed from gold reads its split back from `split_settings`.
+            - `/choose-predictor` groups runs by `split_settings` with the scoring settings, and
+              names each group's split in its table.
       - [ ] Step 5: check the splitter against the store before every run.
             - Check invariants 1, 2, 3, and 5 before the run replays a session, and refuse a run
               that fails one.
