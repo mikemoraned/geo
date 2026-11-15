@@ -1,13 +1,17 @@
 use std::error::Error;
+use std::fs::File;
+use std::io::BufWriter;
 use std::path::PathBuf;
 
 use chrono::Utc;
 use clap::Parser;
+use map::journeys::write_journeys;
 use medallion::MedallionArgs;
 use session_crossings::gold::{Choosing, choose};
 
 const ARTIFACT: &str = "map";
 const FILE: &str = "map.pmtiles";
+const JOURNEYS: &str = "journeys.geojsonseq";
 
 #[derive(Parser)]
 #[command(
@@ -66,11 +70,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     );
 
     let replays = choose(&root, choosing).await?;
+    let features = tempfile::tempdir()?;
+    let journeys = features.path().join(JOURNEYS);
+    let written = write_journeys(&replays, BufWriter::new(File::create(&journeys)?))?;
 
     tracing::info!(
         sessions = replays.len(),
         samples = replays.iter().map(|replay| replay.samples.len()).sum::<usize>(),
-        "chose sessions",
+        features = written,
+        "wrote journeys",
     );
 
     Ok(())

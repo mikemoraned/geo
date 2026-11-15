@@ -279,7 +279,7 @@ features live, so silver gains no datasets.
 - [x] Create the `map` crate with a `pack_map` binary, with arguments shaped like
       `pack_sessions`: `MedallionArgs`, `--min-crossings`, `--max-sessions`, `--output`, and
       `--version-file`.
-- [ ] Write the chosen sessions' samples, as points, and their routes, as lines, as GeoJSON Text
+- [x] Write the chosen sessions' samples, as points, and their routes, as lines, as GeoJSON Text
       Sequences, with each feature's zoom range set in its `tippecanoe` member.
 - [ ] For every country, join `water_crossing_v2` to the bronze extract's segments and water on
       the Overture id and `extract_id`. Write the result as `rail` and `water`, from zoom level 7.
