@@ -78,7 +78,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tracing::info!(
         sessions = replays.len(),
-        samples = replays.iter().map(|replay| replay.samples.len()).sum::<usize>(),
+        samples = replays
+            .iter()
+            .map(|replay| replay.samples.len())
+            .sum::<usize>(),
         features = written,
         "wrote journeys",
     );

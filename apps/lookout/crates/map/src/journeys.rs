@@ -122,7 +122,12 @@ mod tests {
     }
 
     fn sample(second: u32, lat: f64, lon: f64) -> Sample<f64> {
-        Sample::at(Utc.with_ymd_and_hms(2026, 7, 22, 14, 28, second).unwrap(), lat, lon).unwrap()
+        Sample::at(
+            Utc.with_ymd_and_hms(2026, 7, 22, 14, 28, second).unwrap(),
+            lat,
+            lon,
+        )
+        .unwrap()
     }
 
     fn written(replays: &[Replay]) -> Vec<Value> {
