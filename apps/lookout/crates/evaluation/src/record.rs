@@ -2,16 +2,20 @@ use std::num::NonZeroUsize;
 
 use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use code_version::CodeVersion;
-use domain::Span;
-use medallion::{FingerprintError, Root, RunId};
-use medallion_model::{EvaluationRunRowV4, EvaluationSessionRowV1, TrainSessionRowV3};
+use domain::{SessionId, Span};
+use medallion::{FingerprintError, QueryError, Root, RunId};
+use medallion_model::{EvaluationRunRowV4, EvaluationSessionRowV2, TrainSessionRowV3};
 use uuid::Uuid;
 
+use crate::a5::NoA5Cell;
 use crate::fingerprints::Fingerprints;
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};
+use crate::scored::scored_hours;
 use crate::settings::{SettingsError, read_online_detector, write_online_detector};
-use crate::steps::{Predictor, Run};
+use crate::split::ScoredSplit;
+use crate::steps::{EvaluationSettings, Predictor};
+use crate::store::read_samples;
 use crate::summarise::Bootstrap;
 
 pub const EVALUATION_VERSION: &str = "replay-v1";
@@ -25,17 +29,29 @@ pub struct Inputs {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Recorded {
+pub struct RecordResults {
     pub run_id: RunId,
     pub date: NaiveDate,
     pub row: EvaluationRunRowV4,
-    pub sessions: Vec<EvaluationSessionRowV1>,
+    pub sessions: Vec<EvaluationSessionRowV2>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SessionRowsError {
+    #[error("reading the sessions' samples: {0}")]
+    Query(#[from] QueryError),
+    #[error("the session {session_id} was picked, and the store holds no samples for it")]
+    NoSamples { session_id: SessionId },
+    #[error("placing a sample in the split: {0}")]
+    Split(#[from] NoA5Cell),
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum RecordError {
     #[error(transparent)]
     Fingerprint(#[from] FingerprintError),
+    #[error(transparent)]
+    Sessions(#[from] SessionRowsError),
     #[error("the run's predictor settings cannot be read back: {0}")]
     PredictorSettings(SettingsError),
     #[error("the run's online detector settings cannot be read back: {0}")]
@@ -53,24 +69,28 @@ fn namespace(name: &[u8]) -> Uuid {
 
 pub async fn record(
     root: &Root,
-    run: &Run,
+    run: &EvaluationSettings,
     code: &CodeVersion,
     picked: &[TrainSessionRowV3],
-) -> Result<Recorded, RecordError> {
+) -> Result<RecordResults, RecordError> {
     let inputs = Inputs {
         code_version: code.as_str().to_string(),
         fingerprints: Fingerprints::read(root).await?,
     };
     let row = run_row(run, &inputs, Utc::now());
-    Ok(Recorded {
+    Ok(RecordResults {
         run_id: run_id(&row),
         date: row.started_at.date_naive(),
         row,
-        sessions: session_rows(picked),
+        sessions: run_session_rows(root, run, picked).await?,
     })
 }
 
-pub fn run_row(run: &Run, inputs: &Inputs, started_at: DateTime<Utc>) -> EvaluationRunRowV4 {
+pub fn run_row(
+    run: &EvaluationSettings,
+    inputs: &Inputs,
+    started_at: DateTime<Utc>,
+) -> EvaluationRunRowV4 {
     EvaluationRunRowV4 {
         started_at,
         evaluation_version: EVALUATION_VERSION.to_string(),
@@ -107,11 +127,11 @@ pub fn run_id(row: &EvaluationRunRowV4) -> RunId {
     RunId::new(id.to_string()).expect("a UUID names a partition")
 }
 
-impl TryFrom<&EvaluationRunRowV4> for Run {
+impl TryFrom<&EvaluationRunRowV4> for EvaluationSettings {
     type Error = RecordError;
 
     fn try_from(row: &EvaluationRunRowV4) -> Result<Self, Self::Error> {
-        Ok(Run {
+        Ok(EvaluationSettings {
             pick: Pick {
                 country: row.country.parse().map_err(|err| setting("country", err))?,
                 realtime_at_least: row.realtime_at_least,
@@ -136,20 +156,78 @@ impl TryFrom<&EvaluationRunRowV4> for Run {
                 resamples: count("resamples", row.resamples)?,
                 seed: Seed(row.bootstrap_seed),
             },
+            split: None,
         })
     }
 }
 
-pub fn session_rows(picked: &[TrainSessionRowV3]) -> Vec<EvaluationSessionRowV1> {
+pub fn session_rows(picked: &[TrainSessionRowV3]) -> Vec<EvaluationSessionRowV2> {
     picked
         .iter()
-        .map(|session| EvaluationSessionRowV1 {
-            session_id: session.session_id.clone(),
-            started_at: session.started_at,
-            ended_at: session.ended_at,
-            hours: (session.ended_at - session.started_at).as_seconds_f64() / 3_600.0,
+        .map(|session| {
+            let hours = hours(session);
+            session_row(session, hours, hours)
         })
         .collect()
+}
+
+pub async fn run_session_rows(
+    root: &Root,
+    run: &EvaluationSettings,
+    picked: &[TrainSessionRowV3],
+) -> Result<Vec<EvaluationSessionRowV2>, SessionRowsError> {
+    match &run.split {
+        None => Ok(session_rows(picked)),
+        Some(split) => split_session_rows(root, run, picked, split).await,
+    }
+}
+
+async fn split_session_rows(
+    root: &Root,
+    run: &EvaluationSettings,
+    picked: &[TrainSessionRowV3],
+    split: &ScoredSplit,
+) -> Result<Vec<EvaluationSessionRowV2>, SessionRowsError> {
+    let samples = read_samples(
+        root,
+        run.pick.country,
+        picked.iter().map(|session| &session.session_id),
+    )
+    .await?;
+    picked
+        .iter()
+        .map(|session| {
+            let samples =
+                samples
+                    .get(&session.session_id)
+                    .ok_or_else(|| SessionRowsError::NoSamples {
+                        session_id: session.session_id.clone(),
+                    })?;
+            Ok(session_row(
+                session,
+                hours(session),
+                scored_hours(samples, split)?,
+            ))
+        })
+        .collect()
+}
+
+fn hours(session: &TrainSessionRowV3) -> f64 {
+    (session.ended_at - session.started_at).as_seconds_f64() / 3_600.0
+}
+
+fn session_row(
+    session: &TrainSessionRowV3,
+    hours: f64,
+    scored_hours: f64,
+) -> EvaluationSessionRowV2 {
+    EvaluationSessionRowV2 {
+        session_id: session.session_id.clone(),
+        started_at: session.started_at,
+        ended_at: session.ended_at,
+        hours,
+        scored_hours,
+    }
 }
 
 fn milliseconds(span: Span) -> i64 {
@@ -191,8 +269,8 @@ mod tests {
         Span::new(text).expect("a span")
     }
 
-    fn oracle_run() -> Run {
-        Run {
+    fn oracle_run() -> EvaluationSettings {
+        EvaluationSettings {
             pick: Pick {
                 country: Country::Germany,
                 realtime_at_least: Percentage::new(90.0).expect("a percentage"),
@@ -216,11 +294,12 @@ mod tests {
                 resamples: NonZeroUsize::new(1000).expect("not zero"),
                 seed: Seed(1),
             },
+            split: None,
         }
     }
 
-    fn crow_flies_run() -> Run {
-        Run {
+    fn crow_flies_run() -> EvaluationSettings {
+        EvaluationSettings {
             predictor: Predictor::CrowFlies(CrowFliesSettings {
                 radius: Radius::new(5_000.0).expect("a radius"),
                 horizon: span("5m"),
@@ -248,7 +327,10 @@ mod tests {
         for run in [oracle_run(), crow_flies_run()] {
             let row = run_row(&run, &inputs(), instant(0));
 
-            assert_eq!(Run::try_from(&row).expect("the run's settings"), run);
+            assert_eq!(
+                EvaluationSettings::try_from(&row).expect("the run's settings"),
+                run
+            );
         }
     }
 
@@ -315,13 +397,13 @@ mod tests {
 
         assert!(
             matches!(
-                Run::try_from(&row),
+                EvaluationSettings::try_from(&row),
                 Err(RecordError::PredictorSettings(SettingsError::Missing(
                     "horizon"
                 )))
             ),
             "{:?}",
-            Run::try_from(&row)
+            EvaluationSettings::try_from(&row)
         );
     }
 

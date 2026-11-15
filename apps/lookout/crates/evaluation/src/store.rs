@@ -2,27 +2,55 @@ use std::collections::BTreeMap;
 
 use crossings::silver::Crossing;
 use datafusion::prelude::{Expr, col, lit};
-use domain::{CrossingCompactId, CrossingId};
-use medallion::{Query, QueryError, Root};
-use medallion_model::{EvaluationSessionRowV1, TrainSessionCrossingRowV1};
+use domain::{CrossingCompactId, CrossingId, SessionId};
+use itertools::Itertools;
+use medallion::{Country, Query, QueryError, Root};
+use medallion_model::{
+    EvaluationSessionRowV2, TrainSessionCrossingRowV1, TrainSessionSamplePositionV3,
+    TrainSessionSampleRowV3,
+};
 
 pub async fn read_passes(
     root: &Root,
-    sessions: &[EvaluationSessionRowV1],
+    sessions: &[EvaluationSessionRowV2],
 ) -> Result<Vec<TrainSessionCrossingRowV1>, QueryError> {
     Query::new(root.clone())
         .read::<TrainSessionCrossingRowV1>()
         .await?
-        .filter(picked(sessions))?
+        .filter(picked(sessions.iter().map(|session| &session.session_id)))?
         .rows()
         .await
 }
 
-pub(crate) fn picked(sessions: &[EvaluationSessionRowV1]) -> Expr {
+pub async fn read_samples<'a>(
+    root: &Root,
+    country: Country,
+    session_ids: impl IntoIterator<Item = &'a SessionId>,
+) -> Result<BTreeMap<SessionId, Vec<TrainSessionSamplePositionV3>>, QueryError> {
+    let rows = Query::new(root.clone())
+        .read_of_country::<TrainSessionSampleRowV3>(country)
+        .await?
+        .filter(picked(session_ids))?
+        .sort(vec![
+            col("session_id").sort(true, false),
+            col("t").sort(true, false),
+            col("seq").sort(true, false),
+        ])?
+        .rows_as::<TrainSessionSamplePositionV3>()
+        .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| (row.session_id.clone(), row))
+        .into_group_map()
+        .into_iter()
+        .collect())
+}
+
+fn picked<'a>(session_ids: impl IntoIterator<Item = &'a SessionId>) -> Expr {
     col("session_id").in_list(
-        sessions
-            .iter()
-            .map(|session| lit(session.session_id.to_string()))
+        session_ids
+            .into_iter()
+            .map(|session_id| lit(session_id.to_string()))
             .collect(),
         false,
     )
@@ -49,12 +77,12 @@ mod tests {
         SessionId::new(format!("session-{name}")).expect("a session id")
     }
 
-    fn picked_sessions(names: &[&str]) -> Vec<EvaluationSessionRowV1> {
+    fn picked_sessions(names: &[&str]) -> Vec<EvaluationSessionRowV2> {
         names
             .iter()
-            .map(|&name| EvaluationSessionRowV1 {
+            .map(|&name| EvaluationSessionRowV2 {
                 session_id: session(name),
-                ..EvaluationSessionRowV1::example()
+                ..EvaluationSessionRowV2::example()
             })
             .collect()
     }

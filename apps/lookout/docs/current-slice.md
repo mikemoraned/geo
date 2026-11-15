@@ -129,9 +129,9 @@ erDiagram
     train_session_v3 ||--|{ train_session_sample_v3 : "sampled as"
     train_session_v3 ||--o{ train_session_crossing_v1 : "passes"
     water_crossing_v2 ||--o{ train_session_crossing_v1 : "passed in"
-    evaluation_run_v4 ||--|{ evaluation_session_v1 : "replays"
-    train_session_v3 ||--o{ evaluation_session_v1 : "picked for"
-    evaluation_session_v1 ||--o{ evaluation_transition_v1 : "records"
+    evaluation_run_v4 ||--|{ evaluation_session_v2 : "replays"
+    train_session_v3 ||--o{ evaluation_session_v2 : "picked for"
+    evaluation_session_v2 ||--o{ evaluation_transition_v1 : "records"
     evaluation_transition_v1 ||--o| evaluation_outcome_v1 : "notification scored as"
     train_session_crossing_v1 ||--o{ evaluation_outcome_v1 : "scored in"
     evaluation_run_v4 ||--|| evaluation_summary_v1 : "sums up"
@@ -150,13 +150,15 @@ erDiagram
   detector, and so measured no skew. The row
   also holds the run's code version, and a map from each silver dataset the run reads to its
   fingerprint. A dataset added to or removed from the run's inputs needs no new column.
-- `evaluation_session_v1` holds each session a run replays, with its hours, so a session with no
-  transitions still counts.
+- `evaluation_session_v2` holds each session a run replays, with its hours, so a session with no
+  transitions still counts. Its scored hours are the hours that lie in the run's split, and equal
+  its hours in a run without one.
 - `evaluation_transition_v1` holds each transition. A crossing whose state stays the same between
   two samples writes nothing.
-- `evaluation_outcome_v1` holds each notification with its class and score, and each miss.
+- `evaluation_outcome_v1` holds each notification with its class and score, and each miss, of the
+  crossings in the run's split.
 - `evaluation_summary_v1` holds a run's measures and their intervals, with its counts of sessions,
-  passes, and notifications.
+  passes, and notifications. Its hours are the sessions' scored hours.
 - `evaluation_skew_v1` holds a run's skew and its intervals, with its counts of offline passes and
   online visits.
 
@@ -954,7 +956,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             and invariant 4 moves to the measurement of LightCone's angle.
       - [-] Check invariants 1, 2, 3, and 5 against the store in every run, before it replays a
             session. Refuse a run that fails a check, and record the counts each check compared.
-            Moot: step 4 below does this.
+            Moot: step 5 below does this.
       - [x] Step 1: add the split to `evaluation`.
             - A `Split` holds a resolution, a salt, and the tune buckets. A `Set` is tune or test.
             - A point's cell is `a5::lonlat_to_cell` at the split's resolution. Add the crate `a5`
@@ -969,7 +971,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             - Built under the names ML datasets use: a `Splitter` assigns each cell a `Split`,
               tune or test, as `tfds.Split` and scikit-learn's splitters name them. A bucket is a
               `SplitterBucket`. The module `a5` holds the A5 types, `A5Resolution` and `A5CellId`.
-      - [ ] Step 2: score each unit by its crossing's cell.
+      - [x] Step 2: score each unit by its crossing's cell.
             - A run with a split scores only the units whose crossing lies in that split's cells:
               each notification, pass, repeat, false alarm, and miss. A run without a split scores
               every unit, as now.
@@ -981,7 +983,24 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             - The skew between the detectors counts only passes and visits whose crossing lies in
               the split's cells, so every measure a run reports covers one split.
             - Property tests hold invariants 2 and 3.
-      - [ ] Step 3: record the split and its splitter in `evaluation_run_v5`.
+            - Built with pick, not replay, measuring `scored_hours`, as chosen on 2026-11-15:
+              pick writes the session rows before replay runs, and scored hours depend on the
+              session and the split, not the predictor. A run without a split takes its hours.
+              The migration of `evaluation_session_v1` joins Step 4's.
+      - [ ] Step 3: store time spans as durations, and migrate the existing evaluation datasets to
+            them.
+            - Add `DURATIONS` to medallion's `Row`, beside `INSTANTS`. It types each column it
+              names as `Duration(Millisecond)`, and the row holds each as a `TimeDelta`.
+            - A medallion test writes such a row to parquet and reads it back through DataFusion
+              and pyarrow.
+            - Migrate each dataset to a new version through a one-off binary, as the note on
+              migrating the store sets out. Each column drops its unit suffix:
+              - `evaluation_outcome_v2`: `lead`.
+              - `evaluation_summary_v2`: `scored_duration`, from `hours`, and `lead_p10`,
+                `lead_median`, and `lead_p90`.
+              - `evaluation_skew_v2`: `offset_p10`, `offset_median`, and `offset_p90`.
+            - `runs.sql` and the code that reads these datasets read the new versions.
+      - [ ] Step 4: record the split and its splitter in `evaluation_run_v5`.
             - Add a map `split_settings`, as `online_detector_settings` was added in v4: the split,
               the resolution, the salt, and the tune buckets. A run without a split has an empty
               map. The run's id hashes the map with its other settings.
@@ -989,7 +1008,14 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
               binary. Commit the binary with the data it rewrote, and remove it in a later commit,
               as the note on migrating the store sets out.
             - Read v5 in `/choose-predictor`'s `runs.sql`, and show each run's split in its report.
-      - [ ] Step 4: check the splitter against the store before every run.
+            - Store the new datasets' time spans as durations, through Step 3's `DURATIONS`:
+              - `evaluation_run_v5`: `horizon`, `last_moment`, `ramp`, and `warm_up`, from v4's
+                `_ms` columns.
+              - `evaluation_session_v2`: `duration` and `scored_duration`, in place of `hours` and
+                `scored_hours`. It holds no rows until this step's binary migrates v1 into it.
+                `scored_duration` sums the steps' `TimeDelta`s, and summarise converts to hours
+                only to divide false alarms by them.
+      - [ ] Step 5: check the splitter against the store before every run.
             - Check invariants 1, 2, 3, and 5 before the run replays a session, and refuse a run
               that fails one.
             - Invariant 5 reads the country's land and maritime areas, as `transport`'s
@@ -998,12 +1024,14 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             - Record each check's counts in a new gold dataset, `evaluation_split_v1`, with one row
               per run: the cells, the cells in the split, the crossings, the units in the split and
               outside it, and the cells outside the country's cover.
-      - [ ] Step 5: take the split and its splitter in `evaluate` and in `evaluation-py`.
+      - [ ] Step 6: take the split and its splitter in `evaluate` and in `evaluation-py`.
             - `evaluate` takes `--split`, `--split-resolution`, `--split-salt`, and
               `--tune-buckets`, with no defaults, so every run states them. The chosen splitter is
               `--split-resolution 8 --split-salt tune-test-1 --tune-buckets 70`. The recipe
               `just evaluate` passes its arguments through, so each run names these.
             - `evaluation-py` gains a `Splitter` and a `Split`, which its steps and `run` take.
+              Its steps build session rows from the picked table, which holds no scored hours, so
+              they take the session rows `record` returns instead.
 - [ ] Measure in a new `explore5.py` the angle between a train's heading and its positions up to N
       later.
       The notebook is `explore6.py`, since Phase 4 already added `explore5_skew.py`. It reads the

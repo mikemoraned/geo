@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use medallion::{Root, RunError, RunId, write_run};
 use medallion_model::{
-    EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationSkewRowV1, EvaluationSummaryRowV1,
+    EvaluationOutcomeRowV1, EvaluationSessionRowV2, EvaluationSkewRowV1, EvaluationSummaryRowV1,
     EvaluationTransitionRowV1, TrainSessionRowV3,
 };
 
@@ -9,9 +9,9 @@ use crate::PickError;
 use crate::fingerprints::Fingerprints;
 use code_version::CodeVersion;
 
-use crate::record::{RecordError, Recorded, record};
+use crate::record::{RecordError, RecordResults, record};
 use crate::runs::{RunsError, read_run_row, read_run_rows};
-use crate::steps::{self, Ran, Replayed, Run, StepError};
+use crate::steps::{self, EvaluationResults, EvaluationSettings, ReplayResults, StepError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum GoldError {
@@ -38,7 +38,11 @@ pub enum GoldError {
     Write(#[from] RunError),
 }
 
-pub async fn pick(root: &Root, run: &Run, code: &CodeVersion) -> Result<RunId, GoldError> {
+pub async fn pick(
+    root: &Root,
+    run: &EvaluationSettings,
+    code: &CodeVersion,
+) -> Result<RunId, GoldError> {
     let picked = crate::pick(root, &run.pick).await?;
     Ok(begin(root, run, code, &picked).await?.run_id)
 }
@@ -55,7 +59,8 @@ pub async fn replay(
         &begun.sessions,
         begun.run.predictor,
         begun.run.float_type,
-        begun.run.skewing(),
+        begun.run.skew_settings(),
+        begun.run.split.as_ref(),
     )
     .await?;
     write_replayed(root, begun.date, run_id, &replayed).await?;
@@ -66,7 +71,7 @@ async fn write_replayed(
     root: &Root,
     date: NaiveDate,
     run_id: &RunId,
-    replayed: &Replayed,
+    replayed: &ReplayResults,
 ) -> Result<(), GoldError> {
     tracing::info!(%run_id, transitions = replayed.transitions.len(), "replayed");
     write_run(root, date, run_id, &replayed.transitions).await?;
@@ -86,6 +91,7 @@ pub async fn score(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<()
         &begun.sessions,
         &transitions,
         &begun.run.scoring,
+        begun.run.split.as_ref(),
     )
     .await?;
     tracing::info!(%run_id, outcomes = outcomes.len(), "scored");
@@ -106,17 +112,22 @@ pub async fn summarise(
     Ok(summary)
 }
 
-pub async fn run(root: &Root, run: &Run, code: &CodeVersion) -> Result<(RunId, Ran), GoldError> {
+pub async fn run(
+    root: &Root,
+    run: &EvaluationSettings,
+    code: &CodeVersion,
+) -> Result<(RunId, EvaluationResults), GoldError> {
     let country = run.pick.country;
     let picked = crate::pick(root, &run.pick).await?;
-    let Recorded {
+    let RecordResults {
         run_id,
         date,
         sessions,
         ..
     } = begin(root, run, code, &picked).await?;
 
-    let crossings_and_passes = steps::read_crossings_and_passes(root, country, &sessions).await?;
+    let crossings_and_passes =
+        steps::read_crossings_and_passes(root, country, &sessions, run.split.as_ref()).await?;
     let replayed = steps::replay_against(
         root,
         country,
@@ -124,11 +135,11 @@ pub async fn run(root: &Root, run: &Run, code: &CodeVersion) -> Result<(RunId, R
         &crossings_and_passes,
         run.predictor,
         run.float_type,
-        run.skewing(),
+        run.skew_settings(),
     )
     .await?;
     write_replayed(root, date, &run_id, &replayed).await?;
-    let Replayed { transitions, skew } = replayed;
+    let ReplayResults { transitions, skew } = replayed;
 
     let outcomes =
         steps::score_against(&sessions, &crossings_and_passes, &transitions, &run.scoring)?;
@@ -141,7 +152,7 @@ pub async fn run(root: &Root, run: &Run, code: &CodeVersion) -> Result<(RunId, R
 
     Ok((
         run_id,
-        Ran {
+        EvaluationResults {
             picked,
             transitions,
             skew,
@@ -153,10 +164,10 @@ pub async fn run(root: &Root, run: &Run, code: &CodeVersion) -> Result<(RunId, R
 
 async fn begin(
     root: &Root,
-    run: &Run,
+    run: &EvaluationSettings,
     code: &CodeVersion,
     picked: &[TrainSessionRowV3],
-) -> Result<Recorded, GoldError> {
+) -> Result<RecordResults, GoldError> {
     let recorded = record(root, run, code, picked).await?;
     tracing::info!(run_id = %recorded.run_id, sessions = picked.len(), "picked");
     write_run(
@@ -171,9 +182,9 @@ async fn begin(
 }
 
 struct Begun {
-    run: Run,
+    run: EvaluationSettings,
     date: NaiveDate,
-    sessions: Vec<EvaluationSessionRowV1>,
+    sessions: Vec<EvaluationSessionRowV2>,
 }
 
 async fn resume(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<Begun, GoldError> {
@@ -195,8 +206,8 @@ async fn resume(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<Begun
             datasets: changed,
         });
     }
-    let run = Run::try_from(&row)?;
-    let mut sessions = read_run_rows::<EvaluationSessionRowV1>(root, run_id).await?;
+    let run = EvaluationSettings::try_from(&row)?;
+    let mut sessions = read_run_rows::<EvaluationSessionRowV2>(root, run_id).await?;
     sessions.sort_by(|one, other| one.session_id.cmp(&other.session_id));
     Ok(Begun {
         run,
@@ -237,38 +248,38 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = stored(tmp.path()).await;
 
-        let (run_id, ran) = run(&root, &run_of(oracle()), &code("abc1234"))
+        let (run_id, results) = run(&root, &run_of(oracle()), &code("abc1234"))
             .await
             .expect("a run");
 
         assert_eq!(
             (
-                ran.summary.precision,
-                ran.summary.recall,
-                ran.summary.passes
+                results.summary.precision,
+                results.summary.recall,
+                results.summary.passes
             ),
             (Some(1.0), Some(1.0), 3)
         );
         assert_eq!(written::<EvaluationRunRowV4>(&root, &run_id).await.len(), 1);
         assert_eq!(
-            written::<EvaluationSessionRowV1>(&root, &run_id)
+            written::<EvaluationSessionRowV2>(&root, &run_id)
                 .await
                 .len(),
             3
         );
-        assert!(!ran.transitions.is_empty());
+        assert!(!results.transitions.is_empty());
         assert_eq!(
             written::<EvaluationTransitionRowV1>(&root, &run_id).await,
-            ran.transitions
+            results.transitions
         );
-        assert_eq!(ran.outcomes.len(), 3);
+        assert_eq!(results.outcomes.len(), 3);
         assert_eq!(
             written::<EvaluationOutcomeRowV1>(&root, &run_id).await,
-            ran.outcomes
+            results.outcomes
         );
         assert_eq!(
             written::<EvaluationSummaryRowV1>(&root, &run_id).await,
-            [ran.summary]
+            [results.summary]
         );
     }
 

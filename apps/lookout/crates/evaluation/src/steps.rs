@@ -4,22 +4,25 @@ use crossings::silver::{Crossing, ReadError, read_of_country};
 use domain::{CoordinateError, Precision, SessionId};
 use medallion::{Country, QueryError, Root};
 use medallion_model::{
-    EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationSkewRowV1, EvaluationSummaryRowV1,
+    EvaluationOutcomeRowV1, EvaluationSessionRowV2, EvaluationSkewRowV1, EvaluationSummaryRowV1,
     EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
 };
 use predictor::{Alerting, AlertingBeyondWatching, CrowFlies, OnlineDetector, Watching};
 
+use crate::a5::NoA5Cell;
 use crate::offline::{OfflineError, PassesBySession, passes_by_session};
 use crate::oracle::{Oracle, OracleError};
 use crate::pick::{Pick, PickError, pick};
-use crate::record::session_rows;
+use crate::record::{SessionRowsError, run_session_rows};
 use crate::replay::{ReplayError, SessionReplay};
 use crate::rows::{
     RowsError, outcome_rows, replayed_from, scored_from, skew_row, summary_row, transition_rows,
 };
-use crate::score::{ScoreError, Scoring};
+use crate::score::{Outcome, ScoreError, Scoring};
+use crate::scored::ScoredCrossings;
 use crate::settings::{CrowFliesSettings, OnlineDetectorSettings, OracleSettings};
 use crate::skew::{SkewError, Visit, skew};
+use crate::split::ScoredSplit;
 use crate::store::{compact_ids, read_passes};
 use crate::summarise::{Bootstrap, SummariseError};
 
@@ -29,19 +32,20 @@ pub enum Predictor {
     CrowFlies(CrowFliesSettings),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Run {
+#[derive(Debug, Clone, PartialEq)]
+pub struct EvaluationSettings {
     pub pick: Pick,
     pub predictor: Predictor,
     pub online_detector: Option<OnlineDetectorSettings>,
     pub float_type: FloatType,
     pub scoring: Scoring,
     pub bootstrap: Bootstrap,
+    pub split: Option<ScoredSplit>,
 }
 
-impl Run {
-    pub fn skewing(&self) -> Option<Skewing> {
-        self.online_detector.map(|online_detector| Skewing {
+impl EvaluationSettings {
+    pub fn skew_settings(&self) -> Option<SkewSettings> {
+        self.online_detector.map(|online_detector| SkewSettings {
             online_detector,
             bootstrap: self.bootstrap,
         })
@@ -49,19 +53,19 @@ impl Run {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Skewing {
+pub struct SkewSettings {
     pub online_detector: OnlineDetectorSettings,
     pub bootstrap: Bootstrap,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Replayed {
+pub struct ReplayResults {
     pub transitions: Vec<EvaluationTransitionRowV1>,
     pub skew: Option<EvaluationSkewRowV1>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Ran {
+pub struct EvaluationResults {
     pub picked: Vec<TrainSessionRowV3>,
     pub transitions: Vec<EvaluationTransitionRowV1>,
     pub skew: Option<EvaluationSkewRowV1>,
@@ -73,6 +77,10 @@ pub struct Ran {
 pub enum StepError {
     #[error(transparent)]
     Pick(#[from] PickError),
+    #[error(transparent)]
+    Sessions(#[from] SessionRowsError),
+    #[error("placing a crossing in the split: {0}")]
+    Split(#[from] NoA5Cell),
     #[error("reading the store: {0}")]
     Query(#[from] QueryError),
     #[error("reading the crossings: {0}")]
@@ -101,12 +109,14 @@ pub enum StepError {
 pub struct CrossingsAndPasses {
     pub crossings: Vec<Crossing>,
     pub passes: PassesBySession,
+    pub scored: ScoredCrossings,
 }
 
 pub async fn read_crossings_and_passes(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV1],
+    sessions: &[EvaluationSessionRowV2],
+    split: Option<&ScoredSplit>,
 ) -> Result<CrossingsAndPasses, StepError> {
     let crossings = read_of_country(root, country).await?;
     let passes = passes_by_session(
@@ -114,18 +124,24 @@ pub async fn read_crossings_and_passes(
         read_passes(root, sessions).await?,
         &compact_ids(&crossings),
     )?;
-    Ok(CrossingsAndPasses { crossings, passes })
+    let scored = ScoredCrossings::of(&crossings, split)?;
+    Ok(CrossingsAndPasses {
+        crossings,
+        passes,
+        scored,
+    })
 }
 
 pub async fn replay(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV1],
+    sessions: &[EvaluationSessionRowV2],
     predictor: Predictor,
     float_type: FloatType,
-    skewing: Option<Skewing>,
-) -> Result<Replayed, StepError> {
-    let crossings_and_passes = read_crossings_and_passes(root, country, sessions).await?;
+    skew_settings: Option<SkewSettings>,
+    split: Option<&ScoredSplit>,
+) -> Result<ReplayResults, StepError> {
+    let crossings_and_passes = read_crossings_and_passes(root, country, sessions, split).await?;
     replay_against(
         root,
         country,
@@ -133,7 +149,7 @@ pub async fn replay(
         &crossings_and_passes,
         predictor,
         float_type,
-        skewing,
+        skew_settings,
     )
     .await
 }
@@ -141,13 +157,13 @@ pub async fn replay(
 pub async fn replay_against(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV1],
+    sessions: &[EvaluationSessionRowV2],
     crossings_and_passes: &CrossingsAndPasses,
     predictor: Predictor,
     float_type: FloatType,
-    skewing: Option<Skewing>,
-) -> Result<Replayed, StepError> {
-    let online_detector = skewing.map(|skewing| skewing.online_detector);
+    skew_settings: Option<SkewSettings>,
+) -> Result<ReplayResults, StepError> {
+    let online_detector = skew_settings.map(|skew_settings| skew_settings.online_detector);
     let replayed = match float_type {
         FloatType::F32 => {
             replayed::<f32>(
@@ -184,21 +200,32 @@ pub async fn replay_against(
             )| { ((session_id.clone(), transitions), (session_id, visits)) },
         )
         .unzip();
-    let skew = skewing
-        .map(|skewing| {
+    let scored = &crossings_and_passes.scored;
+    let skew = skew_settings
+        .map(|skew_settings| {
             let visits: BTreeMap<SessionId, Vec<Visit>> = visits
                 .into_iter()
-                .filter_map(|(session_id, visits)| Some((session_id, visits?)))
+                .filter_map(|(session_id, visits)| {
+                    Some((
+                        session_id,
+                        scored.keep(visits?, |visit| visit.crossing_compact_id),
+                    ))
+                })
                 .collect();
-            skew(
-                sessions,
-                &crossings_and_passes.passes,
-                &visits,
-                &skewing.bootstrap,
-            )
+            let passes: PassesBySession = crossings_and_passes
+                .passes
+                .iter()
+                .map(|(session_id, passes)| {
+                    (
+                        session_id.clone(),
+                        scored.keep(passes.iter().copied(), |&(_, crossing)| crossing),
+                    )
+                })
+                .collect();
+            skew(sessions, &passes, &visits, &skew_settings.bootstrap)
         })
         .transpose()?;
-    Ok(Replayed {
+    Ok(ReplayResults {
         transitions: transition_rows(&transitions),
         skew: skew.as_ref().map(skew_row),
     })
@@ -207,7 +234,7 @@ pub async fn replay_against(
 async fn replayed<F: Precision + Send + Sync>(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV1],
+    sessions: &[EvaluationSessionRowV2],
     crossings_and_passes: &CrossingsAndPasses,
     predictor: Predictor,
     online_detector: Option<OnlineDetectorSettings>,
@@ -255,27 +282,38 @@ async fn replayed<F: Precision + Send + Sync>(
 pub async fn score(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV1],
+    sessions: &[EvaluationSessionRowV2],
     transitions: &[EvaluationTransitionRowV1],
     scoring: &Scoring,
+    split: Option<&ScoredSplit>,
 ) -> Result<Vec<EvaluationOutcomeRowV1>, StepError> {
-    let crossings_and_passes = read_crossings_and_passes(root, country, sessions).await?;
+    let crossings_and_passes = read_crossings_and_passes(root, country, sessions, split).await?;
     score_against(sessions, &crossings_and_passes, transitions, scoring)
 }
 
 pub fn score_against(
-    sessions: &[EvaluationSessionRowV1],
+    sessions: &[EvaluationSessionRowV2],
     crossings_and_passes: &CrossingsAndPasses,
     transitions: &[EvaluationTransitionRowV1],
     scoring: &Scoring,
 ) -> Result<Vec<EvaluationOutcomeRowV1>, StepError> {
     let replayed = replayed_from(sessions, transitions)?;
-    let scored = crate::score::score(sessions, &replayed, &crossings_and_passes.passes, scoring)?;
+    let scored = crate::score::score(sessions, &replayed, &crossings_and_passes.passes, scoring)?
+        .into_iter()
+        .map(|(session_id, outcomes)| {
+            (
+                session_id,
+                crossings_and_passes
+                    .scored
+                    .keep(outcomes, Outcome::crossing_compact_id),
+            )
+        })
+        .collect();
     Ok(outcome_rows(&scored))
 }
 
 pub fn summarise(
-    sessions: &[EvaluationSessionRowV1],
+    sessions: &[EvaluationSessionRowV2],
     outcomes: &[EvaluationOutcomeRowV1],
     bootstrap: &Bootstrap,
 ) -> Result<EvaluationSummaryRowV1, StepError> {
@@ -285,24 +323,25 @@ pub fn summarise(
     )?))
 }
 
-pub async fn run(root: &Root, run: &Run) -> Result<Ran, StepError> {
+pub async fn run(root: &Root, run: &EvaluationSettings) -> Result<EvaluationResults, StepError> {
     let country = run.pick.country;
     let picked = pick(root, &run.pick).await?;
-    let sessions = session_rows(&picked);
-    let crossings_and_passes = read_crossings_and_passes(root, country, &sessions).await?;
-    let Replayed { transitions, skew } = replay_against(
+    let sessions = run_session_rows(root, run, &picked).await?;
+    let crossings_and_passes =
+        read_crossings_and_passes(root, country, &sessions, run.split.as_ref()).await?;
+    let ReplayResults { transitions, skew } = replay_against(
         root,
         country,
         &sessions,
         &crossings_and_passes,
         run.predictor,
         run.float_type,
-        run.skewing(),
+        run.skew_settings(),
     )
     .await?;
     let outcomes = score_against(&sessions, &crossings_and_passes, &transitions, &run.scoring)?;
     let summary = summarise(&sessions, &outcomes, &run.bootstrap)?;
-    Ok(Ran {
+    Ok(EvaluationResults {
         picked,
         transitions,
         skew,
@@ -316,31 +355,33 @@ mod tests {
 
     use super::*;
     use crate::fixtures::{oracle, run_of, store};
+    use crate::record::session_rows;
+    use crate::split::{Split, Splitter};
 
     #[tokio::test]
     async fn a_whole_oracle_run_scores_perfectly() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = store(tmp.path(), 3).await;
 
-        let ran = run(&root, &run_of(oracle())).await.expect("a run");
+        let results = run(&root, &run_of(oracle())).await.expect("a run");
 
-        assert_eq!(ran.picked.len(), 3);
+        assert_eq!(results.picked.len(), 3);
         assert_eq!(
             (
-                ran.summary.sessions,
-                ran.summary.passes,
-                ran.summary.notifications,
-                ran.summary.false_alarms,
-                ran.summary.misses
+                results.summary.sessions,
+                results.summary.passes,
+                results.summary.notifications,
+                results.summary.false_alarms,
+                results.summary.misses
             ),
             (3, 3, 3, 0, 0)
         );
         assert_eq!(
             (
-                ran.summary.precision,
-                ran.summary.precision_low,
-                ran.summary.recall,
-                ran.summary.recall_low
+                results.summary.precision,
+                results.summary.precision_low,
+                results.summary.recall,
+                results.summary.recall_low
             ),
             (Some(1.0), Some(1.0), Some(1.0), Some(1.0))
         );
@@ -351,7 +392,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = store(tmp.path(), 3).await;
 
-        let ran = run(
+        let results = run(
             &root,
             &run_of(Predictor::CrowFlies(CrowFliesSettings {
                 radius: Radius::new(5_000.0).expect("a radius"),
@@ -361,14 +402,64 @@ mod tests {
         .await
         .expect("a run");
 
-        assert!(!ran.transitions.is_empty());
+        assert!(!results.transitions.is_empty());
         assert_eq!(
             (
-                ran.summary.notifications,
-                ran.summary.misses,
-                ran.summary.recall
+                results.summary.notifications,
+                results.summary.misses,
+                results.summary.recall
             ),
             (0, 3, Some(0.0))
+        );
+    }
+
+    #[tokio::test]
+    async fn the_tune_and_test_runs_sum_to_the_run_without_a_split() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = store(tmp.path(), 3).await;
+        let whole = EvaluationSettings {
+            online_detector: Some(OnlineDetectorSettings {
+                pass_radius: Radius::new(100.0).expect("a radius"),
+            }),
+            ..run_of(oracle())
+        };
+        let scoring = |split| EvaluationSettings {
+            split: Some(ScoredSplit {
+                splitter: Splitter {
+                    resolution: "8".parse().expect("a resolution"),
+                    salt: "tune-test-1".parse().expect("a salt"),
+                    tune_buckets: "70".parse().expect("tune buckets"),
+                },
+                split,
+            }),
+            ..whole.clone()
+        };
+        let counts = |results: &EvaluationResults| {
+            let (summary, skew) = (&results.summary, results.skew.as_ref().expect("a skew"));
+            [
+                summary.passes,
+                summary.notifications,
+                summary.false_alarms,
+                summary.repeats,
+                summary.misses,
+                skew.passes,
+                skew.visits,
+            ]
+        };
+
+        let all = run(&root, &whole).await.expect("a run");
+        let tune = run(&root, &scoring(Split::Tune)).await.expect("a run");
+        let test = run(&root, &scoring(Split::Test)).await.expect("a run");
+
+        let summed: Vec<u64> = counts(&tune)
+            .iter()
+            .zip(counts(&test))
+            .map(|(tune, test)| tune + test)
+            .collect();
+        assert_eq!(summed, counts(&all));
+        assert_eq!(
+            (all.summary.hours, tune.summary.hours, test.summary.hours),
+            (0.5, 0.0, 0.5)
         );
     }
 
@@ -376,22 +467,23 @@ mod tests {
     async fn the_steps_run_one_by_one_give_what_the_run_gives() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = store(tmp.path(), 3).await;
-        let settings = Run {
+        let settings = EvaluationSettings {
             online_detector: Some(OnlineDetectorSettings {
                 pass_radius: Radius::new(100.0).expect("a radius"),
             }),
             ..run_of(oracle())
         };
-        let ran = run(&root, &settings).await.expect("a run");
-        let sessions = session_rows(&ran.picked);
+        let results = run(&root, &settings).await.expect("a run");
+        let sessions = session_rows(&results.picked);
 
-        let Replayed { transitions, skew } = replay(
+        let ReplayResults { transitions, skew } = replay(
             &root,
             Country::Germany,
             &sessions,
             settings.predictor,
             settings.float_type,
-            settings.skewing(),
+            settings.skew_settings(),
+            None,
         )
         .await
         .expect("a replay");
@@ -401,18 +493,24 @@ mod tests {
             &sessions,
             &transitions,
             &settings.scoring,
+            None,
         )
         .await
         .expect("scores");
         let summary = summarise(&sessions, &outcomes, &settings.bootstrap).expect("a summary");
 
         assert!(
-            ran.skew.is_some(),
+            results.skew.is_some(),
             "a run with an online detector measures the skew"
         );
         assert_eq!(
             (transitions, skew, outcomes, summary),
-            (ran.transitions, ran.skew, ran.outcomes, ran.summary)
+            (
+                results.transitions,
+                results.skew,
+                results.outcomes,
+                results.summary
+            )
         );
     }
 }

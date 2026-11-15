@@ -6,7 +6,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use domain::StateKind;
 use domain::{CrossingCompactId, SessionId, Span};
 use itertools::Itertools;
-use medallion_model::EvaluationSessionRowV1;
+use medallion_model::EvaluationSessionRowV2;
 use predictor::Transition;
 
 use crate::offline::PassesBySession;
@@ -98,6 +98,21 @@ pub enum Outcome {
     },
 }
 
+impl Outcome {
+    pub fn crossing_compact_id(&self) -> CrossingCompactId {
+        match self {
+            Outcome::Notification {
+                crossing_compact_id,
+                ..
+            }
+            | Outcome::Miss {
+                crossing_compact_id,
+                ..
+            } => *crossing_compact_id,
+        }
+    }
+}
+
 impl Scoring {
     fn credit(&self, notified_at: DateTime<Utc>, crossed_at: DateTime<Utc>) -> (Credit, Score) {
         let lead = crossed_at - notified_at;
@@ -129,7 +144,7 @@ pub enum ScoreError {
 }
 
 pub fn score(
-    sessions: &[EvaluationSessionRowV1],
+    sessions: &[EvaluationSessionRowV2],
     replayed: &BTreeMap<SessionId, Vec<Transition>>,
     passes: &PassesBySession,
     scoring: &Scoring,
@@ -508,7 +523,7 @@ mod tests {
     }
 
     fn resolved(
-        sessions: &[EvaluationSessionRowV1],
+        sessions: &[EvaluationSessionRowV2],
         passes: impl IntoIterator<Item = TrainSessionCrossingRowV1>,
     ) -> PassesBySession {
         passes_by_session(
@@ -543,13 +558,13 @@ mod tests {
         assert_eq!(misses(&scored[&session("b")]), [(1, 1_000)]);
     }
 
-    fn started(sessions: &[(&str, i64)]) -> Vec<EvaluationSessionRowV1> {
+    fn started(sessions: &[(&str, i64)]) -> Vec<EvaluationSessionRowV2> {
         sessions
             .iter()
-            .map(|&(name, seconds)| EvaluationSessionRowV1 {
+            .map(|&(name, seconds)| EvaluationSessionRowV2 {
                 session_id: session(name),
                 started_at: instant(seconds),
-                ..EvaluationSessionRowV1::example()
+                ..EvaluationSessionRowV2::example()
             })
             .collect()
     }

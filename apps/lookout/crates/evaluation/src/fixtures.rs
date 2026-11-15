@@ -19,7 +19,7 @@ use medallion_model::{
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};
 use crate::settings::OracleSettings;
-use crate::steps::{Predictor, Run};
+use crate::steps::{EvaluationSettings, Predictor};
 use crate::summarise::Bootstrap;
 
 pub fn instant(seconds: i64) -> DateTime<Utc> {
@@ -116,8 +116,8 @@ pub fn first_runs() -> Scoring {
     }
 }
 
-pub fn run_of(predictor: Predictor) -> Run {
-    Run {
+pub fn run_of(predictor: Predictor) -> EvaluationSettings {
+    EvaluationSettings {
         pick: Pick {
             country: Country::Germany,
             realtime_at_least: Percentage::new(90.0).expect("a percentage"),
@@ -132,6 +132,7 @@ pub fn run_of(predictor: Predictor) -> Run {
             resamples: NonZeroUsize::new(100).expect("not zero"),
             seed: Seed(1),
         },
+        split: None,
     }
 }
 

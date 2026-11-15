@@ -1,17 +1,14 @@
 use std::collections::BTreeMap;
 
-use datafusion::prelude::col;
 use domain::{CoordinateError, Precision, Sample, SessionId};
-use medallion::{Country, Query, QueryError, Root};
-use medallion_model::{
-    EvaluationSessionRowV1, TrainSessionSamplePositionV3, TrainSessionSampleRowV3,
-};
+use medallion::{Country, QueryError, Root};
+use medallion_model::EvaluationSessionRowV2;
 use predictor::{DetectPasses, Event, OnlineDetector, OutOfOrder, Predict, Tracker, Transition};
 use rayon::prelude::*;
 
 use crate::offline::{OfflineDetector, PassesBySession};
 use crate::skew::{Visit, visits};
-use crate::store::picked;
+use crate::store::read_samples;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReplayError {
@@ -67,7 +64,7 @@ pub struct SessionReplay {
 pub async fn replay<F, Pr>(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV1],
+    sessions: &[EvaluationSessionRowV2],
     passes: &PassesBySession,
     predictor: impl Fn(&SessionId) -> Pr + Sync,
     online_detector: Option<&OnlineDetector<F>>,
@@ -76,31 +73,27 @@ where
     F: Precision + Send + Sync,
     Pr: Predict<F> + Send,
 {
-    let sample_rows = Query::new(root.clone())
-        .read_of_country::<TrainSessionSampleRowV3>(country)
-        .await?
-        .filter(picked(sessions))?
-        .sort(vec![
-            col("session_id").sort(true, false),
-            col("t").sort(true, false),
-            col("seq").sort(true, false),
-        ])?
-        .rows_as::<TrainSessionSamplePositionV3>()
-        .await?;
+    let mut samples_by_session = read_samples(
+        root,
+        country,
+        sessions.iter().map(|session| &session.session_id),
+    )
+    .await?
+    .into_iter()
+    .map(|(session_id, rows)| {
+        let samples = rows
+            .into_iter()
+            .map(|row| {
+                Sample::at(row.t, row.lat, row.lon).map_err(|source| ReplayError::Position {
+                    session_id: row.session_id,
+                    source,
+                })
+            })
+            .collect::<Result<Vec<Sample<F>>, _>>()?;
+        Ok((session_id, samples))
+    })
+    .collect::<Result<BTreeMap<_, _>, ReplayError>>()?;
     let detectors = OfflineDetector::per_session(passes);
-
-    let mut samples_by_session: BTreeMap<SessionId, Vec<Sample<F>>> = BTreeMap::new();
-    for row in sample_rows {
-        let sample =
-            Sample::at(row.t, row.lat, row.lon).map_err(|source| ReplayError::Position {
-                session_id: row.session_id.clone(),
-                source,
-            })?;
-        samples_by_session
-            .entry(row.session_id)
-            .or_default()
-            .push(sample);
-    }
     let sessions: Vec<(SessionId, Vec<Sample<F>>, OfflineDetector)> = detectors
         .into_iter()
         .map(|(session_id, detector)| {
@@ -346,18 +339,18 @@ mod tests {
         }
     }
 
-    fn picked(names: &[&str]) -> Vec<EvaluationSessionRowV1> {
+    fn picked(names: &[&str]) -> Vec<EvaluationSessionRowV2> {
         names
             .iter()
-            .map(|&name| EvaluationSessionRowV1 {
+            .map(|&name| EvaluationSessionRowV2 {
                 session_id: named(name),
-                ..EvaluationSessionRowV1::example()
+                ..EvaluationSessionRowV2::example()
             })
             .collect()
     }
 
     fn resolved(
-        sessions: &[EvaluationSessionRowV1],
+        sessions: &[EvaluationSessionRowV2],
         passes: &[TrainSessionCrossingRowV1],
     ) -> PassesBySession {
         passes_by_session(

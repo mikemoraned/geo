@@ -5,7 +5,7 @@ use clap::{Args, Parser, Subcommand};
 use code_version::CodeVersion;
 use domain::{Percentage, Radius, Span};
 use evaluation::gold;
-use evaluation::steps::{Predictor, Run};
+use evaluation::steps::{EvaluationSettings, Predictor};
 use evaluation::{
     Bootstrap, CrowFliesSettings, OnlineDetectorSettings, OracleSettings, Pick, Score, Scoring,
     Seed, Sessions, resolve,
@@ -102,12 +102,12 @@ struct Settings {
 }
 
 impl Settings {
-    async fn resolved(&self, root: &Root) -> Result<Run, Box<dyn Error>> {
+    async fn resolved(&self, root: &Root) -> Result<EvaluationSettings, Box<dyn Error>> {
         let sessions = resolve(root, self.country, self.realtime_at_least, self.sessions).await?;
         Ok(self.run(sessions)?)
     }
 
-    fn run(&self, sessions: NonZeroUsize) -> Result<Run, &'static str> {
+    fn run(&self, sessions: NonZeroUsize) -> Result<EvaluationSettings, &'static str> {
         let horizon = self.predictor_horizon;
         let predictor = match (self.predictor, self.radius_metres) {
             (PredictorName::Oracle, _) => Predictor::Oracle(OracleSettings { horizon }),
@@ -116,7 +116,7 @@ impl Settings {
             }
             (PredictorName::CrowFlies, None) => return Err("CrowFlies needs --radius-metres"),
         };
-        Ok(Run {
+        Ok(EvaluationSettings {
             pick: Pick {
                 country: self.country,
                 realtime_at_least: self.realtime_at_least,
@@ -140,6 +140,7 @@ impl Settings {
                 resamples: self.resamples,
                 seed: Seed(self.bootstrap_seed),
             },
+            split: None,
         })
     }
 }
@@ -159,10 +160,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     match cli.command {
         Command::Run(settings) => {
-            let (run_id, ran) = gold::run(&root, &settings.resolved(&root).await?, &code).await?;
+            let (run_id, results) =
+                gold::run(&root, &settings.resolved(&root).await?, &code).await?;
             println!("run {run_id}");
-            print_summary(&ran.summary);
-            print_skew(ran.skew.as_ref());
+            print_summary(&results.summary);
+            print_skew(results.skew.as_ref());
         }
         Command::Pick(settings) => {
             let run_id = gold::pick(&root, &settings.resolved(&root).await?, &code).await?;

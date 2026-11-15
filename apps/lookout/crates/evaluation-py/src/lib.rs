@@ -7,13 +7,13 @@ use domain::{Percentage, Radius, Span};
 use evaluation::gold::{self, GoldError};
 use evaluation::record::session_rows;
 use evaluation::runs::RunsError;
-use evaluation::steps::{self, Predictor, Run, StepError};
+use evaluation::steps::{self, EvaluationSettings, Predictor, StepError};
 use evaluation::{
     CrowFliesSettings, OnlineDetectorSettings, OracleSettings, Pick, PickError, Score, Seed,
 };
 use medallion::Country;
 use medallion_model::{
-    EvaluationOutcomeRowV1, EvaluationSessionRowV1, EvaluationTransitionRowV1, FloatType,
+    EvaluationOutcomeRowV1, EvaluationSessionRowV2, EvaluationTransitionRowV1, FloatType,
     TrainSessionRowV3,
 };
 use py_common::{
@@ -230,7 +230,7 @@ fn replay(
     let transitions = py
         .detach(|| {
             runtime().block_on(steps::replay(
-                &root, country, &sessions, predictor, float_type, None,
+                &root, country, &sessions, predictor, float_type, None, None,
             ))
         })
         .map_err(step_error)?;
@@ -266,6 +266,7 @@ fn score(
                 &sessions,
                 &transitions,
                 &scoring,
+                None,
             ))
         })
         .map_err(step_error)?;
@@ -318,28 +319,29 @@ fn run<'py>(
     float_type: &str,
     root: Option<PathBuf>,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let settings = Run {
+    let settings = EvaluationSettings {
         pick: picking(country, realtime_at_least, sessions, seed)?,
         predictor: predictor_of(predictor)?,
         online_detector: online_detector.map(|online_detector| online_detector.settings),
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
+        split: None,
     };
     let root = root_or_default(root)?;
 
-    let ran = py
+    let results = py
         .detach(|| runtime().block_on(steps::run(&root, &settings)))
         .map_err(step_error)?;
 
     let tables = PyDict::new(py);
-    tables.set_item("picked", table_of(&ran.picked)?)?;
-    tables.set_item("transitions", table_of(&ran.transitions)?)?;
-    if let Some(skew) = ran.skew {
+    tables.set_item("picked", table_of(&results.picked)?)?;
+    tables.set_item("transitions", table_of(&results.transitions)?)?;
+    if let Some(skew) = results.skew {
         tables.set_item("skew", table_of(&[skew])?)?;
     }
-    tables.set_item("outcomes", table_of(&ran.outcomes)?)?;
-    tables.set_item("summary", table_of(&[ran.summary])?)?;
+    tables.set_item("outcomes", table_of(&results.outcomes)?)?;
+    tables.set_item("summary", table_of(&[results.summary])?)?;
     Ok(tables)
 }
 
@@ -368,37 +370,38 @@ fn evaluate<'py>(
     float_type: &str,
     root: Option<PathBuf>,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let settings = Run {
+    let settings = EvaluationSettings {
         pick: picking(country, realtime_at_least, sessions, seed)?,
         predictor: predictor_of(predictor)?,
         online_detector: online_detector.map(|online_detector| online_detector.settings),
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
+        split: None,
     };
     let code = CodeVersion::new(BUILD_CODE_VERSION).map_err(value_error)?;
     let root = root_or_default(root)?;
 
-    let (run_id, ran) = py
+    let (run_id, results) = py
         .detach(|| runtime().block_on(gold::run(&root, &settings, &code)))
         .map_err(gold_error)?;
 
     let tables = PyDict::new(py);
     tables.set_item("run_id", run_id.to_string())?;
-    tables.set_item("picked", table_of(&ran.picked)?)?;
-    tables.set_item("transitions", table_of(&ran.transitions)?)?;
-    if let Some(skew) = ran.skew {
+    tables.set_item("picked", table_of(&results.picked)?)?;
+    tables.set_item("transitions", table_of(&results.transitions)?)?;
+    if let Some(skew) = results.skew {
         tables.set_item("skew", table_of(&[skew])?)?;
     }
-    tables.set_item("outcomes", table_of(&ran.outcomes)?)?;
-    tables.set_item("summary", table_of(&[ran.summary])?)?;
+    tables.set_item("outcomes", table_of(&results.outcomes)?)?;
+    tables.set_item("summary", table_of(&[results.summary])?)?;
     Ok(tables)
 }
 
 /// Record a run over the sessions `picked`, as a dict of its id, its date, and its first two tables.
 ///
 /// The dict's `"run_id"` and `"run_date"` are the text `write_gold` takes. Its `"run"` and
-/// `"sessions"` are the run's tables of gold `evaluation_run_v4` and `evaluation_session_v1`. The
+/// `"sessions"` are the run's tables of gold `evaluation_run_v4` and `evaluation_session_v2`. The
 /// run names `BUILD_CODE_VERSION`, the code this extension was built from, and a fingerprint of each
 /// silver dataset it reads. Its id hashes those with its settings, so the same settings over the
 /// same code and data record the same run. If the extension was built from uncommitted code, a
@@ -423,13 +426,14 @@ fn record<'py>(
     float_type: &str,
     root: Option<PathBuf>,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let settings = Run {
+    let settings = EvaluationSettings {
         pick: picking(country, realtime_at_least, sessions, seed)?,
         predictor: predictor_of(predictor)?,
         online_detector: online_detector.map(|online_detector| online_detector.settings),
         float_type: float_type_of(float_type)?,
         scoring: scoring.scoring,
         bootstrap: bootstrap.bootstrap,
+        split: None,
     };
     let picked = rows_of::<TrainSessionRowV3>(picked)?;
     let code = CodeVersion::new(BUILD_CODE_VERSION).map_err(value_error)?;
@@ -484,7 +488,7 @@ fn span(text: &str) -> PyResult<Span> {
     Span::new(text).map_err(value_error)
 }
 
-fn sessions_of(picked: PyTable) -> PyResult<Vec<EvaluationSessionRowV1>> {
+fn sessions_of(picked: PyTable) -> PyResult<Vec<EvaluationSessionRowV2>> {
     Ok(session_rows(&rows_of::<TrainSessionRowV3>(picked)?))
 }
 

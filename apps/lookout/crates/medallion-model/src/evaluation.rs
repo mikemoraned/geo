@@ -14,6 +14,9 @@ pub const EVALUATION_RUN_V4: DatasetSpec<layers::Gold> =
 pub const EVALUATION_SESSION_V1: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_session_v1", RUN_DATE, &[RUN_ID]);
 
+pub const EVALUATION_SESSION_V2: DatasetSpec<layers::Gold> =
+    DatasetSpec::partitioned_within("evaluation_session_v2", RUN_DATE, &[RUN_ID]);
+
 pub const EVALUATION_TRANSITION_V1: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_transition_v1", RUN_DATE, &[RUN_ID]);
 
@@ -297,6 +300,33 @@ impl Row for EvaluationSessionRowV1 {
             started_at: DateTime::UNIX_EPOCH,
             ended_at: DateTime::UNIX_EPOCH,
             hours: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EvaluationSessionRowV2 {
+    pub session_id: SessionId,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub started_at: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub ended_at: DateTime<Utc>,
+    pub hours: f64,
+    pub scored_hours: f64,
+}
+
+impl Row for EvaluationSessionRowV2 {
+    type Layer = layers::Gold;
+    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_SESSION_V2;
+    const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
+
+    fn example() -> Self {
+        Self {
+            session_id: TrainSessionRowV3::example().session_id,
+            started_at: DateTime::UNIX_EPOCH,
+            ended_at: DateTime::UNIX_EPOCH,
+            hours: 0.0,
+            scored_hours: 0.0,
         }
     }
 }

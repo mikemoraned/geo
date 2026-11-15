@@ -21,6 +21,12 @@ pub enum Split {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SplitterBucket(pub u8);
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ScoredSplit {
+    pub splitter: Splitter,
+    pub split: Split,
+}
+
 #[nutype(
     validate(with = salt_present, error = EmptySalt),
     derive(Debug, Clone, PartialEq, Eq, Hash, Display, FromStr, TryFrom, Into, AsRef)
@@ -92,6 +98,14 @@ impl Splitter {
         } else {
             Split::Test
         }
+    }
+}
+
+impl ScoredSplit {
+    pub fn contains(&self, point: Point<f64>) -> Result<bool, NoA5Cell> {
+        self.splitter
+            .cell(point)
+            .map(|cell| self.splitter.split(cell) == self.split)
     }
 }
 

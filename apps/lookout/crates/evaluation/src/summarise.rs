@@ -5,7 +5,7 @@ use std::ops::Add;
 
 use chrono::TimeDelta;
 use domain::SessionId;
-use medallion_model::EvaluationSessionRowV1;
+use medallion_model::EvaluationSessionRowV2;
 
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -56,7 +56,7 @@ pub enum SummariseError {
 }
 
 pub fn summarise(
-    sessions: &[EvaluationSessionRowV1],
+    sessions: &[EvaluationSessionRowV2],
     scored: &BTreeMap<SessionId, Vec<Outcome>>,
     bootstrap: &Bootstrap,
 ) -> Result<Summary, SummariseError> {
@@ -69,7 +69,7 @@ pub fn summarise(
                     .ok_or_else(|| SummariseError::NotScored {
                         session_id: session.session_id.clone(),
                     })?;
-            Ok(Tally::of(outcomes, session.hours))
+            Ok(Tally::of(outcomes, session.scored_hours))
         })
         .collect::<Result<_, SummariseError>>()?;
     let whole: Tally = tallies.iter().copied().sum();
@@ -253,7 +253,7 @@ mod tests {
         SessionId::new(format!("session-{name}")).expect("a session id")
     }
 
-    fn lasting(name: &str, seconds: i64) -> EvaluationSessionRowV1 {
+    fn lasting(name: &str, seconds: i64) -> EvaluationSessionRowV2 {
         session_rows(&[TrainSessionRowV3 {
             session_id: session(name),
             started_at: instant(0),
@@ -403,7 +403,7 @@ mod tests {
                 (session(&n.to_string()), outcomes)
             })
             .collect();
-        let sessions: Vec<EvaluationSessionRowV1> =
+        let sessions: Vec<EvaluationSessionRowV2> =
             (0..20).map(|n| lasting(&n.to_string(), 3_600)).collect();
 
         let once = summarise(&sessions, &scored, &bootstrap(7)).expect("a summary");
@@ -436,7 +436,7 @@ mod tests {
     }
 
     fn oracle_summary(sessions: &[(i64, Vec<(u32, i64)>)]) -> Summary {
-        let picked: Vec<EvaluationSessionRowV1> = sessions
+        let picked: Vec<EvaluationSessionRowV2> = sessions
             .iter()
             .enumerate()
             .map(|(n, (seconds, _))| lasting(&n.to_string(), *seconds))
