@@ -1,6 +1,8 @@
-import { MercatorCoordinate } from "/vendor/maplibre-gl-6.18.0.js";
+import { geoMercator } from "/vendor/d3-geo-3.1.1.js";
 import { decodeTile } from "/vendor/maplibre-mlt-1.3.0.js";
 import { PMTiles } from "/vendor/pmtiles-4.5.0.js";
+
+const toUnitSquare = geoMercator().scale(1 / (2 * Math.PI)).translate([0.5, 0.5]);
 
 export async function readJourneys(url) {
   const archive = new PMTiles(url);
@@ -22,6 +24,7 @@ async function readJourney(archive, route) {
   return {
     session: route.session,
     crossings: route.crossings,
+    bounds,
     samples: samples.map(asSample),
   };
 }
@@ -54,11 +57,11 @@ async function layerFeatures(archive, layer, zoom, bounds) {
 function tilesCovering(zoom, [west, south, east, north]) {
   const across = 2 ** zoom;
   const tileOf = (fraction) => Math.min(Math.floor(fraction * across), across - 1);
-  const northWest = MercatorCoordinate.fromLngLat([west, north]);
-  const southEast = MercatorCoordinate.fromLngLat([east, south]);
+  const [left, top] = toUnitSquare([west, north]);
+  const [right, bottom] = toUnitSquare([east, south]);
   const tiles = [];
-  for (let x = tileOf(northWest.x); x <= tileOf(southEast.x); x++) {
-    for (let y = tileOf(northWest.y); y <= tileOf(southEast.y); y++) {
+  for (let x = tileOf(left); x <= tileOf(right); x++) {
+    for (let y = tileOf(top); y <= tileOf(bottom); y++) {
       tiles.push({ x, y });
     }
   }

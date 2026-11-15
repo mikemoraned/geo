@@ -198,13 +198,15 @@ pipeline sits behind it.
 
 #### Phase 2: the map on a wide screen
 
-- [ ] In `kiosk/index.html` and `kiosk.js`, create a MapLibre map over the full viewport when
+- [x] In `kiosk/index.html` and `kiosk.js`, create a MapLibre map over the full viewport when
       `(min-width: 768px)` matches, with `lookout-predictor` placed over it at the top right. Give
-      its source `"encoding": "mlt"`.
-- [ ] Draw the session's route from its samples as a line, and fit the map to its bounding box at
-      each journey's `begin`.
-- [ ] Move a dot along the route from a GeoJSON source, updated as each sample is sent.
-- [ ] Check below 768 px that the page creates no map and lays out as it does now, and that
+      its source `"encoding": "mlt"`. MapLibre loads only when the map opens, and `journeys.js`
+      finds tiles through d3-geo's Mercator projection, which the predictor already loads.
+- [x] Draw the session's route from its samples as a line, and fit the map to its bounding box at
+      each journey's `begin`. The line comes from the `route` layer, filtered to the session, with
+      routes kept to zoom level 12 so a fitted journey is not drawn from zoom level 6 geometry.
+- [x] Move a dot along the route from a GeoJSON source, updated as each sample is sent.
+- [x] Check below 768 px that the page creates no map and lays out as it does now, and that
       crossing the width while open moves between the two layouts.
 
 #### Phase 3: the `map` artefact from the store
