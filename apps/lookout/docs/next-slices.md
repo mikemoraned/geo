@@ -347,3 +347,27 @@ Some of the key areas to cover:
 * [session crossings and matching](../crates/session_crossings/README.md)
 * [predictor](../crates/predictor/README.md)
 * evaluation
+  * The measure: a notification earns credit by its lead time to the next pass of its crossing,
+    with a ramp past N rather than a step. Repeats, false alarms, and misses score 0.
+  * The tracker's states, and how a prediction's confidence maps to them.
+  * The online and offline pass detectors, and the skew between them: seen, unmatched, and offset.
+  * The oracle, which checks the skeleton by scoring perfectly except where passes of a crossing
+    fall close together.
+  * Intervals from a bootstrap over sessions.
+  * The tune/test split by A5 cell:
+    * Why a cell rather than a line: `route_name` names a train.
+    * Why A5 rather than H3, and how a salt and buckets assign each cell a split.
+    * The resolution chosen, and why no resolution steadies the heading angle's p99 between the
+      splits.
+    * The invariants of the split, and the three plausible errors that only an invariant caught.
+  * Scoring each unit by its crossing's cell, chosen in Phase 6 of the evaluation slice:
+    * A run replays each session whole. Cutting sessions at a cell's edge starts some mid-approach,
+      so more passes fall under N after a start, and CrowFlies' precision drops from 0.328 to
+      0.299.
+    * Each notification, pass, repeat, false alarm, and miss takes the split of its crossing's
+      cell. A run without a split scores every unit.
+    * False alarms per hour divide by the hours in the split's cells. Each step between two
+      samples counts towards the split of its first sample's cell.
+    * The skew counts only passes and visits whose crossing lies in the split's cells, so every
+      measure a run reports covers one split.
+  * Tuning reads only windows that lie wholly in tune cells.

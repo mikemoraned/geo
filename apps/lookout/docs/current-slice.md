@@ -1100,4 +1100,7 @@ gold is committed. The slice cuts that size before it closes, so its runs do not
       that of `silver-session-crossings`.
 - [ ] Fold the `exploreN.py` notebooks into one or more notebooks that demonstrate the evaluation's
       behaviours or steps. Then remove them, with their answers in the removing commit.
+- [ ] List under the evaluation bullet of the Demonstrable Behaviour slice, in `next-slices.md`,
+      each concept from this slice that a demonstration will need to explain. The list started in
+      Phase 6, so check it and add what Phases 7 to 9 introduce.
 - [ ] Run `just test-no-docker`, and hand over `just test`.
