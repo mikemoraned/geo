@@ -111,7 +111,7 @@ def _(evaluation, mo, pa, samples):
             for _row in sorted(_counts, key=lambda _row: _row["split"])
         )
     )
-    return resolution, split_samples
+    return resolution, split_samples, splitter
 
 
 @app.cell
@@ -146,15 +146,17 @@ def _(mo, pl, pyproj, split_samples):
                         _points.struct.field("lat"),
                     )
                 )
-            )
+            ),
+            repeats_position=(pl.col("lon") == pl.col("previous_lon"))
+            & (pl.col("lat") == pl.col("previous_lat")),
         )
     )
     mo.vstack(
         [
             mo.md(
                 f"{steps.height:,} samples, {steps['step_metres'].null_count():,} of them the first of "
-                f"a session, and {steps.filter(pl.col('step_metres') == 0).height:,} at exactly the "
-                "position of the sample before"
+                f"a session, and {steps.filter('repeats_position').height:,} at exactly the "
+                "coordinates of the sample before"
             ),
             steps.head(5),
         ]
@@ -171,7 +173,7 @@ def _(mo, pl, steps):
         steps.with_columns(
             previous_split=pl.col("split").shift().over("session_id")
         )
-        .filter(pl.col("step_metres") > 0)
+        .filter(~pl.col("repeats_position"))
         .with_columns(t_until=pl.col("t") + horizon)
         .select(
             "session_id",
@@ -243,7 +245,7 @@ def _(mo, pairs, pl):
         f"{_tune.filter('dwelling').height:,} travel under {dwelling_metres:,.0f} m and dwell, "
         f"leaving {_tune.filter(~pl.col('dwelling')).height:,}."
     )
-    return (windows,)
+    return dwelling_metres, windows
 
 
 @app.cell
@@ -391,7 +393,10 @@ def _(geod, mo, pairs, pl, windows):
         .unnest("to_later")
     )
     pair_angles = (
-        _measured.filter(pl.col("metres") > 0)
+        _measured.filter(
+            (pl.col("lon_later") != pl.col("lon"))
+            | (pl.col("lat_later") != pl.col("lat"))
+        )
         .with_columns(
             angle=(
                 (pl.col("bearing") - pl.col("heading") + 180) % 360 - 180
@@ -540,6 +545,216 @@ def _(gpd, horizon_minutes, lonboard, mo, pairs, pl, shapely, window_angles):
                 ],
                 view_state={"longitude": 10.4, "latitude": 51.2, "zoom": 5.5},
             ),
+        ]
+    )
+    return
+
+
+@app.cell
+def _(
+    dwelling_metres,
+    evaluation,
+    horizon_minutes,
+    mo,
+    pa,
+    pair_angles,
+    pairs,
+    pl,
+    samples,
+    splitter,
+    steps,
+    window_angles,
+    windows,
+):
+    _stages = evaluation.cone_stages(
+        samples=samples,
+        split=evaluation.ScoredSplit(splitter=splitter, split="tune"),
+        horizon=f"{horizon_minutes}m",
+        dwelling_metres=dwelling_metres,
+    )
+    rust_pairs_without_bearing = _stages.pop("pairs_without_bearing")
+    rust_stages = {
+        _name: pl.from_arrow(pa.table(_table))
+        for _name, _table in _stages.items()
+    }
+    _notebook = {
+        "steps": steps,
+        "pairs": pairs,
+        "windows": windows,
+        "pair_angles": pair_angles,
+        "window_angles": window_angles,
+    }
+    mo.vstack(
+        [
+            mo.md(
+                "The same stages, run by the evaluation's Rust code over the same samples and "
+                f"settings; {rust_pairs_without_bearing:,} pairs left out at the start's position"
+            ),
+            pl.DataFrame(
+                {
+                    "stage": list(_notebook),
+                    "notebook rows": [
+                        _frame.height for _frame in _notebook.values()
+                    ],
+                    "rust rows": [
+                        rust_stages[_name].height for _name in _notebook
+                    ],
+                }
+            ),
+        ]
+    )
+    return (rust_stages,)
+
+
+@app.cell
+def _(mo, pl, rust_stages, steps):
+    tolerance_metres = 0.001
+
+    _joined = steps.join(
+        rust_stages["steps"],
+        on=["session_id", "t"],
+        how="full",
+        suffix="_rust",
+        coalesce=True,
+    )
+    steps_disagreeing = _joined.filter(
+        pl.col("lon").is_null()
+        | pl.col("lon_rust").is_null()
+        | (pl.col("lon") != pl.col("lon_rust"))
+        | (pl.col("lat") != pl.col("lat_rust"))
+        | ((pl.col("split") == "tune") != pl.col("in_split"))
+        | (pl.col("repeats_position") != pl.col("repeats_position_rust"))
+        | (
+            pl.col("step_metres").is_null()
+            != pl.col("step_metres_rust").is_null()
+        )
+        | (
+            (pl.col("step_metres") - pl.col("step_metres_rust")).abs()
+            > tolerance_metres
+        ).fill_null(False)
+    )
+    _largest = (
+        (_joined["step_metres"] - _joined["step_metres_rust"]).abs().max()
+    )
+    mo.vstack(
+        [
+            mo.md(
+                f"Steps: {steps_disagreeing.height:,} of {_joined.height:,} samples disagree on "
+                "position, split, repeated position, or step distance beyond "
+                f"{tolerance_metres * 1000:.0f} mm. The largest step distance difference is "
+                f"{_largest:.1e} m."
+            ),
+            steps_disagreeing.head(5),
+        ]
+    )
+    return (tolerance_metres,)
+
+
+@app.cell
+def _(mo, pairs, rust_stages):
+    _keys = ["session_id", "t", "t_later"]
+    _rust = rust_stages["pairs"]
+    pairs_only_in_notebook = pairs.select(_keys).join(
+        _rust, on=_keys, how="anti"
+    )
+    pairs_only_in_rust = _rust.join(pairs.select(_keys), on=_keys, how="anti")
+    mo.vstack(
+        [
+            mo.md(
+                f"Pairs: {pairs_only_in_notebook.height:,} of {pairs.height:,} notebook pairs are "
+                f"missing from Rust, and {pairs_only_in_rust.height:,} of {_rust.height:,} Rust "
+                "pairs are missing from the notebook."
+            ),
+            pairs_only_in_notebook.head(5),
+            pairs_only_in_rust.head(5),
+        ]
+    )
+    return
+
+
+@app.cell
+def _(mo, pl, rust_stages, tolerance_metres, windows):
+    _joined = windows.join(
+        rust_stages["windows"],
+        on=["session_id", "t"],
+        how="full",
+        suffix="_rust",
+        coalesce=True,
+    )
+    windows_disagreeing = _joined.filter(
+        pl.col("travelled_metres").is_null()
+        | pl.col("travelled_metres_rust").is_null()
+        | (
+            (
+                pl.col("travelled_metres") - pl.col("travelled_metres_rust")
+            ).abs()
+            > tolerance_metres
+        )
+        | (pl.col("wholly_tune") != pl.col("wholly_in_split"))
+        | (pl.col("dwelling") != pl.col("dwelling_rust"))
+    )
+    _largest = (
+        (_joined["travelled_metres"] - _joined["travelled_metres_rust"])
+        .abs()
+        .max()
+    )
+    mo.vstack(
+        [
+            mo.md(
+                f"Windows: {windows_disagreeing.height:,} of {_joined.height:,} windows disagree on "
+                "whether they lie wholly in tune, whether they dwell, or distance travelled beyond "
+                f"{tolerance_metres * 1000:.0f} mm. The largest distance travelled difference is "
+                f"{_largest:.1e} m."
+            ),
+            windows_disagreeing.select(
+                "session_id",
+                "t",
+                "travelled_metres",
+                "travelled_metres_rust",
+                "wholly_tune",
+                "wholly_in_split",
+                "dwelling",
+                "dwelling_rust",
+            ).head(5),
+        ]
+    )
+    return
+
+
+@app.cell
+def _(mo, pair_angles, pl, rust_stages, window_angles):
+    tolerance_degrees = 0.001
+
+    def angles_disagreeing(notebook, rust, keys):
+        _joined = notebook.select(*keys, "angle").join(
+            rust, on=keys, how="full", suffix="_rust", coalesce=True
+        )
+        return _joined.filter(
+            pl.col("angle").is_null()
+            | pl.col("angle_rust").is_null()
+            | (
+                (pl.col("angle") - pl.col("angle_rust")).abs()
+                > tolerance_degrees
+            )
+        ), (_joined["angle"] - _joined["angle_rust"]).abs().max()
+
+    pair_angles_disagreeing, _pairs_largest = angles_disagreeing(
+        pair_angles, rust_stages["pair_angles"], ["session_id", "t", "t_later"]
+    )
+    window_angles_disagreeing, _windows_largest = angles_disagreeing(
+        window_angles, rust_stages["window_angles"], ["session_id", "t"]
+    )
+    mo.vstack(
+        [
+            mo.md(
+                f"Pair angles: {pair_angles_disagreeing.height:,} of {pair_angles.height:,} pairs "
+                f"disagree beyond {tolerance_degrees}°, and the largest difference is "
+                f"{_pairs_largest:.1e}°. Window angles: {window_angles_disagreeing.height:,} of "
+                f"{window_angles.height:,} windows disagree, and the largest difference is "
+                f"{_windows_largest:.1e}°."
+            ),
+            pair_angles_disagreeing.head(5),
+            window_angles_disagreeing.head(5),
         ]
     )
     return

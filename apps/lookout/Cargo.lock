@@ -3436,16 +3436,20 @@ name = "evaluation-py"
 version = "0.1.0"
 dependencies = [
  "arrow 57.3.1",
+ "chrono",
  "code_version",
  "crossings",
  "domain",
  "evaluation",
  "geo-types",
+ "itertools 0.15.0",
  "medallion",
  "medallion-model",
  "py-common",
  "pyo3",
  "pyo3-arrow",
+ "serde",
+ "serde_arrow",
  "tokio",
 ]
 

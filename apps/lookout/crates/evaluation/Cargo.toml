@@ -7,6 +7,10 @@ edition.workspace = true
 name = "evaluate"
 required-features = ["cli"]
 
+[[bin]]
+name = "evaluation_cone_angles"
+required-features = ["cli"]
+
 [dependencies]
 a5 = { workspace = true }
 chrono = { workspace = true }

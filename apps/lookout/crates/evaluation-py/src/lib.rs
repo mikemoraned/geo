@@ -28,6 +28,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_arrow::{PyArray, PyTable};
 
+mod cone;
+
 const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
 
 /// The oracle, which alerts each recorded pass from `horizon` before it, as text such as `"5m"`.
@@ -697,6 +699,7 @@ fn lookout_evaluation(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(run, module)?)?;
     module.add_function(wrap_pyfunction!(evaluate, module)?)?;
     module.add_function(wrap_pyfunction!(record, module)?)?;
+    module.add_function(wrap_pyfunction!(cone::cone_stages, module)?)?;
     module.add("BUILD_CODE_VERSION", BUILD_CODE_VERSION)?;
     Ok(())
 }

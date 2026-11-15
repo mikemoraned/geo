@@ -1080,16 +1080,22 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
       The notebook is `explore6.py`, since Phase 4 already added `explore5_skew.py`. It reads the
       tune set alone. Hold invariant 4 here: a window counts only when it lies wholly in tune cells.
       - Measuring in `explore7.py`, since `explore6.py` holds the split's experiments. A window
-        whose heading step is 0 m, where a sample repeats the position before it, is left out: 14%
-        of all windows. Each window's angle is the largest to any position within N, since the
-        cone has to hold every position the train reaches, not only the last.
+        whose start repeats the coordinates of the sample before it has no heading, and is left
+        out: 60,534 of 326,656 samples. Distance cannot test this, since pyproj returns noise of
+        about 10⁻¹⁰ m between some identical points, which gives a random heading. Each window's
+        angle is the largest to any position within N, since the cone has to hold every position
+        the train reaches, not only the last.
 - [x] Read ballpark odds for the extremes of that angle, and bound the cone's angle by them.
       Chosen with the user on 2026-11-15: the sweep tries half-widths from 30° to 90°, which hold
-      every later position in 63% to 95% of windows. Above 90° lie tight curves, which no cone fits
+      every later position in 65% to 98% of windows. Above 90° lie tight curves, which no cone fits
       without firing beside straight track.
-- [ ] Capture the tuning the notebook does as a Rust binary, so that it can be run again over a
+- [x] Capture the tuning the notebook does as a Rust binary, so that it can be run again over a
       later store and give the same bound from the same data. The notebook is where the measure is
       worked out with the user, and the binary is how it is repeated.
+      - `evaluation_cone_angles` runs the stages and reports each one's counts, with the window
+        angles' percentiles. evaluation-py exposes the same stages as `cone_stages`, and
+        `explore7.py` checks each of its polars stages against them row by row. Over the 1000
+        sessions the two agree on every row, within 1 mm and 0.001°.
 - [ ] Add `LightCone` to `predictor`: a velocity from the last two samples, and high confidence
       inside the cone it reaches within N.
       Where a sample repeats the position before it, the velocity comes from the last earlier
@@ -1124,12 +1130,14 @@ split doc](2026-11-14-train-test-split.md) gives the evidence for those from `ex
   between the sets spans 26° at resolution 7, 30° at 8, and 23° at 9. Resolution 9 drops a quarter
   of the windows, since more of them cross from one set into the other.
 - **2026-11-15: a cone around the heading misses curving track, not only reversals.** Over the
-  173,771 tune windows of 5 minutes that travel 500 m or more, the largest angle between the
-  heading and any later position has a median of 22.7° and a p90 of 64.9°. The share needing more
-  than a cone's half-width is 37% at 30°, 21% at 45°, 12% at 60°, 4.8% at 90°, and 0.7% at 170°.
-  Spot checks of the 8,392 windows above 90° found sharp turns, leaving stations or following
-  water or hills, and few reversals. The angle that bounds LightCone's cone therefore trades
-  misses on curving track against false alarms beside straight track.
+  166,003 tune windows of 5 minutes that travel 500 m or more, the largest angle between the
+  heading and any later position has a median of 21.6°, a p90 of 57.1°, and a p99 of 102.1°. The
+  share needing more than a cone's half-width is 35% at 30°, 18% at 45°, 9% at 60°, 1.9% at 90°,
+  and 0.1% at 170°. Spot checks of the windows above 90° found sharp turns, leaving stations or
+  following water or hills, and few reversals. A first count put 4.8% above 90°, from headings
+  between identical points, which a distance of pyproj's noise let through. The angle that bounds
+  LightCone's cone therefore trades misses on curving track against false alarms beside straight
+  track.
 
 #### Phase 7: choosing the predictor
 
