@@ -11,11 +11,12 @@
 !Cargo.lock
 !crates
 
-# What the builder copies into the static dir: the crossings a browser fetches and the
-# sessions a kiosk replays. The only part of the store a deploy needs — everything else it
-# holds is read by a query, not served.
+# What the builder copies into the static dir: the crossings a browser fetches, and the
+# sessions and map a kiosk replays. The only part of the store a deploy needs — everything else
+# it holds is read by a query, not served.
 !data/medallion/gold/artifact=crossings
 !data/medallion/gold/artifact=sessions
+!data/medallion/gold/artifact=map
 
 # What the tree carries but the build makes for itself. The uv environments alone
 # are 1.2 GB, and the wasm is written by the builder stage.

@@ -320,7 +320,7 @@ features live, so silver gains no datasets.
       `gold/artifact=map/version=<run>/map.pmtiles`.
 - [x] Add `map.version`, and the Justfile recipes `gold-pack-map` and `kiosk-map`, and make
       `serve-web` depend on `kiosk-map`.
-- [ ] Copy the map artefact in the Dockerfile from a `MAP_VERSION` build argument, and allow
+- [x] Copy the map artefact in the Dockerfile from a `MAP_VERSION` build argument, and allow
       `gold/artifact=map` in `.dockerignore`.
 - [x] Copy the packed artefact over the throwaway `map.pmtiles` in `static`.
 - [x] Style `rail` and `water` in the kiosk's MapLibre style.
