@@ -1001,13 +1001,15 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
               - `evaluation_skew_v2`: `offset_p10`, `offset_median`, and `offset_p90`.
             - `runs.sql` and the code that reads these datasets read the new versions.
             - Built with the migration run on 2026-11-15. Every v2 run matches its v1 run: 15 runs
-              of outcomes and summaries, and 2 of skews. The v1 datasets stay until the user has
-              checked the copy.
+              of outcomes and summaries, and 2 of skews. The v1 datasets, their row types, and the
+              migration binary are removed in the commit after the copy's.
             - DuckDB reads a duration column as an integer of milliseconds, so `runs.sql` turns
               each into an interval with `to_milliseconds`.
-            - The notebooks still read the v1 datasets and columns. `explore6.py` reads the
-              summary's `lead_p10_ms`, `lead_median_ms`, and `lead_p90_ms` from `summarise`, so its
-              cut-or-chunk cell fails until a live session moves it to the durations.
+            - [-] Move the notebooks to the v2 datasets and their durations, in a live session.
+                  `explore3.py`, `explore4.py`, and `explore5_skew.py` read the removed v1
+                  datasets. `explore6.py` reads the summary's `lead_p10_ms`, `lead_median_ms`, and
+                  `lead_p90_ms` from `summarise`. Moot: the Wrap-up removes the notebooks, so they
+                  stay broken until then.
       - [ ] Step 4: record the split and its splitter in `evaluation_run_v5`.
             - Add a map `split_settings`, as `online_detector_settings` was added in v4: the split,
               the resolution, the salt, and the tune buckets. A run without a split has an empty
