@@ -28,8 +28,12 @@ export async function openMap(container, tiles) {
   const map = new maplibre.Map({
     container,
     style: style(new URL(tiles, location.href).href),
-    interactive: false,
+    dragRotate: false,
+    pitchWithRotate: false,
+    touchPitch: false,
   });
+  map.touchZoomRotate.disableRotation();
+  map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-left");
   await map.once("load");
   return {
     showJourney(journey, padding) {
