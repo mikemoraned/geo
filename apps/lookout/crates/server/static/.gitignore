@@ -3,4 +3,4 @@ wasm/
 # Copied by `just crossings` and `just sessions`, from the store's gold layer.
 crossings.json
 sessions.json
-map.pmtiles
+*.pmtiles

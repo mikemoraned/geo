@@ -65,6 +65,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   it from 5.12.0 with `"encoding": "mlt"` on the source. v2 is experimental and no renderer reads
   it. [2026-11-15-maplibre-tile.md](2026-11-15-maplibre-tile.md) compares MLT with Mapbox Vector
   Tile (MVT).
+- **The samples sit at zoom level 6, and `rail` and `water` start at zoom level 7.** A tile holds
+  every layer at its zoom level, so a zoom level 6 tile holds only routes and samples, and reading
+  a journey fetches no base map. At zoom level 6 each of the five sessions reads one tile. Zoom
+  levels 8 and 10 read 12 and 64 tiles in all, for the same 15–22 ms on localhost. Below zoom
+  level 7 the map shows routes alone, which a map fitted to one journey does not reach.
 - **`tippecanoe` tiles, `mlt convert` encodes, and Rust writes the input.** A new crate, `map`,
   reads the chosen sessions and the Overture rail and water through medallion's `Query`, and
   writes them as GeoJSON Text Sequences (one feature per line). `tippecanoe` tiles them into an MVT
@@ -108,9 +113,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Open questions
 
-- The zoom range of `rail` and `water`, and the `samples` zoom level. Sizes measured during the
-  work settle both, as well as whether the artefact stays small enough to commit beside the
-  other gold artefacts.
+- The maximum zoom level of `rail` and `water`. Sizes measured during the work settle it, as well
+  as whether the artefact stays small enough to commit beside the other gold artefacts.
 
 ### Observations
 
@@ -144,8 +148,19 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   each session's crossings count and every sample identical to `sessions.json`. The file holds 28
   tiles in 171 KB, against 105 KB for tippecanoe's gzipped MVT file.
 - **Sessions version `20261031T152101325Z` gives every journey a new id.** The journey `0db3e8fd…`
-  in earlier versions is `533c9d61…` there, with the same 41 crossings and 300 samples. Why the
-  ids changed is not established.
+  in earlier versions is `533c9d61…` there, with the same 41 crossings and 300 samples. Commit
+  `fb324946` derived the session namespace from its name, which changed every session's id, and
+  `31d91dde` packed this version from the result.
+- **The `samples` zoom level changes the number of tiles read, not the file's size or the read
+  time.** Over the five sessions:
+
+  | Zoom level | MLT file | gzipped MVT file | Tiles read per session | Median read in Safari |
+  | --- | --- | --- | --- | --- |
+  | 6 | 157 KB | 90 KB | 1, 1, 1, 1, 1 | 15 ms |
+  | 8 | 171 KB | 105 KB | 2, 4, 3, 1, 2 | 16 ms |
+  | 10 | 196 KB | 131 KB | 24, 12, 16, 4, 8 | 22 ms |
+
+  Each read covers every journey, from localhost, with a URL the browser had not cached.
 - **`mlt convert` writes a `.pmtiles` input only to a `.pmtiles` or `.mbtiles` output.** Loose
   `.mlt` tiles come from converting tippecanoe's directory output (`-e`).
 
@@ -178,7 +193,7 @@ pipeline sits behind it.
       throwaway holds all five sessions of the sessions version being served.
 - [x] Check that the replayed samples equal that session's samples in `sessions.json`, field by
       field.
-- [ ] Measure the file's size, and the time the kiosk takes to read the session's samples, at
+- [x] Measure the file's size, and the time the kiosk takes to read the session's samples, at
       zoom levels 6, 8, and 10. Choose the `samples` zoom level from those.
 
 #### Phase 2: the map on a wide screen

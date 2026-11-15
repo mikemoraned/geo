@@ -26,4 +26,4 @@ crates/**/.pytest_cache
 crates/server/static/wasm
 crates/server/static/crossings.json
 crates/server/static/sessions.json
-crates/server/static/map.pmtiles
+crates/server/static/*.pmtiles
