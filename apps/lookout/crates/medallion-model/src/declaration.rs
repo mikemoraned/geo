@@ -9,14 +9,14 @@ use serde::{Deserialize, Serialize};
 use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, TracerConfig};
 
 use crate::{
-    ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationOutcomeRowV2, EvaluationRunRowV4,
-    EvaluationRunRowV5, EvaluationSessionRowV1, EvaluationSessionRowV2, EvaluationSkewRowV2,
-    EvaluationSummaryRowV2, EvaluationTransitionRowV1, ExtractManifestRowV3, Feed, FloatType,
-    GeometrySource, GersId, GpsReadingRowV2, MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2,
-    MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4, MotisVersion, NotificationClass,
-    OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease, PredictorName, RailMode,
-    RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3, TrainSegmentRowV4,
-    TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3, WaterCrossingRowV2,
+    ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationOutcomeRowV2, EvaluationRunRowV5,
+    EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSummaryRowV2, EvaluationTransitionRowV1,
+    ExtractManifestRowV3, Feed, FloatType, GeometrySource, GersId, GpsReadingRowV2, MotisBaseUrl,
+    MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4,
+    MotisVersion, NotificationClass, OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease,
+    PredictorName, RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3,
+    TrainSegmentRowV4, TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3,
+    WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -320,9 +320,7 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<TrainSessionCrossingRowV1>(&known),
         declaration::<ExtractManifestRowV3>(&known),
         declaration::<EvaluationTransitionRowV1>(&known),
-        declaration::<EvaluationRunRowV4>(&known),
         declaration::<EvaluationRunRowV5>(&known),
-        declaration::<EvaluationSessionRowV1>(&known),
         declaration::<EvaluationSessionRowV2>(&known),
         declaration::<EvaluationOutcomeRowV2>(&known),
         declaration::<EvaluationSummaryRowV2>(&known),

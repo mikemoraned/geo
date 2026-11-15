@@ -1044,6 +1044,15 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             - Record each check's counts in a new gold dataset, `evaluation_split_v1`, with one row
               per run: the cells, the cells in the split, the crossings, the units in the split and
               outside it, and the cells outside the country's cover.
+            - Chosen with the user on 2026-11-15:
+              - Before replay, invariant 2 checks the passes, the only units known then. Scoring
+                checks it again over the outcomes, and refuses the run before writing them.
+              - The reading of a country's land and maritime areas moves out of `transport` into
+                a crate both `transport` and `evaluation` depend on, rather than `evaluation`
+                depending on `transport`.
+              - The tests write a small country of their own, as an extract with its areas, into
+                the fixture store.
+              - A run without a split writes no `evaluation_split_v1` row.
       - [ ] Step 6: take the split and its splitter in `evaluate` and in `evaluation-py`.
             - `evaluate` takes `--split`, `--split-resolution`, `--split-salt`, and
               `--tune-buckets`, with no defaults, so every run states them. The chosen splitter is
