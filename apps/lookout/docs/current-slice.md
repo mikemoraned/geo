@@ -89,9 +89,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Consequences elsewhere
 
-- `CompressionLayer` compresses `application/octet-stream`, which is the type `ServeDir` gives a
-  `.pmtiles` file. A compressed 206 response breaks the range reads `pmtiles` makes, so the server
-  has to serve `.pmtiles` uncompressed.
 - `sessions.version`, `gold-pack-sessions`, `kiosk-sessions`, and the Dockerfile's
   `SESSIONS_VERSION` lose their only consumer once the kiosk reads the map.
 - Building tiles needs `tippecanoe` and the `mlt` CLI on the machine that packs gold. The deploy
@@ -129,6 +126,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **`mlt convert` keeps tippecanoe's metadata, and stores its tiles uncompressed.** The header's
   tile type is `0x06` and its tile compression is none. The MLT file is 43 KB against the MVT
   file's 20 KB, which tippecanoe gzips.
+- **The server answers a range request for a `.pmtiles` file with 206 and the bytes asked for,
+  uncompressed, even to a client that takes gzip.** tower-http's `CompressionLayer` skips any
+  response that carries `Content-Range`. A whole-file request is compressed, and loses its
+  `Accept-Ranges` header.
 - **`mlt convert` writes a `.pmtiles` input only to a `.pmtiles` or `.mbtiles` output.** Loose
   `.mlt` tiles come from converting tippecanoe's directory output (`-e`).
 
@@ -151,9 +152,10 @@ pipeline sits behind it.
       with `jq`, into the scratchpad. This is throwaway.
 - [x] Build a throwaway MVT file from it with `tippecanoe`, with the samples at a single zoom level
       and their values as attributes. Convert it to `map.pmtiles` with `mlt convert`.
-- [ ] Add a server test in `crates/server/tests/server` asserting that a range request for a
+- [x] Add a server test in `crates/server/tests/server` asserting that a range request for a
       `.pmtiles` file returns 206 with no `Content-Encoding`. Make it pass in
-      `crates/server/src/lib.rs`.
+      `crates/server/src/lib.rs`. It passed unchanged: `CompressionLayer` leaves a response with
+      `Content-Range` uncompressed.
 - [ ] Add MapLibre GL JS and `pmtiles` to `just vendor`, and run it.
 - [ ] In `kiosk.js`, read the throwaway file's samples for that session, deduplicate them, sort
       them, and replay them through `lookout-predictor` in place of `sessions.json`.

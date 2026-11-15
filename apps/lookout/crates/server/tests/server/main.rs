@@ -2,6 +2,7 @@ mod auth;
 mod caching;
 mod compression;
 mod gate;
+mod ranges;
 mod status;
 mod support;
 mod version;

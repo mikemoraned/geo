@@ -7847,6 +7847,7 @@ dependencies = [
  "serde_json",
  "shared",
  "telemetry",
+ "tempfile",
  "test-passkeys",
  "test-redis",
  "thiserror 2.0.18",
