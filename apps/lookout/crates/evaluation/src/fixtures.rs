@@ -4,9 +4,10 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 
 use chrono::{DateTime, TimeDelta, Utc};
+use countries::fixtures::{division_area, record_extract};
 use domain::places::DRESDEN_HBF;
 use domain::{CrossingCompactId, CrossingId, Percentage, SessionId, Span};
-use geo_types::{LineString, Point};
+use geo_types::{Geometry, LineString, Point, polygon};
 use medallion::{
     Country, GeographyRow, Root, Row, write_geography_rows, write_geography_rows_by_country,
     write_rows,
@@ -105,6 +106,29 @@ pub async fn store(dir: &Path, sessions: usize) -> Root {
     root
 }
 
+pub fn around_dresden_hbf(half_width_degrees: f64) -> Geometry<f64> {
+    let (lon, lat) = DRESDEN_HBF.x_y();
+    let half = half_width_degrees;
+    Geometry::Polygon(polygon![
+        (x: lon - half, y: lat - half),
+        (x: lon + half, y: lat - half),
+        (x: lon + half, y: lat + half),
+        (x: lon - half, y: lat + half),
+    ])
+}
+
+pub async fn write_country(root: &Root, land: Geometry<f64>) {
+    record_extract(
+        root,
+        "20261115T000000Z",
+        Country::Germany,
+        "2026-07-22.0",
+        instant(0),
+        division_area(Country::Germany, &[("land", land)]),
+    )
+    .await;
+}
+
 pub fn first_runs() -> Scoring {
     Scoring {
         horizon: Span::new("5m").expect("a span"),
@@ -140,4 +164,55 @@ pub fn oracle() -> Predictor {
     Predictor::Oracle(OracleSettings {
         horizon: Span::new("5m").expect("a span"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use countries::CountryAreas;
+    use medallion::Countries;
+
+    use super::*;
+
+    fn far_crossing() -> Point<f64> {
+        let (lon, lat) = DRESDEN_HBF.x_y();
+        Point::new(lon, lat + 0.5)
+    }
+
+    #[tokio::test]
+    async fn a_country_a_degree_around_dresden_hbf_holds_the_stores_samples_and_crossings() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = store(tmp.path(), 1).await;
+        write_country(&root, around_dresden_hbf(1.0)).await;
+
+        let areas = CountryAreas::newest_per_country(&root)
+            .await
+            .expect("the country areas");
+
+        assert_eq!(
+            (
+                areas.containing(DRESDEN_HBF),
+                areas.containing(far_crossing())
+            ),
+            (Some(Country::Germany), Some(Country::Germany))
+        );
+    }
+
+    #[tokio::test]
+    async fn a_country_a_tenth_of_a_degree_around_dresden_hbf_leaves_out_the_far_crossing() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = store(tmp.path(), 1).await;
+        write_country(&root, around_dresden_hbf(0.1)).await;
+
+        let areas = CountryAreas::newest_per_country(&root)
+            .await
+            .expect("the country areas");
+
+        assert_eq!(
+            (
+                areas.containing(DRESDEN_HBF),
+                areas.containing(far_crossing())
+            ),
+            (Some(Country::Germany), None)
+        );
+    }
 }

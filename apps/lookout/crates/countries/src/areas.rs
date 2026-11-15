@@ -177,15 +177,11 @@ impl Countries for CountryAreas {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use arrow::array::{RecordBatch, StringArray};
-    use arrow::datatypes::{DataType, Field, Schema};
     use chrono::{DateTime, TimeZone, Utc};
     use geo_types::{Geometry, line_string, polygon};
 
     use super::*;
-    use crate::fixtures::{record_extract, square_from};
+    use crate::fixtures::{division_area, record_extract, square_from};
 
     fn square(size: f64) -> Geometry<f64> {
         square_from(0.0, size)
@@ -197,33 +193,6 @@ mod tests {
 
     const LAND: &str = "land";
     const MARITIME: &str = "maritime";
-
-    fn division_area(country: Country, areas: &[(&str, Geometry<f64>)]) -> RecordBatch {
-        let geometries: Vec<Geometry<f64>> = areas.iter().map(|(_, area)| area.clone()).collect();
-        let (geometry_field, geometry) = medallion::wkb_column(
-            medallion::wkb_field(GEOMETRY).expect("a geometry field"),
-            &geometries,
-        )
-        .expect("a geometry column");
-        let schema = Schema::new(vec![
-            Arc::new(Field::new(DIVISION_ID, DataType::Utf8, false)),
-            Arc::new(Field::new("class", DataType::Utf8, false)),
-            geometry_field,
-        ]);
-        let division = medallion_model::division_id(country).to_string();
-
-        RecordBatch::try_new(
-            Arc::new(schema),
-            vec![
-                Arc::new(StringArray::from(vec![division; areas.len()])),
-                Arc::new(StringArray::from(
-                    areas.iter().map(|(class, _)| *class).collect::<Vec<_>>(),
-                )),
-                geometry,
-            ],
-        )
-        .expect("a division_area batch")
-    }
 
     async fn extracted(
         root: &Root,
