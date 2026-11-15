@@ -295,15 +295,22 @@ tool, puts the self-check in front of Claude before its next step.
 - [ ] Invoke both skills, edit the file, and confirm the self-check arrives before the next step.
 - [ ] Change the file through Bash, and confirm the self-check arrives there as well.
 
-## Slice: geography and geometry columns
+## Slice: Rationalise Medallion Types
 
 ### Target
 
-Make silver's files say what its two geometry columns hold. The column named `geometry` holds the
+Make every reader of the store see each column as the type its row type declares.
+
+Silver's files say what its two geometry columns hold. The column named `geometry` holds the
 geography, in lat/lon, and `geometry_projected` holds the geometry, in a country's metres. The code
 measures the first on the round Earth and the second on a plane, but a file declares both as planar.
 [2026-11-02-geography-and-geometry-columns.md](2026-11-02-geography-and-geometry-columns.md) holds
 the assessment.
+
+DuckDB reads each dataset through a view that medallion generates from the dataset's row type. The
+view converts what DuckDB's Parquet reader drops, such as a duration, which it reads as an integer
+of milliseconds. [2026-11-15-duckdb-types.md](2026-11-15-duckdb-types.md) holds the assessment and
+the alternatives.
 
 ### Tasks
 
@@ -314,6 +321,11 @@ the assessment.
 - [ ] Rename the columns to `geography` and `geometry`, as new versions of the six datasets that
       hold them.
 - [ ] Measure a dictionary over the WKB, then GeoArrow-native encoding once SedonaDB reads it.
+- [ ] Answer the DuckDB doc's open questions: a CRS on `GEOMETRY`, partition pruning through a
+      view, and where the views live.
+- [ ] Generate a DuckDB view per dataset from its row type, converting each duration with
+      `to_milliseconds`, and each geometry as the first answer allows.
+- [ ] Read the views in `/choose-predictor`'s `runs.sql`, in place of its own conversions.
 
 ## Slice: refuse `expect` and `unwrap` outside tests
 
