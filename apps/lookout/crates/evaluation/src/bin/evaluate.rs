@@ -2,17 +2,19 @@ use chrono::TimeDelta;
 use std::error::Error;
 use std::num::NonZeroUsize;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use code_version::CodeVersion;
 use domain::{Percentage, Radius, Span};
 use evaluation::gold;
 use evaluation::steps::{EvaluationSettings, Predictor};
 use evaluation::{
-    Bootstrap, CrowFliesSettings, OnlineDetectorSettings, OracleSettings, Pick, Score, Scoring,
-    Seed, Sessions, resolve,
+    A5Resolution, Bootstrap, CrowFliesSettings, OnlineDetectorSettings, OracleSettings, Pick, Salt,
+    Score, ScoredSplit, Scoring, Seed, Sessions, Split, Splitter, TuneBuckets, resolve,
 };
 use medallion::{Country, MedallionArgs, Root, RunId};
-use medallion_model::{EvaluationSkewRowV2, EvaluationSummaryRowV2, FloatType, PredictorName};
+use medallion_model::{
+    EvaluationSkewRowV2, EvaluationSplitRowV1, EvaluationSummaryRowV2, FloatType, PredictorName,
+};
 
 const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
 
@@ -44,6 +46,13 @@ struct Begun {
     /// The run, as `pick` named it.
     #[arg(long)]
     run_id: uuid::Uuid,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum Scored {
+    Tune,
+    Test,
+    Every,
 }
 
 #[derive(Args)]
@@ -100,6 +109,19 @@ struct Settings {
     /// The seed the resamples are drawn under.
     #[arg(long)]
     bootstrap_seed: u64,
+    /// The crossings the run scores: those of the `tune` split, of the `test` split, or `every`
+    /// crossing.
+    #[arg(long)]
+    split: Scored,
+    /// The A5 resolution of the cells the splitter assigns a split, such as `8`.
+    #[arg(long, required_if_eq_any([("split", "tune"), ("split", "test")]))]
+    split_resolution: Option<A5Resolution>,
+    /// The salt the splitter hashes each cell with, such as `tune-test-1`.
+    #[arg(long, required_if_eq_any([("split", "tune"), ("split", "test")]))]
+    split_salt: Option<Salt>,
+    /// How many of a hundred buckets the splitter puts in the tune split, such as `70`.
+    #[arg(long, required_if_eq_any([("split", "tune"), ("split", "test")]))]
+    tune_buckets: Option<TuneBuckets>,
 }
 
 impl Settings {
@@ -141,8 +163,42 @@ impl Settings {
                 resamples: self.resamples,
                 seed: Seed(self.bootstrap_seed),
             },
-            split: None,
+            split: scored_split(
+                self.split,
+                self.split_resolution,
+                self.split_salt.clone(),
+                self.tune_buckets,
+            )?,
         })
+    }
+}
+
+fn scored_split(
+    scored: Scored,
+    resolution: Option<A5Resolution>,
+    salt: Option<Salt>,
+    tune_buckets: Option<TuneBuckets>,
+) -> Result<Option<ScoredSplit>, &'static str> {
+    let split = match scored {
+        Scored::Tune => Split::Tune,
+        Scored::Test => Split::Test,
+        Scored::Every => {
+            return match (resolution, salt, tune_buckets) {
+                (None, None, None) => Ok(None),
+                _ => Err("a run of every crossing takes no splitter"),
+            };
+        }
+    };
+    match (resolution, salt, tune_buckets) {
+        (Some(resolution), Some(salt), Some(tune_buckets)) => Ok(Some(ScoredSplit {
+            splitter: Splitter {
+                resolution,
+                salt,
+                tune_buckets,
+            },
+            split,
+        })),
+        _ => Err("a split needs --split-resolution, --split-salt, and --tune-buckets"),
     }
 }
 
@@ -166,6 +222,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             println!("run {run_id}");
             print_summary(&results.summary);
             print_skew(results.skew.as_ref());
+            print_split(results.split.as_ref());
         }
         Command::Pick(settings) => {
             let run_id = gold::pick(&root, &settings.resolved(&root).await?, &code).await?;
@@ -227,6 +284,25 @@ fn print_skew(skew: Option<&EvaluationSkewRowV2>) {
     );
 }
 
+fn print_split(split: Option<&EvaluationSplitRowV1>) {
+    let Some(split) = split else {
+        println!("split not checked: the run scores every crossing");
+        return;
+    };
+    println!("split checked against the store:");
+    println!(
+        "  {} of {} cells and {} of {} crossings in the split",
+        split.cells_in_split, split.cells, split.crossings_in_split, split.crossings
+    );
+    println!(
+        "  passes {} in, {} out; outcomes {} in, {} out",
+        split.passes_in_split,
+        split.passes_outside,
+        split.outcomes_in_split,
+        split.outcomes_outside
+    );
+}
+
 fn print_summary(summary: &EvaluationSummaryRowV2) {
     println!(
         "sessions {}, {:.1} hours, {} passes, {} notifications",
@@ -265,4 +341,156 @@ fn print_summary(summary: &EvaluationSummaryRowV2) {
         seconds(summary.lead_median),
         seconds(summary.lead_p90)
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn splitter() -> (Option<A5Resolution>, Option<Salt>, Option<TuneBuckets>) {
+        (
+            Some(A5Resolution::new(8).expect("a resolution")),
+            Some(Salt::new("tune-test-1").expect("a salt")),
+            Some(TuneBuckets::new(70).expect("tune buckets")),
+        )
+    }
+
+    #[test]
+    fn a_run_of_the_test_split_scores_that_split_of_the_splitters_cells() {
+        let (resolution, salt, tune_buckets) = splitter();
+
+        assert_eq!(
+            scored_split(Scored::Test, resolution, salt, tune_buckets),
+            Ok(Some(ScoredSplit {
+                splitter: Splitter {
+                    resolution: A5Resolution::new(8).expect("a resolution"),
+                    salt: Salt::new("tune-test-1").expect("a salt"),
+                    tune_buckets: TuneBuckets::new(70).expect("tune buckets"),
+                },
+                split: Split::Test,
+            }))
+        );
+    }
+
+    #[test]
+    fn a_run_of_every_crossing_has_no_split() {
+        assert_eq!(scored_split(Scored::Every, None, None, None), Ok(None));
+    }
+
+    #[test]
+    fn a_run_of_every_crossing_given_a_splitter_is_refused() {
+        let (resolution, salt, tune_buckets) = splitter();
+
+        assert!(scored_split(Scored::Every, resolution, salt, tune_buckets).is_err());
+    }
+
+    #[test]
+    fn the_flags_name_the_chosen_splitter() {
+        let cli = Cli::try_parse_from([
+            "evaluate",
+            "run",
+            "--country",
+            "DE",
+            "--realtime-at-least",
+            "90",
+            "--sessions",
+            "1000",
+            "--seed",
+            "1",
+            "--predictor",
+            "oracle",
+            "--predictor-horizon",
+            "5m",
+            "--online-pass-radius-metres",
+            "100",
+            "--float-type",
+            "f32",
+            "--horizon",
+            "5m",
+            "--last-moment",
+            "30s",
+            "--ramp",
+            "1m",
+            "--last-moment-score",
+            "0.25",
+            "--floor",
+            "0.05",
+            "--warm-up",
+            "1m",
+            "--resamples",
+            "1000",
+            "--bootstrap-seed",
+            "1",
+            "--split",
+            "test",
+            "--split-resolution",
+            "8",
+            "--split-salt",
+            "tune-test-1",
+            "--tune-buckets",
+            "70",
+        ])
+        .expect("the flags parse");
+
+        let Command::Run(settings) = cli.command else {
+            panic!("a run");
+        };
+        assert_eq!(
+            settings
+                .run(NonZeroUsize::new(1000).expect("not zero"))
+                .map(|settings| settings.split),
+            Ok(Some(ScoredSplit {
+                splitter: Splitter {
+                    resolution: A5Resolution::new(8).expect("a resolution"),
+                    salt: Salt::new("tune-test-1").expect("a salt"),
+                    tune_buckets: TuneBuckets::new(70).expect("tune buckets"),
+                },
+                split: Split::Test,
+            }))
+        );
+    }
+
+    #[test]
+    fn a_split_without_its_splitter_is_refused_by_the_flags() {
+        let parsed = Cli::try_parse_from([
+            "evaluate",
+            "pick",
+            "--country",
+            "DE",
+            "--realtime-at-least",
+            "90",
+            "--sessions",
+            "1000",
+            "--seed",
+            "1",
+            "--predictor",
+            "oracle",
+            "--predictor-horizon",
+            "5m",
+            "--online-pass-radius-metres",
+            "100",
+            "--float-type",
+            "f32",
+            "--horizon",
+            "5m",
+            "--last-moment",
+            "30s",
+            "--ramp",
+            "1m",
+            "--last-moment-score",
+            "0.25",
+            "--floor",
+            "0.05",
+            "--warm-up",
+            "1m",
+            "--resamples",
+            "1000",
+            "--bootstrap-seed",
+            "1",
+            "--split",
+            "tune",
+        ]);
+
+        assert!(parsed.is_err());
+    }
 }
