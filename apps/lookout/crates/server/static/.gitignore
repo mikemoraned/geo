@@ -1,5 +1,7 @@
 # Built by `just wasm`, from crates/platform/web/bridge.
 wasm/
+# Fetched by `just mlt-decoder`, from esm.sh.
+vendor/maplibre-mlt.js
 # Copied by `just crossings` and `just sessions`, from the store's gold layer.
 crossings.json
 sessions.json

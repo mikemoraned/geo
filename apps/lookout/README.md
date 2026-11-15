@@ -38,9 +38,11 @@ board and a page are built against the same crossings.
 
 ## What is generated
 
-The wasm module, and the crossings and sessions a page fetches, are copied into the directory
-`server` serves them from. All three are gitignored: the Docker builder stage runs the same
-commands for a deploy, so what is served is built rather than committed.
+The wasm module, MapLibre's MLT decoder, and the crossings and sessions a page fetches, are written
+into the directory `server` serves them from. All four are gitignored: the Docker builder stage
+runs the same commands for a deploy, so what is served is built rather than committed. The decoder
+comes from [esm.sh](https://esm.sh), which bundles the `@maplibre/mlt` package into one module a
+page imports without a bundler. `mlt_version` in the Justfile pins its version.
 
 ## The python extensions
 

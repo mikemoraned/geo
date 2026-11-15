@@ -77,11 +77,14 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   page creates no map and lays out as it does now.
 - **Each journey fits the map to its session's bounding box.** A GeoJSON source moves the current
   position's dot, one update for each sample sent.
-- **The page vendors MapLibre GL JS, `pmtiles`, and `@maplibre/mlt` into `static/vendor`, each
-  with its version in the file name, as d3 is vendored.** The pages have no build step. MapLibre
+- **The page vendors MapLibre GL JS and `pmtiles` into `static/vendor`, each with its version in
+  the file name, as d3 is vendored, and generates `@maplibre/mlt` there.** The pages have no build step. MapLibre
   decodes tiles for drawing but gives a page no way to read a tile's features, so the replay
   decodes its tiles with `@maplibre/mlt`'s `decodeTile`. The alternative, `@mapbox/vector-tile`
-  with `pbf`, reads only MVT.
+  with `pbf`, reads only MVT. The published package is not importable without a bundler, so `just
+  mlt-decoder` fetches esm.sh's bundle of it into `static/vendor/maplibre-mlt.js`. The web build
+  runs that recipe, as it runs `just wasm`, and git ignores the file. `mlt_version` in the
+  Justfile pins the version, and the Dockerfile receives it as `MLT_VERSION`.
 - **The slice upgrades no dependency.** The `map` crate reads through the `Query` that
   `session_crossings` already uses, and none of what it adds appears in the `just outdated`
   report.
@@ -106,15 +109,30 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Open questions
 
-- Whether a page without a bundler can import `@maplibre/mlt`. Its `package.json` names a `tsc`
-  build with no `module` or `exports` field. If it cannot, the replay needs another way to decode
-  MLT, and the choice goes back to the user.
-- What a feature decoded by `decodeTile` looks like, and so how the replay reads a sample's
-  attributes.
-
 - The zoom range of `rail` and `water`, and the `samples` zoom level. Sizes measured during the
   work settle both, as well as whether the artefact stays small enough to commit beside the
   other gold artefacts.
+
+### Observations
+
+2026-11-15, from one session of 300 samples, packed at zoom level 8:
+
+- **`@maplibre/mlt` 1.3.0 is not importable without a bundler as published.** 337 of its 339
+  relative imports omit the `.js` extension, and it imports `@mapbox/point-geometry` by package
+  name. esm.sh's bundle (`?bundle&target=es2022`) is one 84 KB ES module with no imports, and
+  exports `decodeTile`.
+- **`decodeTile(bytes)` returns one `FeatureTable` per layer.** Its `getFeatures()` returns
+  `{ id, geometry, properties }` for each feature, with the geometry in tile-grid integers.
+- **Every sample's values come back exactly, except a null.** tippecanoe drops a null attribute,
+  so it decodes as `undefined`. Of the 300 samples, 20 have a null `speed` or `heading`. The
+  replay reads a missing attribute as null.
+- **The tile buffer duplicates 24 of the 300 samples** across the session's three tiles.
+  Deduplicating on `seq` leaves 300.
+- **`mlt convert` keeps tippecanoe's metadata, and stores its tiles uncompressed.** The header's
+  tile type is `0x06` and its tile compression is none. The MLT file is 43 KB against the MVT
+  file's 20 KB, which tippecanoe gzips.
+- **`mlt convert` writes a `.pmtiles` input only to a `.pmtiles` or `.mbtiles` output.** Loose
+  `.mlt` tiles come from converting tippecanoe's directory output (`-e`).
 
 ### Tasks
 
@@ -126,13 +144,14 @@ pipeline sits behind it.
 
 - [x] Add `tippecanoe` to `just prerequisites` and to the README's list of what it installs.
 - [x] Add the `mlt` CLI to `just prerequisites` and to the README's list of what it installs.
-- [ ] Install `tippecanoe` and the `mlt` CLI outside the sandbox with `just prerequisites`. The
+- [x] Install `tippecanoe` and the `mlt` CLI outside the sandbox with `just prerequisites`. The
       user runs this.
-- [ ] Vendor `@maplibre/mlt` and decode one MLT tile with it in a page that has no bundler. Do this
-      first, as the remaining phase 1 tasks depend on it.
-- [ ] Write one session from `sessions.json` as a GeoJSON Text Sequence of sample points, by hand
+- [x] Vendor `@maplibre/mlt` and decode one MLT tile with it in a page that has no bundler. Do this
+      first, as the remaining phase 1 tasks depend on it. Decoded under Node as an ES module with
+      no bundler. A browser first imports it when `kiosk.js` does.
+- [x] Write one session from `sessions.json` as a GeoJSON Text Sequence of sample points, by hand
       with `jq`, into the scratchpad. This is throwaway.
-- [ ] Build a throwaway MVT file from it with `tippecanoe`, with the samples at a single zoom level
+- [x] Build a throwaway MVT file from it with `tippecanoe`, with the samples at a single zoom level
       and their values as attributes. Convert it to `map.pmtiles` with `mlt convert`.
 - [ ] Add a server test in `crates/server/tests/server` asserting that a range request for a
       `.pmtiles` file returns 206 with no `Content-Encoding`. Make it pass in

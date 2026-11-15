@@ -24,5 +24,6 @@ crates/**/target
 crates/**/__pycache__
 crates/**/.pytest_cache
 crates/server/static/wasm
+crates/server/static/vendor/maplibre-mlt.js
 crates/server/static/crossings.json
 crates/server/static/sessions.json
