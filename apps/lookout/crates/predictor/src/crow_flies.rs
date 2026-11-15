@@ -136,7 +136,11 @@ pub(crate) fn metres<P: Precision>(radius: Radius) -> P {
     P::from_f64(radius.as_metres()).expect("a radius fits in any float")
 }
 
-fn arrives_within(now: DateTime<Utc>, at: Option<DateTime<Utc>>, horizon: TimeDelta) -> bool {
+pub(crate) fn arrives_within(
+    now: DateTime<Utc>,
+    at: Option<DateTime<Utc>>,
+    horizon: TimeDelta,
+) -> bool {
     at.is_some_and(|at| at - now <= horizon)
 }
 
@@ -153,7 +157,11 @@ fn implied_speed_mps<P: Precision>(sample: &Sample<P>, previous: &Sample<P>) -> 
         .then(|| Haversine.distance(previous.gps.position, sample.gps.position) / seconds)
 }
 
-fn arrival<P: Precision>(at: DateTime<Utc>, metres: P, speed_mps: P) -> Option<DateTime<Utc>> {
+pub(crate) fn arrival<P: Precision>(
+    at: DateTime<Utc>,
+    metres: P,
+    speed_mps: P,
+) -> Option<DateTime<Utc>> {
     if speed_mps <= P::zero() {
         return None;
     }

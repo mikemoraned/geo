@@ -1096,17 +1096,27 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
         angles' percentiles. evaluation-py exposes the same stages as `cone_stages`, and
         `explore7.py` checks each of its polars stages against them row by row. Over the 1000
         sessions the two agree on every row, within 1 mm and 0.001°.
-- [ ] Add `LightCone` to `predictor`: a velocity from the last two samples, and high confidence
+- [x] Add `LightCone` to `predictor`: a velocity from the last two samples, and high confidence
       inside the cone it reaches within N.
       Where a sample repeats the position before it, the velocity comes from the last earlier
       sample at a different position, so that a moving train always has a heading.
-- [ ] Run LightCone over the same sessions and seed, with angles up to that bound, and compare its
-      best settings with CrowFlies'.
-- [ ] Average the velocity over the last few samples, as a setting of `LightCone`, and run it again.
+      A `VelocityEstimator` trait gives `LightCone` its velocity, so that a better estimator plugs
+      in later. The estimator also decides how a dwelling train's velocity behaves.
+      - A position counts as different only outside a radius of stillness, a setting of
+        `LastMove`. A receiver at rest wanders a few metres between fixes, so exact equality would
+        give a random heading on a device. The store's samples repeat a dwelling train's
+        coordinates exactly, since Motis interpolates them from the timetable.
+- [ ] Run LightCone over every session the filter keeps, scored on the tune split, with angles up
+      to that bound.
+- [ ] Sweep CrowFlies' radius again over every session the filter keeps, scored on the tune split.
+      Its 1 km came from runs without a split, which read the test cells too.
+- [ ] Average the velocity over the last few samples, as a `VelocityEstimator`, and run it again.
 - [ ] Draw LightCone's cone at each sample in `explore5.py` with the user, where it beats
       CrowFlies and where it loses.
-- [ ] Run both predictors over every session the filter keeps. If their intervals still overlap,
+- [-] Run both predictors over every session the filter keeps. If their intervals still overlap,
       widen the filter to every session.
+      Moot: the sweeps above run over every session the filter keeps. If the tune runs' intervals
+      still overlap, widening the filter remains open.
 
 ##### Phase 6 observations
 
@@ -1138,6 +1148,10 @@ split doc](2026-11-14-train-test-split.md) gives the evidence for those from `ex
   between identical points, which a distance of pyproj's noise let through. The angle that bounds
   LightCone's cone therefore trades misses on curving track against false alarms beside straight
   track.
+- **2026-11-15: every session gives the same angles as 1000 sessions.** `evaluation_cone_angles`
+  over all 34,521 sessions measures 5,737,284 tune windows. Their largest angle has a median of
+  21.4°, a p90 of 57.0°, a p95 of 71.1°, and a p99 of 102.6°, each within 0.5° of the 1000
+  sessions' figures. The sweep's bound of 30° to 90° stands.
 
 #### Phase 7: choosing the predictor
 
@@ -1147,8 +1161,10 @@ A person chooses the apps' predictor and its settings from the runs of CrowFlies
       with an interval from its bootstrap, and report it in `/choose-predictor`. Choose β with the
       user, so that the measure ranks the runs so far as the user's choices did. The choice of
       1 km over 2 km on 2026-11-10 favoured precision and few false alarms over recall.
-- [ ] Choose the apps' predictor and settings with the user, through `/choose-predictor` over the
-      runs of Phases 3 and 6.
+- [ ] Choose each predictor's settings with the user, through `/choose-predictor` over the tune
+      runs of Phase 6.
+- [ ] Run each predictor's chosen settings once over every session the filter keeps, scored on
+      the test split. Choose the apps' predictor with the user from those runs alone.
 - [ ] Replace `CrowFlies` in `platform-core` with the chosen predictor and settings.
 
 #### Phase 8: debouncing, an optional experiment
