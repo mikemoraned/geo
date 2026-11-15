@@ -142,8 +142,15 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **`rail_v1` and `water_v1` without `geometry_projected`.** The map reads only lat/lon, and
   `medallion.md` makes the projected column optional. A row's `Geometry` is either `Absent` or
   `LatLonAndProjected`, though, and a lat/lon-only variant would change medallion's `rows.rs`,
-  `geo.rs`, and `table.rs`. `lookout-slice-workstream2` rewrites `rows.rs` and `table.rs`. It comes back once that branch's
-  writer has landed.
+  `geo.rs`, and `table.rs`. `lookout-slice-workstream2` rewrites `rows.rs` and `table.rs`. It
+  comes back once that branch's writer has landed.
+- **Clipping `rail_v1` and `water_v1` to each country's boundary.** `rail_v1` and `water_v1` exist
+  so the map reuses the crossings' choice of features rather than repeating it, and a clip adds a
+  second choice. Measured in `notebooks/maps/base_map_size.py`, clipping to the land area takes
+  GB's water from 26.4 MB to 15.0 MB of WKB, nearly all of it ocean. It changes little elsewhere,
+  and it empties 16 rail segments and 18 water features that crossings name. Clipping to the
+  maritime area saves almost nothing. Silver is not committed, so its size matters only through
+  the artefact's. It comes back if the ocean polygons make the artefact too large.
 
 #### Open questions
 
