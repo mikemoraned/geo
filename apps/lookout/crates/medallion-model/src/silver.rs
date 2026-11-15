@@ -1,10 +1,10 @@
 use medallion::{RowError, SilverTarget};
 
 use crate::{
-    SESSION_CROSSING_V3, SESSION_SAMPLE_V3, SESSION_V3, SessionCrossingRowV3, SessionRowV3,
-    SessionSampleRowV3, TRAIN_SEGMENT_V4, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2,
-    TrainSegmentRowV4, TrainSessionRowV2, TrainSessionSampleRowV2, WATER_CROSSING_V2,
-    WaterCrossingRowV2,
+    RAIL_V1, RailRowV1, SESSION_CROSSING_V3, SESSION_SAMPLE_V3, SESSION_V3, SessionCrossingRowV3,
+    SessionRowV3, SessionSampleRowV3, TRAIN_SEGMENT_V4, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2,
+    TrainSegmentRowV4, TrainSessionRowV2, TrainSessionSampleRowV2, WATER_CROSSING_V2, WATER_V1,
+    WaterCrossingRowV2, WaterRowV1,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -17,7 +17,7 @@ pub enum TargetError {
 
 type Definition = fn() -> Result<SilverTarget, RowError>;
 
-const TARGETS: [(&str, Definition); 7] = [
+const TARGETS: [(&str, Definition); 9] = [
     (SESSION_V3.name, SilverTarget::of::<SessionRowV3>),
     (
         SESSION_SAMPLE_V3.name,
@@ -37,6 +37,8 @@ const TARGETS: [(&str, Definition); 7] = [
         SESSION_CROSSING_V3.name,
         SilverTarget::of::<SessionCrossingRowV3>,
     ),
+    (RAIL_V1.name, SilverTarget::of::<RailRowV1>),
+    (WATER_V1.name, SilverTarget::of::<WaterRowV1>),
 ];
 
 pub fn silver_target(name: &str) -> Result<SilverTarget, TargetError> {

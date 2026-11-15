@@ -10,8 +10,8 @@ use crate::{
     ALL, AccelReadingRowV2, DeviceSessionRowV2, ExtractManifestRowV3, Feed, GeometrySource, GersId,
     GpsReadingRowV2, Label, MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3,
     MotisSourceId, MotisSourceRowV4, MotisVersion, OVERTURE_EXTRACT, OverlapKind, OvertureRelease,
-    RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3,
-    TrainSegmentRowV4, TrainSessionRowV2, TrainSessionSampleRowV2, WaterCrossingRowV2,
+    RailMode, RailRowV1, RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3,
+    TrainSegmentRowV4, TrainSessionRowV2, TrainSessionSampleRowV2, WaterCrossingRowV2, WaterRowV1,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -300,6 +300,8 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<TrainSessionSampleRowV2>(&known),
         declaration::<WaterCrossingRowV2>(&known),
         declaration::<SessionCrossingRowV3>(&known),
+        declaration::<RailRowV1>(&known),
+        declaration::<WaterRowV1>(&known),
         declaration::<ExtractManifestRowV3>(&known),
         rowless(OVERTURE_EXTRACT.info()),
     ];

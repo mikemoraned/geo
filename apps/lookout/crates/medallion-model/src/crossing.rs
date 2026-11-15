@@ -8,6 +8,10 @@ use crate::SessionRowV3;
 pub const WATER_CROSSING_V2: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("water_crossing_v2", COUNTRY);
 
+pub const RAIL_V1: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("rail_v1", COUNTRY);
+
+pub const WATER_V1: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("water_v1", COUNTRY);
+
 pub const SESSION_CROSSING_V3: DatasetSpec<layers::Silver> =
     DatasetSpec::partitioned("session_crossing_v3", "crossed_date");
 
@@ -62,6 +66,54 @@ impl Row for WaterCrossingRowV2 {
             extract_id: "example".to_string(),
             merge_distance_m: 0.0,
             min_crossing_m: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RailRowV1 {
+    pub overture_rail_id: String,
+    pub overture_rail_class: Option<String>,
+    pub extract_id: String,
+}
+
+impl Row for RailRowV1 {
+    type Layer = layers::Silver;
+    const DATASET: DatasetSpec<Self::Layer> = RAIL_V1;
+    const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
+    const UNIQUE: &'static [&'static str] = &["overture_rail_id"];
+
+    fn example() -> Self {
+        let crossing = WaterCrossingRowV2::example();
+        Self {
+            overture_rail_id: crossing.overture_rail_id,
+            overture_rail_class: crossing.overture_rail_class,
+            extract_id: crossing.extract_id,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WaterRowV1 {
+    pub overture_water_id: String,
+    pub overture_water_subtype: Option<String>,
+    pub overture_water_class: Option<String>,
+    pub extract_id: String,
+}
+
+impl Row for WaterRowV1 {
+    type Layer = layers::Silver;
+    const DATASET: DatasetSpec<Self::Layer> = WATER_V1;
+    const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
+    const UNIQUE: &'static [&'static str] = &["overture_water_id"];
+
+    fn example() -> Self {
+        let crossing = WaterCrossingRowV2::example();
+        Self {
+            overture_water_id: crossing.overture_water_id,
+            overture_water_subtype: crossing.overture_water_subtype,
+            overture_water_class: crossing.overture_water_class,
+            extract_id: crossing.extract_id,
         }
     }
 }

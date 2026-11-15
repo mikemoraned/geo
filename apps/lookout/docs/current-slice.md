@@ -139,6 +139,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **Reading samples through MapLibre's `querySourceFeatures`.** It returns only the features in the
   tiles MapLibre has loaded for display, clipped to them, so a journey would read differently at
   each zoom level.
+- **`rail_v1` and `water_v1` without `geometry_projected`.** The map reads only lat/lon, and
+  `medallion.md` makes the projected column optional. A row's `Geometry` is either `Absent` or
+  `LatLonAndProjected`, though, and a lat/lon-only variant would change medallion's `rows.rs`,
+  `geo.rs`, and `table.rs`. `lookout-slice-workstream2` rewrites `rows.rs` and `table.rs`. It comes back once that branch's
+  writer has landed.
 
 #### Open questions
 
@@ -194,6 +199,19 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **`mlt convert` writes a `.pmtiles` input only to a `.pmtiles` or `.mbtiles` output.** Loose
   `.mlt` tiles come from converting tippecanoe's directory output (`-e`).
 
+2026-11-15, from `water_crossing_v2` derived by `just init`:
+
+- **Every rail and water id a crossing names exists in that crossing's extract, and no id
+  appears in two countries.** Each country's crossings come from one extract.
+
+  | Country | Crossings | Rail segments | Rail WKB | Water features | Water WKB |
+  | --- | --- | --- | --- | --- | --- |
+  | DE | 5,749 | 3,640 | 6.9 MB | 2,984 | 12.6 MB |
+  | GB | 4,505 | 2,283 | 4.9 MB | 2,345 | 26.4 MB |
+
+- **A few ocean polygons hold most of the water's bytes.** GB's 36 ocean polygons take 18.9 MB,
+  and the largest is 3.2 MB. Rivers take 8.9 MB in DE and 5.2 MB in GB.
+
 ### Tasks
 
 #### Phase 1: one session through the tiles
@@ -243,14 +261,14 @@ pipeline sits behind it.
 
 The map reads its base layers from silver, so these datasets land before `pack_map` reads them.
 
-- [ ] Derive silver in this worktree with `just init`, outside the sandbox. Its silver predates
+- [x] Derive silver in this worktree with `just init`, outside the sandbox. Its silver predates
       `water_crossing_v2`, and the crossings notebook needs DuckDB's spatial extension, which the
       sandbox cannot install. The user runs this.
-- [ ] Count the distinct rail and water ids `water_crossing_v2` names per country, and their WKB
+- [x] Count the distinct rail and water ids `water_crossing_v2` names per country, and their WKB
       bytes in the extract, before choosing the map's zoom levels.
 - [x] Choose the crate that derives `rail_v1` and `water_v1`, and record the choice under
       Decisions.
-- [ ] Add `RailRowV1` and `WaterRowV1` to `medallion-model`, with their declaration snapshots.
+- [x] Add `RailRowV1` and `WaterRowV1` to `medallion-model`, with their declaration snapshots.
 - [ ] Add a binary that reads `water_crossing_v2`, takes each named rail segment and water feature
       from the crossing's extract, and writes `rail_v1` and `water_v1` through `write_table`.
 - [ ] Test that every rail and water id `water_crossing_v2` names appears exactly once in
