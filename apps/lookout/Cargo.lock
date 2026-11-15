@@ -5013,6 +5013,7 @@ dependencies = [
 name = "map"
 version = "0.1.0"
 dependencies = [
+ "arrow 57.3.1",
  "chrono",
  "clap",
  "domain",
@@ -5020,7 +5021,9 @@ dependencies = [
  "geo-types",
  "geojson",
  "medallion",
+ "medallion-model",
  "serde",
+ "serde_arrow",
  "serde_json",
  "session_crossings",
  "tempfile",

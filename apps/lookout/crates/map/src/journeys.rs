@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::Write;
 
 use chrono::{DateTime, Utc};
 use domain::{Gps, SessionId};
@@ -8,6 +8,8 @@ use geojson::{Geometry, GeometryValue};
 use serde::Serialize;
 use session_crossings::gold::Replay;
 
+use crate::feature::{Feature, FeatureError, Tippecanoe};
+
 pub const SAMPLES_ZOOM: u8 = 6;
 pub const ROUTE_MAX_ZOOM: u8 = 12;
 
@@ -15,26 +17,21 @@ pub const ROUTE_MAX_ZOOM: u8 = 12;
 pub enum JourneyError {
     #[error("session {session} has {samples} samples, and a route needs at least two")]
     TooFewSamples { session: SessionId, samples: usize },
-    #[error("writing the journeys: {0}")]
-    Io(#[from] io::Error),
-    #[error("encoding a feature: {0}")]
-    Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Feature(#[from] FeatureError),
 }
 
-#[derive(Debug, Serialize)]
-#[serde(tag = "type", rename = "Feature")]
-struct Feature<P> {
-    tippecanoe: Tippecanoe,
-    geometry: Geometry,
-    properties: P,
-}
+const ROUTE: Tippecanoe = Tippecanoe {
+    layer: "route",
+    minzoom: 0,
+    maxzoom: Some(ROUTE_MAX_ZOOM),
+};
 
-#[derive(Debug, Serialize)]
-struct Tippecanoe {
-    layer: &'static str,
-    minzoom: u8,
-    maxzoom: u8,
-}
+const SAMPLES: Tippecanoe = Tippecanoe {
+    layer: "samples",
+    minzoom: SAMPLES_ZOOM,
+    maxzoom: Some(SAMPLES_ZOOM),
+};
 
 #[derive(Debug, Serialize)]
 struct RouteProperties<'a> {
@@ -59,15 +56,10 @@ struct SampleProperties<'a> {
 pub fn write_journeys(replays: &[Replay], mut to: impl Write) -> Result<usize, JourneyError> {
     let mut written = 0;
     for replay in replays {
-        serde_json::to_writer(&mut to, &route(replay)?)?;
-        to.write_all(b"\n")?;
+        route(replay)?.write_line(&mut to)?;
         for (seq, sample) in replay.samples.iter().enumerate() {
-            let point = Feature {
-                tippecanoe: Tippecanoe {
-                    layer: "samples",
-                    minzoom: SAMPLES_ZOOM,
-                    maxzoom: SAMPLES_ZOOM,
-                },
+            Feature {
+                tippecanoe: SAMPLES,
                 geometry: Geometry::new(GeometryValue::from(&sample.gps.position)),
                 properties: SampleProperties {
                     session: &replay.session,
@@ -75,9 +67,8 @@ pub fn write_journeys(replays: &[Replay], mut to: impl Write) -> Result<usize, J
                     t: sample.t,
                     gps: sample.gps,
                 },
-            };
-            serde_json::to_writer(&mut to, &point)?;
-            to.write_all(b"\n")?;
+            }
+            .write_line(&mut to)?;
         }
         written += 1 + replay.samples.len();
     }
@@ -100,11 +91,7 @@ fn route(replay: &Replay) -> Result<Feature<RouteProperties<'_>>, JourneyError> 
     let bounds = line.bounding_rect().ok_or_else(too_few)?;
 
     Ok(Feature {
-        tippecanoe: Tippecanoe {
-            layer: "route",
-            minzoom: 0,
-            maxzoom: ROUTE_MAX_ZOOM,
-        },
+        tippecanoe: ROUTE,
         geometry: Geometry::new(GeometryValue::from(&line)),
         properties: RouteProperties {
             session: &replay.session,

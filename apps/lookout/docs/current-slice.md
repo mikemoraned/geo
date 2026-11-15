@@ -281,7 +281,7 @@ features live, so silver gains no datasets.
       `--version-file`.
 - [x] Write the chosen sessions' samples, as points, and their routes, as lines, as GeoJSON Text
       Sequences, with each feature's zoom range set in its `tippecanoe` member.
-- [ ] For every country, join `water_crossing_v2` to the bronze extract's segments and water on
+- [x] For every country, join `water_crossing_v2` to the bronze extract's segments and water on
       the Overture id and `extract_id`. Write the result as `rail` and `water`, from zoom level 7.
 - [ ] Test that `pack_map` writes every rail and water id `water_crossing_v2` names exactly once,
       and fails when an extract lacks one.

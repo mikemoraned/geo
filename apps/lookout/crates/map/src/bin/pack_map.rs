@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 use clap::Parser;
+use map::base::write_base_map;
 use map::journeys::write_journeys;
 use medallion::MedallionArgs;
 use session_crossings::gold::{Choosing, choose};
@@ -12,6 +13,7 @@ use session_crossings::gold::{Choosing, choose};
 const ARTIFACT: &str = "map";
 const FILE: &str = "map.pmtiles";
 const JOURNEYS: &str = "journeys.geojsonseq";
+const BASE_MAP: &str = "base.geojsonseq";
 
 #[derive(Parser)]
 #[command(
@@ -79,6 +81,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         samples = replays.iter().map(|replay| replay.samples.len()).sum::<usize>(),
         features = written,
         "wrote journeys",
+    );
+
+    let base_map = features.path().join(BASE_MAP);
+    let written = write_base_map(&root, BufWriter::new(File::create(&base_map)?)).await?;
+
+    tracing::info!(
+        rail = written.rail,
+        water = written.water,
+        bytes = base_map.metadata()?.len(),
+        "wrote the base map",
     );
 
     Ok(())
