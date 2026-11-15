@@ -20,8 +20,8 @@ For display of the Map itself on the page, we'd use https://maplibre.org which s
 A gold artefact, `map.pmtiles`, that holds everything the kiosk shows and replays. It has three
 layers:
 
-- `rail` and `water`: Overture's rail and water within a corridor around each replayed route,
-  drawn as the base map.
+- `rail` and `water`: the Overture rail segments and water features that the water crossings
+  name, across every country, drawn as the base map.
 - `route`: each replayed session as one line, drawn on the base map. A line carries its session's
   id, its crossings count, its bounding box, and the zoom level its samples sit at. The kiosk
   lists the sessions from these lines at the file's lowest zoom level.
@@ -35,14 +35,24 @@ The artefact holds no land, roads, or place labels, and no crossings. The browse
 
 Decisions taken before starting, as each changes what gets built. Confirmed 2026-11-15.
 
-- **The base map is Overture rail and water, clipped to a corridor around the replayed routes.**
-  Bronze already holds both countries' extracts, and the App will later want the same two layers
-  on the M5. The alternatives were a Protomaps planet extract (larger, and none of it our own
-  data) and hosted tiles (these test nothing about embedding).
-- **The corridor reaches as far from the route as any predictor looks.** That is 5 km today,
-  `predictor::crow_flies::DEFAULT_RADIUS`, and `pack_map` reads it from the `predictor` crate. The
-  App will show nothing beyond that distance, so rail and water further out would cost bytes
-  nobody sees. The App does not show a map yet, so the kiosk does not test this width.
+- **The base map is the Overture rail and water that the water crossings name.** The crossings
+  are the join between rail and water, with the visibility filters already applied, so the rail and
+  water they name are the features the product is about. Bronze already holds both countries'
+  extracts, and the App will later want the same two layers on the M5. The alternatives were a
+  Protomaps planet extract (larger, and none of it our own data) and hosted tiles (these test
+  nothing about embedding).
+- **Silver holds those features as two datasets, `rail_v1` and `water_v1`.** Each row is one
+  Overture rail segment or water feature that a row of `water_crossing_v2` names, read from that
+  crossing's own extract by its Overture id. Each dataset is partitioned by country, with
+  `geometry` and `geometry_projected` as the other silver datasets have, and carries the Overture
+  id, the class, the water's subtype, and the extract id. `pack_map` reads silver rather than
+  repeating the filters on bronze, and so does any later reader of the same features. The
+  alternative was one dataset with a `kind` column, which would give rail and water one schema
+  where their columns differ.
+- **The base map shows each feature whole, across the whole country.** The crossings already
+  limit the features to rail meeting water, so no corridor around the replayed routes applies. The
+  alternatives were clipping to a 5 km corridor around each route, and keeping whole features that
+  come within 5 km of one.
 - **The replay reads its samples from the PMTiles, as the Straw Man proposes.** The kiosk stops
   fetching `sessions.json`. The alternative was to keep `sessions.json` for the replay and use the
   tiles for display only.
@@ -71,7 +81,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   levels 8 and 10 read 12 and 64 tiles in all, for the same 15–22 ms on localhost. Below zoom
   level 7 the map shows routes alone, which a map fitted to one journey does not reach.
 - **`tippecanoe` tiles, `mlt convert` encodes, and Rust writes the input.** A new crate, `map`,
-  reads the chosen sessions and the Overture rail and water through medallion's `Query`, and
+  reads the chosen sessions and silver `rail_v1` and `water_v1` through medallion's `Query`, and
   writes them as GeoJSON Text Sequences (one feature per line). `tippecanoe` tiles them into an MVT
   PMTiles file in a temporary directory. `mlt convert` turns that into `map.pmtiles` in
   `gold/artifact=map/version=<run>/`. The MVT file is never kept or served. The alternatives were
@@ -98,6 +108,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Consequences elsewhere
 
+- Deriving `water_crossing_v2` again leaves `rail_v1` and `water_v1` stale until they are derived
+  from it in turn, so `silver-crossings` runs the two together.
+- The derivation graph in `docs/architecture.md` gains `rail_v1` and `water_v1` between
+  `water_crossing_v2` and the map, and `docs/medallion.md` names them among silver's datasets.
 - `sessions.version`, `gold-pack-sessions`, `kiosk-sessions`, and the Dockerfile's
   `SESSIONS_VERSION` lose their only consumer once the kiosk reads the map.
 - Building tiles needs `tippecanoe` and the `mlt` CLI on the machine that packs gold. The deploy
@@ -107,6 +121,9 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - **Land, roads, and labels underneath.** These would come back if the bare rail and water fail to
   place a route. A Protomaps extract would then go under the Overture layers.
+- **A corridor around the replayed routes.** It would come back if the whole-country base map is
+  too large to commit, or if the App shows a map and wants rail and water beyond what the crossings
+  name.
 - **Reading samples through MapLibre's `querySourceFeatures`.** It returns only the features in the
   tiles MapLibre has loaded for display, clipped to them, so a journey would read differently at
   each zoom level.
@@ -114,7 +131,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 #### Open questions
 
 - The maximum zoom level of `rail` and `water`. Sizes measured during the work settle it, as well
-  as whether the artefact stays small enough to commit beside the other gold artefacts.
+  as whether the artefact stays small enough to commit beside the other gold artefacts. The base
+  map now spans both countries, so its size is the larger unknown.
+- Which crate derives `rail_v1` and `water_v1`. `transport` already reads the Overture extracts and
+  finds each country's newest, and `crossings` already reads `water_crossing_v2`.
 
 ### Observations
 
@@ -209,15 +229,36 @@ pipeline sits behind it.
 - [x] Check below 768 px that the page creates no map and lays out as it does now, and that
       crossing the width while open moves between the two layouts.
 
-#### Phase 3: the `map` artefact from the store
+#### Phase 3: silver rail and water from the crossings
+
+The map reads its base layers from silver, so these datasets land before `pack_map` reads them.
+
+- [ ] Derive silver in this worktree with `just init`, outside the sandbox. Its silver predates
+      `water_crossing_v2`, and the crossings notebook needs DuckDB's spatial extension, which the
+      sandbox cannot install. The user runs this.
+- [ ] Count the distinct rail and water ids `water_crossing_v2` names per country, and their WKB
+      bytes in the extract, before choosing the map's zoom levels.
+- [ ] Choose the crate that derives `rail_v1` and `water_v1`, and record the choice under
+      Decisions.
+- [ ] Add `RailRowV1` and `WaterRowV1` to `medallion-model`, with their declaration snapshots.
+- [ ] Add a binary that reads `water_crossing_v2`, takes each named rail segment and water feature
+      from the crossing's extract, and writes `rail_v1` and `water_v1`.
+- [ ] Test that every rail and water id `water_crossing_v2` names appears exactly once in
+      `rail_v1` or `water_v1`.
+- [ ] Add a `silver-crossed-features` recipe, and run it from `silver-crossings` after
+      `silver-water-crossings`.
+- [ ] Add `rail_v1` and `water_v1` to the derivation graph in `docs/architecture.md`, and to
+      silver's datasets in `docs/medallion.md`.
+
+#### Phase 4: the `map` artefact from the store
 
 - [ ] Create the `map` crate with a `pack_map` binary, with arguments shaped like
       `pack_sessions`: `MedallionArgs`, `--min-crossings`, `--max-sessions`, `--output`, and
       `--version-file`.
 - [ ] Write the chosen sessions' samples, as points, and their routes, as lines, as GeoJSON Text
       Sequences, with each feature's zoom range set in its `tippecanoe` member.
-- [ ] Query Overture rail and water within `DEFAULT_RADIUS` of each route, from the newest
-      extract for its country, and write them as `rail` and `water`.
+- [ ] Read `rail_v1` and `water_v1` for every country, and write them as `rail` and `water`,
+      starting at zoom level 7.
 - [ ] Measure the artefact's size against the `rail` and `water` maximum zoom level, and choose
       the level from those sizes.
 - [ ] Run `tippecanoe` from `pack_map` into a temporary MVT file, and `mlt convert` on it into
