@@ -1,5 +1,8 @@
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::sync::Arc;
+
+use arrow::array::{Array, Float64Array, StringArray};
 
 use code_version::CodeVersion;
 use crossings::silver::ReadError;
@@ -12,6 +15,7 @@ use evaluation::{
     A5Resolution, CrowFliesSettings, OnlineDetectorSettings, OracleSettings, Pick, PickError, Salt,
     Score, Seed, Split, TuneBuckets,
 };
+use geo_types::Point;
 use medallion::Country;
 use medallion_model::{
     EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationTransitionRowV1, FloatType,
@@ -22,7 +26,7 @@ use py_common::{
 };
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use pyo3_arrow::PyTable;
+use pyo3_arrow::{PyArray, PyTable};
 
 const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
 
@@ -198,12 +202,52 @@ impl Splitter {
         })
     }
 
+    /// The split of the cell each point lies in, `"tune"` or `"test"`, as an Arrow array of text.
+    ///
+    /// `lon` and `lat` are Arrow arrays of degrees as float64, of one length and with no nulls. The
+    /// split is the one a run gives a crossing at that point.
+    #[pyo3(signature = (lon, lat))]
+    fn splits(&self, lon: PyArray, lat: PyArray) -> PyResult<PyArray> {
+        let (lon, lat) = (degrees(&lon, "lon")?, degrees(&lat, "lat")?);
+        if lon.len() != lat.len() {
+            return Err(value_error(format!(
+                "`lon` holds {} points and `lat` {}",
+                lon.len(),
+                lat.len()
+            )));
+        }
+        let splits = lon
+            .values()
+            .iter()
+            .zip(lat.values())
+            .map(|(&lon, &lat)| {
+                self.splitter
+                    .cell(Point::new(lon, lat))
+                    .map(|cell| self.splitter.split(cell).to_string())
+                    .map_err(value_error)
+            })
+            .collect::<PyResult<Vec<String>>>()?;
+        Ok(PyArray::from_array_ref(Arc::new(StringArray::from(splits))))
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "Splitter(resolution={}, salt=\"{}\", tune_buckets={})",
             self.splitter.resolution, self.splitter.salt, self.splitter.tune_buckets
         )
     }
+}
+
+fn degrees<'a>(array: &'a PyArray, name: &str) -> PyResult<&'a Float64Array> {
+    let degrees = array
+        .array()
+        .as_any()
+        .downcast_ref::<Float64Array>()
+        .ok_or_else(|| value_error(format!("`{name}` must be an array of float64")))?;
+    if degrees.null_count() > 0 {
+        return Err(value_error(format!("`{name}` holds nulls")));
+    }
+    Ok(degrees)
 }
 
 /// The split a run scores, `"tune"` or `"test"`, of the cells `splitter` assigns. A run with a split

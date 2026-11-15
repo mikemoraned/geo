@@ -15,10 +15,12 @@ test = false
 doctest = false
 
 [dependencies]
+arrow = { workspace = true }
 code_version = { workspace = true }
 crossings = { workspace = true }
 domain = { workspace = true }
 evaluation = { workspace = true }
+geo-types = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }
 py-common = { workspace = true }

@@ -1075,13 +1075,25 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             - Built with Python's pair named `ScoredSplit`, as in Rust, where `Split` is tune or
               test alone. A new step, `session_rows`, makes the session rows the later steps take,
               since `record` refuses a build from uncommitted code, as a notebook's usually is.
-- [ ] Measure in a new `explore5.py` the angle between a train's heading and its positions up to N
+- [x] Measure in a new `explore5.py` the angle between a train's heading and its positions up to N
       later.
       The notebook is `explore6.py`, since Phase 4 already added `explore5_skew.py`. It reads the
       tune set alone. Hold invariant 4 here: a window counts only when it lies wholly in tune cells.
-- [ ] Read ballpark odds for the extremes of that angle, and bound the cone's angle by them.
+      - Measuring in `explore7.py`, since `explore6.py` holds the split's experiments. A window
+        whose heading step is 0 m, where a sample repeats the position before it, is left out: 14%
+        of all windows. Each window's angle is the largest to any position within N, since the
+        cone has to hold every position the train reaches, not only the last.
+- [x] Read ballpark odds for the extremes of that angle, and bound the cone's angle by them.
+      Chosen with the user on 2026-11-15: the sweep tries half-widths from 30° to 90°, which hold
+      every later position in 63% to 95% of windows. Above 90° lie tight curves, which no cone fits
+      without firing beside straight track.
+- [ ] Capture the tuning the notebook does as a Rust binary, so that it can be run again over a
+      later store and give the same bound from the same data. The notebook is where the measure is
+      worked out with the user, and the binary is how it is repeated.
 - [ ] Add `LightCone` to `predictor`: a velocity from the last two samples, and high confidence
       inside the cone it reaches within N.
+      Where a sample repeats the position before it, the velocity comes from the last earlier
+      sample at a different position, so that a moving train always has a heading.
 - [ ] Run LightCone over the same sessions and seed, with angles up to that bound, and compare its
       best settings with CrowFlies'.
 - [ ] Average the velocity over the last few samples, as a setting of `LightCone`, and run it again.
@@ -1092,8 +1104,8 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 
 ##### Phase 6 observations
 
-Each comes from `explore6.py`, over 1,000 sessions picked under seed 1, and
-[the split doc](2026-11-14-train-test-split.md) gives the evidence.
+Each comes from `explore6.py` or `explore7.py`, over 1,000 sessions picked under seed 1. [The
+split doc](2026-11-14-train-test-split.md) gives the evidence for those from `explore6.py`.
 
 - **2026-11-14: `route_name` names a train, not a line.** It joins the line and the train number.
   144 of the 409 line names belong to more than one agency.
@@ -1111,6 +1123,13 @@ Each comes from `explore6.py`, over 1,000 sessions picked under seed 1, and
 - **2026-11-14: no chunk resolution steadies the heading angle's p99.** Over 21 salts, the gap
   between the sets spans 26° at resolution 7, 30° at 8, and 23° at 9. Resolution 9 drops a quarter
   of the windows, since more of them cross from one set into the other.
+- **2026-11-15: a cone around the heading misses curving track, not only reversals.** Over the
+  173,771 tune windows of 5 minutes that travel 500 m or more, the largest angle between the
+  heading and any later position has a median of 22.7° and a p90 of 64.9°. The share needing more
+  than a cone's half-width is 37% at 30°, 21% at 45°, 12% at 60°, 4.8% at 90°, and 0.7% at 170°.
+  Spot checks of the 8,392 windows above 90° found sharp turns, leaving stations or following
+  water or hills, and few reversals. The angle that bounds LightCone's cone therefore trades
+  misses on curving track against false alarms beside straight track.
 
 #### Phase 7: choosing the predictor
 
