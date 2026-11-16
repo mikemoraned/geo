@@ -81,7 +81,7 @@ def _(lookout_medallion, pa, pl):
                     "s.notifications, s.precision, s.precision_low, s.precision_high, s.recall, "
                     "s.recall_low, s.recall_high, s.false_alarms_per_hour, s.false_alarms_per_hour_low, "
                     "s.false_alarms_per_hour_high, s.repeats, s.misses, s.lead_median "
-                    "FROM evaluation_run_v6 r JOIN evaluation_summary_v2 s USING (run_id) "
+                    "FROM evaluation_run_v6 r JOIN evaluation_summary_v3 s USING (run_id) "
                     "WHERE r.run_date = '2026-11-16'"
                 )
             )

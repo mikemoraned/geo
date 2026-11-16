@@ -23,10 +23,10 @@ pub use crossing::{
 };
 pub use evaluation::{
     EVALUATION_OUTCOME_V2, EVALUATION_RUN_V6, EVALUATION_SESSION_V2, EVALUATION_SKEW_V2,
-    EVALUATION_SPLIT_V1, EVALUATION_SUMMARY_V2, EVALUATION_SUMMARY_V3, EVALUATION_TRANSITION_V1,
-    EvaluationOutcomeRowV2, EvaluationRunRowV6, EvaluationSessionRowV2, EvaluationSkewRowV2,
-    EvaluationSplitRowV1, EvaluationSummaryRowV2, EvaluationSummaryRowV3,
-    EvaluationTransitionRowV1, FloatType, NotificationClass, OutcomeKind, PredictorName,
+    EVALUATION_SPLIT_V1, EVALUATION_SUMMARY_V3, EVALUATION_TRANSITION_V1, EvaluationOutcomeRowV2,
+    EvaluationRunRowV6, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSplitRowV1,
+    EvaluationSummaryRowV3, EvaluationTransitionRowV1, FloatType, NotificationClass, OutcomeKind,
+    PredictorName,
 };
 pub use gers::{GersId, NotAGersId};
 pub use gold::{GoldTargetError, gold_target};
@@ -56,7 +56,7 @@ pub use train_session::{
     TrainSessionSamplePositionV3, TrainSessionSampleRowV3, train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 26] = [
+pub const ALL: [DatasetInfo; 25] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
@@ -79,7 +79,6 @@ pub const ALL: [DatasetInfo; 26] = [
     EVALUATION_RUN_V6.info(),
     EVALUATION_SESSION_V2.info(),
     EVALUATION_OUTCOME_V2.info(),
-    EVALUATION_SUMMARY_V2.info(),
     EVALUATION_SUMMARY_V3.info(),
     EVALUATION_SKEW_V2.info(),
     EVALUATION_SPLIT_V1.info(),
@@ -124,7 +123,6 @@ mod tests {
                 "evaluation_session_v2",
                 "evaluation_skew_v2",
                 "evaluation_split_v1",
-                "evaluation_summary_v2",
                 "evaluation_summary_v3",
                 "evaluation_transition_v1",
                 "session_crossing_v3",
@@ -224,7 +222,6 @@ mod tests {
         check_rows_of::<EvaluationRunRowV6>();
         check_rows_of::<EvaluationSessionRowV2>();
         check_rows_of::<EvaluationOutcomeRowV2>();
-        check_rows_of::<EvaluationSummaryRowV2>();
         check_rows_of::<EvaluationSummaryRowV3>();
         check_rows_of::<EvaluationSkewRowV2>();
         check_rows_of::<EvaluationSplitRowV1>();

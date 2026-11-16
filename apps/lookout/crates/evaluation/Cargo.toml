@@ -11,10 +11,6 @@ required-features = ["cli"]
 name = "evaluation_cone_angles"
 required-features = ["cli"]
 
-[[bin]]
-name = "evaluation_migrate_f_half"
-required-features = ["cli"]
-
 [dependencies]
 a5 = { workspace = true }
 chrono = { workspace = true }
@@ -36,7 +32,6 @@ predictor = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
-serde = { workspace = true, optional = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 statrs = { workspace = true }
@@ -51,7 +46,7 @@ uuid = { workspace = true }
 code_version = { workspace = true }
 
 [features]
-cli = ["dep:clap", "dep:serde", "dep:tokio", "dep:tracing-subscriber"]
+cli = ["dep:clap", "dep:tokio", "dep:tracing-subscriber"]
 fixtures = ["countries/fixtures", "domain/fixtures"]
 
 [dev-dependencies]

@@ -568,7 +568,7 @@ def intervals(
     _summaries = pl.from_arrow(
         pa.table(
             lookout_medallion.query_gold(
-                "SELECT run_id, recall_low, recall, recall_high FROM evaluation_summary_v2 "
+                "SELECT run_id, recall_low, recall, recall_high FROM evaluation_summary_v3 "
                 "WHERE run_id IN ($light_cone, $crow_flies)",
                 params=compared,
             )
@@ -701,7 +701,7 @@ def _(lookout_medallion, pa, pl):
                 lookout_medallion.query_gold(
                     "SELECT r.run_id, r.predictor, r.predictor_settings, s.sessions, s.passes, "
                     "s.notifications, s.precision, s.recall, s.false_alarms_per_hour, s.repeats, "
-                    "s.lead_median FROM evaluation_run_v6 r JOIN evaluation_summary_v2 s USING (run_id) "
+                    "s.lead_median FROM evaluation_run_v6 r JOIN evaluation_summary_v3 s USING (run_id) "
                     "WHERE r.run_date = '2026-11-16' AND s.sessions > 1000"
                 )
             )

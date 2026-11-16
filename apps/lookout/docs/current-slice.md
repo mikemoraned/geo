@@ -1248,7 +1248,7 @@ A person chooses the apps' predictor and its settings from the runs of CrowFlies
       `evaluation_migrate_f_half` summarised every run in gold again into v3. Each count and
       measure v2 held came back unchanged, except false alarms per hour, which moved by at most
       1.2e-13 in the 14 runs whose hours v1 stored as a float.
-- [ ] Remove `evaluation_summary_v2`, its row type, and `evaluation_migrate_f_half`, once the user
+- [x] Remove `evaluation_summary_v2`, its row type, and `evaluation_migrate_f_half`, once the user
       has inspected the migration.
 - [ ] Choose each predictor's settings with the user, through `/choose-predictor` over the tune
       runs of Phase 6.
