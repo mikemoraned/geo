@@ -25,6 +25,8 @@ pub trait Shell: Sized + 'static {
 
     fn received(points: Vec<CrossingCompact<f64>>) -> Option<Self::Crossings>;
 
+    fn draws_lines() -> bool;
+
     fn project(model: &Model<Self>) -> Self::ViewModel;
 }
 
@@ -235,6 +237,10 @@ mod tests {
             Some(taken(points))
         }
 
+        fn draws_lines() -> bool {
+            false
+        }
+
         fn project(model: &Model<Self>) -> State {
             State {
                 now: model.now(),
@@ -256,6 +262,10 @@ mod tests {
 
         fn received(points: Vec<CrossingCompact<f64>>) -> Option<Self::Crossings> {
             Some(taken(points))
+        }
+
+        fn draws_lines() -> bool {
+            false
         }
 
         fn project(model: &Model<Self>) -> State {

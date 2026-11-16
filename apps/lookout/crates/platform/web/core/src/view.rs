@@ -49,6 +49,10 @@ impl Shell for Browser {
         )
     }
 
+    fn draws_lines() -> bool {
+        true
+    }
+
     fn project(model: &Model<Self>) -> ViewModel {
         ViewModel {
             now: model.now(),
