@@ -18,6 +18,7 @@ geo-types = { workspace = true }
 predictor = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
+wkb = { workspace = true }
 
 [features]
 # Declared so the generator `#[effect(typegen)]` emits behind it compiles when asked for.
