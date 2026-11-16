@@ -1855,6 +1855,7 @@ dependencies = [
  "chrono",
  "crux_core",
  "domain",
+ "geo",
  "geo-types",
  "predictor",
  "serde",

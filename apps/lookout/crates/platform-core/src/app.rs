@@ -8,6 +8,7 @@ use crux_core::{
     render::{self, RenderOperation},
 };
 use domain::{Bbox, CrossingCompact, Sample};
+use geo_types::Point;
 use predictor::{
     Crossings, CrowFlies, DEFAULT_RADIUS, Event as Observed, Parser, Predict, Sentence,
 };
@@ -15,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Float;
 use crate::battery::{Battery, Charge};
-use crate::lines::Wkb;
+use crate::lines::{Nearby, Wkb};
 
 pub trait Shell: Sized + 'static {
     type ViewModel;
@@ -35,6 +36,7 @@ pub struct Model<S: Shell> {
     parser: Parser<Float>,
     battery: Battery,
     predictor: Predicting<S>,
+    nearby: Nearby,
 }
 
 enum Predicting<S: Shell> {
@@ -51,6 +53,7 @@ impl<S: Shell> Default for Model<S> {
                 Some(crossings) => Predicting::Ready(CrowFlies::new(crossings, DEFAULT_RADIUS)),
                 None => Predicting::Waiting,
             },
+            nearby: Nearby::default(),
         }
     }
 }
@@ -90,6 +93,10 @@ impl<S: Shell> Model<S> {
     pub fn charge(&self) -> Option<Charge> {
         self.battery.charge()
     }
+
+    pub fn lines(&self) -> &[Wkb] {
+        self.nearby.shown()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -127,7 +134,7 @@ impl Operation for GetLines {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Change {
+pub(crate) enum Change {
     Moved,
     Unchanged,
 }
@@ -156,6 +163,20 @@ impl<S: Shell> Lookout<S> {
             Ok(()) => Change::Moved,
             Err(_) => Change::Unchanged,
         }
+    }
+
+    fn lines_to_ask_for(&self, model: &mut Model<S>) -> Option<Bbox> {
+        if !S::draws_lines() {
+            return None;
+        }
+        let fix = model.fix()?.gps.position;
+        let radius_metres = model.radius_metres()?;
+        let centre = Point::new(f64::from(fix.x()), f64::from(fix.y()));
+        model
+            .nearby
+            .follow(centre, f64::from(radius_metres))
+            .ok()
+            .flatten()
     }
 }
 
@@ -189,7 +210,7 @@ impl<S: Shell> App for Lookout<S> {
                 Ok(sample) => self.observe(Observed::Sampled(sample), model),
                 Err(_) => Change::Unchanged,
             },
-            Event::Lines { .. } => Change::Unchanged,
+            Event::Lines { area, lines } => model.nearby.received(area, lines),
             Event::Battery(millivolts) => {
                 let before = model.battery.charge();
                 model.battery.measured(millivolts);
@@ -202,7 +223,13 @@ impl<S: Shell> App for Lookout<S> {
         };
 
         match change {
-            Change::Moved => render::render(),
+            Change::Moved => match self.lines_to_ask_for(model) {
+                Some(area) => Command::all([
+                    render::render(),
+                    Command::notify_shell(GetLines { area }).into(),
+                ]),
+                None => render::render(),
+            },
             Change::Unchanged => Command::done(),
         }
     }
@@ -290,6 +317,63 @@ mod tests {
                 predicted: model.predictions().len(),
             }
         }
+    }
+
+    #[derive(Debug, Default, Clone, Copy)]
+    struct Drawing;
+
+    impl Shell for Drawing {
+        type ViewModel = Vec<Wkb>;
+        type Crossings = Vec<CrossingCompact<Float>>;
+
+        fn carried() -> Option<Self::Crossings> {
+            Some(Vec::new())
+        }
+
+        fn received(points: Vec<CrossingCompact<f64>>) -> Option<Self::Crossings> {
+            Some(taken(points))
+        }
+
+        fn draws_lines() -> bool {
+            true
+        }
+
+        fn project(model: &Model<Self>) -> Vec<Wkb> {
+            model.lines().to_vec()
+        }
+    }
+
+    fn drawing() -> Core<Lookout<Drawing>> {
+        Core::new()
+    }
+
+    fn line() -> Wkb {
+        Wkb::new(vec![
+            1, 2, 0, 0, 0, 2, 0, 0, 0, 246, 40, 92, 143, 194, 117, 43, 64, 133, 235, 81, 184, 30,
+            133, 73, 64, 123, 20, 174, 71, 225, 122, 43, 64, 102, 102, 102, 102, 102, 134, 73, 64,
+        ])
+        .expect("a line in WKB")
+    }
+
+    fn asked(effects: &[Effect]) -> Option<Bbox> {
+        effects.iter().find_map(|effect| match effect {
+            Effect::Lines(request) => Some(request.operation.area),
+            _ => None,
+        })
+    }
+
+    fn north_of_the_station(metres: f64) -> Gps<f64> {
+        Gps {
+            position: Point::new(DRESDEN_LON, 51.0403 + metres / 111_195.0),
+            ..at_the_station()
+        }
+    }
+
+    fn assert_near(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 1e-3,
+            "{actual} is not {expected}"
+        );
     }
 
     fn taken(points: Vec<CrossingCompact<f64>>) -> Vec<CrossingCompact<Float>> {
@@ -590,7 +674,7 @@ mod tests {
     #[test]
     fn lines_arrive_from_a_shell_as_wkb_in_base64() {
         let event: Event = serde_json::from_str(
-            r#"{"Lines":{"area":{"xmin":13.66,"ymin":51.0,"xmax":13.81,"ymax":51.09},"lines":["AQIAAAA="]}}"#,
+            r#"{"Lines":{"area":{"xmin":13.66,"ymin":51.0,"xmax":13.81,"ymax":51.09},"lines":["AQIAAAACAAAA9ihcj8J1K0CF61G4HoVJQHsUrkfheitAZmZmZmaGSUA="]}}"#,
         )
         .expect("an event this core knows");
 
@@ -598,7 +682,7 @@ mod tests {
             panic!("lines, not {event:?}");
         };
         assert_eq!(area, Bbox::new(13.66, 51.0, 13.81, 51.09).expect("a box"));
-        assert_eq!(lines, vec![Wkb::new(vec![1, 2, 0, 0, 0])]);
+        assert_eq!(lines, vec![line()]);
     }
 
     #[test]
@@ -611,6 +695,107 @@ mod tests {
             serde_json::to_string(&request).expect("serialize"),
             r#"{"area":{"xmin":13.66,"ymin":51.0,"xmax":13.81,"ymax":51.09}}"#
         );
+    }
+
+    #[test]
+    fn a_fix_asks_for_the_lines_two_radii_around_it() {
+        let core = drawing();
+
+        let effects = core.process_event(reported(instant(), at_the_station()));
+
+        let area = asked(&effects).expect("a request for lines");
+        assert_near(area.min().x, 13.5892);
+        assert_near(area.min().y, 50.9504);
+        assert_near(area.max().x, 13.8752);
+        assert_near(area.max().y, 51.1302);
+    }
+
+    #[test]
+    fn a_fix_whose_radius_stays_in_the_box_asks_for_nothing() {
+        let core = drawing();
+        core.process_event(reported(instant(), at_the_station()));
+
+        let effects = core.process_event(reported(
+            instant() + TimeDelta::seconds(10),
+            north_of_the_station(4_000.0),
+        ));
+
+        assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
+    }
+
+    #[test]
+    fn a_fix_whose_radius_leaves_the_box_asks_for_another_around_it() {
+        let core = drawing();
+        core.process_event(reported(instant(), at_the_station()));
+
+        let effects = core.process_event(reported(
+            instant() + TimeDelta::seconds(10),
+            north_of_the_station(6_000.0),
+        ));
+
+        let area = asked(&effects).expect("a request for lines");
+        assert_near(area.min().y, 51.0043);
+        assert_near(area.max().y, 51.1842);
+    }
+
+    #[test]
+    fn lines_for_the_box_asked_for_are_shown() {
+        let core = drawing();
+        let area = asked(&core.process_event(reported(instant(), at_the_station())))
+            .expect("a request for lines");
+
+        let effects = core.process_event(Event::Lines {
+            area,
+            lines: vec![line()],
+        });
+
+        assert_eq!(core.view(), vec![line()]);
+        assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
+    }
+
+    #[test]
+    fn lines_for_a_box_since_left_are_dropped() {
+        let core = drawing();
+        let left = asked(&core.process_event(reported(instant(), at_the_station())))
+            .expect("a request for lines");
+        core.process_event(reported(
+            instant() + TimeDelta::seconds(10),
+            north_of_the_station(6_000.0),
+        ));
+
+        let effects = core.process_event(Event::Lines {
+            area: left,
+            lines: vec![line()],
+        });
+
+        assert!(core.view().is_empty());
+        assert!(effects.is_empty());
+    }
+
+    #[test]
+    fn starting_again_forgets_the_lines_and_asks_afresh() {
+        let core = drawing();
+        let area = asked(&core.process_event(reported(instant(), at_the_station())))
+            .expect("a request for lines");
+        core.process_event(Event::Lines {
+            area,
+            lines: vec![line()],
+        });
+
+        core.process_event(Event::Reset);
+        let effects = core.process_event(reported(instant(), at_the_station()));
+
+        assert!(core.view().is_empty());
+        assert_eq!(asked(&effects), Some(area));
+    }
+
+    #[test]
+    fn a_shell_that_draws_no_lines_is_never_asked_for_them() {
+        let core = core();
+
+        let effects = core.process_event(reported(instant(), at_the_station()));
+
+        assert_eq!(asked(&effects), None);
     }
 
     #[test]
