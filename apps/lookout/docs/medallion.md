@@ -258,10 +258,11 @@ Laid out by what was produced and which run produced it, rather than by a partit
 
 **Gold is derived, and so is not versioned in git — with one exception.** An artefact a build
 reads is an input to something outside the store, and cannot be re-derived by whoever builds
-it: a checkout has no silver to pack from. The crossings and the sessions are the cases today.
-The device's firmware embeds the crossings and the browser fetches them, and a kiosk replays the
-sessions. Every version packed is committed, and `apps/lookout/crossings.version` and
-`apps/lookout/sessions.version` name the ones being built against.
+it: a checkout has no silver to pack from. The crossings and the map are the cases today.
+The device's firmware embeds the crossings and the browser fetches them, and a kiosk draws the
+map and replays the sessions it holds. Every version packed is committed, and
+`apps/lookout/crossings.version` and `apps/lookout/map.version` name the ones being built
+against.
 
 ## Reading from another language
 

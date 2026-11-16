@@ -12,10 +12,9 @@
 !crates
 
 # What the builder copies into the static dir: the crossings a browser fetches, and the
-# sessions and map a kiosk replays. The only part of the store a deploy needs — everything else
+# map a kiosk replays. The only part of the store a deploy needs — everything else
 # it holds is read by a query, not served.
 !data/medallion/gold/artifact=crossings
-!data/medallion/gold/artifact=sessions
 !data/medallion/gold/artifact=map
 
 # What the tree carries but the build makes for itself. The uv environments alone
@@ -26,5 +25,4 @@ crates/**/__pycache__
 crates/**/.pytest_cache
 crates/server/static/wasm
 crates/server/static/crossings.json
-crates/server/static/sessions.json
 crates/server/static/*.pmtiles

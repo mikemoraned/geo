@@ -324,21 +324,21 @@ features live, so silver gains no datasets.
       `gold/artifact=map` in `.dockerignore`.
 - [x] Copy the packed artefact over the throwaway `map.pmtiles` in `static`.
 - [x] Style `rail` and `water` in the kiosk's MapLibre style.
-- [ ] Pack the map artefact, commit its version, and check the kiosk on a deploy at both widths.
+- [x] Pack the map artefact, commit its version, and check the kiosk on a deploy at both widths.
 
 #### Wrap-up
 
 - [-] Name the `write_table` workaround, and the writer that replaces it, in this slice's entry in
       `completed-slices.md`, so that a branch rebasing onto this one finds the debt. Moot: no
       workaround remains.
-- [ ] Remove `sessions.version`, `gold-pack-sessions`, `kiosk-sessions`, the Dockerfile's
+- [x] Remove `sessions.version`, `gold-pack-sessions`, `kiosk-sessions`, the Dockerfile's
       `SESSIONS_VERSION`, and the `sessions` line in `.dockerignore`. Do this only after the
       kiosk replays from the map on a deploy.
-- [ ] Decide whether `pack_sessions` and the committed `gold/artifact=sessions` versions go too.
-      The rerun runner and the notebooks do not read them.
+- [x] Decide whether `pack_sessions` and the committed `gold/artifact=sessions` versions go too.
+      The rerun runner and the notebooks do not read them. Both went.
 - [ ] Update `docs/web.md` on what `/kiosk` feeds the element and the map it draws.
-- [ ] Update the derivation graph and the gold consumers in `docs/architecture.md`.
-- [ ] Update the gold exceptions in `docs/medallion.md`, naming the map artefact and `map.version`.
+- [x] Update the derivation graph and the gold consumers in `docs/architecture.md`.
+- [x] Update the gold exceptions in `docs/medallion.md`, naming the map artefact and `map.version`.
 - [ ] State in `docs/medallion.md`'s gold section that an artefact may read an upstream reference
       extract in bronze, such as Overture's, selecting rows by the ids a silver dataset names. The
       allowance covers external reference data only. Observations in bronze still reach gold

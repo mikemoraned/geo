@@ -25,7 +25,7 @@ async fn a_browser_asks_the_server_before_reusing_any_other_file() {
         "/signin/",
         "/signin/signin.js",
         "/version.js",
-        "/sessions.json",
+        "/map.pmtiles",
     ] {
         let reply = get(&server.app, path, None).await;
         assert_eq!(reply.cache_control(), Some("no-cache"), "{path}");

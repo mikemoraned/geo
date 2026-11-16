@@ -32,7 +32,7 @@ way. [`tools/overture-mirror`](../../tools/overture-mirror/README.md) makes the 
 where it is.
 
 Gold is packed when it is needed rather than by `init`, and each packing adopts what it wrote:
-`crossings.version` and `sessions.version` name the versions in play. The device's build script
+`crossings.version` and `map.version` name the versions in play. The device's build script
 reads the first to decide what to embed, and `just deploy` passes both to the image build, so a
 board and a page are built against the same crossings.
 

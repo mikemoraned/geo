@@ -106,18 +106,6 @@ crossings:
     cp "data/medallion/gold/artifact=crossings/version={{crossings_version}}/crossings.json" \
         crates/server/static/crossings.json
 
-sessions_version := trim(`cat sessions.version`)
-
-# Choose the recorded sessions worth replaying into gold, and adopt what was written.
-gold-pack-sessions *args:
-    cargo run --release -p session_crossings --bin pack_sessions -- \
-        --version-file sessions.version --min-crossings 5 --max-sessions 3 {{args}}
-
-# Copy the sessions a kiosk replays into the dir `server` serves them from.
-kiosk-sessions:
-    cp "data/medallion/gold/artifact=sessions/version={{sessions_version}}/sessions.json" \
-        crates/server/static/sessions.json
-
 map_version := trim(`cat map.version`)
 
 # Pack the sessions worth replaying, with the rail and water the crossings name, into gold, and adopt what was written.
@@ -131,7 +119,7 @@ kiosk-map:
         crates/server/static/map.pmtiles
 
 # Serve on http://localhost:3000 with the wasm and the data freshly copied.
-serve-web: wasm crossings kiosk-sessions kiosk-map serve
+serve-web: wasm crossings kiosk-map serve
 
 # Every test: the Rust workspace, Docker ones included, and the Python ones.
 test: test-python test-rust
@@ -191,11 +179,10 @@ mutants-on-diff-no-docker *args:
 end_to_end_test:
     op run --env-file=deploy/lookout.env -- cargo nextest run --release --workspace --profile end-to-end
 
-# Deploy the server to fly.io (lookout-hom.fly.dev), with the git hash, crossings, sessions, and map baked in.
+# Deploy the server to fly.io (lookout-hom.fly.dev), with the git hash, crossings, and map baked in.
 deploy:
     fly deploy --build-arg BUILD_GIT_HASH="{{git_hash}}" \
         --build-arg CROSSINGS_VERSION="{{crossings_version}}" \
-        --build-arg SESSIONS_VERSION="{{sessions_version}}" \
         --build-arg MAP_VERSION="{{map_version}}"
 
 # Set up a fresh worktree's store from what the checkout carries. Gold waits until needed.
