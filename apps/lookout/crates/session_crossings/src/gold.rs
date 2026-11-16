@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use domain::SessionId;
 use domain::{Gps, Sample};
 use medallion::{Country, Query, Root};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Choosing {
@@ -15,7 +15,7 @@ pub struct Choosing {
 const COORDINATE_PLACES: f64 = 1e6;
 const READING_PLACES: f64 = 1e1;
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Replay {
     pub session: SessionId,
     pub crossings: usize,

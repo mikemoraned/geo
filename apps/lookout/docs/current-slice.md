@@ -1,3 +1,3 @@
 # Current Slice
 
-No active slice. Run `/choose-slice` to pick one from `next-slices.md`.
+None. Choose the next one from `next-slices.md` with `/choose-slice`.

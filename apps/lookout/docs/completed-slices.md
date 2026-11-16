@@ -599,3 +599,38 @@ Anyone can register, but a registration grants nothing until the admin allows it
   carries it.
 - **`test-passkeys` is a new crate**, holding the test authenticator, and Rust moved to 1.99.1.
 - **`access.md` is a new doc**, on who can record and the risks the gate accepts.
+
+## Slice: Spike on Maps using Kiosk display as an example
+
+On a screen at least 768 CSS px wide, `/kiosk/` now shows a map behind the predictor, with the
+replayed journey's route, a moving dot, and the rail and water the crossings name. One PMTiles
+file in gold holds both the replay and the base map, and a narrower screen lays out as before.
+
+### The artefact
+
+- **`map` is a new crate, whose `pack_map` writes the sessions worth replaying and the base map
+  into one file.** `tippecanoe` tiles it, and `mlt convert` encodes it as MapLibre Tile, chosen
+  over Mapbox Vector Tile to stay on community-governed formats.
+- **The kiosk reads its journeys from the tiles, not from `sessions.json`.** Each session is a
+  route line carrying its bounds, and its samples are points with their values as attributes, at
+  one zoom level below the base map. The sessions artefact, `pack_sessions`, and their recipes
+  went.
+- **The file packs to zoom level 12 and is committed, at 13.9 MB.** A client fetches single tiles
+  through range requests, which the server supported without change, so the size costs only git.
+
+### The base map
+
+- **The base map is the Overture rail and water that `water_crossing_v2` names, read live from the
+  extract each crossing came from.** `medallion.md` now lets gold read an upstream reference
+  extract by the ids silver names, and nothing else in bronze.
+- **Features stay whole, unclipped by any corridor or country boundary.** Two notebooks under
+  `notebooks/maps` measured the features and the tiles, and clipping to land saved little outside
+  GB's ocean polygons.
+
+### The page
+
+- **MapLibre GL JS, `pmtiles`, and `@maplibre/mlt` are vendored by `just vendor`, with their
+  versions in the file names.** The page loads MapLibre only when the map opens, and reads tiles
+  for the replay through the MLT decoder.
+- **The map can be zoomed and panned, and each journey fits it again.** Rail draws dashed, and
+  water draws as blue areas and lines.

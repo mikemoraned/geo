@@ -89,6 +89,7 @@ pyo3-arrow = "0.16"
 crossings = { path = "crates/crossings" }
 platform-core = { path = "crates/platform-core" }
 m5-core = { path = "crates/platform/m5/core" }
+map = { path = "crates/map" }
 medallion = { path = "crates/medallion" }
 medallion-model = { path = "crates/medallion-model" }
 domain = { path = "crates/domain" }

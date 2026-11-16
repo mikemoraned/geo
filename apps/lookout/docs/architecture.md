@@ -40,7 +40,9 @@ bronze overture        ──notebook────────▶ water_crossing_
 session_v3 + crossings ──match_crossings─▶ session_crossing_v3
 water_crossing_v2      ──pack_crossings──▶ gold crossings.pointset, crossings.json
 session_crossing_v3 +
-  session_sample_v3    ──pack_sessions───▶ gold sessions.json
+  session_sample_v3 +
+  water_crossing_v2 +
+  bronze overture      ──pack_map────────▶ gold map.pmtiles
 ```
 
 Two properties of that graph matter more than the order:
@@ -76,8 +78,9 @@ The rerun runner replays a session's samples through the predictor, and draws wh
 session went against the crossings the predictor expected it to reach; see
 [`crates/platform/rerun-py`](../crates/platform/rerun-py/README.md). The M5 device holds the
 gold point set in flash and scans it against each GPS fix; see [device.md](device.md). A
-browser runs the same core compiled to WebAssembly, fetching the crossings and the sessions
-it replays rather than carrying them; see [web.md](web.md).
+browser runs the same core compiled to WebAssembly, fetching the crossings rather than carrying
+them. A kiosk also fetches the map, reading the sessions it replays from the map's tiles and
+drawing them over the rail and water the crossings name; see [web.md](web.md).
 
 ## Secrets
 

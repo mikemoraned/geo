@@ -18,8 +18,10 @@ What is here, and where to read about it:
 
 `just` recipes run from this directory, and `just --list` is the index. Setting up a machine is
 `just prerequisites`: `rerun`, `wasm-pack`, `cargo-insta`, `cargo-mutants`, and `cargo-audit` from
-cargo, then DuckDB for the multi-engine test, PROJ and jq for `crs-definitions`, and the wasm
-target.
+cargo, and [`mlt`](https://github.com/maplibre/maplibre-tile-spec) from its repository. Then DuckDB
+for the multi-engine test, PROJ and jq for `crs-definitions`,
+[tippecanoe](https://github.com/felt/tippecanoe) for the map's tiles, and the wasm target. `mlt`
+converts tippecanoe's tiles to MapLibre Tile.
 `cargo-insta` reviews a changed snapshot, `cargo-mutants` runs the mutation tests, and
 `cargo-audit` checks the crates for advisories.
 
@@ -30,7 +32,7 @@ way. [`tools/overture-mirror`](../../tools/overture-mirror/README.md) makes the 
 where it is.
 
 Gold is packed when it is needed rather than by `init`, and each packing adopts what it wrote:
-`crossings.version` and `sessions.version` name the versions in play. The device's build script
+`crossings.version` and `map.version` name the versions in play. The device's build script
 reads the first to decide what to embed, and `just deploy` passes both to the image build, so a
 board and a page are built against the same crossings.
 
@@ -39,6 +41,17 @@ board and a page are built against the same crossings.
 The wasm module, and the crossings and sessions a page fetches, are copied into the directory
 `server` serves them from. All three are gitignored: the Docker builder stage runs the same
 commands for a deploy, so what is served is built rather than committed.
+
+The browser libraries in `crates/server/static/vendor` are generated too, but committed. `just
+vendor` replaces them with each package at the version the Justfile pins. A package that ships
+modules a page can import, such as MapLibre GL JS, comes as its own files, through
+[jsDelivr](https://www.jsdelivr.com). Any other comes as [esm.sh](https://esm.sh)'s bundle of it:
+one module a page imports without a bundler. Each file is named for its package and version, such
+as `d3-geo-3.1.1.js`, and a page imports it by that name. Run `just vendor` after changing a
+version or adding a library, and update the imports to match.
+
+MapLibre GL JS looks for its worker beside itself under the worker's unversioned name, so a page
+that uses it names the worker's versioned file through `setWorkerUrl`.
 
 ## The python extensions
 

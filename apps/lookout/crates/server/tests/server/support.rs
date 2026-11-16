@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -117,16 +118,22 @@ pub fn url(origin: &str) -> Url {
 }
 
 pub fn app(relying_party: RelyingParty) -> Router {
-    app_with(relying_party, None)
+    app_with(relying_party, None, Path::new(SITE_DIR))
 }
 
-fn app_with(relying_party: RelyingParty, sink: Option<Arc<dyn SampleSink>>) -> Router {
+const SITE_DIR: &str = env!("CARGO_MANIFEST_DIR");
+
+fn app_with(
+    relying_party: RelyingParty,
+    sink: Option<Arc<dyn SampleSink>>,
+    site_dir: &Path,
+) -> Router {
     build_app(
         AppState {
             sink,
             relying_party,
         },
-        env!("CARGO_MANIFEST_DIR"),
+        site_dir,
     )
 }
 
@@ -140,6 +147,16 @@ impl Server {
     pub fn hosted(allowing: Allowing) -> Self {
         Server::with(ORIGIN, MemoryAuthStore::default(), allowing, None)
     }
+
+    pub fn hosting(site_dir: &Path) -> Self {
+        Server::serving(
+            ORIGIN,
+            MemoryAuthStore::default(),
+            Allowing::ByAdmin,
+            None,
+            site_dir,
+        )
+    }
 }
 
 impl<S: AuthStore + 'static> Server<S> {
@@ -148,6 +165,16 @@ impl<S: AuthStore + 'static> Server<S> {
         passkeys: S,
         allowing: Allowing,
         sink: Option<Arc<dyn SampleSink>>,
+    ) -> Self {
+        Server::serving(origin, passkeys, allowing, sink, Path::new(SITE_DIR))
+    }
+
+    fn serving(
+        origin: &str,
+        passkeys: S,
+        allowing: Allowing,
+        sink: Option<Arc<dyn SampleSink>>,
+        site_dir: &Path,
     ) -> Self {
         let passkeys = Arc::new(passkeys);
         let sessions = MemoryStore::default();
@@ -159,7 +186,7 @@ impl<S: AuthStore + 'static> Server<S> {
         )
         .expect("a relying party");
         Self {
-            app: app_with(relying_party, sink),
+            app: app_with(relying_party, sink, site_dir),
             passkeys,
             sessions,
         }

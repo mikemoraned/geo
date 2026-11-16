@@ -40,4 +40,5 @@ test-passkeys = { workspace = true }
 test-redis = { workspace = true }
 passkey = { workspace = true }
 proptest = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

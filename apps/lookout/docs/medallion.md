@@ -244,6 +244,12 @@ does not change what is stored.
 Outputs, not inputs: the results of evaluating a particular version of a derivation
 against silver, and data prepared for live external use.
 
+A gold derivation may also read an upstream reference extract in bronze, selecting the rows a silver
+dataset names by the upstream's id and the extract's id. The silver dataset holds every decision
+about which rows matter, so the extract supplies only what the rows hold, such as their shapes,
+and a silver copy of them would repeat the selection. This covers upstream reference extracts
+only. Observations in bronze reach gold through silver.
+
 Format: determined by the consumer. Specialised formats are expected at this layer, such as
 [PMTiles](https://docs.protomaps.com/pmtiles/) for live map serving. Polylines are also
 permitted again. Where no specialised format fits, use
@@ -258,10 +264,11 @@ Laid out by what was produced and which run produced it, rather than by a partit
 
 **Gold is derived, and so is not versioned in git — with one exception.** An artefact a build
 reads is an input to something outside the store, and cannot be re-derived by whoever builds
-it: a checkout has no silver to pack from. The crossings and the sessions are the cases today.
-The device's firmware embeds the crossings and the browser fetches them, and a kiosk replays the
-sessions. Every version packed is committed, and `apps/lookout/crossings.version` and
-`apps/lookout/sessions.version` name the ones being built against.
+it: a checkout has no silver to pack from. The crossings and the map are the cases today.
+The device's firmware embeds the crossings and the browser fetches them, and a kiosk draws the
+map and replays the sessions it holds. Every version packed is committed, and
+`apps/lookout/crossings.version` and `apps/lookout/map.version` name the ones being built
+against.
 
 ## Reading from another language
 

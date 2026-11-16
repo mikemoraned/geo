@@ -34,6 +34,8 @@ for working practice and for the limits of this environment. Current notes:
 - [`.claude/memory/test-expectations.md`](.claude/memory/test-expectations.md) — a test writes
   its expected values as literals, never through the code's own constants or helpers, so a
   mutated constant or a renamed key fails it
+- [`.claude/memory/open-source-dependencies.md`](.claude/memory/open-source-dependencies.md) —
+  prefer community-governed open-source libraries and formats, such as MapLibre's, over a vendor's
 - [`.claude/memory/testing-limits.md`](.claude/memory/testing-limits.md) — Docker tests
   don't run in the sandbox, so binaries need running directly
 - [`.claude/memory/working-with-claude.md`](.claude/memory/working-with-claude.md) —
