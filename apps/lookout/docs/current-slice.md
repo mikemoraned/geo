@@ -1133,9 +1133,26 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             of 30°, 45°, 60°, 75°, and 90°.
 - [x] Sweep CrowFlies' radius again over every session the filter keeps, scored on the tune split.
       Its 1 km came from runs without a split, which read the test cells too.
+- [x] Compare LightCone at 30° with CrowFlies at 1 km in `explore8.py`: by outcome, session, speed,
+      and crossing, with sessions picked from the spread drawn on maps.
+- [x] Expose to Python the velocity `LastMove` estimates at each sample, as `velocities` in
+      evaluation-py, so that a notebook can draw the cone LightCone used.
+- [ ] Rebuild LightCone as CrowFlies with a bearing filter on top, so that LightCone at a
+      half-width of 180° is CrowFlies.
+      LightCone as built alerts on any crossing within its watching radius that it expects within
+      N, with no alerting radius, and with a speed of its own. The sweep above therefore measured
+      three changes at once, not the bearing filter.
+      - [ ] Give CrowFlies its speed from a `VelocityEstimator`, `LastMove` by default, in place
+            of the receiver's speed or the speed implied by the previous sample.
+      - [ ] Make LightCone CrowFlies' alerting rule, its alerting radius and N, plus the bearing
+            filter. Show by a property test that at 180° it predicts exactly what CrowFlies does.
+- [ ] Run CrowFlies at 1 km, and the rebuilt LightCone at 1 km with half-widths of 30°, 45°, 60°,
+      75°, and 90°, over every session the filter keeps, scored on the tune split.
+- [ ] Analyse those runs in `explore9.py`, as `explore8.py` did, with the cone drawn at each alert.
 - [ ] Average the velocity over the last few samples, as a `VelocityEstimator`, and run it again.
-- [ ] Draw LightCone's cone at each sample in `explore5.py` with the user, where it beats
+- [-] Draw LightCone's cone at each sample in `explore5.py` with the user, where it beats
       CrowFlies and where it loses.
+      Moot: `explore9.py` draws the cone of the rebuilt LightCone.
 - [-] Run both predictors over every session the filter keeps. If their intervals still overlap,
       widen the filter to every session.
       Moot: the sweeps above run over every session the filter keeps. If the tune runs' intervals
@@ -1179,7 +1196,8 @@ split doc](2026-11-14-train-test-split.md) gives the evidence for those from `ex
   on the tune split, CrowFlies at 1 km scores a precision of 0.327 [0.325, 0.328], a recall of
   0.859 [0.855, 0.864], and 20.4 [20.1, 20.6] false alarms per hour. LightCone's best half-width,
   30°, scores 0.104 [0.102, 0.106], 0.472 [0.468, 0.477], and 28.7 [28.2, 29.2]. Each wider
-  half-width adds false alarms and leaves recall near 0.44.
+  half-width adds false alarms and leaves recall near 0.44. These runs measured LightCone without
+  CrowFlies' alerting radius, as the task to rebuild it sets out.
 - **2026-11-16: LightCone alerts early and repeats.** Its median lead time runs from 330 s to
   360 s, beyond the horizon of 5 minutes. A straight line to a crossing is shorter than the track,
   so LightCone predicts arrival too soon. Its repeats fall from 433,436 at 30° to 199,311 at 90°,

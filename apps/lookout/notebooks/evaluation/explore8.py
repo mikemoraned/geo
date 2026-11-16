@@ -32,6 +32,15 @@ def intro(mo):
     mo.md("""
     # Where LightCone beats CrowFlies, and where it loses
 
+    /// warning | Based on a flawed LightCone
+    The LightCone these runs measured is not CrowFlies with a bearing filter on top. It alerts on any
+    crossing within its 20 km watching radius that it expects to reach within the horizon, without
+    CrowFlies' alerting radius of 1 km, and it estimates speed its own way. The runs therefore
+    measure three changes at once, not the bearing filter alone, and most of LightCone's early alerts
+    and false alarms come from the missing alerting radius. `explore9.py` repeats this analysis on
+    LightCone rebuilt as CrowFlies with a bearing filter.
+    ///
+
     The sweep of 2026-11-16 ran LightCone and CrowFlies over all 34,521 sessions the filter keeps,
     scored on the tune split. This notebook compares one LightCone run with CrowFlies at 1 km. It
     shows the outcomes each predictor gives, how they spread across sessions, and sessions picked from
@@ -1257,10 +1266,11 @@ def session_heading(mo):
     mo.md("""
     ## One session
 
-    The track is grey. Each crossing the session alerted on or passed is coloured by its best
-    outcome under that predictor: a hit, too early, at the last moment, a miss, or a false alarm only.
-    A line joins the train, at each alert, to the crossing it alerted on, in the same colours. The
-    table under each map counts that predictor's outcomes in the session.
+    Each map shows one predictor in the session. The track is grey, and a black dot marks where the
+    train was each time it alerted. An arc leaves that dot for each crossing the alert named, coloured
+    by what came of the alert: a hit, too early, at the last moment, a false alarm, or a repeat of an
+    earlier alert. Each crossing is a dot coloured by its best outcome, with black for a pass no
+    alert announced. The table under each map counts that predictor's alerts and misses.
     """)
     return
 
@@ -1371,21 +1381,15 @@ def session_maps(
                 on="crossing_compact_id",
             )
         )
-        _lines = _alerts.select(
-            "kind",
+        _alert_colours = _colours(_alerts["kind"])
+        _alerted_from = _alerts.unique("notified_at").with_columns(
             _geometries(
-                shapely.linestrings(
-                    np.stack(
-                        [
-                            _alerts.select(
-                                "train_lon", "train_lat"
-                            ).to_numpy(),
-                            _alerts.select("lon", "lat").to_numpy(),
-                        ],
-                        axis=1,
-                    )
+                shapely.points(
+                    _alerts.unique("notified_at")
+                    .select("train_lon", "train_lat")
+                    .to_numpy()
                 )
-            ),
+            )
         )
         _layers = [
             lonboard.PathLayer(
@@ -1401,20 +1405,31 @@ def session_maps(
                 radius_min_pixels=4,
             ),
         ]
-        if _lines.height:
-            _layers.insert(
-                1,
-                lonboard.PathLayer(
-                    table=_lines.to_arrow(),
-                    get_color=np.column_stack(
-                        [
-                            _colours(_lines["kind"]),
-                            np.full(_lines.height, 120, dtype=np.uint8),
-                        ]
-                    ),
-                    width_min_pixels=1,
+        if _alerts.height:
+            _layers[1:1] = [
+                lonboard.ArcLayer(
+                    table=_alerts.select(
+                        "crossing_compact_id", "kind", "notified_at", "lead"
+                    ).to_arrow(),
+                    get_source_position=_alerts.select(
+                        "train_lon", "train_lat"
+                    ).to_numpy(),
+                    get_target_position=_alerts.select(
+                        "lon", "lat"
+                    ).to_numpy(),
+                    get_source_color=_alert_colours,
+                    get_target_color=_alert_colours,
+                    get_tilt=90,
+                    width_min_pixels=2,
                 ),
-            )
+                lonboard.ScatterplotLayer(
+                    table=_alerted_from.select(
+                        "notified_at", "geometry"
+                    ).to_arrow(),
+                    get_fill_color=[33, 33, 33],
+                    radius_min_pixels=3,
+                ),
+            ]
         return mo.vstack(
             [
                 mo.md(f"**{predictor_names[predictor]}**"),
