@@ -1150,7 +1150,9 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
       75°, and 90°, over every session the filter keeps, scored on the tune split.
       Chosen with the user on 2026-11-16: the sweep adds a half-width of 15°.
 - [x] Analyse those runs in `explore9.py`, as `explore8.py` did, with the cone drawn at each alert.
-- [ ] Average the velocity over the last few samples, as a `VelocityEstimator`, and run it again.
+- [-] Average the velocity over the last few samples, as a `VelocityEstimator`, and run it again.
+      Set aside with the user on 2026-11-16: an estimator more elaborate than `LastMove` is better
+      served by a Kalman filter or similar than by an average.
 - [-] Draw LightCone's cone at each sample in `explore5.py` with the user, where it beats
       CrowFlies and where it loses.
       Moot: `explore9.py` draws the cone of the rebuilt LightCone.
