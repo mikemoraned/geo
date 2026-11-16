@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use countries::{CountryAreas, CountryError, Outline};
+use countries::{CountryAreas, CountryError};
 use crossings::silver::Crossing;
 use domain::{CrossingCompactId, SessionId};
 use geo_types::{Geometry, Point, Polygon};
@@ -13,10 +13,9 @@ use crate::score::Outcome;
 use crate::scored::ScoredCrossings;
 use crate::split::{ScoredSplit, Split};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SplitCheck {
     pub split: ScoredSplit,
-    pub outline: Outline,
     pub cover: A5Cover,
 }
 
@@ -77,12 +76,12 @@ impl SplitCheck {
         country: Country,
         split: &ScoredSplit,
     ) -> Result<Self, SplitCheckError> {
-        let areas = CountryAreas::newest_per_country(root).await?;
-        let outline = areas
-            .outline(country)
-            .cloned()
-            .ok_or(SplitCheckError::NoCountry(country))?;
-        let areas = areas.shapes_of(country);
+        let areas = CountryAreas::newest_per_country(root)
+            .await?
+            .shapes_of(country);
+        if areas.is_empty() {
+            return Err(SplitCheckError::NoCountry(country));
+        }
         let polygons = areas
             .into_iter()
             .map(|area| match area {
@@ -93,23 +92,27 @@ impl SplitCheck {
             .collect::<Result<Vec<Vec<Polygon<f64>>>, _>>()?;
         Ok(Self {
             split: split.clone(),
-            outline,
             cover: A5Cover::overlapping(polygons.iter().flatten(), split.splitter.resolution)?,
         })
     }
 
-    pub fn in_country(&self, crossings: Vec<Crossing>) -> Vec<Crossing> {
+    pub fn in_cover(&self, crossings: Vec<Crossing>) -> Result<Vec<Crossing>, NoA5Cell> {
         let read = crossings.len();
-        let kept: Vec<Crossing> = crossings
-            .into_iter()
-            .filter(|crossing| self.outline.covers(&crossing.crossing.position))
-            .collect();
+        let mut kept = Vec::new();
+        for crossing in crossings {
+            if self
+                .cover
+                .contains(self.split.splitter.cell(crossing.crossing.position)?)
+            {
+                kept.push(crossing);
+            }
+        }
         tracing::info!(
             left_out = read - kept.len(),
             kept = kept.len(),
-            "left out the crossings outside the country's areas"
+            "left out the crossings in cells outside the country's cover"
         );
-        kept
+        Ok(kept)
     }
 
     pub fn before_replay(
@@ -329,9 +332,6 @@ mod tests {
                 },
                 split,
             },
-            outline: Outline::new(Country::Germany, &[Geometry::Polygon(around.clone())])
-                .unwrap()
-                .unwrap(),
             cover: A5Cover::overlapping([&around], resolution()).unwrap(),
         }
     }
@@ -385,9 +385,10 @@ mod tests {
     }
 
     #[test]
-    fn a_check_keeps_the_crossings_inside_the_country_alone() {
+    fn a_check_keeps_the_crossings_in_the_countrys_cover_alone() {
         let kept: Vec<u32> = check(Split::Test, 0.1)
-            .in_country(crossings())
+            .in_cover(crossings())
+            .unwrap()
             .iter()
             .map(|crossing| crossing.compact_id.get())
             .collect();

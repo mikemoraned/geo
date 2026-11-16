@@ -157,7 +157,9 @@ another cause.
 The notebook also keeps crossings outside the country it derives them for. DE's crossings include
 one of the Moselle near Thionville, in France. The evaluation leaves such crossings out of a run
 with a split, as a stopgap. Deriving the crossings in Rust cuts them to the country's areas, and
-the evaluation then reads silver as it stands.
+the evaluation then reads silver as it stands. The cut keeps a crossing on a river that forms the
+border, such as the Wurm at Herzogenrath, which German trains pass. Its centre can lie just outside
+the country's outline.
 
 ## Slice: Enrich and use relative direction of POI
 

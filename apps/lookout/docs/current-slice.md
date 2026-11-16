@@ -1120,10 +1120,13 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             - The radius of stillness stays at 20 m. The store's positions carry no receiver
               noise, so no replay can tune it.
       - [x] Remove `evaluation_run_v5`, its row type, and the migration binary.
-      - [x] Leave the crossings outside the country's areas out of a run with a split. Silver
-            `water_crossing_v2` for DE holds a crossing of the Moselle near Thionville, in France.
-            Its A5 cell overlaps no German area, so the split check refused the first check run.
-            A run scoring every crossing still reads them all, as `replay-v1` defines.
+      - [x] Leave the crossings in cells outside the country's cover out of a run with a split.
+            Silver `water_crossing_v2` for DE holds a crossing of the Moselle near Thionville, in
+            France. Its A5 cell overlaps no German area, so the split check refused the first
+            check run. A run scoring every crossing still reads them all, as `replay-v1` defines.
+            - A cut by the country's outline left out 35 crossings, among them one on the Wurm at
+              Herzogenrath, which forms the border with the Netherlands. German trains pass it 998
+              times. The cover keeps such a crossing, since its cell overlaps Germany.
             - Tech debt: silver itself holds crossings outside its country. The slice "derive the
               water crossings in Rust" cuts them out where it derives the crossings.
       - [ ] Run LightCone over 1000 sessions as a check, then over every session at half-widths

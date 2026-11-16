@@ -149,7 +149,7 @@ pub async fn read_crossings_and_passes(
     };
     let crossings = match &check {
         None => read_of_country(root, country).await?,
-        Some(check) => check.in_country(read_of_country(root, country).await?),
+        Some(check) => check.in_cover(read_of_country(root, country).await?)?,
     };
     let passes = passes_by_session(
         sessions.iter().map(|session| session.session_id.clone()),
@@ -617,7 +617,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_run_with_a_split_leaves_out_the_crossings_outside_the_country() {
+    async fn a_run_with_a_split_leaves_out_the_crossings_outside_the_countrys_cover() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = store(tmp.path(), 3).await;
         write_country(&root, around_dresden_hbf(0.1)).await;
