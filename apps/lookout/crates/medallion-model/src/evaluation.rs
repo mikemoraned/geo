@@ -8,9 +8,6 @@ use strum::{AsRefStr, EnumIter, EnumString};
 
 use crate::TrainSessionRowV3;
 
-pub const EVALUATION_RUN_V5: DatasetSpec<layers::Gold> =
-    DatasetSpec::partitioned_within("evaluation_run_v5", RUN_DATE, &[RUN_ID]);
-
 pub const EVALUATION_RUN_V6: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_run_v6", RUN_DATE, &[RUN_ID]);
 
@@ -263,85 +260,9 @@ pub enum PredictorName {
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
-pub enum PredictorNameV5 {
-    Oracle,
-    CrowFlies,
-}
-
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumString, AsRefStr, EnumIter,
-)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
 pub enum FloatType {
     F32,
     F64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EvaluationRunRowV5 {
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub started_at: DateTime<Utc>,
-    pub evaluation_version: String,
-    pub code_version: String,
-    pub country: String,
-    pub realtime_at_least: Percentage,
-    pub sessions: u64,
-    pub pick_seed: u64,
-    pub predictor: PredictorNameV5,
-    pub predictor_settings: BTreeMap<String, String>,
-    pub online_detector_settings: BTreeMap<String, String>,
-    pub split_settings: BTreeMap<String, String>,
-    pub float_type: FloatType,
-    #[serde(with = "medallion::duration::milliseconds")]
-    pub horizon: TimeDelta,
-    #[serde(with = "medallion::duration::milliseconds")]
-    pub last_moment: TimeDelta,
-    #[serde(with = "medallion::duration::milliseconds")]
-    pub ramp: TimeDelta,
-    pub last_moment_score: f64,
-    pub floor: f64,
-    #[serde(with = "medallion::duration::milliseconds")]
-    pub warm_up: TimeDelta,
-    pub resamples: u64,
-    pub bootstrap_seed: u64,
-    pub fingerprints: BTreeMap<String, String>,
-}
-
-impl Row for EvaluationRunRowV5 {
-    type Layer = layers::Gold;
-    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_RUN_V5;
-    const INSTANTS: &'static [&'static str] = &["started_at"];
-    const DURATIONS: &'static [&'static str] = &["horizon", "last_moment", "ramp", "warm_up"];
-
-    fn example() -> Self {
-        Self {
-            started_at: DateTime::UNIX_EPOCH,
-            evaluation_version: "replay-v1".to_string(),
-            code_version: "0000000000000000000000000000000000000000".to_string(),
-            country: "DE".to_string(),
-            realtime_at_least: Percentage::new(90.0).expect("90 is a percentage"),
-            sessions: 1000,
-            pick_seed: 1,
-            predictor: PredictorNameV5::Oracle,
-            predictor_settings: BTreeMap::from([("horizon".to_string(), "5m".to_string())]),
-            online_detector_settings: BTreeMap::from([(
-                "pass_radius_metres".to_string(),
-                "100".to_string(),
-            )]),
-            split_settings: BTreeMap::from([("split".to_string(), "test".to_string())]),
-            float_type: FloatType::F32,
-            horizon: TimeDelta::minutes(5),
-            last_moment: TimeDelta::seconds(30),
-            ramp: TimeDelta::minutes(1),
-            last_moment_score: 0.25,
-            floor: 0.05,
-            warm_up: TimeDelta::minutes(1),
-            resamples: 1000,
-            bootstrap_seed: 1,
-            fingerprints: BTreeMap::from([("example".to_string(), "example".to_string())]),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -467,7 +388,6 @@ mod tests {
     #[test]
     fn a_predictor_is_named_as_it_is_stored() {
         spelt_alike::<PredictorName>();
-        spelt_alike::<PredictorNameV5>();
     }
 
     #[test]

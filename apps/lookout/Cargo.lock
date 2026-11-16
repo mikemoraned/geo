@@ -3419,7 +3419,6 @@ dependencies = [
  "rand 0.10.2",
  "rand_chacha 0.10.0",
  "rayon",
- "serde",
  "serde_json",
  "sha2 0.11.0",
  "statrs",

@@ -1119,7 +1119,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
               alone decides each alert.
             - The radius of stillness stays at 20 m. The store's positions carry no receiver
               noise, so no replay can tune it.
-      - [ ] Remove `evaluation_run_v5`, its row type, and the migration binary.
+      - [x] Remove `evaluation_run_v5`, its row type, and the migration binary.
       - [ ] Run LightCone over 1000 sessions as a check, then over every session at half-widths
             of 30°, 45°, 60°, 75°, and 90°.
 - [ ] Sweep CrowFlies' radius again over every session the filter keeps, scored on the tune split.
