@@ -103,7 +103,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   from `Browser`. Leave the colours to the element.
 - [x] Update the bridge's JSON contract test in `bridge/src/lib.rs` for the new effect, event,
   and view.
-- [ ] Answer the `Lines` effect in `lookout-predictor.js` by reading the `rail` layer of
+- [x] Answer the `Lines` effect in `lookout-predictor.js` by reading the `rail` layer of
   `/map.pmtiles` through `static/tiles.js`.
 - [ ] Draw each line in `lookout-predictor.js` under the crossings, coloured by category and
   clipped to the outer ring.

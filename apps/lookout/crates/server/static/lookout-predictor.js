@@ -1,13 +1,23 @@
 import init, { process_event, view } from "/wasm/lookout.js";
 import { geoAzimuthalEquidistant } from "/vendor/d3-geo-3.1.1.js";
 import { scaleSymlog } from "/vendor/d3-scale-4.0.2.js";
+import { PMTiles } from "/vendor/pmtiles-4.5.0.js";
+import { layerLines } from "/tiles.js";
 
 const loaded = init();
 
 const CROSSINGS = "/crossings.json";
+const MAP = "/map.pmtiles";
+const RAIL_ZOOM = 12;
 const LINEAR_WITHIN_METRES = 500;
 const CANVAS_SIZE = 320;
 const TAU = Math.PI * 2;
+
+let map;
+
+function base64(bytes) {
+  return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""));
+}
 
 function speed(metres_per_second) {
   if (metres_per_second === null || metres_per_second === undefined) return "no speed yet";
@@ -47,6 +57,7 @@ class LookoutPredictor extends HTMLElement {
     for (const request of requests) {
       if ("Render" in request.effect) moved = true;
       if ("Crossings" in request.effect) await this.#fetchCrossings();
+      if ("Lines" in request.effect) this.#fetchRail(request.effect.Lines.area);
     }
     if (moved) this.#paint();
   }
@@ -58,6 +69,17 @@ class LookoutPredictor extends HTMLElement {
       await this.dispatch({ Crossings: await response.json() });
     } catch (failed) {
       this.#screen.textContent = `could not load ${CROSSINGS}: ${failed.message}`;
+    }
+  }
+
+  async #fetchRail(area) {
+    try {
+      map ??= new PMTiles(MAP);
+      const { xmin, ymin, xmax, ymax } = area;
+      const rail = await layerLines(map, "rail", RAIL_ZOOM, [xmin, ymin, xmax, ymax]);
+      await this.dispatch({ Lines: { area, lines: rail.map(base64) } });
+    } catch (failed) {
+      this.#screen.textContent = `could not load the rail from ${MAP}: ${failed.message}`;
     }
   }
 
