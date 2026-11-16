@@ -81,7 +81,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Move `layerFeatures` and `tilesCovering` from `static/kiosk/journeys.js` into
   `static/tiles.js`, and import them from there in `journeys.js`.
 - [x] Choose a JavaScript library that writes and reads WKB, and vendor it under `static/vendor/`.
-- [ ] Add a reader of a layer's lines in `static/tiles.js`, returning WKB geometries in longitude
+- [x] Add a reader of a layer's lines in `static/tiles.js`, returning WKB geometries in longitude
   and latitude.
 
 #### The core asks for rail and keeps a trace (`platform-core`)
