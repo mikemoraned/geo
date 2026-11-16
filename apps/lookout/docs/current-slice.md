@@ -93,7 +93,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   lines as WKB geometries, in `app.rs`.
 - [x] Keep the box and its rail in `Model`, ask for a new box once a fix nears the edge, and drop
   lines for a box the core has left. `Reset` clears both.
-- [ ] Keep the fixes within the snake's window in `Model`, pruned as each fix arrives.
+- [x] Keep the fixes within the snake's window in `Model`, pruned as each fix arrives.
 - [x] Test each in `app.rs`: the first fix asks, a fix inside the box does not, a fix near its
   edge does, stale lines are dropped, and a `Reset` forgets.
 

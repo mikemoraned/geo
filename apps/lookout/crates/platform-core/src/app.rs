@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::Float;
 use crate::battery::{Battery, Charge};
 use crate::lines::{Nearby, Wkb};
+use crate::trace::Trace;
 
 pub trait Shell: Sized + 'static {
     type ViewModel;
@@ -37,6 +38,7 @@ pub struct Model<S: Shell> {
     battery: Battery,
     predictor: Predicting<S>,
     nearby: Nearby,
+    trace: Trace,
 }
 
 enum Predicting<S: Shell> {
@@ -54,6 +56,7 @@ impl<S: Shell> Default for Model<S> {
                 None => Predicting::Waiting,
             },
             nearby: Nearby::default(),
+            trace: Trace::default(),
         }
     }
 }
@@ -96,6 +99,10 @@ impl<S: Shell> Model<S> {
 
     pub fn lines(&self) -> &[Wkb] {
         self.nearby.shown()
+    }
+
+    pub fn trace(&self) -> impl Iterator<Item = Point<Float>> + '_ {
+        self.trace.positions()
     }
 }
 
@@ -159,8 +166,19 @@ impl<S: Shell> Lookout<S> {
         let Predicting::Ready(predictor) = &mut model.predictor else {
             return Change::Unchanged;
         };
+        let sampled = match event {
+            Observed::Sampled(sample) => Some(sample),
+            Observed::Elapsed(_) => None,
+        };
         match predictor.observe(event) {
-            Ok(()) => Change::Moved,
+            Ok(()) => {
+                if let Some(sample) = sampled
+                    && S::draws_lines()
+                {
+                    model.trace.followed(sample);
+                }
+                Change::Moved
+            }
             Err(_) => Change::Unchanged,
         }
     }
@@ -263,6 +281,13 @@ mod tests {
         speed_mps: Option<Float>,
         charge: Option<Charge>,
         predicted: usize,
+        traced: usize,
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct Drawn {
+        lines: Vec<Wkb>,
+        trace: Vec<Point<Float>>,
     }
 
     impl Shell for Bare {
@@ -288,6 +313,7 @@ mod tests {
                 speed_mps: model.speed_mps(),
                 charge: model.charge(),
                 predicted: model.predictions().len(),
+                traced: model.trace().count(),
             }
         }
     }
@@ -315,6 +341,7 @@ mod tests {
                 speed_mps: model.speed_mps(),
                 charge: model.charge(),
                 predicted: model.predictions().len(),
+                traced: model.trace().count(),
             }
         }
     }
@@ -323,7 +350,7 @@ mod tests {
     struct Drawing;
 
     impl Shell for Drawing {
-        type ViewModel = Vec<Wkb>;
+        type ViewModel = Drawn;
         type Crossings = Vec<CrossingCompact<Float>>;
 
         fn carried() -> Option<Self::Crossings> {
@@ -338,8 +365,11 @@ mod tests {
             true
         }
 
-        fn project(model: &Model<Self>) -> Vec<Wkb> {
-            model.lines().to_vec()
+        fn project(model: &Model<Self>) -> Drawn {
+            Drawn {
+                lines: model.lines().to_vec(),
+                trace: model.trace().collect(),
+            }
         }
     }
 
@@ -526,6 +556,7 @@ mod tests {
                 speed_mps: None,
                 charge: None,
                 predicted: 0,
+                traced: 0,
             }
         );
     }
@@ -749,7 +780,7 @@ mod tests {
             lines: vec![line()],
         });
 
-        assert_eq!(core.view(), vec![line()]);
+        assert_eq!(core.view().lines, vec![line()]);
         assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
     }
 
@@ -768,7 +799,7 @@ mod tests {
             lines: vec![line()],
         });
 
-        assert!(core.view().is_empty());
+        assert!(core.view().lines.is_empty());
         assert!(effects.is_empty());
     }
 
@@ -785,7 +816,7 @@ mod tests {
         core.process_event(Event::Reset);
         let effects = core.process_event(reported(instant(), at_the_station()));
 
-        assert!(core.view().is_empty());
+        assert!(core.view().lines.is_empty());
         assert_eq!(asked(&effects), Some(area));
     }
 
@@ -796,6 +827,54 @@ mod tests {
         let effects = core.process_event(reported(instant(), at_the_station()));
 
         assert_eq!(asked(&effects), None);
+    }
+
+    #[test]
+    fn each_fix_a_drawing_shell_is_sent_joins_its_trace() {
+        let core = drawing();
+
+        core.process_event(reported(instant(), at_the_station()));
+        core.process_event(reported(
+            instant() + TimeDelta::seconds(10),
+            north_of_the_station(1_000.0),
+        ));
+
+        let latitudes: Vec<Float> = core.view().trace.iter().map(|at| at.y()).collect();
+        assert_eq!(latitudes.len(), 2);
+        assert!((latitudes[0] - 51.0403).abs() < 1e-4);
+        assert!((latitudes[1] - 51.0493).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_refused_fix_stays_out_of_the_trace() {
+        let core = drawing();
+        core.process_event(reported(instant(), at_the_station()));
+
+        core.process_event(reported(
+            instant() - TimeDelta::seconds(1),
+            north_of_the_station(1_000.0),
+        ));
+
+        assert_eq!(core.view().trace.len(), 1);
+    }
+
+    #[test]
+    fn starting_again_forgets_the_trace() {
+        let core = drawing();
+        core.process_event(reported(instant(), at_the_station()));
+
+        core.process_event(Event::Reset);
+
+        assert!(core.view().trace.is_empty());
+    }
+
+    #[test]
+    fn a_shell_that_draws_no_lines_keeps_no_trace() {
+        let core = core();
+
+        core.process_event(reported(instant(), at_the_station()));
+
+        assert_eq!(core.view().traced, 0);
     }
 
     #[test]
