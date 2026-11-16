@@ -71,9 +71,13 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Refactors / extensions
 
-- [ ] Find what `decodeTile` from `maplibre-mlt-1.3.0.js` gives as a feature's geometry: its
+- [x] Find what `decodeTile` from `maplibre-mlt-1.3.0.js` gives as a feature's geometry: its
   coordinates, its extent, and how it splits a line. Do this first, since the element's reading
   depends on it.
+  - A feature's `geometry.type` is a `GEOMETRY_TYPE` number, 1 for a line and 4 for several.
+    `geometry.coordinates` holds one array of `{x, y}` points per line, in integer units of the
+    table's `extent`, 4096. A line is cut at the tile's edge and runs on into the buffer, so `x`
+    and `y` go below 0 and above 4096.
 - [ ] Move `layerFeatures` and `tilesCovering` from `static/kiosk/journeys.js` into
   `static/tiles.js`, and import them from there in `journeys.js`.
 - [ ] Choose a JavaScript library that writes and reads WKB, and vendor it under `static/vendor/`.
