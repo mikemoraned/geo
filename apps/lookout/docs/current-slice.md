@@ -1253,8 +1253,9 @@ A person chooses the apps' predictor and its settings from the runs of CrowFlies
 - [x] Choose each predictor's settings with the user, through `/choose-predictor` over the tune
       runs of Phase 6.
       LightCone at 1 km and 45°, and CrowFlies at 1 km, each with `LastMove` at 20 m.
-- [ ] Run each predictor's chosen settings once over every session the filter keeps, scored on
+- [x] Run each predictor's chosen settings once over every session the filter keeps, scored on
       the test split. Choose the apps' predictor with the user from those runs alone.
+      LightCone at 1 km and 45°, with `LastMove` at 20 m.
 - [ ] Replace `CrowFlies` in `platform-core` with the chosen predictor and settings.
 
 #### Phase 8: the size of a run on disk
