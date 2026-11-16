@@ -1149,7 +1149,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 - [x] Run CrowFlies at 1 km, and the rebuilt LightCone at 1 km with half-widths of 30°, 45°, 60°,
       75°, and 90°, over every session the filter keeps, scored on the tune split.
       Chosen with the user on 2026-11-16: the sweep adds a half-width of 15°.
-- [ ] Analyse those runs in `explore9.py`, as `explore8.py` did, with the cone drawn at each alert.
+- [x] Analyse those runs in `explore9.py`, as `explore8.py` did, with the cone drawn at each alert.
 - [ ] Average the velocity over the last few samples, as a `VelocityEstimator`, and run it again.
 - [-] Draw LightCone's cone at each sample in `explore5.py` with the user, where it beats
       CrowFlies and where it loses.
@@ -1222,6 +1222,13 @@ split doc](2026-11-14-train-test-split.md) gives the evidence for those from `ex
 - **2026-11-16: CrowFlies scores higher with the speed from `LastMove`.** Its precision rises from
   0.327 to 0.361, and its recall from 0.859 to 0.897, against the run with the receiver's speed.
   The intervals do not overlap. It misses no pass, and raises 422,502 false alarms.
+- **2026-11-16: a pass credits its worst-scoring notification, not its first.** `explore8.py`
+  assumed the first when it bounded what holding back an early alert could gain, so that bound does
+  not hold. Its counts stand.
+- **2026-11-16: a few passes score better under LightCone than under CrowFlies.** At 75°, 99 passes
+  do. In each, CrowFlies alerted early, dropped the crossing, and alerted again at the last moment.
+  LightCone dropped that last alert: the crossing lay 25 m to 200 m away (p10 to p90), and at least
+  75° off the heading, with a median of 127°.
 
 #### Phase 7: choosing the predictor
 
