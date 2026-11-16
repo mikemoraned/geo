@@ -123,7 +123,7 @@ pub enum StepError {
     Rows(#[from] RowsError),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct CrossingsAndPasses {
     pub crossings: Vec<Crossing>,
     pub passes: PassesBySession,
@@ -131,7 +131,7 @@ pub struct CrossingsAndPasses {
     pub checked: Option<CheckedSplit>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct CheckedSplit {
     pub check: SplitCheck,
     pub counts: SplitCounts,
@@ -143,17 +143,23 @@ pub async fn read_crossings_and_passes(
     sessions: &[EvaluationSessionRowV2],
     split: Option<&ScoredSplit>,
 ) -> Result<CrossingsAndPasses, StepError> {
-    let crossings = read_of_country(root, country).await?;
+    let check = match split {
+        None => None,
+        Some(split) => Some(SplitCheck::read(root, country, split).await?),
+    };
+    let crossings = match &check {
+        None => read_of_country(root, country).await?,
+        Some(check) => check.in_country(read_of_country(root, country).await?),
+    };
     let passes = passes_by_session(
         sessions.iter().map(|session| session.session_id.clone()),
         read_passes(root, sessions).await?,
         &compact_ids(&crossings),
     )?;
     let scored = ScoredCrossings::of(&crossings, split)?;
-    let checked = match split {
+    let checked = match check {
         None => None,
-        Some(split) => {
-            let check = SplitCheck::read(root, country, split).await?;
+        Some(check) => {
             let samples = read_samples(
                 root,
                 country,
@@ -611,7 +617,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_run_whose_crossings_reach_beyond_the_countrys_cover_is_refused() {
+    async fn a_run_with_a_split_leaves_out_the_crossings_outside_the_country() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = store(tmp.path(), 3).await;
         write_country(&root, around_dresden_hbf(0.1)).await;
@@ -627,16 +633,21 @@ mod tests {
             ..run_of(oracle())
         };
 
-        let refused = run(&root, &settings).await;
+        let results = run(&root, &settings).await.expect("a run");
 
-        assert!(
-            matches!(
-                refused,
-                Err(StepError::SplitBroken(SplitBroken::OutsideTheCountry {
-                    cells: 1
-                }))
-            ),
-            "{refused:?}"
+        assert_eq!(
+            results.split,
+            Some(EvaluationSplitRowV1 {
+                cells: 1,
+                cells_in_split: 1,
+                crossings: 1,
+                crossings_in_split: 1,
+                passes_in_split: 3,
+                passes_outside: 0,
+                outcomes_in_split: 3,
+                outcomes_outside: 0,
+                cells_outside_cover: 0,
+            })
         );
     }
 

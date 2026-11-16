@@ -48,8 +48,8 @@ impl Outline {
         }))
     }
 
-    pub fn covers(&self, line: &LineString<f64>) -> bool {
-        self.prepared.relate(line).is_covers()
+    pub fn covers(&self, shape: &impl Relate<f64>) -> bool {
+        self.prepared.relate(shape).is_covers()
     }
 }
 

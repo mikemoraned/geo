@@ -154,6 +154,11 @@ crossings were point crossings. That day's run renamed one of them, and two pass
 `silver/session_crossing` then named an id the store no longer held. A moved line crossing needs
 another cause.
 
+The notebook also keeps crossings outside the country it derives them for. DE's crossings include
+one of the Moselle near Thionville, in France. The evaluation leaves such crossings out of a run
+with a split, as a stopgap. Deriving the crossings in Rust cuts them to the country's areas, and
+the evaluation then reads silver as it stands.
+
 ## Slice: Enrich and use relative direction of POI
 
 ### Target
