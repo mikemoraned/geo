@@ -13,6 +13,9 @@ wasm-bindgen = "0.2"
 platform-core = { workspace = true }
 web-core = { workspace = true }
 
+[dev-dependencies]
+serde_json = { workspace = true }
+
 # geo pulls in rand, whose getrandom builds for wasm32-unknown-unknown only with `js`.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }

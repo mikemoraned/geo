@@ -101,7 +101,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - [x] Add `lines` to `web_core::ViewModel`, each a WKB geometry with its category, and draw lines
   from `Browser`. Leave the colours to the element.
-- [ ] Update the bridge's JSON contract test in `bridge/src/lib.rs` for the new effect, event,
+- [x] Update the bridge's JSON contract test in `bridge/src/lib.rs` for the new effect, event,
   and view.
 - [ ] Answer the `Lines` effect in `lookout-predictor.js` by reading the `rail` layer of
   `/map.pmtiles` through `static/tiles.js`.
