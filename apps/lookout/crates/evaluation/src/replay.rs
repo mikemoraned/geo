@@ -131,7 +131,7 @@ mod tests {
     use geo_types::Point;
     use medallion::{GeographyRow, Row, write_geography_rows};
     use medallion_model::{TrainSessionCrossingRowV1, TrainSessionSampleRowV3};
-    use predictor::{Alerting, Confidence, CrowFlies, Prediction, Predictions, Watching};
+    use predictor::{Alerting, Confidence, CrowFlies, LastMove, Prediction, Predictions, Watching};
 
     use super::*;
     use crate::fixtures::{crossing, instant};
@@ -252,6 +252,7 @@ mod tests {
                 radius: Radius::new(1_000.0).expect("a radius"),
                 horizon: Span::new("5m").expect("a span"),
             },
+            LastMove::new(Radius::new(20.0).expect("a radius")),
         )
         .expect("alerting within what it watches");
         let samples =
@@ -288,6 +289,7 @@ mod tests {
                 radius: Radius::new(1_000.0).expect("a radius"),
                 horizon: Span::new("5m").expect("a span"),
             },
+            LastMove::new(Radius::new(20.0).expect("a radius")),
         )
         .expect("alerting within what it watches");
         let samples = [sample(10, DRESDEN_HBF.y()), sample(0, DRESDEN_HBF.y())];

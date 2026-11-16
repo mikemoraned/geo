@@ -32,6 +32,7 @@ pub struct OracleSettings {
 pub struct CrowFliesSettings {
     pub radius: Radius,
     pub horizon: Span,
+    pub still_within: Radius,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -67,6 +68,10 @@ impl TypedSettings for CrowFliesSettings {
         BTreeMap::from([
             ("radius_metres".to_string(), self.radius.to_string()),
             ("horizon".to_string(), self.horizon.to_string()),
+            (
+                "still_within_metres".to_string(),
+                self.still_within.to_string(),
+            ),
         ])
     }
 
@@ -75,6 +80,7 @@ impl TypedSettings for CrowFliesSettings {
         let read = Self {
             radius: reading.take("radius_metres")?,
             horizon: reading.take("horizon")?,
+            still_within: reading.take("still_within_metres")?,
         };
         reading.finish()?;
         Ok(read)
@@ -273,6 +279,7 @@ mod tests {
         Predictor::CrowFlies(CrowFliesSettings {
             radius: Radius::new(1_000.0).expect("a radius"),
             horizon: Span::new("5m").expect("a span"),
+            still_within: Radius::new(20.0).expect("a radius"),
         })
     }
 
@@ -292,12 +299,16 @@ mod tests {
     }
 
     #[test]
-    fn crow_flies_writes_its_radius_in_metres_and_its_horizon_as_a_span() {
+    fn crow_flies_writes_its_radius_and_radius_of_stillness_in_metres_and_its_horizon_as_a_span() {
         assert_eq!(
             (crow_flies().name(), crow_flies().settings()),
             (
                 PredictorName::CrowFlies,
-                map(&[("horizon", "5m"), ("radius_metres", "1000")])
+                map(&[
+                    ("horizon", "5m"),
+                    ("radius_metres", "1000"),
+                    ("still_within_metres", "20")
+                ])
             )
         );
     }

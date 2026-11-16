@@ -10,8 +10,9 @@ use crux_core::{
 use domain::{Bbox, CrossingCompact, CrossingCompactId, Sample, StateKind};
 use geo_types::Point;
 use predictor::{
-    Crossings, CrowFlies, DEFAULT_ALERTING, DEFAULT_PASS_RADIUS, DEFAULT_WATCHING, DetectPasses,
-    Event as Observed, OnlineDetector, OutOfOrder, Parser, Predict, Predictions, Sentence, Tracker,
+    Crossings, CrowFlies, DEFAULT_ALERTING, DEFAULT_PASS_RADIUS, DEFAULT_STILL_WITHIN,
+    DEFAULT_WATCHING, DetectPasses, Event as Observed, LastMove, OnlineDetector, OutOfOrder,
+    Parser, Predict, Predictions, Sentence, Tracker,
 };
 use serde::{Deserialize, Serialize};
 
@@ -58,8 +59,13 @@ struct Tracking<C: Crossings<Float>> {
 impl<C: Crossings<Float> + Clone> Tracking<C> {
     fn new(crossings: C) -> Self {
         Self {
-            predictor: CrowFlies::new(crossings.clone(), DEFAULT_WATCHING, DEFAULT_ALERTING)
-                .expect("the default alerting radius lies within the default watching radius"),
+            predictor: CrowFlies::new(
+                crossings.clone(),
+                DEFAULT_WATCHING,
+                DEFAULT_ALERTING,
+                LastMove::new(DEFAULT_STILL_WITHIN),
+            )
+            .expect("the default alerting radius lies within the default watching radius"),
             detector: OnlineDetector::new(crossings, DEFAULT_PASS_RADIUS),
             tracker: Tracker::new(),
         }
@@ -496,6 +502,20 @@ mod tests {
             .with_speed_mps(Some(27.8))
     }
 
+    fn short_of_the_station() -> Gps<f64> {
+        Gps::at(DRESDEN_HBF.y() - 0.0025, DRESDEN_HBF.x())
+            .expect("on the globe")
+            .with_accuracy_metres(Some(5.0))
+            .with_speed_mps(Some(27.8))
+    }
+
+    fn arriving_at_the_station(t: DateTime<Utc>) -> [Event; 2] {
+        [
+            reported(t - TimeDelta::seconds(10), short_of_the_station()),
+            reported(t, at_the_station()),
+        ]
+    }
+
     fn north_of_the_station(degrees: f64) -> Point<f64> {
         Point::new(DRESDEN_HBF.x(), DRESDEN_HBF.y() + degrees)
     }
@@ -535,7 +555,9 @@ mod tests {
             crossing(4, up_the_line()),
         ]));
 
-        core.process_event(reported(instant(), at_the_station()));
+        for event in arriving_at_the_station(instant()) {
+            core.process_event(event);
+        }
 
         assert_eq!(
             core.view().states,
@@ -553,7 +575,9 @@ mod tests {
         let core = waiting();
         core.process_event(Event::Reset);
         core.process_event(Event::Crossings(vec![crossing(1, DRESDEN_HBF)]));
-        core.process_event(reported(instant(), at_the_station()));
+        for event in arriving_at_the_station(instant()) {
+            core.process_event(event);
+        }
         let passing = core.view().states;
 
         core.process_event(reported(
@@ -577,7 +601,9 @@ mod tests {
         let core = waiting();
         core.process_event(Event::Reset);
         core.process_event(Event::Crossings(vec![crossing(1, DRESDEN_HBF)]));
-        core.process_event(reported(instant(), at_the_station()));
+        for event in arriving_at_the_station(instant()) {
+            core.process_event(event);
+        }
 
         core.process_event(Event::Tick(instant() + TimeDelta::seconds(5)));
 
@@ -703,12 +729,18 @@ mod tests {
     #[test]
     fn a_position_becomes_the_fix_everything_is_measured_from() {
         let core = core();
+        let [short_of_it, at_it] = arriving_at_the_station(instant());
+        core.process_event(short_of_it);
 
-        let effects = core.process_event(reported(instant(), at_the_station()));
+        let effects = core.process_event(at_it);
 
         let view = core.view();
         assert_eq!(view.now, Some(instant()));
-        assert_eq!(view.speed_mps, Some(27.8));
+        let speed_mps = view.speed_mps.expect("a speed");
+        assert!(
+            (speed_mps - 27.8).abs() < 0.05,
+            "{speed_mps} m/s is not 27.8 m/s"
+        );
         assert!((view.latitude.expect("a fix") - DRESDEN_HBF.y() as Float).abs() < 1e-4);
         assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
     }
@@ -782,7 +814,7 @@ mod tests {
     }
 
     #[test]
-    fn a_position_without_a_speed_leaves_one_derived_from_the_fix_before() {
+    fn a_position_without_a_speed_leaves_one_estimated_from_the_fix_before() {
         let core = core();
         let took = TimeDelta::seconds(10);
         core.process_event(reported(
@@ -802,11 +834,11 @@ mod tests {
             },
         ));
 
-        let derived = core.view().speed_mps.expect("a derived speed");
+        let estimated = core.view().speed_mps.expect("an estimated speed");
         let expected = Haversine.distance(DRESDEN_HBF, near_the_station()) / took.as_seconds_f64();
         assert!(
-            (f64::from(derived) - expected).abs() < 0.1,
-            "{derived}m/s against {expected}m/s"
+            (f64::from(estimated) - expected).abs() < 0.1,
+            "{estimated}m/s against {expected}m/s"
         );
     }
 

@@ -55,29 +55,33 @@ impl Oracle {
 }
 
 /// CrowFlies, which predicts each crossing within `radius_metres` of the latest sample, and
-/// alerts each that arrives within `horizon`, as text such as `"5m"`.
+/// alerts each that arrives within `horizon`, as text such as `"5m"`. The speed comes from the
+/// train's last move further than `still_within_metres`.
 #[pyclass(frozen)]
 struct CrowFlies {
-    radius: Radius,
-    horizon: Span,
+    settings: CrowFliesSettings,
 }
 
 #[pymethods]
 impl CrowFlies {
     #[new]
-    #[pyo3(signature = (*, radius_metres, horizon))]
-    fn new(radius_metres: f64, horizon: &str) -> PyResult<Self> {
+    #[pyo3(signature = (*, radius_metres, horizon, still_within_metres))]
+    fn new(radius_metres: f64, horizon: &str, still_within_metres: f64) -> PyResult<Self> {
         Ok(Self {
-            radius: Radius::new(radius_metres).map_err(value_error)?,
-            horizon: span(horizon)?,
+            settings: CrowFliesSettings {
+                radius: Radius::new(radius_metres).map_err(value_error)?,
+                horizon: span(horizon)?,
+                still_within: Radius::new(still_within_metres).map_err(value_error)?,
+            },
         })
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "CrowFlies(radius_metres={:?}, horizon=\"{}\")",
-            self.radius.as_metres(),
-            self.horizon
+            "CrowFlies(radius_metres={:?}, horizon=\"{}\", still_within_metres={:?})",
+            self.settings.radius.as_metres(),
+            self.settings.horizon,
+            self.settings.still_within.as_metres()
         )
     }
 }
@@ -673,10 +677,7 @@ fn predictor_of(predictor: &Bound<'_, PyAny>) -> PyResult<Predictor> {
         }));
     }
     if let Ok(crow_flies) = predictor.extract::<PyRef<'_, CrowFlies>>() {
-        return Ok(Predictor::CrowFlies(CrowFliesSettings {
-            radius: crow_flies.radius,
-            horizon: crow_flies.horizon,
-        }));
+        return Ok(Predictor::CrowFlies(crow_flies.settings));
     }
     if let Ok(light_cone) = predictor.extract::<PyRef<'_, LightCone>>() {
         return Ok(Predictor::LightCone(light_cone.settings));

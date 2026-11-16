@@ -148,6 +148,21 @@ mod tests {
             .with_speed_mps(Some(27.8))
     }
 
+    fn short_of_the_station() -> Gps<f64> {
+        Gps::at(DRESDEN_HBF.y() - 0.0025, DRESDEN_HBF.x())
+            .expect("on the globe")
+            .with_accuracy_metres(Some(5.0))
+            .with_speed_mps(Some(27.8))
+    }
+
+    fn arrive_at_the_station(core: &Core<Lookout<Browser>>) {
+        core.process_event(Event::Position(Sample::new(
+            instant() - TimeDelta::seconds(10),
+            short_of_the_station(),
+        )));
+        core.process_event(Event::Position(Sample::new(instant(), at_the_station())));
+    }
+
     fn instant() -> DateTime<Utc> {
         DateTime::from_timestamp(1_785_098_609, 0).expect("an instant")
     }
@@ -214,7 +229,7 @@ mod tests {
             crossing(3, north_of_the_station(0.0)),
         ]));
 
-        core.process_event(Event::Position(Sample::new(instant(), at_the_station())));
+        arrive_at_the_station(&core);
 
         let states: Vec<StateKind> = core.view().predicted.iter().map(|one| one.state).collect();
         assert_eq!(
@@ -423,12 +438,16 @@ mod tests {
             north_of_the_station(0.01),
         )]));
 
-        core.process_event(Event::Position(Sample::new(instant(), at_the_station())));
+        arrive_at_the_station(&core);
 
         let here = core.view().here.expect("a fix");
         assert!((here.position.y() - DRESDEN_HBF.y() as Float).abs() < 1e-4);
         assert!((here.position.x() - DRESDEN_HBF.x() as Float).abs() < 1e-4);
-        assert_eq!(here.speed_mps, Some(27.8));
+        let speed_mps = here.speed_mps.expect("a speed");
+        assert!(
+            (speed_mps - 27.8).abs() < 0.05,
+            "{speed_mps} m/s is not 27.8 m/s"
+        );
         assert_eq!(core.view().predicted.len(), 1);
     }
 

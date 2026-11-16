@@ -1,8 +1,13 @@
+use std::num::NonZeroU32;
+
 use geo::{Bearing, Distance, Haversine};
 
 use domain::{Precision, Radius, Sample};
 
 use crate::crow_flies::metres;
+
+pub const DEFAULT_STILL_WITHIN: Radius =
+    Radius::metres(NonZeroU32::new(20).expect("twenty is not zero"));
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Velocity<P: Precision> {

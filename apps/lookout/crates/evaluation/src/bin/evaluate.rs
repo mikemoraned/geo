@@ -82,9 +82,9 @@ struct Settings {
     /// How far either side of the train's heading LightCone's cone reaches, in degrees.
     #[arg(long, required_if_eq("predictor", "light_cone"))]
     half_width_degrees: Option<HalfWidth>,
-    /// How far, in metres, a train moves from where it last moved before LightCone takes its
-    /// heading from the move.
-    #[arg(long, required_if_eq("predictor", "light_cone"))]
+    /// How far, in metres, a train moves from where it last moved before CrowFlies or LightCone
+    /// takes its speed and heading from the move.
+    #[arg(long, required_if_eq_any([("predictor", "crow_flies"), ("predictor", "light_cone")]))]
     still_within_metres: Option<Radius>,
     /// How near a sample the online pass detector reports a crossing as passing, in metres. The
     /// run measures how far the passes it reports skew from ground truth.
@@ -147,6 +147,9 @@ impl Settings {
                     .radius_metres
                     .ok_or("CrowFlies needs --radius-metres")?,
                 horizon,
+                still_within: self
+                    .still_within_metres
+                    .ok_or("CrowFlies needs --still-within-metres")?,
             }),
             PredictorName::LightCone => Predictor::LightCone(LightConeSettings {
                 radius: self

@@ -56,7 +56,8 @@ def test_text_that_is_not_a_positive_finite_number_is_no_radius(text):
 
 
 def test_an_arrival_crosses_as_an_aware_instant(predictor):
-    predictor.observe_sample(T0, 50.0, 0.0, speed_mps=10.0)
+    predictor.observe_sample(seconds(-111), 49.99, 0.0)
+    predictor.observe_sample(T0, 50.0, 0.0)
 
     at = predictor.predictions()[0].at
 
@@ -65,9 +66,9 @@ def test_an_arrival_crosses_as_an_aware_instant(predictor):
     assert (at - T0).total_seconds() == pytest.approx(HUNDREDTH_DEGREE_M / 10.0, abs=1.0)
 
 
-def test_a_speed_left_out_is_derived_from_the_fix_before(predictor):
+def test_a_speed_is_estimated_from_the_fixes_before(predictor):
     predictor.observe_sample(T0, 49.99, 0.0)
-    assert predictor.predictions()[0].at is None, "nothing to derive a speed from yet"
+    assert predictor.predictions()[0].at is None, "nothing to estimate a speed from yet"
 
     predictor.observe_sample(seconds(100), 50.0, 0.0)
 
@@ -76,7 +77,8 @@ def test_a_speed_left_out_is_derived_from_the_fix_before(predictor):
 
 
 def test_a_standstill_predicts_a_distance_and_no_time(predictor):
-    predictor.observe_sample(T0, 50.0, 0.0, speed_mps=0.0)
+    predictor.observe_sample(T0, 50.0, 0.0)
+    predictor.observe_sample(seconds(10), 50.0, 0.0, speed_mps=10.0)
 
     predicted = predictor.predictions()[0]
 

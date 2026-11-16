@@ -1,8 +1,8 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use domain::{CrossingCompact, Radius, Sample};
 use predictor::{
-    CrowFlies as CrowFliesPredictor, DEFAULT_ALERTING, DEFAULT_WATCHING, Event, OutOfOrder,
-    Predict, Watching, nearest_first,
+    CrowFlies as CrowFliesPredictor, DEFAULT_ALERTING, DEFAULT_STILL_WITHIN, DEFAULT_WATCHING,
+    Event, LastMove, OutOfOrder, Predict, Watching, nearest_first,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -68,8 +68,13 @@ impl CrowFlies {
             Radius::new(radius_metres).map_err(|err| PyValueError::new_err(err.to_string()))?;
 
         Ok(Self {
-            inner: CrowFliesPredictor::new(crossings, Watching { radius }, DEFAULT_ALERTING)
-                .map_err(|err| PyValueError::new_err(err.to_string()))?,
+            inner: CrowFliesPredictor::new(
+                crossings,
+                Watching { radius },
+                DEFAULT_ALERTING,
+                LastMove::new(DEFAULT_STILL_WITHIN),
+            )
+            .map_err(|err| PyValueError::new_err(err.to_string()))?,
         })
     }
 
@@ -78,10 +83,10 @@ impl CrowFlies {
     /// `t` is an aware datetime in any timezone, since a store hands one back in whichever
     /// its engine holds. A naive one is refused: it names no instant.
     ///
-    /// Everything past the position is what the source happened to know. A field left out
-    /// stays unknown rather than being invented: with no speed reported, the step from the
-    /// previous fix says how fast we are going, and with no previous fix there is no time to
-    /// give.
+    /// Everything past the position is what the source happened to know, and a field left out
+    /// stays unknown rather than being invented. The predictor estimates speed from the fixes
+    /// alone, so a reported speed changes no prediction, and until the train has moved there is
+    /// no time to give.
     ///
     /// # Errors
     ///

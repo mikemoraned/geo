@@ -82,6 +82,12 @@ mod tests {
             .with_course_degrees(79.94)
     }
 
+    fn approaching_the_station() -> Fix {
+        Fix::at(20, 43, 19, 51.039864, 13.728288)
+            .with_speed_knots(54.0)
+            .with_course_degrees(79.94)
+    }
+
     fn moved_on() -> Fix {
         Fix::at(20, 43, 30, 51.0404, 13.73235)
             .with_speed_knots(54.0)
@@ -102,6 +108,8 @@ mod tests {
 
     fn fixed() -> Core<Lookout<Device>> {
         let core = core();
+        core.process_event(Event::Sentence(approaching_the_station().rmc()));
+        core.process_event(Event::Sentence(approaching_the_station().gga()));
         core.process_event(Event::Sentence(at_the_station().rmc()));
         core.process_event(Event::Sentence(at_the_station().gga()));
         core

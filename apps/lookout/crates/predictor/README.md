@@ -8,8 +8,8 @@ in a replay of a recorded session.
 ## Crow flies is a baseline, not an answer
 
 A distance here is the great-circle line to the crossing, and an arrival is that distance divided
-by the speed of the latest fix. The track plays no part, so a curve or a river meander puts a
-crossing nearer, and sooner, than the rails can reach it. That is the point.
+by the speed estimated from the fixes so far. The track plays no part, so a curve or a river
+meander puts a crossing nearer, and sooner, than the rails can reach it. That is the point.
 
 The radius is how far ahead to look — wide enough that a train at speed has a minute or two of
 warning, narrow enough to mean something at walking pace. An arrival is an instant rather than a
@@ -39,12 +39,19 @@ fix stale is a newer fix, and the clock can have run on without one — a browse
 seconds before it is delivered, so a clock refusing anything behind it would throw away every fix
 that followed a tick.
 
-## The speed is the receiver's, or the step between two fixes
+## The speed comes from the fixes, not the receiver
 
-A source reporting no speed is ordinary: a phone's geolocation leaves it out, and a stationary
-receiver reports no course to go with it. Two fixes say how fast.
+A velocity estimator turns the fixes into a speed and a heading, and a predictor takes it as a
+parameter, so a better estimator replaces the default without touching the predictor. The speed a
+receiver reports plays no part. A phone's geolocation often leaves it out, so ignoring it on every
+platform keeps the estimate alike across them.
 
-At `f32` a derived speed is less exact, and the slower we go the less exact it gets: `f32`
+The default estimator measures the last move between two fixes further apart than a radius of
+stillness. A receiver at rest wanders a few metres between fixes, and a move inside that radius
+would give a speed, and a heading, where there is none. The speed is the move's length over the
+time from its start to the latest fix, so it falls while the train stands still.
+
+At `f32` an estimated speed is less exact, and the slower we go the less exact it gets: `f32`
 resolves latitude to about 0.42 m, so each fix carries that much error and so does the step
 between two of them. A train covers 30 m in a second, putting the error near 1%; walking pace
 covers 1.4 m, putting it near 30%. At `f64` it does not arise. At a standstill there is no arrival

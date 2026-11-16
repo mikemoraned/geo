@@ -24,4 +24,4 @@ pub use parser::Parser;
 pub use predict::{Confidence, Event, Predict, Prediction, Predictions, nearest_first};
 pub use sentence::{Sentence, SentenceError};
 pub use tracker::{Tracker, Transition};
-pub use velocity::{LastMove, Velocity, VelocityEstimator};
+pub use velocity::{DEFAULT_STILL_WITHIN, LastMove, Velocity, VelocityEstimator};

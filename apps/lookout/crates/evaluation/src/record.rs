@@ -307,6 +307,7 @@ mod tests {
             predictor: Predictor::CrowFlies(CrowFliesSettings {
                 radius: Radius::new(5_000.0).expect("a radius"),
                 horizon: span("5m"),
+                still_within: Radius::new(20.0).expect("a radius"),
             }),
             online_detector: Some(OnlineDetectorSettings {
                 pass_radius: Radius::new(100.0).expect("a radius"),

@@ -1142,7 +1142,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
       LightCone as built alerts on any crossing within its watching radius that it expects within
       N, with no alerting radius, and with a speed of its own. The sweep above therefore measured
       three changes at once, not the bearing filter.
-      - [ ] Give CrowFlies its speed from a `VelocityEstimator`, `LastMove` by default, in place
+      - [x] Give CrowFlies its speed from a `VelocityEstimator`, `LastMove` by default, in place
             of the receiver's speed or the speed implied by the previous sample.
       - [ ] Make LightCone CrowFlies' alerting rule, its alerting radius and N, plus the bearing
             filter. Show by a property test that at 180° it predicts exactly what CrowFlies does.
