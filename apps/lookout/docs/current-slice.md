@@ -1146,8 +1146,9 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
             of the receiver's speed or the speed implied by the previous sample.
       - [x] Make LightCone CrowFlies' alerting rule, its alerting radius and N, plus the bearing
             filter. Show by a property test that at 180° it predicts exactly what CrowFlies does.
-- [ ] Run CrowFlies at 1 km, and the rebuilt LightCone at 1 km with half-widths of 30°, 45°, 60°,
+- [x] Run CrowFlies at 1 km, and the rebuilt LightCone at 1 km with half-widths of 30°, 45°, 60°,
       75°, and 90°, over every session the filter keeps, scored on the tune split.
+      Chosen with the user on 2026-11-16: the sweep adds a half-width of 15°.
 - [ ] Analyse those runs in `explore9.py`, as `explore8.py` did, with the cone drawn at each alert.
 - [ ] Average the velocity over the last few samples, as a `VelocityEstimator`, and run it again.
 - [-] Draw LightCone's cone at each sample in `explore5.py` with the user, where it beats
@@ -1209,6 +1210,18 @@ split doc](2026-11-14-train-test-split.md) gives the evidence for those from `ex
   not independent, and resampling by session gives intervals narrower than they should be.
   Neither changes the sweep's conclusions, since its gaps far exceed its intervals. Both matter
   when Phase 7 chooses between close settings.
+- **2026-11-16: the rebuilt LightCone at 90° keeps CrowFlies' recall, with a fifth of its false
+  alarms.** Over all 34,521 sessions on the tune split, CrowFlies at 1 km scores a precision of
+  0.361 [0.359, 0.363], a recall of 0.897 [0.893, 0.901], and 19.3 [19.1, 19.6] false alarms per
+  hour. LightCone at 90° scores 0.658 [0.654, 0.662], 0.898 [0.894, 0.902], and 4.00 [3.93, 4.07].
+  Both have a median lead time of 40 s.
+- **2026-11-16: a narrower half-width trades recall for false alarms.** LightCone's recall falls
+  from 0.898 at 90° to 0.874 at 45°, 0.820 at 30°, and 0.701 at 15°. Its false alarms per hour
+  fall from 4.00 to 2.68, 1.99, and 1.10. Its misses rise from 206 at 90° to 1,099 at 30° and
+  15,215 at 15°. Precision stays between 0.64 and 0.67 from 30° to 90°, and drops to 0.599 at 15°.
+- **2026-11-16: CrowFlies scores higher with the speed from `LastMove`.** Its precision rises from
+  0.327 to 0.361, and its recall from 0.859 to 0.897, against the run with the receiver's speed.
+  The intervals do not overlap. It misses no pass, and raises 422,502 false alarms.
 
 #### Phase 7: choosing the predictor
 
