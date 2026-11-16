@@ -89,7 +89,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Check that georust's `wkb` crate builds for the device's target, since `platform-core`
   builds there. If it fails, decide where the WKB decoding lives before the next task.
 - [x] Add a `Shell` function saying whether the shell draws lines, false for `Device`.
-- [ ] Add the `Lines` effect, carrying the box, and the `Lines` event, carrying the box and its
+- [x] Add the `Lines` effect, carrying the box, and the `Lines` event, carrying the box and its
   lines as WKB geometries, in `app.rs`.
 - [ ] Keep the box and its rail in `Model`, ask for a new box once a fix nears the edge, and drop
   lines for a box the core has left. `Reset` clears both.

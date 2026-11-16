@@ -17,6 +17,7 @@ domain = { workspace = true }
 geo-types = { workspace = true }
 predictor = { workspace = true }
 serde = { version = "1", features = ["derive"] }
+serde_with = { version = "3", features = ["base64"] }
 thiserror = "2"
 wkb = { workspace = true }
 

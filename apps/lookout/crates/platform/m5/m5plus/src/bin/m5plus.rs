@@ -150,6 +150,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Effect::Crossings(_) => {
                     core.process_event(Event::Crossings(Vec::new()));
                 }
+                Effect::Lines(_) => {}
             }
         }
 

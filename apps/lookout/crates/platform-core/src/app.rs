@@ -7,7 +7,7 @@ use crux_core::{
     macros::effect,
     render::{self, RenderOperation},
 };
-use domain::{CrossingCompact, Sample};
+use domain::{Bbox, CrossingCompact, Sample};
 use predictor::{
     Crossings, CrowFlies, DEFAULT_RADIUS, Event as Observed, Parser, Predict, Sentence,
 };
@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Float;
 use crate::battery::{Battery, Charge};
+use crate::lines::Wkb;
 
 pub trait Shell: Sized + 'static {
     type ViewModel;
@@ -99,18 +100,29 @@ pub enum Event {
     Sentence(Sentence),
     Position(Sample<f64>),
     Battery(u16),
+    Lines { area: Bbox, lines: Vec<Wkb> },
 }
 
 #[effect(typegen)]
 pub enum Effect {
     Render(RenderOperation),
     Crossings(GetCrossings),
+    Lines(GetLines),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GetCrossings;
 
 impl Operation for GetCrossings {
+    type Output = ();
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct GetLines {
+    pub area: Bbox,
+}
+
+impl Operation for GetLines {
     type Output = ();
 }
 
@@ -177,6 +189,7 @@ impl<S: Shell> App for Lookout<S> {
                 Ok(sample) => self.observe(Observed::Sampled(sample), model),
                 Err(_) => Change::Unchanged,
             },
+            Event::Lines { .. } => Change::Unchanged,
             Event::Battery(millivolts) => {
                 let before = model.battery.charge();
                 model.battery.measured(millivolts);
@@ -571,6 +584,32 @@ mod tests {
         assert_eq!(
             String::from_utf8(requests).expect("utf-8"),
             r#"[{"id":0,"effect":{"Render":null}},{"id":1,"effect":{"Crossings":null}}]"#
+        );
+    }
+
+    #[test]
+    fn lines_arrive_from_a_shell_as_wkb_in_base64() {
+        let event: Event = serde_json::from_str(
+            r#"{"Lines":{"area":{"xmin":13.66,"ymin":51.0,"xmax":13.81,"ymax":51.09},"lines":["AQIAAAA="]}}"#,
+        )
+        .expect("an event this core knows");
+
+        let Event::Lines { area, lines } = event else {
+            panic!("lines, not {event:?}");
+        };
+        assert_eq!(area, Bbox::new(13.66, 51.0, 13.81, 51.09).expect("a box"));
+        assert_eq!(lines, vec![Wkb::new(vec![1, 2, 0, 0, 0])]);
+    }
+
+    #[test]
+    fn the_request_for_lines_names_its_area_as_a_box() {
+        let request = GetLines {
+            area: Bbox::new(13.66, 51.0, 13.81, 51.09).expect("a box"),
+        };
+
+        assert_eq!(
+            serde_json::to_string(&request).expect("serialize"),
+            r#"{"area":{"xmin":13.66,"ymin":51.0,"xmax":13.81,"ymax":51.09}}"#
         );
     }
 
