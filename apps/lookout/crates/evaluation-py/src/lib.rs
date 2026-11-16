@@ -475,7 +475,7 @@ fn score(
 ///
 /// `outcomes` is a table of `score`'s columns for the sessions in `sessions`, a table of
 /// `session_rows`' columns. False alarms per hour divide by the sessions' scored durations. The row
-/// has the columns of gold `evaluation_summary_v2`.
+/// has the columns of gold `evaluation_summary_v3`.
 #[pyfunction]
 #[pyo3(signature = (*, sessions, outcomes, bootstrap))]
 fn summarise(

@@ -23,6 +23,9 @@ pub const EVALUATION_OUTCOME_V2: DatasetSpec<layers::Gold> =
 pub const EVALUATION_SUMMARY_V2: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_summary_v2", RUN_DATE, &[RUN_ID]);
 
+pub const EVALUATION_SUMMARY_V3: DatasetSpec<layers::Gold> =
+    DatasetSpec::partitioned_within("evaluation_summary_v3", RUN_DATE, &[RUN_ID]);
+
 pub const EVALUATION_SKEW_V2: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_skew_v2", RUN_DATE, &[RUN_ID]);
 
@@ -159,6 +162,70 @@ impl Row for EvaluationSummaryRowV2 {
             false_alarms_per_hour: Some(0.0),
             false_alarms_per_hour_low: Some(0.0),
             false_alarms_per_hour_high: Some(0.0),
+            lead_p10: Some(TimeDelta::minutes(5)),
+            lead_median: Some(TimeDelta::minutes(5)),
+            lead_p90: Some(TimeDelta::minutes(5)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EvaluationSummaryRowV3 {
+    pub sessions: u64,
+    #[serde(with = "medallion::duration::milliseconds")]
+    pub scored_duration: TimeDelta,
+    pub passes: u64,
+    pub notifications: u64,
+    pub false_alarms: u64,
+    pub repeats: u64,
+    pub misses: u64,
+    pub precision: Option<f64>,
+    pub precision_low: Option<f64>,
+    pub precision_high: Option<f64>,
+    pub recall: Option<f64>,
+    pub recall_low: Option<f64>,
+    pub recall_high: Option<f64>,
+    pub false_alarms_per_hour: Option<f64>,
+    pub false_alarms_per_hour_low: Option<f64>,
+    pub false_alarms_per_hour_high: Option<f64>,
+    pub f_half: Option<f64>,
+    pub f_half_low: Option<f64>,
+    pub f_half_high: Option<f64>,
+    #[serde(with = "medallion::duration::milliseconds_option")]
+    pub lead_p10: Option<TimeDelta>,
+    #[serde(with = "medallion::duration::milliseconds_option")]
+    pub lead_median: Option<TimeDelta>,
+    #[serde(with = "medallion::duration::milliseconds_option")]
+    pub lead_p90: Option<TimeDelta>,
+}
+
+impl Row for EvaluationSummaryRowV3 {
+    type Layer = layers::Gold;
+    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_SUMMARY_V3;
+    const DURATIONS: &'static [&'static str] =
+        &["scored_duration", "lead_p10", "lead_median", "lead_p90"];
+
+    fn example() -> Self {
+        Self {
+            sessions: 1,
+            scored_duration: TimeDelta::hours(1),
+            passes: 1,
+            notifications: 1,
+            false_alarms: 0,
+            repeats: 0,
+            misses: 0,
+            precision: Some(1.0),
+            precision_low: Some(1.0),
+            precision_high: Some(1.0),
+            recall: Some(1.0),
+            recall_low: Some(1.0),
+            recall_high: Some(1.0),
+            false_alarms_per_hour: Some(0.0),
+            false_alarms_per_hour_low: Some(0.0),
+            false_alarms_per_hour_high: Some(0.0),
+            f_half: Some(1.0),
+            f_half_low: Some(1.0),
+            f_half_high: Some(1.0),
             lead_p10: Some(TimeDelta::minutes(5)),
             lead_median: Some(TimeDelta::minutes(5)),
             lead_p90: Some(TimeDelta::minutes(5)),

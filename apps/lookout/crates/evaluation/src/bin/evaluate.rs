@@ -14,7 +14,7 @@ use evaluation::{
 };
 use medallion::{Country, MedallionArgs, Root, RunId};
 use medallion_model::{
-    EvaluationSkewRowV2, EvaluationSplitRowV1, EvaluationSummaryRowV2, FloatType, PredictorName,
+    EvaluationSkewRowV2, EvaluationSplitRowV1, EvaluationSummaryRowV3, FloatType, PredictorName,
 };
 
 const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
@@ -328,7 +328,7 @@ fn print_split(split: Option<&EvaluationSplitRowV1>) {
     );
 }
 
-fn print_summary(summary: &EvaluationSummaryRowV2) {
+fn print_summary(summary: &EvaluationSummaryRowV3) {
     println!(
         "sessions {}, {:.1} hours, {} passes, {} notifications",
         summary.sessions,
@@ -359,6 +359,10 @@ fn print_summary(summary: &EvaluationSummaryRowV2) {
             summary.false_alarms_per_hour_low,
             summary.false_alarms_per_hour_high
         )
+    );
+    println!(
+        "F0.5 {}",
+        estimate(summary.f_half, summary.f_half_low, summary.f_half_high)
     );
     println!(
         "lead time p10 {}, median {}, p90 {}",

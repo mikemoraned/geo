@@ -46,6 +46,7 @@ pub struct Summary {
     pub precision: Option<Estimate>,
     pub recall: Option<Estimate>,
     pub false_alarms_per_hour: Option<Estimate>,
+    pub f_half: Option<Estimate>,
     pub lead_times: Option<Spread>,
 }
 
@@ -98,9 +99,12 @@ pub fn summarise(
         precision: estimate(&whole, &resamples, Tally::precision),
         recall: estimate(&whole, &resamples, Tally::recall),
         false_alarms_per_hour: estimate(&whole, &resamples, Tally::false_alarms_per_hour),
+        f_half: estimate(&whole, &resamples, Tally::f_half),
         lead_times: spread(leads),
     })
 }
+
+const F_HALF_BETA: f64 = 0.5;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct Tally {
@@ -160,6 +164,12 @@ impl Tally {
     fn false_alarms_per_hour(&self) -> Option<f64> {
         let hours = self.scored_duration.as_seconds_f64() / 3_600.0;
         (hours > 0.0).then(|| self.false_alarms as f64 / hours)
+    }
+
+    fn f_half(&self) -> Option<f64> {
+        let beta_squared = F_HALF_BETA * F_HALF_BETA;
+        let weighed = beta_squared * self.passes as f64 + self.notifications as f64;
+        (weighed > 0.0).then(|| (1.0 + beta_squared) * self.credited_score / weighed)
     }
 }
 
@@ -346,6 +356,7 @@ mod tests {
                 precision: exact(0.375),
                 recall: exact(0.5),
                 false_alarms_per_hour: exact(1.0),
+                f_half: exact(1.875 / 4.75),
                 lead_times: Some(Spread {
                     p10: TimeDelta::seconds(120),
                     median: TimeDelta::seconds(225),
@@ -362,8 +373,13 @@ mod tests {
         let summary = summarise(&[lasting("a", 3_600)], &scored, &bootstrap(1)).expect("a summary");
 
         assert_eq!(
-            (summary.precision, summary.recall, summary.lead_times),
-            (None, None, None)
+            (
+                summary.precision,
+                summary.recall,
+                summary.f_half,
+                summary.lead_times
+            ),
+            (None, None, None, None)
         );
         assert_eq!(summary.false_alarms_per_hour, exact(0.0));
     }
@@ -521,6 +537,32 @@ mod tests {
     proptest! {
 
         #[test]
+        fn f_half_ranks_a_shortfall_in_recall_above_the_same_shortfall_in_precision(
+            hits in 1usize..20,
+            shortfall in 1usize..20,
+        ) {
+            let summary_of = |outcomes: Vec<Outcome>| {
+                summarise(
+                    &[lasting("a", 3_600)],
+                    &BTreeMap::from([(session("a"), outcomes)]),
+                    &bootstrap(1),
+                )
+                .expect("a summary")
+                .f_half
+                .expect("an F-score")
+                .value
+            };
+            let hits_then = |extra: fn() -> Outcome| {
+                std::iter::repeat_with(hit)
+                    .take(hits)
+                    .chain(std::iter::repeat_with(extra).take(shortfall))
+                    .collect::<Vec<_>>()
+            };
+
+            prop_assert!(summary_of(hits_then(missed)) > summary_of(hits_then(false_alarm)));
+        }
+
+        #[test]
         fn the_oracle_scores_perfectly_when_no_two_passes_of_a_crossing_fall_within_40_s(
             sessions in prop::collection::vec(passes_of_crossings(), 1..4),
         ) {
@@ -538,6 +580,7 @@ mod tests {
             if summary.passes > 0 {
                 prop_assert_eq!(summary.precision, exact(1.0));
                 prop_assert_eq!(summary.recall, exact(1.0));
+                prop_assert_eq!(summary.f_half, exact(1.0));
             }
         }
     }

@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use medallion::{Root, RunError, RunId, write_run};
 use medallion_model::{
-    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSummaryRowV2,
+    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSummaryRowV3,
     EvaluationTransitionRowV1, TrainSessionRowV3,
 };
 
@@ -118,7 +118,7 @@ pub async fn summarise(
     root: &Root,
     run_id: &RunId,
     code: &CodeVersion,
-) -> Result<EvaluationSummaryRowV2, GoldError> {
+) -> Result<EvaluationSummaryRowV3, GoldError> {
     let begun = resume(root, run_id, code).await?;
     let outcomes = read_run_rows::<EvaluationOutcomeRowV2>(root, run_id).await?;
     let summary = steps::summarise(&begun.sessions, &outcomes, &begun.run.bootstrap)?;
@@ -295,7 +295,7 @@ mod tests {
             results.outcomes
         );
         assert_eq!(
-            written::<EvaluationSummaryRowV2>(&root, &run_id).await,
+            written::<EvaluationSummaryRowV3>(&root, &run_id).await,
             [results.summary]
         );
     }
@@ -333,8 +333,8 @@ mod tests {
             written::<EvaluationOutcomeRowV2>(&whole_root, &whole_id).await
         );
         assert_eq!(
-            written::<EvaluationSummaryRowV2>(&stepwise_root, &stepwise_id).await,
-            written::<EvaluationSummaryRowV2>(&whole_root, &whole_id).await
+            written::<EvaluationSummaryRowV3>(&stepwise_root, &stepwise_id).await,
+            written::<EvaluationSummaryRowV3>(&whole_root, &whole_id).await
         );
     }
 

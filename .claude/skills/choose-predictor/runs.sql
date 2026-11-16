@@ -26,7 +26,7 @@ SELECT
     to_milliseconds(skew.offset_median) AS skew_offset_median,
     to_milliseconds(skew.offset_p90) AS skew_offset_p90
 FROM read_parquet('data/medallion/gold/evaluation_run_v6/**/*.parquet', hive_partitioning = true) AS run
-JOIN read_parquet('data/medallion/gold/evaluation_summary_v2/**/*.parquet', hive_partitioning = true) AS summary
+JOIN read_parquet('data/medallion/gold/evaluation_summary_v3/**/*.parquet', hive_partitioning = true) AS summary
     USING (run_id)
 LEFT JOIN read_parquet('data/medallion/gold/evaluation_skew_v2/**/*.parquet', hive_partitioning = true) AS skew
     USING (run_id)

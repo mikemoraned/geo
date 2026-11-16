@@ -48,7 +48,7 @@ that holds no Overture extract of the country.
 A step's table crosses as Arrow, through the PyCapsule interface. A table of transitions, outcomes,
 a summary, a skew, or a split has the columns of the gold dataset of that name,
 `evaluation_session_v2`, `evaluation_transition_v1`, `evaluation_outcome_v2`,
-`evaluation_summary_v2`, `evaluation_skew_v2`, or `evaluation_split_v1`. A table handed back to
+`evaluation_summary_v3`, `evaluation_skew_v2`, or `evaluation_split_v1`. A table handed back to
 a step is read through those columns. A table that lacks one, or that names a session the step was
 not given, raises a `ValueError`.
 

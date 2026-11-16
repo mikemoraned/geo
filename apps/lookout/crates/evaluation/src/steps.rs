@@ -5,7 +5,7 @@ use domain::{CoordinateError, Precision, SessionId};
 use medallion::{Country, QueryError, Root};
 use medallion_model::{
     EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSplitRowV1,
-    EvaluationSummaryRowV2, EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
+    EvaluationSummaryRowV3, EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
 };
 use predictor::{
     Alerting, AlertingBeyondWatching, CrowFlies, LastMove, LightCone, OnlineDetector, Watching,
@@ -77,7 +77,7 @@ pub struct EvaluationResults {
     pub skew: Option<EvaluationSkewRowV2>,
     pub outcomes: Vec<EvaluationOutcomeRowV2>,
     pub split: Option<EvaluationSplitRowV1>,
-    pub summary: EvaluationSummaryRowV2,
+    pub summary: EvaluationSummaryRowV3,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -408,7 +408,7 @@ pub fn summarise(
     sessions: &[EvaluationSessionRowV2],
     outcomes: &[EvaluationOutcomeRowV2],
     bootstrap: &Bootstrap,
-) -> Result<EvaluationSummaryRowV2, StepError> {
+) -> Result<EvaluationSummaryRowV3, StepError> {
     let scored = scored_from(sessions, outcomes)?;
     Ok(summary_row(&crate::summarise::summarise(
         sessions, &scored, bootstrap,

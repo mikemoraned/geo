@@ -1237,10 +1237,19 @@ split doc](2026-11-14-train-test-split.md) gives the evidence for those from `ex
 
 A person chooses the apps' predictor and its settings from the runs of CrowFlies and LightCone.
 
-- [ ] Add to `summarise` a measure that weighs precision above recall, such as Fβ with β below 1,
+- [x] Add to `summarise` a measure that weighs precision above recall, such as Fβ with β below 1,
       with an interval from its bootstrap, and report it in `/choose-predictor`. Choose β with the
       user, so that the measure ranks the runs so far as the user's choices did. The choice of
       1 km over 2 km on 2026-11-10 favoured precision and few false alarms over recall.
+      β is 0.5, chosen with the user, and `evaluation_summary_v3` holds it as `f_half`. The
+      choices so far fix no β. Every β below 3.5 ranks 1 km above 2 km, F1 included, and the
+      cooldown was turned down for its code, not its measures. β decides LightCone's half-width
+      on the tune split. 0.25 ranks 45° first, 0.5 ranks 60° level with 45°, and 1 ranks 75°.
+      `evaluation_migrate_f_half` summarised every run in gold again into v3. Each count and
+      measure v2 held came back unchanged, except false alarms per hour, which moved by at most
+      1.2e-13 in the 14 runs whose hours v1 stored as a float.
+- [ ] Remove `evaluation_summary_v2`, its row type, and `evaluation_migrate_f_half`, once the user
+      has inspected the migration.
 - [ ] Choose each predictor's settings with the user, through `/choose-predictor` over the tune
       runs of Phase 6.
 - [ ] Run each predictor's chosen settings once over every session the filter keeps, scored on

@@ -34,12 +34,13 @@ that ends in a choice of predictor and settings for the apps. The report is a da
    notebook can be deleted. Write it through the two writing skills, as `CLAUDE.md` requires. It
    holds these sections, in order:
    - **Runs:** one table per group, one row per run. Each row gives the predictor and its
-     settings, the float type, and precision, recall, and false alarms per hour, each with its
-     interval as `value [low, high]`. It also gives the lead time's p10, median, and p90, and the
-     counts of passes, notifications, false alarms, repeats, and misses. The group's shared
-     settings and its run ids head the table. The shared settings name the split the group
-     scores, tune or test, with its resolution, salt, and tune buckets, or say that it scores
-     every crossing.
+     settings, the float type, and precision, recall, false alarms per hour, and F0.5, each with
+     its interval as `value [low, high]`. F0.5 is `f_half`, the F-score with β = 0.5, which
+     weighs precision above recall as the user's choices do. It also gives the lead time's p10,
+     median, and p90, and the counts of passes, notifications, false alarms, repeats, and
+     misses. The group's shared settings and its run ids head the table. The shared settings
+     name the split the group scores, tune or test, with its resolution, salt, and tune buckets,
+     or say that it scores every crossing.
    - **Skew:** one table, one row per run that measured skew. Skew is how far the passes the apps
      can see depart from ground truth. It describes the detectors and the data, not the
      predictor, so it plays no part in the comparison or the choice, and the section says so.
@@ -51,7 +52,8 @@ that ends in a choice of predictor and settings for the apps. The report is a da
      predictors differ on a measure only where their intervals do not overlap. Where intervals
      overlap, the runs cannot tell the predictors apart.
    - **Trade-offs:** what the numbers leave open, such as recall against false alarms per hour,
-     and the predictor and settings you recommend.
+     and the predictor and settings you recommend. Rank the runs by F0.5 first. F0.5 leaves out
+     false alarms per hour, so weigh that measure beside it.
    - **Choice:** left empty until step 6 ends.
 
 6. **Discuss the choice with the user.** Present the trade-offs and your recommendation, and ask

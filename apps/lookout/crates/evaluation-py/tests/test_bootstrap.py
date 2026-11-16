@@ -71,7 +71,11 @@ def tallies(outcomes):
         name: tallies.column(f"{name}_sum").to_numpy()
         for name in ["credited", "notified", "passed", "false_alarmed"]
     }
-    return summed | {"hours": np.ones(len(SESSIONS))}
+    return summed | {
+        "hours": np.ones(len(SESSIONS)),
+        "f_half_numerator": 1.25 * summed["credited"],
+        "f_half_denominator": 0.25 * summed["passed"] + summed["notified"],
+    }
 
 
 @pytest.fixture(scope="module")
@@ -111,6 +115,7 @@ def scipy_interval(numerator, denominator):
         ("precision", "credited", "notified"),
         ("recall", "credited", "passed"),
         ("false_alarms_per_hour", "false_alarmed", "hours"),
+        ("f_half", "f_half_numerator", "f_half_denominator"),
     ],
 )
 def test_summarise_draws_the_intervals_scipy_draws(

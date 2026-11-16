@@ -291,7 +291,7 @@ def test_an_evaluation_writes_to_gold_the_tables_it_returns(written):
     for dataset, name in [
         ("evaluation_transition_v1", "transitions"),
         ("evaluation_outcome_v2", "outcomes"),
-        ("evaluation_summary_v2", "summary"),
+        ("evaluation_summary_v3", "summary"),
     ]:
         stored = pa.table(
             lookout_medallion.query_gold(

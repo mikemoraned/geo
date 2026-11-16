@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use chrono::TimeDelta;
 use domain::{CrossingCompactId, SessionId};
 use medallion_model::{
-    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSummaryRowV2,
+    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSummaryRowV3,
     EvaluationTransitionRowV1, NotificationClass, OutcomeKind,
 };
 use predictor::Transition;
@@ -87,12 +87,12 @@ pub fn scored_from(
     Ok(scored)
 }
 
-pub fn summary_row(summary: &Summary) -> EvaluationSummaryRowV2 {
+pub fn summary_row(summary: &Summary) -> EvaluationSummaryRowV3 {
     let value = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.value);
     let low = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.low);
     let high = |estimate: Option<Estimate>| estimate.map(|estimate| estimate.high);
     let lead = |pick: fn(&Spread) -> TimeDelta| summary.lead_times.as_ref().map(pick);
-    EvaluationSummaryRowV2 {
+    EvaluationSummaryRowV3 {
         sessions: summary.sessions as u64,
         scored_duration: summary.scored_duration,
         passes: summary.passes as u64,
@@ -109,6 +109,9 @@ pub fn summary_row(summary: &Summary) -> EvaluationSummaryRowV2 {
         false_alarms_per_hour: value(summary.false_alarms_per_hour),
         false_alarms_per_hour_low: low(summary.false_alarms_per_hour),
         false_alarms_per_hour_high: high(summary.false_alarms_per_hour),
+        f_half: value(summary.f_half),
+        f_half_low: low(summary.f_half),
+        f_half_high: high(summary.f_half),
         lead_p10: lead(|lead_times| lead_times.p10),
         lead_median: lead(|lead_times| lead_times.median),
         lead_p90: lead(|lead_times| lead_times.p90),
@@ -474,6 +477,7 @@ mod tests {
             precision: estimate(0.4),
             recall: estimate(0.5),
             false_alarms_per_hour: None,
+            f_half: estimate(0.45),
             lead_times: Some(Spread {
                 p10: TimeDelta::seconds(60),
                 median: TimeDelta::seconds(120),
@@ -483,7 +487,7 @@ mod tests {
 
         assert_eq!(
             summary_row(&summary),
-            EvaluationSummaryRowV2 {
+            EvaluationSummaryRowV3 {
                 sessions: 2,
                 scored_duration: TimeDelta::minutes(90),
                 passes: 3,
@@ -500,6 +504,9 @@ mod tests {
                 false_alarms_per_hour: None,
                 false_alarms_per_hour_low: None,
                 false_alarms_per_hour_high: None,
+                f_half: Some(0.45),
+                f_half_low: Some(0.45 - 0.1),
+                f_half_high: Some(0.45 + 0.1),
                 lead_p10: Some(TimeDelta::seconds(60)),
                 lead_median: Some(TimeDelta::seconds(120)),
                 lead_p90: Some(TimeDelta::seconds(300)),

@@ -107,8 +107,8 @@ def test_a_table_holding_a_column_the_dataset_does_not_define_is_refused(store):
 
 
 def test_a_query_of_a_gold_dataset_never_written_is_refused(store):
-    with pytest.raises(ValueError, match="evaluation_summary_v2"):
-        query(store, "SELECT * FROM evaluation_summary_v2")
+    with pytest.raises(ValueError, match="evaluation_summary_v3"):
+        query(store, "SELECT * FROM evaluation_summary_v3")
 
 
 def test_a_duration_is_read_back_as_a_millisecond_duration(store):
