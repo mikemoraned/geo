@@ -255,7 +255,23 @@ fn complete(
 }
 
 fn within(cells: &BTreeSet<A5CellId>, cover: &A5Cover) -> Result<(), SplitBroken> {
-    let outside = cells.iter().filter(|cell| !cover.contains(**cell)).count();
+    let outside: Vec<A5CellId> = cells
+        .iter()
+        .copied()
+        .filter(|cell| !cover.contains(*cell))
+        .collect();
+    for cell in &outside {
+        match cell.centre() {
+            Ok(centre) => tracing::warn!(
+                %cell,
+                lon = centre.x(),
+                lat = centre.y(),
+                "a cell lies outside the country's cover"
+            ),
+            Err(err) => tracing::warn!(%err, "a cell lies outside the country's cover"),
+        }
+    }
+    let outside = outside.len();
     if outside == 0 {
         Ok(())
     } else {

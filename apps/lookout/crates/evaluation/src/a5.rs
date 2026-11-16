@@ -29,6 +29,13 @@ pub struct NoA5Cell {
     pub reason: String,
 }
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+#[error("cell {cell} has no centre: {reason}")]
+pub struct NoA5Centre {
+    pub cell: A5CellId,
+    pub reason: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct A5Cover {
     cells: BTreeSet<A5CellId>,
@@ -68,6 +75,12 @@ impl A5CellId {
             resolution,
             reason,
         })
+    }
+
+    pub fn centre(self) -> Result<Point<f64>, NoA5Centre> {
+        a5::cell_to_lonlat(self.0)
+            .map(|centre| Point::new(centre.longitude.get(), centre.latitude.get()))
+            .map_err(|reason| NoA5Centre { cell: self, reason })
     }
 }
 
@@ -167,6 +180,16 @@ mod tests {
 
             let cell = A5CellId::containing(Point::new(lon, lat), resolution()).unwrap();
             prop_assert!(cover.contains(cell));
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn a_cells_centre_lies_in_the_cell(lon in 13.2..14.2f64, lat in 50.5..51.5f64) {
+            let cell = A5CellId::containing(Point::new(lon, lat), resolution()).unwrap();
+
+            let centre = cell.centre().unwrap();
+            prop_assert_eq!(A5CellId::containing(centre, resolution()), Ok(cell));
         }
     }
 
