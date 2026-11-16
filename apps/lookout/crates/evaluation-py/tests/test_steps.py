@@ -147,6 +147,16 @@ def test_crow_flies_notifies_nothing_and_misses_every_pass(written):
     assert summary.to_pylist()[0]["misses"] == 3
 
 
+def test_light_cone_notifies_nothing_and_misses_every_pass(written):
+    light_cone = lookout_evaluation.LightCone(
+        radius_metres=20_000.0, half_width_degrees=45.0, horizon="5m", still_within_metres=20.0
+    )
+    summary = run(written, light_cone)["summary"]
+
+    assert summary.to_pylist()[0]["notifications"] == 0
+    assert summary.to_pylist()[0]["misses"] == 3
+
+
 def test_an_unknown_float_type_is_refused(written):
     sessions = sessions_of(written, run(written, oracle())["picked"])
 
@@ -156,7 +166,7 @@ def test_an_unknown_float_type_is_refused(written):
         )
 
 
-def test_a_predictor_that_is_neither_an_oracle_nor_crow_flies_is_refused(written):
+def test_a_predictor_of_no_known_kind_is_refused(written):
     sessions = sessions_of(written, run(written, oracle())["picked"])
 
     with pytest.raises(ValueError, match="predictor"):
@@ -244,7 +254,7 @@ def test_a_record_names_the_run_its_settings_code_and_data_make(written):
     assert recorded["run_date"] == run_row["started_at"].date().isoformat()
     assert pa.table(recorded["sessions"]).column("session_id").to_pylist() == SESSION_IDS
     written_run = lookout_medallion.write_gold(
-        "evaluation_run_v5",
+        "evaluation_run_v6",
         recorded["run"],
         run_date=recorded["run_date"],
         run_id=recorded["run_id"],

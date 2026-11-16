@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::str::FromStr;
 
-use domain::{Radius, Span};
+use domain::{HalfWidth, Radius, Span};
 use medallion_model::PredictorName;
 
 use crate::split::{ScoredSplit, Splitter};
@@ -32,6 +32,14 @@ pub struct OracleSettings {
 pub struct CrowFliesSettings {
     pub radius: Radius,
     pub horizon: Span,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LightConeSettings {
+    pub radius: Radius,
+    pub half_width: HalfWidth,
+    pub horizon: Span,
+    pub still_within: Radius,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -67,6 +75,35 @@ impl TypedSettings for CrowFliesSettings {
         let read = Self {
             radius: reading.take("radius_metres")?,
             horizon: reading.take("horizon")?,
+        };
+        reading.finish()?;
+        Ok(read)
+    }
+}
+
+impl TypedSettings for LightConeSettings {
+    fn write(&self) -> BTreeMap<String, String> {
+        BTreeMap::from([
+            ("radius_metres".to_string(), self.radius.to_string()),
+            (
+                "half_width_degrees".to_string(),
+                self.half_width.to_string(),
+            ),
+            ("horizon".to_string(), self.horizon.to_string()),
+            (
+                "still_within_metres".to_string(),
+                self.still_within.to_string(),
+            ),
+        ])
+    }
+
+    fn read(settings: &BTreeMap<String, String>) -> Result<Self, SettingsError> {
+        let mut reading = Reading::new(settings);
+        let read = Self {
+            radius: reading.take("radius_metres")?,
+            half_width: reading.take("half_width_degrees")?,
+            horizon: reading.take("horizon")?,
+            still_within: reading.take("still_within_metres")?,
         };
         reading.finish()?;
         Ok(read)
@@ -155,6 +192,7 @@ impl Predictor {
         match self {
             Predictor::Oracle(_) => PredictorName::Oracle,
             Predictor::CrowFlies(_) => PredictorName::CrowFlies,
+            Predictor::LightCone(_) => PredictorName::LightCone,
         }
     }
 
@@ -162,6 +200,7 @@ impl Predictor {
         match self {
             Predictor::Oracle(settings) => settings.write(),
             Predictor::CrowFlies(settings) => settings.write(),
+            Predictor::LightCone(settings) => settings.write(),
         }
     }
 
@@ -172,6 +211,7 @@ impl Predictor {
         Ok(match name {
             PredictorName::Oracle => Predictor::Oracle(OracleSettings::read(settings)?),
             PredictorName::CrowFlies => Predictor::CrowFlies(CrowFliesSettings::read(settings)?),
+            PredictorName::LightCone => Predictor::LightCone(LightConeSettings::read(settings)?),
         })
     }
 }
@@ -236,6 +276,15 @@ mod tests {
         })
     }
 
+    fn light_cone() -> Predictor {
+        Predictor::LightCone(LightConeSettings {
+            radius: Radius::new(20_000.0).expect("a radius"),
+            half_width: HalfWidth::new(45.0).expect("a half-width"),
+            horizon: Span::new("5m").expect("a span"),
+            still_within: Radius::new(20.0).expect("a radius"),
+        })
+    }
+
     fn oracle() -> Predictor {
         Predictor::Oracle(OracleSettings {
             horizon: Span::new("90s").expect("a span"),
@@ -254,6 +303,23 @@ mod tests {
     }
 
     #[test]
+    fn light_cone_writes_its_radius_half_width_and_radius_of_stillness_in_units_and_its_horizon_as_a_span()
+     {
+        assert_eq!(
+            (light_cone().name(), light_cone().settings()),
+            (
+                PredictorName::LightCone,
+                map(&[
+                    ("half_width_degrees", "45"),
+                    ("horizon", "5m"),
+                    ("radius_metres", "20000"),
+                    ("still_within_metres", "20"),
+                ])
+            )
+        );
+    }
+
+    #[test]
     fn the_oracle_writes_its_horizon_alone() {
         assert_eq!(
             (oracle().name(), oracle().settings()),
@@ -263,7 +329,7 @@ mod tests {
 
     #[test]
     fn each_predictors_settings_survive_a_round_trip_through_the_map() {
-        for predictor in [oracle(), crow_flies()] {
+        for predictor in [oracle(), crow_flies(), light_cone()] {
             assert_eq!(
                 Predictor::read(predictor.name(), &predictor.settings()),
                 Ok(predictor)

@@ -4,7 +4,7 @@ use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use code_version::CodeVersion;
 use domain::{SessionId, Span};
 use medallion::{Country, FingerprintError, QueryError, Root, RunId};
-use medallion_model::{EvaluationRunRowV5, EvaluationSessionRowV2, TrainSessionRowV3};
+use medallion_model::{EvaluationRunRowV6, EvaluationSessionRowV2, TrainSessionRowV3};
 use uuid::Uuid;
 
 use crate::a5::NoA5Cell;
@@ -34,7 +34,7 @@ pub struct Inputs {
 pub struct RecordResults {
     pub run_id: RunId,
     pub date: NaiveDate,
-    pub row: EvaluationRunRowV5,
+    pub row: EvaluationRunRowV6,
     pub sessions: Vec<EvaluationSessionRowV2>,
 }
 
@@ -94,8 +94,8 @@ pub fn run_row(
     run: &EvaluationSettings,
     inputs: &Inputs,
     started_at: DateTime<Utc>,
-) -> EvaluationRunRowV5 {
-    EvaluationRunRowV5 {
+) -> EvaluationRunRowV6 {
+    EvaluationRunRowV6 {
         started_at,
         evaluation_version: EVALUATION_VERSION.to_string(),
         code_version: inputs.code_version.clone(),
@@ -120,8 +120,8 @@ pub fn run_row(
     }
 }
 
-pub fn run_id(row: &EvaluationRunRowV5) -> RunId {
-    let unstarted = EvaluationRunRowV5 {
+pub fn run_id(row: &EvaluationRunRowV6) -> RunId {
+    let unstarted = EvaluationRunRowV6 {
         started_at: DateTime::UNIX_EPOCH,
         ..row.clone()
     };
@@ -132,10 +132,10 @@ pub fn run_id(row: &EvaluationRunRowV5) -> RunId {
     RunId::new(id.to_string()).expect("a UUID names a partition")
 }
 
-impl TryFrom<&EvaluationRunRowV5> for EvaluationSettings {
+impl TryFrom<&EvaluationRunRowV6> for EvaluationSettings {
     type Error = RecordError;
 
-    fn try_from(row: &EvaluationRunRowV5) -> Result<Self, Self::Error> {
+    fn try_from(row: &EvaluationRunRowV6) -> Result<Self, Self::Error> {
         Ok(EvaluationSettings {
             pick: Pick {
                 country: row.country.parse().map_err(|err| setting("country", err))?,
@@ -431,7 +431,7 @@ mod tests {
 
     #[test]
     fn an_oracle_row_without_its_horizon_is_refused() {
-        let row = EvaluationRunRowV5 {
+        let row = EvaluationRunRowV6 {
             predictor_settings: BTreeMap::new(),
             ..run_row(&oracle_run(), &inputs(), instant(0))
         };

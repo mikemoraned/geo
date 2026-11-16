@@ -31,8 +31,8 @@ pub use score::{
 };
 pub use scored::{ScoredCrossings, scored_duration};
 pub use settings::{
-    CrowFliesSettings, OnlineDetectorSettings, OracleSettings, SettingsError, TypedSettings,
-    read_online_detector, write_online_detector,
+    CrowFliesSettings, LightConeSettings, OnlineDetectorSettings, OracleSettings, SettingsError,
+    TypedSettings, read_online_detector, write_online_detector,
 };
 pub use split::{
     EmptySalt, NotTuneBuckets, Salt, ScoredSplit, Split, Splitter, SplitterBucket, TuneBuckets,

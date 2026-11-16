@@ -404,7 +404,9 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **A Kalman filter on the velocity.** Deferred, since the Straw Man judges it more than this slice
   needs. A train sample carries no noise to filter, so it waits on a model of GPS error.
 - **A model of GPS error.** Deferred: the Straw Man's extension for a slice that goes well. It
-  perturbs each train position with accuracy sampled from the recorded sessions.
+  perturbs each train position with accuracy sampled from the recorded sessions. Such a model
+  would also let a replay tune LightCone's radius of stillness, which positions without noise
+  cannot.
 - **The phone's own speed and heading.** Rejected, so that every platform runs one velocity
   estimate.
 - **Interpolating each pass's instant along the path**, as
@@ -1108,6 +1110,18 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
         coordinates exactly, since Motis interpolates them from the timetable.
 - [ ] Run LightCone over every session the filter keeps, scored on the tune split, with angles up
       to that bound.
+      - [x] Record LightCone in `evaluation_run_v6`, whose `predictor` gains `light_cone`, and
+            migrate the v5 runs into it under their ids. Take its settings in `evaluate` and
+            evaluation-py: the watching radius, the half-width, the horizon, and the radius of
+            stillness.
+            - The watching radius is a setting, since it caps how far the cone reaches. The sweep
+              holds it at 20 km, beyond the reach of 5 minutes at most trains' speeds, so the cone
+              alone decides each alert.
+            - The radius of stillness stays at 20 m. The store's positions carry no receiver
+              noise, so no replay can tune it.
+      - [ ] Remove `evaluation_run_v5`, its row type, and the migration binary.
+      - [ ] Run LightCone over 1000 sessions as a check, then over every session at half-widths
+            of 30°, 45°, 60°, 75°, and 90°.
 - [ ] Sweep CrowFlies' radius again over every session the filter keeps, scored on the tune split.
       Its 1 km came from runs without a split, which read the test cells too.
 - [ ] Average the velocity over the last few samples, as a `VelocityEstimator`, and run it again.

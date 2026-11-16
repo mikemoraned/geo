@@ -7,7 +7,10 @@ use medallion_model::{
     EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSplitRowV1,
     EvaluationSummaryRowV2, EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
 };
-use predictor::{Alerting, AlertingBeyondWatching, CrowFlies, OnlineDetector, Watching};
+use predictor::{
+    Alerting, AlertingBeyondWatching, Cone, CrowFlies, LastMove, LightCone, OnlineDetector,
+    Watching,
+};
 
 use crate::a5::NoA5Cell;
 use crate::check::{SplitBroken, SplitCheck, SplitCheckError, SplitCounts};
@@ -21,7 +24,9 @@ use crate::rows::{
 };
 use crate::score::{Outcome, ScoreError, Scoring};
 use crate::scored::ScoredCrossings;
-use crate::settings::{CrowFliesSettings, OnlineDetectorSettings, OracleSettings};
+use crate::settings::{
+    CrowFliesSettings, LightConeSettings, OnlineDetectorSettings, OracleSettings,
+};
 use crate::skew::{SkewError, Visit, skew};
 use crate::split::ScoredSplit;
 use crate::store::{compact_ids, read_passes, read_samples};
@@ -31,6 +36,7 @@ use crate::summarise::{Bootstrap, SummariseError};
 pub enum Predictor {
     Oracle(OracleSettings),
     CrowFlies(CrowFliesSettings),
+    LightCone(LightConeSettings),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -310,6 +316,31 @@ async fn replayed<F: Precision + Send + Sync>(
             )
             .await?
         }
+        Predictor::LightCone(LightConeSettings {
+            radius,
+            half_width,
+            horizon,
+            still_within,
+        }) => {
+            let light_cone = LightCone::new(
+                compact,
+                Watching { radius },
+                Cone {
+                    half_width,
+                    horizon,
+                },
+                LastMove::new(still_within),
+            );
+            crate::replay::replay(
+                root,
+                country,
+                sessions,
+                &crossings_and_passes.passes,
+                |_| light_cone.clone(),
+                online_detector.as_ref(),
+            )
+            .await?
+        }
     })
 }
 
@@ -402,7 +433,7 @@ pub async fn run(root: &Root, run: &EvaluationSettings) -> Result<EvaluationResu
 #[cfg(test)]
 mod tests {
     use chrono::TimeDelta;
-    use domain::{Radius, Span};
+    use domain::{HalfWidth, Radius, Span};
 
     use super::*;
     use crate::fixtures::{around_dresden_hbf, oracle, run_of, store, write_country};
@@ -448,6 +479,34 @@ mod tests {
             &run_of(Predictor::CrowFlies(CrowFliesSettings {
                 radius: Radius::new(5_000.0).expect("a radius"),
                 horizon: Span::new("5m").expect("a span"),
+            })),
+        )
+        .await
+        .expect("a run");
+
+        assert!(!results.transitions.is_empty());
+        assert_eq!(
+            (
+                results.summary.notifications,
+                results.summary.misses,
+                results.summary.recall
+            ),
+            (0, 3, Some(0.0))
+        );
+    }
+
+    #[tokio::test]
+    async fn a_whole_light_cone_run_notifies_nothing_and_misses_every_pass() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = store(tmp.path(), 3).await;
+
+        let results = run(
+            &root,
+            &run_of(Predictor::LightCone(LightConeSettings {
+                radius: Radius::new(20_000.0).expect("a radius"),
+                half_width: HalfWidth::new(45.0).expect("a half-width"),
+                horizon: Span::new("5m").expect("a span"),
+                still_within: Radius::new(20.0).expect("a radius"),
             })),
         )
         .await

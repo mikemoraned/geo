@@ -6,14 +6,14 @@ use arrow::array::{Array, Float64Array, StringArray};
 
 use code_version::CodeVersion;
 use crossings::silver::ReadError;
-use domain::{Percentage, Radius, Span};
+use domain::{HalfWidth, Percentage, Radius, Span};
 use evaluation::gold::{self, GoldError};
 use evaluation::record::run_session_rows;
 use evaluation::runs::RunsError;
 use evaluation::steps::{self, EvaluationSettings, Predictor, StepError};
 use evaluation::{
-    A5Resolution, CrowFliesSettings, OnlineDetectorSettings, OracleSettings, Pick, PickError, Salt,
-    Score, Seed, Split, TuneBuckets,
+    A5Resolution, CrowFliesSettings, LightConeSettings, OnlineDetectorSettings, OracleSettings,
+    Pick, PickError, Salt, Score, Seed, Split, TuneBuckets,
 };
 use geo_types::Point;
 use medallion::Country;
@@ -77,6 +77,47 @@ impl CrowFlies {
             "CrowFlies(radius_metres={:?}, horizon=\"{}\")",
             self.radius.as_metres(),
             self.horizon
+        )
+    }
+}
+
+/// LightCone, which predicts each crossing within `radius_metres` of the latest sample, and alerts
+/// each within `half_width_degrees` of the train's heading that it reaches within `horizon`, as
+/// text such as `"5m"`. The heading comes from the train's last move further than
+/// `still_within_metres`.
+#[pyclass(frozen)]
+struct LightCone {
+    settings: LightConeSettings,
+}
+
+#[pymethods]
+impl LightCone {
+    #[new]
+    #[pyo3(signature = (*, radius_metres, half_width_degrees, horizon, still_within_metres))]
+    fn new(
+        radius_metres: f64,
+        half_width_degrees: f64,
+        horizon: &str,
+        still_within_metres: f64,
+    ) -> PyResult<Self> {
+        Ok(Self {
+            settings: LightConeSettings {
+                radius: Radius::new(radius_metres).map_err(value_error)?,
+                half_width: HalfWidth::new(half_width_degrees).map_err(value_error)?,
+                horizon: span(horizon)?,
+                still_within: Radius::new(still_within_metres).map_err(value_error)?,
+            },
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "LightCone(radius_metres={:?}, half_width_degrees={:?}, horizon=\"{}\", \
+             still_within_metres={:?})",
+            self.settings.radius.as_metres(),
+            self.settings.half_width.as_degrees(),
+            self.settings.horizon,
+            self.settings.still_within.as_metres()
         )
     }
 }
@@ -344,7 +385,8 @@ fn session_rows(
 
 /// Replay each session in `sessions` through `predictor`, as an Arrow table of transitions.
 ///
-/// `sessions` is a table of `session_rows`' columns, and `predictor` an `Oracle` or a `CrowFlies`.
+/// `sessions` is a table of `session_rows`' columns, and `predictor` an `Oracle`, a `CrowFlies`,
+/// or a `LightCone`.
 /// The replay runs in `float_type`, `"f32"` or `"f64"`. Each row is one crossing's change of state
 /// at one sample, with the columns of gold `evaluation_transition_v1`. Given `split`, a
 /// `ScoredSplit`, the replay first checks the split against the store, and a split that fails a
@@ -562,7 +604,7 @@ fn evaluate<'py>(
 /// Record a run over the sessions `picked`, as a dict of its id, its date, and its first two tables.
 ///
 /// The dict's `"run_id"` and `"run_date"` are the text `write_gold` takes. Its `"run"` and
-/// `"sessions"` are the run's tables of gold `evaluation_run_v5` and `evaluation_session_v2`. The
+/// `"sessions"` are the run's tables of gold `evaluation_run_v6` and `evaluation_session_v2`. The
 /// run names `BUILD_CODE_VERSION`, the code this extension was built from, and a fingerprint of each
 /// silver dataset it reads. Its id hashes those with its settings, `split` among them, so the same
 /// settings over the same code and data record the same run. If the extension was built from
@@ -635,7 +677,12 @@ fn predictor_of(predictor: &Bound<'_, PyAny>) -> PyResult<Predictor> {
             horizon: crow_flies.horizon,
         }));
     }
-    Err(value_error("`predictor` must be an Oracle or a CrowFlies"))
+    if let Ok(light_cone) = predictor.extract::<PyRef<'_, LightCone>>() {
+        return Ok(Predictor::LightCone(light_cone.settings));
+    }
+    Err(value_error(
+        "`predictor` must be an Oracle, a CrowFlies, or a LightCone",
+    ))
 }
 
 fn float_type_of(float_type: &str) -> PyResult<FloatType> {
@@ -686,6 +733,7 @@ fn gold_error(err: GoldError) -> PyErr {
 fn lookout_evaluation(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<Oracle>()?;
     module.add_class::<CrowFlies>()?;
+    module.add_class::<LightCone>()?;
     module.add_class::<OnlineDetector>()?;
     module.add_class::<Scoring>()?;
     module.add_class::<Bootstrap>()?;

@@ -10,13 +10,14 @@ use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, Trace
 
 use crate::{
     ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationOutcomeRowV2, EvaluationRunRowV5,
-    EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSplitRowV1, EvaluationSummaryRowV2,
-    EvaluationTransitionRowV1, ExtractManifestRowV3, Feed, FloatType, GeometrySource, GersId,
-    GpsReadingRowV2, MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3,
-    MotisSourceId, MotisSourceRowV4, MotisVersion, NotificationClass, OVERTURE_EXTRACT,
-    OutcomeKind, OverlapKind, OvertureRelease, PredictorName, RailMode, RawSampleRow,
-    SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3, TrainSegmentRowV4,
-    TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3, WaterCrossingRowV2,
+    EvaluationRunRowV6, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSplitRowV1,
+    EvaluationSummaryRowV2, EvaluationTransitionRowV1, ExtractManifestRowV3, Feed, FloatType,
+    GeometrySource, GersId, GpsReadingRowV2, MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2,
+    MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4, MotisVersion, NotificationClass,
+    OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease, PredictorName, PredictorNameV5,
+    RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3,
+    TrainSegmentRowV4, TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3,
+    WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -215,6 +216,7 @@ fn enums() -> BTreeMap<String, Vec<String>> {
         variants::<OutcomeKind>(),
         variants::<OverlapKind>(),
         variants::<PredictorName>(),
+        variants::<PredictorNameV5>(),
         variants::<RailMode>(),
         variants::<StartedBy>(),
         variants::<StateKind>(),
@@ -321,6 +323,7 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<ExtractManifestRowV3>(&known),
         declaration::<EvaluationTransitionRowV1>(&known),
         declaration::<EvaluationRunRowV5>(&known),
+        declaration::<EvaluationRunRowV6>(&known),
         declaration::<EvaluationSessionRowV2>(&known),
         declaration::<EvaluationOutcomeRowV2>(&known),
         declaration::<EvaluationSummaryRowV2>(&known),

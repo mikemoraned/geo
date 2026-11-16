@@ -4,12 +4,13 @@ use std::num::NonZeroUsize;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use code_version::CodeVersion;
-use domain::{Percentage, Radius, Span};
+use domain::{HalfWidth, Percentage, Radius, Span};
 use evaluation::gold;
 use evaluation::steps::{EvaluationSettings, Predictor};
 use evaluation::{
-    A5Resolution, Bootstrap, CrowFliesSettings, OnlineDetectorSettings, OracleSettings, Pick, Salt,
-    Score, ScoredSplit, Scoring, Seed, Sessions, Split, Splitter, TuneBuckets, resolve,
+    A5Resolution, Bootstrap, CrowFliesSettings, LightConeSettings, OnlineDetectorSettings,
+    OracleSettings, Pick, Salt, Score, ScoredSplit, Scoring, Seed, Sessions, Split, Splitter,
+    TuneBuckets, resolve,
 };
 use medallion::{Country, MedallionArgs, Root, RunId};
 use medallion_model::{
@@ -69,15 +70,22 @@ struct Settings {
     /// The seed the sessions are picked under.
     #[arg(long)]
     seed: u64,
-    /// The predictor the sessions are replayed through: `oracle` or `crow_flies`.
+    /// The predictor the sessions are replayed through: `oracle`, `crow_flies`, or `light_cone`.
     #[arg(long)]
     predictor: PredictorName,
     /// How far ahead the predictor alerts a pass, such as `5m`.
     #[arg(long)]
     predictor_horizon: Span,
-    /// How far from the latest sample CrowFlies predicts crossings, in metres.
-    #[arg(long, required_if_eq("predictor", "crow_flies"))]
+    /// How far from the latest sample CrowFlies or LightCone predicts crossings, in metres.
+    #[arg(long, required_if_eq_any([("predictor", "crow_flies"), ("predictor", "light_cone")]))]
     radius_metres: Option<Radius>,
+    /// How far either side of the train's heading LightCone's cone reaches, in degrees.
+    #[arg(long, required_if_eq("predictor", "light_cone"))]
+    half_width_degrees: Option<HalfWidth>,
+    /// How far, in metres, a train moves from where it last moved before LightCone takes its
+    /// heading from the move.
+    #[arg(long, required_if_eq("predictor", "light_cone"))]
+    still_within_metres: Option<Radius>,
     /// How near a sample the online pass detector reports a crossing as passing, in metres. The
     /// run measures how far the passes it reports skew from ground truth.
     #[arg(long)]
@@ -132,12 +140,26 @@ impl Settings {
 
     fn run(&self, sessions: NonZeroUsize) -> Result<EvaluationSettings, &'static str> {
         let horizon = self.predictor_horizon;
-        let predictor = match (self.predictor, self.radius_metres) {
-            (PredictorName::Oracle, _) => Predictor::Oracle(OracleSettings { horizon }),
-            (PredictorName::CrowFlies, Some(radius)) => {
-                Predictor::CrowFlies(CrowFliesSettings { radius, horizon })
-            }
-            (PredictorName::CrowFlies, None) => return Err("CrowFlies needs --radius-metres"),
+        let predictor = match self.predictor {
+            PredictorName::Oracle => Predictor::Oracle(OracleSettings { horizon }),
+            PredictorName::CrowFlies => Predictor::CrowFlies(CrowFliesSettings {
+                radius: self
+                    .radius_metres
+                    .ok_or("CrowFlies needs --radius-metres")?,
+                horizon,
+            }),
+            PredictorName::LightCone => Predictor::LightCone(LightConeSettings {
+                radius: self
+                    .radius_metres
+                    .ok_or("LightCone needs --radius-metres")?,
+                half_width: self
+                    .half_width_degrees
+                    .ok_or("LightCone needs --half-width-degrees")?,
+                horizon,
+                still_within: self
+                    .still_within_metres
+                    .ok_or("LightCone needs --still-within-metres")?,
+            }),
         };
         Ok(EvaluationSettings {
             pick: Pick {
@@ -490,6 +512,91 @@ mod tests {
             "--split",
             "tune",
         ]);
+
+        assert!(parsed.is_err());
+    }
+
+    fn light_cone_flags(predictor: &[&str]) -> Vec<String> {
+        [
+            "evaluate",
+            "run",
+            "--country",
+            "DE",
+            "--realtime-at-least",
+            "90",
+            "--sessions",
+            "1000",
+            "--seed",
+            "1",
+            "--predictor",
+            "light_cone",
+            "--predictor-horizon",
+            "5m",
+            "--online-pass-radius-metres",
+            "100",
+            "--float-type",
+            "f32",
+            "--horizon",
+            "5m",
+            "--last-moment",
+            "30s",
+            "--ramp",
+            "1m",
+            "--last-moment-score",
+            "0.25",
+            "--floor",
+            "0.05",
+            "--warm-up",
+            "1m",
+            "--resamples",
+            "1000",
+            "--bootstrap-seed",
+            "1",
+            "--split",
+            "every",
+        ]
+        .into_iter()
+        .chain(predictor.iter().copied())
+        .map(str::to_string)
+        .collect()
+    }
+
+    #[test]
+    fn the_flags_name_light_cones_settings() {
+        let cli = Cli::try_parse_from(light_cone_flags(&[
+            "--radius-metres",
+            "20000",
+            "--half-width-degrees",
+            "45",
+            "--still-within-metres",
+            "20",
+        ]))
+        .expect("the flags parse");
+
+        let Command::Run(settings) = cli.command else {
+            panic!("a run");
+        };
+        assert_eq!(
+            settings
+                .run(NonZeroUsize::new(1000).expect("not zero"))
+                .map(|settings| settings.predictor),
+            Ok(Predictor::LightCone(LightConeSettings {
+                radius: Radius::new(20_000.0).expect("a radius"),
+                half_width: HalfWidth::new(45.0).expect("a half-width"),
+                horizon: Span::new("5m").expect("a span"),
+                still_within: Radius::new(20.0).expect("a radius"),
+            }))
+        );
+    }
+
+    #[test]
+    fn light_cone_without_a_half_width_is_refused_by_the_flags() {
+        let parsed = Cli::try_parse_from(light_cone_flags(&[
+            "--radius-metres",
+            "20000",
+            "--still-within-metres",
+            "20",
+        ]));
 
         assert!(parsed.is_err());
     }
