@@ -76,6 +76,7 @@ wasm:
 vendor_dir := "crates/server/static/vendor"
 d3_geo_version := "3.1.1"
 d3_scale_version := "4.0.2"
+loaders_gl_wkt_version := "4.5.4"
 maplibre_mlt_version := "1.3.0"
 maplibre_gl_version := "6.18.0"
 pmtiles_version := "4.5.0"
@@ -85,6 +86,7 @@ vendor:
     rm -f {{vendor_dir}}/*
     just _vendor-bundle d3-geo {{d3_geo_version}} d3-geo d3-geo
     just _vendor-bundle d3-scale {{d3_scale_version}} d3-scale d3-scale
+    just _vendor-bundle @loaders.gl/wkt {{loaders_gl_wkt_version}} wkt loaders-gl-wkt
     just _vendor-bundle @maplibre/mlt {{maplibre_mlt_version}} mlt maplibre-mlt
     just _vendor-bundle pmtiles {{pmtiles_version}} pmtiles pmtiles
     just _vendor-file maplibre-gl {{maplibre_gl_version}} dist/maplibre-gl.mjs maplibre-gl js

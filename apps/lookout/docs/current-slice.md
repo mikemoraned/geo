@@ -80,7 +80,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
     and `y` go below 0 and above 4096.
 - [x] Move `layerFeatures` and `tilesCovering` from `static/kiosk/journeys.js` into
   `static/tiles.js`, and import them from there in `journeys.js`.
-- [ ] Choose a JavaScript library that writes and reads WKB, and vendor it under `static/vendor/`.
+- [x] Choose a JavaScript library that writes and reads WKB, and vendor it under `static/vendor/`.
 - [ ] Add a reader of a layer's lines in `static/tiles.js`, returning WKB geometries in longitude
   and latitude.
 
