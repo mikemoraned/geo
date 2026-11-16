@@ -102,6 +102,8 @@ the same turn at every speed. A train turns less the faster it goes, since it ca
 curve at speed, and the shape of the track limits its turns too. The current speed can therefore
 predict the largest turn the train can make. Carried ahead along the heading, that limit draws a
 shape narrow near the train and wider further out, like a trumpet.
+[The trumpet, as a reachable set](2026-11-16-trumpet-reachable-set.md) names the fields that
+study this shape, and derives a bound on it from the physics of a train in a curve.
 
 - [ ] Learn the relationship between speed and the turning angle measured in the recorded sessions.
 - [ ] Build the trumpet from that relationship, as a filter on CrowFlies' alerts in place of the
