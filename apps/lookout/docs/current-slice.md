@@ -1250,8 +1250,9 @@ A person chooses the apps' predictor and its settings from the runs of CrowFlies
       1.2e-13 in the 14 runs whose hours v1 stored as a float.
 - [x] Remove `evaluation_summary_v2`, its row type, and `evaluation_migrate_f_half`, once the user
       has inspected the migration.
-- [ ] Choose each predictor's settings with the user, through `/choose-predictor` over the tune
+- [x] Choose each predictor's settings with the user, through `/choose-predictor` over the tune
       runs of Phase 6.
+      LightCone at 1 km and 45°, and CrowFlies at 1 km, each with `LastMove` at 20 m.
 - [ ] Run each predictor's chosen settings once over every session the filter keeps, scored on
       the test split. Choose the apps' predictor with the user from those runs alone.
 - [ ] Replace `CrowFlies` in `platform-core` with the chosen predictor and settings.
