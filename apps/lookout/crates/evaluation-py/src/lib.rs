@@ -86,10 +86,10 @@ impl CrowFlies {
     }
 }
 
-/// LightCone, which predicts each crossing within `radius_metres` of the latest sample, and alerts
-/// each within `half_width_degrees` of the train's heading that it reaches within `horizon`, as
-/// text such as `"5m"`. The heading comes from the train's last move further than
-/// `still_within_metres`.
+/// LightCone, which alerts what CrowFlies alerts, but only within `half_width_degrees` of the
+/// train's heading. It takes CrowFlies' `radius_metres`, `horizon`, and `still_within_metres`, and
+/// its heading comes from the train's last move further than `still_within_metres`. At a
+/// half-width of 180°, it alerts what CrowFlies does.
 #[pyclass(frozen)]
 struct LightCone {
     settings: LightConeSettings,

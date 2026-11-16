@@ -18,7 +18,7 @@ pub use crow_flies::{
     Alerting, AlertingBeyondWatching, CrowFlies, DEFAULT_ALERTING, DEFAULT_WATCHING, Watching,
 };
 pub use detect::{DetectPasses, Passes};
-pub use light_cone::{Cone, LightCone};
+pub use light_cone::LightCone;
 pub use online::{DEFAULT_PASS_RADIUS, OnlineDetector};
 pub use parser::Parser;
 pub use predict::{Confidence, Event, Predict, Prediction, Predictions, nearest_first};

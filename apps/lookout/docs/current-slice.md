@@ -1137,14 +1137,14 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
       and crossing, with sessions picked from the spread drawn on maps.
 - [x] Expose to Python the velocity `LastMove` estimates at each sample, as `velocities` in
       evaluation-py, so that a notebook can draw the cone LightCone used.
-- [ ] Rebuild LightCone as CrowFlies with a bearing filter on top, so that LightCone at a
+- [x] Rebuild LightCone as CrowFlies with a bearing filter on top, so that LightCone at a
       half-width of 180° is CrowFlies.
       LightCone as built alerts on any crossing within its watching radius that it expects within
       N, with no alerting radius, and with a speed of its own. The sweep above therefore measured
       three changes at once, not the bearing filter.
       - [x] Give CrowFlies its speed from a `VelocityEstimator`, `LastMove` by default, in place
             of the receiver's speed or the speed implied by the previous sample.
-      - [ ] Make LightCone CrowFlies' alerting rule, its alerting radius and N, plus the bearing
+      - [x] Make LightCone CrowFlies' alerting rule, its alerting radius and N, plus the bearing
             filter. Show by a property test that at 180° it predicts exactly what CrowFlies does.
 - [ ] Run CrowFlies at 1 km, and the rebuilt LightCone at 1 km with half-widths of 30°, 45°, 60°,
       75°, and 90°, over every session the filter keeps, scored on the tune split.

@@ -8,8 +8,7 @@ use medallion_model::{
     EvaluationSummaryRowV2, EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
 };
 use predictor::{
-    Alerting, AlertingBeyondWatching, Cone, CrowFlies, LastMove, LightCone, OnlineDetector,
-    Watching,
+    Alerting, AlertingBeyondWatching, CrowFlies, LastMove, LightCone, OnlineDetector, Watching,
 };
 
 use crate::a5::NoA5Cell;
@@ -337,13 +336,13 @@ async fn replayed<F: Precision + Send + Sync>(
             still_within,
         }) => {
             let light_cone = LightCone::new(
-                compact,
-                Watching { radius },
-                Cone {
-                    half_width,
-                    horizon,
-                },
-                LastMove::new(still_within),
+                CrowFlies::new(
+                    compact,
+                    Watching { radius },
+                    Alerting { radius, horizon },
+                    LastMove::new(still_within),
+                )?,
+                half_width,
             );
             crate::replay::replay(
                 root,

@@ -8,7 +8,7 @@ use domain::{CrossingCompact, Precision, Radius, Sample, Span};
 use crate::clock::{Clock, OutOfOrder};
 use crate::crossings::Crossings;
 use crate::predict::{Confidence, Event, Predict, Prediction, Predictions};
-use crate::velocity::{LastMove, VelocityEstimator};
+use crate::velocity::{LastMove, Velocity, VelocityEstimator};
 
 pub const DEFAULT_WATCHING: Watching = Watching {
     radius: Radius::metres(NonZeroU32::new(5_000).expect("five thousand is not zero")),
@@ -89,7 +89,11 @@ impl<P: Precision, C: Crossings<P>, V: VelocityEstimator<P>> CrowFlies<P, C, V> 
     }
 
     pub fn speed_mps(&self) -> Option<P> {
-        self.velocity.velocity().map(|velocity| velocity.speed_mps)
+        self.velocity().map(|velocity| velocity.speed_mps)
+    }
+
+    pub fn velocity(&self) -> Option<Velocity<P>> {
+        self.velocity.velocity()
     }
 
     pub fn watching_radius_metres(&self) -> P {
@@ -181,7 +185,7 @@ mod tests {
     use num_traits::float::TotalOrder;
 
     use crate::predict::nearest_first;
-    use crate::velocity::{DEFAULT_STILL_WITHIN, Velocity};
+    use crate::velocity::DEFAULT_STILL_WITHIN;
 
     use super::*;
 
