@@ -1,10 +1,11 @@
 use domain::{Bbox, BboxError};
 use geo::{Destination, Haversine};
-use geo_types::Point;
+use geo_types::{LineString, Point};
 use serde::{Deserialize, Serialize};
 use serde_with::base64::Base64;
 use serde_with::serde_as;
 use wkb::error::WkbError;
+use wkb::writer::{WriteOptions, write_line_string};
 
 use crate::app::Change;
 
@@ -17,6 +18,12 @@ pub struct Wkb(Vec<u8>);
 impl Wkb {
     pub fn new(bytes: Vec<u8>) -> Result<Self, WkbError> {
         wkb::reader::read_wkb(&bytes)?;
+        Ok(Self(bytes))
+    }
+
+    pub fn of_line(line: &LineString<f64>) -> Result<Self, WkbError> {
+        let mut bytes = Vec::new();
+        write_line_string(&mut bytes, line, &WriteOptions::default())?;
         Ok(Self(bytes))
     }
 }
@@ -92,6 +99,18 @@ mod tests {
             serde_json::from_str(r#""AQIAAAACAAAA9ihcj8J1K0CF61G4HoVJQHsUrkfheitAZmZmZmaGSUA=""#);
 
         assert!(wkb.is_ok(), "{wkb:?}");
+    }
+
+    #[test]
+    fn a_line_is_written_as_little_endian_wkb() {
+        let line = LineString::from(vec![(13.73, 51.04), (13.74, 51.05)]);
+
+        let wkb = Wkb::of_line(&line).expect("a line writes");
+
+        assert_eq!(
+            serde_json::to_string(&wkb).expect("serialize"),
+            r#""AQIAAAACAAAA9ihcj8J1K0CF61G4HoVJQHsUrkfheitAZmZmZmaGSUA=""#
+        );
     }
 
     #[test]

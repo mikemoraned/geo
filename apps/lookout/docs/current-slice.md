@@ -99,7 +99,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### The browser draws them (`web` core, bridge, and element)
 
-- [ ] Add `lines` to `web_core::ViewModel`, each a WKB geometry with its category, and draw lines
+- [x] Add `lines` to `web_core::ViewModel`, each a WKB geometry with its category, and draw lines
   from `Browser`. Leave the colours to the element.
 - [ ] Update the bridge's JSON contract test in `bridge/src/lib.rs` for the new effect, event,
   and view.

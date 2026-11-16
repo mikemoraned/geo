@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use domain::CrossingCompact;
-use geo_types::Point;
+use geo_types::{LineString, Point};
+use platform_core::lines::Wkb;
 use platform_core::{Float, Model, Shell};
 use predictor::{Crossings, Prediction};
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,19 @@ pub struct Predicted {
     pub at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Category {
+    Rail,
+    Trace,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Line {
+    pub category: Category,
+    pub wkb: Wkb,
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ViewModel {
     pub now: Option<DateTime<Utc>>,
@@ -25,6 +39,7 @@ pub struct ViewModel {
     pub radius_metres: Float,
     pub here: Option<Here>,
     pub predicted: Vec<Predicted>,
+    pub lines: Vec<Line>,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -66,8 +81,25 @@ impl Shell for Browser {
                 .crossings()
                 .map(|crossings| located(crossings, model.predictions()))
                 .unwrap_or_default(),
+            lines: drawn(model),
         }
     }
+}
+
+fn drawn(model: &Model<Browser>) -> Vec<Line> {
+    let rail = model.lines().iter().map(|wkb| Line {
+        category: Category::Rail,
+        wkb: wkb.clone(),
+    });
+    let trace: LineString<f64> = model
+        .trace()
+        .map(|at| (f64::from(at.x()), f64::from(at.y())))
+        .collect();
+    let traced = (trace.0.len() > 1).then(|| Line {
+        category: Category::Trace,
+        wkb: Wkb::of_line(&trace).expect("a line writes into a Vec, which cannot fail"),
+    });
+    rail.chain(traced).collect()
 }
 
 fn located(crossings: &impl Crossings<Float>, predictions: &[Prediction<Float>]) -> Vec<Predicted> {
@@ -97,7 +129,7 @@ mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
     use crux_core::Core;
     use domain::{CrossingCompactId, Gps, Sample};
-    use platform_core::{Event, Lookout};
+    use platform_core::{Effect, Event, Lookout};
 
     use super::*;
 
@@ -167,6 +199,117 @@ mod tests {
         let placed = located(&crossings(), &[prediction(0, 1_000.0, Some(at))]);
 
         assert_eq!(placed[0].at, Some(at));
+    }
+
+    fn line() -> Wkb {
+        Wkb::new(vec![
+            1, 2, 0, 0, 0, 2, 0, 0, 0, 246, 40, 92, 143, 194, 117, 43, 64, 133, 235, 81, 184, 30,
+            133, 73, 64, 123, 20, 174, 71, 225, 122, 43, 64, 102, 102, 102, 102, 102, 134, 73, 64,
+        ])
+        .expect("a line in WKB")
+    }
+
+    fn a_kilometre_north() -> Gps<f64> {
+        Gps::at(51.0403 + 1_000.0 / 111_195.0, 13.7322)
+            .expect("on the globe")
+            .with_speed_mps(Some(27.8))
+    }
+
+    fn located_at_the_station() -> Core<Lookout<Browser>> {
+        let core: Core<Lookout<Browser>> = Core::new();
+        core.process_event(Event::Crossings(vec![
+            CrossingCompact::at(1, 51.0503, 13.7322).expect("on the globe"),
+        ]));
+        core
+    }
+
+    fn categories(view: &ViewModel) -> Vec<Category> {
+        view.lines.iter().map(|line| line.category).collect()
+    }
+
+    #[test]
+    fn the_rail_received_is_drawn_as_rail() {
+        let core = located_at_the_station();
+        let area = core
+            .process_event(Event::Position(Sample::new(instant(), at_the_station())))
+            .iter()
+            .find_map(|effect| match effect {
+                Effect::Lines(request) => Some(request.operation.area),
+                _ => None,
+            })
+            .expect("a request for lines");
+
+        core.process_event(Event::Lines {
+            area,
+            lines: vec![line()],
+        });
+
+        assert_eq!(
+            core.view().lines,
+            vec![Line {
+                category: Category::Rail,
+                wkb: line(),
+            }]
+        );
+    }
+
+    #[test]
+    fn the_trace_is_one_line_from_the_oldest_fix_to_the_latest() {
+        let core = located_at_the_station();
+        core.process_event(Event::Position(Sample::new(instant(), at_the_station())));
+
+        core.process_event(Event::Position(Sample::new(
+            instant() + TimeDelta::seconds(36),
+            a_kilometre_north(),
+        )));
+
+        assert_eq!(
+            core.view().lines,
+            vec![Line {
+                category: Category::Trace,
+                wkb: Wkb::new(vec![
+                    1, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 224, 226, 118, 43, 64, 0, 0, 0, 128, 40,
+                    133, 73, 64, 0, 0, 0, 224, 226, 118, 43, 64, 0, 0, 0, 64, 79, 134, 73, 64,
+                ])
+                .expect("a line in WKB"),
+            }]
+        );
+    }
+
+    #[test]
+    fn the_trace_is_drawn_over_the_rail() {
+        let core = located_at_the_station();
+        let area = core
+            .process_event(Event::Position(Sample::new(instant(), at_the_station())))
+            .iter()
+            .find_map(|effect| match effect {
+                Effect::Lines(request) => Some(request.operation.area),
+                _ => None,
+            })
+            .expect("a request for lines");
+        core.process_event(Event::Lines {
+            area,
+            lines: vec![line()],
+        });
+
+        core.process_event(Event::Position(Sample::new(
+            instant() + TimeDelta::seconds(36),
+            a_kilometre_north(),
+        )));
+
+        assert_eq!(
+            categories(&core.view()),
+            vec![Category::Rail, Category::Trace]
+        );
+    }
+
+    #[test]
+    fn a_single_fix_draws_no_trace() {
+        let core = located_at_the_station();
+
+        core.process_event(Event::Position(Sample::new(instant(), at_the_station())));
+
+        assert!(core.view().lines.is_empty());
     }
 
     #[test]
