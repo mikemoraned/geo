@@ -208,7 +208,7 @@ pub fn cone_stages<'py>(
     Ok(tables)
 }
 
-fn sessions_of(
+pub(crate) fn sessions_of(
     samples: Vec<TrainSessionSamplePositionV3>,
 ) -> BTreeMap<String, Vec<TrainSessionSamplePositionV3>> {
     samples
@@ -220,7 +220,11 @@ fn sessions_of(
         .collect()
 }
 
-fn table_from<T: Serialize>(rows: &[T], example: &T, instants: &[&str]) -> PyResult<PyTable> {
+pub(crate) fn table_from<T: Serialize>(
+    rows: &[T],
+    example: &T,
+    instants: &[&str],
+) -> PyResult<PyTable> {
     let fields = medallion::fields_of(example, instants).map_err(runtime_error)?;
     let batch = serde_arrow::to_record_batch(&fields, &rows).map_err(runtime_error)?;
     table_of_batch(batch)

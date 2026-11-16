@@ -29,6 +29,7 @@ use pyo3::types::PyDict;
 use pyo3_arrow::{PyArray, PyTable};
 
 mod cone;
+mod velocity;
 
 const BUILD_CODE_VERSION: &str = env!("BUILD_CODE_VERSION");
 
@@ -748,6 +749,7 @@ fn lookout_evaluation(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(evaluate, module)?)?;
     module.add_function(wrap_pyfunction!(record, module)?)?;
     module.add_function(wrap_pyfunction!(cone::cone_stages, module)?)?;
+    module.add_function(wrap_pyfunction!(velocity::velocities, module)?)?;
     module.add("BUILD_CODE_VERSION", BUILD_CODE_VERSION)?;
     Ok(())
 }

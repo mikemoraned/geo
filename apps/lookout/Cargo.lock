@@ -3445,6 +3445,7 @@ dependencies = [
  "itertools 0.15.0",
  "medallion",
  "medallion-model",
+ "predictor",
  "py-common",
  "pyo3",
  "pyo3-arrow",

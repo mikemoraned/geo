@@ -19,6 +19,7 @@ pub mod split;
 pub mod steps;
 pub mod store;
 pub mod summarise;
+pub mod velocity;
 
 pub use self::a5::{A5CellId, A5Resolution, NoA5Cell, NotAnA5Resolution};
 pub use offline::{OfflineDetector, OfflineError, RecordedPass};
@@ -39,3 +40,4 @@ pub use split::{
 };
 pub use store::{compact_ids, read_passes};
 pub use summarise::{Bootstrap, Estimate, Spread, SummariseError, Summary, summarise};
+pub use velocity::{VelocityAt, velocities};
