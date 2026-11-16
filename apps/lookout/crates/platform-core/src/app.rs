@@ -10,9 +10,9 @@ use crux_core::{
 use domain::{Bbox, CrossingCompact, CrossingCompactId, Sample, StateKind};
 use geo_types::Point;
 use predictor::{
-    Crossings, CrowFlies, DEFAULT_ALERTING, DEFAULT_PASS_RADIUS, DEFAULT_STILL_WITHIN,
-    DEFAULT_WATCHING, DetectPasses, Event as Observed, LastMove, OnlineDetector, OutOfOrder,
-    Parser, Predict, Predictions, Sentence, Tracker,
+    Crossings, CrowFlies, DEFAULT_ALERTING, DEFAULT_HALF_WIDTH, DEFAULT_PASS_RADIUS,
+    DEFAULT_STILL_WITHIN, DEFAULT_WATCHING, DetectPasses, Event as Observed, LastMove, LightCone,
+    OnlineDetector, OutOfOrder, Parser, Predict, Predictions, Sentence, Tracker,
 };
 use serde::{Deserialize, Serialize};
 
@@ -51,7 +51,7 @@ enum Predicting<S: Shell> {
 }
 
 struct Tracking<C: Crossings<Float>> {
-    predictor: CrowFlies<Float, C>,
+    predictor: LightCone<Float, C>,
     detector: OnlineDetector<Float, C>,
     tracker: Tracker,
 }
@@ -59,13 +59,16 @@ struct Tracking<C: Crossings<Float>> {
 impl<C: Crossings<Float> + Clone> Tracking<C> {
     fn new(crossings: C) -> Self {
         Self {
-            predictor: CrowFlies::new(
-                crossings.clone(),
-                DEFAULT_WATCHING,
-                DEFAULT_ALERTING,
-                LastMove::new(DEFAULT_STILL_WITHIN),
-            )
-            .expect("the default alerting radius lies within the default watching radius"),
+            predictor: LightCone::new(
+                CrowFlies::new(
+                    crossings.clone(),
+                    DEFAULT_WATCHING,
+                    DEFAULT_ALERTING,
+                    LastMove::new(DEFAULT_STILL_WITHIN),
+                )
+                .expect("the default alerting radius lies within the default watching radius"),
+                DEFAULT_HALF_WIDTH,
+            ),
             detector: OnlineDetector::new(crossings, DEFAULT_PASS_RADIUS),
             tracker: Tracker::new(),
         }
@@ -109,7 +112,10 @@ impl<S: Shell> Model<S> {
     }
 
     pub fn predictions(&self) -> &Predictions<Float> {
-        self.ready().map_or(&NO_PREDICTIONS, CrowFlies::predictions)
+        match &self.predictor {
+            Predicting::Ready(tracking) => tracking.predictor.predictions(),
+            Predicting::Waiting => &NO_PREDICTIONS,
+        }
     }
 
     pub fn speed_mps(&self) -> Option<Float> {
@@ -140,7 +146,7 @@ impl<S: Shell> Model<S> {
 
     fn ready(&self) -> Option<&CrowFlies<Float, S::Crossings>> {
         match &self.predictor {
-            Predicting::Ready(tracking) => Some(&tracking.predictor),
+            Predicting::Ready(tracking) => Some(tracking.predictor.crow_flies()),
             Predicting::Waiting => None,
         }
     }
@@ -567,6 +573,25 @@ mod tests {
                 (3, StateKind::CandidatePass),
                 (4, StateKind::OutOfReach),
             ]
+        );
+    }
+
+    #[test]
+    fn a_crossing_behind_the_train_is_not_alerted() {
+        let core = waiting();
+        core.process_event(Event::Reset);
+        core.process_event(Event::Crossings(vec![
+            crossing(1, north_of_the_station(0.005)),
+            crossing(2, north_of_the_station(-0.005)),
+        ]));
+
+        for event in arriving_at_the_station(instant()) {
+            core.process_event(event);
+        }
+
+        assert_eq!(
+            core.view().states,
+            vec![(1, StateKind::AlertedPass), (2, StateKind::CandidatePass),]
         );
     }
 

@@ -8,6 +8,9 @@ use crate::crow_flies::CrowFlies;
 use crate::predict::{Confidence, Event, Predict, Prediction, Predictions};
 use crate::velocity::{LastMove, Velocity, VelocityEstimator};
 
+pub const DEFAULT_HALF_WIDTH: HalfWidth =
+    HalfWidth::checked(45.0).expect("45 degrees lies within a half-width's range");
+
 #[derive(Debug, Clone)]
 pub struct LightCone<
     P: Precision,
@@ -26,6 +29,10 @@ impl<P: Precision, C: Crossings<P>, V: VelocityEstimator<P>> LightCone<P, C, V> 
             half_width,
             predictions: Predictions::new(),
         }
+    }
+
+    pub fn crow_flies(&self) -> &CrowFlies<P, C, V> {
+        &self.crow_flies
     }
 
     fn predict(&mut self, sample: Sample<P>) {
@@ -296,19 +303,22 @@ mod tests {
             |steps| {
                 steps
                     .into_iter()
-                    .scan((50.0, 0.0, 0), |(latitude, longitude, after), (north, east, wait)| {
-                        *latitude += north;
-                        *longitude += east;
-                        *after += wait;
-                        Some(
-                            Sample::at(
-                                instant() + TimeDelta::seconds(*after),
-                                *latitude,
-                                *longitude,
+                    .scan(
+                        (50.0, 0.0, 0),
+                        |(latitude, longitude, after), (north, east, wait)| {
+                            *latitude += north;
+                            *longitude += east;
+                            *after += wait;
+                            Some(
+                                Sample::at(
+                                    instant() + TimeDelta::seconds(*after),
+                                    *latitude,
+                                    *longitude,
+                                )
+                                .expect("on the globe"),
                             )
-                            .expect("on the globe"),
-                        )
-                    })
+                        },
+                    )
                     .collect()
             },
         )

@@ -14,10 +14,14 @@ pub enum NotAHalfWidth {
 
 impl HalfWidth {
     pub fn new(degrees: f64) -> Result<Self, NotAHalfWidth> {
+        Self::checked(degrees).ok_or(NotAHalfWidth::OutOfRange(degrees))
+    }
+
+    pub const fn checked(degrees: f64) -> Option<Self> {
         if degrees > 0.0 && degrees <= 180.0 {
-            Ok(Self(degrees))
+            Some(Self(degrees))
         } else {
-            Err(NotAHalfWidth::OutOfRange(degrees))
+            None
         }
     }
 
