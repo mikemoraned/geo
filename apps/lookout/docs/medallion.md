@@ -244,6 +244,12 @@ does not change what is stored.
 Outputs, not inputs: the results of evaluating a particular version of a derivation
 against silver, and data prepared for live external use.
 
+A gold derivation may also read an upstream reference extract in bronze, selecting the rows a silver
+dataset names by the upstream's id and the extract's id. The silver dataset holds every decision
+about which rows matter, so the extract supplies only what the rows hold, such as their shapes,
+and a silver copy of them would repeat the selection. This covers upstream reference extracts
+only. Observations in bronze reach gold through silver.
+
 Format: determined by the consumer. Specialised formats are expected at this layer, such as
 [PMTiles](https://docs.protomaps.com/pmtiles/) for live map serving. Polylines are also
 permitted again. Where no specialised format fits, use

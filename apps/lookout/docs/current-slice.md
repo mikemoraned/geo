@@ -234,6 +234,21 @@ features:
   The zoom level 6 tiles hold every sample of the sessions they cover, so reading a journey
   fetches at most 108 KB.
 
+2026-11-16, what the spike leaves for the App slice:
+
+- **One file holds both the replay and the base map, and a client reads it a tile at a time.**
+  The deployed server answers range requests for it with 206 and the bytes asked for. The file is
+  13.9 MB at maximum zoom level 12, which costs only git. The base map's tiles stay under 55 KB at
+  every zoom level, and a journey's samples come from at most two zoom level 6 tiles of up to
+  108 KB.
+- **Reading every journey took 15 ms in Safari from localhost,** measured on the phase 1 file of
+  the same five sessions with samples at zoom level 6. The packed map was not timed again, and its
+  zoom level 6 tiles hold the same samples.
+- **The zoom levels chosen:** samples at 6, the rail and water from 7, and routes and the file to
+  12.
+- **The base map needs no silver of its own.** It reads the Overture extract's shapes for the
+  features `water_crossing_v2` names, so the crossings remain the one place the filtering lives.
+
 ### Tasks
 
 #### Phase 1: one session through the tiles
@@ -336,14 +351,14 @@ features live, so silver gains no datasets.
       kiosk replays from the map on a deploy.
 - [x] Decide whether `pack_sessions` and the committed `gold/artifact=sessions` versions go too.
       The rerun runner and the notebooks do not read them. Both went.
-- [ ] Update `docs/web.md` on what `/kiosk` feeds the element and the map it draws.
+- [x] Update `docs/web.md` on what `/kiosk` feeds the element and the map it draws.
 - [x] Update the derivation graph and the gold consumers in `docs/architecture.md`.
 - [x] Update the gold exceptions in `docs/medallion.md`, naming the map artefact and `map.version`.
-- [ ] State in `docs/medallion.md`'s gold section that an artefact may read an upstream reference
+- [x] State in `docs/medallion.md`'s gold section that an artefact may read an upstream reference
       extract in bronze, such as Overture's, selecting rows by the ids a silver dataset names. The
       allowance covers external reference data only. Observations in bronze still reach gold
       through silver.
-- [ ] Write `crates/map/README.md`.
-- [ ] Record under Observations what the spike measured: the file size, the read time, and the
+- [x] Write `crates/map/README.md`.
+- [x] Record under Observations what the spike measured: the file size, the read time, and the
       zoom levels chosen. This is what the App slice needs to know.
 - [ ] Run `just test-no-docker` and `cargo clippy --workspace`, and ask the user to run `just test`.

@@ -87,6 +87,21 @@ Each journey begins by telling the core to start again knowing nothing, which is
 journey from the morning follow one from that evening. The page runs them in turn for as long as
 it is left open.
 
+The journeys come from the map, a [PMTiles](https://docs.protomaps.com/pmtiles/) file the page
+reads a tile at a time through range requests. Each journey is a line in a route layer, listed from
+the file's lowest zoom level, and the line carries the journey's session, its crossings count, its
+bounding box, and the zoom level its samples sit at. The samples are points in a layer of their
+own at that one zoom level, so reading a journey fetches only the tiles covering its bounding box
+there. A sample's values travel as the point's attributes, since a tile rounds a point's position
+to its grid. The tile buffer repeats a sample near a tile's edge in the next tile, so the page
+keeps one sample per position in the journey.
+
+On a screen at least 768 CSS px wide, the page also draws the map: the rail and water the
+crossings name, the journey's route, and a dot at the sample last sent, with the element over the
+map's top right. Each journey fits the map to its bounding box. The map can be zoomed and panned,
+and the next journey fits it again. A narrower screen shows the element alone, and the page then
+loads no map library.
+
 `/record` captures and sends; [the telemetry wire](telemetry.md) describes what it sends.
 
 Every page shows the git hash of the build serving it, so a reader can match what is running to
