@@ -1108,7 +1108,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
         `LastMove`. A receiver at rest wanders a few metres between fixes, so exact equality would
         give a random heading on a device. The store's samples repeat a dwelling train's
         coordinates exactly, since Motis interpolates them from the timetable.
-- [ ] Run LightCone over every session the filter keeps, scored on the tune split, with angles up
+- [x] Run LightCone over every session the filter keeps, scored on the tune split, with angles up
       to that bound.
       - [x] Record LightCone in `evaluation_run_v6`, whose `predictor` gains `light_cone`, and
             migrate the v5 runs into it under their ids. Take its settings in `evaluate` and
@@ -1129,9 +1129,9 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
               times. The cover keeps such a crossing, since its cell overlaps Germany.
             - Tech debt: silver itself holds crossings outside its country. The slice "derive the
               water crossings in Rust" cuts them out where it derives the crossings.
-      - [ ] Run LightCone over 1000 sessions as a check, then over every session at half-widths
+      - [x] Run LightCone over 1000 sessions as a check, then over every session at half-widths
             of 30°, 45°, 60°, 75°, and 90°.
-- [ ] Sweep CrowFlies' radius again over every session the filter keeps, scored on the tune split.
+- [x] Sweep CrowFlies' radius again over every session the filter keeps, scored on the tune split.
       Its 1 km came from runs without a split, which read the test cells too.
 - [ ] Average the velocity over the last few samples, as a `VelocityEstimator`, and run it again.
 - [ ] Draw LightCone's cone at each sample in `explore5.py` with the user, where it beats
@@ -1175,6 +1175,15 @@ split doc](2026-11-14-train-test-split.md) gives the evidence for those from `ex
   over all 34,521 sessions measures 5,737,284 tune windows. Their largest angle has a median of
   21.4°, a p90 of 57.0°, a p95 of 71.1°, and a p99 of 102.6°, each within 0.5° of the 1000
   sessions' figures. The sweep's bound of 30° to 90° stands.
+- **2026-11-16: CrowFlies at 1 km beats LightCone at every half-width.** Over all 34,521 sessions
+  on the tune split, CrowFlies at 1 km scores a precision of 0.327 [0.325, 0.328], a recall of
+  0.859 [0.855, 0.864], and 20.4 [20.1, 20.6] false alarms per hour. LightCone's best half-width,
+  30°, scores 0.104 [0.102, 0.106], 0.472 [0.468, 0.477], and 28.7 [28.2, 29.2]. Each wider
+  half-width adds false alarms and leaves recall near 0.44.
+- **2026-11-16: LightCone alerts early and repeats.** Its median lead time runs from 330 s to
+  360 s, beyond the horizon of 5 minutes. A straight line to a crossing is shorter than the track,
+  so LightCone predicts arrival too soon. Its repeats fall from 433,436 at 30° to 199,311 at 90°,
+  so crossings at the cone's edge leave it and return.
 
 #### Phase 7: choosing the predictor
 
