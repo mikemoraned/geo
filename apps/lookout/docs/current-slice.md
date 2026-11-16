@@ -879,8 +879,9 @@ tracker meets that can be wrong.
       again only once it leaves the watching radius. CrowFlies alerts a crossing through its pass
       and after it, and the tracker re-alerts a passed crossing on its next alert. A cooldown that
       starts at the last alert would therefore never start. Run it at 1 km over every session, and
-      compare it with the 1 km run without one. This is a quick, simple form of Phase 8's
-      debouncing.
+      compare it with the 1 km run without one. This is a quick, simple form of the debouncing
+      that [the collected improvements](next-slices.md#slice-collected-possible-precisionrecall-improvements)
+      hold.
       A 2-minute cooldown raised precision from 0.327 to 0.374 and recall from 0.862 to 0.883, and
       cut false alarms from 20.3 to 17.4 per hour. It added 236 misses. The apps keep no cooldown,
       since the gain does not justify the code, and the cooldown is removed again.
@@ -1246,17 +1247,7 @@ A person chooses the apps' predictor and its settings from the runs of CrowFlies
       the test split. Choose the apps' predictor with the user from those runs alone.
 - [ ] Replace `CrowFlies` in `platform-core` with the chosen predictor and settings.
 
-#### Phase 8: debouncing, an optional experiment
-
-A run shows whether debouncing a predictor's predictions improves its precision and recall. The apps
-can take a predictor without it, so this phase can be skipped. Each run starts `/choose-predictor`,
-so a debounced predictor can replace the one Phase 7 chose.
-
-- [ ] Debounce `LightCone`'s predictions and `CrowFlies`', each as a setting of its predictor.
-- [ ] Run each predictor with and without its debouncing, over the same sessions and seed, and
-      compare precision, recall, and false alarms per hour.
-
-#### Phase 9: the size of a run on disk
+#### Phase 8: the size of a run on disk
 
 A run over every session takes 15–21 MB in gold, nearly all of it transitions and outcomes, and
 gold is committed. The slice cuts that size before it closes, so its runs do not swell the repo.

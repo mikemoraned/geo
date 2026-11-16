@@ -76,6 +76,38 @@ has seen:
 - **Staleness.** A test set captured weeks after the build measures how fast the map goes stale
   as the network and its services change.
 
+## Slice: Collected Possible Precision/Recall Improvements
+
+### Target
+
+Collect the ideas that could raise a predictor's precision or recall beyond what LightCone's slice
+chose. Each is an experiment, measured against the chosen predictor through the evaluation, and
+adopted only where its runs beat that predictor.
+
+### Debouncing
+
+A run shows whether debouncing a predictor's predictions improves its precision and recall. The
+apps can take a predictor without it, so this experiment can be skipped. Each run starts
+`/choose-predictor`, so a debounced predictor can replace the one LightCone's slice chose.
+
+- [ ] Debounce `LightCone`'s predictions and `CrowFlies`', each as a setting of its predictor.
+- [ ] Run each predictor with and without its debouncing, over the same sessions and seed, and
+      compare precision, recall, and false alarms per hour.
+
+### A trumpet around the heading
+
+LightCone keeps the crossings CrowFlies alerts on that lie within a cone around the heading. The
+cone stands for what the train can reach within the horizon, given how far it can turn. It grants
+the same turn at every speed. A train turns less the faster it goes, since it cannot take a tight
+curve at speed, and the shape of the track limits its turns too. The current speed can therefore
+predict the largest turn the train can make. Carried ahead along the heading, that limit draws a
+shape narrow near the train and wider further out, like a trumpet.
+
+- [ ] Learn the relationship between speed and the turning angle measured in the recorded sessions.
+- [ ] Build the trumpet from that relationship, as a filter on CrowFlies' alerts in place of the
+      cone.
+- [ ] Run it over the sessions LightCone's runs used, and compare it with the chosen predictor.
+
 # Unassigned
 
 Anything that doesn't clearly fit in V1 or V2.
