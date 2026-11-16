@@ -1184,6 +1184,13 @@ split doc](2026-11-14-train-test-split.md) gives the evidence for those from `ex
   360 s, beyond the horizon of 5 minutes. A straight line to a crossing is shorter than the track,
   so LightCone predicts arrival too soon. Its repeats fall from 433,436 at 30° to 199,311 at 90°,
   so crossings at the cone's edge leave it and return.
+- **2026-11-16: the bootstrap's intervals are unpaired, and treat sessions as independent.** Each
+  run resamples its sessions on its own, and runs are compared by whether their intervals overlap.
+  Runs over the same sessions under the same seed allow a paired bootstrap of their difference,
+  which gives a narrower interval. Sessions on the same route pass the same crossings, so they are
+  not independent, and resampling by session gives intervals narrower than they should be.
+  Neither changes the sweep's conclusions, since its gaps far exceed its intervals. Both matter
+  when Phase 7 chooses between close settings.
 
 #### Phase 7: choosing the predictor
 

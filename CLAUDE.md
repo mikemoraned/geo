@@ -26,7 +26,7 @@ an app's `docs/`, written for anyone working on the code rather than for Claude.
 for working practice and for the limits of this environment. Current notes:
 
 - [`.claude/memory/python-conventions.md`](.claude/memory/python-conventions.md) — keep
-  Python minimal, in a uv project dir, no low-level fiddliness
+  Python minimal, in a uv project dir, no low-level fiddliness, and polars rather than pandas
 - [`.claude/memory/docs-style.md`](.claude/memory/docs-style.md) — reference docs are
   written abstractly (no component names in rules) and in dry language, a README change cites
   the sources behind it, another project is linked at its first mention, and an interface is a
