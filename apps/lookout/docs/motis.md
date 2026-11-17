@@ -237,6 +237,16 @@ fills that array with exactly one trip: v2.11.3 builds each segment in `src/rail
 single `TripInfo`. Of 2,432 rail segments in one country-wide response, every one carried one
 trip. A segment carrying none, or several, is therefore an error rather than a choice.
 
+## A leg's realtime flag narrowed in v2.11.4
+
+Up to v2.11.3, a leg's `realTime` states that realtime data exists about the leg. From v2.11.4, it
+states that its departure or its arrival has a realtime time. A time counts only if Motis gives it
+neither the reason `NO_RT_DATA` nor `INCONSISTENT_RT`. The second covers a time Motis changed
+itself, such as an update it could not match to one trip. Each stop of a leg now carries
+`departureTimestampReason` and `arrivalTimestampReason` as well. A capture under v2.11.4 can
+therefore mark fewer legs realtime than one under v2.11.3 from the same feed.
+([motis#1616](https://github.com/motis-project/motis/pull/1616))
+
 ## A leg's identity is its source, trip, departure stop, and scheduled departure
 
 A leg is identified by the source that captured it, its trip id, the stop it departs, and its

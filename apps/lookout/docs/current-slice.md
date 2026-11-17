@@ -70,8 +70,9 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Open questions
 
-- The floor for each capture. The German capture held 85–90% across all rail before its fall. The
-  UK floor waits on the Scotland trial.
+- The floor for each capture. The German capture held 85–90% across all rail before its fall,
+  under v2.11.3. v2.11.4 marks fewer legs realtime, as `docs/motis.md` sets out, so the UK floor
+  waits on the Scotland trial.
 - How far ahead Aubin's timetable runs, and how often Aubin rebuilds it. If it runs only days ahead,
   the week-long capture needs fresh imports, each a new run with its own label.
 - Whether Aubin's trip ids resolve against its own realtime feed as DELFI's do, at about 99.9%.
@@ -80,7 +81,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Refactors / extensions
 
-- [ ] Move Motis to v2.11.4 in `tools/motis-server/Justfile`, and run `just motis-openapi`. Rebuild
+- [x] Move Motis to v2.11.4 in `tools/motis-server/Justfile`, and run `just motis-openapi`. Rebuild
       `crates/motis`, and run its tests.
 - [ ] Move the German recipes into `tools/motis-server/de/Justfile`, as a just module. The top
       Justfile keeps `VERSION`, `TARGET`, and `prerequisites`.
