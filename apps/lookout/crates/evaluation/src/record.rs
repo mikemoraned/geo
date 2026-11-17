@@ -3,8 +3,11 @@ use std::num::NonZeroUsize;
 use chrono::{DateTime, NaiveDate, TimeDelta, Utc};
 use code_version::CodeVersion;
 use domain::{SessionId, Span};
+use itertools::Itertools;
 use medallion::{Country, FingerprintError, QueryError, Root, RunId};
-use medallion_model::{EvaluationRunRowV6, EvaluationSessionRowV2, TrainSessionRowV3};
+use medallion_model::{
+    EvaluationRunRowV6, EvaluationSessionRowV3, TrainSessionCrossingRowV1, TrainSessionRowV3,
+};
 use uuid::Uuid;
 
 use crate::a5::NoA5Cell;
@@ -17,7 +20,7 @@ use crate::settings::{
 };
 use crate::split::ScoredSplit;
 use crate::steps::{EvaluationSettings, Predictor};
-use crate::store::read_samples;
+use crate::store::{read_passes, read_samples};
 use crate::summarise::Bootstrap;
 
 pub const EVALUATION_VERSION: &str = "replay-v1";
@@ -35,7 +38,7 @@ pub struct RecordResults {
     pub run_id: RunId,
     pub date: NaiveDate,
     pub row: EvaluationRunRowV6,
-    pub sessions: Vec<EvaluationSessionRowV2>,
+    pub sessions: Vec<EvaluationSessionRowV3>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -166,14 +169,38 @@ impl TryFrom<&EvaluationRunRowV6> for EvaluationSettings {
     }
 }
 
-pub fn session_rows(picked: &[TrainSessionRowV3]) -> Vec<EvaluationSessionRowV2> {
-    picked
-        .iter()
-        .map(|session| {
+pub fn session_rows(
+    picked: &[TrainSessionRowV3],
+    passes: &[TrainSessionCrossingRowV1],
+) -> Vec<EvaluationSessionRowV3> {
+    in_route_order(picked, passes)
+        .map(|(index, session)| {
             let duration = duration(session);
-            session_row(session, duration, duration)
+            session_row(index, session, duration, duration)
         })
         .collect()
+}
+
+fn in_route_order<'a>(
+    picked: &'a [TrainSessionRowV3],
+    passes: &[TrainSessionCrossingRowV1],
+) -> impl Iterator<Item = (u32, &'a TrainSessionRowV3)> {
+    let routes = passes
+        .iter()
+        .sorted_by_key(|pass| pass.crossed_at)
+        .map(|pass| (&pass.session_id, &pass.crossing_id))
+        .into_group_map();
+    let no_route = Vec::new();
+    picked
+        .iter()
+        .sorted_by_key(|session| {
+            (
+                routes.get(&session.session_id).unwrap_or(&no_route).clone(),
+                &session.session_id,
+            )
+        })
+        .zip(0..)
+        .map(|(session, index)| (index, session))
 }
 
 pub async fn run_session_rows(
@@ -181,10 +208,11 @@ pub async fn run_session_rows(
     country: Country,
     split: Option<&ScoredSplit>,
     picked: &[TrainSessionRowV3],
-) -> Result<Vec<EvaluationSessionRowV2>, SessionRowsError> {
+) -> Result<Vec<EvaluationSessionRowV3>, SessionRowsError> {
+    let passes = read_passes(root, picked.iter().map(|session| &session.session_id)).await?;
     match split {
-        None => Ok(session_rows(picked)),
-        Some(split) => split_session_rows(root, country, picked, split).await,
+        None => Ok(session_rows(picked, &passes)),
+        Some(split) => split_session_rows(root, country, picked, &passes, split).await,
     }
 }
 
@@ -192,17 +220,17 @@ async fn split_session_rows(
     root: &Root,
     country: Country,
     picked: &[TrainSessionRowV3],
+    passes: &[TrainSessionCrossingRowV1],
     split: &ScoredSplit,
-) -> Result<Vec<EvaluationSessionRowV2>, SessionRowsError> {
+) -> Result<Vec<EvaluationSessionRowV3>, SessionRowsError> {
     let samples = read_samples(
         root,
         country,
         picked.iter().map(|session| &session.session_id),
     )
     .await?;
-    picked
-        .iter()
-        .map(|session| {
+    in_route_order(picked, passes)
+        .map(|(index, session)| {
             let samples =
                 samples
                     .get(&session.session_id)
@@ -210,6 +238,7 @@ async fn split_session_rows(
                         session_id: session.session_id.clone(),
                     })?;
             Ok(session_row(
+                index,
                 session,
                 duration(session),
                 scored_duration(samples, split)?,
@@ -223,11 +252,13 @@ fn duration(session: &TrainSessionRowV3) -> TimeDelta {
 }
 
 fn session_row(
+    session_index: u32,
     session: &TrainSessionRowV3,
     duration: TimeDelta,
     scored_duration: TimeDelta,
-) -> EvaluationSessionRowV2 {
-    EvaluationSessionRowV2 {
+) -> EvaluationSessionRowV3 {
+    EvaluationSessionRowV3 {
+        session_index,
         session_id: session.session_id.clone(),
         started_at: session.started_at,
         ended_at: session.ended_at,
@@ -449,6 +480,44 @@ mod tests {
         );
     }
 
+    #[test]
+    fn sessions_are_numbered_in_the_order_of_the_crossings_they_pass() {
+        let session = |name: &str| TrainSessionRowV3 {
+            session_id: SessionId::new(format!("session-{name}")).expect("a session id"),
+            ..medallion::Row::example()
+        };
+        let pass = |name: &str, crossing: &str, seconds: i64| TrainSessionCrossingRowV1 {
+            session_id: SessionId::new(format!("session-{name}")).expect("a session id"),
+            crossing_id: domain::CrossingId::new(crossing).expect("a crossing id"),
+            crossed_at: DateTime::UNIX_EPOCH + TimeDelta::seconds(seconds),
+            ..medallion::Row::example()
+        };
+        let picked = [session("a"), session("b"), session("c"), session("d")];
+        let passes = [
+            pass("a", "y", 20),
+            pass("a", "x", 10),
+            pass("b", "w", 10),
+            pass("c", "x", 10),
+            pass("c", "y", 20),
+        ];
+
+        let numbered: Vec<(String, u32)> = session_rows(&picked, &passes)
+            .into_iter()
+            .map(|row| (row.session_id.to_string(), row.session_index))
+            .sorted()
+            .collect();
+
+        assert_eq!(
+            numbered,
+            [
+                ("session-a".to_string(), 2),
+                ("session-b".to_string(), 1),
+                ("session-c".to_string(), 3),
+                ("session-d".to_string(), 0),
+            ]
+        );
+    }
+
     #[tokio::test]
     async fn a_recorded_run_names_its_code_inputs_and_sessions_under_its_id() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
@@ -471,6 +540,9 @@ mod tests {
         );
         assert_eq!(recorded.run_id, run_id(&recorded.row));
         assert_eq!(recorded.date, recorded.row.started_at.date_naive());
-        assert_eq!(recorded.sessions, session_rows(&picked));
+        let passes = read_passes(&root, picked.iter().map(|session| &session.session_id))
+            .await
+            .expect("the passes");
+        assert_eq!(recorded.sessions, session_rows(&picked, &passes));
     }
 }

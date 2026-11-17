@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use medallion::{Root, RunError, RunId, write_run};
 use medallion_model::{
-    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSummaryRowV3,
+    EvaluationOutcomeRowV2, EvaluationSessionRowV3, EvaluationSkewRowV2, EvaluationSummaryRowV3,
     EvaluationTransitionRowV1, TrainSessionRowV3,
 };
 
@@ -200,7 +200,7 @@ async fn begin(
 struct Begun {
     run: EvaluationSettings,
     date: NaiveDate,
-    sessions: Vec<EvaluationSessionRowV2>,
+    sessions: Vec<EvaluationSessionRowV3>,
 }
 
 async fn resume(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<Begun, GoldError> {
@@ -223,7 +223,7 @@ async fn resume(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<Begun
         });
     }
     let run = EvaluationSettings::try_from(&row)?;
-    let mut sessions = read_run_rows::<EvaluationSessionRowV2>(root, run_id).await?;
+    let mut sessions = read_run_rows::<EvaluationSessionRowV3>(root, run_id).await?;
     sessions.sort_by(|one, other| one.session_id.cmp(&other.session_id));
     Ok(Begun {
         run,
@@ -279,7 +279,7 @@ mod tests {
         );
         assert_eq!(written::<EvaluationRunRowV6>(&root, &run_id).await.len(), 1);
         assert_eq!(
-            written::<EvaluationSessionRowV2>(&root, &run_id)
+            written::<EvaluationSessionRowV3>(&root, &run_id)
                 .await
                 .len(),
             3

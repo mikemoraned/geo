@@ -4,7 +4,7 @@ use std::ops::Add;
 
 use chrono::{DateTime, Utc};
 use domain::{CrossingCompactId, Precision, Sample, SessionId};
-use medallion_model::EvaluationSessionRowV2;
+use medallion_model::EvaluationSessionRowV3;
 use predictor::{DetectPasses, Event, OutOfOrder};
 
 use crate::offline::{PassesBySession, SessionPasses};
@@ -73,7 +73,7 @@ pub fn visits<F: Precision, D: DetectPasses<F>>(
 }
 
 pub fn skew(
-    sessions: &[EvaluationSessionRowV2],
+    sessions: &[EvaluationSessionRowV3],
     passes: &PassesBySession,
     visits: &BTreeMap<SessionId, Vec<Visit>>,
     bootstrap: &Bootstrap,
@@ -249,7 +249,7 @@ mod tests {
         SessionId::new(format!("session-{name}")).expect("a session id")
     }
 
-    fn sessions(names: &[&str]) -> Vec<EvaluationSessionRowV2> {
+    fn sessions(names: &[&str]) -> Vec<EvaluationSessionRowV3> {
         session_rows(
             &names
                 .iter()
@@ -260,6 +260,7 @@ mod tests {
                     ..medallion::Row::example()
                 })
                 .collect::<Vec<_>>(),
+            &[],
         )
     }
 

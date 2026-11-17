@@ -18,7 +18,7 @@ use evaluation::{
 use geo_types::Point;
 use medallion::Country;
 use medallion_model::{
-    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationTransitionRowV1, FloatType,
+    EvaluationOutcomeRowV2, EvaluationSessionRowV3, EvaluationTransitionRowV1, FloatType,
     TrainSessionRowV3,
 };
 use py_common::{
@@ -365,7 +365,7 @@ fn pick(
 /// The rows of the sessions `picked` a run replays, as an Arrow table.
 ///
 /// `picked` is a table of `pick`'s columns. Each row has the columns of gold
-/// `evaluation_session_v2`: the session's duration, and its scored duration, the time it spends in
+/// `evaluation_session_v3`: the session's duration, and its scored duration, the time it spends in
 /// the cells of `split`, a `ScoredSplit`. Without a split, the scored duration is the duration.
 #[pyfunction]
 #[pyo3(signature = (*, country, picked, split=None, root=None))]
@@ -609,7 +609,7 @@ fn evaluate<'py>(
 /// Record a run over the sessions `picked`, as a dict of its id, its date, and its first two tables.
 ///
 /// The dict's `"run_id"` and `"run_date"` are the text `write_gold` takes. Its `"run"` and
-/// `"sessions"` are the run's tables of gold `evaluation_run_v6` and `evaluation_session_v2`. The
+/// `"sessions"` are the run's tables of gold `evaluation_run_v6` and `evaluation_session_v3`. The
 /// run names `BUILD_CODE_VERSION`, the code this extension was built from, and a fingerprint of each
 /// silver dataset it reads. Its id hashes those with its settings, `split` among them, so the same
 /// settings over the same code and data record the same run. If the extension was built from
@@ -699,8 +699,8 @@ fn span(text: &str) -> PyResult<Span> {
     Span::new(text).map_err(value_error)
 }
 
-fn sessions_of(sessions: PyTable) -> PyResult<Vec<EvaluationSessionRowV2>> {
-    rows_of::<EvaluationSessionRowV2>(sessions)
+fn sessions_of(sessions: PyTable) -> PyResult<Vec<EvaluationSessionRowV3>> {
+    rows_of::<EvaluationSessionRowV3>(sessions)
 }
 
 fn pick_error(err: PickError) -> PyErr {

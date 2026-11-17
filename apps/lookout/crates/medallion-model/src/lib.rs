@@ -22,11 +22,11 @@ pub use crossing::{
     TrainSessionCrossingRowV1, WATER_CROSSING_V2, WaterCrossingRowV2,
 };
 pub use evaluation::{
-    EVALUATION_OUTCOME_V2, EVALUATION_RUN_V6, EVALUATION_SESSION_V2, EVALUATION_SKEW_V2,
-    EVALUATION_SPLIT_V1, EVALUATION_SUMMARY_V3, EVALUATION_TRANSITION_V1, EvaluationOutcomeRowV2,
-    EvaluationRunRowV6, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSplitRowV1,
-    EvaluationSummaryRowV3, EvaluationTransitionRowV1, FloatType, NotificationClass, OutcomeKind,
-    PredictorName,
+    EVALUATION_OUTCOME_V2, EVALUATION_RUN_V6, EVALUATION_SESSION_V2, EVALUATION_SESSION_V3,
+    EVALUATION_SKEW_V2, EVALUATION_SPLIT_V1, EVALUATION_SUMMARY_V3, EVALUATION_TRANSITION_V1,
+    EvaluationOutcomeRowV2, EvaluationRunRowV6, EvaluationSessionRowV2, EvaluationSessionRowV3,
+    EvaluationSkewRowV2, EvaluationSplitRowV1, EvaluationSummaryRowV3, EvaluationTransitionRowV1,
+    FloatType, NotificationClass, OutcomeKind, PredictorName,
 };
 pub use gers::{GersId, NotAGersId};
 pub use gold::{GoldTargetError, gold_target};
@@ -56,7 +56,7 @@ pub use train_session::{
     TrainSessionSamplePositionV3, TrainSessionSampleRowV3, train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 25] = [
+pub const ALL: [DatasetInfo; 26] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
@@ -78,6 +78,7 @@ pub const ALL: [DatasetInfo; 25] = [
     EVALUATION_TRANSITION_V1.info(),
     EVALUATION_RUN_V6.info(),
     EVALUATION_SESSION_V2.info(),
+    EVALUATION_SESSION_V3.info(),
     EVALUATION_OUTCOME_V2.info(),
     EVALUATION_SUMMARY_V3.info(),
     EVALUATION_SKEW_V2.info(),
@@ -121,6 +122,7 @@ mod tests {
                 "evaluation_outcome_v2",
                 "evaluation_run_v6",
                 "evaluation_session_v2",
+                "evaluation_session_v3",
                 "evaluation_skew_v2",
                 "evaluation_split_v1",
                 "evaluation_summary_v3",
@@ -221,6 +223,7 @@ mod tests {
         check_rows_of::<EvaluationTransitionRowV1>();
         check_rows_of::<EvaluationRunRowV6>();
         check_rows_of::<EvaluationSessionRowV2>();
+        check_rows_of::<EvaluationSessionRowV3>();
         check_rows_of::<EvaluationOutcomeRowV2>();
         check_rows_of::<EvaluationSummaryRowV3>();
         check_rows_of::<EvaluationSkewRowV2>();

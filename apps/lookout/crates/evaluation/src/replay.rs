@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use domain::{CoordinateError, Precision, Sample, SessionId};
 use medallion::{Country, QueryError, Root};
-use medallion_model::EvaluationSessionRowV2;
+use medallion_model::EvaluationSessionRowV3;
 use predictor::{DetectPasses, Event, OnlineDetector, OutOfOrder, Predict, Tracker, Transition};
 use rayon::prelude::*;
 
@@ -64,7 +64,7 @@ pub struct SessionReplay {
 pub async fn replay<F, Pr>(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV2],
+    sessions: &[EvaluationSessionRowV3],
     passes: &PassesBySession,
     predictor: impl Fn(&SessionId) -> Pr + Sync,
     online_detector: Option<&OnlineDetector<F>>,
@@ -341,18 +341,18 @@ mod tests {
         }
     }
 
-    fn picked(names: &[&str]) -> Vec<EvaluationSessionRowV2> {
+    fn picked(names: &[&str]) -> Vec<EvaluationSessionRowV3> {
         names
             .iter()
-            .map(|&name| EvaluationSessionRowV2 {
+            .map(|&name| EvaluationSessionRowV3 {
                 session_id: named(name),
-                ..EvaluationSessionRowV2::example()
+                ..EvaluationSessionRowV3::example()
             })
             .collect()
     }
 
     fn resolved(
-        sessions: &[EvaluationSessionRowV2],
+        sessions: &[EvaluationSessionRowV3],
         passes: &[TrainSessionCrossingRowV1],
     ) -> PassesBySession {
         passes_by_session(

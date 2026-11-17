@@ -4,7 +4,7 @@ use crossings::silver::{Crossing, ReadError, read_of_country};
 use domain::{CoordinateError, Precision, SessionId};
 use medallion::{Country, QueryError, Root};
 use medallion_model::{
-    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSplitRowV1,
+    EvaluationOutcomeRowV2, EvaluationSessionRowV3, EvaluationSkewRowV2, EvaluationSplitRowV1,
     EvaluationSummaryRowV3, EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
 };
 use predictor::{
@@ -139,7 +139,7 @@ pub struct CheckedSplit {
 pub async fn read_crossings_and_passes(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV2],
+    sessions: &[EvaluationSessionRowV3],
     split: Option<&ScoredSplit>,
 ) -> Result<CrossingsAndPasses, StepError> {
     let check = match split {
@@ -152,7 +152,7 @@ pub async fn read_crossings_and_passes(
     };
     let passes = passes_by_session(
         sessions.iter().map(|session| session.session_id.clone()),
-        read_passes(root, sessions).await?,
+        read_passes(root, sessions.iter().map(|session| &session.session_id)).await?,
         &compact_ids(&crossings),
     )?;
     let scored = ScoredCrossings::of(&crossings, split)?;
@@ -180,7 +180,7 @@ pub async fn read_crossings_and_passes(
 pub async fn replay(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV2],
+    sessions: &[EvaluationSessionRowV3],
     predictor: Predictor,
     float_type: FloatType,
     skew_settings: Option<SkewSettings>,
@@ -202,7 +202,7 @@ pub async fn replay(
 pub async fn replay_against(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV2],
+    sessions: &[EvaluationSessionRowV3],
     crossings_and_passes: &CrossingsAndPasses,
     predictor: Predictor,
     float_type: FloatType,
@@ -279,7 +279,7 @@ pub async fn replay_against(
 async fn replayed<F: Precision + Send + Sync>(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV2],
+    sessions: &[EvaluationSessionRowV3],
     crossings_and_passes: &CrossingsAndPasses,
     predictor: Predictor,
     online_detector: Option<OnlineDetectorSettings>,
@@ -360,7 +360,7 @@ async fn replayed<F: Precision + Send + Sync>(
 pub async fn score(
     root: &Root,
     country: Country,
-    sessions: &[EvaluationSessionRowV2],
+    sessions: &[EvaluationSessionRowV3],
     transitions: &[EvaluationTransitionRowV1],
     scoring: &Scoring,
     split: Option<&ScoredSplit>,
@@ -370,7 +370,7 @@ pub async fn score(
 }
 
 pub fn score_against(
-    sessions: &[EvaluationSessionRowV2],
+    sessions: &[EvaluationSessionRowV3],
     crossings_and_passes: &CrossingsAndPasses,
     transitions: &[EvaluationTransitionRowV1],
     scoring: &Scoring,
@@ -405,7 +405,7 @@ pub fn score_against(
 }
 
 pub fn summarise(
-    sessions: &[EvaluationSessionRowV2],
+    sessions: &[EvaluationSessionRowV3],
     outcomes: &[EvaluationOutcomeRowV2],
     bootstrap: &Bootstrap,
 ) -> Result<EvaluationSummaryRowV3, StepError> {
@@ -694,7 +694,13 @@ mod tests {
             ..run_of(oracle())
         };
         let results = run(&root, &settings).await.expect("a run");
-        let sessions = session_rows(&results.picked);
+        let passes = crate::store::read_passes(
+            &root,
+            results.picked.iter().map(|session| &session.session_id),
+        )
+        .await
+        .expect("the passes");
+        let sessions = session_rows(&results.picked, &passes);
 
         let ReplayResults { transitions, skew } = replay(
             &root,

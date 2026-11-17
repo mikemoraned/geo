@@ -6,18 +6,17 @@ use domain::{CrossingCompactId, CrossingId, SessionId};
 use itertools::Itertools;
 use medallion::{Country, Query, QueryError, Root};
 use medallion_model::{
-    EvaluationSessionRowV2, TrainSessionCrossingRowV1, TrainSessionSamplePositionV3,
-    TrainSessionSampleRowV3,
+    TrainSessionCrossingRowV1, TrainSessionSamplePositionV3, TrainSessionSampleRowV3,
 };
 
-pub async fn read_passes(
+pub async fn read_passes<'a>(
     root: &Root,
-    sessions: &[EvaluationSessionRowV2],
+    session_ids: impl IntoIterator<Item = &'a SessionId>,
 ) -> Result<Vec<TrainSessionCrossingRowV1>, QueryError> {
     Query::new(root.clone())
         .read::<TrainSessionCrossingRowV1>()
         .await?
-        .filter(picked(sessions.iter().map(|session| &session.session_id)))?
+        .filter(picked(session_ids))?
         .rows()
         .await
 }
@@ -77,16 +76,6 @@ mod tests {
         SessionId::new(format!("session-{name}")).expect("a session id")
     }
 
-    fn picked_sessions(names: &[&str]) -> Vec<EvaluationSessionRowV2> {
-        names
-            .iter()
-            .map(|&name| EvaluationSessionRowV2 {
-                session_id: session(name),
-                ..EvaluationSessionRowV2::example()
-            })
-            .collect()
-    }
-
     fn pass(name: &str, seconds: i64) -> TrainSessionCrossingRowV1 {
         TrainSessionCrossingRowV1 {
             session_id: session(name),
@@ -109,7 +98,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = store(tmp.path()).await;
 
-        let mut passes = read_passes(&root, &picked_sessions(&["a", "c"]))
+        let mut passes = read_passes(&root, [&session("a"), &session("c")])
             .await
             .expect("the passes");
         passes.sort_by_key(|pass| pass.crossed_at);

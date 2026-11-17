@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use chrono::TimeDelta;
 use domain::{CrossingCompactId, SessionId};
 use medallion_model::{
-    EvaluationOutcomeRowV2, EvaluationSessionRowV2, EvaluationSkewRowV2, EvaluationSummaryRowV3,
+    EvaluationOutcomeRowV2, EvaluationSessionRowV3, EvaluationSkewRowV2, EvaluationSummaryRowV3,
     EvaluationTransitionRowV1, NotificationClass, OutcomeKind,
 };
 use predictor::Transition;
@@ -49,7 +49,7 @@ pub fn transition_rows(
 }
 
 pub fn replayed_from(
-    sessions: &[EvaluationSessionRowV2],
+    sessions: &[EvaluationSessionRowV3],
     rows: &[EvaluationTransitionRowV1],
 ) -> Result<BTreeMap<SessionId, Vec<Transition>>, RowsError> {
     let mut replayed = every_session(sessions);
@@ -76,7 +76,7 @@ pub fn outcome_rows(scored: &BTreeMap<SessionId, Vec<Outcome>>) -> Vec<Evaluatio
 }
 
 pub fn scored_from(
-    sessions: &[EvaluationSessionRowV2],
+    sessions: &[EvaluationSessionRowV3],
     rows: &[EvaluationOutcomeRowV2],
 ) -> Result<BTreeMap<SessionId, Vec<Outcome>>, RowsError> {
     let mut scored = every_session(sessions);
@@ -141,7 +141,7 @@ pub fn skew_row(skew: &Skew) -> EvaluationSkewRowV2 {
     }
 }
 
-fn every_session<T>(sessions: &[EvaluationSessionRowV2]) -> BTreeMap<SessionId, Vec<T>> {
+fn every_session<T>(sessions: &[EvaluationSessionRowV3]) -> BTreeMap<SessionId, Vec<T>> {
     sessions
         .iter()
         .map(|session| (session.session_id.clone(), Vec::new()))
@@ -268,12 +268,12 @@ mod tests {
         SessionId::new(format!("session-{name}")).expect("a session id")
     }
 
-    fn picked(names: &[&str]) -> Vec<EvaluationSessionRowV2> {
+    fn picked(names: &[&str]) -> Vec<EvaluationSessionRowV3> {
         names
             .iter()
-            .map(|&name| EvaluationSessionRowV2 {
+            .map(|&name| EvaluationSessionRowV3 {
                 session_id: session(name),
-                ..EvaluationSessionRowV2::example()
+                ..EvaluationSessionRowV3::example()
             })
             .collect()
     }
