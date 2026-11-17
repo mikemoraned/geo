@@ -52,6 +52,17 @@ a summary, a skew, or a split has the columns of the gold dataset of that name,
 a step is read through those columns. A table that lacks one, or that names a session the step was
 not given, raises a `ValueError`.
 
+Gold stores a run's transitions and outcomes in fewer bytes than those tables take:
+`evaluation_episode_v1` holds one row per episode, a stay of a crossing within the predictor's
+reach, and `evaluation_outcome_v3` holds each outcome by session index, with times as offsets from
+the session's start. `transitions_of` and `outcomes_of` rebuild the tables from a run's rows of
+those datasets and of `evaluation_session_v3`:
+
+```python
+transitions = evaluation.transitions_of(sessions=sessions, episodes=episodes)
+outcomes = evaluation.outcomes_of(sessions=sessions, outcomes=compact)
+```
+
 ## Using it from a notebook
 
 [The python extensions](../../README.md#the-python-extensions) covers taking an extension into a

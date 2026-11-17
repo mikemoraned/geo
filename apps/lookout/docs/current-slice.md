@@ -1283,7 +1283,7 @@ layouts that store the same rows in about a quarter of the bytes.
   - [x] Add `evaluation_outcome_v3`: the session index, offsets from the session's start in place of
         times, and no `lead`. Conversions to and from the outcomes `score` builds check the round
         trip in a test.
-  - [ ] Have `replay` write episodes, `score` read them and write v3 outcomes, and `summarise` read
+  - [x] Have `replay` write episodes, `score` read them and write v3 outcomes, and `summarise` read
         v3 outcomes. `evaluation-py` reads the new datasets.
   - [ ] Migrate the runs in gold to the new datasets through the row types. Check that each run's
         episodes and outcomes rebuild its current rows, and pause before deleting the old versions.

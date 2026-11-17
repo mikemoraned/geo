@@ -1,12 +1,14 @@
 use chrono::NaiveDate;
 use medallion::{Root, RunError, RunId, write_run};
 use medallion_model::{
-    EvaluationOutcomeRowV2, EvaluationSessionRowV3, EvaluationSkewRowV2, EvaluationSummaryRowV3,
-    EvaluationTransitionRowV1, TrainSessionRowV3,
+    EvaluationEpisodeRowV1, EvaluationOutcomeRowV3, EvaluationSessionRowV3, EvaluationSkewRowV2,
+    EvaluationSummaryRowV3, TrainSessionRowV3,
 };
 
 use crate::PickError;
+use crate::episodes::{EpisodeError, episode_rows, transition_rows_of};
 use crate::fingerprints::Fingerprints;
+use crate::outcomes::{CompactError, compact_outcome_rows, outcome_rows_of};
 use code_version::CodeVersion;
 
 use crate::record::{RecordError, RecordResults, record};
@@ -28,6 +30,10 @@ pub enum GoldError {
         run_id: RunId,
         datasets: Vec<String>,
     },
+    #[error(transparent)]
+    Episode(#[from] EpisodeError),
+    #[error(transparent)]
+    Compact(#[from] CompactError),
     #[error(transparent)]
     Pick(#[from] PickError),
     #[error(transparent)]
@@ -65,7 +71,7 @@ pub async fn replay(
         begun.run.split.as_ref(),
     )
     .await?;
-    write_replayed(root, begun.date, run_id, &replayed).await?;
+    write_replayed(root, begun.date, run_id, &begun.sessions, &replayed).await?;
     Ok(replayed.skew)
 }
 
@@ -73,10 +79,12 @@ async fn write_replayed(
     root: &Root,
     date: NaiveDate,
     run_id: &RunId,
+    sessions: &[EvaluationSessionRowV3],
     replayed: &ReplayResults,
 ) -> Result<(), GoldError> {
-    tracing::info!(%run_id, transitions = replayed.transitions.len(), "replayed");
-    write_run(root, date, run_id, &replayed.transitions).await?;
+    let episodes = episode_rows(sessions, &replayed.transitions)?;
+    tracing::info!(%run_id, transitions = replayed.transitions.len(), episodes = episodes.len(), "replayed");
+    write_run(root, date, run_id, &episodes).await?;
     if let Some(skew) = &replayed.skew {
         tracing::info!(%run_id, "measured the skew");
         write_run(root, date, run_id, std::slice::from_ref(skew)).await?;
@@ -86,7 +94,8 @@ async fn write_replayed(
 
 pub async fn score(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<(), GoldError> {
     let begun = resume(root, run_id, code).await?;
-    let transitions = read_run_rows::<EvaluationTransitionRowV1>(root, run_id).await?;
+    let episodes = read_run_rows::<EvaluationEpisodeRowV1>(root, run_id).await?;
+    let transitions = transition_rows_of(&begun.sessions, &episodes)?;
     let scored = steps::score(
         root,
         begun.run.pick.country,
@@ -96,17 +105,24 @@ pub async fn score(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<()
         begun.run.split.as_ref(),
     )
     .await?;
-    write_scored(root, begun.date, run_id, &scored).await
+    write_scored(root, begun.date, run_id, &begun.sessions, &scored).await
 }
 
 async fn write_scored(
     root: &Root,
     date: NaiveDate,
     run_id: &RunId,
+    sessions: &[EvaluationSessionRowV3],
     scored: &ScoreResults,
 ) -> Result<(), GoldError> {
     tracing::info!(%run_id, outcomes = scored.outcomes.len(), "scored");
-    write_run(root, date, run_id, &scored.outcomes).await?;
+    write_run(
+        root,
+        date,
+        run_id,
+        &compact_outcome_rows(sessions, &scored.outcomes)?,
+    )
+    .await?;
     if let Some(split) = &scored.split {
         tracing::info!(%run_id, "checked the split");
         write_run(root, date, run_id, std::slice::from_ref(split)).await?;
@@ -120,7 +136,8 @@ pub async fn summarise(
     code: &CodeVersion,
 ) -> Result<EvaluationSummaryRowV3, GoldError> {
     let begun = resume(root, run_id, code).await?;
-    let outcomes = read_run_rows::<EvaluationOutcomeRowV2>(root, run_id).await?;
+    let compact = read_run_rows::<EvaluationOutcomeRowV3>(root, run_id).await?;
+    let outcomes = outcome_rows_of(&begun.sessions, &compact)?;
     let summary = steps::summarise(&begun.sessions, &outcomes, &begun.run.bootstrap)?;
     tracing::info!(%run_id, "summarised");
     write_run(root, begun.date, run_id, std::slice::from_ref(&summary)).await?;
@@ -153,12 +170,12 @@ pub async fn run(
         run.skew_settings(),
     )
     .await?;
-    write_replayed(root, date, &run_id, &replayed).await?;
+    write_replayed(root, date, &run_id, &sessions, &replayed).await?;
     let ReplayResults { transitions, skew } = replayed;
 
     let scored =
         steps::score_against(&sessions, &crossings_and_passes, &transitions, &run.scoring)?;
-    write_scored(root, date, &run_id, &scored).await?;
+    write_scored(root, date, &run_id, &sessions, &scored).await?;
     let ScoreResults { outcomes, split } = scored;
 
     let summary = steps::summarise(&sessions, &outcomes, &run.bootstrap)?;
@@ -285,14 +302,27 @@ mod tests {
             3
         );
         assert!(!results.transitions.is_empty());
+        let sessions = written::<EvaluationSessionRowV3>(&root, &run_id).await;
         assert_eq!(
-            written::<EvaluationTransitionRowV1>(&root, &run_id).await,
+            transition_rows_of(
+                &sessions,
+                &written::<EvaluationEpisodeRowV1>(&root, &run_id).await
+            )
+            .expect("transitions"),
             results.transitions
         );
         assert_eq!(results.outcomes.len(), 3);
         assert_eq!(
-            written::<EvaluationOutcomeRowV2>(&root, &run_id).await,
-            results.outcomes
+            outcome_rows_of(
+                &sessions,
+                &written::<EvaluationOutcomeRowV3>(&root, &run_id).await
+            )
+            .expect("outcomes"),
+            outcome_rows_of(
+                &sessions,
+                &compact_outcome_rows(&sessions, &results.outcomes).expect("compact outcomes")
+            )
+            .expect("outcomes")
         );
         assert_eq!(
             written::<EvaluationSummaryRowV3>(&root, &run_id).await,
@@ -325,12 +355,12 @@ mod tests {
             .expect("a summary");
 
         assert_eq!(
-            written::<EvaluationTransitionRowV1>(&stepwise_root, &stepwise_id).await,
-            written::<EvaluationTransitionRowV1>(&whole_root, &whole_id).await
+            written::<EvaluationEpisodeRowV1>(&stepwise_root, &stepwise_id).await,
+            written::<EvaluationEpisodeRowV1>(&whole_root, &whole_id).await
         );
         assert_eq!(
-            written::<EvaluationOutcomeRowV2>(&stepwise_root, &stepwise_id).await,
-            written::<EvaluationOutcomeRowV2>(&whole_root, &whole_id).await
+            written::<EvaluationOutcomeRowV3>(&stepwise_root, &stepwise_id).await,
+            written::<EvaluationOutcomeRowV3>(&whole_root, &whole_id).await
         );
         assert_eq!(
             written::<EvaluationSummaryRowV3>(&stepwise_root, &stepwise_id).await,

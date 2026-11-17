@@ -18,8 +18,8 @@ use evaluation::{
 use geo_types::Point;
 use medallion::Country;
 use medallion_model::{
-    EvaluationOutcomeRowV2, EvaluationSessionRowV3, EvaluationTransitionRowV1, FloatType,
-    TrainSessionRowV3,
+    EvaluationEpisodeRowV1, EvaluationOutcomeRowV2, EvaluationOutcomeRowV3, EvaluationSessionRowV3,
+    EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
 };
 use py_common::{
     query_error, root_or_default, rows_of, run_error, runtime, runtime_error, table_of, value_error,
@@ -492,6 +492,36 @@ fn summarise(
     table_of(&[summary])
 }
 
+/// Expand a run's `episodes` into its transitions, as an Arrow table.
+///
+/// `episodes` is a table of gold `evaluation_episode_v1`'s columns, and `sessions` the run's table of
+/// gold `evaluation_session_v3`. Each row of the result is one transition, with the columns of gold
+/// `evaluation_transition_v1`, ordered by session, time, and crossing. An episode naming a session
+/// index that `sessions` lacks raises a `ValueError`.
+#[pyfunction]
+#[pyo3(signature = (*, sessions, episodes))]
+fn transitions_of(sessions: PyTable, episodes: PyTable) -> PyResult<PyTable> {
+    let sessions = sessions_of(sessions)?;
+    let episodes = rows_of::<EvaluationEpisodeRowV1>(episodes)?;
+
+    table_of(&evaluation::transition_rows_of(&sessions, &episodes).map_err(value_error)?)
+}
+
+/// Rebuild a run's outcomes from their compact rows, as an Arrow table.
+///
+/// `outcomes` is a table of gold `evaluation_outcome_v3`'s columns, and `sessions` the run's table of
+/// gold `evaluation_session_v3`. Each row of the result has the columns of gold
+/// `evaluation_outcome_v2`, which `summarise` takes. An outcome naming a session index that
+/// `sessions` lacks raises a `ValueError`.
+#[pyfunction]
+#[pyo3(signature = (*, sessions, outcomes))]
+fn outcomes_of(sessions: PyTable, outcomes: PyTable) -> PyResult<PyTable> {
+    let sessions = sessions_of(sessions)?;
+    let compact = rows_of::<EvaluationOutcomeRowV3>(outcomes)?;
+
+    table_of(&evaluation::outcome_rows_of(&sessions, &compact).map_err(value_error)?)
+}
+
 /// Pick sessions, then replay, score, and summarise them, as a dict of the four steps' tables.
 ///
 /// The dict's keys are `"picked"`, `"transitions"`, `"outcomes"`, and `"summary"`. The arguments
@@ -551,7 +581,9 @@ fn run<'py>(
 
 /// Run as `run` does, writing each step's table to gold, as a dict of the run's id and the tables.
 ///
-/// The dict's `"run_id"` names the run in gold, and its other keys are those of `run`. The run
+/// The dict's `"run_id"` names the run in gold, and its other keys are those of `run`. Gold holds
+/// the transitions as episodes, in `evaluation_episode_v1`, and the outcomes as compact rows, in
+/// `evaluation_outcome_v3`: `transitions_of` and `outcomes_of` give back the tables. The run
 /// names `BUILD_CODE_VERSION` and a fingerprint of each silver dataset it reads, as `record` sets
 /// out. A `ValueError` is raised if the extension was built from uncommitted code, or if gold
 /// already holds the run.
@@ -746,6 +778,8 @@ fn lookout_evaluation(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(replay, module)?)?;
     module.add_function(wrap_pyfunction!(score, module)?)?;
     module.add_function(wrap_pyfunction!(summarise, module)?)?;
+    module.add_function(wrap_pyfunction!(transitions_of, module)?)?;
+    module.add_function(wrap_pyfunction!(outcomes_of, module)?)?;
     module.add_function(wrap_pyfunction!(run, module)?)?;
     module.add_function(wrap_pyfunction!(evaluate, module)?)?;
     module.add_function(wrap_pyfunction!(record, module)?)?;

@@ -288,17 +288,23 @@ def test_an_evaluation_writes_to_gold_the_tables_it_returns(written):
 
     evaluated = lookout_evaluation.evaluate(**evaluating(written))
 
-    for dataset, name in [
-        ("evaluation_transition_v1", "transitions"),
-        ("evaluation_outcome_v2", "outcomes"),
-        ("evaluation_summary_v3", "summary"),
-    ]:
-        stored = pa.table(
+    def stored(dataset):
+        return pa.table(
             lookout_medallion.query_gold(
                 f"SELECT * FROM {dataset} WHERE run_id = '{evaluated['run_id']}'",
                 root=written,
             )
         )
-        assert stored.num_rows == pa.table(evaluated[name]).num_rows
+
+    sessions = stored("evaluation_session_v3")
+    transitions = lookout_evaluation.transitions_of(
+        sessions=sessions, episodes=stored("evaluation_episode_v1")
+    )
+    outcomes = lookout_evaluation.outcomes_of(
+        sessions=sessions, outcomes=stored("evaluation_outcome_v3")
+    )
+    assert pa.table(transitions).num_rows == pa.table(evaluated["transitions"]).num_rows
+    assert pa.table(outcomes).num_rows == pa.table(evaluated["outcomes"]).num_rows
+    assert stored("evaluation_summary_v3").num_rows == 1
     with pytest.raises(ValueError, match="already"):
         lookout_evaluation.evaluate(**evaluating(written))
