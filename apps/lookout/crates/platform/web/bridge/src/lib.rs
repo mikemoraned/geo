@@ -89,21 +89,20 @@ mod tests {
                 .unwrap(),
         )
         .unwrap();
-        let area = requests
+        let request = requests
             .as_array()
             .unwrap()
             .iter()
             .find_map(|request| request["effect"].get("Lines"))
-            .expect("a fix asks for lines")["area"]
-            .clone();
-        assert_near(&area["xmin"], 13.5892);
-        assert_near(&area["ymin"], 50.9504);
-        assert_near(&area["xmax"], 13.8752);
-        assert_near(&area["ymax"], 51.1302);
+            .expect("a fix asks for lines");
+        let area = &request["area"];
+        assert_near(&area["xmin"], 13.5177);
+        assert_near(&area["ymin"], 50.9054);
+        assert_near(&area["xmax"], 13.9467);
+        assert_near(&area["ymax"], 51.1752);
 
-        let answered = dispatch(&format!(
-            r#"{{"Lines":{{"area":{area},"lines":["{RAIL}"]}}}}"#
-        ));
+        let id = &request["id"];
+        let answered = dispatch(&format!(r#"{{"Lines":{{"id":{id},"lines":["{RAIL}"]}}}}"#));
 
         assert!(answered.unwrap().contains(r#"{"Render":null}"#));
         assert!(

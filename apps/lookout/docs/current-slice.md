@@ -24,9 +24,9 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   `map.pmtiles` already serves costs no new data and no growth in the committed file. Every
   non-tram rail segment in each extract would fill the gaps, but DE's rail alone is 189 MB of
   parquet.
-- **The core asks for lines, and the shell answers.** A new effect carries the area the core
-  wants rail for, and a new event brings back the area and its lines. The shell reads them, as it
-  reads the crossings, so the core never learns where the lines come from.
+- **The core asks for lines, and the shell answers.** A new effect carries an id and the area the
+  core wants rail for, and a new event brings back that id and the lines. The shell reads them, as
+  it reads the crossings, so the core never learns where the lines come from.
 - **Lines cross the bridge as WKB geometries in longitude and latitude, base64 inside the JSON,
   both ways.** The shell hands the core WKB, and the view hands the display WKB, so neither side
   sees a tile, its coordinates, or PMTiles. WKB is the OGC's standard binary form, at 16 bytes a
@@ -36,8 +36,13 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   draws no map, so its core never asks. The alternative, a request the device answers with
   nothing, sends an effect per fix to a shell that discards it.
 - **The area is a box around the fix, wider than the predictor's radius.** The core asks again
-  once a fix nears the box's edge, and drops lines that arrive for a box it has left. Asking on
-  every fix would read tiles at the fix rate.
+  once a fix nears the box's edge. Asking on every fix would read tiles at the fix rate.
+- **An answer matches its request by id, and only the latest request is answered.** The core drops
+  lines carrying any other id. Each `Reset` draws a random UUIDv4, and a request's id is the
+  UUIDv5 of its count, with that UUIDv4 as the namespace. An answer still in flight from one
+  journey therefore cannot match a request from the next. Matching on the box instead needs a
+  float to survive the JSON round trip exactly, and `serde_json` does not guarantee that without
+  its `float_roundtrip` feature.
 - **The snake is the fixes within a time window before the latest.** A window means the same
   stretch of track at the phone's fix rate and at a kiosk replay's, which skips samples. A count
   of N samples covers a different distance on each page.
@@ -48,7 +53,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **Every page with the element draws the lines.** `/live` and `/kiosk` both get them, and the
   kiosk's MapLibre map stays as it is.
 - **The element reads the rail at zoom 12, the `rail` layer's highest.** A tile there spans
-  about 6 km at these latitudes, so a box twice the 5 km radius covers a few tiles.
+  about 6 km at these latitudes, so a box reaching 15 km from the fix is about six tiles across.
 
 #### Rejected / deferred
 
@@ -91,6 +96,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Add a `Shell` function saying whether the shell draws lines, false for `Device`.
 - [x] Add the `Lines` effect, carrying the box, and the `Lines` event, carrying the box and its
   lines as WKB geometries, in `app.rs`.
+  - The effect now also carries a request id, and the event carries that id in place of the box.
 - [x] Keep the box and its rail in `Model`, ask for a new box once a fix nears the edge, and drop
   lines for a box the core has left. `Reset` clears both.
 - [x] Keep the fixes within the snake's window in `Model`, pruned as each fix arrives.
@@ -107,9 +113,12 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   `/map.pmtiles` through `static/tiles.js`.
 - [x] Draw each line in `lookout-predictor.js` under the crossings, coloured by category and
   clipped to the outer ring.
-- [ ] Rebuild the wasm with `just wasm`, then check `/live` and `/kiosk` in a browser.
-- [ ] Choose the snake's window and the box's width from a kiosk replay, only after the element
+- [x] Rebuild the wasm with `just wasm`, then check `/live` and `/kiosk` in a browser.
+- [x] Choose the snake's window and the box's width from a kiosk replay, only after the element
   draws both.
+  - The window stays at 2 minutes. Rail sometimes arrived late with a box of two radii, asked for
+    again once the radius left it. The box now reaches three radii, and the core asks again once
+    two radii around the fix leave it.
 
 #### Wrap-up
 

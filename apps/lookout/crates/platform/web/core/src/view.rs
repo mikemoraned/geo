@@ -230,17 +230,17 @@ mod tests {
     #[test]
     fn the_rail_received_is_drawn_as_rail() {
         let core = located_at_the_station();
-        let area = core
+        let id = core
             .process_event(Event::Position(Sample::new(instant(), at_the_station())))
             .iter()
             .find_map(|effect| match effect {
-                Effect::Lines(request) => Some(request.operation.area),
+                Effect::Lines(request) => Some(request.operation.id),
                 _ => None,
             })
             .expect("a request for lines");
 
         core.process_event(Event::Lines {
-            area,
+            id,
             lines: vec![line()],
         });
 
@@ -279,16 +279,16 @@ mod tests {
     #[test]
     fn the_trace_is_drawn_over_the_rail() {
         let core = located_at_the_station();
-        let area = core
+        let id = core
             .process_event(Event::Position(Sample::new(instant(), at_the_station())))
             .iter()
             .find_map(|effect| match effect {
-                Effect::Lines(request) => Some(request.operation.area),
+                Effect::Lines(request) => Some(request.operation.id),
                 _ => None,
             })
             .expect("a request for lines");
         core.process_event(Event::Lines {
-            area,
+            id,
             lines: vec![line()],
         });
 

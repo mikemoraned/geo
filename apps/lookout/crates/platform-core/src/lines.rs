@@ -4,12 +4,14 @@ use geo_types::{LineString, Point};
 use serde::{Deserialize, Serialize};
 use serde_with::base64::Base64;
 use serde_with::serde_as;
+use uuid::Uuid;
 use wkb::error::WkbError;
 use wkb::writer::{WriteOptions, write_line_string};
 
-use crate::app::Change;
+use crate::app::{Change, GetLines};
 
-const REACH_IN_RADII: f64 = 2.0;
+const REACH_IN_RADII: f64 = 3.0;
+const AHEAD_IN_RADII: f64 = 2.0;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "Encoded", into = "Encoded")]
@@ -46,10 +48,27 @@ impl From<Wkb> for Encoded {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct RequestId(Uuid);
+
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Nearby {
-    asked: Option<Bbox>,
+    reset: Uuid,
+    asked_so_far: u32,
+    asked: Option<GetLines>,
     shown: Vec<Wkb>,
+}
+
+impl Default for Nearby {
+    fn default() -> Self {
+        Self {
+            reset: Uuid::new_v4(),
+            asked_so_far: 0,
+            asked: None,
+            shown: Vec::new(),
+        }
+    }
 }
 
 impl Nearby {
@@ -57,20 +76,24 @@ impl Nearby {
         &mut self,
         fix: Point<f64>,
         radius_metres: f64,
-    ) -> Result<Option<Bbox>, BboxError> {
-        let seen = around(fix, radius_metres)?;
+    ) -> Result<Option<GetLines>, BboxError> {
+        let ahead = around(fix, AHEAD_IN_RADII * radius_metres)?;
         if self.asked.is_some_and(|asked| {
-            asked.contains(seen.min().into()) && asked.contains(seen.max().into())
+            asked.area.contains(ahead.min().into()) && asked.area.contains(ahead.max().into())
         }) {
             return Ok(None);
         }
-        let area = around(fix, REACH_IN_RADII * radius_metres)?;
-        self.asked = Some(area);
-        Ok(Some(area))
+        let request = GetLines {
+            id: RequestId(Uuid::new_v5(&self.reset, &self.asked_so_far.to_be_bytes())),
+            area: around(fix, REACH_IN_RADII * radius_metres)?,
+        };
+        self.asked = Some(request);
+        self.asked_so_far = self.asked_so_far.wrapping_add(1);
+        Ok(Some(request))
     }
 
-    pub(crate) fn received(&mut self, area: Bbox, lines: Vec<Wkb>) -> Change {
-        if self.asked == Some(area) {
+    pub(crate) fn received(&mut self, id: RequestId, lines: Vec<Wkb>) -> Change {
+        if self.asked.is_some_and(|asked| asked.id == id) {
             self.shown = lines;
             Change::Moved
         } else {

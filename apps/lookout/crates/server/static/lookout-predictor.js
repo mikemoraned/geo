@@ -72,7 +72,7 @@ class LookoutPredictor extends HTMLElement {
     for (const request of requests) {
       if ("Render" in request.effect) moved = true;
       if ("Crossings" in request.effect) await this.#fetchCrossings();
-      if ("Lines" in request.effect) this.#fetchRail(request.effect.Lines.area);
+      if ("Lines" in request.effect) this.#fetchRail(request.effect.Lines);
     }
     if (moved) this.#paint();
   }
@@ -87,12 +87,12 @@ class LookoutPredictor extends HTMLElement {
     }
   }
 
-  async #fetchRail(area) {
+  async #fetchRail({ id, area }) {
     try {
       map ??= new PMTiles(MAP);
       const { xmin, ymin, xmax, ymax } = area;
       const rail = await layerLines(map, "rail", RAIL_ZOOM, [xmin, ymin, xmax, ymax]);
-      await this.dispatch({ Lines: { area, lines: rail.map(base64) } });
+      await this.dispatch({ Lines: { id, lines: rail.map(base64) } });
     } catch (failed) {
       this.#screen.textContent = `could not load the rail from ${MAP}: ${failed.message}`;
     }

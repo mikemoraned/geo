@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Float;
 use crate::battery::{Battery, Charge};
-use crate::lines::{Nearby, Wkb};
+use crate::lines::{Nearby, RequestId, Wkb};
 use crate::trace::Trace;
 
 pub trait Shell: Sized + 'static {
@@ -114,7 +114,7 @@ pub enum Event {
     Sentence(Sentence),
     Position(Sample<f64>),
     Battery(u16),
-    Lines { area: Bbox, lines: Vec<Wkb> },
+    Lines { id: RequestId, lines: Vec<Wkb> },
 }
 
 #[effect(typegen)]
@@ -133,6 +133,7 @@ impl Operation for GetCrossings {
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GetLines {
+    pub id: RequestId,
     pub area: Bbox,
 }
 
@@ -183,7 +184,7 @@ impl<S: Shell> Lookout<S> {
         }
     }
 
-    fn lines_to_ask_for(&self, model: &mut Model<S>) -> Option<Bbox> {
+    fn lines_to_ask_for(&self, model: &mut Model<S>) -> Option<GetLines> {
         if !S::draws_lines() {
             return None;
         }
@@ -228,7 +229,7 @@ impl<S: Shell> App for Lookout<S> {
                 Ok(sample) => self.observe(Observed::Sampled(sample), model),
                 Err(_) => Change::Unchanged,
             },
-            Event::Lines { area, lines } => model.nearby.received(area, lines),
+            Event::Lines { id, lines } => model.nearby.received(id, lines),
             Event::Battery(millivolts) => {
                 let before = model.battery.charge();
                 model.battery.measured(millivolts);
@@ -242,10 +243,9 @@ impl<S: Shell> App for Lookout<S> {
 
         match change {
             Change::Moved => match self.lines_to_ask_for(model) {
-                Some(area) => Command::all([
-                    render::render(),
-                    Command::notify_shell(GetLines { area }).into(),
-                ]),
+                Some(request) => {
+                    Command::all([render::render(), Command::notify_shell(request).into()])
+                }
                 None => render::render(),
             },
             Change::Unchanged => Command::done(),
@@ -385,9 +385,9 @@ mod tests {
         .expect("a line in WKB")
     }
 
-    fn asked(effects: &[Effect]) -> Option<Bbox> {
+    fn asked(effects: &[Effect]) -> Option<GetLines> {
         effects.iter().find_map(|effect| match effect {
-            Effect::Lines(request) => Some(request.operation.area),
+            Effect::Lines(request) => Some(request.operation),
             _ => None,
         })
     }
@@ -705,44 +705,48 @@ mod tests {
     #[test]
     fn lines_arrive_from_a_shell_as_wkb_in_base64() {
         let event: Event = serde_json::from_str(
-            r#"{"Lines":{"area":{"xmin":13.66,"ymin":51.0,"xmax":13.81,"ymax":51.09},"lines":["AQIAAAACAAAA9ihcj8J1K0CF61G4HoVJQHsUrkfheitAZmZmZmaGSUA="]}}"#,
+            r#"{"Lines":{"id":"6ba7b810-9dad-51d1-80b4-00c04fd430c8","lines":["AQIAAAACAAAA9ihcj8J1K0CF61G4HoVJQHsUrkfheitAZmZmZmaGSUA="]}}"#,
         )
         .expect("an event this core knows");
 
-        let Event::Lines { area, lines } = event else {
+        let Event::Lines { id, lines } = event else {
             panic!("lines, not {event:?}");
         };
-        assert_eq!(area, Bbox::new(13.66, 51.0, 13.81, 51.09).expect("a box"));
+        assert_eq!(
+            serde_json::to_string(&id).expect("serialize"),
+            r#""6ba7b810-9dad-51d1-80b4-00c04fd430c8""#
+        );
         assert_eq!(lines, vec![line()]);
     }
 
     #[test]
-    fn the_request_for_lines_names_its_area_as_a_box() {
+    fn the_request_for_lines_carries_its_id_and_names_its_area_as_a_box() {
         let request = GetLines {
+            id: serde_json::from_str(r#""6ba7b810-9dad-51d1-80b4-00c04fd430c8""#).expect("an id"),
             area: Bbox::new(13.66, 51.0, 13.81, 51.09).expect("a box"),
         };
 
         assert_eq!(
             serde_json::to_string(&request).expect("serialize"),
-            r#"{"area":{"xmin":13.66,"ymin":51.0,"xmax":13.81,"ymax":51.09}}"#
+            r#"{"id":"6ba7b810-9dad-51d1-80b4-00c04fd430c8","area":{"xmin":13.66,"ymin":51.0,"xmax":13.81,"ymax":51.09}}"#
         );
     }
 
     #[test]
-    fn a_fix_asks_for_the_lines_two_radii_around_it() {
+    fn a_fix_asks_for_the_lines_three_radii_around_it() {
         let core = drawing();
 
         let effects = core.process_event(reported(instant(), at_the_station()));
 
-        let area = asked(&effects).expect("a request for lines");
-        assert_near(area.min().x, 13.5892);
-        assert_near(area.min().y, 50.9504);
-        assert_near(area.max().x, 13.8752);
-        assert_near(area.max().y, 51.1302);
+        let area = asked(&effects).expect("a request for lines").area;
+        assert_near(area.min().x, 13.5177);
+        assert_near(area.min().y, 50.9054);
+        assert_near(area.max().x, 13.9467);
+        assert_near(area.max().y, 51.1752);
     }
 
     #[test]
-    fn a_fix_whose_radius_stays_in_the_box_asks_for_nothing() {
+    fn a_fix_keeping_two_radii_inside_the_box_asks_for_nothing() {
         let core = drawing();
         core.process_event(reported(instant(), at_the_station()));
 
@@ -755,7 +759,7 @@ mod tests {
     }
 
     #[test]
-    fn a_fix_whose_radius_leaves_the_box_asks_for_another_around_it() {
+    fn a_fix_whose_two_radii_leave_the_box_asks_for_another_around_it() {
         let core = drawing();
         core.process_event(reported(instant(), at_the_station()));
 
@@ -764,19 +768,19 @@ mod tests {
             north_of_the_station(6_000.0),
         ));
 
-        let area = asked(&effects).expect("a request for lines");
-        assert_near(area.min().y, 51.0043);
-        assert_near(area.max().y, 51.1842);
+        let area = asked(&effects).expect("a request for lines").area;
+        assert_near(area.min().y, 50.9594);
+        assert_near(area.max().y, 51.2292);
     }
 
     #[test]
-    fn lines_for_the_box_asked_for_are_shown() {
+    fn lines_answering_the_request_are_shown() {
         let core = drawing();
-        let area = asked(&core.process_event(reported(instant(), at_the_station())))
+        let request = asked(&core.process_event(reported(instant(), at_the_station())))
             .expect("a request for lines");
 
         let effects = core.process_event(Event::Lines {
-            area,
+            id: request.id,
             lines: vec![line()],
         });
 
@@ -785,9 +789,9 @@ mod tests {
     }
 
     #[test]
-    fn lines_for_a_box_since_left_are_dropped() {
+    fn lines_answering_an_earlier_request_are_dropped() {
         let core = drawing();
-        let left = asked(&core.process_event(reported(instant(), at_the_station())))
+        let earlier = asked(&core.process_event(reported(instant(), at_the_station())))
             .expect("a request for lines");
         core.process_event(reported(
             instant() + TimeDelta::seconds(10),
@@ -795,7 +799,7 @@ mod tests {
         ));
 
         let effects = core.process_event(Event::Lines {
-            area: left,
+            id: earlier.id,
             lines: vec![line()],
         });
 
@@ -806,10 +810,10 @@ mod tests {
     #[test]
     fn starting_again_forgets_the_lines_and_asks_afresh() {
         let core = drawing();
-        let area = asked(&core.process_event(reported(instant(), at_the_station())))
+        let request = asked(&core.process_event(reported(instant(), at_the_station())))
             .expect("a request for lines");
         core.process_event(Event::Lines {
-            area,
+            id: request.id,
             lines: vec![line()],
         });
 
@@ -817,7 +821,24 @@ mod tests {
         let effects = core.process_event(reported(instant(), at_the_station()));
 
         assert!(core.view().lines.is_empty());
-        assert_eq!(asked(&effects), Some(area));
+        assert_eq!(asked(&effects).map(|again| again.area), Some(request.area));
+    }
+
+    #[test]
+    fn lines_answering_a_request_from_before_starting_again_are_dropped() {
+        let core = drawing();
+        let before = asked(&core.process_event(reported(instant(), at_the_station())))
+            .expect("a request for lines");
+        core.process_event(Event::Reset);
+        core.process_event(reported(instant(), at_the_station()));
+
+        let effects = core.process_event(Event::Lines {
+            id: before.id,
+            lines: vec![line()],
+        });
+
+        assert!(core.view().lines.is_empty());
+        assert!(effects.is_empty());
     }
 
     #[test]
