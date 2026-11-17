@@ -124,6 +124,21 @@ One import of Germany, reusing its street graph, geocoding, and tiles, measures:
 
 Over Thuringia, a regional leg then holds a median of 140 points and a high-speed leg 1,812.
 
+A first import of Great Britain, from Aubin's timetable with rail alone and without tiles or
+geocoding, measures:
+
+| Measure | Value |
+| --- | --- |
+| Timetable step | 9 minutes 55 seconds, 8 minutes 52 seconds of it reading stop times |
+| Street graph step | 1 minute 52 seconds |
+| Matching and `route_shapes` steps | 4 minutes 29 seconds, peak resident set 3.8 GB |
+| Peak resident set, timetable and street graph | 7.8 GB |
+| Data directory | 6.3 GiB: street graph 2.8 GiB, computed shapes 2.2 GiB, way matches 865 MB, timetable 456 MB |
+| Trips | 293,200 |
+| Routes matched | 49,587 |
+| Segments routed | 551,838 |
+| Segments beelined | 0 |
+
 A computed shape is a model of the track, built from stop positions and OSM, rather than a record of
 where the train ran. Two of its errors change which crossings a leg passes:
 
@@ -336,6 +351,35 @@ column takes 0.09–0.14 MB. Sorted by trip, each takes 0.73–0.75 MB.
 Storing only a leg's changes gains little. Over the same days, 35% of rows repeat another capture of
 the same leg, and a sorted file already stores those cheaply. A row would also change meaning, from
 one leg in one poll to one leg over a span of polls.
+
+## Aubin's timetable for Great Britain runs months ahead
+
+Aubin's build of 16 November 2026 declares 15 November 2026 to 7 February 2027 in its
+`feed_info.txt`. Its calendar runs further: Motis loaded service days from 15 November 2026 to 15
+May 2027. One import therefore serves a week-long capture. The zip takes 1.49 GB and
+unpacks to 13.3 GB, of which `stop_times.txt` takes 6.3 GB and `shapes.txt` 6.2 GB. Without
+`shapes.txt`, the zip takes 689 MB.
+
+Of its 13,943 routes, 29 are rail, with route type 2. Each is one operator, keyed by its two-letter
+code, such as `GW` for Great Western Railway or `SR` for ScotRail. Nine are suburban, with route type
+109: six London Overground lines, the Elizabeth line, and two Merseyrail lines. The rest are buses,
+coaches, ferries, trams, the Underground, and rail replacement buses.
+
+| Route type | Routes |
+| --- | --- |
+| 3, bus | 13,316 |
+| 200, coach | 376 |
+| 4, ferry | 101 |
+| 714, rail replacement bus | 56 |
+| 0, tram | 36 |
+| 2, rail | 29 |
+| 1, subway | 15 |
+| 109, suburban rail | 9 |
+| 12, monorail | 3 |
+| 6, aerial lift | 2 |
+
+Transitous's script for Great Britain sets a route type for 26 of the 29 rail routes. ScotRail,
+Lumo's Stirling service (`LF`), and `ZZ`, named "Other operator", keep route type 2.
 
 ## Two server quirks a caller has to absorb
 

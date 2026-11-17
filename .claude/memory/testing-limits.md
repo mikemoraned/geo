@@ -35,8 +35,13 @@ What a passing test run does and doesn't prove when Claude runs it.
   there. Set `WASM_PACK_CACHE` to a scratch dir in the same command, and the first run fetches the
   tools again into it. What the built wasm does can be checked under node without a browser:
   import the `--target web` module and pass the `.wasm` bytes to `init` as `{ module_or_path }`.
-- **The sandbox denies the Motis server the mmap of its LMDB tile database**, so the server runs
-  outside it, started by the user. Any check against it, such as a realtime A/B, waits for that.
+- **The sandbox denies Motis the mmap of an LMDB database**, so the server runs outside it, started
+  by the user. Any check against it, such as a realtime A/B, waits for that. `motis import` meets
+  the same refusal at the `route_shapes` step's shape cache, as "unable to import: Operation not
+  permitted". The timetable and street graph steps finish here, and Motis records each finished
+  step, so the user's rerun outside the sandbox computes only the shapes.
+- **`brew` fails here**, so a recipe depending on `prerequisites` stops before its own lines. Once
+  the tool is installed, `just --no-deps <recipe>` runs the recipe alone.
 - **The sandbox denies by default and grants only what it is given**, so a path outside the
   app directory is unreachable — for reading as much as for writing — unless the launcher
   lists it. That `~/.cargo` and `~/.rustup` are readable says nothing about any other home

@@ -43,6 +43,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   not rail.** Transitous's `gb-great-britain.lua` is under the MIT licence, which permits copying
   it into the tree with its credit. Dropping buses at import keeps Aubin's bus timetable out of the
   shapes the import computes.
+- **The download drops `shapes.txt` from Aubin's timetable**, as Transitous does. It takes 6.2 GB
+  of the 13.3 GB unpacked, and `route_shapes` computes rail shapes afresh. A 2.3 GB `shapes.txt`
+  coincided with broken realtime in Germany, as `docs/motis.md` records. Keeping the file is the
+  alternative, and the straw man took it.
 
 #### The capture
 
@@ -73,8 +77,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - The floor for each capture. The German capture held 85–90% across all rail before its fall,
   under v2.11.3. v2.11.4 marks fewer legs realtime, as `docs/motis.md` sets out, so the UK floor
   waits on the Scotland trial.
-- How far ahead Aubin's timetable runs, and how often Aubin rebuilds it. If it runs only days ahead,
-  the week-long capture needs fresh imports, each a new run with its own label.
 - Whether Aubin's trip ids resolve against its own realtime feed as DELFI's do, at about 99.9%.
 
 ### Tasks
@@ -88,8 +90,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       variables, so `motis.just` holds the three, and the top Justfile and `de/Justfile` import it.
 - [-] Move the German server's `motis_server` and `geo_data` from the main checkout into `de/`,
       and start the server from there. Moot: the German server sets up afresh in `de/` instead.
-- [ ] Set up the German server afresh in `de/`, under v2.11.4, with `download_motis`,
-      `download_geo_data`, and `motis_setup`. The user deletes the old data in the main checkout.
+- [ ] Set up the German server afresh in `de/`, under v2.11.4, with `just de setup`. The user
+      deletes the old data in the main checkout.
 - [x] Update the links in `crates/motis/README.md` and `docs/motis.md`.
 
 #### The realtime warning
@@ -102,14 +104,16 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### The UK server
 
-- [ ] Add `tools/motis-server/gb/Justfile`, downloading Geofabrik's `great-britain-latest.osm.pbf`
+- [x] Add `tools/motis-server/gb/Justfile`, downloading Geofabrik's `great-britain-latest.osm.pbf`
       and Aubin's timetable into `gb/geo_data`.
-- [ ] Read the dates the timetable's calendar covers, and record its horizon in `docs/motis.md`.
-- [ ] Add `gb/motis_server/scripts/gb-rail.lua`, with Transitous's route types, its credit, and a
-      `process_route` that drops every route that is not rail.
-- [ ] Add a `motis_setup` recipe: config, `route_shapes` as Germany has it, the script, no tiles,
-      no geocoding, and port 8081.
-- [ ] Import, and record the time, peak memory, data size, routes matched, and segments beelined.
+- [x] Read the dates the timetable's calendar covers, and record its horizon in `docs/motis.md`.
+- [x] Add `gb/motis_server/scripts/gb-rail.lua`, with Transitous's route types, its credit, and a
+      `process_route` that drops every route that is not rail. It sits in `gb/scripts`, since git
+      ignores `motis_server`.
+- [x] Add a `motis_setup` recipe: config, `route_shapes` as Germany has it, the script, no tiles,
+      no geocoding, and port 8081. Add `setup` beside it, as `de/Justfile` has.
+- [x] Import, and record the time, peak memory, data size, routes matched, and segments beelined.
+      The sandbox refuses the `route_shapes` step, which the user ran outside it.
 - [ ] Add an `enable_rt` recipe, putting Aubin's realtime feed in the dataset's `rt` list with a
       `User-Agent` naming lookout.
 - [ ] Start the server, and read realtime resolution from its log.
