@@ -37,13 +37,25 @@ fn projection() -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
+
     use super::*;
 
+    const RAIL: &str = "AQIAAAACAAAA9ihcj8J1K0CF61G4HoVJQHsUrkfheitAZmZmZmaGSUA=";
+
+    fn assert_near(actual: &Value, expected: f64) {
+        let actual = actual.as_f64().expect("a number");
+        assert!(
+            (actual - expected).abs() < 1e-3,
+            "{actual} is not {expected}"
+        );
+    }
+
     #[test]
-    fn a_page_is_asked_for_crossings_and_answers_with_them() {
+    fn a_page_is_asked_for_crossings_and_lines_and_answers_with_them() {
         assert_eq!(
             projection().unwrap(),
-            r#"{"now":null,"crossings":0,"radius_metres":0.0,"here":null,"predicted":[]}"#
+            r#"{"now":null,"crossings":0,"radius_metres":0.0,"here":null,"predicted":[],"lines":[]}"#
         );
 
         let requests = dispatch(r#""Reset""#).unwrap();
@@ -57,7 +69,7 @@ mod tests {
         assert_eq!(answered.unwrap(), r#"[{"id":2,"effect":{"Render":null}}]"#);
         assert_eq!(
             projection().unwrap(),
-            r#"{"now":null,"crossings":2,"radius_metres":5000.0,"here":null,"predicted":[]}"#
+            r#"{"now":null,"crossings":2,"radius_metres":5000.0,"here":null,"predicted":[],"lines":[]}"#
         );
 
         assert!(
@@ -68,8 +80,48 @@ mod tests {
         );
         assert_eq!(
             projection().unwrap(),
-            r#"{"now":null,"crossings":0,"radius_metres":0.0,"here":null,"predicted":[]}"#
+            r#"{"now":null,"crossings":0,"radius_metres":0.0,"here":null,"predicted":[],"lines":[]}"#
         );
+
+        dispatch(r#"{"Crossings":[[7,51.0403,13.7322]]}"#).unwrap();
+        let requests: Value = serde_json::from_str(
+            &dispatch(r#"{"Position":{"t":"2026-07-26T20:43:29Z","gps":{"lat":51.0403,"lon":13.7322,"alt":null,"acc":5.0,"speed":27.8,"heading":null}}}"#)
+                .unwrap(),
+        )
+        .unwrap();
+        let request = requests
+            .as_array()
+            .unwrap()
+            .iter()
+            .find_map(|request| request["effect"].get("Lines"))
+            .expect("a fix asks for lines");
+        let area = &request["area"];
+        assert_near(&area["xmin"], 13.5177);
+        assert_near(&area["ymin"], 50.9054);
+        assert_near(&area["xmax"], 13.9467);
+        assert_near(&area["ymax"], 51.1752);
+
+        let id = &request["id"];
+        let answered = dispatch(&format!(r#"{{"Lines":{{"id":{id},"lines":["{RAIL}"]}}}}"#));
+
+        assert!(answered.unwrap().contains(r#"{"Render":null}"#));
+        assert!(
+            projection().unwrap().ends_with(&format!(
+                r#""lines":[{{"category":"rail","wkb":"{RAIL}"}}]}}"#
+            )),
+            "the rail answering the request is drawn"
+        );
+
+        dispatch(r#"{"Position":{"t":"2026-07-26T20:44:05Z","gps":{"lat":51.0493,"lon":13.7322,"alt":null,"acc":5.0,"speed":27.8,"heading":null}}}"#).unwrap();
+
+        let view: Value = serde_json::from_str(&projection().unwrap()).unwrap();
+        let categories: Vec<&str> = view["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|line| line["category"].as_str().unwrap())
+            .collect();
+        assert_eq!(categories, vec!["rail", "trace"]);
     }
 
     #[test]

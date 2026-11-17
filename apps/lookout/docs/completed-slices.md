@@ -634,3 +634,36 @@ file in gold holds both the replay and the base map, and a narrower screen lays 
   for the replay through the MLT decoder.
 - **The map can be zoomed and panned, and each journey fits it again.** Rail draws dashed, and
   water draws as blue areas and lines.
+
+## Slice: Show map context within App itself
+
+The browser's predictor now draws the rail near the fix and a trail of where it has been, under
+its predicted crossings, on `/live` and `/kiosk`. The core asks for the rail and keeps the trail,
+and the shell only answers with what the map holds. The device's panel stays as it was.
+
+### The core
+
+- **A shell says whether it draws lines, and only one that does is asked for them or keeps a
+  trail.** The device says no, so its core asks for nothing.
+- **The core asks for the rail in a box around the fix, and again before the fix reaches its
+  edge.** The box reaches three radii out.
+- **Each answer matches its request by id.** A request's id is a UUIDv5 under a UUIDv4 drawn at
+  each reset, so a late answer from one journey cannot match the next.
+- **The trail is the fixes of the last two minutes.** A window of time covers the same stretch of
+  track at any fix rate, where a count of fixes would not.
+
+### Across the bridge
+
+- **Lines cross as WKB in base64, both ways, so neither side sees a tile.** GeoJSON and WKT spell
+  coordinates out as text and are too verbose. georust's `wkb` reads and writes it in the core,
+  and loaders.gl's WKB reader and writer is vendored for the page.
+- **The view hands the display lines named `rail` and `trace`, and the element picks their
+  style.**
+
+### The page
+
+- **The element answers from the map's `rail` layer at its most detailed zoom level**, through a
+  tile reader it now shares with the kiosk. That layer holds only the rail a water crossing names,
+  so track away from water stays undrawn.
+- **Each vertex is placed as a crossing is, and lines are cut at the outer ring.** Rail draws
+  dashed, and the trail draws pale over it.

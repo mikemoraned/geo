@@ -15,6 +15,11 @@ loads the wasm, answers what the core asks for, and paints what it says. An even
 nothing comes back with no request, so the element does not repaint — which is what stops a replay
 at speed redrawing per sample.
 
+The core asks for the rail within a box around the fix, and the element answers from the map. It
+reads the rail from the map's most detailed tiles covering the box, through range requests, and
+hands each line back as WKB. The core never learns that the rail came from tiles. Only one
+request is read at a time: a new one cancels any still loading, whose answer the core would drop.
+
 The wasm load sits at module scope, so several elements on a page share one, and the first paint
 waits on its promise: a browser cannot await `connectedCallback`.
 
@@ -28,14 +33,16 @@ We are in the middle, and what is about to be crossed is around us.
 
 ```
                 . - - - - .
-             .               .          *   a crossing the core predicts,
-           .      . - - .      .            drawn where it really lies
-          .     .    *    .     .
-          .     .    ●    .     .       ●   us, sized by the speed the core
-          .     .         .     .           reckons we are going
+             .   /           .          *   a crossing the core predicts,
+           .   /  . - - .      .            drawn where it really lies
+          .  /  .    *    .     .
+          . /   .    ●    .     .       ●   us, sized by the speed the core
+          ./    .    :    .     .           reckons we are going
            .      . - - .      .
              .          *    .          the outer ring is the furthest the
                 . - - - - .             core looks; nothing is drawn past it
+                                        /   rail near us, cut at the outer ring
+                                        :   where we have been lately
 ```
 
 An azimuthal equidistant projection centred on the fix places each crossing, so it is drawn in the
@@ -56,6 +63,13 @@ km, a crossing sits this far out from the centre:
 | of the way to the rim | 17% | 29% | 46% | 67% | 100% |
 
 The inner ring is drawn half way out, which under those settings is a crossing about 1.2 km away.
+
+The rail near us, and where we have been lately, lie under the crossings. The rail is dashed, and
+where we have been is one line through the fixes of the last two minutes. Each point of either line
+is placed as a crossing is, in its true direction and at its distance on the same scale. A
+straight track therefore bends where the scale compresses. A line running past the outer ring is
+cut there.
+The map holds only the rail a water crossing lies on, so track far from water is not drawn.
 
 The centre dot is sized by how fast the core reckons we are going. The core measures in metres a
 second, which is what a distance divided by a time comes out in, and a page shows km/h, which is

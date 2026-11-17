@@ -1,8 +1,5 @@
-import { geoMercator } from "/vendor/d3-geo-3.1.1.js";
-import { decodeTile } from "/vendor/maplibre-mlt-1.3.0.js";
 import { PMTiles } from "/vendor/pmtiles-4.5.0.js";
-
-const toUnitSquare = geoMercator().scale(1 / (2 * Math.PI)).translate([0.5, 0.5]);
+import { layerFeatures } from "/tiles.js";
 
 export async function readJourneys(url) {
   const archive = new PMTiles(url);
@@ -41,31 +38,6 @@ function asSample(properties) {
       heading: properties.heading ?? null,
     },
   };
-}
-
-async function layerFeatures(archive, layer, zoom, bounds) {
-  const tiles = await Promise.all(
-    tilesCovering(zoom, bounds).map(({ x, y }) => archive.getZxy(zoom, x, y)),
-  );
-  return tiles
-    .filter((tile) => tile !== undefined)
-    .flatMap((tile) => decodeTile(new Uint8Array(tile.data)))
-    .filter((table) => table.name === layer)
-    .flatMap((table) => table.getFeatures().map((feature) => feature.properties));
-}
-
-function tilesCovering(zoom, [west, south, east, north]) {
-  const across = 2 ** zoom;
-  const tileOf = (fraction) => Math.min(Math.floor(fraction * across), across - 1);
-  const [left, top] = toUnitSquare([west, north]);
-  const [right, bottom] = toUnitSquare([east, south]);
-  const tiles = [];
-  for (let x = tileOf(left); x <= tileOf(right); x++) {
-    for (let y = tileOf(top); y <= tileOf(bottom); y++) {
-      tiles.push({ x, y });
-    }
-  }
-  return tiles;
 }
 
 function uniqueBy(items, key) {

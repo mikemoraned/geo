@@ -19,6 +19,10 @@ impl Shell for Device {
         None
     }
 
+    fn draws_lines() -> bool {
+        false
+    }
+
     fn project(model: &Model<Self>) -> ViewModel {
         let now = model.now();
         let fix = model.fix();

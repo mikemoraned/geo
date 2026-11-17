@@ -80,7 +80,9 @@ session went against the crossings the predictor expected it to reach; see
 gold point set in flash and scans it against each GPS fix; see [device.md](device.md). A
 browser runs the same core compiled to WebAssembly, fetching the crossings rather than carrying
 them. A kiosk also fetches the map, reading the sessions it replays from the map's tiles and
-drawing them over the rail and water the crossings name; see [web.md](web.md).
+drawing them over the rail and water the crossings name; see [web.md](web.md). Every page
+showing the predictor reads the map's rail around the fix as well, which the core shows beside
+its crossings.
 
 ## Secrets
 

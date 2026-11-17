@@ -14,6 +14,16 @@ place that id means anything. So the view reads the set once as it projects, rat
 prediction, and drops a crossing the set no longer holds: the canvas draws a position, and there
 is none for it.
 
+## Lines are WKB, named by category
+
+The browser draws lines, so its core asks for the rail around a fix and keeps a trace. The view
+hands each line over as WKB in base64, with its category: `rail` for the lines the page answered
+with, and `trace` for the recent fixes. A page decodes the WKB and picks a style per category,
+and never learns how the core chose them.
+
+The rail comes first and the trace last, so a page drawing them in order lays the trace over the
+rail. The trace is one line, oldest fix first, and needs two fixes before there is a line to draw.
+
 ## The tests are the JSON contract
 
 Nothing checks the shapes across the bridge, so the tests do. They assert the exact JSON of an

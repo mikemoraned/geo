@@ -1,0 +1,145 @@
+use domain::{Bbox, BboxError};
+use geo::{Destination, Haversine};
+use geo_types::{LineString, Point};
+use serde::{Deserialize, Serialize};
+use serde_with::base64::Base64;
+use serde_with::serde_as;
+use uuid::Uuid;
+use wkb::error::WkbError;
+use wkb::writer::{WriteOptions, write_line_string};
+
+use crate::app::{Change, GetLines};
+
+const REACH_IN_RADII: f64 = 3.0;
+const AHEAD_IN_RADII: f64 = 2.0;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "Encoded", into = "Encoded")]
+pub struct Wkb(Vec<u8>);
+
+impl Wkb {
+    pub fn new(bytes: Vec<u8>) -> Result<Self, WkbError> {
+        wkb::reader::read_wkb(&bytes)?;
+        Ok(Self(bytes))
+    }
+
+    pub fn of_line(line: &LineString<f64>) -> Result<Self, WkbError> {
+        let mut bytes = Vec::new();
+        write_line_string(&mut bytes, line, &WriteOptions::default())?;
+        Ok(Self(bytes))
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+struct Encoded(#[serde_as(as = "Base64")] Vec<u8>);
+
+impl TryFrom<Encoded> for Wkb {
+    type Error = WkbError;
+
+    fn try_from(Encoded(bytes): Encoded) -> Result<Self, WkbError> {
+        Self::new(bytes)
+    }
+}
+
+impl From<Wkb> for Encoded {
+    fn from(Wkb(bytes): Wkb) -> Self {
+        Self(bytes)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct RequestId(Uuid);
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Nearby {
+    reset: Uuid,
+    asked_so_far: u32,
+    asked: Option<GetLines>,
+    shown: Vec<Wkb>,
+}
+
+impl Default for Nearby {
+    fn default() -> Self {
+        Self {
+            reset: Uuid::new_v4(),
+            asked_so_far: 0,
+            asked: None,
+            shown: Vec::new(),
+        }
+    }
+}
+
+impl Nearby {
+    pub(crate) fn follow(
+        &mut self,
+        fix: Point<f64>,
+        radius_metres: f64,
+    ) -> Result<Option<GetLines>, BboxError> {
+        let ahead = around(fix, AHEAD_IN_RADII * radius_metres)?;
+        if self.asked.is_some_and(|asked| {
+            asked.area.contains(ahead.min().into()) && asked.area.contains(ahead.max().into())
+        }) {
+            return Ok(None);
+        }
+        let request = GetLines {
+            id: RequestId(Uuid::new_v5(&self.reset, &self.asked_so_far.to_be_bytes())),
+            area: around(fix, REACH_IN_RADII * radius_metres)?,
+        };
+        self.asked = Some(request);
+        self.asked_so_far = self.asked_so_far.wrapping_add(1);
+        Ok(Some(request))
+    }
+
+    pub(crate) fn received(&mut self, id: RequestId, lines: Vec<Wkb>) -> Change {
+        if self.asked.is_some_and(|asked| asked.id == id) {
+            self.shown = lines;
+            Change::Moved
+        } else {
+            Change::Unchanged
+        }
+    }
+
+    pub(crate) fn shown(&self) -> &[Wkb] {
+        &self.shown
+    }
+}
+
+fn around(centre: Point<f64>, metres: f64) -> Result<Bbox, BboxError> {
+    let [north, east, south, west] =
+        [0.0, 90.0, 180.0, 270.0].map(|bearing| Haversine.destination(centre, bearing, metres));
+    Bbox::new(west.x(), south.y(), east.x(), north.y())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_line_in_wkb_is_taken() {
+        let wkb: Result<Wkb, _> =
+            serde_json::from_str(r#""AQIAAAACAAAA9ihcj8J1K0CF61G4HoVJQHsUrkfheitAZmZmZmaGSUA=""#);
+
+        assert!(wkb.is_ok(), "{wkb:?}");
+    }
+
+    #[test]
+    fn a_line_is_written_as_little_endian_wkb() {
+        let line = LineString::from(vec![(13.73, 51.04), (13.74, 51.05)]);
+
+        let wkb = Wkb::of_line(&line).expect("a line writes");
+
+        assert_eq!(
+            serde_json::to_string(&wkb).expect("serialize"),
+            r#""AQIAAAACAAAA9ihcj8J1K0CF61G4HoVJQHsUrkfheitAZmZmZmaGSUA=""#
+        );
+    }
+
+    #[test]
+    fn bytes_that_are_not_wkb_are_refused() {
+        let wkb: Result<Wkb, _> = serde_json::from_str(r#""AQIAAAA=""#);
+
+        assert!(wkb.is_err(), "{wkb:?}");
+    }
+}
