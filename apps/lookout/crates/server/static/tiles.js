@@ -10,8 +10,8 @@ export async function layerFeatures(archive, layer, zoom, bounds) {
   );
 }
 
-export async function layerLines(archive, layer, zoom, bounds) {
-  return (await layerTables(archive, layer, zoom, bounds)).flatMap(({ x, y, table }) => {
+export async function layerLines(archive, layer, zoom, bounds, signal) {
+  return (await layerTables(archive, layer, zoom, bounds, signal)).flatMap(({ x, y, table }) => {
     const toLonLat = ({ x: across, y: down }) =>
       toUnitSquare.invert([
         (x + across / table.extent) / 2 ** zoom,
@@ -37,12 +37,12 @@ function asLonLat({ type, coordinates }, toLonLat) {
   }
 }
 
-async function layerTables(archive, layer, zoom, bounds) {
+async function layerTables(archive, layer, zoom, bounds, signal) {
   const tiles = await Promise.all(
     tilesCovering(zoom, bounds).map(async ({ x, y }) => ({
       x,
       y,
-      tile: await archive.getZxy(zoom, x, y),
+      tile: await archive.getZxy(zoom, x, y, signal),
     })),
   );
   return tiles

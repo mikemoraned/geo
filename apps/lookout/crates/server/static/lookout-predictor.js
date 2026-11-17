@@ -42,6 +42,7 @@ function speed(metres_per_second) {
 class LookoutPredictor extends HTMLElement {
   #screen;
   #canvas;
+  #rail;
 
   connectedCallback() {
     const root = this.attachShadow({ mode: "open" });
@@ -88,13 +89,19 @@ class LookoutPredictor extends HTMLElement {
   }
 
   async #fetchRail({ id, area }) {
+    this.#rail?.abort();
+    const asked = new AbortController();
+    this.#rail = asked;
     try {
       map ??= new PMTiles(MAP);
       const { xmin, ymin, xmax, ymax } = area;
-      const rail = await layerLines(map, "rail", RAIL_ZOOM, [xmin, ymin, xmax, ymax]);
+      const bounds = [xmin, ymin, xmax, ymax];
+      const rail = await layerLines(map, "rail", RAIL_ZOOM, bounds, asked.signal);
       await this.dispatch({ Lines: { id, lines: rail.map(base64) } });
     } catch (failed) {
-      this.#screen.textContent = `could not load the rail from ${MAP}: ${failed.message}`;
+      if (!asked.signal.aborted) {
+        this.#screen.textContent = `could not load the rail from ${MAP}: ${failed.message}`;
+      }
     }
   }
 

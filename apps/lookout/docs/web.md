@@ -17,7 +17,8 @@ at speed redrawing per sample.
 
 The core asks for the rail within a box around the fix, and the element answers from the map. It
 reads the rail from the map's most detailed tiles covering the box, through range requests, and
-hands each line back as WKB. The core never learns that the rail came from tiles.
+hands each line back as WKB. The core never learns that the rail came from tiles. Only one
+request is read at a time: a new one cancels any still loading, whose answer the core would drop.
 
 The wasm load sits at module scope, so several elements on a page share one, and the first paint
 waits on its promise: a browser cannot await `connectedCallback`.
