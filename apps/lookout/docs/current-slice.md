@@ -122,7 +122,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Wrap-up
 
-- [ ] Describe the lines in `crates/platform-core/README.md`: who asks, when, and what a shell
+- [x] Describe the lines in `crates/platform-core/README.md`: who asks, when, and what a shell
   answers.
 - [ ] Describe the lines in `crates/platform/web/README.md` and in the picture in `docs/web.md`.
 - [ ] Name the element as a reader of the `rail` layer in `crates/map/README.md`.

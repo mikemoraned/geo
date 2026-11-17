@@ -43,8 +43,8 @@ nothing to scan therefore holds no predictor, rather than one scanning an empty 
 measured against the set — the clock, the fix, the predictions — arrives with it. Anything a shell
 sends before then has nowhere to be measured, and is refused.
 
-`Reset` is the one event answered with more than a render. It puts the model back to what it was
-built as, which also decides whether there are crossings to ask for: a shell carrying its own is
+`Reset` is the one event that can ask for crossings. It puts the model back to what it was built
+as, which also decides whether there are crossings to ask for: a shell carrying its own is
 asked for nothing, and one that fetches them fetches again. A shell sends it on coming up, and
 again whenever what follows has nothing to do with what came before — the kiosk, where the next
 journey happened before the last one, so every fix in it would otherwise be refused as stale.
@@ -65,6 +65,37 @@ exactly as a corrupt sentence is: the last fix and its predictions stay where th
 
 A battery event is the terminal voltage in millivolts. What it means is decided here, not in the
 shell, and a shell with no battery to read never sends one.
+
+## Lines around the fix
+
+A shell says whether it draws lines. Only a shell that does is asked for them, or keeps a trace.
+The device's panel is text, so its core asks for nothing and keeps no trace.
+
+Once a fix moves, the core asks for the lines within a box reaching three radii from the fix. It
+asks again once the area two radii around the fix leaves that box. A radius then still separates
+what the predictor reaches from the box's edge while the shell answers. The core places the box's
+edges with [`geo`'s haversine
+`Destination`](https://docs.rs/geo/0.32.0/geo/algorithm/line_measures/trait.Destination.html). An
+area that is no single box, across the antimeridian or over a pole, is not asked for, in the same
+way that a fix off the globe is refused.
+
+A request carries an id, and the shell answers with that id and the lines. The core keeps the
+lines answering its latest request and drops any other answer. A shell answers at its own pace,
+and a moving fix can outrun it. The core draws a random
+[UUIDv4](https://www.rfc-editor.org/rfc/rfc9562#section-5.4) when it starts and on each `Reset`.
+A request's id is the [UUIDv5](https://www.rfc-editor.org/rfc/rfc9562#section-5.5) of its count,
+with that UUIDv4 as the namespace. An answer to a request made before a `Reset` therefore matches
+nothing after it.
+
+A line arrives as [WKB](https://www.ogc.org/standards/sfa/), in
+[base64](https://www.rfc-editor.org/rfc/rfc4648#section-4) inside the JSON. The core refuses an
+event holding bytes that [`wkb`](https://docs.rs/wkb/0.9.2/wkb/) cannot read. Otherwise it keeps
+the bytes as they came and hands them to the view unread, so where the lines came from stays the
+shell's business.
+
+The trace is the fixes of the last two minutes, oldest first. A fix the predictor refuses never
+joins it. A span of time, rather than a count of fixes, covers the same stretch of track at any
+fix rate.
 
 ## How full the battery is
 
