@@ -1277,7 +1277,7 @@ layouts that store the same rows in about a quarter of the bytes.
   - [x] Write bronze and gold at zstd level 19, and silver at level 3 as now.
   - [x] Add `evaluation_session_v3`, which adds a session index to v2's columns. The pick numbers
         sessions in route order, from each session's passes in `train_session_crossing_v1`.
-  - [ ] Add a path type that refuses an illegal transition, and `evaluation_episode_v1`. One
+  - [x] Add a path type that refuses an illegal transition, and `evaluation_episode_v1`. One
         function groups a session's transitions into episodes, and its inverse expands them. A
         property test checks the round trip.
   - [ ] Add `evaluation_outcome_v3`: the session index, offsets from the session's start in place of

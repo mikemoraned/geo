@@ -1,6 +1,7 @@
 mod bronze;
 mod crossing;
 mod declaration;
+mod episode;
 mod evaluation;
 mod gers;
 mod gold;
@@ -20,6 +21,9 @@ pub use bronze::{NoSuchBronzeDataset, bronze_dataset};
 pub use crossing::{
     OverlapKind, SESSION_CROSSING_V3, SessionCrossingRowV3, TRAIN_SESSION_CROSSING_V1,
     TrainSessionCrossingRowV1, WATER_CROSSING_V2, WaterCrossingRowV2,
+};
+pub use episode::{
+    EVALUATION_EPISODE_V1, EpisodePath, EvaluationEpisodeRowV1, IllegalPath, path_is_legal,
 };
 pub use evaluation::{
     EVALUATION_OUTCOME_V2, EVALUATION_RUN_V6, EVALUATION_SESSION_V2, EVALUATION_SESSION_V3,
@@ -56,7 +60,7 @@ pub use train_session::{
     TrainSessionSamplePositionV3, TrainSessionSampleRowV3, train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 26] = [
+pub const ALL: [DatasetInfo; 27] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
@@ -79,6 +83,7 @@ pub const ALL: [DatasetInfo; 26] = [
     EVALUATION_RUN_V6.info(),
     EVALUATION_SESSION_V2.info(),
     EVALUATION_SESSION_V3.info(),
+    EVALUATION_EPISODE_V1.info(),
     EVALUATION_OUTCOME_V2.info(),
     EVALUATION_SUMMARY_V3.info(),
     EVALUATION_SKEW_V2.info(),
@@ -119,6 +124,7 @@ mod tests {
         assert_eq!(
             replaceable,
             [
+                "evaluation_episode_v1",
                 "evaluation_outcome_v2",
                 "evaluation_run_v6",
                 "evaluation_session_v2",
@@ -224,6 +230,7 @@ mod tests {
         check_rows_of::<EvaluationRunRowV6>();
         check_rows_of::<EvaluationSessionRowV2>();
         check_rows_of::<EvaluationSessionRowV3>();
+        check_rows_of::<EvaluationEpisodeRowV1>();
         check_rows_of::<EvaluationOutcomeRowV2>();
         check_rows_of::<EvaluationSummaryRowV3>();
         check_rows_of::<EvaluationSkewRowV2>();

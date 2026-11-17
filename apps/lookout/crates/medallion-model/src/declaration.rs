@@ -9,14 +9,15 @@ use serde::{Deserialize, Serialize};
 use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, TracerConfig};
 
 use crate::{
-    ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationOutcomeRowV2, EvaluationRunRowV6,
-    EvaluationSessionRowV2, EvaluationSessionRowV3, EvaluationSkewRowV2, EvaluationSplitRowV1,
-    EvaluationSummaryRowV3, EvaluationTransitionRowV1, ExtractManifestRowV3, Feed, FloatType,
-    GeometrySource, GersId, GpsReadingRowV2, MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2,
-    MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4, MotisVersion, NotificationClass,
-    OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease, PredictorName, RailMode,
-    RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3, TrainSegmentRowV4,
-    TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3, WaterCrossingRowV2,
+    ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationEpisodeRowV1, EvaluationOutcomeRowV2,
+    EvaluationRunRowV6, EvaluationSessionRowV2, EvaluationSessionRowV3, EvaluationSkewRowV2,
+    EvaluationSplitRowV1, EvaluationSummaryRowV3, EvaluationTransitionRowV1, ExtractManifestRowV3,
+    Feed, FloatType, GeometrySource, GersId, GpsReadingRowV2, MotisBaseUrl, MotisPollRowV2,
+    MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4, MotisVersion,
+    NotificationClass, OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease, PredictorName,
+    RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3,
+    TrainSegmentRowV4, TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3,
+    WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -237,6 +238,10 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
             "DeviceId",
             Checks::from([("device_id_present", domain::device::DEVICE_ID_PRESENT_HASH)]),
         ),
+        (
+            "EpisodePath",
+            Checks::from([("path_is_legal", crate::episode::PATH_IS_LEGAL_HASH)]),
+        ),
         ("GersId", Checks::from([("GersId::new", GersId::NEW_HASH)])),
         (
             "Label",
@@ -323,6 +328,7 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<EvaluationRunRowV6>(&known),
         declaration::<EvaluationSessionRowV2>(&known),
         declaration::<EvaluationSessionRowV3>(&known),
+        declaration::<EvaluationEpisodeRowV1>(&known),
         declaration::<EvaluationOutcomeRowV2>(&known),
         declaration::<EvaluationSummaryRowV3>(&known),
         declaration::<EvaluationSkewRowV2>(&known),

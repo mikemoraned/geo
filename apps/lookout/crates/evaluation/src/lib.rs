@@ -1,6 +1,7 @@
 pub mod a5;
 pub mod check;
 pub mod cone;
+pub mod episodes;
 pub mod fingerprints;
 pub mod fixtures;
 pub mod gold;
@@ -22,6 +23,7 @@ pub mod summarise;
 pub mod velocity;
 
 pub use self::a5::{A5CellId, A5Resolution, NoA5Cell, NotAnA5Resolution};
+pub use episodes::{EpisodeError, episode_rows, transition_rows_of};
 pub use offline::{OfflineDetector, OfflineError, RecordedPass};
 pub use oracle::{Oracle, OracleError};
 pub use pick::{NotSessions, Pick, PickError, Seed, Sessions, pick, resolve};
