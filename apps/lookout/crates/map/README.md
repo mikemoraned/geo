@@ -30,6 +30,11 @@ near a tile's edge also appears in the neighbouring tile's buffer, so a reader k
 The samples sit below the base map's lowest zoom level, so reading a session fetches no rail or
 water.
 
+The browser's predictor element reads the `rail` layer alone, at zoom level 12, from the tiles
+covering the box its core asks for. [`tippecanoe`](https://github.com/felt/tippecanoe) cuts a line
+at a tile's edge and carries it on into the tile's buffer, so the pieces from neighbouring tiles
+overlap there. A reader drawing them needs no join.
+
 ## Where the base map comes from
 
 The rail and water are the features the water crossings name, whole, across every country. Each
