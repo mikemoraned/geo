@@ -105,7 +105,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   and view.
 - [x] Answer the `Lines` effect in `lookout-predictor.js` by reading the `rail` layer of
   `/map.pmtiles` through `static/tiles.js`.
-- [ ] Draw each line in `lookout-predictor.js` under the crossings, coloured by category and
+- [x] Draw each line in `lookout-predictor.js` under the crossings, coloured by category and
   clipped to the outer ring.
 - [ ] Rebuild the wasm with `just wasm`, then check `/live` and `/kiosk` in a browser.
 - [ ] Choose the snake's window and the box's width from a kiosk replay, only after the element

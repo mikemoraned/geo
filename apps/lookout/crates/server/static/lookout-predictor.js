@@ -1,6 +1,7 @@
 import init, { process_event, view } from "/wasm/lookout.js";
-import { geoAzimuthalEquidistant } from "/vendor/d3-geo-3.1.1.js";
+import { geoAzimuthalEquidistant, geoDistance } from "/vendor/d3-geo-3.1.1.js";
 import { scaleSymlog } from "/vendor/d3-scale-4.0.2.js";
+import { WKBLoader } from "/vendor/loaders-gl-wkt-4.5.4.js";
 import { PMTiles } from "/vendor/pmtiles-4.5.0.js";
 import { layerLines } from "/tiles.js";
 
@@ -12,11 +13,25 @@ const RAIL_ZOOM = 12;
 const LINEAR_WITHIN_METRES = 500;
 const CANVAS_SIZE = 320;
 const TAU = Math.PI * 2;
+const EARTH_RADIUS_METRES = 6_371_008.8;
+const LINE_STYLES = {
+  rail: { colour: "#3a6", width: 1.5, dash: [3, 2] },
+  trace: { colour: "rgba(204, 255, 221, 0.6)", width: 2, dash: [] },
+};
 
 let map;
 
 function base64(bytes) {
   return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""));
+}
+
+function geometry(wkb) {
+  const bytes = Uint8Array.from(atob(wkb), (character) => character.charCodeAt(0));
+  return WKBLoader.parseSync(bytes.buffer);
+}
+
+function polylines({ type, coordinates }) {
+  return type === "MultiLineString" ? coordinates : [coordinates];
 }
 
 function speed(metres_per_second) {
@@ -84,8 +99,8 @@ class LookoutPredictor extends HTMLElement {
   }
 
   #paint() {
-    const { now, crossings, radius_metres, here, predicted } = JSON.parse(view());
-    this.#draw(here, predicted, radius_metres);
+    const { now, crossings, radius_metres, here, predicted, lines } = JSON.parse(view());
+    this.#draw(here, predicted, lines, radius_metres);
     this.#screen.textContent = [
       now ? new Date(now).toLocaleTimeString() : "no time yet",
       here ? speed(here.speed_mps) : "no position yet",
@@ -95,7 +110,7 @@ class LookoutPredictor extends HTMLElement {
     ].join("\n");
   }
 
-  #draw(here, predicted, maximum) {
+  #draw(here, predicted, lines, maximum) {
     const context = this.#canvas.getContext("2d");
     const middle = CANVAS_SIZE / 2;
     const radius = middle - 4;
@@ -120,6 +135,32 @@ class LookoutPredictor extends HTMLElement {
       .range([0, radius])
       .constant(LINEAR_WITHIN_METRES)
       .clamp(true);
+
+    const centre = [here.position.x, here.position.y];
+    const beyond = reach.copy().clamp(false);
+    const place = (point) => {
+      const [x, y] = project(point);
+      const angle = Math.atan2(x, -y);
+      const out = beyond(geoDistance(centre, point) * EARTH_RADIUS_METRES);
+      return [middle + out * Math.sin(angle), middle - out * Math.cos(angle)];
+    };
+
+    context.save();
+    context.beginPath();
+    context.arc(middle, middle, radius, 0, TAU);
+    context.clip();
+    for (const { category, wkb } of lines) {
+      const style = LINE_STYLES[category];
+      context.strokeStyle = style.colour;
+      context.lineWidth = style.width;
+      context.setLineDash(style.dash);
+      for (const polyline of polylines(geometry(wkb))) {
+        context.beginPath();
+        for (const point of polyline) context.lineTo(...place(point));
+        context.stroke();
+      }
+    }
+    context.restore();
 
     context.fillStyle = "#7f8";
     for (const crossing of predicted) {
