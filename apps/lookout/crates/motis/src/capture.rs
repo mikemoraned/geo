@@ -13,6 +13,7 @@ use crate::api::types::{Mode, TripSegment};
 use crate::client::{MotisClient, MotisError};
 use crate::details::TripDetailsCache;
 use crate::landing::{SegmentLog, SegmentLogError};
+use crate::realtime::RealtimeShare;
 use crate::segment::SingleTripSegment;
 use crate::tally::Tally;
 use crate::zoom::Zoom;
@@ -76,6 +77,7 @@ fn polygonal(shape: Geometry<f64>) -> Option<MultiPolygon<f64>> {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Captured {
     pub segments: usize,
+    pub realtime: usize,
     pub outside: usize,
     pub no_polyline: usize,
     pub invalid_polylines: Vec<String>,
@@ -83,6 +85,12 @@ pub struct Captured {
     pub requests: Requests,
     pub filter_took: Duration,
     pub log_took: Duration,
+}
+
+impl Captured {
+    pub fn realtime_share(&self) -> Option<RealtimeShare> {
+        RealtimeShare::of(self.realtime, self.segments)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -150,6 +158,10 @@ impl Capture {
             }
         }
         captured.filter_took = filtering.elapsed();
+        captured.realtime = kept_segments
+            .iter()
+            .filter(|kept| kept.segment().real_time)
+            .count();
 
         let resolution = self.details.resolve(&self.client, &trip_ids).await;
         captured.requests.trip = resolution.lookups;
@@ -323,6 +335,30 @@ mod tests {
             )
             .await
             .expect("capture")
+    }
+
+    #[tokio::test]
+    async fn the_legs_motis_marks_realtime_are_counted_and_give_the_share() {
+        let mut realtime = rail_leg();
+        realtime["realTime"] = serde_json::json!(true);
+        let mut scheduled = rail_leg();
+        scheduled["realTime"] = serde_json::json!(false);
+        let server = motis_serving(&serde_json::json!([realtime, scheduled]).to_string()).await;
+        let store = tempfile::tempdir().expect("tempdir");
+
+        let captured = capture(&server, store.path())
+            .capture(
+                chrono::Utc::now(),
+                &whole_country(vec![square(8.0, 49.5, 2.0)]),
+            )
+            .await
+            .expect("capture");
+
+        assert_eq!((captured.segments, captured.realtime), (2, 1));
+        assert_eq!(
+            captured.realtime_share(),
+            Some(RealtimeShare::new(0.5).expect("a share"))
+        );
     }
 
     #[tokio::test]

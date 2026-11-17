@@ -94,8 +94,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### The realtime warning
 
-- [ ] Count realtime legs in `Captured`, and log the realtime share in "polled motis".
-- [ ] Make the poller log a warning when a poll's share of realtime legs falls below the floor
+- [x] Count realtime legs in `Captured`, and log the realtime share in "polled motis".
+- [x] Make the poller log a warning when a poll's share of realtime legs falls below the floor
       `--min-realtime-share` sets in `PollArgs`. The German capture
       lost its realtime on 20 October 2026, and nothing reported it, as
       [its caveat](completed-slices.md#caveat-realtime-stops-partway-through-the-capture) sets out.

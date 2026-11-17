@@ -86,6 +86,13 @@ still captured without those two fields, and is asked about again at the next po
 without exactly one trip is not captured. Each poll reports both kinds of failure, and the poller
 logs them as errors.
 
+## A fall in realtime warns
+
+Each poll logs its realtime share: the share of the legs it captured that Motis marks realtime.
+If a poll's share falls below `--min-realtime-share`, the poller logs a warning. A poll that
+captures no legs has no share, and never warns. The poller carries on either way, since a server
+that loses its realtime feed still answers from the timetable.
+
 ## How long a run lasts
 
 A run polls at its start and then every `--poll-interval`, and stops once `--poll-duration` has

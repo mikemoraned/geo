@@ -11,6 +11,7 @@ use medallion_model::{Area, Feed, Label, MotisSource};
 use crate::capture::{Capture, Captured, Coverage, Unresolved};
 use crate::client::{DEFAULT_BASE_URL, MotisClient, MotisError};
 use crate::landing::SegmentLog;
+use crate::realtime::RealtimeShare;
 use crate::source::{SourceError, register};
 use crate::zoom::Zoom;
 
@@ -34,6 +35,9 @@ pub struct PollArgs {
     /// Free text telling two setups of one server apart, such as the timetable build.
     #[arg(long)]
     pub label: Option<Label>,
+    /// Warn when a poll's share of realtime legs falls below this, a number from 0 to 1.
+    #[arg(long)]
+    pub min_realtime_share: Option<RealtimeShare>,
     #[command(flatten)]
     pub medallion: MedallionArgs,
 }
@@ -53,6 +57,7 @@ pub struct Poller {
     capture: Capture,
     interval: Span,
     duration: Span,
+    min_realtime_share: Option<RealtimeShare>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -97,6 +102,7 @@ impl Poller {
             ),
             interval: args.poll_interval,
             duration: args.poll_duration,
+            min_realtime_share: args.min_realtime_share,
         })
     }
 
@@ -115,14 +121,19 @@ impl Poller {
                     break;
                 }
                 _ = ticker.tick() => {
-                    poll(Utc::now(), look, &mut self.capture).await;
+                    poll(Utc::now(), look, &mut self.capture, self.min_realtime_share).await;
                 }
             }
         }
     }
 }
 
-async fn poll(now: DateTime<Utc>, look: &mut impl Look, capture: &mut Capture) {
+async fn poll(
+    now: DateTime<Utc>,
+    look: &mut impl Look,
+    capture: &mut Capture,
+    min_realtime_share: Option<RealtimeShare>,
+) {
     let Some(coverage) = look.coverage(now).await else {
         return;
     };
@@ -131,18 +142,23 @@ async fn poll(now: DateTime<Utc>, look: &mut impl Look, capture: &mut Capture) {
     let captured = capture.capture(now, &coverage).await;
     let took = started.elapsed();
     match captured {
-        Ok(Captured {
-            segments,
-            outside,
-            no_polyline,
-            invalid_polylines,
-            unresolved,
-            requests,
-            filter_took,
-            log_took,
-        }) => {
+        Ok(captured) => {
+            let realtime_share = captured.realtime_share();
+            let Captured {
+                segments,
+                realtime,
+                outside,
+                no_polyline,
+                invalid_polylines,
+                unresolved,
+                requests,
+                filter_took,
+                log_took,
+            } = captured;
             tracing::info!(
                 segments,
+                realtime,
+                realtime_share = realtime_share.map(tracing::field::display),
                 outside,
                 no_polyline,
                 invalid_polylines = invalid_polylines.len(),
@@ -156,6 +172,12 @@ async fn poll(now: DateTime<Utc>, look: &mut impl Look, capture: &mut Capture) {
                 ?log_took,
                 "polled motis"
             );
+            if let Some(share) = realtime_share
+                && let Some(floor) = min_realtime_share
+                && share < floor
+            {
+                tracing::warn!(%share, %floor, "the share of realtime legs fell below the floor");
+            }
             if no_polyline > 0 {
                 tracing::warn!(no_polyline, "legs without a polyline were not captured");
             }

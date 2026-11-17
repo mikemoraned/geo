@@ -10,6 +10,7 @@ pub mod landing;
 pub mod landing_to_bronze_promotion;
 pub mod near_gps;
 pub mod polling;
+pub mod realtime;
 pub mod sampling;
 pub mod segment;
 pub mod source;
