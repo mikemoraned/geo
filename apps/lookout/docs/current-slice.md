@@ -124,7 +124,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - [x] Describe the lines in `crates/platform-core/README.md`: who asks, when, and what a shell
   answers.
-- [ ] Describe the lines in `crates/platform/web/README.md` and in the picture in `docs/web.md`.
+- [x] Describe the lines in `crates/platform/web/README.md` and in the picture in `docs/web.md`.
 - [ ] Name the element as a reader of the `rail` layer in `crates/map/README.md`.
 - [ ] Run `just test-no-docker` and `cargo clippy --workspace`, and ask the user to run
   `just test`.
