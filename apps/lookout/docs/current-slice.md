@@ -1260,10 +1260,13 @@ A person chooses the apps' predictor and its settings from the runs of CrowFlies
 
 #### Phase 8: the size of a run on disk
 
-A run over every session takes 15–21 MB in gold, nearly all of it transitions and outcomes, and
-gold is committed. The slice cuts that size before it closes, so its runs do not swell the repo.
+A run over every session takes 10.4–38.0 MB in gold, nearly all of it transitions and outcomes,
+and gold is committed. The slice cuts that size before it closes, so its runs do not swell the repo.
 
-- [ ] Measure each gold dataset's share of a run's size, and what each column takes.
+[`2026-11-17-run-size.md`](2026-11-17-run-size.md) measures where a run's bytes go, and lossless
+layouts that store the same rows in about a quarter of the bytes.
+
+- [x] Measure each gold dataset's share of a run's size, and what each column takes.
 - [ ] Try each way to shrink a run, and measure what it saves: rewriting the files with other
       encodings and compression, storing rows by reference to silver rather than copying them,
       and holding a run in `landing` until it is promoted through bronze and silver to gold.
@@ -1287,6 +1290,8 @@ gold is committed. The slice cuts that size before it closes, so its runs do not
       it, and delete it.
 - [ ] Fold what held of `2026-11-14-train-test-split.md` into `docs/evaluation.md`, repoint the
       links to it, and delete it.
+- [ ] Fold what held of `2026-11-17-run-size.md` into `docs/medallion.md`, repoint the links to
+      it, and delete it.
 - [ ] Add `train_session_crossing_v1` and the gold datasets to the derivation graph in
       `docs/architecture.md`.
 - [ ] Describe gold datasets of rows, and writing them from Python, in the gold sections of
