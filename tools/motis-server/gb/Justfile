@@ -16,6 +16,7 @@ motis_setup: prerequisites
     just route_shapes
     just rail_only
     just motis_import
+    just enable_rt
 
 # Import, leaving out of the timetable log the error Motis logs for each trip and stop time of a route the script drops.
 [working-directory: 'motis_server']
@@ -29,3 +30,8 @@ motis_import:
 [working-directory: 'motis_server']
 rail_only: prerequisites
     yq -i 'del(.tiles) | .geocoding = false | .reverse_geocoding = false | .server.port = "8081" | .timetable.datasets.greatbritaingtfs.script = "../scripts/gb-rail.lua"' config.yml
+
+# Add Aubin's GTFS-RT feed to the imported config, naming lookout in each request. Restart the server to pick it up.
+[working-directory: 'motis_server']
+enable_rt: prerequisites
+    yq -i '.timetable.datasets.greatbritaingtfs.rt = [{"url": "https://realtime.aubin.app/great_britain_gtfsrt.binpb", "protocol": "gtfsrt", "headers": {"User-Agent": "lookout (+https://github.com/mikemoraned/geo)"}}]' data/config.yml

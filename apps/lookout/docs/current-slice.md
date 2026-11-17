@@ -114,7 +114,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       no geocoding, and port 8081. Add `setup` beside it, as `de/Justfile` has.
 - [x] Import, and record the time, peak memory, data size, routes matched, and segments beelined.
       The sandbox refuses the `route_shapes` step, which the user ran outside it.
-- [ ] Add an `enable_rt` recipe, putting Aubin's realtime feed in the dataset's `rt` list with a
+- [x] Add an `enable_rt` recipe, putting Aubin's realtime feed in the dataset's `rt` list with a
       `User-Agent` naming lookout.
 - [ ] Start the server, and read realtime resolution from its log.
 
