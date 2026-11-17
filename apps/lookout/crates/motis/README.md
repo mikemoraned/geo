@@ -99,11 +99,12 @@ any later poll. The poller logs the error and writes no file for that poll.
 ## The client
 
 The client is generated at build time from `openapi.json`, the API spec of the Motis version
-[`tools/motis-server`](../../../../tools/motis-server/Justfile) pins. After a Motis upgrade,
+[`tools/motis-server`](../../../../tools/motis-server/motis.just) pins. After a Motis upgrade,
 `just motis-openapi` fetches the matching spec, and the next build regenerates the client from it.
 
 ## Testing against a server
 
 One test drives a poll against a live Motis server at the default base URL, and one against a
 mock; their names decide which profile runs which, as `.config/nextest.toml` sets out.
-[`tools/motis-server`](../../../../tools/motis-server/Justfile) brings a server up.
+[`tools/motis-server/de`](../../../../tools/motis-server/de/Justfile) brings a German server up,
+which the live test needs.

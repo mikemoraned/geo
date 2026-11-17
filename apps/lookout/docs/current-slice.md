@@ -58,8 +58,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - `Captured` in `crates/motis` gains a count of the legs Motis marks realtime.
 - `crates/motis/README.md` and `docs/motis.md` link to the top Justfile, and name the German
   recipes by their new paths.
-- The German server's data, 13 GiB in the main checkout on 17 November, moves into `de/` rather
-  than downloading and importing again.
+- The German server sets up afresh in `de/`. Its old data, 13 GiB in the main checkout on 17
+  November, goes.
 
 #### Rejected / deferred
 
@@ -83,11 +83,14 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - [x] Move Motis to v2.11.4 in `tools/motis-server/Justfile`, and run `just motis-openapi`. Rebuild
       `crates/motis`, and run its tests.
-- [ ] Move the German recipes into `tools/motis-server/de/Justfile`, as a just module. The top
-      Justfile keeps `VERSION`, `TARGET`, and `prerequisites`.
-- [ ] Move the German server's `motis_server` and `geo_data` from the main checkout into `de/`,
-      and start the server from there.
-- [ ] Update the links in `crates/motis/README.md` and `docs/motis.md`.
+- [x] Move the German recipes into `tools/motis-server/de/Justfile`, as a just module. The top
+      Justfile keeps `VERSION`, `TARGET`, and `prerequisites`. A module does not see its parent's
+      variables, so `motis.just` holds the three, and the top Justfile and `de/Justfile` import it.
+- [-] Move the German server's `motis_server` and `geo_data` from the main checkout into `de/`,
+      and start the server from there. Moot: the German server sets up afresh in `de/` instead.
+- [ ] Set up the German server afresh in `de/`, under v2.11.4, with `download_motis`,
+      `download_geo_data`, and `motis_setup`. The user deletes the old data in the main checkout.
+- [x] Update the links in `crates/motis/README.md` and `docs/motis.md`.
 
 #### The realtime warning
 

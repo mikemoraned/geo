@@ -2,7 +2,7 @@
 
 What the Motis server and the feed behind it can and cannot answer: the properties of the
 external system, rather than of whatever asks it. Two servers answer here: Transitous, a public
-service, and the local server, which [`tools/motis-server`](../../../tools/motis-server/Justfile)
+service, and the local server, which [`tools/motis-server/de`](../../../tools/motis-server/de/Justfile)
 sets up and runs.
 
 ## There is no vehicle position, from any German open feed
@@ -57,7 +57,7 @@ DELFI's GTFS-RT, which Mobilithek publishes under CC-BY-SA. One snapshot holds 4
 [Transitous](https://transitous.org) runs Motis as a public service, at
 `https://api.transitous.org`, on volunteers' servers. For Germany it answers from DELFI, with
 DELFI's realtime feed, as the local server in
-[`tools/motis-server`](../../../tools/motis-server/Justfile) does. Both servers compute rail shapes
+[`tools/motis-server/de`](../../../tools/motis-server/de/Justfile) does. Both servers compute rail shapes
 and load the same train-name script. Transitous differs from the local server in two ways:
 
 - **Realtime adds forecasts.** It adds DELFI's SIRI ET forecasts to the trip updates. Motis accepts
