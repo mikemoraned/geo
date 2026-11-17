@@ -298,7 +298,7 @@ impl<L: LayerKind> Dataset<L> {
     ) -> Result<PathBuf, WriteError> {
         let (store, location) = self.destination(&batch_stem(at))?;
         refuse_existing(store.as_ref(), &location).await?;
-        write_batches(store, location, batches).await?;
+        write_batches(L::LAYER, store, location, batches).await?;
         Ok(self.batch_file(at))
     }
 
@@ -321,7 +321,7 @@ impl<L: LayerKind> Dataset<L> {
     ) -> Result<Written, GeoError> {
         let (store, location) = self.destination(&batch_stem(at))?;
         refuse_existing(store.as_ref(), &location).await?;
-        let rows = write_geo_stream(store, location, batches).await?;
+        let rows = write_geo_stream(L::LAYER, store, location, batches).await?;
         Ok(Written {
             path: self.batch_file(at),
             rows,
@@ -371,18 +371,18 @@ impl Dataset<layers::Landing> {
 impl<L: Replaceable> Dataset<L> {
     pub async fn replace_with(&self, batches: &[RecordBatch]) -> Result<PathBuf, WriteError> {
         let (store, location) = self.destination(PARTITION_STEM)?;
-        write_batches(store, location, batches).await?;
+        write_batches(L::LAYER, store, location, batches).await?;
         Ok(self.partition_file())
     }
 
     pub(crate) fn create_geo_partition(&self, schema: &Schema) -> Result<GeoParquetFile, GeoError> {
         let (store, location) = self.destination(PARTITION_STEM)?;
-        GeoParquetFile::create(store, location, schema)
+        GeoParquetFile::create(L::LAYER, store, location, schema)
     }
 
     pub async fn replace_with_geo(&self, batches: &[RecordBatch]) -> Result<PathBuf, GeoError> {
         let (store, location) = self.destination(PARTITION_STEM)?;
-        write_geo_batches(store, location, batches).await?;
+        write_geo_batches(L::LAYER, store, location, batches).await?;
         Ok(self.partition_file())
     }
 

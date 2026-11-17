@@ -1271,6 +1271,23 @@ layouts that store the same rows in about a quarter of the bytes.
       encodings and compression, storing rows by reference to silver rather than copying them,
       and holding a run in `landing` until it is promoted through bronze and silver to gold.
 - [ ] Choose a way with the user, and apply it to the runs already in gold.
+  - [x] Choose a way. The user chose option 1 of the research doc: one row per episode, and compact
+        outcomes, with sessions in route order and named by a session index. Bronze and gold, the
+        layers in git, write at zstd level 19.
+  - [x] Write bronze and gold at zstd level 19, and silver at level 3 as now.
+  - [ ] Add `evaluation_session_v3`, which adds a session index to v2's columns. The pick numbers
+        sessions in route order, from each session's passes in `train_session_crossing_v1`.
+  - [ ] Add a path type that refuses an illegal transition, and `evaluation_episode_v1`. One
+        function groups a session's transitions into episodes, and its inverse expands them. A
+        property test checks the round trip.
+  - [ ] Add `evaluation_outcome_v3`: the session index, offsets from the session's start in place of
+        times, and no `lead`. Conversions to and from the outcomes `score` builds check the round
+        trip in a test.
+  - [ ] Have `replay` write episodes, `score` read them and write v3 outcomes, and `summarise` read
+        v3 outcomes. `evaluation-py` reads the new datasets.
+  - [ ] Migrate the runs in gold to the new datasets through the row types. Check that each run's
+        episodes and outcomes rebuild its current rows, and pause before deleting the old versions.
+  - [ ] Measure a run's size in the new datasets, against the research doc's estimates.
 - [ ] Decide with the user whether to rewrite the branch's history before it merges, so that the
       commits which added runs at full size leave the repo. Applying a way to the runs in gold
       shrinks only the files from then on, and each earlier commit keeps its runs as written.

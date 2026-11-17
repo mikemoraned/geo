@@ -6,6 +6,7 @@ use datafusion::execution::SendableRecordBatchStream;
 use futures::StreamExt;
 
 use crate::country::Country;
+use crate::layer::Layer;
 use crate::rows::{Geometry, Row, RowError, batch, fields};
 use crate::write::WriteError;
 use arrow::array::{Array, ArrayRef, BinaryArray, RecordBatch};
@@ -235,13 +236,14 @@ pub(crate) struct GeoParquetFile {
 
 impl GeoParquetFile {
     pub(crate) fn create(
+        layer: Layer,
         store: Arc<dyn ObjectStore>,
         location: ObjectPath,
         schema: &Schema,
     ) -> Result<Self, GeoError> {
         let encoder =
             GeoParquetRecordBatchEncoder::try_new(schema, &GeoParquetWriterOptions::default())?;
-        let writer = crate::write::writer_at(store, location, encoder.target_schema())?;
+        let writer = crate::write::writer_at(layer, store, location, encoder.target_schema())?;
         Ok(Self { encoder, writer })
     }
 
@@ -263,6 +265,7 @@ impl GeoParquetFile {
 }
 
 pub(crate) async fn write_geo_batches(
+    layer: Layer,
     store: Arc<dyn ObjectStore>,
     location: ObjectPath,
     batches: &[RecordBatch],
@@ -271,7 +274,7 @@ pub(crate) async fn write_geo_batches(
         return Err(WriteError::Empty.into());
     };
 
-    let mut file = GeoParquetFile::create(store, location, first.schema().as_ref())?;
+    let mut file = GeoParquetFile::create(layer, store, location, first.schema().as_ref())?;
     for batch in batches {
         file.write(batch).await?;
     }
@@ -279,11 +282,12 @@ pub(crate) async fn write_geo_batches(
 }
 
 pub(crate) async fn write_geo_stream(
+    layer: Layer,
     store: Arc<dyn ObjectStore>,
     location: ObjectPath,
     mut batches: SendableRecordBatchStream,
 ) -> Result<usize, GeoError> {
-    let mut file = GeoParquetFile::create(store, location, batches.schema().as_ref())?;
+    let mut file = GeoParquetFile::create(layer, store, location, batches.schema().as_ref())?;
 
     let mut rows = 0;
     while let Some(batch) = batches.next().await {

@@ -8,7 +8,14 @@ use parquet::arrow::async_writer::ParquetObjectWriter;
 use parquet::basic::{Compression, ZstdLevel};
 use parquet::file::properties::WriterProperties;
 
-const ZSTD_LEVEL: i32 = 3;
+use crate::layer::Layer;
+
+fn zstd_level(layer: Layer) -> i32 {
+    match layer {
+        Layer::Landing | Layer::Silver => 3,
+        Layer::Bronze | Layer::Gold => 19,
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum WriteError {
@@ -29,6 +36,7 @@ pub enum WriteError {
 }
 
 pub(crate) async fn write_batches(
+    layer: Layer,
     store: Arc<dyn ObjectStore>,
     location: ObjectPath,
     batches: &[RecordBatch],
@@ -37,7 +45,7 @@ pub(crate) async fn write_batches(
         return Err(WriteError::Empty);
     };
 
-    let mut writer = writer_at(store, location, first.schema())?;
+    let mut writer = writer_at(layer, store, location, first.schema())?;
     for batch in batches {
         writer.write(batch).await?;
     }
@@ -59,13 +67,14 @@ pub(crate) async fn refuse_existing(
 }
 
 pub(crate) fn writer_at(
+    layer: Layer,
     store: Arc<dyn ObjectStore>,
     location: ObjectPath,
     schema: arrow::datatypes::SchemaRef,
 ) -> Result<AsyncArrowWriter<ParquetObjectWriter>, WriteError> {
     let object_writer = ParquetObjectWriter::new(store, location);
     let properties = WriterProperties::builder()
-        .set_compression(Compression::ZSTD(ZstdLevel::try_new(ZSTD_LEVEL)?))
+        .set_compression(Compression::ZSTD(ZstdLevel::try_new(zstd_level(layer))?))
         .build();
     Ok(AsyncArrowWriter::try_new(
         object_writer,
@@ -133,9 +142,14 @@ mod tests {
         let (store, location, path) =
             destination(&Root::new(tmp.path()), "bronze/a=1/b=2/part-0.parquet");
 
-        write_batches(store, location, &[batch(vec![1, 2], vec!["a", "b"])])
-            .await
-            .unwrap();
+        write_batches(
+            Layer::Bronze,
+            store,
+            location,
+            &[batch(vec![1, 2], vec!["a", "b"])],
+        )
+        .await
+        .unwrap();
 
         assert!(path.exists(), "{} should exist", path.display());
         assert_eq!(rows_in(&path), 2);
@@ -146,9 +160,14 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let (store, location, path) = destination(&Root::new(tmp.path()), "part-0.parquet");
 
-        write_batches(store, location, &[batch(vec![1, 2], vec!["a", "b"])])
-            .await
-            .unwrap();
+        write_batches(
+            Layer::Bronze,
+            store,
+            location,
+            &[batch(vec![1, 2], vec!["a", "b"])],
+        )
+        .await
+        .unwrap();
 
         let file = std::fs::File::open(&path).unwrap();
         let reader = ParquetRecordBatchReaderBuilder::try_new(file).unwrap();
@@ -169,12 +188,21 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_layers_in_git_are_compressed_harder_than_the_others() {
+        assert_eq!(zstd_level(Layer::Landing), 3);
+        assert_eq!(zstd_level(Layer::Bronze), 19);
+        assert_eq!(zstd_level(Layer::Silver), 3);
+        assert_eq!(zstd_level(Layer::Gold), 19);
+    }
+
     #[tokio::test]
     async fn multiple_batches_are_written_into_the_one_file() {
         let tmp = tempfile::tempdir().unwrap();
         let (store, location, path) = destination(&Root::new(tmp.path()), "part-0.parquet");
 
         write_batches(
+            Layer::Bronze,
             store,
             location,
             &[batch(vec![1], vec!["a"]), batch(vec![2, 3], vec!["b", "c"])],
@@ -190,7 +218,9 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let (store, location, path) = destination(&Root::new(tmp.path()), "part-0.parquet");
 
-        let err = write_batches(store, location, &[]).await.unwrap_err();
+        let err = write_batches(Layer::Bronze, store, location, &[])
+            .await
+            .unwrap_err();
 
         assert!(matches!(err, WriteError::Empty), "unexpected error: {err}");
         assert!(!path.exists(), "no file should have been created");
@@ -206,9 +236,14 @@ mod tests {
         )
         .unwrap();
 
-        let err = write_batches(store, location, &[batch(vec![1], vec!["a"]), mismatched])
-            .await
-            .unwrap_err();
+        let err = write_batches(
+            Layer::Bronze,
+            store,
+            location,
+            &[batch(vec![1], vec!["a"]), mismatched],
+        )
+        .await
+        .unwrap_err();
 
         assert!(matches!(err, WriteError::Parquet(_)), "unexpected: {err}");
         assert!(
