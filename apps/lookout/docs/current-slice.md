@@ -1280,7 +1280,7 @@ layouts that store the same rows in about a quarter of the bytes.
   - [x] Add a path type that refuses an illegal transition, and `evaluation_episode_v1`. One
         function groups a session's transitions into episodes, and its inverse expands them. A
         property test checks the round trip.
-  - [ ] Add `evaluation_outcome_v3`: the session index, offsets from the session's start in place of
+  - [x] Add `evaluation_outcome_v3`: the session index, offsets from the session's start in place of
         times, and no `lead`. Conversions to and from the outcomes `score` builds check the round
         trip in a test.
   - [ ] Have `replay` write episodes, `score` read them and write v3 outcomes, and `summarise` read

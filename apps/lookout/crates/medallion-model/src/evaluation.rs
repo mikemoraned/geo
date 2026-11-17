@@ -23,6 +23,9 @@ pub const EVALUATION_TRANSITION_V1: DatasetSpec<layers::Gold> =
 pub const EVALUATION_OUTCOME_V2: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_outcome_v2", RUN_DATE, &[RUN_ID]);
 
+pub const EVALUATION_OUTCOME_V3: DatasetSpec<layers::Gold> =
+    DatasetSpec::partitioned_within("evaluation_outcome_v3", RUN_DATE, &[RUN_ID]);
+
 pub const EVALUATION_SUMMARY_V3: DatasetSpec<layers::Gold> =
     DatasetSpec::partitioned_within("evaluation_summary_v3", RUN_DATE, &[RUN_ID]);
 
@@ -107,6 +110,34 @@ impl Row for EvaluationOutcomeRowV2 {
             lead: Some(TimeDelta::zero()),
             class: Some(NotificationClass::Hit),
             score: Some(1.0),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EvaluationOutcomeRowV3 {
+    pub session_index: u32,
+    pub crossing_compact_id: CrossingCompactId,
+    pub outcome: OutcomeKind,
+    pub class: Option<NotificationClass>,
+    pub score: Option<f64>,
+    pub notified_offset_ms: Option<u32>,
+    pub crossed_offset_ms: Option<u32>,
+}
+
+impl Row for EvaluationOutcomeRowV3 {
+    type Layer = layers::Gold;
+    const DATASET: DatasetSpec<Self::Layer> = EVALUATION_OUTCOME_V3;
+
+    fn example() -> Self {
+        Self {
+            session_index: 0,
+            crossing_compact_id: CrossingCompactId::new(1),
+            outcome: OutcomeKind::Credited,
+            class: Some(NotificationClass::Hit),
+            score: Some(1.0),
+            notified_offset_ms: Some(0),
+            crossed_offset_ms: Some(300_000),
         }
     }
 }
