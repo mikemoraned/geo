@@ -173,7 +173,7 @@ pub fn session_rows(
     picked: &[TrainSessionRowV3],
     passes: &[TrainSessionCrossingRowV1],
 ) -> Vec<EvaluationSessionRowV3> {
-    in_route_order(picked, passes)
+    in_route_order(picked, |session| &session.session_id, passes)
         .map(|(index, session)| {
             let duration = duration(session);
             session_row(index, session, duration, duration)
@@ -181,23 +181,22 @@ pub fn session_rows(
         .collect()
 }
 
-fn in_route_order<'a>(
-    picked: &'a [TrainSessionRowV3],
+pub fn in_route_order<'a, T>(
+    sessions: &'a [T],
+    session_id: impl Fn(&T) -> &SessionId,
     passes: &[TrainSessionCrossingRowV1],
-) -> impl Iterator<Item = (u32, &'a TrainSessionRowV3)> {
+) -> impl Iterator<Item = (u32, &'a T)> {
     let routes = passes
         .iter()
         .sorted_by_key(|pass| pass.crossed_at)
         .map(|pass| (&pass.session_id, &pass.crossing_id))
         .into_group_map();
     let no_route = Vec::new();
-    picked
+    sessions
         .iter()
-        .sorted_by_key(|session| {
-            (
-                routes.get(&session.session_id).unwrap_or(&no_route).clone(),
-                &session.session_id,
-            )
+        .sorted_by_cached_key(|session| {
+            let id = session_id(session);
+            (routes.get(id).unwrap_or(&no_route).clone(), id.clone())
         })
         .zip(0..)
         .map(|(session, index)| (index, session))
@@ -229,7 +228,7 @@ async fn split_session_rows(
         picked.iter().map(|session| &session.session_id),
     )
     .await?;
-    in_route_order(picked, passes)
+    in_route_order(picked, |session| &session.session_id, passes)
         .map(|(index, session)| {
             let samples =
                 samples

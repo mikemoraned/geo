@@ -44,9 +44,8 @@ pub fn compact_outcome_rows(
         .sorted_by_key(|row| {
             (
                 row.session_index,
+                row.notified_offset_ms.or(row.crossed_offset_ms),
                 row.crossing_compact_id,
-                row.notified_offset_ms,
-                row.crossed_offset_ms,
             )
         })
         .collect())
