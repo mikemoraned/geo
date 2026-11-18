@@ -1333,6 +1333,6 @@ layouts that store the same rows in about a quarter of the bytes.
       each concept from this slice that a demonstration will need to explain. The list started in
       Phase 6, so check it and add what Phases 7 to 9 introduce.
       The slice has no Phase 9, so the list adds what Phases 6 to 8 introduced beyond the split.
-- [ ] Delete the backup of the branch from before its history was rewritten, with
+- [x] Delete the backup of the branch from before its history was rewritten, with
       `git branch -D lookout-slice-workstream2-before-rewrite`, so its old blobs can leave the repo.
 - [ ] Run `just test-no-docker`, and hand over `just test`.
