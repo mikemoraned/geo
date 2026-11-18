@@ -1325,8 +1325,10 @@ layouts that store the same rows in about a quarter of the bytes.
       builds it, and of `evaluation-py`.
 - [ ] Name the v3 datasets in the help of `silver-motis-ingest`, and `train_session_crossing_v1` in
       that of `silver-session-crossings`.
-- [ ] Fold the `exploreN.py` notebooks into one or more notebooks that demonstrate the evaluation's
-      behaviours or steps. Then remove them, with their answers in the removing commit.
+- [-] Fold the `exploreN.py` notebooks into one or more notebooks that demonstrate the evaluation's
+      behaviours or steps. Then remove them, with their answers in the removing commit. Moot here:
+      the notebooks stay, as a starting point for the Demonstrable Behaviour slice in
+      `next-slices.md`.
 - [ ] List under the evaluation bullet of the Demonstrable Behaviour slice, in `next-slices.md`,
       each concept from this slice that a demonstration will need to explain. The list started in
       Phase 6, so check it and add what Phases 7 to 9 introduce.

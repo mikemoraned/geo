@@ -430,3 +430,14 @@ Some of the key areas to cover:
     * The skew counts only passes and visits whose crossing lies in the split's cells, so every
       measure a run reports covers one split.
   * Tuning reads only windows that lie wholly in tune cells.
+
+### Starting points
+
+- **The evaluation's exploration notebooks.** `notebooks/evaluation/explore1.py` to `explore9.py`
+  each answered one question while the evaluation was built, and several explain a step as they go.
+  `explore8.py`, for example, sets out what each of a run's choices guards against. Fold them into
+  one or more notebooks that demonstrate the evaluation's behaviours or steps, then remove them,
+  with their answers in the removing commit. `explore3.py`, `explore4.py`, `explore8.py`, and
+  `explore9.py` read gold datasets that runs no longer write, `evaluation_transition_v1`,
+  `evaluation_outcome_v2`, and `evaluation_session_v2` among them. Each needs moving to the
+  datasets that replace them before it runs.
