@@ -3,7 +3,7 @@
 The evaluation's steps from python, as the extension module `lookout_evaluation`. A notebook runs
 the steps the evaluation runs, so what it inspects is the evaluation rather than a copy of it.
 `help(lookout_evaluation.pick)` in a notebook is the reference for what a step takes and returns,
-and likewise for `session_rows`, `replay`, `score`, `summarise`, and `run`.
+and likewise for every other function and class.
 
 ```python
 import pyarrow as pa
@@ -62,6 +62,35 @@ those datasets and of `evaluation_session_v3`:
 transitions = evaluation.transitions_of(sessions=sessions, episodes=episodes)
 outcomes = evaluation.outcomes_of(sessions=sessions, outcomes=compact)
 ```
+
+## Predictors
+
+A step that replays takes a predictor: an `Oracle`, a `CrowFlies`, or a `LightCone`. Each takes
+the settings the `evaluate` binary does, with spans of time as text such as `"5m"`:
+
+```python
+oracle = evaluation.Oracle(horizon="5m")
+crow_flies = evaluation.CrowFlies(radius_metres=1000, horizon="5m", still_within_metres=20)
+light_cone = evaluation.LightCone(
+    radius_metres=1000, half_width_degrees=45, horizon="5m", still_within_metres=20
+)
+online = evaluation.OnlineDetector(pass_radius_metres=250)
+```
+
+## Writing a run to gold
+
+`evaluate` runs as `run` does, and writes each step's table to gold. `record` records a run's
+settings and sessions from a picked table, and returns its id, its date, and its first two tables,
+which `write_gold` from [medallion-py](../medallion-py/README.md#gold-datasets-of-rows) then writes.
+Both name the code the extension was built from, so each raises a `ValueError` if the extension was
+built from uncommitted code. `evaluate` also raises one if gold already holds the run.
+
+## Measuring how far a train turns
+
+`cone_stages` runs the stages that measure how far a train turns from its heading within a horizon,
+and returns each stage's table, as the `evaluation_cone_angles` binary computes them. `velocities`
+returns the speed and heading LightCone estimates at each sample. Both take a table of samples as
+silver `train_session_sample_v3` holds them.
 
 ## Using it from a notebook
 

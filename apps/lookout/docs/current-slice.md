@@ -1321,7 +1321,7 @@ layouts that store the same rows in about a quarter of the bytes.
       LightCone, and `platform-core`'s for the states it exposes.
 - [x] Show the states in the picture in `docs/web.md`, and on the panel in
       `crates/platform/m5/README.md`.
-- [ ] Write the READMEs of `evaluation`, covering its `evaluate` binary and the `cli` feature that
+- [x] Write the READMEs of `evaluation`, covering its `evaluate` binary and the `cli` feature that
       builds it, and of `evaluation-py`.
 - [x] Name the v3 datasets in the help of `silver-motis-ingest`, and `train_session_crossing_v1` in
       that of `silver-session-crossings`.
