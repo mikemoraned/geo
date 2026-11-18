@@ -35,12 +35,13 @@ We are in the middle, and what is about to be crossed is around us.
                 . - - - - .
              .   /           .          *   a crossing the core predicts,
            .   /  . - - .      .            drawn where it really lies
-          .  /  .    *    .     .
-          . /   .   (●)   .     .       ●   us
-          ./    .    :    .     .
-           .      . - - .      .        ( ) the pass radius: a crossing
-             .          *    .              inside it is being passed
-                . - - - - .
+          .  /  .  <*>    .     .       <*> a crossing the core alerts on,
+          . /   .   (●)   .     .           ringed with a dashed circle
+          ./    .  [*]:   .     .       [*] a crossing being passed, ringed
+           .      . - - .      .            with a solid circle
+             .          *    .          ●   us
+                . - - - - .             ( ) the pass radius: a crossing
+                                            inside it is being passed
                                         the outer ring is the furthest the
                                         core looks; nothing is drawn past it
                                         /   rail near us, cut at the outer ring

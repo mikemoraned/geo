@@ -37,6 +37,13 @@ A crossing's line opens with one character for its state: a space while it is on
 `!` once the core alerts on it, and `*` while it is being passed. The character takes no space
 after it, so the widest line, `!>999km 59:59`, is thirteen characters.
 
+A crossing the core alerts on, and one being passed, read:
+
+```
+│!800m 0:29   │  alerted on: 800 m away, reached in 29 s
+│*90m 0:04    │  being passed: 90 m away
+```
+
 Nothing wraps, so a longer line runs off the side. A crossing's id will not fit beside the two
 numbers and is the one to drop: it names a row in a dataset, where the distance and the countdown
 are the prediction. A countdown of an hour or more shows as `>1h`: hours would not fit, and

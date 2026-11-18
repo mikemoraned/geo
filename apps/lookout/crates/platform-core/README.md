@@ -39,11 +39,15 @@ refuses as out of order.
 
 ## Each crossing has a state
 
-Every event the predictor accepts also reaches a pass detector and a tracker. The detector reports
-each crossing within its pass radius of the latest fix. The tracker turns the predictions and those
-passes into each crossing's state: out of reach, a candidate, alerted on, or being passed. A view
-reads a crossing's state and the pass radius through the model. The transitions between states
-stay in the core, since a view shows only where each crossing is now.
+The core predicts with LightCone over CrowFlies, at the predictor's defaults, and detects passes
+online, within the default pass radius of the latest fix. Every event the predictor accepts also
+reaches the pass detector and a tracker. The tracker turns the predictions and the passes into
+each crossing's state: out of reach, a candidate, alerted on, or passed.
+[The predictor's README](../predictor/README.md#each-crossing-has-a-state) sets out each state and
+how a crossing moves between them.
+
+A view reads a crossing's state and the pass radius through the model. The transitions between
+states stay in the core, since a view shows only where each crossing is now.
 
 ## A core with no crossings has no predictor
 
