@@ -31,7 +31,7 @@ motis_import:
 rail_only: prerequisites
     yq -i 'del(.tiles) | .geocoding = false | .reverse_geocoding = false | .server.port = "8081" | .timetable.datasets.greatbritaingtfs.script = "../scripts/gb-rail.lua"' config.yml
 
-# Add Aubin's GTFS-RT feed to the imported config, naming lookout in each request. Restart the server to pick it up.
+# Add Aubin's GTFS-RT feed to the imported config, naming lookout in each request, and log at info, leaving out a line per bus update. Restart the server to pick it up.
 [working-directory: 'motis_server']
 enable_rt: prerequisites
-    yq -i '.timetable.datasets.greatbritaingtfs.rt = [{"url": "https://realtime.aubin.app/great_britain_gtfsrt.binpb", "protocol": "gtfsrt", "headers": {"User-Agent": "lookout (+https://github.com/mikemoraned/geo)"}}]' data/config.yml
+    yq -i '.timetable.datasets.greatbritaingtfs.rt = [{"url": "https://realtime.aubin.app/great_britain_gtfsrt.binpb", "protocol": "gtfsrt", "headers": {"User-Agent": "lookout (+https://github.com/mikemoraned/geo)"}}] | .logging.log_level = "info"' data/config.yml
