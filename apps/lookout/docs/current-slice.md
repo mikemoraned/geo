@@ -1294,12 +1294,13 @@ layouts that store the same rows in about a quarter of the bytes.
 
 #### Things to consider
 
-- [ ] Consider tracing each dataset back to what it was derived from, such as the Overture release
+- [-] Consider tracing each dataset back to what it was derived from, such as the Overture release
       behind a silver dataset. A disparity between the newest Overture extract and a silver
       dataset could then be told apart from the two reading different releases, which would guide
       what to do and where to debug. The split checks read the newest extract of a country, while
       the crossings they check came from whichever extract built them. Tracing is more than the
       split needs, so this phase records the question for a later slice rather than answering it.
+      Moot here: it moved to "Slice: derive the water crossings in Rust" in `next-slices.md`.
 
 #### Wrap-up
 

@@ -195,6 +195,12 @@ the evaluation then reads silver as it stands. The cut keeps a crossing on a riv
 border, such as the Wurm at Herzogenrath, which German trains pass. Its centre can lie just outside
 the country's outline.
 
+Consider tracing each dataset back to what it was derived from, such as the Overture release behind
+the crossings. A disparity between the newest Overture extract and a silver dataset could then be
+told apart from the two reading different releases, which would guide what to do and where to
+debug. The evaluation's split checks, for example, read a country's newest extract, while the
+crossings they check came from whichever extract built them.
+
 ## Slice: Enrich and use relative direction of POI
 
 ### Target
