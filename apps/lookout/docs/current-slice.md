@@ -1270,7 +1270,7 @@ layouts that store the same rows in about a quarter of the bytes.
 - [ ] Try each way to shrink a run, and measure what it saves: rewriting the files with other
       encodings and compression, storing rows by reference to silver rather than copying them,
       and holding a run in `landing` until it is promoted through bronze and silver to gold.
-- [ ] Choose a way with the user, and apply it to the runs already in gold.
+- [x] Choose a way with the user, and apply it to the runs already in gold.
   - [x] Choose a way. The user chose option 1 of the research doc: one row per episode, and compact
         outcomes, with sessions in route order and named by a session index. Bronze and gold, the
         layers in git, write at zstd level 19.
@@ -1287,8 +1287,8 @@ layouts that store the same rows in about a quarter of the bytes.
         v3 outcomes. `evaluation-py` reads the new datasets.
   - [x] Migrate the runs in gold to the new datasets through the row types. Check that each run's
         episodes and outcomes rebuild its current rows, and pause before deleting the old versions.
-  - [ ] Measure a run's size in the new datasets, against the research doc's estimates.
-- [ ] Decide with the user whether to rewrite the branch's history before it merges, so that the
+  - [x] Measure a run's size in the new datasets, against the research doc's estimates.
+- [x] Decide with the user whether to rewrite the branch's history before it merges, so that the
       commits which added runs at full size leave the repo. Applying a way to the runs in gold
       shrinks only the files from then on, and each earlier commit keeps its runs as written.
 
