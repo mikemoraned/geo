@@ -25,6 +25,8 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    from datetime import UTC, datetime
+
     import marimo as mo
     import altair as alt
     import geopandas as gpd
@@ -36,7 +38,19 @@ def _():
 
     import lookout_medallion
 
-    return alt, gpd, lonboard, lookout_medallion, mo, np, pa, polyline, shapely
+    return (
+        UTC,
+        alt,
+        datetime,
+        gpd,
+        lonboard,
+        lookout_medallion,
+        mo,
+        np,
+        pa,
+        polyline,
+        shapely,
+    )
 
 
 @app.cell
@@ -57,18 +71,39 @@ def _(lookout_medallion, pa):
 
 
 @app.cell
-def _(lookout_medallion, pa, source_id):
-    legs = pa.table(
-        lookout_medallion.query_landing(
-            """
-            SELECT captured_at, trip_id, route_name, agency_name, mode,
-                   from_stop_id, from_lat, from_lon, to_stop_id, to_lat, to_lon,
-                   departure, arrival, scheduled_departure, scheduled_arrival, realtime
-            FROM motis_poll_v2
-            WHERE source_id = $source_id
-            """,
-            params={"source_id": source_id},
+def _(UTC, datetime, mo):
+    refresh = mo.ui.button(
+        value=datetime.now(UTC),
+        on_click=lambda _: datetime.now(UTC),
+        label="Refresh polls",
+    )
+    refresh
+    return (refresh,)
+
+
+@app.cell
+def _(lookout_medallion, mo, pa, refresh, source_id):
+    def poll_query(sql):
+        return pa.table(
+            lookout_medallion.query_landing(
+                sql, params={"source_id": source_id}
+            )
         )
+
+    mo.md(f"Polls landed by {refresh.value:%Y-%m-%d %H:%M:%S} UTC")
+    return (poll_query,)
+
+
+@app.cell
+def _(poll_query):
+    legs = poll_query(
+        """
+        SELECT captured_at, trip_id, route_name, agency_name, mode,
+               from_stop_id, from_lat, from_lon, to_stop_id, to_lat, to_lon,
+               departure, arrival, scheduled_departure, scheduled_arrival, realtime
+        FROM motis_poll_v2
+        WHERE source_id = $source_id
+        """
     )
     (
         legs.group_by("captured_at")
@@ -81,20 +116,17 @@ def _(lookout_medallion, pa, source_id):
 
 
 @app.cell
-def _(alt, lookout_medallion, mo, pa, source_id):
-    share_by_mode = pa.table(
-        lookout_medallion.query_landing(
-            """
-            SELECT captured_at, mode, count(*) AS legs,
-                   sum(CAST(realtime AS INT)) AS realtime,
-                   avg(CAST(realtime AS DOUBLE)) AS share
-            FROM motis_poll_v2
-            WHERE source_id = $source_id
-            GROUP BY captured_at, mode
-            ORDER BY captured_at, mode
-            """,
-            params={"source_id": source_id},
-        )
+def _(alt, mo, poll_query):
+    share_by_mode = poll_query(
+        """
+        SELECT captured_at, mode, count(*) AS legs,
+               sum(CAST(realtime AS INT)) AS realtime,
+               avg(CAST(realtime AS DOUBLE)) AS share
+        FROM motis_poll_v2
+        WHERE source_id = $source_id
+        GROUP BY captured_at, mode
+        ORDER BY captured_at, mode
+        """
     ).to_pandas()
     mo.vstack(
         [
@@ -124,18 +156,15 @@ def _(alt, lookout_medallion, mo, pa, source_id):
 
 
 @app.cell
-def _(alt, lookout_medallion, pa, source_id):
-    trips_by_mode = pa.table(
-        lookout_medallion.query_landing(
-            """
-            SELECT captured_at, mode, count(DISTINCT trip_id) AS trips
-            FROM motis_poll_v2
-            WHERE source_id = $source_id
-            GROUP BY captured_at, mode
-            ORDER BY captured_at, mode
-            """,
-            params={"source_id": source_id},
-        )
+def _(alt, poll_query):
+    trips_by_mode = poll_query(
+        """
+        SELECT captured_at, mode, count(DISTINCT trip_id) AS trips
+        FROM motis_poll_v2
+        WHERE source_id = $source_id
+        GROUP BY captured_at, mode
+        ORDER BY captured_at, mode
+        """
     ).to_pandas()
     alt.Chart(trips_by_mode).mark_area().encode(
         x=alt.X("captured_at:T", title="poll (UTC)"),
@@ -147,42 +176,36 @@ def _(alt, lookout_medallion, pa, source_id):
 
 
 @app.cell
-def _(lookout_medallion, pa, source_id):
-    unmarked = pa.table(
-        lookout_medallion.query_landing(
-            """
-            SELECT mode, agency_name, route_name,
-                   count(*) AS legs,
-                   count(DISTINCT trip_id) AS trips,
-                   count(DISTINCT captured_at) AS polls,
-                   min(captured_at) AS first_poll,
-                   max(captured_at) AS last_poll
-            FROM motis_poll_v2
-            WHERE source_id = $source_id AND NOT realtime
-            GROUP BY mode, agency_name, route_name
-            ORDER BY legs DESC
-            """,
-            params={"source_id": source_id},
-        )
+def _(poll_query):
+    unmarked = poll_query(
+        """
+        SELECT mode, agency_name, route_name,
+               count(*) AS legs,
+               count(DISTINCT trip_id) AS trips,
+               count(DISTINCT captured_at) AS polls,
+               min(captured_at) AS first_poll,
+               max(captured_at) AS last_poll
+        FROM motis_poll_v2
+        WHERE source_id = $source_id AND NOT realtime
+        GROUP BY mode, agency_name, route_name
+        ORDER BY legs DESC
+        """
     ).to_pandas()
     unmarked
     return
 
 
 @app.cell
-def _(gpd, lookout_medallion, pa, polyline, shapely, source_id):
+def _(gpd, poll_query, polyline, shapely):
     traces = gpd.GeoDataFrame(
-        pa.table(
-            lookout_medallion.query_landing(
-                """
-                SELECT captured_at, trip_id, mode, agency_name, route_name,
-                       departure, arrival, realtime, polyline
-                FROM motis_poll_v2
-                WHERE source_id = $source_id
-                ORDER BY captured_at, trip_id
-                """,
-                params={"source_id": source_id},
-            )
+        poll_query(
+            """
+            SELECT captured_at, trip_id, mode, agency_name, route_name,
+                   departure, arrival, realtime, polyline
+            FROM motis_poll_v2
+            WHERE source_id = $source_id
+            ORDER BY captured_at, trip_id
+            """
         )
         .to_pandas()
         .assign(
