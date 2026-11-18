@@ -142,4 +142,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 - [ ] Fold what holds of `docs/2026-10-23-great-britain-capture.md` into `docs/motis.md`, and
       delete it.
+- [ ] Fold what holds of `docs/2026-11-15-maplibre-tile.md` into `docs/web.md` and
+      `docs/medallion.md`, as its header directs, and delete it.
 - [ ] Run `just test-no-docker` before every commit. The user runs `just test`.
