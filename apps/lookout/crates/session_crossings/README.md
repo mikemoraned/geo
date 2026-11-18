@@ -1,8 +1,9 @@
 # session_crossings
 
-The ground truth: which water crossings each recorded session actually passed. It joins what two
-other crates produce — the sessions derived from telemetry, and the crossings derived from
-reference data — so it sits beside both rather than inside either.
+The ground truth: which water crossings each session actually passed, both the sessions a device
+recorded and the train sessions derived from a Motis capture. It joins what other crates produce —
+the sessions, and the crossings derived from reference data — so it sits beside them rather than
+inside any of them.
 [medallion.md](../../docs/medallion.md) describes the store it reads and writes.
 
 ## A crossing is passed when a sample comes near it
@@ -50,6 +51,19 @@ What a stored row adds to a pass is the device and the radius. The device is der
 session and carried anyway, so a partition reads without joining back — as the samples carry it
 for the same reason. The radius is the run's own: a match made at 150 m and one made at 20 m are
 not the same claim, so a row stays interpretable after the default changes.
+
+## Train sessions
+
+The same matching runs over the train sessions that [motis](../motis/README.md#a-train-as-a-session)
+derives from a capture, and writes their passes to a dataset of their own. A train session's
+samples are simulated, one every 10 s along its legs' shapes, so the matching takes them as it takes
+a device's. A train's pass carries no device, since a train session has none. Each run of the
+matching derives both datasets, the devices' passes and the trains', at one radius.
+
+A train's passes are the evaluation's ground truth. Its positions come from where Motis placed the
+train, realtime where Motis had it, so a train session's
+[`realtime_percentage`](../motis/README.md#a-train-as-a-session) says how far its passes reflect the
+train rather than its timetable.
 
 ## Choosing what a kiosk replays
 

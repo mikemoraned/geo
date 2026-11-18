@@ -1315,7 +1315,7 @@ layouts that store the same rows in about a quarter of the bytes.
 - [x] Describe gold datasets of rows, and writing them from Python, in the gold sections of
       `docs/medallion.md`.
 - [x] Describe `query_gold` and `write_gold` in `crates/medallion-py/README.md`.
-- [ ] Describe `realtime` and `realtime_percentage` in `crates/motis/README.md`, and train sessions
+- [x] Describe `realtime` and `realtime_percentage` in `crates/motis/README.md`, and train sessions
       in `crates/session_crossings/README.md`.
 - [ ] Rewrite `predictor`'s README for the typed states, the tracker, the pass detectors, and
       LightCone, and `platform-core`'s for the states it exposes.
