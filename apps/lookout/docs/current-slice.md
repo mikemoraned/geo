@@ -1263,7 +1263,7 @@ A person chooses the apps' predictor and its settings from the runs of CrowFlies
 A run over every session takes 10.4–38.0 MB in gold, nearly all of it transitions and outcomes,
 and gold is committed. The slice cuts that size before it closes, so its runs do not swell the repo.
 
-[`2026-11-17-run-size.md`](2026-11-17-run-size.md) measures where a run's bytes go, and lossless
+[`2026-11-17-run-size.md`](https://github.com/mikemoraned/geo/blob/c04053e41efc83d055c41828de8b71e7c15edb89/apps/lookout/docs/2026-11-17-run-size.md) measures where a run's bytes go, and lossless
 layouts that store the same rows in about a quarter of the bytes.
 
 - [x] Measure each gold dataset's share of a run's size, and what each column takes.
@@ -1308,7 +1308,7 @@ layouts that store the same rows in about a quarter of the bytes.
       it, and delete it.
 - [x] Fold what held of `2026-11-14-train-test-split.md` into `docs/evaluation.md`, repoint the
       links to it, and delete it.
-- [ ] Fold what held of `2026-11-17-run-size.md` into `docs/medallion.md`, repoint the links to
+- [x] Fold what held of `2026-11-17-run-size.md` into `docs/medallion.md`, repoint the links to
       it, and delete it.
 - [ ] Add `train_session_crossing_v1` and the gold datasets to the derivation graph in
       `docs/architecture.md`.

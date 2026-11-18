@@ -275,6 +275,41 @@ its day, and a later re-derive can change that silver, so a later checkout canno
 choice of predictor rests on its runs, so every run is committed, and a review reads them from the
 checkout.
 
+**A committed dataset is laid out for its size in git.** Git keeps every committed blob, so a
+dataset written once per run grows the repository by its full size each time. Its layout stores the
+rows a reader needs in the fewest bytes, and a reader rebuilds the fuller rows from them exactly:
+
+- **A row stands for a run of rows where one would repeat its neighbours.** A crossing's
+  transitions within one stay in reach become one row, holding the path of states and the gaps
+  between them. The crossing's id and the starting time then appear once per stay rather than once
+  per transition.
+- **A column that other columns give is dropped**, such as a lead that is always the time from a
+  notification to its pass, or a state that always repeats the one entered before.
+- **Times are offsets from a nearby instant**, such as a session's start, in place of instants. An
+  offset is a smaller number, and repeats more often.
+- **A dense index names a row's group in place of a long id**, with one table mapping index to id.
+- **Rows are ordered so that similar rows share a page.**
+  [Parquet compresses each page on its own](https://parquet.apache.org/docs/concepts/), so the codec
+  finds repeats only among rows in one page. Sessions ordered by the crossings they pass put
+  sessions on one route side by side, and their rows repeat within a page.
+- **A rebuild is checked before a layout replaces another.** A migration refuses a run whose new
+  rows do not rebuild its old rows exactly, and a property test checks the round trip.
+
+These rules cut an evaluation run to about a quarter of the bytes of one row per transition.
+Encodings and codec levels matter less than layout and order: Parquet's dictionary encoding
+already stores a column of a few values as small integers, so a code in place of a name saves
+nothing.
+
+**The layers in git compress harder.** Every layer writes Parquet with
+[zstd](https://github.com/facebook/zstd). Bronze and gold, the layers committed to git, write at
+level 19. Landing and silver write at level 3, since silver is rewritten in bulk on every re-derive
+and landing is drained. Level 19 writes slower than level 3, and reads as fast.
+
+Git seldom finds a delta between two compressed Parquet files that differ, so each changed file
+costs about its full size in a pack
+([`git pack-objects`](https://git-scm.com/docs/git-pack-objects)). Identical files cost one object,
+so runs that write the same file, such as the sessions of runs over one pick and split, share it.
+
 ## Reading from another language
 
 A read from outside the store's own language goes through the same binding as a write, and names
