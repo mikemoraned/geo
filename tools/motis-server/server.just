@@ -17,3 +17,8 @@ route_shapes: prerequisites
 [working-directory: 'motis_server']
 motis_server:
     ./motis server
+
+# Have the imported server listen on this country's port, so the countries' servers run side by side. Restart the server to pick it up.
+[working-directory: 'motis_server']
+server_port: prerequisites
+    yq -i '.server.port = "{{ PORT }}"' data/config.yml

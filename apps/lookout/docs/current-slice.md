@@ -36,9 +36,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **Motis moves to v2.11.4 first, in a commit of its own.** v2.11.4 was released on 21 October,
   and the rule in `.claude/rules/lookout-upgrades.md` upgrades what a slice touches before the slice
   starts. The client's API spec is fetched again for the new version.
-- **The UK import skips tiles and geocoding, and listens on port 8081.** Tiles and geocoding took
-  17.5 GiB of the German server's 26 GiB on 23 October. The capture uses neither. Port 8081 lets
-  both servers run together.
+- **The UK import skips tiles and geocoding.** Tiles and geocoding took 17.5 GiB of the German
+  server's 26 GiB on 23 October. The capture uses neither.
+- **The German server listens on port 10000 and the British one on 10001.** Each module sets
+  `PORT`, and `server_port` writes it into the imported config. Another project on this machine
+  holds 8081, and moving both servers keeps their ports together.
 - **A script of our own, `gb-rail.lua`, sets Transitous's route types and drops every route that is
   not rail.** Transitous's `gb-great-britain.lua` is under the MIT licence, which permits copying
   it into the tree with its credit. Dropping buses at import keeps Aubin's bus timetable out of the
@@ -110,12 +112,14 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       `process_route` that drops every route that is not rail. It sits in `gb/scripts`, since git
       ignores `motis_server`.
 - [x] Add a `motis_setup` recipe: config, `route_shapes` as Germany has it, the script, no tiles,
-      no geocoding, and port 8081. Add `setup` beside it, as `de/Justfile` has.
+      no geocoding, and its own port. Add `setup` beside it, as `de/Justfile` has.
 - [x] Import, and record the time, peak memory, data size, routes matched, and segments beelined.
       The sandbox refuses the `route_shapes` step, which the user ran outside it.
 - [x] Add an `enable_rt` recipe, putting Aubin's realtime feed in the dataset's `rt` list with a
       `User-Agent` naming lookout.
 - [x] Start the server, and read realtime resolution from its log.
+- [x] Move the German server to port 10000 and the British one to 10001, with `server_port`, and
+      the client's default to 10000.
 
 #### The Scotland trial
 

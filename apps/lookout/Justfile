@@ -225,11 +225,11 @@ landing-poll-local-de label duration *args:
 
 # Capture every train in Scotland from the local UK Motis server into landing, every 10 minutes for a duration such as 4h. The label names the Aubin build and the setup, such as aubin-2026-11-16.route-shapes.
 landing-poll-local-gb-sct label duration *args:
-    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --motis-url http://127.0.0.1:8081 --feed local --label {{label}} --country GB --region GB-SCT --poll-interval 10m --poll-duration {{duration}} {{args}}
+    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --motis-url http://127.0.0.1:10001 --feed local --label {{label}} --country GB --region GB-SCT --poll-interval 10m --poll-duration {{duration}} {{args}}
 
 # Capture every train in Great Britain from the local UK Motis server into landing, every 10 minutes for a duration such as 7d. The label names the Aubin build and the setup, such as aubin-2026-11-16.route-shapes.
 landing-poll-local-gb label duration *args:
-    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --motis-url http://127.0.0.1:8081 --feed local --label {{label}} --country GB --poll-interval 10m --poll-duration {{duration}} {{args}}
+    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --motis-url http://127.0.0.1:10001 --feed local --label {{label}} --country GB --poll-interval 10m --poll-duration {{duration}} {{args}}
 
 # Move Motis polls from landing into bronze.
 bronze-promote-motis-landing *args:

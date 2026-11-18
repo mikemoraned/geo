@@ -1,6 +1,7 @@
 import '../motis.just'
 import '../server.just'
 
+PORT := "10000"
 TRANSITOUS_COMMIT := "95e54e95d041239ffa1341e3cb086bfa56fbc724"
 TRANSITOUS_SCRIPTS := "https://raw.githubusercontent.com/public-transport/transitous/" + TRANSITOUS_COMMIT + "/scripts"
 
@@ -32,6 +33,7 @@ motis_setup: download_delfi_script
     just train_names
     /usr/bin/time -l ./motis import
     just enable_rt
+    just server_port
 
 # Have the import name trains as Transitous does, such as `ICE 123`, with the script `download_delfi_script` fetches.
 [working-directory: 'motis_server']

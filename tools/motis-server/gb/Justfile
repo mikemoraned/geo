@@ -1,6 +1,8 @@
 import '../motis.just'
 import '../server.just'
 
+PORT := "10001"
+
 # Download Geofabrik's extract of England, Scotland, and Wales, and Aubin's latest timetable for Great Britain, without its shapes.
 download_geo_data: create_dirs
     time wget https://download.geofabrik.de/europe/great-britain-latest.osm.pbf -O ./{{ GEO_DATA_DIR }}/great-britain.osm.pbf
@@ -17,6 +19,7 @@ motis_setup: prerequisites
     just rail_only
     just motis_import
     just enable_rt
+    just server_port
 
 # Import, leaving out of the timetable log the error Motis logs for each trip and stop time of a route the script drops.
 [working-directory: 'motis_server']
@@ -26,10 +29,10 @@ motis_import:
     grep -v -E '(trip "[^"]*": route_id "[^"]*"|stop_times\.txt:[0-9]+ trip "[^"]*") not found$' < data/logs/tt.txt > data/logs/tt-kept.txt & \
     /usr/bin/time -l ./motis import
 
-# Have the import keep only rail, with Transitous's route types, and skip the tiles and geocoding the capture never uses. Listen on port 8081.
+# Have the import keep only rail, with Transitous's route types, and skip the tiles and geocoding the capture never uses.
 [working-directory: 'motis_server']
 rail_only: prerequisites
-    yq -i 'del(.tiles) | .geocoding = false | .reverse_geocoding = false | .server.port = "8081" | .timetable.datasets.greatbritaingtfs.script = "../scripts/gb-rail.lua"' config.yml
+    yq -i 'del(.tiles) | .geocoding = false | .reverse_geocoding = false | .timetable.datasets.greatbritaingtfs.script = "../scripts/gb-rail.lua"' config.yml
 
 # Add Aubin's GTFS-RT feed to the imported config, naming lookout in each request, and log at info, leaving out a line per bus update. Restart the server to pick it up.
 [working-directory: 'motis_server']
