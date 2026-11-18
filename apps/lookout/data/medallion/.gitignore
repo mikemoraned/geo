@@ -6,11 +6,8 @@
 !/gold/artifact=crossings/
 !/gold/artifact=map/
 !/gold/evaluation_run_v6/
-!/gold/evaluation_session_v2/
 !/gold/evaluation_session_v3/
 !/gold/evaluation_episode_v1/
-!/gold/evaluation_transition_v1/
-!/gold/evaluation_outcome_v2/
 !/gold/evaluation_outcome_v3/
 !/gold/evaluation_summary_v3/
 !/gold/evaluation_skew_v2/

@@ -10,12 +10,12 @@ use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, Trace
 
 use crate::{
     ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationEpisodeRowV1, EvaluationOutcomeRowV2,
-    EvaluationOutcomeRowV3, EvaluationRunRowV6, EvaluationSessionRowV2, EvaluationSessionRowV3,
-    EvaluationSkewRowV2, EvaluationSplitRowV1, EvaluationSummaryRowV3, EvaluationTransitionRowV1,
-    ExtractManifestRowV3, Feed, FloatType, GeometrySource, GersId, GpsReadingRowV2, MotisBaseUrl,
-    MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4,
-    MotisVersion, NotificationClass, OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease,
-    PredictorName, RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3,
+    EvaluationOutcomeRowV3, EvaluationRunRowV6, EvaluationSessionRowV3, EvaluationSkewRowV2,
+    EvaluationSplitRowV1, EvaluationSummaryRowV3, EvaluationTransitionRowV1, ExtractManifestRowV3,
+    Feed, FloatType, GeometrySource, GersId, GpsReadingRowV2, MotisBaseUrl, MotisPollRowV2,
+    MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4, MotisVersion,
+    NotificationClass, OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease, PredictorName,
+    RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3,
     TrainSegmentRowV4, TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3,
     WaterCrossingRowV2,
 };
@@ -326,7 +326,6 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<ExtractManifestRowV3>(&known),
         declaration::<EvaluationTransitionRowV1>(&known),
         declaration::<EvaluationRunRowV6>(&known),
-        declaration::<EvaluationSessionRowV2>(&known),
         declaration::<EvaluationSessionRowV3>(&known),
         declaration::<EvaluationEpisodeRowV1>(&known),
         declaration::<EvaluationOutcomeRowV2>(&known),

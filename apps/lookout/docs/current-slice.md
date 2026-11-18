@@ -1285,7 +1285,7 @@ layouts that store the same rows in about a quarter of the bytes.
         trip in a test.
   - [x] Have `replay` write episodes, `score` read them and write v3 outcomes, and `summarise` read
         v3 outcomes. `evaluation-py` reads the new datasets.
-  - [ ] Migrate the runs in gold to the new datasets through the row types. Check that each run's
+  - [x] Migrate the runs in gold to the new datasets through the row types. Check that each run's
         episodes and outcomes rebuild its current rows, and pause before deleting the old versions.
   - [ ] Measure a run's size in the new datasets, against the research doc's estimates.
 - [ ] Decide with the user whether to rewrite the branch's history before it merges, so that the

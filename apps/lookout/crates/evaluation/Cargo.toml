@@ -11,10 +11,6 @@ required-features = ["cli"]
 name = "evaluation_cone_angles"
 required-features = ["cli"]
 
-[[bin]]
-name = "evaluation_migrate_episodes"
-required-features = ["cli"]
-
 [dependencies]
 a5 = { workspace = true }
 chrono = { workspace = true }
@@ -36,7 +32,6 @@ predictor = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 statrs = { workspace = true }
