@@ -613,7 +613,7 @@ recorded session.
 - Writing to the store from a demonstration.
 - Profiling a derivation's performance.
 - Evaluating a predictor against the ground truth. A slice of its own covers it, with its own
-  assessment in `2026-08-01-evaluation.md`.
+  assessment in [evaluation.md](evaluation.md).
 - Fitness for purpose: whether a criterion is the right one, rather than whether the code meets it.
 - Demonstrations for the product's users, such as the kiosk's sped-up replay of a journey. They
   serve riders rather than developers, though they share this assessment's components: recordings,

@@ -47,7 +47,7 @@ I suspect on Web we could benefit from the cleverness of the GPS baked into the 
 
 #### Evaluation method and modelling approach
 
-The method should be informed by the [research](2026-08-01-evaluation.md) done previously.
+The method should be informed by the [research](https://github.com/mikemoraned/geo/blob/86ee01f7961a27b3d2652f3ddedf232397076115/apps/lookout/docs/2026-08-01-evaluation.md) done previously.
 
 We should drive a predictor based on fake train data as if it was receiving it live, and then assess it based on ground truth of what was actually passed.
 
@@ -113,7 +113,7 @@ no notification.
 - **False alarms per hour** is false alarms over the hours replayed.
 - **Lead time** is reported as a distribution, over the notifications the passes credit.
 
-[The research](2026-08-01-evaluation.md#outcome-classification) borrows its early and late classes
+[The research](https://github.com/mikemoraned/geo/blob/86ee01f7961a27b3d2652f3ddedf232397076115/apps/lookout/docs/2026-08-01-evaluation.md#outcome-classification) borrows its early and late classes
 from punctuality, where a late train still carries its rider. These classes depart from it, since a
 crossing passed is gone: nothing after the pass earns credit. Credit is also graded rather than
 counted. Transitions into the other states are recorded and not scored. Entries into `ActualPass`
@@ -198,7 +198,7 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   scored as [The measure](#the-measure) sets out. A predictor that flickers pays for each flicker,
   as a rider would. Recall counts each ground-truth pass once. This beats one outcome per (session,
   crossing) pair, taken from its first notification, as
-  [the research](2026-08-01-evaluation.md#unit-of-counting) proposes. That leaves every repeat
+  [the research](https://github.com/mikemoraned/geo/blob/86ee01f7961a27b3d2652f3ddedf232397076115/apps/lookout/docs/2026-08-01-evaluation.md#unit-of-counting) proposes. That leaves every repeat
   unscored.
 - **A notification earns credit by its lead time.** It earns full credit from 30 s to N before its
   pass, a heavy penalty under 30 s, and almost nothing past the ramp beyond N. A notification with
@@ -410,7 +410,7 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
 - **The phone's own speed and heading.** Rejected, so that every platform runs one velocity
   estimate.
 - **Interpolating each pass's instant along the path**, as
-  [the research](2026-08-01-evaluation.md#ground-truth) proposes. Deferred:
+  [the research](https://github.com/mikemoraned/geo/blob/86ee01f7961a27b3d2652f3ddedf232397076115/apps/lookout/docs/2026-08-01-evaluation.md#ground-truth) proposes. Deferred:
   `train_session_crossing_v1` takes the nearest sample, as `session_crossing_v3` does. Samples lie
   more than twice the match radius apart in 0.18% of steps, which loses about 0.1% of passes, an
   acceptable share. It comes back once a run's scores trace to a pass lost that way.
@@ -1304,7 +1304,7 @@ layouts that store the same rows in about a quarter of the bytes.
 
 #### Wrap-up
 
-- [ ] Fold what held of `2026-08-01-evaluation.md` into `docs/evaluation.md`, repoint the links to
+- [x] Fold what held of `2026-08-01-evaluation.md` into `docs/evaluation.md`, repoint the links to
       it, and delete it.
 - [ ] Fold what held of `2026-11-14-train-test-split.md` into `docs/evaluation.md`, repoint the
       links to it, and delete it.
