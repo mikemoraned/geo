@@ -1267,7 +1267,7 @@ and gold is committed. The slice cuts that size before it closes, so its runs do
 layouts that store the same rows in about a quarter of the bytes.
 
 - [x] Measure each gold dataset's share of a run's size, and what each column takes.
-- [ ] Try each way to shrink a run, and measure what it saves: rewriting the files with other
+- [x] Try each way to shrink a run, and measure what it saves: rewriting the files with other
       encodings and compression, storing rows by reference to silver rather than copying them,
       and holding a run in `landing` until it is promoted through bronze and silver to gold.
 - [x] Choose a way with the user, and apply it to the runs already in gold.
@@ -1329,4 +1329,6 @@ layouts that store the same rows in about a quarter of the bytes.
 - [ ] List under the evaluation bullet of the Demonstrable Behaviour slice, in `next-slices.md`,
       each concept from this slice that a demonstration will need to explain. The list started in
       Phase 6, so check it and add what Phases 7 to 9 introduce.
+- [ ] Delete the backup of the branch from before its history was rewritten, with
+      `git branch -D lookout-slice-workstream2-before-rewrite`, so its old blobs can leave the repo.
 - [ ] Run `just test-no-docker`, and hand over `just test`.
