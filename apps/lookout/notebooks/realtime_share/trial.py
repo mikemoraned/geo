@@ -156,6 +156,30 @@ def _(alt, mo, poll_query):
 
 
 @app.cell
+def _(mo, poll_query):
+    share_by_poll = poll_query(
+        """
+        SELECT captured_at, count(*) AS legs,
+               sum(CAST(realtime AS INT)) AS realtime,
+               avg(CAST(realtime AS DOUBLE)) AS share,
+               count(DISTINCT trip_id) AS trips,
+               count(DISTINCT CASE WHEN NOT realtime THEN trip_id END) AS unmarked_trips
+        FROM motis_poll_v2
+        WHERE source_id = $source_id
+        GROUP BY captured_at
+        ORDER BY captured_at
+        """
+    ).to_pandas()
+    mo.vstack(
+        [
+            share_by_poll[["share", "unmarked_trips"]].describe().T,
+            share_by_poll,
+        ]
+    )
+    return
+
+
+@app.cell
 def _(alt, poll_query):
     trips_by_mode = poll_query(
         """
@@ -179,19 +203,45 @@ def _(alt, poll_query):
 def _(poll_query):
     unmarked = poll_query(
         """
-        SELECT mode, agency_name, route_name,
-               count(*) AS legs,
-               count(DISTINCT trip_id) AS trips,
-               count(DISTINCT captured_at) AS polls,
-               min(captured_at) AS first_poll,
-               max(captured_at) AS last_poll
-        FROM motis_poll_v2
-        WHERE source_id = $source_id AND NOT realtime
-        GROUP BY mode, agency_name, route_name
-        ORDER BY legs DESC
+        WITH ever_unmarked AS (
+            SELECT DISTINCT trip_id
+            FROM motis_poll_v2
+            WHERE source_id = $source_id AND NOT realtime
+        )
+        SELECT p.trip_id, p.agency_name, p.mode,
+               count(DISTINCT CASE WHEN p.realtime THEN p.captured_at END) AS polls_marked,
+               count(DISTINCT CASE WHEN NOT p.realtime THEN p.captured_at END) AS polls_unmarked,
+               min(CASE WHEN NOT p.realtime THEN p.captured_at END) AS first_unmarked,
+               max(CASE WHEN NOT p.realtime THEN p.captured_at END) AS last_unmarked,
+               min(p.departure) AS first_departure,
+               max(p.arrival) AS last_arrival
+        FROM motis_poll_v2 p
+        JOIN ever_unmarked USING (trip_id)
+        WHERE p.source_id = $source_id
+        GROUP BY p.trip_id, p.agency_name, p.mode
+        ORDER BY first_unmarked, p.trip_id
         """
     ).to_pandas()
     unmarked
+    return (unmarked,)
+
+
+@app.cell
+def _(poll_query):
+    night_trips = poll_query(
+        """
+        SELECT trip_id,
+               count(DISTINCT CASE WHEN realtime THEN captured_at END) AS polls_marked,
+               count(DISTINCT CASE WHEN NOT realtime THEN captured_at END) AS polls_unmarked,
+               min(departure) AS first_departure,
+               max(arrival) AS last_arrival
+        FROM motis_poll_v2
+        WHERE source_id = $source_id AND mode = 'NIGHT_RAIL'
+        GROUP BY trip_id
+        ORDER BY trip_id
+        """
+    ).to_pandas()
+    night_trips
     return
 
 
@@ -290,6 +340,61 @@ def _(leg_table, lonboard, np, poll_traces):
             )
         )
     lonboard.Map(_layers, height=560)
+    return
+
+
+@app.cell
+def _(lonboard, mo, np, traces, unmarked):
+    _unmarked_traces = traces[
+        traces.trip_id.isin(unmarked.trip_id) & ~traces.realtime
+    ]
+    _trip_colours = {
+        trip_id: colour
+        for trip_id, colour in zip(
+            unmarked.trip_id,
+            [
+                [220, 40, 40],
+                [240, 140, 0],
+                [150, 60, 200],
+                [0, 150, 140],
+                [200, 0, 120],
+                [90, 90, 90],
+            ],
+        )
+    }
+    mo.vstack(
+        [
+            lonboard.Map(
+                [
+                    lonboard.PathLayer.from_geopandas(
+                        traces[traces.realtime][["geometry"]],
+                        get_color=[200, 200, 200],
+                        width_min_pixels=1,
+                    ),
+                    lonboard.PathLayer.from_geopandas(
+                        _unmarked_traces[
+                            ["trip_id", "agency_name", "geometry"]
+                        ],
+                        get_color=np.array(
+                            [
+                                _trip_colours.get(trip_id, [90, 90, 90])
+                                for trip_id in _unmarked_traces.trip_id
+                            ],
+                            dtype=np.uint8,
+                        ),
+                        width_min_pixels=4,
+                    ),
+                ],
+                height=560,
+            ),
+            unmarked[["agency_name", "trip_id"]].assign(
+                colour=[
+                    str(_trip_colours.get(trip_id))
+                    for trip_id in unmarked.trip_id
+                ]
+            ),
+        ]
+    )
     return
 
 
