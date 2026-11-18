@@ -307,6 +307,45 @@ fn query_bronze(
     PyTable::try_new(batches, schema).map_err(runtime_error)
 }
 
+/// Query landing, returning an Arrow table: the datasets the query names are its tables.
+///
+/// A landing dataset holds what has arrived since the last drain, so a read sees a capture while
+/// it runs. `params` binds the query's `$name` placeholders as values. See `docs/medallion.md`.
+#[pyfunction]
+#[pyo3(signature = (sql, *, params=None, root=None))]
+fn query_landing(
+    py: Python<'_>,
+    sql: &str,
+    params: Option<HashMap<String, Param>>,
+    root: Option<PathBuf>,
+) -> PyResult<PyTable> {
+    let datasets = medallion::table_references(sql)
+        .map_err(query_error)?
+        .into_iter()
+        .map(|name| {
+            medallion_model::landing_dataset(&name)
+                .map(|dataset| (dataset, name))
+                .map_err(value_error)
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    let root = root_or_default(root)?;
+    let params = scalars(params);
+
+    let batches = py
+        .detach(|| {
+            runtime().block_on(async {
+                let query = Query::new(root);
+                for (dataset, name) in &datasets {
+                    query.register_landing(*dataset, name).await?;
+                }
+                query.sql_with_params(sql, params).await
+            })
+        })
+        .map_err(query_error)?;
+
+    table_of(batches)
+}
+
 /// The countries a silver dataset holds a partition for, as the codes a read of it names.
 ///
 /// A dataset holding no country level answers with none. See `docs/medallion.md`.
@@ -357,6 +396,7 @@ fn lookout_medallion(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(write_gold, module)?)?;
     module.add_function(wrap_pyfunction!(query_gold, module)?)?;
     module.add_function(wrap_pyfunction!(query_bronze, module)?)?;
+    module.add_function(wrap_pyfunction!(query_landing, module)?)?;
     module.add_function(wrap_pyfunction!(countries_of, module)?)?;
     module.add_function(wrap_pyfunction!(projected_crs, module)?)?;
     module.add_function(wrap_pyfunction!(division_id, module)?)?;

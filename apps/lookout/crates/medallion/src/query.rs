@@ -189,6 +189,22 @@ impl Query {
         dataset: DatasetSpec<layers::Bronze>,
         table: &str,
     ) -> Result<(), QueryError> {
+        self.register_whole(dataset, table).await
+    }
+
+    pub async fn register_landing(
+        &self,
+        dataset: DatasetSpec<layers::Landing>,
+        table: &str,
+    ) -> Result<(), QueryError> {
+        self.register_whole(dataset, table).await
+    }
+
+    async fn register_whole<L: LayerKind>(
+        &self,
+        dataset: DatasetSpec<L>,
+        table: &str,
+    ) -> Result<(), QueryError> {
         let keys: Vec<&str> = dataset.partition_key.into_iter().collect();
         match self
             .register_as_parquet(&self.root.dataset(dataset), table, &keys)

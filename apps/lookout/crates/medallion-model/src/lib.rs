@@ -5,6 +5,7 @@ mod episode;
 mod evaluation;
 mod gers;
 mod gold;
+mod landing;
 mod motis;
 mod motis_source;
 mod overture;
@@ -34,6 +35,7 @@ pub use evaluation::{
 };
 pub use gers::{GersId, NotAGersId};
 pub use gold::{GoldTargetError, gold_target};
+pub use landing::{NoSuchLandingDataset, landing_dataset};
 pub use motis::{
     AgencyId, EmptyAgencyId, EmptyStopId, EmptyTripId, MOTIS_POLL_V2, MOTIS_POLYLINE_V2,
     MOTIS_SEGMENT_V3, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, NotAPolylineId,
