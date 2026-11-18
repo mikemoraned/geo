@@ -381,6 +381,21 @@ coaches, ferries, trams, the Underground, and rail replacement buses.
 Transitous's script for Great Britain sets a route type for 26 of the 29 rail routes. ScotRail,
 Lumo's Stirling service (`LF`), and `ZZ`, named "Other operator", keep route type 2.
 
+## Aubin's realtime feed resolves against its own timetable
+
+One fetch of Aubin's realtime feed, at 13:37 UTC on 17 November 2026, took 20 MB and held 74,220
+entities: 42,349 trip updates, 30,788 vehicle positions, and 1,083 alerts. Of the trip updates,
+36,620 name a rail or suburban trip, and 36,487 of those, 99.6%, name a trip the timetable holds.
+c2c accounts for 114 of the 133 that do not, out of its 655.
+
+Motis's own summary counts every entity, buses and vehicle positions included, so it reports
+48.5% resolved. A server whose script drops buses fails to resolve their updates, and logs each at
+debug level.
+
+No rail vehicle position carries coordinates. Each of the 2,577 rail entities names its trip, a
+stop sequence, and a status such as `STOPPED_AT`. The 28,211 entities with coordinates are buses.
+A train's position therefore stays interpolated along its leg, as in Germany.
+
 ## Two server quirks a caller has to absorb
 
 Both are Motis behaviours rather than ours, and both look like an empty or nonsensical

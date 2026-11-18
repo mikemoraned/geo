@@ -77,7 +77,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - The floor for each capture. The German capture held 85–90% across all rail before its fall,
   under v2.11.3. v2.11.4 marks fewer legs realtime, as `docs/motis.md` sets out, so the UK floor
   waits on the Scotland trial.
-- Whether Aubin's trip ids resolve against its own realtime feed as DELFI's do, at about 99.9%.
 
 ### Tasks
 
@@ -116,7 +115,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       The sandbox refuses the `route_shapes` step, which the user ran outside it.
 - [x] Add an `enable_rt` recipe, putting Aubin's realtime feed in the dataset's `rt` list with a
       `User-Agent` naming lookout.
-- [ ] Start the server, and read realtime resolution from its log.
+- [x] Start the server, and read realtime resolution from its log.
 
 #### The Scotland trial
 
