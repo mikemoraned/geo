@@ -82,6 +82,9 @@ list names the crate's sources, those of the workspace crates it builds on, and 
 that crate's `Cargo.toml` and sources to its list. A change to an unlisted crate leaves the old
 extension in place. To force a rebuild, pass `--reinstall-package <package>` to `uv run`.
 
+[The notebooks' README](notebooks/README.md) holds advice for writing a notebook, such as how to
+draw a grid's cells on a map.
+
 ## Testing
 
 `just test` runs everything, `just test-no-docker` everything a sandbox can. Among them,

@@ -26,6 +26,26 @@ recorded passes, and sums the scores into measures:
 A run records its settings, the code it ran, and a fingerprint of each input dataset. The same
 settings over the same code and data give the same run.
 
+### What each choice guards against
+
+A run makes four choices before it reports a number. Three of them each guard against one way the
+number can mislead. The pick guards against nothing, and trades precision for speed:
+
+1. **The filter** guards against scoring the predictor against the plan rather than the train. A
+   session's positions are both the predictor's input and the ground truth. A timetable's
+   positions show where the train was planned to be, and realtime positions show where it was. The
+   filter keeps the sessions whose share of realtime positions reaches a threshold.
+2. **The pick** sets how many of the kept sessions a run replays, under a seed, or replays every
+   one. Fewer sessions give a quicker run with wider intervals, and the seed keeps a small sample
+   the same from run to run. A run over every session loses nothing to the pick.
+3. **The split** guards against reporting a number on the sessions used to choose the settings.
+   It assigns each place to the tune set or the test set, and a run counts only what happens in one
+   set's places. Every session replays in full, so the predictor keeps its history across places
+   that do not count. [Tuning and testing](#tuning-and-testing) sets out the split.
+4. **The bootstrap** guards against reading noise as a difference. It redraws the counted sessions
+   to estimate how far each measure would move under another draw of sessions like these.
+   [Intervals](#intervals) sets out the bootstrap.
+
 ## Ground truth
 
 A pass is one visit of a session to a crossing: a run of consecutive samples within a match
@@ -39,6 +59,10 @@ crossing is recorded as passed.
 
 The unit is the pass, one (session, crossing, pass) triple. Each notification and each pass
 contributes at most one outcome, however many samples the approach held.
+
+A **scored unit** is anything that takes an outcome: a notification, which is credited, a repeat,
+or a false alarm, and a pass that no notification credits, which is a miss. Each scored unit
+belongs to one crossing.
 
 ## Scoring a notification
 
@@ -158,9 +182,133 @@ A run with an online detector measures how far its passes skew from the offline 
 - **Unmatched.** The share of online visits that match no offline pass.
 - **Offset.** The time from each offline pass to the online visit matching it, as percentiles.
 
+## Tuning and testing
+
+**Tuning** is anything that sets a predictor's settings from sessions. It takes two forms:
+
+- **Measuring a setting from the data**, such as the largest angle trains turn through within N.
+  Such a measure reads **windows**: a window is one session's samples from a given sample to N
+  later, and the measure takes one value from each window, such as the angle the train turns
+  through.
+- **Choosing settings from a sweep.** Several runs replay the sessions under different settings,
+  and the best score picks one.
+
+A predictor tested on the sessions it was tuned on scores better than it will on sessions it has
+not seen. The best of several runs also scores high on those runs partly by chance.
+[Cawley and Talbot](https://jmlr.org/papers/v11/cawley10a.html) show this selection bias to be as
+large as the differences between the methods they compare. The evaluation therefore keeps a
+**tune** set, which tuning and every sweep read, apart from a **test** set, which each predictor's
+chosen settings run over once.
+
+Two sets suffice while tuning chooses among a few settings. If a predictor learns many numbers from
+the data, as a model's weights are learned, it needs a third set to choose its settings on. The
+predictors the evaluation runs learn no such numbers, so it keeps two sets.
+
+A test set that informs a choice becomes a tune set, and each comparison on it is then a sweep.
+A fresh test set, such as a later capture, removes that bias.
+
+### Why the split is by place
+
+A session is one trip on one day, and sessions repeat each other in three ways:
+
+- **One trip on several days**, over the same track at the same times.
+- **One line through the day.** A line with a train every 20 minutes gives dozens of sessions a
+  day over the same track.
+- **One corridor, several lines**, where different trains share track between two cities.
+
+How far a train turns within N is a property of the track. A random split of sessions can put the
+10:00 train of a line in one set and the 10:20 train in the other. It then tunes and tests on
+the same curves. [Roberts et al.](https://doi.org/10.1111/ecog.02881) show that a random split of
+data with this structure overstates how well a model does on new data. Their remedy is to split by
+group, or by block of space or time, so that each group falls wholly on one side.
+
+The split is therefore by cell of a global grid.
+[Splitting by trip or by line](#splitting-by-trip-or-by-line) sets out why neither serves as the
+group. Cells at one resolution cover the globe without overlap, so each crossing and each sample
+lies in exactly one cell. The split needs nothing from a feed but positions, and works the same in
+every country.
+
+### Cells and their sets
+
+The grid is [A5](https://a5geo.org/), which tiles the globe in pentagons of equal area at each
+resolution. A cell then covers the same ground in every country, where the cells of
+[H3](https://a5geo.org/examples/area) vary in area by a factor of about 2. The resolution is 8,
+whose cells cover 519 km², about 23 km across. A finer resolution cuts more of the
+[windows](#tuning-and-testing) tuning reads across two sets. A coarser one puts more sessions in
+each cell, so the sets come out more uneven.
+
+A cell's set comes from a hash. The SHA-256 of a salt and the cell's id, modulo 100, gives the
+cell a bucket. A cell whose bucket falls below the tune buckets goes to tune, and the rest to test.
+The assignment depends on the hash alone, so it holds across reruns and library upgrades, as
+repeatable splitting in
+[*Machine Learning Design Patterns*](https://www.oreilly.com/library/view/machine-learning-design/9781098115777/)
+sets out. A run records its resolution, salt, and tune buckets. The salt is fixed for good once a
+predictor has read the tune set: a change puts track the predictor was tuned on into its test set.
+
+### Scoring by each crossing's cell
+
+A run replays each session whole, and scores each unit in the set of its crossing's cell. A
+notification, a pass, a false alarm, and a miss each belong to one crossing, and so to one set. A
+run without a split scores every unit.
+
+This holds out what a predictor is scored on, and not what it reads as it predicts. Forecasting
+does the same in
+[evaluation on a rolling forecasting origin](https://otexts.com/fpp3/tscv.html), which forecasts
+each target from all the history before it, and scores only the test period. So does spatial
+cross-validation, which assigns each observation to a block by its location.
+
+[Cutting sessions at cells' edges](#cutting-sessions-at-cells-edges) sets out why sessions
+replay whole.
+
+The other measures follow the split:
+
+- False alarms per hour divide by the hours in the split's cells. Each step between two samples
+  counts towards the split of its first sample's cell.
+- The skew between pass detectors counts only passes and visits whose crossing lies in the split's
+  cells.
+
+Tuning reads only [windows](#tuning-and-testing) that lie wholly in tune cells, so no tuning
+window reads test track.
+
+### What the split leaves unequal
+
+The tune and test sets match in the ordinary shape of their track: how straight it runs, and how
+far a train turns within N. They differ in the rare large turns. A turn of well over 90° within N
+is a reversal, as at a terminus, and a few cells hold most of them. Whichever set those cells fall
+in has more of them. A setting bounded by the tune set's largest turns therefore does not bound the
+test set's. Such extremes serve only to bound the range of a sweep, and the sweep over the tune set
+chooses the setting.
+
+The sets also differ in size. A busy cell moves many sessions at once, so a set's share of
+sessions differs from its share of cells.
+
+### Checks of a split
+
+A broken split can look healthy. If a bug gives samples the wrong set, the sets can still hold
+about 70% and 30% of the sessions, as intended, so looking at their sizes shows nothing wrong. Each
+check below holds for every correct split, and catches errors of that kind:
+
+1. **Disjoint.** No cell lies in both sets.
+2. **Complete.** Every [scored unit](#the-unit-of-counting) of a run falls in exactly one set,
+   and the units of the two sets sum to the units of the run.
+3. **One cell per crossing.** Every [scored unit](#the-unit-of-counting) of a crossing takes the
+   set of the crossing's cell.
+4. **One set per tuning window.** A [window](#tuning-and-testing) that tuning reads lies wholly
+   in tune cells.
+5. **Within the country.** Every cell that holds a crossing or a sample lies among the cells that
+   overlap the country's land and maritime areas. A covering of those areas finds the cells, and it
+   shares no code with placing a point in a cell.
+6. **Stable.** One salt, resolution, and cell give one set on every run.
+
+Property tests over generated sessions hold checks 1 to 4 and 6. Every run with a split checks 1,
+2, 3, and 5 against the store, and every tuning step checks 4. A run that fails a check is refused,
+and a run that passes records the counts each check compared.
+
+A crossing outside the country's cover is left out of a run with a split.
+
 ## Not covered
 
-These lie outside the evaluation. Each is cheaper to add later than to remove:
+These lie outside the evaluation:
 
 - **Calibration.** A prediction carries a confidence of low or high, and no measure checks that
   the confidence matches how often a prediction is right.
@@ -168,23 +316,34 @@ These lie outside the evaluation. Each is cheaper to add later than to remove:
   time to a crossing, so no measure reports the estimate's error by remaining time.
 - **Parallel lines.** A pass recorded for a crossing on a parallel track stays in the ground
   truth until sessions are matched to track.
+- **A predictor that learns as it replays.** A split by place holds out the units a predictor is
+  scored on, and not what it reads. A predictor that learns from what it reads would then learn
+  from the test set.
+- **A predictor that holds its data**, such as a map from where and how fast a train goes to the
+  crossings it reaches. It claims to predict later trains over track it has seen, so a split by
+  place tests it only where it has seen nothing. A split by time tests its claim: build on earlier
+  journeys, and test on later ones.
 - **The cause of a miss.** No measure separates a predictor's error from a train's unforeseeable
   behaviour, such as an unscheduled stop.
 
 ## Approaches considered and rejected
 
-**Counting per sample**: at each sample, whether the predictor judged each crossing within reach
-correctly. The evaluation counts per pass instead, for two reasons:
+### Counting per sample
+
+Counting per sample scores, at each sample, whether the predictor judged each crossing within
+reach correctly. The evaluation counts per pass instead, for two reasons:
 
 - **Slow approaches dominate.** With a sample every 10 seconds, an approach lasting 10 minutes
   counts 60 times, and one lasting 1 minute counts 6 times. Each is still one approach. An
   average over samples is therefore mostly an average over slow approaches and densely sampled
   sessions.
 - **The predictor sets its own denominator.** The number of samples counted depends on how long
-  the predictor keeps a crossing within reach. A predictor could then improve its score by
+  the predictor keeps a crossing within reach. A predictor can then improve its score by
   changing what it counts, rather than by predicting better.
 
-**Precision and recall per prediction cycle, over a space of crossings and instants.** The imbalance
+### Precision and recall per prediction cycle
+
+This approach counts precision and recall over a space of crossings and instants. The imbalance
 between passes and the space of every crossing at every instant makes precision and recall the
 right family, over accuracy or ROC. Three definitions make the numbers unresponsive to the
 predictor:
@@ -196,7 +355,9 @@ predictor:
 - Counting each cycle is counting per sample, so it has the two problems that counting per sample
   has: slow approaches dominate, and the predictor sets its own denominator.
 
-**Prognostics metrics**, such as α-λ accuracy, prognostic horizon, and convergence. The domain is
+### Prognostics metrics
+
+Prognostics metrics include α-λ accuracy, prognostic horizon, and convergence. The domain is
 similar: repeated estimates of the time to an event, refined as the event approaches. A tolerance
 in proportion to the time remaining is attractive. These metrics fail here on three grounds:
 
@@ -207,6 +368,20 @@ in proportion to the time remaining is attractive. These metrics fail here on th
 - They assume the event happens. A crossing that the train never reaches is a principal failure
   here, and they have no place for it.
 
+### Splitting by trip or by line
+
+Neither a trip nor a line serves as the group of a split. A trip keeps one trip's days together,
+and leaves the trains of one line apart. A line's name in the German feed names a train rather
+than a line, repeats across operators, and depends on how each country's feed names its lines.
+
+### Cutting sessions at cells' edges
+
+A split can instead cut each session where it crosses from one cell into another, and replay
+each part of a session alone, in the set of its cell. That changes the task, since a real train
+meets no cell's edge. A part starts mid-approach, without the samples a predictor needs to measure
+a speed. A notification near a part's end has its pass in the next part, perhaps in the other set,
+so it counts as a false alarm. Over 1,000 sessions, cutting lowers CrowFlies' precision at 1 km
+from 0.328 to 0.299, and the two intervals do not overlap. Scoring by cell reproduces the precision of the same predictor over whole sessions.
 
 ## References
 

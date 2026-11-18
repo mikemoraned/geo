@@ -63,7 +63,7 @@ against the predictor the apps run, through the evaluation that LightCone's slic
 
 The map holds the journeys it was built from. A test on those journeys measures how well it
 recalls them, not how well it predicts.
-[Splitting sessions for tuning and testing](2026-11-14-train-test-split.md) sets out how the
+[Tuning and testing](evaluation.md#tuning-and-testing) sets out how the
 evaluation splits sessions for LightCone, whose few settings claim to work on any track. This
 slice revisits that doc's choices for a map, which claims to predict later trains over track it
 has seen:

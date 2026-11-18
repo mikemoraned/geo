@@ -379,7 +379,7 @@ Decisions taken before starting, as each changes what gets built, confirmed on 2
   by cell is disjoint by construction and works in every country, since it reads only positions.
   This beats a split by session, whose sets share track, and a split by line, which rests on how
   each feed names its lines. It also beats cutting sessions at cells' edges, which lowered
-  CrowFlies' precision from 0.328 to 0.299. [The split doc](2026-11-14-train-test-split.md#the-choice)
+  CrowFlies' precision from 0.328 to 0.299. [The split doc](https://github.com/mikemoraned/geo/blob/c04053e41efc83d055c41828de8b71e7c15edb89/apps/lookout/docs/2026-11-14-train-test-split.md#the-choice)
   gives the evidence. Decided on 2026-11-14.
 
 #### Consequences elsewhere
@@ -939,7 +939,7 @@ appear before LightCone exists.
 LightCone is the improvement the Target asks for, measured against CrowFlies on the same sessions.
 
 - [x] Write up how to keep the sessions LightCone is tuned on apart from those it is tested on, in
-      [`2026-11-14-train-test-split.md`](2026-11-14-train-test-split.md).
+      [`2026-11-14-train-test-split.md`](https://github.com/mikemoraned/geo/blob/c04053e41efc83d055c41828de8b71e7c15edb89/apps/lookout/docs/2026-11-14-train-test-split.md).
 - [x] Run that doc's experiments, and choose a group key and the bounds of each set with the user.
       - [x] Experiment 1: whether `route_name` names a line.
       - [-] Experiments 2 to 4, on the trip and line keys: moot. Experiment 1 ruled the line out,
@@ -958,9 +958,9 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
       The steps below carry the choices made with the user on 2026-11-14. Each step ends with its
       tests passing and a proposed commit message, then stops for the user's review. The
       invariants' numbers are
-      [the split doc's](2026-11-14-train-test-split.md#invariants-of-a-split-by-cell).
+      [the split doc's](https://github.com/mikemoraned/geo/blob/c04053e41efc83d055c41828de8b71e7c15edb89/apps/lookout/docs/2026-11-14-train-test-split.md#invariants-of-a-split-by-cell).
       - [-] Hold the split's invariants 1 to 4 and 6, as
-            [the split doc](2026-11-14-train-test-split.md#invariants-of-a-split-by-cell) numbers
+            [the split doc](https://github.com/mikemoraned/geo/blob/c04053e41efc83d055c41828de8b71e7c15edb89/apps/lookout/docs/2026-11-14-train-test-split.md#invariants-of-a-split-by-cell) numbers
             them, in property tests over generated sessions. Moot: steps 1 and 2 below hold them,
             and invariant 4 moves to the measurement of LightCone's angle.
       - [-] Check invariants 1, 2, 3, and 5 against the store in every run, before it replays a
@@ -1165,7 +1165,7 @@ LightCone is the improvement the Target asks for, measured against CrowFlies on 
 ##### Phase 6 observations
 
 Each comes from `explore6.py` or `explore7.py`, over 1,000 sessions picked under seed 1. [The
-split doc](2026-11-14-train-test-split.md) gives the evidence for those from `explore6.py`.
+split doc](https://github.com/mikemoraned/geo/blob/c04053e41efc83d055c41828de8b71e7c15edb89/apps/lookout/docs/2026-11-14-train-test-split.md) gives the evidence for those from `explore6.py`.
 
 - **2026-11-14: `route_name` names a train, not a line.** It joins the line and the train number.
   144 of the 409 line names belong to more than one agency.
@@ -1306,7 +1306,7 @@ layouts that store the same rows in about a quarter of the bytes.
 
 - [x] Fold what held of `2026-08-01-evaluation.md` into `docs/evaluation.md`, repoint the links to
       it, and delete it.
-- [ ] Fold what held of `2026-11-14-train-test-split.md` into `docs/evaluation.md`, repoint the
+- [x] Fold what held of `2026-11-14-train-test-split.md` into `docs/evaluation.md`, repoint the
       links to it, and delete it.
 - [ ] Fold what held of `2026-11-17-run-size.md` into `docs/medallion.md`, repoint the links to
       it, and delete it.
