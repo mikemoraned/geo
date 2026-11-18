@@ -6,7 +6,7 @@ create_dirs:
     mkdir -p ./{{ GEO_DATA_DIR }}/
 
 download_motis: create_dirs
-    time wget https://github.com/motis-project/motis/releases/download/{{VERSION}}/motis-{{TARGET}}.tar.bz2
+    time wget https://github.com/motis-project/motis/releases/download/{{VERSION}}/motis-{{TARGET}}.tar.bz2 -O motis-{{TARGET}}.tar.bz2
     cd {{ MOTIS_DIR }} && tar xf ../motis-{{TARGET}}.tar.bz2
 
 # Have the import route high-speed, long-distance, night, and regional rail along OSM track, in place of the timetable's shapes. Every other class keeps the timetable's.
