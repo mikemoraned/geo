@@ -667,3 +667,48 @@ and the shell only answers with what the map holds. The device's panel stays as 
   so track away from water stays undrawn.
 - **Each vertex is placed as a crossing is, and lines are cut at the outer ring.** Rail draws
   dashed, and the trail draws pale over it.
+
+## Slice: Evaluation framework with associated Crow Flies predictor improvement (LightCone)
+
+The predictor now gives each crossing a state, and an evaluation measures it against train
+sessions derived from the Motis capture. The apps moved from CrowFlies to LightCone on the strength
+of that evaluation. New crates: `evaluation`, `evaluation-py`, `countries`, `py-common`, and
+`code_version`.
+
+### States
+
+- **Each crossing is out of reach, a candidate, alerted on, or passed**, as types that make an
+  illegal transition unrepresentable. A tracker turns predictions and passes into states, and an
+  online detector reports passes within 250 m.
+- **The apps show the states.** The browser rings an alerted crossing dashed and a passed one
+  solid, and the M5 panel marks them `!` and `*`.
+
+### The evaluation
+
+- **A run picks sessions, replays them, scores each notification, and summarises the scores.**
+  Train sessions with their passes are the ground truth, kept only where most positions are
+  realtime.
+- **A notification earns credit by its lead to its next pass**, with a ramp past the horizon.
+  Repeats, false alarms, and misses score 0. Precision, recall, false alarms per hour, and F0.5
+  carry intervals from a bootstrap over sessions.
+- **Tuning and testing split by A5 cell**, so trains on one track fall in one set. Sessions replay
+  whole, and each unit is scored in its crossing's cell. A run checks the split against the store.
+- **A run is reproducible and written once.** Its id hashes its settings, code, and input
+  fingerprints, and a build from uncommitted code is refused.
+
+### The predictor
+
+- **LightCone keeps CrowFlies' alerts that lie within a cone around the heading**, with the heading
+  from the train's last real move. Swept on the tune split and run once on the test split, it
+  scored F0.5 0.711 against CrowFlies' 0.415, and the apps run it at 1 km and 45°.
+
+### Storage
+
+- **A run is stored as episodes and compact outcomes, with sessions in route order**, in about a
+  quarter of the bytes of one row per transition. Bronze and gold write at zstd level 19.
+
+### Docs
+
+- **`docs/evaluation.md` describes the evaluation**, `medallion.md` how a committed dataset is laid
+  out, and a notebooks README holds advice on drawing A5 cells. The exploration notebooks stay, as
+  a starting point for the Demonstrable Behaviour slice.
