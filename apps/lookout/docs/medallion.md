@@ -256,11 +256,36 @@ permitted again. Where no specialised format fits, use
 [GeoArrow 0.2](https://geoarrow.org) for fast export/import, **uncompressed**, since
 compressed GeoArrow is not universally supported by consuming viewers.
 
-Laid out by what was produced and which run produced it, rather than by a partition key:
+An export in a specialised format is laid out by what was produced and which run produced it,
+rather than by a partition key:
 
 ```
 <root>/gold/artifact=<name>/version=<run>/<file>
 ```
+
+#### Gold datasets of rows
+
+Gold also holds datasets of rows: results a query reads, such as the rows an evaluation run
+writes. Each is defined as silver's are, by a row type that gives its columns, and is written as
+Parquet. A dataset of rows partitions on the run that wrote it, by date and then by id, as
+[gold's partitioning](#partitioning) lays out:
+
+```
+<root>/gold/<dataset>/run_date=<date>/run_id=<id>/part-0.parquet
+```
+
+A run writes each of its datasets once. The store refuses a second write of a run to a dataset,
+under any date, and the rows already written stay. Gold registers its datasets by name, so a
+query names the datasets it reads, and each row carries the date and id of its run as columns.
+
+#### Writing gold from another language
+
+A notebook writes and reads gold datasets of rows through the same binding as silver, for the same
+reason: one implementation of the format. A write names the dataset, the run's date, and the run's
+id, and hands over a table holding the dataset's columns. The binding checks the table against the
+dataset's definition, and refuses a table lacking a column or holding one the dataset does not
+define. A read is a query over the datasets it names, with each row's run date and run id as
+columns, so a query picks runs in its `WHERE`.
 
 **Gold is derived, and so is not versioned in git — with two exceptions.** An artefact a build
 reads is an input to something outside the store, and cannot be re-derived by whoever builds

@@ -1310,11 +1310,11 @@ layouts that store the same rows in about a quarter of the bytes.
       links to it, and delete it.
 - [x] Fold what held of `2026-11-17-run-size.md` into `docs/medallion.md`, repoint the links to
       it, and delete it.
-- [ ] Add `train_session_crossing_v1` and the gold datasets to the derivation graph in
+- [x] Add `train_session_crossing_v1` and the gold datasets to the derivation graph in
       `docs/architecture.md`.
-- [ ] Describe gold datasets of rows, and writing them from Python, in the gold sections of
+- [x] Describe gold datasets of rows, and writing them from Python, in the gold sections of
       `docs/medallion.md`.
-- [ ] Describe `query_gold` and `write_gold` in `crates/medallion-py/README.md`.
+- [x] Describe `query_gold` and `write_gold` in `crates/medallion-py/README.md`.
 - [ ] Describe `realtime` and `realtime_percentage` in `crates/motis/README.md`, and train sessions
       in `crates/session_crossings/README.md`.
 - [ ] Rewrite `predictor`'s README for the typed states, the tracker, the pass detectors, and
@@ -1323,7 +1323,7 @@ layouts that store the same rows in about a quarter of the bytes.
       `crates/platform/m5/README.md`.
 - [ ] Write the READMEs of `evaluation`, covering its `evaluate` binary and the `cli` feature that
       builds it, and of `evaluation-py`.
-- [ ] Name the v3 datasets in the help of `silver-motis-ingest`, and `train_session_crossing_v1` in
+- [x] Name the v3 datasets in the help of `silver-motis-ingest`, and `train_session_crossing_v1` in
       that of `silver-session-crossings`.
 - [-] Fold the `exploreN.py` notebooks into one or more notebooks that demonstrate the evaluation's
       behaviours or steps. Then remove them, with their answers in the removing commit. Moot here:
