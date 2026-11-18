@@ -396,6 +396,12 @@ No rail vehicle position carries coordinates. Each of the 2,577 rail entities na
 stop sequence, and a status such as `STOPPED_AT`. The 28,211 entities with coordinates are buses.
 A train's position therefore stays interpolated along its leg, as in Germany.
 
+Across Scotland's trains from 20:22 to 23:32 UTC on 18 November 2026, Motis marked realtime every
+regional leg, 0.926 of long-distance legs, and 0.310 of night legs. Two night trips were never
+marked, and each one's trip ID also names a third night trip, which was marked in every poll. Each
+unmarked long-distance trip had started hours before its first leg in Scotland, and stayed
+unmarked from that leg to its last.
+
 ## Two server quirks a caller has to absorb
 
 Both are Motis behaviours rather than ours, and both look like an empty or nonsensical

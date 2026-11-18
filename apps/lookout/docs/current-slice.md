@@ -57,6 +57,9 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   and with no floor the poller only logs the share. A fixed floor beats a drop relative to the
   previous poll, since the share differs by mode and by country: German high-speed rail held
   10–16% even before its realtime fell.
+- **The UK floor is 0.9.** Across the Scotland trial's polls the share held 0.981–0.994, and
+  regional rail, 95% of legs, was marked in every one. A dead feed takes the share to about 0.05.
+  A floor near 0.98 would warn whenever one more train went unmarked.
 - **The UK capture runs through landing**, as Germany's does, with `--country GB`.
 
 #### Consequences elsewhere
@@ -76,9 +79,24 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### Open questions
 
-- The floor for each capture. The German capture held 85–90% across all rail before its fall,
-  under v2.11.3. v2.11.4 marks fewer legs realtime, as `docs/motis.md` sets out, so the UK floor
-  waits on the Scotland trial.
+- Whether the share falls below 0.9 in the small hours, when the unmarked sleeper portions make up
+  more of the few trains running. The Scotland trial ends at 00:22, so the first night of the
+  week-long capture answers it. If the share falls, the poller gains a minimum count of legs below
+  which it does not warn.
+
+### Observations
+
+- **The Scotland trial, 20:22–00:22 UTC on 18 November**, labelled
+  `aubin-2026-11-18.route-shapes`. `notebooks/realtime_share/trial.py` reads it from landing.
+  The first 20 polls held a share of 0.981–0.994, with 2–4 of 115–155 trips unmarked in each.
+  - Regional rail: all 5,972 legs marked.
+  - Long-distance: 0.926 of 256 legs. Three trips were unmarked, each from its first poll in
+    Scotland to its last: two CrossCountry trips ending in Edinburgh, and one Avanti West Coast
+    trip ending in Glasgow. They had started at 11:15, 14:27, and 19:30, hours before their first
+    leg in Scotland.
+  - Night rail: 0.310 of 84 legs. Two Caledonian Sleeper trips, one on the West Highland line and
+    one reaching Aberdeen, were unmarked in every poll. Their trip IDs name the main train,
+    `C04565`, which was marked in 18 of its 18 polls.
 
 ### Tasks
 
@@ -123,9 +141,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 
 #### The Scotland trial
 
-- [ ] Capture `--region GB-SCT` for a few hours, with a label naming the timetable build.
-- [ ] Read the realtime share by mode, and the route types ScotRail and the unscripted operators
-      take. Choose the floor for the week-long capture.
+- [x] Capture `--region GB-SCT` for a few hours, with a label naming the timetable build.
+- [x] Read the realtime share by mode, and the route types ScotRail and the unscripted operators
+      take. Choose the floor for the week-long capture. ScotRail's routes take regional rail. The
+      trial held no unscripted operator.
 - [ ] Capture Scotland from the local server and Transitous together, and compare shapes and
       arrivals, as the German side-by-side pass did.
 
