@@ -419,7 +419,7 @@ Some of the key areas to cover:
     * The resolution chosen, and why no resolution steadies the heading angle's p99 between the
       splits.
     * The invariants of the split, and the three plausible errors that only an invariant caught.
-  * Scoring each unit by its crossing's cell, chosen in Phase 6 of the evaluation slice:
+  * Scoring each unit by its crossing's cell:
     * A run replays each session whole. Cutting sessions at a cell's edge starts some mid-approach,
       so more passes fall under N after a start, and CrowFlies' precision drops from 0.328 to
       0.299.
@@ -430,6 +430,22 @@ Some of the key areas to cover:
     * The skew counts only passes and visits whose crossing lies in the split's cells, so every
       measure a run reports covers one split.
   * Tuning reads only windows that lie wholly in tune cells.
+  * LightCone, the predictor the apps run:
+    * CrowFlies with a cone around the heading on top, which only lowers a confidence, so it
+      alerts on a subset of what CrowFlies alerts on.
+    * The heading and speed from the train's last move beyond a radius of stillness, so a
+      receiver wandering at rest gives neither.
+    * How far trains turn within N, measured over windows, bounds the sweep of the cone's angle.
+      The extremes differ between the splits, since a few places hold most reversals.
+  * F0.5: why the measure weighs precision above recall, and how β ranks the runs.
+  * Choosing settings: a sweep over the tune split, then each predictor's chosen settings run once
+    over the test split, and the apps' predictor chosen from those runs alone.
+  * How a run is stored:
+    * A crossing's transitions within one stay in reach become one episode, holding its path of
+      states and the gaps between them.
+    * Outcomes drop what other columns give, and sessions sort in route order, so similar rows
+      share a page.
+    * A migration refuses a run whose new rows do not rebuild its old ones exactly.
 
 ### Starting points
 

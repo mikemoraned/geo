@@ -1329,9 +1329,10 @@ layouts that store the same rows in about a quarter of the bytes.
       behaviours or steps. Then remove them, with their answers in the removing commit. Moot here:
       the notebooks stay, as a starting point for the Demonstrable Behaviour slice in
       `next-slices.md`.
-- [ ] List under the evaluation bullet of the Demonstrable Behaviour slice, in `next-slices.md`,
+- [x] List under the evaluation bullet of the Demonstrable Behaviour slice, in `next-slices.md`,
       each concept from this slice that a demonstration will need to explain. The list started in
       Phase 6, so check it and add what Phases 7 to 9 introduce.
+      The slice has no Phase 9, so the list adds what Phases 6 to 8 introduced beyond the split.
 - [ ] Delete the backup of the branch from before its history was rewritten, with
       `git branch -D lookout-slice-workstream2-before-rewrite`, so its old blobs can leave the repo.
 - [ ] Run `just test-no-docker`, and hand over `just test`.
