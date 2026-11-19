@@ -57,7 +57,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   and with no floor the poller only logs the share. A fixed floor beats a drop relative to the
   previous poll, since the share differs by mode and by country: German high-speed rail held
   10–16% even before its realtime fell.
-- **The UK floor is 0.9.** Across the Scotland trial's polls the share held 0.981–0.994, and
+- **The UK floor is 0.9.** Across the Scotland trial's polls the share held 0.975–0.994, and
   regional rail, 95% of legs, was marked in every one. A dead feed takes the share to about 0.05.
   A floor near 0.98 would warn whenever one more train went unmarked.
 - **The UK capture runs through landing**, as Germany's does, with `--country GB`.
@@ -80,23 +80,26 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 #### Open questions
 
 - Whether the share falls below 0.9 in the small hours, when the unmarked sleeper portions make up
-  more of the few trains running. The Scotland trial ends at 00:22, so the first night of the
-  week-long capture answers it. If the share falls, the poller gains a minimum count of legs below
-  which it does not warn.
+  more of the few trains running. The trial's share was already falling as it ended, and the first
+  night of the week-long capture answers it. If the share falls, the poller gains a minimum count
+  of legs below which it does not warn.
 
 ### Observations
 
 - **The Scotland trial, 20:22–00:22 UTC on 18 November**, labelled
   `aubin-2026-11-18.route-shapes`. `notebooks/realtime_share/trial.py` reads it from landing.
-  The first 20 polls held a share of 0.981–0.994, with 2–4 of 115–155 trips unmarked in each.
-  - Regional rail: all 5,972 legs marked.
-  - Long-distance: 0.926 of 256 legs. Three trips were unmarked, each from its first poll in
+  Its 25 polls held a share of 0.975–0.994, with 2–4 trips unmarked in each. From 23:32 the
+  trips fell from 115 to 42 a poll, while 2–3 stayed unmarked, and the share fell from 0.989 to
+  0.975.
+  - Regional rail: all 6,708 legs marked.
+  - Long-distance: 0.916 of 273 legs. Three trips were unmarked, each from its first poll in
     Scotland to its last: two CrossCountry trips ending in Edinburgh, and one Avanti West Coast
     trip ending in Glasgow. They had started at 11:15, 14:27, and 19:30, hours before their first
     leg in Scotland.
-  - Night rail: 0.310 of 84 legs. Two Caledonian Sleeper trips, one on the West Highland line and
+  - Night rail: 0.381 of 113 legs. Two Caledonian Sleeper trips, one on the West Highland line and
     one reaching Aberdeen, were unmarked in every poll. Their trip IDs name the main train,
-    `C04565`, which was marked in 18 of its 18 polls.
+    `C04565`, which was marked in all 23 of its polls. The two trips starting at 23:41 were
+    marked in all 5 of theirs.
 
 ### Tasks
 
