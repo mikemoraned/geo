@@ -340,9 +340,7 @@ impl Row for MotisSourceRowV4 {
             motis_version: MotisVersion(Version::new(2, 11, 3)),
             feed: Feed::Transitous,
             country: Some("DE".to_string()),
-            overture_region_id: Some(
-                GersId::new(Uuid::nil().to_string()).expect("a constant UUID is a GERS id"),
-            ),
+            overture_region_id: Some(GersId::from(Uuid::nil())),
             overture_region_name: Some("Thüringen".to_string()),
             overture_release: Some(
                 OvertureRelease::new("2026-09-23.1").expect("a constant Overture release parses"),
