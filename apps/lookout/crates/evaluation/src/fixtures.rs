@@ -2,7 +2,6 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use countries::fixtures::{division_area, record_extract};
 use domain::places::DRESDEN_HBF;
 use domain::{CrossingCompactId, CrossingId, Percentage, SessionId, Span};
 use geo_types::{Geometry, LineString, Point, polygon};
@@ -14,6 +13,7 @@ use medallion_model::{
     FloatType, TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3,
     WaterCrossingRowV2,
 };
+use test_countries::{division_area, record_extract};
 
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};

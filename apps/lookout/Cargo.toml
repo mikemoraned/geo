@@ -108,6 +108,7 @@ session_crossings = { path = "crates/session_crossings" }
 shared = { path = "crates/shared" }
 telemetry = { path = "crates/telemetry" }
 test-passkeys = { path = "crates/test-passkeys" }
+test-countries = { path = "crates/test-countries" }
 test-redis = { path = "crates/test-redis" }
 web-core = { path = "crates/platform/web/core" }
 transport = { path = "crates/transport" }

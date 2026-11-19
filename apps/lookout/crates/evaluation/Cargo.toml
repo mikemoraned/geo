@@ -49,7 +49,7 @@ code_version = { workspace = true }
 cli = ["dep:clap", "dep:tokio", "dep:tracing-subscriber"]
 
 [dev-dependencies]
-countries = { workspace = true, features = ["fixtures"] }
+test-countries = { workspace = true }
 domain = { workspace = true, features = ["fixtures"] }
 proptest = { workspace = true }
 tempfile = { workspace = true }

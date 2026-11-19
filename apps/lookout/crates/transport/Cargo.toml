@@ -23,7 +23,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
-countries = { workspace = true, features = ["fixtures"] }
+test-countries = { workspace = true }
 tempfile = { workspace = true }
 wkb = { workspace = true }
 
