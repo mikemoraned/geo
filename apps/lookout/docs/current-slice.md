@@ -43,7 +43,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 #### Refactors / extensions
 
 - [x] Add a `just clippy` recipe, so every session runs the same check.
-- [ ] Add `lints.workspace = true` to `crates/server/Cargo.toml`, and clear what `clippy::all`
+- [x] Add `lints.workspace = true` to `crates/server/Cargo.toml`, and clear what `clippy::all`
       then flags there.
 
 #### The lints, at `warn`
