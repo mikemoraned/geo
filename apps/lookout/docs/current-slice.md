@@ -71,6 +71,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       `LIBCLANG_PATH`, in a commit of its own. Installing it runs outside the sandbox.
       `esp-1.99.0.0` failed to compile `std` for ESP-IDF, so the build decides first. The device
       then soaks as for 1.98.1.0. If either fails, `!` stays out of the crates `m5plus` builds.
+- [ ] Fold the [Rust 1.100 assessment](2026-11-19-rust-1.100.md) into this slice.
+  - [ ] Fold each change listed under "Changes to the plan" into this slice's decisions and tasks.
+  - [ ] Add an Opportunities task group before the Wrap-up group. Its tasks apply each change
+        listed under "Opportunities in existing code" to the code already written.
 - [ ] Give each conversion from a typed input a `TryFrom` with `type Error = !`: `Uuid` to
       `GersId` and to `MotisPolylineId`, and `DateTime<Utc>` to `ExtractId`. Only after the
       upgrade lands. Calls found in later crates join this task.
