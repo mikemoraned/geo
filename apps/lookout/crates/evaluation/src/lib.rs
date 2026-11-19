@@ -3,7 +3,8 @@ pub mod check;
 pub mod cone;
 pub mod episodes;
 pub mod fingerprints;
-pub mod fixtures;
+#[cfg(test)]
+mod fixtures;
 pub mod gold;
 pub mod offline;
 pub mod oracle;

@@ -23,6 +23,14 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
   helpers to return `Result` loses to it: it doubles the diff and changes no outcome.
 - **A crate that only tests use allows both lints at its root.** `test-redis` and
   `test-passkeys` take one crate-level allow each, by the same reason.
+- **Fixtures sit where a reader sees that only tests use them.** Confirmed 19 November 2026.
+  A crate whose fixtures only its own tests use holds them in a `#[cfg(test)]` module, which
+  `clippy.toml` already covers. Fixtures shared with other crates' tests move to a test-only crate
+  of their own, such as `test-countries`, which takes the crate-level allow above. A
+  feature-gated `fixtures` module with an allow of its own loses: it reads as library code. A
+  crate's unit tests that use its own shared fixtures move to `tests/`, since a dev-dependency
+  on the fixtures crate would compile a second copy of the crate under test, whose types
+  differ from the first.
 - **A build script allows both lints at its root.** A build script reports failure by
   panicking, as `.claude/rules/rust.md` already says. Each `build.rs` takes one file-level allow
   rather than an allow per call.
@@ -55,12 +63,17 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 - [x] Add the root-level allow to `crates/test-redis` and `crates/test-passkeys`.
 - [x] Add the file-level allow to `crates/motis/build.rs` and `crates/platform/m5/core/build.rs`.
 
-#### Library code, 87 calls
+#### Library code, 87 calls, 29 of them in fixtures
 
-- [ ] `evaluation` (21).
+- [x] `evaluation` (21). Its fixtures became a `#[cfg(test)]` module, and its `fixtures`
+      feature went.
 - [ ] `medallion-model` (19), including `Row::example`, which runs on the write path.
-- [ ] `domain` (9), `recorder` (7), and `countries` (7).
-- [ ] `predictor` (5), `motis` (4), and `crossings` (3).
+- [ ] Move `countries::fixtures` to a `test-countries` crate, and the `countries` unit tests that
+      use it to `crates/countries/tests/`. Point `transport` and `evaluation` at the new crate.
+- [ ] Move `predictor::fixtures` to a `test-predictor` crate, and the `predictor` unit tests that
+      use it to `crates/predictor/tests/`. Point `platform-core` and `m5-core` at the new crate.
+- [ ] `domain` (9) and `recorder` (7).
+- [ ] `predictor` (1, once its fixtures move), `motis` (4), and `crossings` (3).
 - [ ] The rest, two or fewer each: `platform/web/core`, `platform/web/bridge`, `platform-core`,
       `medallion-py`, `session_crossings`, `server`, `py-common`, and `platform/m5/core`.
 

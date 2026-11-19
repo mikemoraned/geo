@@ -88,6 +88,7 @@ impl Splitter {
 
     pub fn bucket(&self, cell: A5CellId) -> SplitterBucket {
         let digest = Sha256::digest(format!("{}:{cell}", self.salt));
+        #[allow(clippy::expect_used, reason = "a SHA-256 digest holds 32 bytes")]
         let leading: [u8; 8] = digest[..8]
             .try_into()
             .expect("a SHA-256 digest holds 32 bytes");

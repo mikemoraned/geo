@@ -128,10 +128,16 @@ pub fn run_id(row: &EvaluationRunRowV6) -> RunId {
         started_at: DateTime::UNIX_EPOCH,
         ..row.clone()
     };
-    // Infallible: a run row's one map is keyed by text, and serde_json refuses only other keys.
+    #[allow(
+        clippy::expect_used,
+        reason = "a run row's one map is keyed by text, and serde_json refuses only other keys"
+    )]
     let canonical = serde_json::to_vec(&unstarted).expect("a run row writes as JSON");
     let id = Uuid::new_v5(&namespace(RUN_NAMESPACE), &canonical);
-    // Infallible: a UUID's text holds none of the characters a partition value refuses.
+    #[allow(
+        clippy::expect_used,
+        reason = "a UUID's text holds none of the characters a partition value refuses"
+    )]
     RunId::new(id.to_string()).expect("a UUID names a partition")
 }
 

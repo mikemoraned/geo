@@ -1,5 +1,3 @@
-#![cfg(any(test, feature = "fixtures"))]
-
 use std::num::NonZeroUsize;
 use std::path::Path;
 
