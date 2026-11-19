@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "a test reports failure by panicking"
+)]
+
 use std::process::Command;
 
 use domain::Gps;

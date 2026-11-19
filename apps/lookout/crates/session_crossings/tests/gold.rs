@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "a test reports failure by panicking"
+)]
+
 use chrono::{DateTime, TimeZone, Utc};
 use domain::{Bbox, CrossingId, DeviceId, SessionId, StartedBy};
 use geo_types::{LineString, Point};

@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "a test reports failure by panicking"
+)]
+
 use std::sync::Arc;
 
 use arrow::array::{Array, BinaryArray, Int64Array, RecordBatch};

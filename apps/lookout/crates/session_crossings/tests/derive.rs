@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "a test reports failure by panicking"
+)]
+
 use chrono::{DateTime, TimeZone, Utc};
 use domain::places::BERLIN;
 use domain::{CrossingCompactId, CrossingId, Gps};

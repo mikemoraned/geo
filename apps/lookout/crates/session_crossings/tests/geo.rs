@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "a test reports failure by panicking"
+)]
+
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::error::Error;
