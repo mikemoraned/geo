@@ -52,7 +52,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       `clippy.toml` setting `allow-expect-in-tests` and `allow-unwrap-in-tests`. `deny` waits on
       the last group.
 - [x] Add the root-level allow to each of the 17 `tests/` crate roots.
-- [ ] Add the root-level allow to `crates/test-redis` and `crates/test-passkeys`.
+- [x] Add the root-level allow to `crates/test-redis` and `crates/test-passkeys`.
 - [ ] Add the file-level allow to `crates/motis/build.rs` and `crates/platform/m5/core/build.rs`.
 
 #### Library code, 87 calls
