@@ -154,12 +154,6 @@ after `cargo clippy` ran on the extension's crate, and 7 minutes after a marimo 
 the extension. Run cargo on an extension's crate after its python tests, not between two of their
 builds, and expect the first test build after a notebook session to take minutes.
 
-## Cargo
-
-`cargo remove` also deletes every `[workspace.dependencies]` entry that no member of the
-workspace uses, and the lookout workspace keeps some of those on purpose. After running it, check
-`git diff Cargo.toml` at the workspace root, and restore any entry it pruned.
-
 ## Rejected designs
 
 When a review rejects a design, correct or remove every uncommitted doc and comment that still

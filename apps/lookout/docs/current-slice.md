@@ -90,7 +90,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       `m5-core`, and clear what `incompatible_msrv` flags.
 - [x] Add `From<Uuid> for GersId`, and use it in `MotisSourceRowV4::example`. Conversions from a
       typed input found in later crates join this task.
-- [ ] Drop the claim in `.claude/memory/working-with-claude.md` that the workspace keeps unused
+- [x] Drop the claim in `.claude/memory/working-with-claude.md` that the workspace keeps unused
       `[workspace.dependencies]` entries on purpose.
 
 #### The lints, at `warn`
