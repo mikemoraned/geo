@@ -138,6 +138,10 @@ test-rust: test-doc
 test-no-docker: test-python test-doc
     INSTA_UPDATE=unseen cargo nextest run --workspace --profile no-docker
 
+# Clippy over every crate and target, tests included.
+clippy:
+    cargo clippy --workspace --all-targets --all-features
+
 # The geo tests: the crossings the store holds, against the bbox test cases. Needs a filled store.
 test-geo:
     cargo nextest run --profile geo

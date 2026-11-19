@@ -38,14 +38,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 - `m5plus` is a workspace of its own and inherits no lints. Clippy on it needs the ESP-IDF
   toolchain, so the check runs outside the sandbox.
 
-#### Open questions
-
-- No recipe runs clippy. A `just clippy` recipe would let CI and a session run the same check.
-
 ### Tasks
 
 #### Refactors / extensions
 
+- [x] Add a `just clippy` recipe, so every session runs the same check.
 - [ ] Add `lints.workspace = true` to `crates/server/Cargo.toml`, and clear what `clippy::all`
       then flags there.
 
@@ -80,6 +77,5 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 
 #### Wrap-up
 
-- [ ] Raise both lints to `deny`, once clippy flags none, and run
-      `cargo clippy --workspace --all-targets --all-features`.
+- [ ] Raise both lints to `deny`, once clippy flags none, and run `just clippy`.
 - [ ] Name the lints, and the three root-level allows, in `.claude/rules/rust.md`.
