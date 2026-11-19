@@ -86,7 +86,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
   - [x] Fold each change listed under "Changes to the plan" into this slice's decisions and tasks.
   - [x] Add an Opportunities task group before the Wrap-up group. Its tasks apply each change
         listed under "Opportunities in existing code" to the code already written.
-- [ ] Set `rust-version = "1.98"` in the manifests of `domain`, `predictor`, `platform-core`, and
+- [x] Set `rust-version = "1.98"` in the manifests of `domain`, `predictor`, `platform-core`, and
       `m5-core`, and clear what `incompatible_msrv` flags.
 - [ ] Add `From<Uuid> for GersId`, and use it in `MotisSourceRowV4::example`. Conversions from a
       typed input found in later crates join this task.
