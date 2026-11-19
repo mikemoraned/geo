@@ -90,8 +90,9 @@ logs them as errors.
 
 Each poll logs its realtime share: the share of the legs it captured that Motis marks realtime.
 If a poll's share falls below `--min-realtime-share`, the poller logs a warning. A poll that
-captures no legs has no share, and never warns. The poller carries on either way, since a server
-that loses its realtime feed still answers from the timetable.
+captures no legs has no share, and never warns. Nor does a poll of fewer legs than
+`--min-realtime-legs`, since at night a few trains without realtime decide its share. The poller
+carries on either way, since a server that loses its realtime feed still answers from the timetable.
 
 ## How long a run lasts
 

@@ -60,6 +60,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - **The UK floor is 0.9.** Across the Scotland trial's polls the share held 0.975–0.994, and
   regional rail, 95% of legs, was marked in every one. A dead feed takes the share to about 0.05.
   A floor near 0.98 would warn whenever one more train went unmarked.
+- **A poll of fewer than 50 legs never warns.** At night a few unmarked trains decide the share:
+  at 01:07 on 19 November, 7 of Scotland's 10 legs were marked, and the poll warned with the feed
+  healthy. A dead feed in the day still warns, over hundreds of legs. `--min-realtime-legs` sets the
+  count. A floor that changes with the hour loses to it, since the timetable sets how many trains
+  run, not the clock.
 - **The UK capture runs through landing**, as Germany's does, with `--country GB`.
 
 #### Consequences elsewhere
@@ -76,13 +81,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
   account, a Kafka consumer, and a GTFS-RT server.
 - **Asking Aubin before polling.** Transitous polls the realtime feed without a key, and the server
   fetches it once a minute. A reply from Aubin asking for less brings this back.
-
-#### Open questions
-
-- Whether the share falls below 0.9 in the small hours, when the unmarked sleeper portions make up
-  more of the few trains running. The trial's share was already falling as it ended, and the first
-  night of the week-long capture answers it. If the share falls, the poller gains a minimum count
-  of legs below which it does not warn.
 
 ### Observations
 
@@ -123,6 +121,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
       `--min-realtime-share` sets in `PollArgs`. The German capture
       lost its realtime on 20 October 2026, and nothing reported it, as
       [its caveat](completed-slices.md#caveat-realtime-stops-partway-through-the-capture) sets out.
+- [x] Leave a poll of fewer legs than `--min-realtime-legs` unwarned, and pass 50 in the GB
+      recipes.
 
 #### The UK server
 

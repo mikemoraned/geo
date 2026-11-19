@@ -22,6 +22,19 @@ impl RealtimeShare {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RealtimeFloor {
+    pub share: RealtimeShare,
+    pub min_legs: usize,
+}
+
+impl RealtimeFloor {
+    pub fn breached_by(&self, realtime: usize, legs: usize) -> Option<RealtimeShare> {
+        RealtimeShare::of(realtime, legs)
+            .filter(|share| legs >= self.min_legs && *share < self.share)
+    }
+}
+
 impl FromStr for RealtimeShare {
     type Err = NotAShare;
 
@@ -42,6 +55,42 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
+
+    const FLOOR: RealtimeFloor = RealtimeFloor {
+        share: RealtimeShare(0.9),
+        min_legs: 50,
+    };
+
+    #[test]
+    fn a_poll_whose_share_falls_below_the_floor_breaches_it() {
+        assert_eq!(FLOOR.breached_by(40, 100), Some(RealtimeShare(0.4)));
+    }
+
+    #[test]
+    fn a_poll_of_fewer_legs_than_the_minimum_never_breaches() {
+        assert_eq!(FLOOR.breached_by(7, 10), None);
+        assert_eq!(FLOOR.breached_by(0, 49), None);
+    }
+
+    #[test]
+    fn a_poll_of_exactly_the_minimum_legs_can_breach() {
+        assert_eq!(FLOOR.breached_by(0, 50), Some(RealtimeShare(0.0)));
+    }
+
+    #[test]
+    fn a_share_at_the_floor_does_not_breach() {
+        assert_eq!(FLOOR.breached_by(90, 100), None);
+    }
+
+    #[test]
+    fn a_poll_without_legs_never_breaches() {
+        let floor = RealtimeFloor {
+            share: RealtimeShare(0.9),
+            min_legs: 0,
+        };
+
+        assert_eq!(floor.breached_by(0, 0), None);
+    }
 
     #[test]
     fn a_share_reads_from_text() {
