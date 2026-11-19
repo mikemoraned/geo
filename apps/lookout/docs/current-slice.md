@@ -38,17 +38,27 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
   call becomes `?` into its boxed error. An allow with a reason remains only for a call that
   cannot fail. Library code follows the Target: a `thiserror` variant where the failure can
   happen, an allow with a reason where it cannot.
-
-- **A value built from an input already typed comes through `TryFrom` with `type Error = !`.**
-  Confirmed 19 November 2026. Rust 1.100 makes `!` nameable anywhere, so the call site reads
-  `let Ok(id) = GersId::try_from(uuid);`, and its type states that the call cannot fail. The one
-  `expect` left sits inside the impl, with its allow. An allow at every call site loses: it states
-  in prose what the type can state. A constant, such as a value in `Row::example`, keeps its allow.
+- **A value built from an input already typed comes through `From`.** Confirmed 19 November 2026.
+  The signature then states that the call cannot fail, and the one `expect` left sits inside the
+  impl, with its allow. `domain` already does this in `From<Uuid> for DeviceId` and
+  `From<Uuid> for SessionId`. A `TryFrom` with `type Error = !` loses: Clippy's
+  `infallible_try_from` flags it, and a `From` impl brings a `TryFrom` whose error is `!` anyway.
+  A `From` impl also compiles on `esp-1.98.1.0`. `PolylineId::of` and `ExtractId::at` already
+  return `Self`, so `Uuid` to `GersId` is the one conversion to add. A constant, such as a value
+  in `Row::example`, keeps its allow.
+- **The shared crates declare `rust-version = "1.98"` until the esp upgrade lands.** `m5plus`
+  builds `domain`, `predictor`, `platform-core`, and `m5-core` on `esp-1.98.1.0`, which rejects
+  every 1.100 addition. Clippy's `incompatible_msrv`, part of `clippy::all`, then flags a standard
+  library item newer than 1.98 in those crates. It misses language features such as `!`, so `!`
+  stays out of them by review. The `rust-version` rises with the esp upgrade.
 
 #### Consequences elsewhere
 
 - `crates/server/Cargo.toml` has no `[lints]` table, so the workspace lints miss `server` today.
   Adding `lints.workspace = true` also subjects it to `clippy::all`.
+- `.claude/memory/working-with-claude.md` says the workspace keeps some unused
+  `[workspace.dependencies]` entries on purpose. 6a8e701c removed the last of them, and Cargo
+  1.100's `unused_workspace_dependencies` flags any entry that comes back.
 - `m5plus` is a workspace of its own and inherits no lints. Clippy on it needs the ESP-IDF
   toolchain, so the check runs outside the sandbox.
 
@@ -70,14 +80,18 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 - [ ] Upgrade `m5plus` to `esp-1.100.0.0` in its `rust-toolchain.toml` and in the Justfile's
       `LIBCLANG_PATH`, in a commit of its own. Installing it runs outside the sandbox.
       `esp-1.99.0.0` failed to compile `std` for ESP-IDF, so the build decides first. The device
-      then soaks as for 1.98.1.0. If either fails, `!` stays out of the crates `m5plus` builds.
-- [ ] Fold the [Rust 1.100 assessment](2026-11-19-rust-1.100.md) into this slice.
-  - [ ] Fold each change listed under "Changes to the plan" into this slice's decisions and tasks.
-  - [ ] Add an Opportunities task group before the Wrap-up group. Its tasks apply each change
+      then soaks as for 1.98.1.0. If both pass, raise the shared crates' `rust-version` to
+      `"1.100"`. If either fails, it stays at `"1.98"`.
+- [x] Fold the [Rust 1.100 assessment](2026-11-19-rust-1.100.md) into this slice.
+  - [x] Fold each change listed under "Changes to the plan" into this slice's decisions and tasks.
+  - [x] Add an Opportunities task group before the Wrap-up group. Its tasks apply each change
         listed under "Opportunities in existing code" to the code already written.
-- [ ] Give each conversion from a typed input a `TryFrom` with `type Error = !`: `Uuid` to
-      `GersId` and to `MotisPolylineId`, and `DateTime<Utc>` to `ExtractId`. Only after the
-      upgrade lands. Calls found in later crates join this task.
+- [ ] Set `rust-version = "1.98"` in the manifests of `domain`, `predictor`, `platform-core`, and
+      `m5-core`, and clear what `incompatible_msrv` flags.
+- [ ] Add `From<Uuid> for GersId`, and use it in `MotisSourceRowV4::example`. Conversions from a
+      typed input found in later crates join this task.
+- [ ] Drop the claim in `.claude/memory/working-with-claude.md` that the workspace keeps unused
+      `[workspace.dependencies]` entries on purpose.
 
 #### The lints, at `warn`
 
@@ -113,7 +127,20 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 - [ ] Add `[lints.clippy]` with both lints to `crates/platform/m5/m5plus/Cargo.toml`, and clear
       what it flags. Run clippy outside the sandbox.
 
+#### Opportunities from Rust 1.100
+
+- [ ] Use `Path::trim_prefix` in place of `strip_prefix` and an unwrap, at
+      `crates/medallion/src/path.rs:523` and `crates/recorder/tests/sessionise.rs:120`.
+- [ ] Use `Vec::from_fn` in place of a mapped range, at the eleven sites the assessment lists.
+- [ ] Set `global-min-publish-age = "7 days"` in `apps/lookout/.cargo/config.toml`, and lift it
+      in `just audit-update` with `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow`.
+- [ ] Drop the six `--locked` options from the `prerequisites` recipe.
+- [ ] Use `str::trim_prefix` at `crates/predictor/src/sentence.rs:47`. Only after the esp upgrade
+      passes.
+
 #### Wrap-up
 
-- [ ] Raise both lints to `deny`, once clippy flags none, and run `just clippy`.
+- [ ] Raise both lints to `deny`, once clippy flags none, and run `just clippy`. It prints
+      Cargo's warnings beside Clippy's, and the run clears both.
 - [ ] Name the lints, and the three root-level allows, in `.claude/rules/rust.md`.
+- [ ] Delete `docs/2026-11-19-rust-1.100.md`, once the tasks above that come from it are done.
