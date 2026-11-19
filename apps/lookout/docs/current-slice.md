@@ -39,12 +39,24 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
   cannot fail. Library code follows the Target: a `thiserror` variant where the failure can
   happen, an allow with a reason where it cannot.
 
+- **A value built from an input already typed comes through `TryFrom` with `type Error = !`.**
+  Confirmed 19 November 2026. Rust 1.100 makes `!` nameable anywhere, so the call site reads
+  `let Ok(id) = GersId::try_from(uuid);`, and its type states that the call cannot fail. The one
+  `expect` left sits inside the impl, with its allow. An allow at every call site loses: it states
+  in prose what the type can state. A constant, such as a value in `Row::example`, keeps its allow.
+
 #### Consequences elsewhere
 
 - `crates/server/Cargo.toml` has no `[lints]` table, so the workspace lints miss `server` today.
   Adding `lints.workspace = true` also subjects it to `clippy::all`.
 - `m5plus` is a workspace of its own and inherits no lints. Clippy on it needs the ESP-IDF
   toolchain, so the check runs outside the sandbox.
+
+#### Rejected / deferred
+
+- **Keeping the checked form.** `EpisodePath` and `Polyline` re-parse text that construction
+  already checked, so each carries an allowed `expect`. Holding the parsed states and line instead
+  removes the call. It changes the stored type, so it waits for a refactor of its own.
 
 ### Tasks
 
@@ -53,6 +65,15 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 - [x] Add a `just clippy` recipe, so every session runs the same check.
 - [x] Add `lints.workspace = true` to `crates/server/Cargo.toml`, and clear what `clippy::all`
       then flags there.
+
+- [ ] Upgrade the toolchain to 1.100 in `rust-toolchain.toml`, in a commit of its own.
+- [ ] Upgrade `m5plus` to `esp-1.100.0.0` in its `rust-toolchain.toml` and in the Justfile's
+      `LIBCLANG_PATH`, in a commit of its own. Installing it runs outside the sandbox.
+      `esp-1.99.0.0` failed to compile `std` for ESP-IDF, so the build decides first. The device
+      then soaks as for 1.98.1.0. If either fails, `!` stays out of the crates `m5plus` builds.
+- [ ] Give each conversion from a typed input a `TryFrom` with `type Error = !`: `Uuid` to
+      `GersId` and to `MotisPolylineId`, and `DateTime<Utc>` to `ExtractId`. Only after the
+      upgrade lands. Calls found in later crates join this task.
 
 #### The lints, at `warn`
 
@@ -67,7 +88,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 
 - [x] `evaluation` (21). Its fixtures became a `#[cfg(test)]` module, and its `fixtures`
       feature went.
-- [ ] `medallion-model` (19), including `Row::example`, which runs on the write path.
+- [x] `medallion-model` (19), including `Row::example`, which runs on the write path.
 - [ ] Move `countries::fixtures` to a `test-countries` crate, and the `countries` unit tests that
       use it to `crates/countries/tests/`. Point `transport` and `evaluation` at the new crate.
 - [ ] Move `predictor::fixtures` to a `test-predictor` crate, and the `predictor` unit tests that

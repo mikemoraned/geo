@@ -48,6 +48,10 @@ impl Row for TrainSessionRowV3 {
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
     const UNIQUE: &'static [&'static str] = &["session_id"];
 
+    #[allow(
+        clippy::expect_used,
+        reason = "every value here is a constant its type accepts"
+    )]
     fn example() -> Self {
         let source = MotisSourceRowV4::example();
         let trip_id = TrainSegmentRowV4::example().trip_id;

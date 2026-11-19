@@ -338,6 +338,10 @@ impl Row for EvaluationRunRowV6 {
     const INSTANTS: &'static [&'static str] = &["started_at"];
     const DURATIONS: &'static [&'static str] = &["horizon", "last_moment", "ramp", "warm_up"];
 
+    #[allow(
+        clippy::expect_used,
+        reason = "every value here is a constant its type accepts"
+    )]
     fn example() -> Self {
         Self {
             started_at: DateTime::UNIX_EPOCH,

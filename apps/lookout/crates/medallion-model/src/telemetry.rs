@@ -53,6 +53,10 @@ impl Row for GpsReadingRowV2 {
     const DATASET: DatasetSpec<Self::Layer> = GPS_READING_V2;
     const INSTANTS: &'static [&'static str] = &["t"];
 
+    #[allow(
+        clippy::expect_used,
+        reason = "every value here is a constant its type accepts"
+    )]
     fn example() -> Self {
         Self {
             device_id: DeviceId::new("example").expect("a constant device id is not empty"),

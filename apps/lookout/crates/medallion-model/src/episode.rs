@@ -79,7 +79,10 @@ impl EpisodePath {
     }
 
     pub fn states(&self) -> Vec<StateKind> {
-        // Infallible: construction checked that every name parses.
+        #[allow(
+            clippy::expect_used,
+            reason = "construction checked that every name parses"
+        )]
         states_named(self.as_ref()).expect("a path names only states")
     }
 }
@@ -97,6 +100,10 @@ impl Row for EvaluationEpisodeRowV1 {
     type Layer = layers::Gold;
     const DATASET: DatasetSpec<Self::Layer> = EVALUATION_EPISODE_V1;
 
+    #[allow(
+        clippy::expect_used,
+        reason = "every value here is a constant its type accepts"
+    )]
     fn example() -> Self {
         Self {
             session_index: 0,

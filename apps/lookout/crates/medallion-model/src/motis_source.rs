@@ -328,6 +328,10 @@ impl Row for MotisSourceRowV4 {
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_SOURCE_V4;
     const INSTANTS: &'static [&'static str] = &["registered_at"];
 
+    #[allow(
+        clippy::expect_used,
+        reason = "every value here is a constant its type accepts"
+    )]
     fn example() -> Self {
         Self {
             source_id: MotisSourceId::new(Uuid::nil().to_string()),

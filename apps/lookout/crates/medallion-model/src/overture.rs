@@ -33,6 +33,10 @@ fn partition_value(id: &str) -> Result<(), medallion::PathError> {
 
 impl ExtractId {
     pub fn at(at: DateTime<Utc>) -> Self {
+        #[allow(
+            clippy::expect_used,
+            reason = "a compact UTC instant holds only digits and letters"
+        )]
         Self::new(at.format(COMPACT_UTC).to_string())
             .expect("a compact UTC instant holds only digits and letters")
     }
@@ -82,6 +86,10 @@ pub fn division_id(country: Country) -> GersId {
         Country::Germany => "567d1698-7209-4b94-b7b8-0bc71bde0104",
         Country::UnitedKingdom => "ce3429b1-d5c6-4763-91e7-0107e26d613e",
     };
+    #[allow(
+        clippy::expect_used,
+        reason = "each id above is a constant, checked by the tests below"
+    )]
     GersId::new(id).expect("a division id written here is a constant, checked by the tests below")
 }
 
@@ -123,6 +131,10 @@ impl Row for ExtractManifestRowV3 {
     const DATASET: DatasetSpec<Self::Layer> = EXTRACT_MANIFEST_V3;
     const INSTANTS: &'static [&'static str] = &["extracted_at"];
 
+    #[allow(
+        clippy::expect_used,
+        reason = "every value here is a constant its type accepts"
+    )]
     fn example() -> Self {
         Self {
             extract_id: "example".to_string(),

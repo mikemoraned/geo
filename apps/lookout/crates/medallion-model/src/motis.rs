@@ -161,6 +161,10 @@ impl Polyline {
 
     pub fn line(&self) -> LineString<f64> {
         let text: &str = self.as_ref();
+        #[allow(
+            clippy::expect_used,
+            reason = "construction and deserialisation both checked that the text decodes"
+        )]
         polyline::decode_polyline(text, POLYLINE_PRECISION).expect("a polyline decodes")
     }
 }
@@ -191,6 +195,7 @@ impl PolylineId {
     pub fn of(polyline: &Polyline) -> Self {
         let namespace = Uuid::new_v5(&Uuid::nil(), b"MOTIS_POLYLINE_NAMESPACE");
         let text: &str = polyline.as_ref();
+        #[allow(clippy::expect_used, reason = "a formatted UUID parses as a UUID")]
         Self::try_new(Uuid::new_v5(&namespace, text.as_bytes()).to_string())
             .expect("a formatted UUID parses as a UUID")
     }
@@ -331,6 +336,10 @@ impl Row for MotisPollRowV2 {
         "scheduled_arrival",
     ];
 
+    #[allow(
+        clippy::expect_used,
+        reason = "every value here is a constant its type accepts"
+    )]
     fn example() -> Self {
         Self {
             source_id: MotisSourceRowV4::example().source_id,
@@ -406,6 +415,10 @@ impl Row for TrainSegmentRowV4 {
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
 
+    #[allow(
+        clippy::expect_used,
+        reason = "every value here is a constant its type accepts"
+    )]
     fn example() -> Self {
         Self {
             source_id: MotisSourceRowV4::example().source_id,
