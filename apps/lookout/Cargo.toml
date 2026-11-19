@@ -88,7 +88,6 @@ geo-traits = "0.3"
 a5 = "=1.0.0"
 itertools = "0.15"
 rstar = "0.13"
-wkt = "0.14"
 chrono = { version = "0.4", features = ["serde"] }
 pyo3 = "0.28"
 # 0.16 is the pyo3-arrow release built against arrow 57, so the tables it hands over from
@@ -98,8 +97,6 @@ code_version = { path = "crates/code_version" }
 countries = { path = "crates/countries" }
 crossings = { path = "crates/crossings" }
 platform-core = { path = "crates/platform-core" }
-m5-core = { path = "crates/platform/m5/core" }
-map = { path = "crates/map" }
 medallion = { path = "crates/medallion" }
 medallion-model = { path = "crates/medallion-model" }
 py-common = { path = "crates/py-common" }

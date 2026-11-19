@@ -26,7 +26,6 @@ md5 = { workspace = true }
 shared = { workspace = true }
 telemetry = { workspace = true }
 countries = { workspace = true }
-transport = { workspace = true }
 
 [dev-dependencies]
 # The same crate again, for the places its tests are set in. A dev-dependency, so the feature

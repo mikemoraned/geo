@@ -66,7 +66,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 - [x] Add `lints.workspace = true` to `crates/server/Cargo.toml`, and clear what `clippy::all`
       then flags there.
 
-- [ ] Upgrade the toolchain to 1.100 in `rust-toolchain.toml`, in a commit of its own.
+- [x] Upgrade the toolchain to 1.100 in `rust-toolchain.toml`, in a commit of its own.
 - [ ] Upgrade `m5plus` to `esp-1.100.0.0` in its `rust-toolchain.toml` and in the Justfile's
       `LIBCLANG_PATH`, in a commit of its own. Installing it runs outside the sandbox.
       `esp-1.99.0.0` failed to compile `std` for ESP-IDF, so the build decides first. The device
