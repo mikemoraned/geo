@@ -82,7 +82,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       `esp-1.99.0.0` failed to compile `std` for ESP-IDF, so the build decides first. The device
       then soaks as for 1.98.1.0. If both pass, raise the shared crates' `rust-version` to
       `"1.100"`. If either fails, it stays at `"1.98"`.
-- [x] Fold the [Rust 1.100 assessment](2026-11-19-rust-1.100.md) into this slice.
+- [x] Fold the Rust 1.100 assessment into this slice.
   - [x] Fold each change listed under "Changes to the plan" into this slice's decisions and tasks.
   - [x] Add an Opportunities task group before the Wrap-up group. Its tasks apply each change
         listed under "Opportunities in existing code" to the code already written.
@@ -131,7 +131,12 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 
 - [ ] Use `Path::trim_prefix` in place of `strip_prefix` and an unwrap, at
       `crates/medallion/src/path.rs:523` and `crates/recorder/tests/sessionise.rs:120`.
-- [ ] Use `Vec::from_fn` in place of a mapped range, at the eleven sites the assessment lists.
+- [ ] Use `Vec::from_fn` in place of a `usize` range mapped and collected into a `Vec`, at
+      `crates/crossings/src/pointset.rs:98`, `crates/crossings/tests/pack.rs:202`,
+      `crates/evaluation/src/cone.rs:325`, `crates/evaluation/src/fixtures.rs:59`,
+      `crates/evaluation/src/pick.rs` lines 146, 202, 220, and 340,
+      `crates/evaluation/src/summarise.rs:427`, and `crates/session_crossings/tests/derive.rs`
+      lines 84 and 367. Line numbers hold at 6a8e701c.
 - [ ] Set `global-min-publish-age = "7 days"` in `apps/lookout/.cargo/config.toml`, and lift it
       in `just audit-update` with `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow`.
 - [ ] Drop the six `--locked` options from the `prerequisites` recipe.
@@ -143,4 +148,5 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 - [ ] Raise both lints to `deny`, once clippy flags none, and run `just clippy`. It prints
       Cargo's warnings beside Clippy's, and the run clears both.
 - [ ] Name the lints, and the three root-level allows, in `.claude/rules/rust.md`.
-- [ ] Delete `docs/2026-11-19-rust-1.100.md`, once the tasks above that come from it are done.
+- [x] Delete `docs/2026-11-19-rust-1.100.md`. Done before its tasks, once each carried what it
+      needed from the assessment.
