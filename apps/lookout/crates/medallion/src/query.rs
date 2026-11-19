@@ -3,11 +3,13 @@ use std::collections::{BTreeSet, HashMap};
 use datafusion::arrow::array::RecordBatch;
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::ParamValues;
+use datafusion::dataframe::DataFrame;
 use datafusion::prelude::ParquetReadOptions;
 use datafusion::scalar::ScalarValue;
 use datafusion::sql::TableReference;
 use datafusion::sql::parser::DFParser;
 use datafusion::sql::resolve::resolve_table_references;
+use futures::{Stream, StreamExt};
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
@@ -16,6 +18,8 @@ use crate::dataset::DatasetSpec;
 use crate::layer::{LayerKind, layers};
 use crate::partition::Partition;
 use crate::path::{Dataset, Root, any_file_under};
+use crate::read::Read;
+use crate::rows::{Geometry, Row, RowError, from_batches};
 use crate::table::{Layout, SilverTarget};
 
 #[derive(Debug, thiserror::Error)]
@@ -29,6 +33,8 @@ pub enum QueryError {
     DataFusion(#[from] datafusion::error::DataFusionError),
     #[error("reading rows: {0}")]
     Rows(#[from] serde_arrow::Error),
+    #[error(transparent)]
+    Describing(#[from] RowError),
     #[error("naming a country's partition: {0}")]
     Path(#[from] crate::partition::PathError),
     #[error("listing the partitions of {path}: {source}")]
@@ -49,6 +55,10 @@ pub enum QueryError {
     CountryNeeded { dataset: &'static str },
     #[error("{dataset} holds no country level, so a read of it names no country")]
     NoCountryLevel { dataset: &'static str },
+}
+
+fn has_country_level<T: Row>() -> bool {
+    T::DATASET.partition_key == Some(COUNTRY) || matches!(T::GEOMETRY, Geometry::LatLonAndProjected)
 }
 
 pub fn table_references(sql: &str) -> Result<Vec<String>, QueryError> {
@@ -130,10 +140,14 @@ pub struct Query {
 
 impl Query {
     pub fn new(root: Root) -> Self {
-        Self {
-            root,
-            ctx: SedonaContext::new(),
-        }
+        let ctx = SedonaContext::new();
+        let state = ctx.ctx.state_ref();
+        let mut state = state.write();
+        let parquet = &mut state.config_mut().options_mut().execution.parquet;
+        parquet.pushdown_filters = true;
+        parquet.reorder_filters = true;
+        drop(state);
+        Self { root, ctx }
     }
 
     pub async fn register<L: LayerKind>(
@@ -255,19 +269,69 @@ impl Query {
         dataset: &Dataset<L>,
         table: &str,
     ) -> Result<(), QueryError> {
+        let frame = self.frame_at(dataset).await?;
+        self.ctx.ctx.register_table(table, frame.into_view())?;
+        Ok(())
+    }
+
+    pub async fn read<T: Row>(&self) -> Result<Read<T>, QueryError> {
+        if has_country_level::<T>() {
+            return Err(QueryError::CountryNeeded {
+                dataset: T::DATASET.name,
+            });
+        }
+        let dataset = self.root.dataset(T::DATASET);
+        self.parquet_frame(&dataset, &T::DATASET.partition_levels())
+            .await?
+            .map(Read::new)
+            .ok_or_else(|| QueryError::NoSuchDataset {
+                layer: dataset.layer(),
+                dataset: dataset.name().to_string(),
+            })
+    }
+
+    pub async fn read_of_country<T: Row>(&self, country: Country) -> Result<Read<T>, QueryError> {
+        if !has_country_level::<T>() {
+            return Err(QueryError::NoCountryLevel {
+                dataset: T::DATASET.name,
+            });
+        }
+        let of_country = self.root.dataset(T::DATASET).partition(COUNTRY, country)?;
+        Ok(Read::new(self.frame_at(&of_country).await?))
+    }
+
+    async fn frame_at<L: LayerKind>(&self, dataset: &Dataset<L>) -> Result<DataFrame, QueryError> {
         if !dataset.is_filled() {
             return Err(QueryError::NoSuchDataset {
                 layer: dataset.layer(),
                 dataset: dataset.name().to_string(),
             });
         }
-        let dir = dataset.dir();
-        let df = self
+        Ok(self
             .ctx
-            .read_parquet(dir.display().to_string(), GeoParquetReadOptions::default())
-            .await?;
-        self.ctx.ctx.register_table(table, df.into_view())?;
-        Ok(())
+            .read_parquet(
+                dataset.dir().display().to_string(),
+                GeoParquetReadOptions::default(),
+            )
+            .await?)
+    }
+
+    pub async fn register_gold(
+        &self,
+        dataset: DatasetSpec<layers::Gold>,
+    ) -> Result<(), QueryError> {
+        let runs = self.root.dataset(dataset);
+        if self
+            .register_as_parquet(&runs, dataset.name, &dataset.partition_levels())
+            .await?
+        {
+            Ok(())
+        } else {
+            Err(QueryError::NoSuchDataset {
+                layer: runs.layer(),
+                dataset: dataset.name.to_string(),
+            })
+        }
     }
 
     pub async fn register_if_present<L: LayerKind>(
@@ -309,25 +373,37 @@ impl Query {
         table: &str,
         partition_keys: &[&str],
     ) -> Result<bool, QueryError> {
-        if !dataset.is_filled() {
-            return Ok(false);
+        match self.parquet_frame(dataset, partition_keys).await? {
+            Some(rows) => {
+                self.ctx.ctx.register_table(table, rows.into_view())?;
+                Ok(true)
+            }
+            None => Ok(false),
         }
+    }
 
-        let rows = self
-            .ctx
-            .ctx
-            .read_parquet(
-                dataset.dir().display().to_string(),
-                ParquetReadOptions::default().table_partition_cols(
-                    partition_keys
-                        .iter()
-                        .map(|key| ((*key).to_string(), DataType::Utf8))
-                        .collect(),
-                ),
-            )
-            .await?;
-        self.ctx.ctx.register_table(table, rows.into_view())?;
-        Ok(true)
+    async fn parquet_frame<L: LayerKind>(
+        &self,
+        dataset: &Dataset<L>,
+        partition_keys: &[&str],
+    ) -> Result<Option<DataFrame>, QueryError> {
+        if !dataset.is_filled() {
+            return Ok(None);
+        }
+        Ok(Some(
+            self.ctx
+                .ctx
+                .read_parquet(
+                    dataset.dir().display().to_string(),
+                    ParquetReadOptions::default().table_partition_cols(
+                        partition_keys
+                            .iter()
+                            .map(|key| ((*key).to_string(), DataType::Utf8))
+                            .collect(),
+                    ),
+                )
+                .await?,
+        ))
     }
 
     pub async fn register_of_country<L: LayerKind>(
@@ -379,11 +455,18 @@ impl Query {
     where
         T: for<'de> serde::Deserialize<'de>,
     {
-        let mut rows = Vec::new();
-        for batch in self.sql(sql).await? {
-            rows.extend(serde_arrow::from_record_batch::<Vec<T>>(&batch)?);
-        }
-        Ok(rows)
+        Ok(from_batches(&self.sql(sql).await?)?)
+    }
+
+    pub async fn row_batches<T>(
+        &self,
+        sql: &str,
+    ) -> Result<impl Stream<Item = Result<Vec<T>, QueryError>> + Unpin + use<T>, QueryError>
+    where
+        T: for<'de> serde::Deserialize<'de>,
+    {
+        let batches = self.ctx.sql(sql).await?.execute_stream().await?;
+        Ok(batches.map(|batch| Ok(serde_arrow::from_record_batch::<Vec<T>>(&batch?)?)))
     }
 }
 
@@ -394,7 +477,10 @@ mod tests {
     use arrow::array::{Int64Array, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
     use chrono::{TimeZone, Utc};
+    use futures::TryStreamExt;
     use serde::{Deserialize, Serialize};
+
+    use domain::places::BERLIN;
 
     use super::*;
     use crate::geo::GEOMETRY;
@@ -481,10 +567,6 @@ mod tests {
         }
     }
 
-    fn berlin() -> geo_types::Point<f64> {
-        geo_types::Point::new(13.404954, 52.520008)
-    }
-
     async fn store_boxes(dir: &std::path::Path, ids: &[&str]) -> Root {
         let root = Root::new(dir);
         let rows: Vec<crate::GeographyRow<BoxedRow, geo_types::Point<f64>>> = ids
@@ -495,7 +577,7 @@ mod tests {
                     seen_at: Utc.with_ymd_and_hms(2026, 7, 21, 9, 0, 0).unwrap(),
                     corner: Corner { x: 1.0, y: 2.0 },
                 },
-                geography: berlin(),
+                geography: BERLIN,
                 country: Country::Germany,
             })
             .collect();
@@ -553,7 +635,7 @@ mod tests {
 
         assert_eq!(
             crate::geo::geometries(&batches[0], GEOMETRY).unwrap(),
-            [geo_types::Geometry::Point(berlin())]
+            [geo_types::Geometry::Point(BERLIN)]
         );
     }
 
@@ -669,6 +751,28 @@ mod tests {
             .unwrap();
 
         assert_eq!(rows.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn rows_read_a_batch_at_a_time_add_up_to_every_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = store_with_rows(tmp.path(), vec![1, 2, 3], vec!["a", "b", "c"]).await;
+        let query = Query::new(root);
+        query.register(THING, "thing").await.unwrap();
+        let sql = "SELECT id, name FROM thing ORDER BY id";
+
+        let batches: Vec<Vec<Row>> = query
+            .row_batches(sql)
+            .await
+            .unwrap()
+            .try_collect()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            batches.into_iter().flatten().collect::<Vec<Row>>(),
+            query.rows::<Row>(sql).await.unwrap()
+        );
     }
 
     #[tokio::test]

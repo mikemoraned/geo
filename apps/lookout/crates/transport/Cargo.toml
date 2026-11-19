@@ -12,6 +12,7 @@ geo = { workspace = true }
 geo-types = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }
+nutype = { workspace = true }
 object_store = { workspace = true, features = ["aws"] }
 serde = { workspace = true }
 sedona = { workspace = true }
@@ -22,6 +23,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
+countries = { workspace = true, features = ["fixtures"] }
 tempfile = { workspace = true }
 wkb = { workspace = true }
 

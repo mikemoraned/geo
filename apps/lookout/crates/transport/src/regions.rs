@@ -1,14 +1,13 @@
-use std::fmt::{self, Display};
-use std::str::FromStr;
-
 use geo_types::Geometry;
 use medallion::{Country, GEOMETRY, Query, Root};
-use medallion_model::{DIVISION_ID, NotAGersId, OvertureRegion};
+use medallion_model::{DIVISION_ID, ExtractId, NotAGersId, OvertureRegion, OvertureType};
+use nutype::nutype;
 use serde::Deserialize;
 
-use crate::extract::ExtractId;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[nutype(
+    validate(with = iso_3166_2, error = NotARegionCode),
+    derive(Debug, Clone, PartialEq, Eq, Hash, Display, FromStr, AsRef)
+)]
 pub struct RegionCode(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -17,43 +16,34 @@ pub struct NotARegionCode {
     code: String,
 }
 
+fn iso_3166_2(code: &str) -> Result<(), NotARegionCode> {
+    let well_formed = match code.split_once('-') {
+        Some((country, subdivision)) => {
+            country.len() == 2
+                && country.chars().all(|c| c.is_ascii_uppercase())
+                && (1..=3).contains(&subdivision.len())
+                && subdivision
+                    .chars()
+                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+        }
+        None => false,
+    };
+    if well_formed {
+        Ok(())
+    } else {
+        Err(NotARegionCode {
+            code: code.to_string(),
+        })
+    }
+}
+
 impl RegionCode {
     pub fn new(code: impl Into<String>) -> Result<Self, NotARegionCode> {
-        let code = code.into();
-        let well_formed = match code.split_once('-') {
-            Some((country, subdivision)) => {
-                country.len() == 2
-                    && country.chars().all(|c| c.is_ascii_uppercase())
-                    && (1..=3).contains(&subdivision.len())
-                    && subdivision
-                        .chars()
-                        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
-            }
-            None => false,
-        };
-        if well_formed {
-            Ok(Self(code))
-        } else {
-            Err(NotARegionCode { code })
-        }
+        Self::try_new(code)
     }
 
     pub fn country_code(&self) -> &str {
-        &self.0[..2]
-    }
-}
-
-impl FromStr for RegionCode {
-    type Err = NotARegionCode;
-
-    fn from_str(code: &str) -> Result<Self, Self::Err> {
-        Self::new(code)
-    }
-}
-
-impl Display for RegionCode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        &self.as_ref()[..2]
     }
 }
 
@@ -106,11 +96,7 @@ pub async fn region_area(
         });
     }
     let query = Query::new(root.clone());
-    let division_area = root
-        .dataset(medallion_model::OVERTURE_EXTRACT)
-        .for_id(extract)?
-        .partition("theme", "divisions")?
-        .partition("type", "division_area")?;
+    let division_area = OvertureType::DIVISION_AREA.in_extract(root, extract)?;
     query
         .register_at_without_geometry(&division_area, "division_area")
         .await?;
@@ -166,7 +152,7 @@ mod tests {
     use chrono::{DateTime, TimeZone, Utc};
 
     use super::*;
-    use crate::testing::{record_extract, square_from};
+    use countries::fixtures::{record_extract, square_from};
 
     const THURINGIA: &str = "e0ff5492-5758-4335-aabd-af1747925cd1";
     const SAXONY: &str = "3e1aa55a-1b9b-4d9b-8072-38ba413f6d2b";

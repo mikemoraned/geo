@@ -1,0 +1,11 @@
+[package]
+name = "code_version"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+nutype = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

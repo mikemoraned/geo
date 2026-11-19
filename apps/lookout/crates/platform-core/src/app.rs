@@ -7,10 +7,12 @@ use crux_core::{
     macros::effect,
     render::{self, RenderOperation},
 };
-use domain::{Bbox, CrossingCompact, Sample};
+use domain::{Bbox, CrossingCompact, CrossingCompactId, Sample, StateKind};
 use geo_types::Point;
 use predictor::{
-    Crossings, CrowFlies, DEFAULT_RADIUS, Event as Observed, Parser, Predict, Sentence,
+    Crossings, CrowFlies, DEFAULT_ALERTING, DEFAULT_HALF_WIDTH, DEFAULT_PASS_RADIUS,
+    DEFAULT_STILL_WITHIN, DEFAULT_WATCHING, DetectPasses, Event as Observed, LastMove, LightCone,
+    OnlineDetector, OutOfOrder, Parser, Predict, Predictions, Sentence, Tracker,
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,10 +21,12 @@ use crate::battery::{Battery, Charge};
 use crate::lines::{Nearby, RequestId, Wkb};
 use crate::trace::Trace;
 
+static NO_PREDICTIONS: Predictions<Float> = Predictions::new();
+
 pub trait Shell: Sized + 'static {
     type ViewModel;
 
-    type Crossings: Crossings<Float> + Default;
+    type Crossings: Crossings<Float> + Clone + Default;
 
     fn carried() -> Option<Self::Crossings>;
 
@@ -43,7 +47,44 @@ pub struct Model<S: Shell> {
 
 enum Predicting<S: Shell> {
     Waiting,
-    Ready(CrowFlies<Float, S::Crossings>),
+    Ready(Box<Tracking<S::Crossings>>),
+}
+
+struct Tracking<C: Crossings<Float>> {
+    predictor: LightCone<Float, C>,
+    detector: OnlineDetector<Float, C>,
+    tracker: Tracker,
+}
+
+impl<C: Crossings<Float> + Clone> Tracking<C> {
+    fn new(crossings: C) -> Self {
+        Self {
+            predictor: LightCone::new(
+                CrowFlies::new(
+                    crossings.clone(),
+                    DEFAULT_WATCHING,
+                    DEFAULT_ALERTING,
+                    LastMove::new(DEFAULT_STILL_WITHIN),
+                )
+                .expect("the default alerting radius lies within the default watching radius"),
+                DEFAULT_HALF_WIDTH,
+            ),
+            detector: OnlineDetector::new(crossings, DEFAULT_PASS_RADIUS),
+            tracker: Tracker::new(),
+        }
+    }
+
+    fn observe(&mut self, event: Observed<Float>) -> Result<(), OutOfOrder> {
+        let at = match event {
+            Observed::Sampled(sample) => sample.t,
+            Observed::Elapsed(now) => now,
+        };
+        self.predictor.observe(event)?;
+        self.detector.observe(event)?;
+        self.tracker
+            .track(at, self.predictor.predictions(), self.detector.passing())?;
+        Ok(())
+    }
 }
 
 impl<S: Shell> Default for Model<S> {
@@ -52,7 +93,7 @@ impl<S: Shell> Default for Model<S> {
             parser: Parser::new(),
             battery: Battery::default(),
             predictor: match S::carried() {
-                Some(crossings) => Predicting::Ready(CrowFlies::new(crossings, DEFAULT_RADIUS)),
+                Some(crossings) => Predicting::Ready(Box::new(Tracking::new(crossings))),
                 None => Predicting::Waiting,
             },
             nearby: Nearby::default(),
@@ -70,8 +111,11 @@ impl<S: Shell> Model<S> {
         self.ready().and_then(CrowFlies::latest)
     }
 
-    pub fn predictions(&self) -> &[predictor::Prediction<Float>] {
-        self.ready().map_or(&[], CrowFlies::predictions)
+    pub fn predictions(&self) -> &Predictions<Float> {
+        match &self.predictor {
+            Predicting::Ready(tracking) => tracking.predictor.predictions(),
+            Predicting::Waiting => &NO_PREDICTIONS,
+        }
     }
 
     pub fn speed_mps(&self) -> Option<Float> {
@@ -79,16 +123,30 @@ impl<S: Shell> Model<S> {
     }
 
     pub fn radius_metres(&self) -> Option<Float> {
-        self.ready().map(CrowFlies::radius_metres)
+        self.ready().map(CrowFlies::watching_radius_metres)
+    }
+
+    pub fn pass_radius_metres(&self) -> Option<Float> {
+        match &self.predictor {
+            Predicting::Ready(tracking) => Some(tracking.detector.pass_radius_metres()),
+            Predicting::Waiting => None,
+        }
     }
 
     pub fn crossings(&self) -> Option<&S::Crossings> {
         self.ready().map(CrowFlies::crossings)
     }
 
+    pub fn state(&self, crossing_compact_id: CrossingCompactId) -> StateKind {
+        match &self.predictor {
+            Predicting::Ready(tracking) => tracking.tracker.kind(crossing_compact_id),
+            Predicting::Waiting => StateKind::OutOfReach,
+        }
+    }
+
     fn ready(&self) -> Option<&CrowFlies<Float, S::Crossings>> {
         match &self.predictor {
-            Predicting::Ready(predictor) => Some(predictor),
+            Predicting::Ready(tracking) => Some(tracking.predictor.crow_flies()),
             Predicting::Waiting => None,
         }
     }
@@ -164,14 +222,14 @@ impl<S: Shell> Lookout<S> {
     }
 
     fn observe(&self, event: Observed<Float>, model: &mut Model<S>) -> Change {
-        let Predicting::Ready(predictor) = &mut model.predictor else {
+        let Predicting::Ready(tracking) = &mut model.predictor else {
             return Change::Unchanged;
         };
         let sampled = match event {
             Observed::Sampled(sample) => Some(sample),
             Observed::Elapsed(_) => None,
         };
-        match predictor.observe(event) {
+        match tracking.observe(event) {
             Ok(()) => {
                 if let Some(sample) = sampled
                     && S::draws_lines()
@@ -218,7 +276,7 @@ impl<S: Shell> App for Lookout<S> {
             }
             Event::Crossings(points) => match (&model.predictor, S::received(points)) {
                 (Predicting::Waiting, Some(crossings)) => {
-                    model.predictor = Predicting::Ready(CrowFlies::new(crossings, DEFAULT_RADIUS));
+                    model.predictor = Predicting::Ready(Box::new(Tracking::new(crossings)));
                     Change::Moved
                 }
                 _ => Change::Unchanged,
@@ -263,6 +321,8 @@ mod tests {
     use crux_core::Core;
     use crux_core::bridge::{Bridge, JsonFfiFormat};
     use domain::Gps;
+    use domain::places::DRESDEN_HBF;
+    use geo::{Distance, Haversine};
     use geo_types::Point;
     use predictor::fixtures::{Fix, captured};
 
@@ -282,6 +342,7 @@ mod tests {
         charge: Option<Charge>,
         predicted: usize,
         traced: usize,
+        states: Vec<(u32, StateKind)>,
     }
 
     #[derive(Debug, PartialEq)]
@@ -314,6 +375,7 @@ mod tests {
                 charge: model.charge(),
                 predicted: model.predictions().len(),
                 traced: model.trace().count(),
+                states: states(model),
             }
         }
     }
@@ -342,6 +404,7 @@ mod tests {
                 charge: model.charge(),
                 predicted: model.predictions().len(),
                 traced: model.trace().count(),
+                states: states(model),
             }
         }
     }
@@ -392,9 +455,9 @@ mod tests {
         })
     }
 
-    fn north_of_the_station(metres: f64) -> Gps<f64> {
+    fn metres_north_of_the_station(metres: f64) -> Gps<f64> {
         Gps {
-            position: Point::new(DRESDEN_LON, 51.0403 + metres / 111_195.0),
+            position: Point::new(DRESDEN_HBF.x(), DRESDEN_HBF.y() + metres / 111_195.0),
             ..at_the_station()
         }
     }
@@ -404,6 +467,17 @@ mod tests {
             (actual - expected).abs() < 1e-3,
             "{actual} is not {expected}"
         );
+    }
+
+    fn states<S: Shell<Crossings = Vec<CrossingCompact<Float>>>>(
+        model: &Model<S>,
+    ) -> Vec<(u32, StateKind)> {
+        model
+            .crossings()
+            .into_iter()
+            .flatten()
+            .map(|crossing| (crossing.id.get(), model.state(crossing.id)))
+            .collect()
     }
 
     fn taken(points: Vec<CrossingCompact<f64>>) -> Vec<CrossingCompact<Float>> {
@@ -427,21 +501,138 @@ mod tests {
         DateTime::from_timestamp(1_785_098_609, 0).expect("an instant")
     }
 
-    const DRESDEN_LON: f64 = 13.7322;
-
     fn at_the_station() -> Gps<f64> {
-        Gps::at(51.0403, 13.7322)
+        Gps::at(DRESDEN_HBF.y(), DRESDEN_HBF.x())
             .expect("on the globe")
             .with_accuracy_metres(Some(5.0))
             .with_speed_mps(Some(27.8))
     }
 
-    fn crossing(id: u32, latitude: f64, longitude: f64) -> CrossingCompact<f64> {
-        CrossingCompact::at(id, latitude, longitude).expect("on the globe")
+    fn short_of_the_station() -> Gps<f64> {
+        Gps::at(DRESDEN_HBF.y() - 0.0025, DRESDEN_HBF.x())
+            .expect("on the globe")
+            .with_accuracy_metres(Some(5.0))
+            .with_speed_mps(Some(27.8))
+    }
+
+    fn arriving_at_the_station(t: DateTime<Utc>) -> [Event; 2] {
+        [
+            reported(t - TimeDelta::seconds(10), short_of_the_station()),
+            reported(t, at_the_station()),
+        ]
+    }
+
+    fn north_of_the_station(degrees: f64) -> Point<f64> {
+        Point::new(DRESDEN_HBF.x(), DRESDEN_HBF.y() + degrees)
+    }
+
+    fn near_the_station() -> Point<f64> {
+        north_of_the_station(0.01)
+    }
+
+    fn up_the_line() -> Point<f64> {
+        north_of_the_station(1.0)
+    }
+
+    fn far_from_the_station() -> Point<f64> {
+        north_of_the_station(9.0)
+    }
+
+    fn off_the_globe() -> Point<f64> {
+        Point::new(DRESDEN_HBF.x(), 91.0)
+    }
+
+    fn crossing(id: u32, at: Point<f64>) -> CrossingCompact<f64> {
+        CrossingCompact::at(id, at.y(), at.x()).expect("on the globe")
     }
 
     fn reported(t: DateTime<Utc>, gps: Gps<f64>) -> Event {
         Event::Position(domain::Sample::new(t, gps))
+    }
+
+    #[test]
+    fn each_crossing_takes_the_state_its_distance_gives() {
+        let core = waiting();
+        core.process_event(Event::Reset);
+        core.process_event(Event::Crossings(vec![
+            crossing(1, DRESDEN_HBF),
+            crossing(2, north_of_the_station(0.005)),
+            crossing(3, near_the_station()),
+            crossing(4, up_the_line()),
+        ]));
+
+        for event in arriving_at_the_station(instant()) {
+            core.process_event(event);
+        }
+
+        assert_eq!(
+            core.view().states,
+            vec![
+                (1, StateKind::ActualPass),
+                (2, StateKind::AlertedPass),
+                (3, StateKind::CandidatePass),
+                (4, StateKind::OutOfReach),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_crossing_behind_the_train_is_not_alerted() {
+        let core = waiting();
+        core.process_event(Event::Reset);
+        core.process_event(Event::Crossings(vec![
+            crossing(1, north_of_the_station(0.005)),
+            crossing(2, north_of_the_station(-0.005)),
+        ]));
+
+        for event in arriving_at_the_station(instant()) {
+            core.process_event(event);
+        }
+
+        assert_eq!(
+            core.view().states,
+            vec![(1, StateKind::AlertedPass), (2, StateKind::CandidatePass),]
+        );
+    }
+
+    #[test]
+    fn a_crossing_left_behind_leaves_its_pass() {
+        let core = waiting();
+        core.process_event(Event::Reset);
+        core.process_event(Event::Crossings(vec![crossing(1, DRESDEN_HBF)]));
+        for event in arriving_at_the_station(instant()) {
+            core.process_event(event);
+        }
+        let passing = core.view().states;
+
+        core.process_event(reported(
+            instant() + TimeDelta::seconds(10),
+            Gps::at(up_the_line().y(), up_the_line().x())
+                .expect("on the globe")
+                .with_speed_mps(Some(27.8)),
+        ));
+
+        assert_eq!(
+            [passing, core.view().states],
+            [
+                vec![(1, StateKind::ActualPass)],
+                vec![(1, StateKind::OutOfReach)]
+            ]
+        );
+    }
+
+    #[test]
+    fn a_crossing_stays_passed_while_time_passes_at_it() {
+        let core = waiting();
+        core.process_event(Event::Reset);
+        core.process_event(Event::Crossings(vec![crossing(1, DRESDEN_HBF)]));
+        for event in arriving_at_the_station(instant()) {
+            core.process_event(event);
+        }
+
+        core.process_event(Event::Tick(instant() + TimeDelta::seconds(5)));
+
+        assert_eq!(core.view().states, vec![(1, StateKind::ActualPass)]);
     }
 
     #[test]
@@ -471,7 +662,7 @@ mod tests {
         let core = waiting();
         core.process_event(Event::Reset);
 
-        core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
+        core.process_event(Event::Crossings(vec![crossing(1, near_the_station())]));
 
         let effects = core.process_event(Event::Reset);
 
@@ -500,8 +691,8 @@ mod tests {
         core.process_event(Event::Reset);
 
         core.process_event(Event::Crossings(vec![
-            crossing(1, 51.0503, 13.7322),
-            crossing(2, 60.0, 13.7322),
+            crossing(1, near_the_station()),
+            crossing(2, far_from_the_station()),
         ]));
         core.process_event(reported(instant(), at_the_station()));
 
@@ -512,7 +703,7 @@ mod tests {
     fn crossings_arriving_before_the_shell_starts_are_taken() {
         let core = waiting();
 
-        core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
+        core.process_event(Event::Crossings(vec![crossing(1, near_the_station())]));
         core.process_event(reported(instant(), at_the_station()));
 
         assert_eq!(core.view().predicted, 1);
@@ -523,7 +714,7 @@ mod tests {
         let core = core();
         core.process_event(reported(instant(), at_the_station()));
 
-        let effects = core.process_event(Event::Crossings(vec![crossing(1, 51.0503, 13.7322)]));
+        let effects = core.process_event(Event::Crossings(vec![crossing(1, near_the_station())]));
 
         assert_eq!(core.view().predicted, 0);
         assert!(effects.is_empty());
@@ -533,11 +724,9 @@ mod tests {
     fn a_point_off_the_globe_is_dropped_rather_than_losing_the_set() {
         let core = waiting();
 
-        let off_the_globe = CrossingCompact::new(1, geo_types::Point::new(13.7322, 91.0));
-
         core.process_event(Event::Crossings(vec![
-            off_the_globe,
-            crossing(2, 51.0503, 13.7322),
+            CrossingCompact::new(1, off_the_globe()),
+            crossing(2, near_the_station()),
         ]));
         core.process_event(reported(instant(), at_the_station()));
 
@@ -557,6 +746,7 @@ mod tests {
                 charge: None,
                 predicted: 0,
                 traced: 0,
+                states: Vec::new(),
             }
         );
     }
@@ -564,31 +754,37 @@ mod tests {
     #[test]
     fn a_position_becomes_the_fix_everything_is_measured_from() {
         let core = core();
+        let [short_of_it, at_it] = arriving_at_the_station(instant());
+        core.process_event(short_of_it);
 
-        let effects = core.process_event(reported(instant(), at_the_station()));
+        let effects = core.process_event(at_it);
 
         let view = core.view();
         assert_eq!(view.now, Some(instant()));
-        assert_eq!(view.speed_mps, Some(27.8));
-        assert!((view.latitude.expect("a fix") - 51.0403).abs() < 1e-4);
+        let speed_mps = view.speed_mps.expect("a speed");
+        assert!(
+            (speed_mps - 27.8).abs() < 0.05,
+            "{speed_mps} m/s is not 27.8 m/s"
+        );
+        assert!((view.latitude.expect("a fix") - DRESDEN_HBF.y() as Float).abs() < 1e-4);
         assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
     }
 
     #[test]
     fn a_position_and_a_sentence_move_the_same_fix() {
         let core = core();
-        let sentence = Fix::at(20, 43, 29, 51.0403, 13.7322);
+        let sentence = Fix::at(20, 43, 29, DRESDEN_HBF.y(), DRESDEN_HBF.x());
         core.process_event(Event::Sentence(sentence.rmc()));
 
         core.process_event(reported(
             sentence.t() + TimeDelta::seconds(1),
             Gps {
-                position: Point::new(DRESDEN_LON, 52.0),
+                position: up_the_line(),
                 ..at_the_station()
             },
         ));
 
-        assert!((core.view().latitude.expect("a fix") - 52.0).abs() < 1e-4);
+        assert!((core.view().latitude.expect("a fix") - up_the_line().y() as Float).abs() < 1e-4);
     }
 
     #[test]
@@ -599,12 +795,12 @@ mod tests {
         let effects = core.process_event(reported(
             instant() + TimeDelta::seconds(1),
             Gps {
-                position: Point::new(DRESDEN_LON, 91.0),
+                position: off_the_globe(),
                 ..at_the_station()
             },
         ));
 
-        assert!((core.view().latitude.expect("a fix") - 51.0403).abs() < 1e-4);
+        assert!((core.view().latitude.expect("a fix") - DRESDEN_HBF.y() as Float).abs() < 1e-4);
         assert!(effects.is_empty());
     }
 
@@ -617,12 +813,12 @@ mod tests {
         core.process_event(reported(
             instant() - TimeDelta::seconds(3_600),
             Gps {
-                position: Point::new(DRESDEN_LON, 52.0),
+                position: up_the_line(),
                 ..at_the_station()
             },
         ));
 
-        assert!((core.view().latitude.expect("a fix") - 52.0).abs() < 1e-4);
+        assert!((core.view().latitude.expect("a fix") - up_the_line().y() as Float).abs() < 1e-4);
     }
 
     #[test]
@@ -633,18 +829,19 @@ mod tests {
         let effects = core.process_event(reported(
             instant() - TimeDelta::seconds(1),
             Gps {
-                position: Point::new(DRESDEN_LON, 52.0),
+                position: up_the_line(),
                 ..at_the_station()
             },
         ));
 
-        assert!((core.view().latitude.expect("a fix") - 51.0403).abs() < 1e-4);
+        assert!((core.view().latitude.expect("a fix") - DRESDEN_HBF.y() as Float).abs() < 1e-4);
         assert!(effects.is_empty());
     }
 
     #[test]
-    fn a_position_without_a_speed_leaves_one_derived_from_the_fix_before() {
+    fn a_position_without_a_speed_leaves_one_estimated_from_the_fix_before() {
         let core = core();
+        let took = TimeDelta::seconds(10);
         core.process_event(reported(
             instant(),
             Gps {
@@ -654,16 +851,20 @@ mod tests {
         ));
 
         core.process_event(reported(
-            instant() + TimeDelta::seconds(10),
+            instant() + took,
             Gps {
-                position: Point::new(DRESDEN_LON, 51.0503),
+                position: near_the_station(),
                 speed_mps: None,
                 ..at_the_station()
             },
         ));
 
-        let derived = core.view().speed_mps.expect("a derived speed");
-        assert!((derived - 111.0).abs() < 20.0, "{derived}m/s");
+        let estimated = core.view().speed_mps.expect("an estimated speed");
+        let expected = Haversine.distance(DRESDEN_HBF, near_the_station()) / took.as_seconds_f64();
+        assert!(
+            (f64::from(estimated) - expected).abs() < 0.1,
+            "{estimated}m/s against {expected}m/s"
+        );
     }
 
     #[test]
@@ -752,7 +953,7 @@ mod tests {
 
         let effects = core.process_event(reported(
             instant() + TimeDelta::seconds(10),
-            north_of_the_station(4_000.0),
+            metres_north_of_the_station(4_000.0),
         ));
 
         assert!(matches!(effects.as_slice(), [Effect::Render(_)]));
@@ -765,7 +966,7 @@ mod tests {
 
         let effects = core.process_event(reported(
             instant() + TimeDelta::seconds(10),
-            north_of_the_station(6_000.0),
+            metres_north_of_the_station(6_000.0),
         ));
 
         let area = asked(&effects).expect("a request for lines").area;
@@ -795,7 +996,7 @@ mod tests {
             .expect("a request for lines");
         core.process_event(reported(
             instant() + TimeDelta::seconds(10),
-            north_of_the_station(6_000.0),
+            metres_north_of_the_station(6_000.0),
         ));
 
         let effects = core.process_event(Event::Lines {
@@ -857,7 +1058,7 @@ mod tests {
         core.process_event(reported(instant(), at_the_station()));
         core.process_event(reported(
             instant() + TimeDelta::seconds(10),
-            north_of_the_station(1_000.0),
+            metres_north_of_the_station(1_000.0),
         ));
 
         let latitudes: Vec<Float> = core.view().trace.iter().map(|at| at.y()).collect();
@@ -873,7 +1074,7 @@ mod tests {
 
         core.process_event(reported(
             instant() - TimeDelta::seconds(1),
-            north_of_the_station(1_000.0),
+            metres_north_of_the_station(1_000.0),
         ));
 
         assert_eq!(core.view().trace.len(), 1);

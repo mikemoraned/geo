@@ -55,10 +55,10 @@ that uses it names the worker's versioned file through `setWorkerUrl`.
 
 ## The python extensions
 
-Three crates are pyo3 extension modules: [medallion-py](crates/medallion-py/README.md) for the
+Four crates are pyo3 extension modules: [medallion-py](crates/medallion-py/README.md) for the
 store, [rerun-py](crates/platform/rerun-py/README.md) for replaying a session through the
-predictor, and [session-crossings-py](crates/session-crossings-py/README.md) for the session
-crossings matching's steps. Each one's API reference is its docstrings, which pyo3 publishes from
+predictor, [session-crossings-py](crates/session-crossings-py/README.md) for the session crossings
+matching's steps, and [evaluation-py](crates/evaluation-py/README.md) for the evaluation's steps. Each one's API reference is its docstrings, which pyo3 publishes from
 the doc comments in its `src/lib.rs`, so `help(…)` in a notebook or a REPL is the documentation.
 
 A notebook takes an extension through its own inline script metadata, since marimo notebooks here
@@ -81,6 +81,9 @@ list names the crate's sources, those of the workspace crates it builds on, and 
 `Cargo.toml` and `Cargo.lock`. When an extension comes to depend on another workspace crate, add
 that crate's `Cargo.toml` and sources to its list. A change to an unlisted crate leaves the old
 extension in place. To force a rebuild, pass `--reinstall-package <package>` to `uv run`.
+
+[The notebooks' README](notebooks/README.md) holds advice for writing a notebook, such as how to
+draw a grid's cells on a map.
 
 ## Testing
 

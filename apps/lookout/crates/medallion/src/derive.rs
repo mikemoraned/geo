@@ -62,6 +62,52 @@ where
     writer.finish().await
 }
 
+pub async fn write_geography_rows_by_country<R, G>(
+    root: &Root,
+    rows: &[GeographyRow<R, G>],
+) -> Result<TableWritten, TableError>
+where
+    R: Row<Layer = layers::Silver> + Clone,
+    G: geo_traits::GeometryTrait<T = f64> + geo::MapCoords<f64, f64, Output = G>,
+{
+    let target = SilverTarget::of::<R>()?;
+    if target.layout()? != Layout::Country {
+        return Err(TableError::UnsupportedLayout {
+            dataset: target.name(),
+            key: target.spec().partition_key.unwrap_or_default().to_string(),
+        });
+    }
+    check_named(&target, rows.iter().map(|placed| &placed.row))?;
+    let mut projectors = Projectors::default();
+    let countries: Vec<Country> = rows.iter().map(|placed| placed.country).collect();
+    let mut written = Replaced::default();
+    for (country, indices) in group(&countries) {
+        let placed: Vec<&GeographyRow<R, G>> =
+            indices.iter().map(|row| &rows[*row as usize]).collect();
+        let projector = projectors.for_country(country)?;
+        let projected: Vec<G> = placed
+            .iter()
+            .map(|placed| projector.project(&placed.geography))
+            .collect::<Result<_, _>>()?;
+        let own: Vec<&R> = placed.iter().map(|placed| &placed.row).collect();
+        let batch = geo_day(
+            &own,
+            placed.iter().map(|placed| &placed.geography),
+            &projected,
+            country,
+        )?;
+        root.dataset(R::DATASET)
+            .partition(COUNTRY, country)?
+            .replace_with_geo(&[batch])
+            .await?;
+        written.written += 1;
+    }
+    Ok(TableWritten {
+        rows: rows.len(),
+        partitions: written,
+    })
+}
+
 type Partition = (Country, NaiveDate);
 
 pub struct GeometryRowWriter<R> {
@@ -297,6 +343,8 @@ mod tests {
     use geo_types::{LineString, Point};
     use serde::{Deserialize, Serialize};
 
+    use domain::places::BERLIN;
+
     use super::*;
     use crate::dataset::DatasetSpec;
     use crate::geo::{PROJECTED_GEOMETRY, Projector};
@@ -393,7 +441,7 @@ mod tests {
             },
             geometry: Projector::for_country(country)
                 .unwrap()
-                .zoned(berlin())
+                .zoned(BERLIN)
                 .unwrap(),
         }
     }
@@ -589,17 +637,13 @@ mod tests {
         Utc.with_ymd_and_hms(2026, 7, day, 9, 0, 0).unwrap()
     }
 
-    fn berlin() -> Point<f64> {
-        Point::new(13.404954, 52.520008)
-    }
-
     fn track(id: &str, day: u32, country: Country) -> GeographyRow<TrackRow, LineString<f64>> {
         GeographyRow {
             row: TrackRow {
                 track_id: id.to_string(),
                 seen_at: at(day),
             },
-            geography: LineString::from(vec![berlin(), berlin()]),
+            geography: LineString::from(vec![BERLIN, BERLIN]),
             country,
         }
     }
@@ -795,7 +839,7 @@ mod tests {
             &Root::new(tmp.path()),
             &[GeographyRow {
                 row: pass("a", 21),
-                geography: berlin(),
+                geography: BERLIN,
                 country: Country::Germany,
             }],
         )
@@ -823,5 +867,103 @@ mod tests {
         assert_eq!(written.rows, 0);
         assert_eq!(written.partitions.removed, 1);
         assert!(!tmp.path().join("silver/track/country=DE").exists());
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    struct LandmarkRow {
+        landmark_id: String,
+    }
+
+    impl Row for LandmarkRow {
+        type Layer = layers::Silver;
+        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::partitioned("landmark", COUNTRY);
+        const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
+        const UNIQUE: &'static [&'static str] = &["landmark_id"];
+
+        fn example() -> Self {
+            LandmarkRow {
+                landmark_id: "example".to_string(),
+            }
+        }
+    }
+
+    fn landmark(id: &str, country: Country) -> GeographyRow<LandmarkRow, Point<f64>> {
+        GeographyRow {
+            row: LandmarkRow {
+                landmark_id: id.to_string(),
+            },
+            geography: BERLIN,
+            country,
+        }
+    }
+
+    #[tokio::test]
+    async fn rows_of_a_dataset_laid_out_by_country_land_under_their_country() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let root = Root::new(tmp.path());
+
+        let written = write_geography_rows_by_country(
+            &root,
+            &[
+                landmark("a", Country::Germany),
+                landmark("b", Country::Germany),
+                landmark("c", Country::UnitedKingdom),
+            ],
+        )
+        .await
+        .expect("a write");
+
+        assert_eq!((written.rows, written.partitions.written), (3, 2));
+        let mut german = Query::new(root)
+            .read_of_country::<LandmarkRow>(Country::Germany)
+            .await
+            .expect("a read")
+            .rows()
+            .await
+            .expect("the rows");
+        german.sort_by(|one, other| one.landmark_id.cmp(&other.landmark_id));
+        assert_eq!(
+            german,
+            [
+                landmark("a", Country::Germany).row,
+                landmark("b", Country::Germany).row
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_dataset_laid_out_by_date_is_refused_by_the_write_by_country() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+        let sighting = GeographyRow {
+            row: SightingRow::example(),
+            geography: BERLIN,
+            country: Country::Germany,
+        };
+
+        let refused = write_geography_rows_by_country(&Root::new(tmp.path()), &[sighting]).await;
+
+        assert!(
+            matches!(refused, Err(TableError::UnsupportedLayout { .. })),
+            "{refused:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn rows_naming_one_id_twice_are_refused_by_the_write_by_country() {
+        let tmp = tempfile::tempdir().expect("a temporary directory");
+
+        let refused = write_geography_rows_by_country(
+            &Root::new(tmp.path()),
+            &[
+                landmark("a", Country::Germany),
+                landmark("a", Country::Germany),
+            ],
+        )
+        .await;
+
+        assert!(
+            matches!(refused, Err(TableError::Duplicate { .. })),
+            "{refused:?}"
+        );
     }
 }

@@ -11,6 +11,7 @@ use crate::dataset::DatasetSpec;
 use crate::layer::LayerKind;
 
 const INSTANT_TYPE: &str = "Timestamp(Millisecond, Some(\"UTC\"))";
+const DURATION_TYPE: &str = "Duration(Millisecond)";
 
 #[derive(Debug, thiserror::Error)]
 pub enum RowError {
@@ -33,9 +34,31 @@ pub trait Row: Serialize + for<'de> Deserialize<'de> {
 
     const INSTANTS: &'static [&'static str] = &[];
 
+    const DURATIONS: &'static [&'static str] = &[];
+
     const UNIQUE: &'static [&'static str] = &[];
 
     fn example() -> Self;
+}
+
+pub trait Projection: Serialize + for<'de> Deserialize<'de> {
+    type Of: Row;
+
+    fn example() -> Self;
+}
+
+pub fn projected_columns<P: Projection>() -> Result<Vec<String>, RowError> {
+    let options = tracing_options();
+    Ok(Vec::<FieldRef>::from_samples(&[P::example()], options)?
+        .iter()
+        .map(|field| field.name().clone())
+        .collect())
+}
+
+fn tracing_options() -> TracingOptions {
+    TracingOptions::default()
+        .enums_without_data_as_strings(true)
+        .map_as_struct(false)
 }
 
 pub trait Dated: Row {
@@ -43,14 +66,29 @@ pub trait Dated: Row {
 }
 
 pub fn fields<T: Row>() -> Result<Vec<FieldRef>, RowError> {
-    let options = TracingOptions::default().enums_without_data_as_strings(true);
-    let options = T::INSTANTS.iter().try_fold(options, |options, &name| {
-        options.overwrite(
-            name,
-            json!({"name": name, "data_type": INSTANT_TYPE, "nullable": true}),
-        )
-    })?;
-    Ok(Vec::<FieldRef>::from_samples(&[T::example()], options)?
+    typed_fields(&T::example(), T::INSTANTS, T::DURATIONS)
+}
+
+pub fn fields_of<T: Serialize>(example: &T, instants: &[&str]) -> Result<Vec<FieldRef>, RowError> {
+    typed_fields(example, instants, &[])
+}
+
+fn typed_fields<T: Serialize>(
+    example: &T,
+    instants: &[&str],
+    durations: &[&str],
+) -> Result<Vec<FieldRef>, RowError> {
+    let options = instants
+        .iter()
+        .map(|&name| (name, INSTANT_TYPE))
+        .chain(durations.iter().map(|&name| (name, DURATION_TYPE)))
+        .try_fold(tracing_options(), |options, (name, data_type)| {
+            options.overwrite(
+                name,
+                json!({"name": name, "data_type": data_type, "nullable": true}),
+            )
+        })?;
+    Ok(Vec::<FieldRef>::from_samples([example], options)?
         .iter()
         .map(undictionary)
         .collect())
@@ -70,14 +108,24 @@ pub fn batch<T: Row>(rows: &[T]) -> Result<RecordBatch, RowError> {
     Ok(serde_arrow::to_record_batch(&fields::<T>()?, &rows)?)
 }
 
+pub fn from_batches<T: for<'de> Deserialize<'de>>(
+    batches: &[RecordBatch],
+) -> Result<Vec<T>, RowError> {
+    let mut rows = Vec::new();
+    for batch in batches {
+        rows.extend(serde_arrow::from_record_batch::<Vec<T>>(batch)?);
+    }
+    Ok(rows)
+}
+
 #[cfg(test)]
 mod tests {
     use arrow::datatypes::TimeUnit;
-    use chrono::{DateTime, Utc};
+    use chrono::{DateTime, TimeDelta, Utc};
 
     use super::*;
 
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct Reading {
         id: i64,
         t: i64,
@@ -112,6 +160,27 @@ mod tests {
             t: 1_700_000_000_000,
             name: None,
             source: Source::Measured,
+        }
+    }
+
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    struct Waited {
+        #[serde(with = "crate::duration::milliseconds")]
+        waited: TimeDelta,
+        #[serde(with = "crate::duration::milliseconds_option")]
+        lead: Option<TimeDelta>,
+    }
+
+    impl Row for Waited {
+        type Layer = crate::layer::layers::Bronze;
+        const DATASET: DatasetSpec<Self::Layer> = DatasetSpec::unpartitioned("waited");
+        const DURATIONS: &'static [&'static str] = &["waited", "lead"];
+
+        fn example() -> Self {
+            Waited {
+                waited: TimeDelta::zero(),
+                lead: Some(TimeDelta::zero()),
+            }
         }
     }
 
@@ -197,6 +266,40 @@ mod tests {
     }
 
     #[test]
+    fn a_named_duration_column_is_typed_as_a_millisecond_duration() {
+        let fields = fields::<Waited>().unwrap();
+
+        assert_eq!(
+            fields
+                .iter()
+                .map(|field| (field.name().as_str(), field.data_type().clone()))
+                .collect::<Vec<_>>(),
+            [
+                ("waited", DataType::Duration(TimeUnit::Millisecond)),
+                ("lead", DataType::Duration(TimeUnit::Millisecond)),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_duration_round_trips_through_a_batch() {
+        let rows = vec![
+            Waited {
+                waited: TimeDelta::milliseconds(90_500),
+                lead: Some(TimeDelta::milliseconds(-5_000)),
+            },
+            Waited {
+                waited: TimeDelta::zero(),
+                lead: None,
+            },
+        ];
+
+        let read: Vec<Waited> = from_batches(&[batch(&rows).unwrap()]).unwrap();
+
+        assert_eq!(read, rows);
+    }
+
+    #[test]
     fn other_integer_columns_are_left_alone() {
         let fields = fields::<Reading>().unwrap();
 
@@ -274,5 +377,28 @@ mod tests {
             DateTime::from_timestamp_millis(rows[0].t),
             DateTime::<Utc>::from_timestamp_millis(1_700_000_000_000)
         );
+    }
+
+    #[test]
+    fn rows_survive_a_round_trip_through_a_batch() {
+        let rows = vec![row(1), row(2)];
+
+        let read: Vec<Reading> = from_batches(&[batch(&rows).unwrap()]).unwrap();
+
+        assert_eq!(read, rows);
+    }
+
+    #[test]
+    fn a_batch_lacking_a_column_of_the_row_is_refused() {
+        let batch = batch(&[row(1)]).unwrap();
+        let without_source = batch
+            .project(
+                &(0..batch.num_columns())
+                    .filter(|&index| batch.schema().field(index).name() != "source")
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+
+        assert!(from_batches::<Reading>(&[without_source]).is_err());
     }
 }

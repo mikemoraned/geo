@@ -1,48 +1,14 @@
-use std::fmt::{self, Display};
-use std::str::FromStr;
-
 use arrow::array::{Array, Float64Array};
 use chrono::{DateTime, Utc};
 use geo_types::{Coord, Rect};
-use medallion::{Country, PartitionValue, Query, Root};
-use medallion_model::{DIVISION_ID, ExtractManifestRowV3, OvertureRelease};
+use medallion::{Country, Query, Root};
+use medallion_model::{
+    DIVISION_ID, ExtractId, ExtractManifestRowV3, OvertureRelease, OvertureType, RECORDED,
+};
 
-use crate::overture::{Overture, OvertureError, OvertureType};
+use crate::overture::{Overture, OvertureError};
 
 const EXCLUDED_CLASSES: &[&str] = &["tram"];
-
-const COMPACT_UTC: &str = "%Y%m%dT%H%M%SZ";
-
-pub(crate) const RECORDED: &str = "SELECT * FROM extract_manifest_v3 ORDER BY extracted_at DESC";
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExtractId(String);
-
-impl ExtractId {
-    pub fn at(at: DateTime<Utc>) -> Self {
-        Self(at.format(COMPACT_UTC).to_string())
-    }
-
-    pub fn new(id: impl Into<String>) -> Result<Self, medallion::PathError> {
-        let id = id.into();
-        PartitionValue::new(id.clone())?;
-        Ok(Self(id))
-    }
-}
-
-impl FromStr for ExtractId {
-    type Err = medallion::PathError;
-
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        Self::new(id)
-    }
-}
-
-impl Display for ExtractId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
 
 pub async fn recorded(root: &Root) -> Result<Vec<ExtractManifestRowV3>, ExtractError> {
     let query = Query::new(root.clone());
@@ -235,12 +201,8 @@ impl<'a> Extractor<'a> {
                 "SELECT *, '{id}' AS extract_id FROM {table} WHERE {predicate}"
             ))
             .await?;
-        Ok(self
-            .root
-            .dataset(medallion_model::OVERTURE_EXTRACT)
-            .for_id(id)?
-            .partition("theme", overture_type.theme)?
-            .partition("type", overture_type.name)?
+        Ok(overture_type
+            .in_extract(self.root, id)?
             .append_geo_stream(at, stream)
             .await?
             .rows)
@@ -537,14 +499,9 @@ mod tests {
         for (overture_type, rows) in &extraction.rows {
             assert_eq!(*rows, 1, "{}/{}", overture_type.theme, overture_type.name);
         }
-        let segments = root
-            .dataset(medallion_model::OVERTURE_EXTRACT)
-            .for_id(&extraction.id)
-            .expect("the id the manifest gave it")
-            .partition("theme", OvertureType::SEGMENT.theme)
-            .expect("the theme")
-            .partition("type", OvertureType::SEGMENT.name)
-            .expect("the type");
+        let segments = OvertureType::SEGMENT
+            .in_extract(&root, &extraction.id)
+            .expect("the extract's segments");
         assert!(segments.is_filled(), "{}", segments.dir().display());
     }
 

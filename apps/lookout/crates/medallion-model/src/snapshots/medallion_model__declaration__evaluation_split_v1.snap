@@ -1,0 +1,35 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: gold
+partition_key: run_date
+unique: []
+columns:
+  - name: cells
+    data_type: UInt64
+    nullable: false
+  - name: cells_in_split
+    data_type: UInt64
+    nullable: false
+  - name: crossings
+    data_type: UInt64
+    nullable: false
+  - name: crossings_in_split
+    data_type: UInt64
+    nullable: false
+  - name: passes_in_split
+    data_type: UInt64
+    nullable: false
+  - name: passes_outside
+    data_type: UInt64
+    nullable: false
+  - name: outcomes_in_split
+    data_type: UInt64
+    nullable: false
+  - name: outcomes_outside
+    data_type: UInt64
+    nullable: false
+  - name: cells_outside_cover
+    data_type: UInt64
+    nullable: false

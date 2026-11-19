@@ -57,8 +57,10 @@ example, with `enum Colour { Red, Green, Blue }`:
    key.
 2. Define its row type beside it, with one field per column, deriving `Serialize` and `Deserialize`.
 3. Implement `Row` for the row type, setting `DATASET` to the dataset.
-4. Set `GEOMETRY` for rows written with a geometry, `INSTANTS` for fields holding instants, and
-   `UNIQUE` for identifying columns.
+4. Set `GEOMETRY` for rows written with a geometry, `INSTANTS` for fields holding instants,
+   `DURATIONS` for fields holding spans of time, and `UNIQUE` for identifying columns. A field
+   named in `DURATIONS` holds a `TimeDelta`, serialised with `medallion::duration::milliseconds`,
+   or `milliseconds_option` for an `Option<TimeDelta>`.
 5. If the dataset is partitioned by date, implement `Dated` to give the date each row is stored
    under.
 6. Implement `example`, returning a row that follows the two rules for an example.
@@ -171,6 +173,13 @@ A dataset is registered as a table by name, which walks its partition directorie
 geometry columns back with their CRS, so a caller expresses what it wants as a query rather than
 as file traversal.
 
+A read in Rust can name a row type instead of a table. `Query::read_of_country` returns a `Read` of
+that type over one country's partition. `Query::read` returns one over a whole dataset that has no
+country level. Each refuses a dataset laid out the other way. A `Read`'s `filter`, `sort`, and `limit` take the engine's own
+expressions, and `rows` returns rows of the type, reading only its columns. The engine plans and
+runs these operators as it does a SQL query. [What a read
+costs](../../docs/medallion.md#what-a-read-costs) sets out what that saves.
+
 A summary answers "is this dataset there, and how much of it" without reading a row: the counts
 come from each parquet file's own footer, so the cost is a seek per file rather than a scan.
 Nothing in it interprets a dataset's columns, which is what lets one summary cover every dataset —
@@ -193,7 +202,7 @@ There are two workarounds:
 - **Write the geometry first.** A file whose geometry precedes every nested column reads normally.
   Every silver file holds its geometry columns ahead of its other columns, as a workaround until a
   SedonaDB release fixes [the panic](../../docs/2026-10-03-sedona-nested-column-panic.md). A silver
-  dataset holding a struct, such as `train_session_v2` and its `bbox`, therefore reads with typed
+  dataset holding a struct, such as `train_session_v3` and its `bbox`, therefore reads with typed
   geometry. A fixture can use this workaround too. Bronze cannot, since it keeps the column order
   of the release it records.
 

@@ -1,0 +1,30 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: silver
+partition_key: crossed_date
+unique: []
+columns:
+  - name: session_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "domain::name::checked": adb6eaead74b5eb27fb75d5e90a525ccbef775a2d60f35da16ebefe5f88d8829
+  - name: crossing_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "domain::name::checked": adb6eaead74b5eb27fb75d5e90a525ccbef775a2d60f35da16ebefe5f88d8829
+  - name: crossed_at
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true
+  - name: distance_m
+    data_type: Float64
+    nullable: false
+  - name: samples_within
+    data_type: UInt32
+    nullable: false
+  - name: match_radius_m
+    data_type: Float64
+    nullable: false

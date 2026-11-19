@@ -2,9 +2,9 @@ use medallion::{RowError, SilverTarget};
 
 use crate::{
     SESSION_CROSSING_V3, SESSION_SAMPLE_V3, SESSION_V3, SessionCrossingRowV3, SessionRowV3,
-    SessionSampleRowV3, TRAIN_SEGMENT_V4, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2,
-    TrainSegmentRowV4, TrainSessionRowV2, TrainSessionSampleRowV2, WATER_CROSSING_V2,
-    WaterCrossingRowV2,
+    SessionSampleRowV3, TRAIN_SEGMENT_V4, TRAIN_SESSION_CROSSING_V1, TRAIN_SESSION_SAMPLE_V3,
+    TRAIN_SESSION_V3, TrainSegmentRowV4, TrainSessionCrossingRowV1, TrainSessionRowV3,
+    TrainSessionSampleRowV3, WATER_CROSSING_V2, WaterCrossingRowV2,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -17,17 +17,17 @@ pub enum TargetError {
 
 type Definition = fn() -> Result<SilverTarget, RowError>;
 
-const TARGETS: [(&str, Definition); 7] = [
+const TARGETS: [(&str, Definition); 8] = [
     (SESSION_V3.name, SilverTarget::of::<SessionRowV3>),
     (
         SESSION_SAMPLE_V3.name,
         SilverTarget::of::<SessionSampleRowV3>,
     ),
     (TRAIN_SEGMENT_V4.name, SilverTarget::of::<TrainSegmentRowV4>),
-    (TRAIN_SESSION_V2.name, SilverTarget::of::<TrainSessionRowV2>),
+    (TRAIN_SESSION_V3.name, SilverTarget::of::<TrainSessionRowV3>),
     (
-        TRAIN_SESSION_SAMPLE_V2.name,
-        SilverTarget::of::<TrainSessionSampleRowV2>,
+        TRAIN_SESSION_SAMPLE_V3.name,
+        SilverTarget::of::<TrainSessionSampleRowV3>,
     ),
     (
         WATER_CROSSING_V2.name,
@@ -36,6 +36,10 @@ const TARGETS: [(&str, Definition); 7] = [
     (
         SESSION_CROSSING_V3.name,
         SilverTarget::of::<SessionCrossingRowV3>,
+    ),
+    (
+        TRAIN_SESSION_CROSSING_V1.name,
+        SilverTarget::of::<TrainSessionCrossingRowV1>,
     ),
 ];
 
@@ -88,7 +92,7 @@ mod tests {
 
     #[test]
     fn the_train_sessions_can_be_named() {
-        for name in [TRAIN_SESSION_V2.name, TRAIN_SESSION_SAMPLE_V2.name] {
+        for name in [TRAIN_SESSION_V3.name, TRAIN_SESSION_SAMPLE_V3.name] {
             assert!(silver_target(name).is_ok(), "{name} cannot be named");
         }
     }

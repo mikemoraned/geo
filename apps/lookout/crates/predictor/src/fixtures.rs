@@ -1,3 +1,5 @@
+#![cfg(any(test, feature = "fixtures"))]
+
 use chrono::{DateTime, TimeZone, Utc};
 
 use crate::sentence::Sentence;

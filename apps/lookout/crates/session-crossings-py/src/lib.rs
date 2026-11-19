@@ -1,18 +1,15 @@
-use std::sync::Arc;
-
 use arrow::array::{Array, ArrayRef, Int64Array, RecordBatch, StringArray};
 use arrow::compute::{cast, concat_batches};
-use arrow::datatypes::{DataType, Field, FieldRef, TimeUnit};
+use arrow::datatypes::{DataType, TimeUnit};
 use chrono::{DateTime, Utc};
-use domain::{CrossingId, Pass, Radius, SessionId};
+use domain::{CrossingId, Radius, SessionId};
 use geo_types::{Geometry, Point};
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use py_common::{runtime_error, table_of_batch, value_error};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_arrow::PyTable;
 use serde::{Deserialize, Serialize};
-use serde_arrow::schema::{SchemaLike, TracingOptions};
-use session_crossings::matching::{self, Crossing, DEFAULT_RADIUS, Near, Sample};
+use session_crossings::matching::{self, Crossing, DEFAULT_RADIUS, Sample, Visit};
 
 /// The steps the session crossings matching takes for one session, as two tables.
 ///
@@ -39,23 +36,19 @@ fn steps<'py>(
     let crossings = crossings_of(&one_batch(crossings)?)?;
     let radius = Radius::new(radius_metres).map_err(value_error)?;
 
-    let mut near: Vec<(CrossingId, Near)> = Vec::new();
-    let mut passes = Vec::new();
-    for crossing in &crossings {
-        let steps =
-            matching::steps(&session_id, &samples, crossing, radius).map_err(runtime_error)?;
-        near.extend(
-            steps
-                .near
-                .into_iter()
-                .map(|one| (crossing.crossing.id.clone(), one)),
-        );
-        passes.extend(steps.passes);
-    }
+    let visits_by_crossing = crossings
+        .iter()
+        .map(|crossing| {
+            matching::visits(&session_id, &samples, crossing, radius).map_err(runtime_error)
+        })
+        .collect::<PyResult<Vec<Vec<Visit>>>>()?;
 
     let answer = PyDict::new(py);
-    answer.set_item("near", table(near_batch(&near)?)?)?;
-    answer.set_item("passes", table(passes_batch(&passes)?)?)?;
+    answer.set_item("near", table_of_batch(near_batch(&visits_by_crossing)?)?)?;
+    answer.set_item(
+        "passes",
+        table_of_batch(passes_batch(&visits_by_crossing)?)?,
+    )?;
     Ok(answer)
 }
 
@@ -72,7 +65,7 @@ fn samples_of(batch: &RecordBatch) -> PyResult<Vec<Sample>> {
         .zip(projected)
         .map(|(t, projected)| Sample { t, projected })
         .collect();
-    samples.sort_by_key(|sample| sample.t);
+    samples.sort_by(Sample::session_order);
     Ok(samples)
 }
 
@@ -98,7 +91,7 @@ fn crossings_of(batch: &RecordBatch) -> PyResult<Vec<Crossing>> {
 fn column<'a>(batch: &'a RecordBatch, name: &str) -> PyResult<&'a ArrayRef> {
     batch
         .column_by_name(name)
-        .ok_or_else(|| PyValueError::new_err(format!("the table has no `{name}` column")))
+        .ok_or_else(|| value_error(format!("the table has no `{name}` column")))
 }
 
 fn instants(batch: &RecordBatch, name: &str) -> PyResult<Vec<DateTime<Utc>>> {
@@ -167,76 +160,66 @@ struct PassRow {
     samples_within: u32,
 }
 
-fn near_batch(near: &[(CrossingId, Near)]) -> PyResult<RecordBatch> {
-    let rows = near
-        .iter()
-        .map(|(crossing_id, one)| {
-            Ok(NearRow {
-                crossing_id: crossing_id.to_string(),
-                t: one.sample.t,
-                distance_m: one.distance_metres,
-                visit: one.visit.try_into().map_err(|_| {
-                    PyRuntimeError::new_err(format!(
-                        "visit {} is more than the `visit` column can number",
-                        one.visit
-                    ))
-                })?,
-            })
-        })
-        .collect::<PyResult<Vec<_>>>()?;
-    batch(&rows, "t")
+impl NearRow {
+    fn example() -> Self {
+        Self {
+            crossing_id: "example".to_string(),
+            t: DateTime::UNIX_EPOCH,
+            distance_m: 0.0,
+            visit: 0,
+        }
+    }
 }
 
-fn passes_batch(passes: &[Pass]) -> PyResult<RecordBatch> {
-    let rows: Vec<PassRow> = passes
+impl PassRow {
+    fn example() -> Self {
+        Self {
+            crossing_id: "example".to_string(),
+            crossed_at: DateTime::UNIX_EPOCH,
+            distance_m: 0.0,
+            samples_within: 1,
+        }
+    }
+}
+
+fn near_batch(visits_by_crossing: &[Vec<Visit>]) -> PyResult<RecordBatch> {
+    let rows: Vec<NearRow> = visits_by_crossing
         .iter()
-        .map(|pass| PassRow {
+        .flat_map(|visits| {
+            (0..).zip(visits).flat_map(|(number, visit)| {
+                visit.near.iter().map(move |near| NearRow {
+                    crossing_id: visit.pass.crossing_id.to_string(),
+                    t: near.sample.t,
+                    distance_m: near.distance_metres,
+                    visit: number,
+                })
+            })
+        })
+        .collect();
+    batch(&rows, &NearRow::example(), "t")
+}
+
+fn passes_batch(visits_by_crossing: &[Vec<Visit>]) -> PyResult<RecordBatch> {
+    let rows: Vec<PassRow> = visits_by_crossing
+        .iter()
+        .flatten()
+        .map(|Visit { pass, .. }| PassRow {
             crossing_id: pass.crossing_id.to_string(),
             crossed_at: pass.crossed_at,
             distance_m: pass.distance_metres,
             samples_within: pass.samples_within,
         })
         .collect();
-    batch(&rows, "crossed_at")
+    batch(&rows, &PassRow::example(), "crossed_at")
 }
 
-fn batch<T: Serialize + for<'de> Deserialize<'de>>(
-    rows: &[T],
-    instant: &str,
-) -> PyResult<RecordBatch> {
-    let fields: Vec<FieldRef> = Vec::<FieldRef>::from_type::<T>(TracingOptions::default())
-        .map_err(runtime_error)?
-        .into_iter()
-        .map(|field| {
-            if field.name() == instant {
-                Arc::new(Field::new(
-                    instant,
-                    DataType::Timestamp(TimeUnit::Millisecond, Some("UTC".into())),
-                    false,
-                ))
-            } else {
-                field
-            }
-        })
-        .collect();
+fn batch<T: Serialize>(rows: &[T], example: &T, instant: &str) -> PyResult<RecordBatch> {
+    let fields = medallion::fields_of(example, &[instant]).map_err(runtime_error)?;
     serde_arrow::to_record_batch(&fields, &rows).map_err(runtime_error)
 }
 
-fn table(batch: RecordBatch) -> PyResult<PyTable> {
-    let schema = batch.schema();
-    PyTable::try_new(vec![batch], schema).map_err(runtime_error)
-}
-
 fn unreadable(name: &str, reason: impl std::fmt::Display) -> PyErr {
-    PyValueError::new_err(format!("the `{name}` column cannot be read: {reason}"))
-}
-
-fn value_error(err: impl std::fmt::Display) -> PyErr {
-    PyValueError::new_err(err.to_string())
-}
-
-fn runtime_error(err: impl std::fmt::Display) -> PyErr {
-    PyRuntimeError::new_err(err.to_string())
+    value_error(format!("the `{name}` column cannot be read: {reason}"))
 }
 
 #[pymodule]

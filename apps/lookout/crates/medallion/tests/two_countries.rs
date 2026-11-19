@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use arrow::array::{Int64Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema};
+use domain::places::{BERLIN, EDINBURGH};
 use geo_types::Point;
 use medallion::{
     COUNTRY, Country, DatasetSpec, GEOMETRY, PROJECTED_GEOMETRY, Projector, Query, Root, layers,
@@ -10,11 +11,7 @@ use medallion::{
 
 const CROSSINGS: DatasetSpec<layers::Silver> = DatasetSpec::partitioned("water_crossing", COUNTRY);
 
-const BERLIN: (f64, f64) = (13.404954, 52.520008);
-const EDINBURGH: (f64, f64) = (-3.188267, 55.953251);
-
-fn crossings_of(country: Country, at: (f64, f64)) -> RecordBatch {
-    let point = Point::new(at.0, at.1);
+fn crossings_of(country: Country, point: Point<f64>) -> RecordBatch {
     let projected = Projector::for_country(country)
         .expect("a projector")
         .project(&point)

@@ -1,13 +1,11 @@
-use chrono::{DateTime, Utc};
-use domain::TrainNumber;
 use geo_types::{Coord, LineString, Point};
 use medallion::{
     Countries, Country, Dated, GeoError, GeometryRow, GeometryRowWriter, Projectors, Query, Root,
     ZonedGeometry,
 };
 use medallion_model::{
-    AgencyId, MOTIS_POLYLINE_V2, MOTIS_SEGMENT_V3, MotisPolylineRowV2, MotisSourceId, PolylineId,
-    RailMode, StopId, TrainSegmentRowV4, TripId,
+    MOTIS_POLYLINE_V2, MOTIS_SEGMENT_V3, MotisPolylineRowV2, MotisSourceId, PolylineId, RailMode,
+    TrainSegmentRowV4, TripId,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -47,6 +45,8 @@ pub enum IngestError {
     Sources(#[from] crate::source::SourceError),
     #[error("placing a train: {0}")]
     Unplaced(#[from] crate::sampling::NoWhereabouts),
+    #[error("the share of a session's samples timed in real time: {0}")]
+    RealtimeShare(#[from] domain::NotAPercentage),
     #[error("projecting a train's sample: {0}")]
     Projection(#[from] medallion::GeoError),
     #[error("trip `{trip_id}`: {source}")]
@@ -69,42 +69,13 @@ pub enum IngestError {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Leg {
-    pub(crate) source_id: MotisSourceId,
-    pub(crate) trip_id: TripId,
-    pub(crate) route_name: Option<String>,
-    pub(crate) train_number: Option<TrainNumber>,
-    pub(crate) agency_id: Option<AgencyId>,
-    pub(crate) agency_name: Option<String>,
-    pub(crate) mode: RailMode,
-    pub(crate) realtime: bool,
-    pub(crate) from_stop_id: Option<StopId>,
+    #[serde(flatten)]
+    pub(crate) segment: TrainSegmentRowV4,
     pub(crate) from_lat: f64,
     pub(crate) from_lon: f64,
     pub(crate) to_lat: f64,
     pub(crate) to_lon: f64,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub(crate) departure: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    pub(crate) arrival: DateTime<Utc>,
     pub(crate) polyline_id: PolylineId,
-}
-
-impl From<Leg> for TrainSegmentRowV4 {
-    fn from(leg: Leg) -> Self {
-        Self {
-            source_id: leg.source_id,
-            trip_id: leg.trip_id,
-            route_name: leg.route_name,
-            train_number: leg.train_number,
-            agency_id: leg.agency_id,
-            agency_name: leg.agency_name,
-            mode: leg.mode,
-            realtime: leg.realtime,
-            from_stop_id: leg.from_stop_id,
-            departure: leg.departure,
-            arrival: leg.arrival,
-        }
-    }
 }
 
 #[derive(Default)]
@@ -149,7 +120,7 @@ async fn ingest_in_writes_of(
                 None
             }
         };
-        if let Some(PlacedLine { line, country }) = placed {
+        if let Some(PlacedLine { line, country, .. }) = placed {
             match country {
                 Some(country) => {
                     let geometry = match zoned_polylines.get(&leg.polyline_id) {
@@ -159,7 +130,7 @@ async fn ingest_in_writes_of(
                             .zoned(LineString::clone(&line))?,
                     };
                     pending.push(GeometryRow {
-                        row: TrainSegmentRowV4::from(leg),
+                        row: leg.segment,
                         geometry,
                     });
                 }
@@ -242,14 +213,17 @@ fn rail_modes() -> String {
 pub(crate) struct PlacedLine {
     pub(crate) line: Arc<LineString<f64>>,
     pub(crate) country: Option<Country>,
+    pub(crate) covered_by: Option<Country>,
 }
 
 impl PlacedLine {
     fn of(line: LineString<f64>, countries: &impl Countries) -> Self {
         let country = countries.containing(starts_from(&line));
+        let covered_by = countries.covering(&line);
         Self {
             line: Arc::new(line),
             country,
+            covered_by,
         }
     }
 }
@@ -291,6 +265,7 @@ impl<'a, C: Countries> Shapes<'a, C> {
             if let Some(PlacedLine {
                 line,
                 country: Some(country),
+                ..
             }) = placed
             {
                 let line = projectors
@@ -351,14 +326,16 @@ mod tests {
 
     use crate::api::types::{Mode, TripSegment};
     use arrow::array::RecordBatch;
-    use chrono::TimeZone;
+    use chrono::{DateTime, TimeZone, Utc};
     use medallion::{GEOMETRY, PROJECTED_GEOMETRY, Projector, Row};
     use medallion_model::{Feed, MotisPollRowV2, MotisSegmentRowV3, Polyline};
 
     use super::*;
     use crate::landing::SegmentLog;
     use crate::landing_to_bronze_promotion::{promote, write_polls};
-    use crate::testing::{CaptureLog, EastIsGermany, Nowhere, germany, regional_trips, source};
+    use crate::testing::{
+        CaptureLog, Nowhere, PretendEastOfGreenwichIsGermany, germany, regional_trips, source,
+    };
 
     fn log(root: &Root) -> CaptureLog {
         CaptureLog::new(root.clone(), source(Feed::Local).id())
@@ -971,7 +948,7 @@ mod tests {
     async fn legs_sharing_a_polyline_are_placed_once() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let countries = EastIsGermany::default();
+        let countries = PretendEastOfGreenwichIsGermany::default();
         log(&root)
             .append(
                 Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap(),
@@ -991,7 +968,7 @@ mod tests {
     async fn a_polyline_bronze_holds_twice_is_placed_once() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let countries = EastIsGermany::default();
+        let countries = PretendEastOfGreenwichIsGermany::default();
         let captured_at = Utc.with_ymd_and_hms(2026, 7, 26, 14, 0, 0).unwrap();
         log(&root)
             .append(captured_at, &[one_trip(leg_on(21))], &Map::new())
@@ -1011,21 +988,23 @@ mod tests {
 
     fn leg_naming(polyline: &Polyline) -> Leg {
         Leg {
-            source_id: source(Feed::Local).id(),
-            trip_id: TripId::new("a trip").expect("a trip id"),
-            route_name: None,
-            train_number: None,
-            agency_id: None,
-            agency_name: None,
-            mode: RailMode::RegionalRail,
-            realtime: false,
-            from_stop_id: None,
+            segment: TrainSegmentRowV4 {
+                source_id: source(Feed::Local).id(),
+                trip_id: TripId::new("a trip").expect("a trip id"),
+                route_name: None,
+                train_number: None,
+                agency_id: None,
+                agency_name: None,
+                mode: RailMode::RegionalRail,
+                realtime: false,
+                from_stop_id: None,
+                departure: DateTime::UNIX_EPOCH,
+                arrival: DateTime::UNIX_EPOCH,
+            },
             from_lat: 0.0,
             from_lon: 0.0,
             to_lat: 0.0,
             to_lon: 0.0,
-            departure: DateTime::UNIX_EPOCH,
-            arrival: DateTime::UNIX_EPOCH,
             polyline_id: PolylineId::of(polyline),
         }
     }
@@ -1065,7 +1044,7 @@ mod tests {
             .await
             .expect("append poll");
 
-        let outcome = ingest(&root, &EastIsGermany::default())
+        let outcome = ingest(&root, &PretendEastOfGreenwichIsGermany::default())
             .await
             .expect("ingest");
 

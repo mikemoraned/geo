@@ -34,15 +34,25 @@ produces, so any of them can be re-run over unchanged input to the same result.
 
 ```
 bronze telemetry       ──sessionise──────▶ session_v3, session_sample_v3
-bronze motis log       ──motis_ingest────▶ train_segment_v4, train_session_v2,
-                                           train_session_sample_v2
+bronze motis log       ──motis_ingest────▶ train_segment_v4, train_session_v3,
+                                           train_session_sample_v3
 bronze overture        ──notebook────────▶ water_crossing_v2
 session_v3 + crossings ──match_crossings─▶ session_crossing_v3
+train_session_v3 +
+  crossings            ──match_crossings─▶ train_session_crossing_v1
 water_crossing_v2      ──pack_crossings──▶ gold crossings.pointset, crossings.json
 session_crossing_v3 +
   session_sample_v3 +
   water_crossing_v2 +
   bronze overture      ──pack_map────────▶ gold map.pmtiles
+train_session_v3 +
+  train_session_sample_v3 +
+  train_session_crossing_v1 +
+  water_crossing_v2 +
+  bronze overture      ──evaluate────────▶ gold evaluation_run_v6, evaluation_session_v3,
+                                           evaluation_episode_v1, evaluation_outcome_v3,
+                                           evaluation_summary_v3, evaluation_skew_v2,
+                                           evaluation_split_v1
 ```
 
 Two properties of that graph matter more than the order:
@@ -60,6 +70,9 @@ Gold is read by a build rather than by a query: the crossings are compiled into 
 firmware and fetched by a browser, and the sessions are fetched by a browser. A checkout
 cannot re-derive either, so the versions in use are committed — see
 [medallion.md](medallion.md).
+
+An evaluation run is also gold, and is read by a query. It records how a predictor scored against
+the silver of its day, which a later re-derive can change, so every run is committed as well.
 
 ## Languages
 

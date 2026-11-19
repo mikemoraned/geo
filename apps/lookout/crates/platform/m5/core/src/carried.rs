@@ -15,10 +15,14 @@ pub fn crossings() -> PointSet<'static> {
 mod tests {
     use chrono::{DateTime, Utc};
     use domain::Sample;
+    use domain::places::DRESDEN_HBF;
     use geo::Contains;
     use geo_types::Point;
     use medallion::Country;
-    use predictor::{CrowFlies, DEFAULT_RADIUS, Event, Predict};
+    use predictor::{
+        CrowFlies, DEFAULT_ALERTING, DEFAULT_STILL_WITHIN, DEFAULT_WATCHING, Event, LastMove,
+        Predict, nearest_first,
+    };
 
     use super::*;
 
@@ -48,7 +52,6 @@ mod tests {
         }
     }
 
-    const DRESDEN_HBF: (f64, f64) = (51.0403, 13.7322);
     const NEAREST_TO_DRESDEN: [(u32, f32); 5] = [
         (0x5c9f_65c9, 2335.0),
         (0x3a81_47c0, 2338.4),
@@ -59,11 +62,17 @@ mod tests {
     const TOLERANCE_M: f32 = 1.0;
 
     fn at_dresden() -> CrowFlies<f32, PointSet<'static>> {
-        let mut predictor = CrowFlies::new(crossings(), DEFAULT_RADIUS);
+        let mut predictor = CrowFlies::new(
+            crossings(),
+            DEFAULT_WATCHING,
+            DEFAULT_ALERTING,
+            LastMove::new(DEFAULT_STILL_WITHIN),
+        )
+        .expect("the defaults alert within what they watch");
         let t = DateTime::<Utc>::from_timestamp_millis(1_785_098_609_000).expect("an instant");
         predictor
             .observe(Event::Sampled(
-                Sample::at(t, DRESDEN_HBF.0, DRESDEN_HBF.1).expect("on the globe"),
+                Sample::at(t, DRESDEN_HBF.y(), DRESDEN_HBF.x()).expect("on the globe"),
             ))
             .expect("the first event");
         predictor
@@ -73,11 +82,10 @@ mod tests {
     fn the_device_agrees_with_the_notebook_about_what_is_nearest() {
         let predictor = at_dresden();
 
-        let ids: Vec<u32> = predictor
-            .predictions()
-            .iter()
+        let ids: Vec<u32> = nearest_first(predictor.predictions())
+            .into_iter()
             .take(NEAREST_TO_DRESDEN.len())
-            .map(|prediction| prediction.crossing_compact_id.get())
+            .map(|(crossing_compact_id, _)| crossing_compact_id.get())
             .collect();
 
         assert_eq!(
@@ -91,8 +99,12 @@ mod tests {
     fn the_device_agrees_with_the_notebook_about_how_far() {
         let predictor = at_dresden();
 
-        for (prediction, (id, metres)) in predictor.predictions().iter().zip(NEAREST_TO_DRESDEN) {
-            assert_eq!(prediction.crossing_compact_id.get(), id);
+        for ((crossing_compact_id, prediction), (id, metres)) in
+            nearest_first(predictor.predictions())
+                .into_iter()
+                .zip(NEAREST_TO_DRESDEN)
+        {
+            assert_eq!(crossing_compact_id.get(), id);
             assert!(
                 (prediction.metres - metres).abs() < TOLERANCE_M,
                 "{:08x}: the device says {}m, the notebook says {metres}m",

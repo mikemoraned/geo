@@ -5,11 +5,11 @@ use hashfn::hashfn;
 pub struct NameError(String);
 
 #[hashfn]
-pub fn checked(id: String) -> Result<String, NameError> {
+pub fn checked(id: &str) -> Result<(), NameError> {
     const RESERVED: [char; 3] = ['/', ' ', '='];
     if id.is_empty() || id.contains(RESERVED) {
-        Err(NameError(id))
+        Err(NameError(id.to_string()))
     } else {
-        Ok(id)
+        Ok(())
     }
 }

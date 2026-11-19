@@ -2,12 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use domain::{DeviceId, Pass, Radius, SessionId};
+use futures::StreamExt;
 use geo_types::Point;
 use medallion::{COUNTRY, Country, DatasetSpec, Query, Replaced, Root, layers};
-use medallion_model::{SessionCrossingRowV3, WaterCrossingRowV2};
+use medallion_model::{SessionCrossingRowV3, TrainSessionCrossingRowV1, WaterCrossingRowV2};
 use serde::Deserialize;
 
-use crate::matching::{Crossing, NoPass, Sample, Session, passes};
+use crate::matching::{Crossing, CrossingIndex, Matcher, NoPass, Sample, Session};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MatchOutcome {
@@ -32,21 +33,40 @@ pub enum CrossingError {
     Path(#[from] medallion::PathError),
     #[error("matching sessions to crossings: {0}")]
     Matching(#[from] NoPass),
-}
-
-#[derive(Debug, Deserialize)]
-struct StoredSession {
-    session_id: SessionId,
-    device_id: DeviceId,
-    samples: Option<Vec<StoredSample>>,
+    #[error("counting the sessions: {0}")]
+    Count(#[from] std::num::TryFromIntError),
 }
 
 #[derive(Debug, Deserialize)]
 struct StoredSample {
+    session_id: SessionId,
+    seq: u32,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     t: DateTime<Utc>,
     x: f64,
     y: f64,
+}
+
+impl StoredSample {
+    fn sample(&self) -> Sample {
+        Sample {
+            t: self.t,
+            projected: Point::new(self.x, self.y),
+        }
+    }
+}
+
+const STORED_SAMPLES: &str = "SELECT session_id,
+        seq,
+        t,
+        ST_X(geometry_projected) AS x,
+        ST_Y(geometry_projected) AS y
+    FROM samples";
+
+#[derive(Debug, Deserialize)]
+struct StoredDevice {
+    session_id: SessionId,
+    device_id: DeviceId,
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,27 +79,93 @@ struct PlacedCrossing {
     lat: f64,
 }
 
-pub async fn derive(root: &Root, radius: Radius) -> Result<MatchOutcome, CrossingError> {
-    let mut outcome = MatchOutcome::default();
-    let mut passed: Vec<SessionCrossingRowV3> = Vec::new();
+#[derive(Debug, Clone, Copy)]
+struct Sessions {
+    sessions: DatasetSpec<layers::Silver>,
+    samples: DatasetSpec<layers::Silver>,
+}
 
-    for country in countries_to_match(root)? {
-        let (matched, rows) = matched_in(root, country, radius).await?;
+const DEVICES: Sessions = Sessions {
+    sessions: medallion_model::SESSION_V3,
+    samples: medallion_model::SESSION_SAMPLE_V3,
+};
+
+const TRAINS: Sessions = Sessions {
+    sessions: medallion_model::TRAIN_SESSION_V3,
+    samples: medallion_model::TRAIN_SESSION_SAMPLE_V3,
+};
+
+impl Sessions {
+    fn read(self) -> [DatasetSpec<layers::Silver>; 3] {
+        [
+            self.sessions,
+            self.samples,
+            medallion_model::WATER_CROSSING_V2,
+        ]
+    }
+}
+
+pub async fn derive_device(root: &Root, radius: Radius) -> Result<MatchOutcome, CrossingError> {
+    let (mut outcome, passed) = matched(root, DEVICES, radius).await?;
+    let devices = devices(root).await?;
+    let rows: Vec<SessionCrossingRowV3> = passed
+        .iter()
+        .map(|pass| device_row(pass, &devices[&pass.session_id], radius))
+        .collect();
+    outcome.partitions = medallion::write_rows(root, &rows).await?.partitions;
+    Ok(outcome)
+}
+
+pub async fn derive_train(root: &Root, radius: Radius) -> Result<MatchOutcome, CrossingError> {
+    let (mut outcome, passed) = matched(root, TRAINS, radius).await?;
+    let rows: Vec<TrainSessionCrossingRowV1> =
+        passed.iter().map(|pass| train_row(pass, radius)).collect();
+    outcome.partitions = medallion::write_rows(root, &rows).await?.partitions;
+    Ok(outcome)
+}
+
+async fn matched(
+    root: &Root,
+    kind: Sessions,
+    radius: Radius,
+) -> Result<(MatchOutcome, Vec<Pass>), CrossingError> {
+    let mut outcome = MatchOutcome::default();
+    let mut passed: Vec<Pass> = Vec::new();
+
+    for country in countries_to_match(root, kind)? {
+        let (matched, passes) = matched_in(root, kind, country, radius).await?;
         outcome.sessions += matched.sessions;
         outcome.crossings += matched.crossings;
         outcome.sessions_matched += matched.sessions_matched;
-        passed.extend(rows);
+        passed.extend(passes);
     }
 
     passed.sort_by(|a, b| (a.crossed_at, &a.crossing_id).cmp(&(b.crossed_at, &b.crossing_id)));
     outcome.passes = passed.len();
-    outcome.partitions = medallion::write_rows(root, &passed).await?.partitions;
-    Ok(outcome)
+    Ok((outcome, passed))
 }
 
-fn datasets_held_in(root: &Root, country: Country) -> Result<Vec<&'static str>, CrossingError> {
+async fn devices(root: &Root) -> Result<HashMap<SessionId, DeviceId>, CrossingError> {
+    let query = Query::new(root.clone());
+    query
+        .register_at_without_geometry(&root.dataset(DEVICES.sessions), "session_v3")
+        .await?;
+    let stored: Vec<StoredDevice> = query
+        .rows("SELECT session_id, device_id FROM session_v3")
+        .await?;
+    Ok(stored
+        .into_iter()
+        .map(|stored| (stored.session_id, stored.device_id))
+        .collect())
+}
+
+fn datasets_held_in(
+    root: &Root,
+    kind: Sessions,
+    country: Country,
+) -> Result<Vec<&'static str>, CrossingError> {
     let mut held = Vec::new();
-    for (dataset, _) in READ {
+    for dataset in kind.read() {
         if root
             .dataset(dataset)
             .partition(COUNTRY, country)?
@@ -91,20 +177,21 @@ fn datasets_held_in(root: &Root, country: Country) -> Result<Vec<&'static str>, 
     Ok(held)
 }
 
-fn countries_to_match(root: &Root) -> Result<Vec<Country>, CrossingError> {
+fn countries_to_match(root: &Root, kind: Sessions) -> Result<Vec<Country>, CrossingError> {
     let mut to_match = Vec::new();
     let mut held_by_some_country: HashSet<&'static str> = HashSet::new();
 
     for country in Country::ALL {
-        let held = datasets_held_in(root, country)?;
+        let held = datasets_held_in(root, kind, country)?;
         held_by_some_country.extend(&held);
 
-        if held.len() == READ.len() {
+        if held.len() == kind.read().len() {
             to_match.push(country);
         } else if !held.is_empty() {
-            let missing = READ
+            let missing = kind
+                .read()
                 .iter()
-                .map(|(dataset, _)| dataset.name)
+                .map(|dataset| dataset.name)
                 .filter(|name| !held.contains(name))
                 .collect::<Vec<_>>()
                 .join(", ");
@@ -117,9 +204,10 @@ fn countries_to_match(root: &Root) -> Result<Vec<Country>, CrossingError> {
         }
     }
 
-    if let Some((dataset, _)) = READ
-        .iter()
-        .find(|(dataset, _)| !held_by_some_country.contains(dataset.name))
+    if let Some(dataset) = kind
+        .read()
+        .into_iter()
+        .find(|dataset| !held_by_some_country.contains(dataset.name))
     {
         return Err(CrossingError::Missing {
             dataset: dataset.name,
@@ -131,28 +219,31 @@ fn countries_to_match(root: &Root) -> Result<Vec<Country>, CrossingError> {
 
 async fn matched_in(
     root: &Root,
+    kind: Sessions,
     country: Country,
     radius: Radius,
-) -> Result<(MatchOutcome, Vec<SessionCrossingRowV3>), CrossingError> {
-    let Inputs {
-        sessions,
-        crossings,
-    } = inputs(root, country).await?;
-    let matched = passes(&sessions, &crossings, radius)?;
+) -> Result<(MatchOutcome, Vec<Pass>), CrossingError> {
+    let query = registered(root, kind, country).await?;
+    let index = CrossingIndex::new(crossings_in(&query).await?);
+    let sessions = usize::try_from(
+        query
+            .count("SELECT COUNT(*) AS count FROM sessions")
+            .await?,
+    )?;
 
-    let devices: HashMap<&SessionId, &DeviceId> = sessions
-        .iter()
-        .map(|session| (&session.session_id, &session.device_id))
-        .collect();
-    let rows = matched
-        .iter()
-        .map(|pass| row(pass, devices[&pass.session_id], radius))
-        .collect();
+    let mut matcher = Matcher::new(&index, radius);
+    let mut batches = query.row_batches::<StoredSample>(STORED_SAMPLES).await?;
+    while let Some(batch) = batches.next().await {
+        for stored in batch? {
+            matcher.observe(&stored.session_id, u64::from(stored.seq), &stored.sample());
+        }
+    }
+    let matched = matcher.passes()?;
 
     Ok((
         MatchOutcome {
-            sessions: sessions.len(),
-            crossings: crossings.len(),
+            sessions,
+            crossings: index.crossings().len(),
             sessions_matched: matched
                 .iter()
                 .map(|pass| &pass.session_id)
@@ -160,7 +251,7 @@ async fn matched_in(
                 .len(),
             ..MatchOutcome::default()
         },
-        rows,
+        matched,
     ))
 }
 
@@ -171,59 +262,38 @@ pub struct Inputs {
 }
 
 pub async fn inputs(root: &Root, country: Country) -> Result<Inputs, CrossingError> {
-    let query = Query::new(root.clone());
-    for (dataset, table) in READ {
-        query.register_of_country(dataset, table, country).await?;
-    }
+    let query = registered(root, DEVICES, country).await?;
+    let stored: Vec<StoredSample> = query
+        .rows(&format!("{STORED_SAMPLES} ORDER BY session_id, seq"))
+        .await?;
     Ok(Inputs {
-        sessions: sessions_in(&query).await?,
+        sessions: stored
+            .chunk_by(|a, b| a.session_id == b.session_id)
+            .map(|samples| Session {
+                session_id: samples[0].session_id.clone(),
+                samples: samples.iter().map(StoredSample::sample).collect(),
+            })
+            .collect(),
         crossings: crossings_in(&query).await?,
     })
 }
 
-const READ: [(DatasetSpec<layers::Silver>, &str); 3] = [
-    (medallion_model::SESSION_V3, "session_v3"),
-    (medallion_model::SESSION_SAMPLE_V3, "session_sample_v3"),
-    (medallion_model::WATER_CROSSING_V2, "water_crossing_v2"),
-];
-
-async fn sessions_in(query: &Query) -> Result<Vec<Session>, CrossingError> {
-    let stored: Vec<StoredSession> = query
-        .rows(
-            "SELECT s.session_id, s.device_id, p.samples
-             FROM session_v3 s
-             LEFT JOIN (
-                 SELECT session_id,
-                        array_agg(
-                            named_struct(
-                                't', t,
-                                'x', ST_X(geometry_projected),
-                                'y', ST_Y(geometry_projected)
-                            )
-                            ORDER BY t
-                        ) AS samples
-                 FROM session_sample_v3
-                 GROUP BY session_id
-             ) p ON s.session_id = p.session_id",
+async fn registered(root: &Root, kind: Sessions, country: Country) -> Result<Query, CrossingError> {
+    let query = Query::new(root.clone());
+    query
+        .register_of_country(kind.sessions, "sessions", country)
+        .await?;
+    query
+        .register_of_country(kind.samples, "samples", country)
+        .await?;
+    query
+        .register_of_country(
+            medallion_model::WATER_CROSSING_V2,
+            "water_crossing_v2",
+            country,
         )
         .await?;
-
-    Ok(stored
-        .into_iter()
-        .map(|session| Session {
-            session_id: session.session_id,
-            device_id: session.device_id,
-            samples: session
-                .samples
-                .unwrap_or_default()
-                .into_iter()
-                .map(|sample| Sample {
-                    t: sample.t,
-                    projected: Point::new(sample.x, sample.y),
-                })
-                .collect(),
-        })
-        .collect())
+    Ok(query)
 }
 
 async fn crossings_in(query: &Query) -> Result<Vec<Crossing>, CrossingError> {
@@ -251,11 +321,22 @@ async fn crossings_in(query: &Query) -> Result<Vec<Crossing>, CrossingError> {
         .collect()
 }
 
-fn row(pass: &Pass, device: &DeviceId, radius: Radius) -> SessionCrossingRowV3 {
+fn device_row(pass: &Pass, device: &DeviceId, radius: Radius) -> SessionCrossingRowV3 {
     SessionCrossingRowV3 {
         session_id: pass.session_id.clone(),
         crossing_id: pass.crossing_id.clone(),
         device_id: device.clone(),
+        crossed_at: pass.crossed_at,
+        distance_m: pass.distance_metres,
+        samples_within: pass.samples_within,
+        match_radius_m: radius.as_metres(),
+    }
+}
+
+fn train_row(pass: &Pass, radius: Radius) -> TrainSessionCrossingRowV1 {
+    TrainSessionCrossingRowV1 {
+        session_id: pass.session_id.clone(),
+        crossing_id: pass.crossing_id.clone(),
         crossed_at: pass.crossed_at,
         distance_m: pass.distance_metres,
         samples_within: pass.samples_within,
@@ -284,17 +365,29 @@ mod tests {
     fn a_row_records_the_radius_it_was_matched_under() {
         let device = DeviceId::new("device-a").expect("an id");
 
-        let row = row(&pass(), &device, Radius::new(150.0).expect("a radius"));
+        let row = device_row(&pass(), &device, Radius::new(150.0).expect("a radius"));
 
         assert_eq!(row.match_radius_m, 150.0);
         assert_eq!(row.distance_m, 20.0);
     }
 
     #[test]
+    fn a_train_row_records_the_pass_and_the_radius_it_was_matched_under() {
+        let row = train_row(&pass(), Radius::new(150.0).expect("a radius"));
+
+        assert_eq!(row.session_id, pass().session_id);
+        assert_eq!(row.crossing_id, pass().crossing_id);
+        assert_eq!(row.crossed_at, pass().crossed_at);
+        assert_eq!(row.samples_within, 3);
+        assert_eq!(row.distance_m, 20.0);
+        assert_eq!(row.match_radius_m, 150.0);
+    }
+
+    #[test]
     fn a_row_names_the_device_the_session_ran_on() {
         let device = DeviceId::new("device-a").expect("an id");
 
-        let row = row(&pass(), &device, Radius::new(150.0).expect("a radius"));
+        let row = device_row(&pass(), &device, Radius::new(150.0).expect("a radius"));
 
         assert_eq!(row.device_id, device);
         assert_eq!(row.session_id, pass().session_id);

@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::OnceLock;
 
-use medallion::{
-    Country, DatasetSpec, Query, QueryError, Root, ScalarValue, TableError, UnknownCountry, layers,
+use arrow::array::RecordBatch;
+use chrono::NaiveDate;
+use medallion::{Country, DatasetSpec, Query, Root, RunId, ScalarValue, UnknownCountry, layers};
+use py_common::{
+    gold_target_error, query_error, root_or_default, run_error, runtime, runtime_error,
+    table_error, target_error, value_error,
 };
-use medallion_model::TargetError;
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3_arrow::PyTable;
 
@@ -101,11 +102,7 @@ fn query_silver(
         .collect::<PyResult<Vec<_>>>()?;
     let country = country.map(country_of).transpose()?;
     let root = root_or_default(root)?;
-    let params = params
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(name, param)| (name, ScalarValue::from(param)))
-        .collect();
+    let params = scalars(params);
 
     let batches = py
         .detach(|| {
@@ -119,13 +116,100 @@ fn query_silver(
         })
         .map_err(query_error)?;
 
+    table_of(batches)
+}
+
+/// Write `table` as one run of the gold dataset `dataset`, under `run_date` and `run_id`.
+///
+/// `run_date` is an ISO date such as `"2026-11-06"`. Each run is written once: a `run_id` the
+/// dataset already holds, under any date, raises a `ValueError`, as does a table lacking a column
+/// of the dataset or holding a column it does not define. `root` defaults to the store in the repo the caller is working in. See
+/// `docs/medallion.md`.
+#[pyfunction]
+#[pyo3(signature = (dataset, table, *, run_date, run_id, root=None))]
+fn write_gold(
+    py: Python<'_>,
+    dataset: &str,
+    table: PyTable,
+    run_date: &str,
+    run_id: &str,
+    root: Option<PathBuf>,
+) -> PyResult<Written> {
+    let target = medallion_model::gold_target(dataset).map_err(gold_target_error)?;
+    let date = NaiveDate::parse_from_str(run_date, "%Y-%m-%d")
+        .map_err(|err| value_error(format!("`run_date` {run_date:?} is not an ISO date: {err}")))?;
+    let run_id = RunId::new(run_id).map_err(value_error)?;
+    let root = root_or_default(root)?;
+    let (batches, _) = table.into_inner();
+
+    let written = py
+        .detach(|| {
+            runtime().block_on(medallion::write_run_table(
+                &root, &target, date, &run_id, &batches,
+            ))
+        })
+        .map_err(run_error)?;
+
+    Ok(Written {
+        rows: written.rows,
+        partitions_written: written.partitions.written,
+        partitions_removed: written.partitions.removed,
+    })
+}
+
+/// Query the gold datasets, returning an Arrow table: the datasets the query names are its tables.
+///
+/// Each row carries the `run_date` and `run_id` of the run that wrote it, so a query picks runs in
+/// its `WHERE`. `params` binds the query's `$name` placeholders as values. A dataset gold does not
+/// define, or that has never been written, raises a `ValueError` naming it. See
+/// `docs/medallion.md`.
+#[pyfunction]
+#[pyo3(signature = (sql, *, params=None, root=None))]
+fn query_gold(
+    py: Python<'_>,
+    sql: &str,
+    params: Option<HashMap<String, Param>>,
+    root: Option<PathBuf>,
+) -> PyResult<PyTable> {
+    let targets = medallion::table_references(sql)
+        .map_err(query_error)?
+        .iter()
+        .map(|dataset| medallion_model::gold_target(dataset).map_err(gold_target_error))
+        .collect::<PyResult<Vec<_>>>()?;
+    let root = root_or_default(root)?;
+    let params = scalars(params);
+
+    let batches = py
+        .detach(|| {
+            runtime().block_on(async {
+                let query = Query::new(root);
+                for target in &targets {
+                    query.register_gold(target.spec()).await?;
+                }
+                query.sql_with_params(sql, params).await
+            })
+        })
+        .map_err(query_error)?;
+
+    table_of(batches)
+}
+
+fn scalars(params: Option<HashMap<String, Param>>) -> HashMap<String, ScalarValue> {
+    params
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(name, param)| (name, ScalarValue::from(param)))
+        .collect()
+}
+
+fn table_of(batches: Vec<RecordBatch>) -> PyResult<PyTable> {
     // Infallible: a query answers with at least one batch, so the columns are always there.
     let schema = batches
         .first()
         .map(|batch| batch.schema())
         .expect("a query answers with at least one batch");
 
-    PyTable::try_new(batches, schema).map_err(|err| PyRuntimeError::new_err(err.to_string()))
+    PyTable::try_new(batches, schema).map_err(runtime_error)
 }
 
 enum BronzeTable {
@@ -135,7 +219,7 @@ enum BronzeTable {
 
 fn within(named: &HashMap<String, String>, key: &str, table: &str) -> PyResult<String> {
     named.get(key).cloned().ok_or_else(|| {
-        PyValueError::new_err(format!(
+        value_error(format!(
             "the table {table} names no {key} of the extracts to read"
         ))
     })
@@ -152,10 +236,9 @@ fn bronze_table(
         });
     }
 
-    let dataset = medallion_model::bronze_dataset(name)
-        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    let dataset = medallion_model::bronze_dataset(name).map_err(value_error)?;
     match dataset.name == medallion_model::OVERTURE_EXTRACT.name {
-        true => Err(PyValueError::new_err(format!(
+        true => Err(value_error(format!(
             "{name} spans themes whose columns differ, so a read of it names the theme and type \
              it reads: tables={{\"{name}\": {{\"theme\": ..., \"type\": ...}}}}"
         ))),
@@ -221,7 +304,7 @@ fn query_bronze(
         .map(|batch| batch.schema())
         .expect("a query answers with at least one batch");
 
-    PyTable::try_new(batches, schema).map_err(|err| PyRuntimeError::new_err(err.to_string()))
+    PyTable::try_new(batches, schema).map_err(runtime_error)
 }
 
 /// The countries a silver dataset holds a partition for, as the codes a read of it names.
@@ -244,8 +327,7 @@ fn countries_of(py: Python<'_>, dataset: &str, root: Option<PathBuf>) -> PyResul
 }
 
 fn country_of(code: &str) -> PyResult<Country> {
-    code.parse()
-        .map_err(|err: UnknownCountry| PyValueError::new_err(err.to_string()))
+    code.parse().map_err(|err: UnknownCountry| value_error(err))
 }
 
 /// The CRS a country's projected geometry is stored in, as an authority string a python
@@ -265,61 +347,15 @@ fn division_id(country: &str) -> PyResult<String> {
 /// The store in the repo the caller is working in, as a path: what the writes here default to.
 #[pyfunction]
 fn default_root() -> PyResult<PathBuf> {
-    Root::default_path().map_err(|err| PyRuntimeError::new_err(err.to_string()))
-}
-
-fn root_or_default(root: Option<PathBuf>) -> PyResult<Root> {
-    match root {
-        Some(path) => Ok(Root::new(path)),
-        None => Ok(Root::new(default_root()?)),
-    }
-}
-
-fn runtime() -> &'static tokio::runtime::Runtime {
-    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| {
-        tokio::runtime::Runtime::new().expect("a tokio runtime for the store's writers")
-    })
-}
-
-fn query_error(err: QueryError) -> PyErr {
-    match err {
-        QueryError::NoSuchDataset { .. }
-        | QueryError::DataFusion(_)
-        | QueryError::UnknownCountry { .. }
-        | QueryError::CountryNeeded { .. }
-        | QueryError::NoCountryLevel { .. } => PyValueError::new_err(err.to_string()),
-        QueryError::Rows(_) | QueryError::Path(_) | QueryError::List { .. } => {
-            PyRuntimeError::new_err(err.to_string())
-        }
-    }
-}
-
-fn target_error(err: TargetError) -> PyErr {
-    match err {
-        TargetError::NoSuchDataset { .. } => PyValueError::new_err(err.to_string()),
-        TargetError::Row(_) => PyRuntimeError::new_err(err.to_string()),
-    }
-}
-
-fn table_error(err: TableError) -> PyErr {
-    match err {
-        TableError::Missing { .. }
-        | TableError::Unexpected { .. }
-        | TableError::Duplicate { .. }
-        | TableError::Untranslatable { .. }
-        | TableError::UndatedRow { .. }
-        | TableError::Country { .. }
-        | TableError::UnsupportedLayout { .. }
-        | TableError::Unpartitioned(_) => PyValueError::new_err(err.to_string()),
-        _ => PyRuntimeError::new_err(err.to_string()),
-    }
+    Root::default_path().map_err(runtime_error)
 }
 
 #[pymodule]
 fn lookout_medallion(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(write_silver, module)?)?;
     module.add_function(wrap_pyfunction!(query_silver, module)?)?;
+    module.add_function(wrap_pyfunction!(write_gold, module)?)?;
+    module.add_function(wrap_pyfunction!(query_gold, module)?)?;
     module.add_function(wrap_pyfunction!(query_bronze, module)?)?;
     module.add_function(wrap_pyfunction!(countries_of, module)?)?;
     module.add_function(wrap_pyfunction!(projected_crs, module)?)?;

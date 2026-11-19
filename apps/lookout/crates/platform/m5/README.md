@@ -22,16 +22,27 @@ laptop runs it; `m5plus` is left with wiring.
               │             │  can be told from a jittering fix
       y 108   │20 in 5km    │  how many crossings, and how far out it looked
               │             │
-      y 130   │2.3km 1:24   │  each crossing: how far, then how long
-      y 152   │2.3km 1:24   │
-      y 174   │2.3km 1:24   │
-      y 196   │2.3km 1:24   │
-      y 218   │2.4km 1:24   │  the last one, clear of a 240-pixel screen
+      y 130   │ 2.3km 1:24  │  each crossing: its state, how far, then how long
+      y 152   │ 2.3km 1:24  │
+      y 174   │ 2.3km 1:24  │
+      y 196   │ 2.3km 1:24  │
+      y 218   │ 2.4km 1:24  │  the last one, clear of a 240-pixel screen
               └─────────────┘
 ```
 
 Those are real values: Dresden Hauptbahnhof at 100 km/h, where the five nearest crossings are the
 Elbe ones a train north out of the station passes, clustered within twenty metres of each other.
+
+A crossing's line opens with one character for its state: a space while it is only within reach,
+`!` once the core alerts on it, and `*` while it is being passed. The character takes no space
+after it, so the widest line, `!>999km 59:59`, is thirteen characters.
+
+A crossing the core alerts on, and one being passed, read:
+
+```
+│!800m 0:29   │  alerted on: 800 m away, reached in 29 s
+│*90m 0:04    │  being passed: 90 m away
+```
 
 Nothing wraps, so a longer line runs off the side. A crossing's id will not fit beside the two
 numbers and is the one to drop: it names a row in a dataset, where the distance and the countdown

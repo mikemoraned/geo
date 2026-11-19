@@ -3,6 +3,15 @@
 version = 4
 
 [[package]]
+name = "a5"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73444b5953a4d7bada9b9554cfb3dea40060bc2b1cc48429556acc77bf58d6ee"
+dependencies = [
+ "lazy_static",
+]
+
+[[package]]
 name = "abi_stable"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1770,6 +1779,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 
 [[package]]
+name = "code_version"
+version = "0.1.0"
+dependencies = [
+ "nutype",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1965,6 +1982,22 @@ checksum = "1eb98d5e9155e2cf7cd942c8b3033097d4563b6fb0a00b9caecb74669555c058"
 dependencies = [
  "ciborium",
  "ciborium-io",
+]
+
+[[package]]
+name = "countries"
+version = "0.1.0"
+dependencies = [
+ "arrow 57.3.1",
+ "chrono",
+ "datafusion",
+ "geo 0.32.0",
+ "geo-types",
+ "medallion",
+ "medallion-model",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]
@@ -3362,6 +3395,66 @@ dependencies = [
 ]
 
 [[package]]
+name = "evaluation"
+version = "0.1.0"
+dependencies = [
+ "a5",
+ "chrono",
+ "clap",
+ "code_version",
+ "countries",
+ "crossings",
+ "datafusion",
+ "domain",
+ "futures",
+ "geo 0.32.0",
+ "geo-types",
+ "hashfn",
+ "itertools 0.15.0",
+ "medallion",
+ "medallion-model",
+ "nutype",
+ "predictor",
+ "proptest",
+ "rand 0.10.2",
+ "rand_chacha 0.10.0",
+ "rayon",
+ "serde_json",
+ "sha2 0.11.0",
+ "statrs",
+ "strum 0.28.0",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "evaluation-py"
+version = "0.1.0"
+dependencies = [
+ "arrow 57.3.1",
+ "chrono",
+ "code_version",
+ "crossings",
+ "domain",
+ "evaluation",
+ "geo-types",
+ "itertools 0.15.0",
+ "medallion",
+ "medallion-model",
+ "predictor",
+ "py-common",
+ "pyo3",
+ "pyo3-arrow",
+ "serde",
+ "serde_arrow",
+ "tokio",
+]
+
+[[package]]
 name = "event-listener"
 version = "5.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3917,6 +4010,24 @@ dependencies = [
  "rand_core 0.10.1",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "glam"
+version = "0.30.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19fc433e8437a212d1b6f1e68c7824af3aed907da60afa994e7f542d18d12aa9"
+
+[[package]]
+name = "glam"
+version = "0.31.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "556f6b2ea90b8d15a74e0e7bb41671c9bdf38cd9f78c284d750b9ce58a2b5be7"
+
+[[package]]
+name = "glam"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
 
 [[package]]
 name = "glam"
@@ -4723,6 +4834,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5098,6 +5218,7 @@ dependencies = [
  "clap",
  "datafusion",
  "dirs",
+ "domain",
  "duckdb",
  "futures",
  "geo 0.32.0",
@@ -5106,6 +5227,7 @@ dependencies = [
  "geoarrow-array",
  "geoarrow-schema",
  "geoparquet",
+ "nutype",
  "object_store",
  "parquet",
  "proj4rs",
@@ -5117,6 +5239,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "uuid",
  "wkb",
 ]
 
@@ -5148,8 +5271,11 @@ dependencies = [
 name = "medallion-py"
 version = "0.1.0"
 dependencies = [
+ "arrow 57.3.1",
+ "chrono",
  "medallion",
  "medallion-model",
+ "py-common",
  "pyo3",
  "pyo3-arrow",
  "tokio",
@@ -5238,12 +5364,15 @@ dependencies = [
  "arrow 57.3.1",
  "chrono",
  "clap",
+ "code_version",
+ "countries",
  "domain",
  "geo 0.32.0",
  "geo-traits",
  "geo-types",
  "medallion",
  "medallion-model",
+ "nutype",
  "openapiv3",
  "parquet",
  "prettyplease",
@@ -5284,6 +5413,26 @@ name = "mutants"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc0287524726960e07b119cebd01678f852f147742ae0d925e6a520dca956126"
+
+[[package]]
+name = "nalgebra"
+version = "0.35.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "adc43a60c217b0c6ff46e47f26911015ad8d2e5a8be1af668c67e370d99a4346"
+dependencies = [
+ "approx",
+ "glam 0.30.10",
+ "glam 0.31.1",
+ "glam 0.32.1",
+ "glam 0.33.2",
+ "matrixmultiply",
+ "num-complex",
+ "num-rational",
+ "num-traits",
+ "rand 0.10.2",
+ "simba",
+ "typenum",
+]
 
 [[package]]
 name = "native-tls"
@@ -6103,6 +6252,8 @@ dependencies = [
  "geo-types",
  "nmea",
  "num-traits",
+ "nutype",
+ "proptest",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -6383,6 +6534,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "py-common"
+version = "0.1.0"
+dependencies = [
+ "arrow 57.3.1",
+ "medallion",
+ "medallion-model",
+ "pyo3",
+ "pyo3-arrow",
+ "tokio",
+]
+
+[[package]]
 name = "pyo3"
 version = "0.28.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6616,6 +6779,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_chacha"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e6af7f3e25ded52c41df4e0b1af2d047e45896c2f3281792ed68a1c243daedb"
+dependencies = [
+ "ppv-lite86",
+ "rand_core 0.10.1",
+]
+
+[[package]]
 name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6690,6 +6863,7 @@ dependencies = [
  "arrow 57.3.1",
  "chrono",
  "clap",
+ "countries",
  "domain",
  "geo 0.32.0",
  "geo-traits",
@@ -7165,6 +7339,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
+name = "safe_arch"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42c6efa15875e6ecb39ca61fb0b0c1a40b84fac5a5ffe71eef7d1000c8eb3f5f"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7368,7 +7551,7 @@ dependencies = [
  "datafusion-common",
  "datafusion-expr",
  "geo-traits",
- "glam",
+ "glam 0.33.2",
  "sedona-common",
  "sedona-expr",
  "sedona-geometry",
@@ -7900,6 +8083,7 @@ dependencies = [
  "domain",
  "geo-types",
  "medallion",
+ "py-common",
  "pyo3",
  "pyo3-arrow",
  "serde",
@@ -7914,13 +8098,15 @@ dependencies = [
  "chrono",
  "clap",
  "domain",
- "geo 0.32.0",
+ "futures",
  "geo-types",
  "geojson",
  "libtest-mimic",
  "medallion",
  "medallion-model",
+ "proptest",
  "recorder",
+ "rstar 0.13.0",
  "serde",
  "serde_json",
  "shared",
@@ -8031,6 +8217,18 @@ checksum = "28d567dcbaf0049cb8ac2608a76cd95ff9e4412e1899d389ee400918ca7537f5"
 dependencies = [
  "digest 0.11.3",
  "rand_core 0.10.1",
+]
+
+[[package]]
+name = "simba"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1a7200d82ff1c7b4235efd12f11e2537a402c91cf83a5cb97ce80eef787fde7"
+dependencies = [
+ "approx",
+ "num-complex",
+ "num-traits",
+ "wide",
 ]
 
 [[package]]
@@ -8173,6 +8371,19 @@ dependencies = [
  "libc",
  "psm",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "statrs"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1837f9a1bd13dabbdbb04489c39451482d3cdd35a6e1a0d0f3570dea2b8c8be"
+dependencies = [
+ "approx",
+ "nalgebra",
+ "num-traits",
+ "rand 0.10.2",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -8379,7 +8590,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.59.0",
@@ -8948,11 +9159,13 @@ dependencies = [
  "arrow 57.3.1",
  "chrono",
  "clap",
+ "countries",
  "datafusion",
  "geo 0.32.0",
  "geo-types",
  "medallion",
  "medallion-model",
+ "nutype",
  "object_store",
  "sedona",
  "sedona-geoparquet",
@@ -9466,6 +9679,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5f280bbb2b287bc8e7de7e3852945a0ff50d1bbcb5ed42b6c7a568c546df171"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "wide"
+version = "1.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d920ac99c3c8edce110cb8d07dbb324d6d026011dce85b1e9355b70f0adacc4f"
+dependencies = [
+ "bytemuck",
+ "safe_arch",
 ]
 
 [[package]]

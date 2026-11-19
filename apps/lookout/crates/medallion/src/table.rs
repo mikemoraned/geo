@@ -15,7 +15,7 @@ use crate::dataset::DatasetSpec;
 use crate::geo::{GEOMETRY, GeoError, PROJECTED_GEOMETRY, geometry_fields};
 use crate::layer::layers;
 use crate::path::{ReplaceError, Replaced, Root};
-use crate::rows::{Geometry, Row, RowError, fields};
+use crate::rows::{Geometry, Row, RowError, batch, fields, from_batches};
 
 #[derive(Debug, Clone)]
 pub struct SilverTarget {
@@ -23,6 +23,14 @@ pub struct SilverTarget {
     columns: Vec<FieldRef>,
     pub(crate) geometry: Geometry,
     unique: &'static [&'static str],
+}
+
+#[derive(Debug, Clone)]
+pub struct GoldTarget {
+    spec: DatasetSpec<layers::Gold>,
+    columns: Vec<FieldRef>,
+    pub(crate) geometry: Geometry,
+    rows_of: fn(&[RecordBatch]) -> Result<RecordBatch, RowError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -181,6 +189,44 @@ impl SilverTarget {
     }
 }
 
+impl GoldTarget {
+    pub fn of<R: Row<Layer = layers::Gold>>() -> Result<Self, RowError> {
+        Ok(Self {
+            spec: R::DATASET,
+            columns: fields::<R>()?,
+            geometry: R::GEOMETRY,
+            rows_of: rows_of::<R>,
+        })
+    }
+
+    pub fn spec(&self) -> DatasetSpec<layers::Gold> {
+        self.spec
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.spec.name
+    }
+
+    pub fn expected_columns(&self) -> Vec<String> {
+        self.columns
+            .iter()
+            .map(|field| field.name().clone())
+            .collect()
+    }
+
+    pub(crate) fn rows(&self, table: &[RecordBatch]) -> Result<RecordBatch, TableError> {
+        let expected = self.expected_columns();
+        for part in table {
+            check_columns(self.name(), &expected, part)?;
+        }
+        Ok((self.rows_of)(table)?)
+    }
+}
+
+fn rows_of<R: Row>(table: &[RecordBatch]) -> Result<RecordBatch, RowError> {
+    batch(&from_batches::<R>(table)?)
+}
+
 pub async fn write_table(
     root: &Root,
     target: &SilverTarget,
@@ -190,7 +236,7 @@ pub async fn write_table(
         return Ok(TableWritten::default());
     };
     let table = arrow::compute::concat_batches(&first.schema(), table)?;
-    check_columns(target, &table)?;
+    check_columns(target.name(), &target.expected_columns()?, &table)?;
     check_unique(target, &table)?;
 
     let columns = translate(target, &table)?;
@@ -494,12 +540,15 @@ pub(crate) fn check_unique(target: &SilverTarget, table: &RecordBatch) -> Result
     Ok(())
 }
 
-fn check_columns(target: &SilverTarget, table: &RecordBatch) -> Result<(), TableError> {
-    let expected = target.expected_columns()?;
-    for column in &expected {
+fn check_columns(
+    dataset: &'static str,
+    expected: &[String],
+    table: &RecordBatch,
+) -> Result<(), TableError> {
+    for column in expected {
         if table.schema_ref().index_of(column).is_err() {
             return Err(TableError::Missing {
-                dataset: target.name(),
+                dataset,
                 column: column.clone(),
             });
         }
@@ -514,7 +563,7 @@ fn check_columns(target: &SilverTarget, table: &RecordBatch) -> Result<(), Table
         .collect();
     if !unexpected.is_empty() {
         return Err(TableError::Unexpected {
-            dataset: target.name(),
+            dataset,
             columns: unexpected,
         });
     }
@@ -528,6 +577,8 @@ mod tests {
     use arrow::datatypes::TimeUnit;
     use geo_types::{LineString, Point};
     use serde::{Deserialize, Serialize};
+
+    use domain::places::{BERLIN, FRANKFURT};
 
     use super::*;
     use crate::geo::{Projector, file_schema, projected_wkb_field, wkb_column, wkb_field};
@@ -639,19 +690,11 @@ mod tests {
         (date - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days() as i32
     }
 
-    fn berlin() -> Point<f64> {
-        Point::new(13.404954, 52.520008)
-    }
-
-    fn frankfurt() -> Point<f64> {
-        Point::new(8.682127, 50.110924)
-    }
-
     #[tokio::test]
     async fn a_table_lands_in_one_file_per_country() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let table = crossing_table(&["a", "b"], &[berlin(), frankfurt()], &["DE", "DE"]);
+        let table = crossing_table(&["a", "b"], &[BERLIN, FRANKFURT], &["DE", "DE"]);
 
         let written = write_table(&root, &crossings(), &[table]).await.unwrap();
 
@@ -666,7 +709,7 @@ mod tests {
 
     #[test]
     fn a_table_is_laid_out_as_a_file_of_its_row_type() {
-        let table = crossing_table(&["a"], &[berlin()], &["DE"]);
+        let table = crossing_table(&["a"], &[BERLIN], &["DE"]);
         let columns = translate(&crossings(), &table).unwrap();
 
         let batch = columns.batch(&crossings(), Some(Country::Germany)).unwrap();
@@ -681,7 +724,7 @@ mod tests {
     async fn the_partition_column_is_not_stored_in_the_file() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let table = crossing_table(&["a"], &[berlin()], &["DE"]);
+        let table = crossing_table(&["a"], &[BERLIN], &["DE"]);
         write_table(&root, &crossings(), &[table]).await.unwrap();
 
         let query = Query::new(root);
@@ -713,7 +756,7 @@ mod tests {
     async fn the_geometry_reads_back_as_it_was_handed_over() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let table = crossing_table(&["a"], &[berlin()], &["DE"]);
+        let table = crossing_table(&["a"], &[BERLIN], &["DE"]);
         write_table(&root, &crossings(), &[table]).await.unwrap();
 
         let query = Query::new(root);
@@ -730,7 +773,7 @@ mod tests {
 
         let lat_lon = crate::geo::geometries(&batches[0], GEOMETRY).unwrap();
         let projected = crate::geo::geometries(&batches[0], PROJECTED_GEOMETRY).unwrap();
-        assert_eq!(lat_lon, vec![geo_types::Geometry::Point(berlin())]);
+        assert_eq!(lat_lon, vec![geo_types::Geometry::Point(BERLIN)]);
         let geo_types::Geometry::Point(metres) = projected[0] else {
             panic!("expected a point, got {:?}", projected[0]);
         };
@@ -741,7 +784,7 @@ mod tests {
     async fn a_plain_binary_geometry_column_is_read_as_wkb() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let declared = crossing_table(&["a"], &[berlin()], &["DE"]);
+        let declared = crossing_table(&["a"], &[BERLIN], &["DE"]);
         let undeclared = RecordBatch::try_from_iter(
             declared
                 .schema_ref()
@@ -767,7 +810,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             crate::geo::geometries(&batches[0], GEOMETRY).unwrap(),
-            vec![geo_types::Geometry::Point(berlin())]
+            vec![geo_types::Geometry::Point(BERLIN)]
         );
     }
 
@@ -775,7 +818,7 @@ mod tests {
     async fn a_column_of_another_type_is_read_as_the_one_the_dataset_defines() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let table = crossing_table(&["a"], &[berlin()], &["DE"]);
+        let table = crossing_table(&["a"], &[BERLIN], &["DE"]);
         let views: Vec<ArrayRef> = table
             .columns()
             .iter()
@@ -811,7 +854,7 @@ mod tests {
     #[tokio::test]
     async fn a_missing_column_names_it() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut without = crossing_table(&["a"], &[berlin()], &["DE"]);
+        let mut without = crossing_table(&["a"], &[BERLIN], &["DE"]);
         without.remove_column(1);
 
         let err = write_table(&Root::new(tmp.path()), &crossings(), &[without])
@@ -827,7 +870,7 @@ mod tests {
     #[tokio::test]
     async fn columns_the_dataset_does_not_hold_are_refused() {
         let tmp = tempfile::tempdir().unwrap();
-        let table = crossing_table(&["a"], &[berlin()], &["DE"]);
+        let table = crossing_table(&["a"], &[BERLIN], &["DE"]);
         let extra = RecordBatch::try_from_iter(
             table
                 .schema_ref()
@@ -855,7 +898,7 @@ mod tests {
     #[tokio::test]
     async fn a_country_the_store_does_not_know_is_refused() {
         let tmp = tempfile::tempdir().unwrap();
-        let table = crossing_table(&["a"], &[berlin()], &["ZZ"]);
+        let table = crossing_table(&["a"], &[BERLIN], &["ZZ"]);
 
         let err = write_table(&Root::new(tmp.path()), &crossings(), &[table])
             .await
@@ -947,7 +990,7 @@ mod tests {
         let root = Root::new(tmp.path());
         let target = SilverTarget::of::<TrackRow>().unwrap();
         let projector = Projector::for_country(Country::Germany).unwrap();
-        let line = LineString::from(vec![berlin().0, frankfurt().0]);
+        let line = LineString::from(vec![BERLIN.0, FRANKFURT.0]);
         let projected = projector.project(&line).unwrap();
         let (geometry_field, geometry) = wkb_column(wkb_field(GEOMETRY).unwrap(), &[line]).unwrap();
         let (projected_field, projected_array) = wkb_column(
@@ -1013,8 +1056,8 @@ mod tests {
 
     #[test]
     fn the_wkb_a_table_carries_is_the_wkb_the_store_writes() {
-        let (_, from_geometry) = wkb_column(wkb_field(GEOMETRY).unwrap(), &[berlin()]).unwrap();
-        let table = crossing_table(&["a"], &[berlin()], &["DE"]);
+        let (_, from_geometry) = wkb_column(wkb_field(GEOMETRY).unwrap(), &[BERLIN]).unwrap();
+        let table = crossing_table(&["a"], &[BERLIN], &["DE"]);
         let target = crossings();
 
         let translated = translate(&target, &table).unwrap();
@@ -1037,11 +1080,7 @@ mod tests {
     async fn a_table_naming_two_rows_the_same_is_refused() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let table = crossing_table(
-            &["a", "b", "a"],
-            &[berlin(), berlin(), berlin()],
-            &["DE"; 3],
-        );
+        let table = crossing_table(&["a", "b", "a"], &[BERLIN, BERLIN, BERLIN], &["DE"; 3]);
 
         let err = write_table(&root, &crossings(), &[table])
             .await
@@ -1058,7 +1097,7 @@ mod tests {
     async fn a_repeated_id_is_refused_even_across_partitions() {
         let tmp = tempfile::tempdir().unwrap();
         let root = Root::new(tmp.path());
-        let table = crossing_table(&["a", "a"], &[berlin(), berlin()], &["DE", "FR"]);
+        let table = crossing_table(&["a", "a"], &[BERLIN, BERLIN], &["DE", "FR"]);
 
         assert!(matches!(
             write_table(&root, &crossings(), &[table]).await,

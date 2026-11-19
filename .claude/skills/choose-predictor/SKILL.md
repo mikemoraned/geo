@@ -1,0 +1,64 @@
+---
+name: choose-predictor
+description: Report lookout's evaluation runs in gold as a dated doc, and choose the apps' predictor and its settings with the user. Use after every run of `just evaluate`, and whenever the user asks which predictor the apps run.
+user-invocable: true
+---
+
+This skill reports every evaluation run in lookout's gold, and opens a discussion with the user
+that ends in a choice of predictor and settings for the apps. The report is a dated doc in
+`docs/evaluations/`, so the review sits in a diff beside the runs it weighed. Run it from
+`apps/lookout`.
+
+## Steps
+
+1. **Read every run.** Run `duckdb -json < ../../.claude/skills/choose-predictor/runs.sql`. Each
+   row is one run's settings joined to its summary. If gold holds no run, say so and stop.
+
+2. **Find the runs no report covers.** A report names each run it covers by its `run_id`. Search
+   `docs/evaluations/` for each id. If every run is covered, say so and stop.
+
+3. **Find what the apps run now.** Read which predictor `platform-core`'s model builds, and the
+   settings it passes, from the code. Mark that predictor's runs in the report.
+
+4. **Group the comparable runs.** Two runs are comparable when they share `evaluation_version`,
+   `country`, `realtime_at_least`, `sessions`, `pick_seed`, `split_settings`, and every scoring
+   setting: `horizon`, `last_moment`, `ramp`, `last_moment_score`, `floor`, and `warm_up`. A run
+   outside every group of two or more goes in a list of its own.
+   The oracle reads ground truth, which the apps cannot, so it can never be chosen. Its runs are a
+   reference, showing the best score the data and the rules allow, and the report says so.
+
+5. **Write the report** as `docs/evaluations/<today>-<topic>.md`, where the topic names what the
+   runs evaluate, such as `cooldown`. If a report of today's covers the same evaluation, add the
+   new runs to it. If the new runs make an evaluation of their own, such as the first measure of
+   something new, give them a report of their own. A report names and links no notebook, since a
+   notebook can be deleted. Write it through the two writing skills, as `CLAUDE.md` requires. It
+   holds these sections, in order:
+   - **Runs:** one table per group, one row per run. Each row gives the predictor and its
+     settings, the float type, and precision, recall, false alarms per hour, and F0.5, each with
+     its interval as `value [low, high]`. F0.5 is `f_half`, the F-score with β = 0.5, which
+     weighs precision above recall as the user's choices do. It also gives the lead time's p10,
+     median, and p90, and the counts of passes, notifications, false alarms, repeats, and
+     misses. The group's shared settings and its run ids head the table. The shared settings
+     name the split the group scores, tune or test, with its resolution, salt, and tune buckets,
+     or say that it scores every crossing.
+   - **Skew:** one table, one row per run that measured skew. Skew is how far the passes the apps
+     can see depart from ground truth. It describes the detectors and the data, not the
+     predictor, so it plays no part in the comparison or the choice, and the section says so.
+     Each row gives the run id, the online pass radius, and seen and unmatched, each with its
+     interval as `value [low, high]`. It also gives the offset's p10, median, and p90, and the
+     counts of passes, passes seen, visits, and visits unmatched. A run without skew is listed
+     as not measuring it.
+   - **Comparison:** for each pair of predictors in a group, which measures differ. Two
+     predictors differ on a measure only where their intervals do not overlap. Where intervals
+     overlap, the runs cannot tell the predictors apart.
+   - **Trade-offs:** what the numbers leave open, such as recall against false alarms per hour,
+     and the predictor and settings you recommend. Rank the runs by F0.5 first. F0.5 leaves out
+     false alarms per hour, so weigh that measure beside it.
+   - **Choice:** left empty until step 6 ends.
+
+6. **Discuss the choice with the user.** Present the trade-offs and your recommendation, and ask
+   which predictor and settings the apps run. Record the answer under **Choice**, with the
+   reasons the user gave. A choice to keep the current predictor counts as a choice.
+
+7. **Report** the doc's path, and whether the choice changes what the apps run. A change is a
+   code change to `platform-core`, made as its own task rather than by this skill.

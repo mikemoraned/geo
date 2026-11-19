@@ -1,18 +1,20 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::path::Path;
 use std::sync::Arc;
 
 use datafusion::execution::SendableRecordBatchStream;
 use futures::StreamExt;
 
 use crate::country::Country;
+use crate::layer::Layer;
 use crate::rows::{Geometry, Row, RowError, batch, fields};
 use crate::write::WriteError;
 use arrow::array::{Array, ArrayRef, BinaryArray, RecordBatch};
 use arrow::datatypes::{DataType, Field, FieldRef, Schema, SchemaRef};
 use geoarrow_schema::{Crs, Metadata, WkbType};
 use geoparquet::writer::{GeoParquetRecordBatchEncoder, GeoParquetWriterOptions};
+use object_store::ObjectStore;
+use object_store::path::Path as ObjectPath;
 use parquet::arrow::AsyncArrowWriter;
 use parquet::arrow::async_writer::ParquetObjectWriter;
 use serde::Serialize;
@@ -233,10 +235,15 @@ pub(crate) struct GeoParquetFile {
 }
 
 impl GeoParquetFile {
-    pub(crate) fn create(path: &Path, schema: &Schema) -> Result<Self, GeoError> {
+    pub(crate) fn create(
+        layer: Layer,
+        store: Arc<dyn ObjectStore>,
+        location: ObjectPath,
+        schema: &Schema,
+    ) -> Result<Self, GeoError> {
         let encoder =
             GeoParquetRecordBatchEncoder::try_new(schema, &GeoParquetWriterOptions::default())?;
-        let writer = crate::write::writer_at(path, encoder.target_schema())?;
+        let writer = crate::write::writer_at(layer, store, location, encoder.target_schema())?;
         Ok(Self { encoder, writer })
     }
 
@@ -258,14 +265,16 @@ impl GeoParquetFile {
 }
 
 pub(crate) async fn write_geo_batches(
-    path: &Path,
+    layer: Layer,
+    store: Arc<dyn ObjectStore>,
+    location: ObjectPath,
     batches: &[RecordBatch],
 ) -> Result<(), GeoError> {
     let Some(first) = batches.first() else {
         return Err(WriteError::Empty.into());
     };
 
-    let mut file = GeoParquetFile::create(path, first.schema().as_ref())?;
+    let mut file = GeoParquetFile::create(layer, store, location, first.schema().as_ref())?;
     for batch in batches {
         file.write(batch).await?;
     }
@@ -273,10 +282,12 @@ pub(crate) async fn write_geo_batches(
 }
 
 pub(crate) async fn write_geo_stream(
-    path: &Path,
+    layer: Layer,
+    store: Arc<dyn ObjectStore>,
+    location: ObjectPath,
     mut batches: SendableRecordBatchStream,
 ) -> Result<usize, GeoError> {
-    let mut file = GeoParquetFile::create(path, batches.schema().as_ref())?;
+    let mut file = GeoParquetFile::create(layer, store, location, batches.schema().as_ref())?;
 
     let mut rows = 0;
     while let Some(batch) = batches.next().await {
@@ -290,6 +301,7 @@ pub(crate) async fn write_geo_stream(
 
 #[cfg(test)]
 mod tests {
+    use domain::places::{BERLIN, EDINBURGH, FRANKFURT};
     use serde::{Deserialize, Serialize};
 
     use super::*;
@@ -390,9 +402,7 @@ mod tests {
     fn projecting_lat_lon_yields_metres_in_the_german_zone() {
         let projector = Projector::for_country(Country::Germany).unwrap();
 
-        let projected = projector
-            .project(&geo_types::Point::new(13.404954, 52.520008))
-            .unwrap();
+        let projected = projector.project(&BERLIN).unwrap();
 
         assert!(
             (projected.x() - 798_809.63).abs() < 0.01
@@ -405,9 +415,7 @@ mod tests {
     fn projecting_lat_lon_yields_metres_in_the_british_zone() {
         let projector = Projector::for_country(Country::UnitedKingdom).unwrap();
 
-        let projected = projector
-            .project(&geo_types::Point::new(-3.188267, 55.953251))
-            .unwrap();
+        let projected = projector.project(&EDINBURGH).unwrap();
 
         assert!(
             (projected.x() - 488_244.04).abs() < 0.01
@@ -419,7 +427,7 @@ mod tests {
     #[test]
     fn projecting_a_line_string_projects_every_coordinate() {
         let projector = Projector::for_country(Country::Germany).unwrap();
-        let line = geo_types::LineString::from(vec![(13.404954, 52.520008), (8.682127, 50.110924)]);
+        let line = geo_types::LineString::from(vec![BERLIN, FRANKFURT]);
 
         let projected = projector.project(&line).unwrap();
 
@@ -431,30 +439,28 @@ mod tests {
 
     #[test]
     fn a_zoned_geometry_holds_its_projection_under_the_projectors_country() {
-        let berlin = geo_types::Point::new(13.404954, 52.520008);
         let projector = Projector::for_country(Country::Germany).unwrap();
 
-        let zoned = projector.zoned(berlin).unwrap();
+        let zoned = projector.zoned(BERLIN).unwrap();
 
-        assert_eq!(zoned.geography(), &berlin);
-        assert_eq!(zoned.projected(), &projector.project(&berlin).unwrap());
+        assert_eq!(zoned.geography(), &BERLIN);
+        assert_eq!(zoned.projected(), &projector.project(&BERLIN).unwrap());
         assert_eq!(zoned.country(), Country::Germany);
     }
 
     #[test]
     fn projectors_give_each_country_its_own_zone() {
-        let berlin = geo_types::Point::new(13.404954, 52.520008);
         let mut projectors = Projectors::default();
 
         let german = projectors
             .for_country(Country::Germany)
             .unwrap()
-            .zoned(berlin)
+            .zoned(BERLIN)
             .unwrap();
         let british = projectors
             .for_country(Country::UnitedKingdom)
             .unwrap()
-            .zoned(berlin)
+            .zoned(BERLIN)
             .unwrap();
 
         assert_eq!(german.country(), Country::Germany);

@@ -18,168 +18,6 @@ There should be some minimal display of map context to contextualise where you a
 the nearby trainlines and maybe the water bodies. This can be very minimal however e.g. showing the
 train line is probably enough.
 
-## Slice: Evaluation framework with associated Crow Flies predictor improvement
-
-### Target
-
-I have some larger ideas for how to come up with a good predictor, but for now I want to prove I can improve things + measure that improvement in some way.
-
-So, I'd like to go from a very simple Crow Flies predictor I have now, which effectively just shows distance to nearby crossings, to one that takes into account current speed and average direction, and predicts when a crossing will be passed in next N minutes.
-
-### Straw Man
-
-This approach means we have to become a lot crisper in what a prediction means. Right now the display just shows a radar style view which isn't really making a prediction and is instead just a map of nearby crossings. My thinking here is that, for each crossing, we need to have a little state-machine, something like:
-
-States:
-* OutOfReach: this is maybe an implicit state that any crossing sits in, if it is just in the pointset data, and isn't reachable at all
-* CandidatePass: this is when it becomes nearby enough to be considered as a possible crossing
-* PredictedPass: this is when we expect we will actually pass by this crossing in the next N minutes
-* ActualPass: we just actually passed the crossing
-
-Transitions:
-* OutOfReach <-> CandidatePass: a crossing can oscillate in and out of being a candidate
-* OutOfReach -> PredictedPass or CandidatePass -> PredictedPass: this is us making a prediction, and this transition should lead to a notification of some kind to the user
-* PredictedPass -> CandidatePass or PredictedPass -> OutOfReach: this counts as a failed prediction
-* PredictedPass -> ActualPass: a successful prediction. Note that a crossing stays in the ActualPass state until we've gotten some distance away from it to avoid re-notifying repeatedly. In general, the state transitions should probably have some sort of debouncing to avoid frequent flips in and out of states.
-* ActualPass -> PredictedPass: it's always possible we can pass somewhere multiple times, so this is a new prediction
-* ActualPass -> CandidatePass: still within reach but not currently predicted
-* ActualPass -> OutOfReach: it's now distance from us and we don't even think it is a candidate
-
-In this framework, depending on how clever the predictor is, we may be able to display a crossing but still label it as OutOfReach. This could be, for example, if we decide it is technically close by but we are not going to reach it because it's not on our current track.
-
-However, the cleverness of the predictor we do in this slice should be limited to using a current-speed/direction + light-cone approach i.e. predict what we will reach based on where we will pass by based on current vector. This can start with a low-level of cleverness about current speed/direction (i.e. just literal current speed) and then start building up an overall speed/direction based on an average over last few fixes and/or on speed reported by the GPS device. 
-
-I suspect on Web we could benefit from the cleverness of the GPS baked into the phone, as it's probably doing something clever, but I'd prefer not to use that and instead do it ourselves, as then we have consistent performance across platforms. I am thinking here of some sort of Kalman-filter or similar.
-
-We should implement an evaluation framework which uses advice from apps/lookout/docs/2026-08-01-evaluation.md and applies it to saved sessions from myself (silver/session_v3 table) and from motis (bronze/motis_segment_v3). The idea is to use real recorded data from being on a train or from reported positions of trains to drive an evaluation of what the predictor says about future water crossings compared to when they actually happened. We can use silver/session_crossing_v3 for this, and we may want to apply the same pattern to motis data i.e. treat motis train tracking as a session.
-
-### What a prediction is
-
-Each crossing is in one of four states:
-
-- **OutOfReach**: the predictor rules it out.
-- **CandidatePass**: reachable, but not expected within N minutes.
-- **PredictedPass**: expected within N minutes. Entering it raises an alert, which is the
-  notification the user sees and what the evaluation scores.
-- **ActualPass**: recently passed, until the train is far enough away that a new alert means a
-  second pass.
-
-The evaluation scores the first alert before each pass. A train reversing out of Leipzig passes
-the same crossings twice, so the unit is (session, crossing, pass), not the (session, crossing)
-pair of [2026-08-01-evaluation.md](2026-08-01-evaluation.md).
-
-Imprecise samples can split one pass into two. Session `71b9c047`, on 26 July, reports about
-1,450 m of accuracy, and passes four crossings twice each, 22 s apart. The rule that splits a
-session's samples into visits cannot tell such jitter from a real revisit. A real revisit needs
-the train to leave and return, which takes a span of space and time. Where a session's
-uncertainty exceeds that span, two visits are no longer discernible.
-
-### Decisions
-
-Decisions taken before starting, as each changes what gets built. Confirmed 2026-10-03.
-
-The evaluation scores predictions against the ground truth the slice "Motis as ground truth"
-establishes. Most of that capture has no realtime, as
-[its caveat](completed-slices.md#caveat-realtime-stops-partway-through-the-capture) sets out. If
-that proves an issue, limit the evaluation data to legs with realtime.
-
-#### Prediction
-
-- **The state machine lives in `predictor`, over any `Predict`**, so the device, the browser, the
-  replay, and the evaluation share it.
-- **A light cone decides reachability, and the current velocity decides the prediction.** A
-  train's maximum speed and acceleration bound where it can be within the horizon. Projecting the
-  current velocity estimates when a reachable crossing is passed. The bounds are recorded per
-  country, with sources.
-- **`LightCone` sits beside `CrowFlies`.** `CrowFlies` stays as the baseline, and marks every
-  crossing in its radius reachable.
-- **Speed and direction come from the fixes alone**, averaged over the last few, so every platform
-  estimates alike. `CrowFlies` keeps the reported speed, as the constant-velocity baseline.
-- **Transitions debounce with hysteresis and a minimum dwell**, as geofencing APIs do. ActualPass
-  is entered within the 250 m match radius, and left beyond a larger one.
-
-#### Evaluation
-
-- **A Rust binary scores, and a notebook measures.** The binary writes a gold row per pass or false
-  alarm, with the outcome, the lead time, and the run's parameters. An alert with no pass following
-  within the horizon is a false alarm.
-- **A Motis train is a train session in silver.** `train_session_sample_v2` holds its position every
-  10 s, the recorded sessions' median, along its legs. Motis results are reported apart from
-  recorded sessions.
-
-#### Notifications
-
-- **The core raises a notification as a crux effect, on entry into PredictedPass.** The web
-  element shows a banner, and a system notification while the page is hidden. The M5 panel shows a
-  banner.
-
-#### Consequences elsewhere
-
-- `Prediction` gains a reachability field.
-- The `lookout_predictor` binding in `crates/platform/rerun-py` exposes `CrowFlies` alone.
-- The picture in `docs/web.md` and the derivation graph in `docs/architecture.md` change.
-
-#### Open questions
-
-- Why the sentence that scans takes 262 ms on the device rather than 8.5 ms. geo 0.32 takes it
-  to 119 ms, and crux 0.20 to 262 ms. On the host, neither changes it, so the cause lies in the
-  device build. The light cone adds work to that sentence, so the answer matters before it lands.
-
-#### Rejected / deferred
-
-- **A Kalman filter**, until the evaluation shows averaging limits the result. It then comes from
-  a crate that builds for the device.
-
-### Tasks
-
-#### The state machine
-
-- [ ] Survey how geofencing APIs debounce, and record the choice under Decisions.
-- [ ] Add reachability to `Prediction`, and set it in `CrowFlies`.
-- [ ] Add the four states to `predictor`, reporting each transition as an event.
-- [ ] Debounce each transition, with its thresholds as parameters.
-
-#### The evaluation
-
-- [ ] Research how to represent a crossing's discernibility in space and time, before scoring a
-      second pass. Compare how closely a real train can revisit a crossing with how uncertain a
-      session's samples leave the train. Look for prior art, such as scale space in images.
-      Record the findings under Decisions.
-- [ ] Add an `evaluation` crate, with a binary replaying `silver/session_sample_v3` through a
-      predictor and the state machine.
-- [ ] Score each pass in `silver/session_crossing_v3`, and each unmatched alert, as `EvaluationRow`
-      under gold evaluation results.
-- [ ] Add a recipe for the run.
-- [ ] Add a marimo notebook: the headline measures with n, the threshold sweep, and the horizon
-      diagnostic.
-- [ ] Run `CrowFlies` across a sweep of N, as the baseline.
-- [ ] Score the train sessions, and report them apart in the notebook.
-
-#### The light cone
-
-- [ ] Record a maximum speed and acceleration for trains in DE and GB, each with its source.
-- [ ] Add a velocity estimate to `predictor`, averaged over the last few fixes.
-- [ ] Add `LightCone` to `predictor`.
-- [ ] Evaluate it across a sweep of N against the baseline, and choose the operating point.
-- [ ] Bind `LightCone` and the state machine in `crates/platform/rerun-py`. Low priority.
-
-#### Notifications
-
-- [ ] Run `LightCone` and the state machine in `crates/platform-core/src/app.rs`, at the operating
-      point.
-- [ ] Add a notification effect to `Effect`.
-- [ ] Show it in the web element, with a system notification while the page is hidden, and on the
-      M5 panel.
-- [ ] Draw each crossing's state in the web picture and on the M5 panel.
-- [ ] Describe the notification and the states in `docs/web.md` and `docs/device.md`.
-- [ ] Build both shells, and flash the device. The user rides with it.
-
-#### Wrap-up
-
-- [ ] Add the evaluation to the derivation graph in `docs/architecture.md`.
-- [ ] Fold what holds of `docs/2026-08-01-evaluation.md` into a durable doc, and delete it.
-- [ ] Run `just test-no-docker` before every commit. The user runs `just test`.
-
 ## Slice: Motis as ground truth for the UK
 
 ### Target
@@ -213,6 +51,64 @@ Germany alone.
 - Runs on Web/M5Plus + also: Android/iOS App + also: CoreS3 M5 device with GNSS base.
 - Has a predictor that takes into account reachability of a crossing and not just distance,
   either through observational data, or through route connectivity.
+
+## Slice: an observational predictor
+
+### Target
+
+Build the predictor that
+[the observational predictor notes](2026-10-03-observational-predictor.md) describe: a map from
+(speed, direction, cell) to the crossings reached, learned from recorded journeys. Measure it
+against the predictor the apps run, through the evaluation that LightCone's slice built.
+
+The map holds the journeys it was built from. A test on those journeys measures how well it
+recalls them, not how well it predicts.
+[Tuning and testing](evaluation.md#tuning-and-testing) sets out how the
+evaluation splits sessions for LightCone, whose few settings claim to work on any track. This
+slice revisits that doc's choices for a map, which claims to predict later trains over track it
+has seen:
+
+- **Split by time.** The test set holds journeys captured after those the map was built from.
+  The German capture holds two usable days under one timetable, so this needs a later capture.
+- **A third set.** The map learns a distribution in every bucket, and a sweep then chooses its
+  resolution, buckets, and back-off. Building the map and choosing those settings each need
+  journeys the other has not read.
+- **Staleness.** A test set captured weeks after the build measures how fast the map goes stale
+  as the network and its services change.
+
+## Slice: Collected Possible Precision/Recall Improvements
+
+### Target
+
+Collect the ideas that could raise a predictor's precision or recall beyond what LightCone's slice
+chose. Each is an experiment, measured against the chosen predictor through the evaluation, and
+adopted only where its runs beat that predictor.
+
+### Debouncing
+
+A run shows whether debouncing a predictor's predictions improves its precision and recall. The
+apps can take a predictor without it, so this experiment can be skipped. Each run starts
+`/choose-predictor`, so a debounced predictor can replace the one LightCone's slice chose.
+
+- [ ] Debounce `LightCone`'s predictions and `CrowFlies`', each as a setting of its predictor.
+- [ ] Run each predictor with and without its debouncing, over the same sessions and seed, and
+      compare precision, recall, and false alarms per hour.
+
+### A trumpet around the heading
+
+LightCone keeps the crossings CrowFlies alerts on that lie within a cone around the heading. The
+cone stands for what the train can reach within the horizon, given how far it can turn. It grants
+the same turn at every speed. A train turns less the faster it goes, since it cannot take a tight
+curve at speed, and the shape of the track limits its turns too. The current speed can therefore
+predict the largest turn the train can make. Carried ahead along the heading, that limit draws a
+shape narrow near the train and wider further out, like a trumpet.
+[The trumpet, as a reachable set](2026-11-16-trumpet-reachable-set.md) names the fields that
+study this shape, and derives a bound on it from the physics of a train in a curve.
+
+- [ ] Learn the relationship between speed and the turning angle measured in the recorded sessions.
+- [ ] Build the trumpet from that relationship, as a filter on CrowFlies' alerts in place of the
+      cone.
+- [ ] Run it over the sessions LightCone's runs used, and compare it with the chosen predictor.
 
 # Unassigned
 
@@ -291,6 +187,19 @@ distance. That fits how at least 40 of those 42 moved. On 24 October, 642 of the
 crossings were point crossings. That day's run renamed one of them, and two passes in
 `silver/session_crossing` then named an id the store no longer held. A moved line crossing needs
 another cause.
+
+The notebook also keeps crossings outside the country it derives them for. DE's crossings include
+one of the Moselle near Thionville, in France. The evaluation leaves such crossings out of a run
+with a split, as a stopgap. Deriving the crossings in Rust cuts them to the country's areas, and
+the evaluation then reads silver as it stands. The cut keeps a crossing on a river that forms the
+border, such as the Wurm at Herzogenrath, which German trains pass. Its centre can lie just outside
+the country's outline.
+
+Consider tracing each dataset back to what it was derived from, such as the Overture release behind
+the crossings. A disparity between the newest Overture extract and a silver dataset could then be
+told apart from the two reading different releases, which would guide what to do and where to
+debug. The evaluation's split checks, for example, read a country's newest extract, while the
+crossings they check came from whichever extract built them.
 
 ## Slice: Enrich and use relative direction of POI
 
@@ -433,15 +342,22 @@ tool, puts the self-check in front of Claude before its next step.
 - [ ] Invoke both skills, edit the file, and confirm the self-check arrives before the next step.
 - [ ] Change the file through Bash, and confirm the self-check arrives there as well.
 
-## Slice: geography and geometry columns
+## Slice: Rationalise Medallion Types
 
 ### Target
 
-Make silver's files say what its two geometry columns hold. The column named `geometry` holds the
+Make every reader of the store see each column as the type its row type declares.
+
+Silver's files say what its two geometry columns hold. The column named `geometry` holds the
 geography, in lat/lon, and `geometry_projected` holds the geometry, in a country's metres. The code
 measures the first on the round Earth and the second on a plane, but a file declares both as planar.
 [2026-11-02-geography-and-geometry-columns.md](2026-11-02-geography-and-geometry-columns.md) holds
 the assessment.
+
+DuckDB reads each dataset through a view that medallion generates from the dataset's row type. The
+view converts what DuckDB's Parquet reader drops, such as a duration, which it reads as an integer
+of milliseconds. [2026-11-15-duckdb-types.md](2026-11-15-duckdb-types.md) holds the assessment and
+the alternatives.
 
 ### Tasks
 
@@ -452,6 +368,11 @@ the assessment.
 - [ ] Rename the columns to `geography` and `geometry`, as new versions of the six datasets that
       hold them.
 - [ ] Measure a dictionary over the WKB, then GeoArrow-native encoding once SedonaDB reads it.
+- [ ] Answer the DuckDB doc's open questions: a CRS on `GEOMETRY`, partition pruning through a
+      view, and where the views live.
+- [ ] Generate a DuckDB view per dataset from its row type, converting each duration with
+      `to_milliseconds`, and each geometry as the first answer allows.
+- [ ] Read the views in `/choose-predictor`'s `runs.sql`, in place of its own conversions.
 
 ## Slice: refuse `expect` and `unwrap` outside tests
 
@@ -473,3 +394,66 @@ it is there. `.claude/rules/rust.md` asks for this in prose, and no lint enforce
 - [ ] Go through each flagged call in `src/bin/` by the same test.
 - [ ] Apply the same lints to the `m5plus` workspace.
 - [ ] Name the lints in `.claude/rules/rust.md`.
+
+## Slice: Demonstrable Behaviour
+
+### Target
+
+Some of the algorithms / processing we are doing here is getting quite complex, and I am likely to not remember / understand after some time, particularly if I go away and work on something else. So, we should produce a small "book", expressed in notebooks, and some associated blogposts on how this works, following the principles of [our research](2026-10-18-demonstrable-behaviour.md).
+
+Some of the key areas to cover:
+* deriving water crossings
+* [session crossings and matching](../crates/session_crossings/README.md)
+* [predictor](../crates/predictor/README.md)
+* evaluation
+  * The measure: a notification earns credit by its lead time to the next pass of its crossing,
+    with a ramp past N rather than a step. Repeats, false alarms, and misses score 0.
+  * The tracker's states, and how a prediction's confidence maps to them.
+  * The online and offline pass detectors, and the skew between them: seen, unmatched, and offset.
+  * The oracle, which checks the skeleton by scoring perfectly except where passes of a crossing
+    fall close together.
+  * Intervals from a bootstrap over sessions.
+  * The tune/test split by A5 cell:
+    * Why a cell rather than a line: `route_name` names a train.
+    * Why A5 rather than H3, and how a salt and buckets assign each cell a split.
+    * The resolution chosen, and why no resolution steadies the heading angle's p99 between the
+      splits.
+    * The invariants of the split, and the three plausible errors that only an invariant caught.
+  * Scoring each unit by its crossing's cell:
+    * A run replays each session whole. Cutting sessions at a cell's edge starts some mid-approach,
+      so more passes fall under N after a start, and CrowFlies' precision drops from 0.328 to
+      0.299.
+    * Each notification, pass, repeat, false alarm, and miss takes the split of its crossing's
+      cell. A run without a split scores every unit.
+    * False alarms per hour divide by the hours in the split's cells. Each step between two
+      samples counts towards the split of its first sample's cell.
+    * The skew counts only passes and visits whose crossing lies in the split's cells, so every
+      measure a run reports covers one split.
+  * Tuning reads only windows that lie wholly in tune cells.
+  * LightCone, the predictor the apps run:
+    * CrowFlies with a cone around the heading on top, which only lowers a confidence, so it
+      alerts on a subset of what CrowFlies alerts on.
+    * The heading and speed from the train's last move beyond a radius of stillness, so a
+      receiver wandering at rest gives neither.
+    * How far trains turn within N, measured over windows, bounds the sweep of the cone's angle.
+      The extremes differ between the splits, since a few places hold most reversals.
+  * F0.5: why the measure weighs precision above recall, and how β ranks the runs.
+  * Choosing settings: a sweep over the tune split, then each predictor's chosen settings run once
+    over the test split, and the apps' predictor chosen from those runs alone.
+  * How a run is stored:
+    * A crossing's transitions within one stay in reach become one episode, holding its path of
+      states and the gaps between them.
+    * Outcomes drop what other columns give, and sessions sort in route order, so similar rows
+      share a page.
+    * A migration refuses a run whose new rows do not rebuild its old ones exactly.
+
+### Starting points
+
+- **The evaluation's exploration notebooks.** `notebooks/evaluation/explore1.py` to `explore9.py`
+  each answered one question while the evaluation was built, and several explain a step as they go.
+  `explore8.py`, for example, sets out what each of a run's choices guards against. Fold them into
+  one or more notebooks that demonstrate the evaluation's behaviours or steps, then remove them,
+  with their answers in the removing commit. `explore3.py`, `explore4.py`, `explore8.py`, and
+  `explore9.py` read gold datasets that runs no longer write, `evaluation_transition_v1`,
+  `evaluation_outcome_v2`, and `evaluation_session_v2` among them. Each needs moving to the
+  datasets that replace them before it runs.

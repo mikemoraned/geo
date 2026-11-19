@@ -3,7 +3,7 @@ import { readJourneys } from "/kiosk/journeys.js";
 import { openMap } from "/kiosk/map.js";
 
 const JOURNEYS = "/map.pmtiles";
-const WATCH_EACH_SESSION_MS = 60_000;
+const WATCH_EACH_SESSION_MS = 120_000;
 const WIDE_ENOUGH_FOR_A_MAP = matchMedia("(min-width: 768px)");
 const MAP_MARGIN_PX = 32;
 

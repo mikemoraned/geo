@@ -33,12 +33,35 @@ The last command prints the tree's hash. Once the user approves the commits, `gi
 it, so commit the steps in order. If `HEAD` moves first, as when another session commits
 polls, rebuild each tree on the new `HEAD`.
 
+## Decomposing a slice
+
+A decomposition plans a slice, and leaves the solving to the slice's tasks, so the user can judge
+each step as it lands. On 2026-11-03, a re-run of `/decompose-slice` measured the store, ran a
+throwaway preview of several predictors, and rebuilt the slice around the results. The user had no
+way to assess any of it, and reverted it.
+
+- Keep the plan small enough to read and check, and build it up from scratch in steps.
+- Ask the user rather than measure. Where a decision depends on a number, make measuring it a task.
+- Change only the current slice. Another slice's text stays as written unless the user asks.
+- Write in plain words. "The chosen settings" says what "operating point" says, without the jargon.
+
 ## Memos and caches
 
 A memo that saves much time shows that something upstream repeats work. Find why the same input
 comes back, and remove the repeat there. Keep a memo only where no upstream change removes the
 repeat. On 1 November 2026, a memo of country lookups saved 156 s, and its repeats came from a read
 that joined each polyline's text onto every leg.
+
+## Optimisations
+
+Keep a speed or memory change only once a measurement shows it is worth its code. Before a change
+is proposed, time a release build of the old and new binaries over the real store, back to back,
+with `/usr/bin/time -l`, and compare the peak memory footprint as well as the time. Another
+application holding memory can double a run's time, so run the two versions under the same
+conditions. Then lay out the gain against the code it adds, and let the user decide. On
+9 November 2026, a change that saved 100 s of a re-derive but added 0.9 GB was reverted, as was
+one that saved 0.27 GB of 2.97 GB. A change that cut matching's peak from 15.2 GB to 2.0 GB, and
+removed code, was kept.
 
 ## Flashing the M5 device
 
@@ -124,6 +147,12 @@ The command printed a failure all the same, so judge it by free disk. The sandbo
 `tmutil listlocalsnapshots /` lists nothing there, and `diskutil` cannot reach its daemon, so the
 user runs both `tmutil` commands. Check free disk after clearing, and keep the third-party builds
 unless the space is needed.
+
+Any other build of a python extension's crates slows the next uv build of that extension. On
+6 November 2026, uv rebuilt `evaluation-py` in 36 s with nothing run between. It took 9 minutes
+after `cargo clippy` ran on the extension's crate, and 7 minutes after a marimo sandbox installed
+the extension. Run cargo on an extension's crate after its python tests, not between two of their
+builds, and expect the first test build after a notebook session to take minutes.
 
 ## Cargo
 

@@ -1,0 +1,310 @@
+import datetime
+
+import pyarrow as pa
+import pytest
+
+import lookout_evaluation
+import lookout_medallion
+from conftest import crossing_table, train_pass_table, train_sample_table, train_session_table
+
+SESSION_IDS = ["session-a", "session-b", "session-c"]
+CROSSINGS = [("crossing-1", 1), ("crossing-2", 2)]
+
+
+@pytest.fixture
+def written(store):
+    root = str(store)
+    lookout_medallion.write_silver(
+        "train_session_v3",
+        train_session_table(SESSION_IDS, [100.0] * len(SESSION_IDS), lasting=600),
+        root=root,
+    )
+    lookout_medallion.write_silver(
+        "train_session_sample_v3",
+        train_sample_table(SESSION_IDS, [step * 10 for step in range(61)]),
+        root=root,
+    )
+    lookout_medallion.write_silver(
+        "train_session_crossing_v1",
+        train_pass_table([(session_id, "crossing-1", 300) for session_id in SESSION_IDS]),
+        root=root,
+    )
+    lookout_medallion.write_silver("water_crossing_v2", crossing_table(CROSSINGS), root=root)
+    return root
+
+
+def first_runs():
+    return lookout_evaluation.Scoring(
+        horizon="5m",
+        last_moment="30s",
+        ramp="1m",
+        last_moment_score=0.25,
+        floor=0.05,
+        warm_up="1m",
+    )
+
+
+def bootstrap():
+    return lookout_evaluation.Bootstrap(resamples=100, seed=1)
+
+
+def oracle():
+    return lookout_evaluation.Oracle(horizon="5m")
+
+
+def splitter():
+    return lookout_evaluation.Splitter(resolution=8, salt="tune-test-1", tune_buckets=70)
+
+
+def sessions_of(root, picked, split=None):
+    return pa.table(
+        lookout_evaluation.session_rows(country="DE", picked=picked, split=split, root=root)
+    )
+
+
+def run(root, predictor, **settings):
+    ran = lookout_evaluation.run(
+        country="DE",
+        realtime_at_least=90.0,
+        sessions=len(SESSION_IDS),
+        seed=1,
+        predictor=predictor,
+        scoring=first_runs(),
+        bootstrap=bootstrap(),
+        root=root,
+        **settings,
+    )
+    return {name: pa.table(table) for name, table in ran.items()}
+
+
+def test_the_oracle_run_scores_perfectly(written):
+    summary = run(written, oracle())["summary"].to_pylist()[0]
+
+    assert (summary["passes"], summary["notifications"], summary["misses"]) == (3, 3, 0)
+    assert (summary["precision"], summary["recall"]) == (1.0, 1.0)
+    assert (summary["precision_low"], summary["recall_low"]) == (1.0, 1.0)
+
+
+def test_a_run_with_an_online_detector_measures_its_skew(written):
+    online_detector = lookout_evaluation.OnlineDetector(pass_radius_metres=100.0)
+
+    skew = run(written, oracle(), online_detector=online_detector)["skew"].to_pylist()[0]
+
+    assert (skew["passes"], skew["seen_passes"], skew["visits"], skew["unmatched_visits"]) == (
+        3,
+        3,
+        6,
+        3,
+    )
+    assert (skew["seen"], skew["unmatched"]) == (1.0, 0.5)
+    assert skew["offset_median"] == datetime.timedelta(minutes=-5)
+
+
+def test_a_run_without_an_online_detector_measures_no_skew(written):
+    assert "skew" not in run(written, oracle())
+
+
+def test_the_steps_run_one_by_one_give_what_the_run_gives(written):
+    ran = run(written, oracle())
+    sessions = sessions_of(written, ran["picked"])
+
+    transitions = pa.table(
+        lookout_evaluation.replay(country="DE", sessions=sessions, predictor=oracle(), root=written)
+    )
+    outcomes = pa.table(
+        lookout_evaluation.score(
+            country="DE",
+            sessions=sessions,
+            transitions=transitions,
+            scoring=first_runs(),
+            root=written,
+        )
+    )
+    summary = pa.table(
+        lookout_evaluation.summarise(sessions=sessions, outcomes=outcomes, bootstrap=bootstrap())
+    )
+
+    assert transitions.equals(ran["transitions"])
+    assert outcomes.equals(ran["outcomes"])
+    assert summary.equals(ran["summary"])
+
+
+def test_a_transition_is_a_row_of_session_crossing_instant_and_states(written):
+    transitions = run(written, oracle())["transitions"]
+
+    assert transitions.column_names == ["session_id", "crossing_compact_id", "at", "from", "to"]
+    assert set(transitions.column("to").to_pylist()) == {
+        "alerted_pass",
+        "actual_pass",
+        "out_of_reach",
+    }
+
+
+def test_crow_flies_notifies_nothing_and_misses_every_pass(written):
+    crow_flies = lookout_evaluation.CrowFlies(
+        radius_metres=5_000.0, horizon="5m", still_within_metres=20.0
+    )
+    summary = run(written, crow_flies)["summary"]
+
+    assert summary.to_pylist()[0]["notifications"] == 0
+    assert summary.to_pylist()[0]["misses"] == 3
+
+
+def test_light_cone_notifies_nothing_and_misses_every_pass(written):
+    light_cone = lookout_evaluation.LightCone(
+        radius_metres=20_000.0, half_width_degrees=45.0, horizon="5m", still_within_metres=20.0
+    )
+    summary = run(written, light_cone)["summary"]
+
+    assert summary.to_pylist()[0]["notifications"] == 0
+    assert summary.to_pylist()[0]["misses"] == 3
+
+
+def test_an_unknown_float_type_is_refused(written):
+    sessions = sessions_of(written, run(written, oracle())["picked"])
+
+    with pytest.raises(ValueError, match="float_type"):
+        lookout_evaluation.replay(
+            country="DE", sessions=sessions, predictor=oracle(), float_type="f16", root=written
+        )
+
+
+def test_a_predictor_of_no_known_kind_is_refused(written):
+    sessions = sessions_of(written, run(written, oracle())["picked"])
+
+    with pytest.raises(ValueError, match="predictor"):
+        lookout_evaluation.replay(country="DE", sessions=sessions, predictor="oracle", root=written)
+
+
+def test_a_session_without_a_split_scores_its_whole_duration(written):
+    sessions = sessions_of(written, run(written, oracle())["picked"]).to_pylist()
+
+    assert {(row["duration"], row["scored_duration"]) for row in sessions} == {
+        (datetime.timedelta(minutes=10), datetime.timedelta(minutes=10))
+    }
+
+
+def test_a_session_scores_its_whole_duration_in_one_split_and_none_in_the_other(written):
+    picked = run(written, oracle())["picked"]
+    scored = {
+        split: sessions_of(
+            written,
+            picked,
+            lookout_evaluation.ScoredSplit(splitter=splitter(), split=split),
+        ).column("scored_duration").to_pylist()
+        for split in ["tune", "test"]
+    }
+
+    assert [sorted(pair) for pair in zip(scored["tune"], scored["test"])] == [
+        [datetime.timedelta(0), datetime.timedelta(minutes=10)]
+    ] * 3
+
+
+def test_a_run_with_a_split_over_a_store_holding_no_country_is_refused(written):
+    split = lookout_evaluation.ScoredSplit(splitter=splitter(), split="test")
+
+    with pytest.raises(ValueError, match="extract"):
+        run(written, oracle(), split=split)
+
+
+def test_a_split_other_than_tune_or_test_is_refused():
+    with pytest.raises(ValueError, match="split"):
+        lookout_evaluation.ScoredSplit(splitter=splitter(), split="train")
+
+
+def test_transitions_of_a_session_not_picked_are_refused(written):
+    ran = run(written, oracle())
+    fewer = sessions_of(written, ran["picked"]).slice(0, 1)
+
+    with pytest.raises(ValueError, match="session-b"):
+        lookout_evaluation.score(
+            country="DE",
+            sessions=fewer,
+            transitions=ran["transitions"],
+            scoring=first_runs(),
+            root=written,
+        )
+
+
+def recording(written, picked):
+    return dict(
+        country="DE",
+        realtime_at_least=90.0,
+        sessions=len(SESSION_IDS),
+        seed=1,
+        predictor=oracle(),
+        scoring=first_runs(),
+        bootstrap=bootstrap(),
+        picked=picked,
+        root=written,
+    )
+
+
+def test_a_record_names_the_run_its_settings_code_and_data_make(written):
+    picked = run(written, oracle())["picked"]
+    code = lookout_evaluation.BUILD_CODE_VERSION
+    if code == "unknown" or code.endswith("-dirty"):
+        with pytest.raises(ValueError, match="code"):
+            lookout_evaluation.record(**recording(written, picked))
+        return
+
+    recorded = lookout_evaluation.record(**recording(written, picked))
+    again = lookout_evaluation.record(**recording(written, picked))
+
+    run_row = pa.table(recorded["run"]).to_pylist()[0]
+    assert recorded["run_id"] == again["run_id"]
+    assert run_row["code_version"] == code
+    assert recorded["run_date"] == run_row["started_at"].date().isoformat()
+    assert pa.table(recorded["sessions"]).column("session_id").to_pylist() == SESSION_IDS
+    written_run = lookout_medallion.write_gold(
+        "evaluation_run_v6",
+        recorded["run"],
+        run_date=recorded["run_date"],
+        run_id=recorded["run_id"],
+        root=written,
+    )
+    assert written_run.rows == 1
+
+
+def evaluating(written):
+    return dict(
+        country="DE",
+        realtime_at_least=90.0,
+        sessions=len(SESSION_IDS),
+        seed=1,
+        predictor=oracle(),
+        scoring=first_runs(),
+        bootstrap=bootstrap(),
+        root=written,
+    )
+
+
+def test_an_evaluation_writes_to_gold_the_tables_it_returns(written):
+    code = lookout_evaluation.BUILD_CODE_VERSION
+    if code == "unknown" or code.endswith("-dirty"):
+        with pytest.raises(ValueError, match="code"):
+            lookout_evaluation.evaluate(**evaluating(written))
+        return
+
+    evaluated = lookout_evaluation.evaluate(**evaluating(written))
+
+    def stored(dataset):
+        return pa.table(
+            lookout_medallion.query_gold(
+                f"SELECT * FROM {dataset} WHERE run_id = '{evaluated['run_id']}'",
+                root=written,
+            )
+        )
+
+    sessions = stored("evaluation_session_v3")
+    transitions = lookout_evaluation.transitions_of(
+        sessions=sessions, episodes=stored("evaluation_episode_v1")
+    )
+    outcomes = lookout_evaluation.outcomes_of(
+        sessions=sessions, outcomes=stored("evaluation_outcome_v3")
+    )
+    assert pa.table(transitions).num_rows == pa.table(evaluated["transitions"]).num_rows
+    assert pa.table(outcomes).num_rows == pa.table(evaluated["outcomes"]).num_rows
+    assert stored("evaluation_summary_v3").num_rows == 1
+    with pytest.raises(ValueError, match="already"):
+        lookout_evaluation.evaluate(**evaluating(written))

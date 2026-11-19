@@ -1,11 +1,11 @@
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
+use countries::CountryAreas;
 use domain::Span;
 use medallion::MedallionArgs;
 use recorder::sessions::{DEFAULT_GAP, DEFAULT_LEAD, Gap, Lead, sessions};
 use recorder::silver;
-use transport::countries::CountryAreas;
 
 #[derive(Parser)]
 #[command(about = "Derive the silver session datasets from the bronze telemetry")]

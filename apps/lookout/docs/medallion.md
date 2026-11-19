@@ -256,19 +256,84 @@ permitted again. Where no specialised format fits, use
 [GeoArrow 0.2](https://geoarrow.org) for fast export/import, **uncompressed**, since
 compressed GeoArrow is not universally supported by consuming viewers.
 
-Laid out by what was produced and which run produced it, rather than by a partition key:
+An export in a specialised format is laid out by what was produced and which run produced it,
+rather than by a partition key:
 
 ```
 <root>/gold/artifact=<name>/version=<run>/<file>
 ```
 
-**Gold is derived, and so is not versioned in git — with one exception.** An artefact a build
+#### Gold datasets of rows
+
+Gold also holds datasets of rows: results a query reads, such as the rows an evaluation run
+writes. Each is defined as silver's are, by a row type that gives its columns, and is written as
+Parquet. A dataset of rows partitions on the run that wrote it, by date and then by id, as
+[gold's partitioning](#partitioning) lays out:
+
+```
+<root>/gold/<dataset>/run_date=<date>/run_id=<id>/part-0.parquet
+```
+
+A run writes each of its datasets once. The store refuses a second write of a run to a dataset,
+under any date, and the rows already written stay. Gold registers its datasets by name, so a
+query names the datasets it reads, and each row carries the date and id of its run as columns.
+
+#### Writing gold from another language
+
+A notebook writes and reads gold datasets of rows through the same binding as silver, for the same
+reason: one implementation of the format. A write names the dataset, the run's date, and the run's
+id, and hands over a table holding the dataset's columns. The binding checks the table against the
+dataset's definition, and refuses a table lacking a column or holding one the dataset does not
+define. A read is a query over the datasets it names, with each row's run date and run id as
+columns, so a query picks runs in its `WHERE`.
+
+**Gold is derived, and so is not versioned in git — with two exceptions.** An artefact a build
 reads is an input to something outside the store, and cannot be re-derived by whoever builds
 it: a checkout has no silver to pack from. The crossings and the map are the cases today.
 The device's firmware embeds the crossings and the browser fetches them, and a kiosk draws the
 map and replays the sessions it holds. Every version packed is committed, and
 `apps/lookout/crossings.version` and `apps/lookout/map.version` name the ones being built
 against.
+
+An evaluation run is the other exception. It records how a predictor scored against the silver of
+its day, and a later re-derive can change that silver, so a later checkout cannot repeat the run. A
+choice of predictor rests on its runs, so every run is committed, and a review reads them from the
+checkout.
+
+**A committed dataset is laid out for its size in git.** Git keeps every committed blob, so a
+dataset written once per run grows the repository by its full size each time. Its layout stores the
+rows a reader needs in the fewest bytes, and a reader rebuilds the fuller rows from them exactly:
+
+- **A row stands for a run of rows where one would repeat its neighbours.** A crossing's
+  transitions within one stay in reach become one row, holding the path of states and the gaps
+  between them. The crossing's id and the starting time then appear once per stay rather than once
+  per transition.
+- **A column that other columns give is dropped**, such as a lead that is always the time from a
+  notification to its pass, or a state that always repeats the one entered before.
+- **Times are offsets from a nearby instant**, such as a session's start, in place of instants. An
+  offset is a smaller number, and repeats more often.
+- **A dense index names a row's group in place of a long id**, with one table mapping index to id.
+- **Rows are ordered so that similar rows share a page.**
+  [Parquet compresses each page on its own](https://parquet.apache.org/docs/concepts/), so the codec
+  finds repeats only among rows in one page. Sessions ordered by the crossings they pass put
+  sessions on one route side by side, and their rows repeat within a page.
+- **A rebuild is checked before a layout replaces another.** A migration refuses a run whose new
+  rows do not rebuild its old rows exactly, and a property test checks the round trip.
+
+These rules cut an evaluation run to about a quarter of the bytes of one row per transition.
+Encodings and codec levels matter less than layout and order: Parquet's dictionary encoding
+already stores a column of a few values as small integers, so a code in place of a name saves
+nothing.
+
+**The layers in git compress harder.** Every layer writes Parquet with
+[zstd](https://github.com/facebook/zstd). Bronze and gold, the layers committed to git, write at
+level 19. Landing and silver write at level 3, since silver is rewritten in bulk on every re-derive
+and landing is drained. Level 19 writes slower than level 3, and reads as fast.
+
+Git seldom finds a delta between two compressed Parquet files that differ, so each changed file
+costs about its full size in a pack
+([`git pack-objects`](https://git-scm.com/docs/git-pack-objects)). Identical files cost one object,
+so runs that write the same file, such as the sessions of runs over one pick and split, share it.
 
 ## Reading from another language
 
@@ -289,6 +354,26 @@ parsing it out of a path. A read of an upstream extract names a theme and type r
 extract: one table cannot span themes whose columns differ, and a theme and type covers every
 extract taken, each row carrying the id of the extract it came from, so the provenance table joins
 to the rows in plain SQL. Geometry comes back as the upstream file holds it.
+
+## What a read costs
+
+A read costs the bytes it scans and the rows it holds, not the size of the dataset. When a read
+states its columns, filter, and order in the query, three properties of the scan keep both small:
+
+- **A scan reads only the columns the read names.** In a dataset holding a path per row, geometry
+  takes most of the bytes. A read that leaves geometry out scans a small part of each file.
+- **A filter skips what statistics rule out.** A filter on a partition key skips whole partitions.
+  A filter on any other column skips each file, and each row group within a file, whose minimum
+  and maximum rule it out. It then applies to the rows as they stream from the scan, so rejected
+  rows never accumulate.
+- **A sort followed by a limit holds only the leading rows.** The scan keeps the first rows as it
+  goes, rather than sorting every row first.
+
+How much a filter skips depends on how the files order its column. A column unrelated to the order
+of writing varies within every file, so its statistics rule out little. Its saving then lies in the
+rows the read never holds, not in the bytes it skips.
+
+A filter or a sort applied to rows already fetched holds every row of the dataset at once.
 
 ## No table format
 
@@ -395,6 +480,12 @@ that knowing one dataset's columns is knowing them all.
 - **Instants are UTC timestamps at millisecond precision**, whatever integer form they
   travel in on the way here. A column holding a time is stored as a time, never as a number
   a reader has to be told the unit and epoch of.
+- **Spans of time are durations at millisecond precision.** A column holding a lead, an offset,
+  or any other span of time is stored as a duration, never as a number whose name carries its
+  unit. Parquet has no duration type, so a file stores the column as a 64-bit integer and records
+  the duration type in its Arrow schema. DataFusion and pyarrow read that schema and return a
+  duration. DuckDB ignores it and returns the integer, which `to_milliseconds` turns into an
+  interval.
 - **A value drawn from a closed set of names is stored as the name**, in a string column. It
   is not stored as a code to be resolved elsewhere, and not as a union type whose reading the
   engines disagree on.
@@ -521,6 +612,10 @@ Gold partitions on **which run or version produced the output**, and nothing is 
 A run's configuration and input dataset versions are written as columns alongside its
 results, so a run is interpretable without reference to the code that produced it.
 
+**A run is written once.** A write of a run whose id the dataset already holds, under any date, is
+refused, and the rows already written stay. A run with no rows still writes its partition, so a
+read finds the run.
+
 **A coordinate written out for a consumer keeps six decimal places**, about 11 cm. Silver holds a
 position as `f64`, which takes seventeen significant digits to write in full: nanometres, against a
 fix accurate to metres at best. The digits past the sixth cost bytes in every row of every export.
@@ -531,6 +626,20 @@ format has no room for columns. It is laid out the same way and holds its file i
 which is the one thing that always differs, and what it cannot carry as a column belongs in
 the run's log instead. Something outside the store holding one of these cannot say which run
 produced it, which is why a rerun adds a version rather than replacing one.
+
+## A dataset's fingerprint
+
+A dataset's fingerprint names its contents, so a record of what a derivation read stays checkable
+later. It hashes each file's place in the dataset with what the file's parquet footer says of its
+data: each column's path, type, and levels, each row group's row count, and each column chunk's
+sizes, value count, null count, minimum, and maximum. The footer is read through the object store,
+and no row is read. What the footer says of its writer, such as the library and version that wrote
+the file, does not count.
+
+Rewriting the same rows keeps the fingerprint. Adding a partition changes it, and so does any
+change of rows that moves a count, a size, or a statistic. A writer that encodes the same rows
+differently, such as after an upgrade of its compression, changes the sizes and so the fingerprint.
+A file that is not parquet does not count, and a dataset never written has no fingerprint.
 
 ## Options considered or deferred
 

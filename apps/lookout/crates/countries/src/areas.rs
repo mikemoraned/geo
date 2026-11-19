@@ -1,0 +1,458 @@
+use std::collections::HashMap;
+use std::fmt;
+
+use geo::{Contains, PreparedGeometry, Relate, unary_union};
+use geo_types::{Geometry, LineString, MultiPolygon, Point};
+use medallion::{Countries, Country, GEOMETRY, Query, Root};
+use medallion_model::{
+    DIVISION_ID, ExtractId, ExtractManifestRowV3, OvertureRelease, OvertureType, RECORDED,
+};
+
+#[derive(Debug, thiserror::Error)]
+pub enum CountryError {
+    #[error("reading the extracts: {0}")]
+    Query(#[from] medallion::QueryError),
+    #[error("reading the country areas: {0}")]
+    Geo(#[from] medallion::GeoError),
+    #[error("partitioning the extract: {0}")]
+    Path(#[from] medallion::PathError),
+    #[error("an area of {country} is not a polygon")]
+    NotAnArea { country: Country },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewestExtract {
+    pub id: ExtractId,
+    pub release: OvertureRelease,
+}
+
+#[derive(Clone)]
+pub struct Outline {
+    country: Country,
+    prepared: PreparedGeometry<'static, MultiPolygon<f64>>,
+}
+
+impl Outline {
+    pub fn new(country: Country, areas: &[Geometry<f64>]) -> Result<Option<Self>, CountryError> {
+        let polygons = areas
+            .iter()
+            .map(|area| match area {
+                Geometry::Polygon(polygon) => Ok(MultiPolygon::new(vec![polygon.clone()])),
+                Geometry::MultiPolygon(polygons) => Ok(polygons.clone()),
+                _ => Err(CountryError::NotAnArea { country }),
+            })
+            .collect::<Result<Vec<MultiPolygon<f64>>, _>>()?;
+        Ok((!polygons.is_empty()).then(|| Self {
+            country,
+            prepared: PreparedGeometry::from(unary_union(&polygons)),
+        }))
+    }
+
+    pub fn covers(&self, line: &LineString<f64>) -> bool {
+        self.prepared.relate(line).is_covers()
+    }
+}
+
+impl fmt::Debug for Outline {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Outline")
+            .field("country", &self.country)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CountryAreas {
+    areas: Vec<(Country, Geometry<f64>)>,
+    outlines: Vec<Outline>,
+    extracts: HashMap<Country, NewestExtract>,
+}
+
+impl CountryAreas {
+    pub async fn newest_per_country(root: &Root) -> Result<Self, CountryError> {
+        let query = Query::new(root.clone());
+        query
+            .register_by_name(medallion_model::EXTRACT_MANIFEST_V3)
+            .await?;
+        let recorded: Vec<ExtractManifestRowV3> = query.rows(RECORDED).await?;
+
+        let newest_of_each_country = Country::ALL.into_iter().filter_map(|country| {
+            recorded
+                .iter()
+                .find(|extract| extract.country == country.code())
+                .map(|extract| (country, extract))
+        });
+
+        let mut areas = Vec::new();
+        let mut extracts = HashMap::new();
+        for (country, extract) in newest_of_each_country {
+            let id = ExtractId::new(extract.extract_id.clone())?;
+            let division_area = OvertureType::DIVISION_AREA.in_extract(root, &id)?;
+            let table = format!("division_area_{}", country.code().to_lowercase());
+            query.register_at(&division_area, &table).await?;
+
+            let batches = query
+                .sql(&format!(
+                    "SELECT ST_AsBinary({GEOMETRY}) AS {GEOMETRY}
+                     FROM {table}
+                     WHERE {DIVISION_ID} = '{}'",
+                    medallion_model::division_id(country)
+                ))
+                .await?;
+            for batch in &batches {
+                areas.extend(
+                    medallion::geometries(batch, GEOMETRY)?
+                        .into_iter()
+                        .map(|area| (country, area)),
+                );
+            }
+            extracts.insert(
+                country,
+                NewestExtract {
+                    id,
+                    release: extract.overture_release,
+                },
+            );
+        }
+
+        Self::new(areas, extracts)
+    }
+
+    fn new(
+        areas: Vec<(Country, Geometry<f64>)>,
+        extracts: HashMap<Country, NewestExtract>,
+    ) -> Result<Self, CountryError> {
+        let outlines = Country::ALL
+            .into_iter()
+            .map(|country| Outline::new(country, &shapes_of(&areas, country)))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(Self {
+            areas,
+            outlines,
+            extracts,
+        })
+    }
+
+    pub fn newest_extract(&self, country: Country) -> Option<&NewestExtract> {
+        self.extracts.get(&country)
+    }
+
+    pub fn shapes_of(&self, country: Country) -> Vec<Geometry<f64>> {
+        shapes_of(&self.areas, country)
+    }
+
+    pub fn outline(&self, country: Country) -> Option<&Outline> {
+        self.outlines
+            .iter()
+            .find(|outline| outline.country == country)
+    }
+}
+
+fn shapes_of(areas: &[(Country, Geometry<f64>)], country: Country) -> Vec<Geometry<f64>> {
+    areas
+        .iter()
+        .filter(|(of, _)| *of == country)
+        .map(|(_, area)| area.clone())
+        .collect()
+}
+
+impl Countries for CountryAreas {
+    fn containing(&self, point: Point<f64>) -> Option<Country> {
+        self.areas
+            .iter()
+            .find(|(_, area)| area.contains(&point))
+            .map(|(country, _)| *country)
+    }
+
+    fn covering(&self, line: &LineString<f64>) -> Option<Country> {
+        self.outlines
+            .iter()
+            .find(|outline| outline.covers(line))
+            .map(|outline| outline.country)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::{DateTime, TimeZone, Utc};
+    use geo_types::{Geometry, line_string, polygon};
+
+    use super::*;
+    use crate::fixtures::{division_area, record_extract, square_from};
+
+    fn square(size: f64) -> Geometry<f64> {
+        square_from(0.0, size)
+    }
+
+    fn at(hour: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 9, 27, hour, 0, 0).unwrap()
+    }
+
+    const LAND: &str = "land";
+    const MARITIME: &str = "maritime";
+
+    async fn extracted(
+        root: &Root,
+        id: &str,
+        country: Country,
+        release: &str,
+        taken_at: DateTime<Utc>,
+        areas: &[(&str, Geometry<f64>)],
+    ) {
+        record_extract(
+            root,
+            id,
+            country,
+            release,
+            taken_at,
+            division_area(country, areas),
+        )
+        .await;
+    }
+
+    fn germany(areas: &[Geometry<f64>]) -> CountryAreas {
+        CountryAreas::new(
+            areas
+                .iter()
+                .map(|area| (Country::Germany, area.clone()))
+                .collect(),
+            HashMap::new(),
+        )
+        .expect("areas")
+    }
+
+    #[test]
+    fn a_line_crossing_from_the_land_into_its_waters_is_covered_by_its_country() {
+        let land = square(10.0);
+        let waters = Geometry::Polygon(polygon![
+            (x: 10.0, y: 0.0), (x: 20.0, y: 0.0), (x: 20.0, y: 10.0), (x: 10.0, y: 10.0),
+        ]);
+        let line = line_string![(x: 5.0, y: 5.0), (x: 15.0, y: 5.0)];
+
+        assert_eq!(
+            germany(&[land, waters]).covering(&line),
+            Some(Country::Germany)
+        );
+    }
+
+    #[test]
+    fn a_line_crossing_a_gap_between_two_areas_is_covered_by_no_country() {
+        let line = line_string![(x: 5.0, y: 5.0), (x: 25.0, y: 25.0)];
+
+        assert_eq!(
+            germany(&[square(10.0), square_from(20.0, 10.0)]).covering(&line),
+            None
+        );
+    }
+
+    #[test]
+    fn a_line_leaving_every_area_is_covered_by_no_country() {
+        let line = line_string![(x: 5.0, y: 5.0), (x: 50.0, y: 5.0)];
+
+        assert_eq!(germany(&[square(10.0)]).covering(&line), None);
+    }
+
+    #[test]
+    fn a_point_inside_an_area_is_in_that_country() {
+        let areas = germany(&[square(10.0)]);
+
+        assert_eq!(
+            areas.containing(Point::new(5.0, 5.0)),
+            Some(Country::Germany)
+        );
+    }
+
+    #[test]
+    fn a_country_has_the_shapes_of_its_own_areas_alone() {
+        let areas = CountryAreas::new(
+            vec![
+                (Country::Germany, square(10.0)),
+                (Country::UnitedKingdom, square_from(20.0, 10.0)),
+                (Country::Germany, square_from(40.0, 1.0)),
+            ],
+            HashMap::new(),
+        )
+        .expect("areas");
+
+        assert_eq!(
+            areas.shapes_of(Country::Germany),
+            vec![square(10.0), square_from(40.0, 1.0)]
+        );
+    }
+
+    #[test]
+    fn a_point_outside_every_area_is_in_no_country() {
+        let areas = germany(&[square(10.0)]);
+
+        assert_eq!(areas.containing(Point::new(20.0, 20.0)), None);
+    }
+
+    #[tokio::test]
+    async fn a_store_with_no_extract_cannot_place_a_point() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        let err = CountryAreas::newest_per_country(&Root::new(tmp.path())).await;
+
+        assert!(matches!(
+            err,
+            Err(CountryError::Query(
+                medallion::QueryError::NoSuchDataset { .. }
+            ))
+        ));
+    }
+    #[tokio::test]
+    async fn a_later_extract_of_one_country_leaves_the_others_points_placeable() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        extracted(
+            &root,
+            "20260927T090000Z",
+            Country::Germany,
+            "2026-07-22.0",
+            at(9),
+            &[(LAND, square(10.0))],
+        )
+        .await;
+        extracted(
+            &root,
+            "20260927T190000Z",
+            Country::UnitedKingdom,
+            "2026-07-22.0",
+            at(19),
+            &[(LAND, square_from(20.0, 10.0))],
+        )
+        .await;
+
+        let areas = CountryAreas::newest_per_country(&root)
+            .await
+            .expect("the country areas");
+
+        assert_eq!(
+            areas.containing(Point::new(5.0, 5.0)),
+            Some(Country::Germany)
+        );
+        assert_eq!(
+            areas.containing(Point::new(25.0, 25.0)),
+            Some(Country::UnitedKingdom)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_country_extracted_from_an_older_release_places_its_points_the_same() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        extracted(
+            &root,
+            "20260927T090000Z",
+            Country::UnitedKingdom,
+            "2026-07-22.0",
+            at(9),
+            &[(LAND, square_from(20.0, 10.0))],
+        )
+        .await;
+        extracted(
+            &root,
+            "20260927T190000Z",
+            Country::Germany,
+            "2026-05-21.0",
+            at(19),
+            &[(LAND, square(10.0))],
+        )
+        .await;
+
+        let areas = CountryAreas::newest_per_country(&root)
+            .await
+            .expect("the country areas");
+
+        assert_eq!(
+            areas.containing(Point::new(5.0, 5.0)),
+            Some(Country::Germany)
+        );
+        assert_eq!(
+            areas.containing(Point::new(25.0, 25.0)),
+            Some(Country::UnitedKingdom)
+        );
+        assert_eq!(
+            areas
+                .newest_extract(Country::Germany)
+                .map(|extract| extract.release.to_string()),
+            Some("2026-05-21.0".to_string())
+        );
+        assert_eq!(
+            areas
+                .newest_extract(Country::UnitedKingdom)
+                .map(|extract| extract.release.to_string()),
+            Some("2026-07-22.0".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_point_over_the_territorial_waters_is_placed_in_that_country() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        extracted(
+            &root,
+            "20260927T090000Z",
+            Country::Germany,
+            "2026-07-22.0",
+            at(9),
+            &[(LAND, square(10.0)), (MARITIME, square_from(10.0, 5.0))],
+        )
+        .await;
+
+        let areas = CountryAreas::newest_per_country(&root)
+            .await
+            .expect("the country areas");
+
+        assert_eq!(
+            areas.containing(Point::new(12.0, 12.0)),
+            Some(Country::Germany),
+            "a fix over the waters is what a railway crossing an estuary gives, so the areas \
+             a country is read as keep its maritime area beside its land"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_second_extract_of_a_country_supersedes_the_first() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        extracted(
+            &root,
+            "20260927T090000Z",
+            Country::Germany,
+            "2026-05-21.0",
+            at(9),
+            &[(LAND, square(10.0))],
+        )
+        .await;
+        extracted(
+            &root,
+            "20260927T190000Z",
+            Country::Germany,
+            "2026-07-22.0",
+            at(19),
+            &[(LAND, square_from(20.0, 10.0))],
+        )
+        .await;
+
+        let areas = CountryAreas::newest_per_country(&root)
+            .await
+            .expect("the country areas");
+
+        assert_eq!(
+            areas.containing(Point::new(25.0, 25.0)),
+            Some(Country::Germany)
+        );
+        assert_eq!(areas.containing(Point::new(5.0, 5.0)), None);
+        assert_eq!(
+            areas.newest_extract(Country::Germany),
+            Some(&NewestExtract {
+                id: "20260927T190000Z".parse().expect("an extract id"),
+                release: "2026-07-22.0".parse().expect("a release"),
+            })
+        );
+    }
+}

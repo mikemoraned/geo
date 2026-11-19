@@ -26,7 +26,7 @@ an app's `docs/`, written for anyone working on the code rather than for Claude.
 for working practice and for the limits of this environment. Current notes:
 
 - [`.claude/memory/python-conventions.md`](.claude/memory/python-conventions.md) — keep
-  Python minimal, in a uv project dir, no low-level fiddliness
+  Python minimal, in a uv project dir, no low-level fiddliness, and polars rather than pandas
 - [`.claude/memory/docs-style.md`](.claude/memory/docs-style.md) — reference docs are
   written abstractly (no component names in rules) and in dry language, a README change cites
   the sources behind it, another project is linked at its first mention, and an interface is a
@@ -40,14 +40,16 @@ for working practice and for the limits of this environment. Current notes:
   don't run in the sandbox, so binaries need running directly
 - [`.claude/memory/working-with-claude.md`](.claude/memory/working-with-claude.md) —
   committing only on explicit instruction, recording each step as a tree until it is
-  committed, keeping formatting out of feature commits, tracing a repeat to its source before
-  memoising it, writing a store migration through the row types and medallion's interfaces, why
-  Claude cannot flash the device, keeping shell plain, fitting a workspace build into the free
-  disk, what `cargo remove` prunes, and clearing prose that states a rejected design
+  committed, keeping a slice's decomposition to a plan the user can check, keeping formatting
+  out of feature commits, tracing a repeat to its source before
+  memoising it, keeping an optimisation only once a measurement justifies it, writing a store
+  migration through the row types and medallion's interfaces, why Claude cannot flash the device,
+  keeping shell plain, fitting a workspace build into the free disk, what `cargo remove` prunes,
+  and clearing prose that states a rejected design
 
 Lookout's own facts are in [`apps/lookout/docs/`](apps/lookout/docs/): `medallion.md` (the
 store), `architecture.md` (the pipeline), `telemetry.md` (the wire a device sends),
-`device.md` (the M5 board and its GNSS receiver), `motis.md` (the Motis API and the German
+`device.md` (the M5 board and its GNSS receiver), `evaluation.md` (how a predictor is measured), `motis.md` (the Motis API and the German
 timetable feed), `overture.md` (the reference source and what an extract takes), `access.md` (who
 can record, and the risks the passkey gate accepts).
 

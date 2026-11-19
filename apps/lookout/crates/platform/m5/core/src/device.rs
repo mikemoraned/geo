@@ -1,5 +1,6 @@
 use platform_core::pointset::PointSet;
 use platform_core::{Model, Shell};
+use predictor::nearest_first;
 
 use crate::carried;
 use crate::panel::{self, NEAREST_ON_SCREEN, NO_FIX_YET, NO_TIME_YET, ViewModel};
@@ -55,10 +56,10 @@ impl Shell for Device {
                 None => String::new(),
                 Some(_) => panel::within(predictions.len()),
             },
-            nearest: predictions
-                .iter()
+            nearest: nearest_first(predictions)
+                .into_iter()
                 .take(NEAREST_ON_SCREEN)
-                .map(|prediction| panel::line(prediction, now))
+                .map(|(id, prediction)| panel::line(prediction, model.state(id), now))
                 .collect(),
         }
     }
@@ -68,6 +69,7 @@ impl Shell for Device {
 mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
     use crux_core::Core;
+    use domain::places::DRESDEN_HBF;
     use predictor::fixtures::{Fix, RMC_VOID, captured};
 
     use super::*;
@@ -75,7 +77,13 @@ mod tests {
     use platform_core::{Effect, Event, Lookout};
 
     fn at_the_station() -> Fix {
-        Fix::at(20, 43, 29, 51.0403, 13.7322)
+        Fix::at(20, 43, 29, DRESDEN_HBF.y(), DRESDEN_HBF.x())
+            .with_speed_knots(54.0)
+            .with_course_degrees(79.94)
+    }
+
+    fn approaching_the_station() -> Fix {
+        Fix::at(20, 43, 19, 51.039864, 13.728288)
             .with_speed_knots(54.0)
             .with_course_degrees(79.94)
     }
@@ -87,7 +95,7 @@ mod tests {
     }
 
     fn stopped() -> Fix {
-        Fix::at(20, 48, 58, 51.0403, 13.7322)
+        Fix::at(20, 48, 58, DRESDEN_HBF.y(), DRESDEN_HBF.x())
     }
 
     fn fix_instant() -> DateTime<Utc> {
@@ -100,6 +108,8 @@ mod tests {
 
     fn fixed() -> Core<Lookout<Device>> {
         let core = core();
+        core.process_event(Event::Sentence(approaching_the_station().rmc()));
+        core.process_event(Event::Sentence(approaching_the_station().gga()));
         core.process_event(Event::Sentence(at_the_station().rmc()));
         core.process_event(Event::Sentence(at_the_station().gga()));
         core
@@ -212,7 +222,7 @@ mod tests {
     fn a_line_says_how_far_and_how_long() {
         let core = fixed();
 
-        assert_eq!(core.view().nearest[0], "2.3km 1:24");
+        assert_eq!(core.view().nearest[0], " 2.3km 1:24");
     }
 
     #[test]
@@ -221,7 +231,7 @@ mod tests {
 
         core.process_event(Event::Tick(fix_instant() + TimeDelta::seconds(30)));
 
-        assert_eq!(core.view().nearest[0], "2.3km 0:54");
+        assert_eq!(core.view().nearest[0], " 2.3km 0:54");
     }
 
     #[test]
@@ -230,7 +240,7 @@ mod tests {
 
         core.process_event(Event::Sentence(stopped().rmc()));
 
-        assert_eq!(core.view().nearest[0], format!("2.3km {NO_ARRIVAL}"));
+        assert_eq!(core.view().nearest[0], format!(" 2.3km {NO_ARRIVAL}"));
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use std::fmt::{self, Display};
+use std::num::NonZeroU32;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -17,6 +18,8 @@ pub enum NotASpan {
     Zero { text: String },
     #[error("`{text}` is longer than a span can be")]
     TooLong { text: String },
+    #[error("{delta} is no time at all; a span is longer than zero")]
+    NotPositive { delta: TimeDelta },
 }
 
 impl Span {
@@ -36,6 +39,10 @@ impl Span {
             });
         }
         Ok(Self(duration))
+    }
+
+    pub const fn minutes(minutes: NonZeroU32) -> Self {
+        Self(Duration::from_secs(minutes.get() as u64 * 60))
     }
 
     pub fn duration(self) -> Duration {
@@ -58,6 +65,17 @@ impl From<Age> for Span {
                 .to_std()
                 .expect("an age is longer than zero, so it is a std duration"),
         )
+    }
+}
+
+impl TryFrom<TimeDelta> for Span {
+    type Error = NotASpan;
+
+    fn try_from(delta: TimeDelta) -> Result<Self, Self::Error> {
+        match delta.to_std() {
+            Ok(duration) if !duration.is_zero() => Ok(Self(duration)),
+            _ => Err(NotASpan::NotPositive { delta }),
+        }
     }
 }
 
@@ -101,6 +119,14 @@ mod tests {
     }
 
     #[test]
+    fn a_span_of_minutes_is_the_span_written_in_minutes() {
+        assert_eq!(
+            Span::minutes(NonZeroU32::new(5).expect("not zero")),
+            span("5m")
+        );
+    }
+
+    #[test]
     fn a_span_is_written_back_as_it_reads() {
         assert_eq!(span("4h").to_string(), "4h");
         assert_eq!(span("90m").to_string(), "1h 30m");
@@ -130,6 +156,21 @@ mod tests {
             "500000000y".parse::<Span>(),
             Err(NotASpan::TooLong { .. })
         ));
+    }
+
+    #[test]
+    fn a_positive_time_delta_is_a_span_of_the_same_length() {
+        assert_eq!(
+            Span::try_from(TimeDelta::milliseconds(1_500)),
+            Ok(span("1500ms"))
+        );
+    }
+
+    #[test]
+    fn a_time_delta_of_zero_or_less_is_refused() {
+        for delta in [TimeDelta::zero(), TimeDelta::seconds(-30)] {
+            assert_eq!(Span::try_from(delta), Err(NotASpan::NotPositive { delta }));
+        }
     }
 
     #[test]

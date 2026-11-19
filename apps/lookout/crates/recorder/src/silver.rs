@@ -147,6 +147,8 @@ mod tests {
     use crate::bronze::{Archive, Payload};
     use crate::sessions::{Gap, Lead, sessions};
 
+    use domain::places::BERLIN;
+
     use super::*;
 
     struct Everywhere(Country);
@@ -363,7 +365,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let id = Uuid::from_u128(1);
 
-        let (root, _) = written(&tmp, &[gps(id, at(9, 0, 0), 52.520008, 13.404954)]).await;
+        let (root, _) = written(&tmp, &[gps(id, at(9, 0, 0), BERLIN.y(), BERLIN.x())]).await;
 
         let batches = dataset(&root)
             .await
@@ -375,7 +377,7 @@ mod tests {
             .await
             .expect("query geometries");
 
-        assert_eq!(first_point(&batches[0], GEOMETRY), (13.404954, 52.520008));
+        assert_eq!(first_point(&batches[0], GEOMETRY), (BERLIN.x(), BERLIN.y()));
         let (easting, northing) = first_point(&batches[0], PROJECTED_GEOMETRY);
         assert!(
             (easting - 798_809.63).abs() < 0.01 && (northing - 5_828_000.60).abs() < 0.01,
@@ -518,7 +520,7 @@ mod tests {
         let (root, _) = written(
             &tmp,
             &[
-                gps(id, at(9, 0, 0), 52.520008, 13.404954),
+                gps(id, at(9, 0, 0), BERLIN.y(), BERLIN.x()),
                 gps(id, at(9, 0, 10), 52.6, 13.5),
             ],
         )
@@ -539,7 +541,7 @@ mod tests {
             .expect("query geometries");
 
         let line = first_line(&batches[0], GEOMETRY);
-        assert_eq!(line[0], (13.404954, 52.520008));
+        assert_eq!(line[0], (BERLIN.x(), BERLIN.y()));
         assert_eq!(line.len(), 2);
         let projected = first_line(&batches[0], PROJECTED_GEOMETRY);
         assert!(

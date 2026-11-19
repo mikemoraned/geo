@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
-use predictor::{DEFAULT_RADIUS, Prediction};
+use domain::StateKind;
+use predictor::{DEFAULT_WATCHING, Prediction};
 
 use platform_core::Float;
 use platform_core::battery::Charge;
@@ -26,12 +27,25 @@ pub struct ViewModel {
     pub nearest: Vec<String>,
 }
 
-pub(crate) fn line(prediction: &Prediction<Float>, now: Option<DateTime<Utc>>) -> String {
+pub(crate) fn line(
+    prediction: &Prediction<Float>,
+    state: StateKind,
+    now: Option<DateTime<Utc>>,
+) -> String {
     format!(
-        "{} {}",
+        "{}{} {}",
+        mark(state),
         distance(prediction.metres),
         countdown(prediction.at, now)
     )
+}
+
+fn mark(state: StateKind) -> char {
+    match state {
+        StateKind::OutOfReach | StateKind::CandidatePass => ' ',
+        StateKind::AlertedPass => '!',
+        StateKind::ActualPass => '*',
+    }
 }
 
 pub(crate) fn bars(charge: Charge) -> &'static str {
@@ -41,7 +55,10 @@ pub(crate) fn bars(charge: Charge) -> &'static str {
 }
 
 pub(crate) fn within(count: usize) -> String {
-    format!("{count} in {:.0}km", DEFAULT_RADIUS.as_metres() / 1_000.0)
+    format!(
+        "{count} in {:.0}km",
+        DEFAULT_WATCHING.radius.as_metres() / 1_000.0
+    )
 }
 
 fn distance(metres: Float) -> String {
@@ -68,7 +85,7 @@ fn countdown(at: Option<DateTime<Utc>>, now: Option<DateTime<Utc>>) -> String {
 #[cfg(test)]
 mod tests {
     use chrono::{TimeDelta, TimeZone};
-    use domain::CrossingCompactId;
+    use predictor::Confidence;
 
     use super::*;
 
@@ -76,6 +93,29 @@ mod tests {
         Utc.with_ymd_and_hms(2026, 7, 29, 20, 43, 29)
             .single()
             .expect("an instant")
+    }
+
+    #[test]
+    fn each_state_is_marked_by_a_character_of_its_own() {
+        assert_eq!(mark(StateKind::OutOfReach), ' ');
+        assert_eq!(mark(StateKind::CandidatePass), ' ');
+        assert_eq!(mark(StateKind::AlertedPass), '!');
+        assert_eq!(mark(StateKind::ActualPass), '*');
+    }
+
+    #[test]
+    fn a_line_opens_with_its_crossings_mark() {
+        let line = line(
+            &Prediction {
+                metres: 942.0,
+                at: Some(instant() + TimeDelta::seconds(84)),
+                confidence: Confidence::High,
+            },
+            StateKind::AlertedPass,
+            Some(instant()),
+        );
+
+        assert_eq!(line, "!942m 1:24");
     }
 
     #[test]
@@ -125,10 +165,11 @@ mod tests {
             for seconds in [-1, 0, 1, 59, 60, 599, 600, 3_599, 3_600, 86_400] {
                 let line = line(
                     &Prediction {
-                        crossing_compact_id: CrossingCompactId::new(u32::MAX),
                         metres,
                         at: Some(now + TimeDelta::seconds(seconds)),
+                        confidence: Confidence::Low,
                     },
+                    StateKind::AlertedPass,
                     Some(now),
                 );
                 assert!(
@@ -144,10 +185,11 @@ mod tests {
     fn a_line_with_no_countdown_still_fits() {
         let line = line(
             &Prediction {
-                crossing_compact_id: CrossingCompactId::new(u32::MAX),
                 metres: 999_999.0,
                 at: None,
+                confidence: Confidence::Low,
             },
+            StateKind::AlertedPass,
             Some(instant()),
         );
 

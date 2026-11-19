@@ -1,8 +1,10 @@
 mod bronze;
 mod crossing;
-#[cfg(test)]
 mod declaration;
+mod episode;
+mod evaluation;
 mod gers;
+mod gold;
 mod motis;
 mod motis_source;
 mod overture;
@@ -17,9 +19,21 @@ use medallion::DatasetInfo;
 
 pub use bronze::{NoSuchBronzeDataset, bronze_dataset};
 pub use crossing::{
-    OverlapKind, SESSION_CROSSING_V3, SessionCrossingRowV3, WATER_CROSSING_V2, WaterCrossingRowV2,
+    OverlapKind, SESSION_CROSSING_V3, SessionCrossingRowV3, TRAIN_SESSION_CROSSING_V1,
+    TrainSessionCrossingRowV1, WATER_CROSSING_V2, WaterCrossingRowV2,
+};
+pub use episode::{
+    EVALUATION_EPISODE_V1, EpisodePath, EvaluationEpisodeRowV1, IllegalPath, path_is_legal,
+};
+pub use evaluation::{
+    EVALUATION_OUTCOME_V2, EVALUATION_OUTCOME_V3, EVALUATION_RUN_V6, EVALUATION_SESSION_V3,
+    EVALUATION_SKEW_V2, EVALUATION_SPLIT_V1, EVALUATION_SUMMARY_V3, EVALUATION_TRANSITION_V1,
+    EvaluationOutcomeRowV2, EvaluationOutcomeRowV3, EvaluationRunRowV6, EvaluationSessionRowV3,
+    EvaluationSkewRowV2, EvaluationSplitRowV1, EvaluationSummaryRowV3, EvaluationTransitionRowV1,
+    FloatType, NotificationClass, OutcomeKind, PredictorName,
 };
 pub use gers::{GersId, NotAGersId};
+pub use gold::{GoldTargetError, gold_target};
 pub use motis::{
     AgencyId, EmptyAgencyId, EmptyStopId, EmptyTripId, MOTIS_POLL_V2, MOTIS_POLYLINE_V2,
     MOTIS_SEGMENT_V3, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3, NotAPolylineId,
@@ -31,8 +45,8 @@ pub use motis_source::{
     MotisVersion, NotALabel, NotAMotisBaseUrl, NotAMotisVersion, UnknownFeed,
 };
 pub use overture::{
-    DIVISION_ID, EXTRACT_MANIFEST_V3, ExtractManifestRowV3, OVERTURE_EXTRACT, OvertureRegion,
-    division_id,
+    DIVISION_ID, EXTRACT_MANIFEST_V3, ExtractId, ExtractManifestRowV3, OVERTURE_EXTRACT,
+    OvertureRegion, OvertureType, RECORDED, division_id,
 };
 pub use overture_release::{NotAnOvertureRelease, OvertureRelease};
 pub use session::{SESSION_SAMPLE_V3, SESSION_V3, SessionRowV3, SessionSampleRowV3};
@@ -42,11 +56,11 @@ pub use telemetry::{
     GpsReadingRowV2, RAW_SAMPLE, RawSampleRow,
 };
 pub use train_session::{
-    GeometrySource, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2, TrainSessionRowV2,
-    TrainSessionSampleRowV2, train_session_id,
+    GeometrySource, TRAIN_SESSION_SAMPLE_V3, TRAIN_SESSION_V3, TrainSessionRowV3,
+    TrainSessionSamplePositionV3, TrainSessionSampleRowV3, train_session_id,
 };
 
-pub const ALL: [DatasetInfo; 17] = [
+pub const ALL: [DatasetInfo; 27] = [
     RAW_SAMPLE.info(),
     GPS_READING_V2.info(),
     ACCEL_READING_V2.info(),
@@ -58,12 +72,22 @@ pub const ALL: [DatasetInfo; 17] = [
     TRAIN_SEGMENT_V4.info(),
     SESSION_V3.info(),
     SESSION_SAMPLE_V3.info(),
-    TRAIN_SESSION_V2.info(),
-    TRAIN_SESSION_SAMPLE_V2.info(),
+    TRAIN_SESSION_V3.info(),
+    TRAIN_SESSION_SAMPLE_V3.info(),
     WATER_CROSSING_V2.info(),
     SESSION_CROSSING_V3.info(),
+    TRAIN_SESSION_CROSSING_V1.info(),
     OVERTURE_EXTRACT.info(),
     EXTRACT_MANIFEST_V3.info(),
+    EVALUATION_TRANSITION_V1.info(),
+    EVALUATION_RUN_V6.info(),
+    EVALUATION_SESSION_V3.info(),
+    EVALUATION_EPISODE_V1.info(),
+    EVALUATION_OUTCOME_V3.info(),
+    EVALUATION_OUTCOME_V2.info(),
+    EVALUATION_SUMMARY_V3.info(),
+    EVALUATION_SKEW_V2.info(),
+    EVALUATION_SPLIT_V1.info(),
 ];
 
 #[cfg(test)]
@@ -100,12 +124,22 @@ mod tests {
         assert_eq!(
             replaceable,
             [
+                "evaluation_episode_v1",
+                "evaluation_outcome_v2",
+                "evaluation_outcome_v3",
+                "evaluation_run_v6",
+                "evaluation_session_v3",
+                "evaluation_skew_v2",
+                "evaluation_split_v1",
+                "evaluation_summary_v3",
+                "evaluation_transition_v1",
                 "session_crossing_v3",
                 "session_sample_v3",
                 "session_v3",
                 "train_segment_v4",
-                "train_session_sample_v2",
-                "train_session_v2",
+                "train_session_crossing_v1",
+                "train_session_sample_v3",
+                "train_session_v3",
                 "water_crossing_v2"
             ]
         );
@@ -186,10 +220,20 @@ mod tests {
         check_rows_of::<TrainSegmentRowV4>();
         check_rows_of::<SessionRowV3>();
         check_rows_of::<SessionSampleRowV3>();
-        check_rows_of::<TrainSessionRowV2>();
-        check_rows_of::<TrainSessionSampleRowV2>();
+        check_rows_of::<TrainSessionRowV3>();
+        check_rows_of::<TrainSessionSampleRowV3>();
         check_rows_of::<WaterCrossingRowV2>();
         check_rows_of::<SessionCrossingRowV3>();
+        check_rows_of::<TrainSessionCrossingRowV1>();
         check_rows_of::<ExtractManifestRowV3>();
+        check_rows_of::<EvaluationTransitionRowV1>();
+        check_rows_of::<EvaluationRunRowV6>();
+        check_rows_of::<EvaluationSessionRowV3>();
+        check_rows_of::<EvaluationEpisodeRowV1>();
+        check_rows_of::<EvaluationOutcomeRowV3>();
+        check_rows_of::<EvaluationOutcomeRowV2>();
+        check_rows_of::<EvaluationSummaryRowV3>();
+        check_rows_of::<EvaluationSkewRowV2>();
+        check_rows_of::<EvaluationSplitRowV1>();
     }
 }

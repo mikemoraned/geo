@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use domain::{Bbox, Span, implied_speed, path_through};
+use domain::{Bbox, NotAPercentage, Percentage, Span, implied_speed, path_through};
 use geo::BoundingRect;
 use geo_types::{LineString, Point};
 use medallion::{
@@ -8,13 +8,15 @@ use medallion::{
     Replaced, Root, ZonedGeometry,
 };
 use medallion_model::{
-    Label, MotisSourceId, TrainSessionRowV2, TrainSessionSampleRowV2, TripId, train_session_id,
+    Label, MotisSourceId, TrainSessionRowV3, TrainSessionSampleRowV3, TripId, train_session_id,
 };
 
 use crate::ingest::{self, IngestError, PlacedLine, Shape, Shapes, captured};
-use crate::sampling::{InvalidLeg, InvalidLegs, Leg, NormalisedLegs, Placed};
+use crate::sampling::{InvalidLeg, InvalidLegs, Leg, NormalisedLegs, Placed, TimeSource};
 
 const SAMPLES_PER_WRITE: usize = 100_000;
+
+const MAX_IMPLIED_SPEED_MPS: f64 = 100.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TrainSessionsOutcome {
@@ -32,11 +34,18 @@ pub struct DroppedTrips {
     pub arrives_before_departing: usize,
     pub overlapping: usize,
     pub unplaceable: usize,
+    pub leaves_its_country: usize,
+    pub too_fast: usize,
 }
 
 impl DroppedTrips {
     pub fn total(&self) -> usize {
-        self.shapeless + self.arrives_before_departing + self.overlapping + self.unplaceable
+        self.shapeless
+            + self.arrives_before_departing
+            + self.overlapping
+            + self.unplaceable
+            + self.leaves_its_country
+            + self.too_fast
     }
 }
 
@@ -45,7 +54,7 @@ struct Trip {
     source_label: Option<Label>,
     trip_id: TripId,
     legs: NormalisedLegs,
-    country: Option<Country>,
+    country: Country,
 }
 
 enum Normalised {
@@ -57,12 +66,14 @@ enum Drop {
     Shapeless,
     ArrivesBeforeDeparting,
     Overlapping,
+    LeavesItsCountry,
+    Unplaceable,
 }
 
 struct Session {
-    row: TrainSessionRowV2,
+    row: TrainSessionRowV3,
     path: LineString<f64>,
-    samples: Vec<GeometryRow<TrainSessionSampleRowV2, Point<f64>>>,
+    samples: Vec<GeometryRow<TrainSessionSampleRowV3, Point<f64>>>,
 }
 
 pub async fn derive_train_sessions(
@@ -79,7 +90,7 @@ pub async fn derive_train_sessions(
     let mut by_trip: HashMap<(MotisSourceId, TripId), Vec<ingest::Leg>> = HashMap::new();
     for leg in captured.legs {
         by_trip
-            .entry((leg.source_id.clone(), leg.trip_id.clone()))
+            .entry((leg.segment.source_id.clone(), leg.segment.trip_id.clone()))
             .or_default()
             .push(leg);
     }
@@ -106,31 +117,32 @@ pub async fn derive_train_sessions(
                 outcome.dropped.arrives_before_departing += 1
             }
             Normalised::Dropped(Drop::Overlapping) => outcome.dropped.overlapping += 1,
+            Normalised::Dropped(Drop::LeavesItsCountry) => outcome.dropped.leaves_its_country += 1,
+            Normalised::Dropped(Drop::Unplaceable) => outcome.dropped.unplaceable += 1,
         }
     }
     trips.sort_by_key(|trip| trip.legs.departure());
 
     let mut projectors = Projectors::default();
-    let mut sample_writer = GeometryRowWriter::<TrainSessionSampleRowV2>::new(root)?;
-    let mut pending: Vec<GeometryRow<TrainSessionSampleRowV2, Point<f64>>> = Vec::new();
-    let mut sessions: Vec<GeographyRow<TrainSessionRowV2, LineString<f64>>> = Vec::new();
+    let mut sample_writer = GeometryRowWriter::<TrainSessionSampleRowV3>::new(root)?;
+    let mut pending: Vec<GeometryRow<TrainSessionSampleRowV3, Point<f64>>> = Vec::new();
+    let mut sessions: Vec<GeographyRow<TrainSessionRowV3, LineString<f64>>> = Vec::new();
     for trip in trips {
-        match trip.country {
-            None => outcome.dropped.unplaceable += 1,
-            Some(country) => {
-                let placed = trip.legs.sampled(interval)?;
-                let session = session_of(&trip, &placed, projectors.for_country(country)?)?;
-                pending.extend(session.samples);
-                sessions.push(GeographyRow {
-                    row: session.row,
-                    geography: session.path,
-                    country,
-                });
-                if pending.len() >= SAMPLES_PER_WRITE {
-                    sample_writer.write(&pending).await?;
-                    pending.clear();
-                }
-            }
+        let placed = trip.legs.sampled(interval)?;
+        let session = session_of(&trip, &placed, projectors.for_country(trip.country)?)?;
+        if is_too_fast(&session) {
+            outcome.dropped.too_fast += 1;
+        } else {
+            pending.extend(session.samples);
+            sessions.push(GeographyRow {
+                row: session.row,
+                geography: session.path,
+                country: trip.country,
+            });
+        }
+        if pending.len() >= SAMPLES_PER_WRITE {
+            sample_writer.write(&pending).await?;
+            pending.clear();
         }
     }
     sample_writer.write(&pending).await?;
@@ -168,12 +180,26 @@ fn normalised(
     let country = captured
         .iter()
         .zip(&placed_lines)
-        .min_by_key(|(leg, _)| (leg.departure, leg.arrival))
+        .min_by_key(|(leg, _)| (leg.segment.departure, leg.segment.arrival))
         .and_then(|(_, placed)| placed.country);
+    if country.is_some_and(|country| {
+        placed_lines
+            .iter()
+            .any(|placed| placed.covered_by != Some(country))
+    }) {
+        return Ok(Normalised::Dropped(Drop::LeavesItsCountry));
+    }
     let legs = match captured
         .iter()
         .zip(placed_lines)
-        .map(|(leg, placed)| Leg::new(leg.departure, leg.arrival, placed.line))
+        .map(|(leg, placed)| {
+            Leg::new(
+                leg.segment.departure,
+                leg.segment.arrival,
+                time_source_of(leg),
+                placed.line,
+            )
+        })
         .collect::<Result<Vec<Leg>, InvalidLeg>>()
     {
         Ok(legs) => legs,
@@ -184,16 +210,42 @@ fn normalised(
             return Err(IngestError::InvalidLeg { trip_id, source });
         }
     };
-    match NormalisedLegs::new(&legs) {
-        Ok(legs) => Ok(Normalised::Trip(Trip {
+    match (NormalisedLegs::new(&legs), country) {
+        (Ok(legs), Some(country)) => Ok(Normalised::Trip(Trip {
             source_id,
             source_label,
             trip_id,
             legs,
             country,
         })),
-        Err(InvalidLegs::Overlapping { .. }) => Ok(Normalised::Dropped(Drop::Overlapping)),
-        Err(source) => Err(IngestError::InvalidLegs { trip_id, source }),
+        (Ok(_), None) => Ok(Normalised::Dropped(Drop::Unplaceable)),
+        (Err(InvalidLegs::Overlapping { .. }), _) => Ok(Normalised::Dropped(Drop::Overlapping)),
+        (Err(source), _) => Err(IngestError::InvalidLegs { trip_id, source }),
+    }
+}
+
+fn is_too_fast(session: &Session) -> bool {
+    session.samples.iter().any(|sample| {
+        sample
+            .row
+            .implied_speed_mps
+            .is_some_and(|speed| speed > MAX_IMPLIED_SPEED_MPS)
+    })
+}
+
+fn realtime_percentage(placed: &[Placed]) -> Result<Percentage, NotAPercentage> {
+    let realtime = placed
+        .iter()
+        .filter(|sample| sample.time_source == TimeSource::Realtime)
+        .count();
+    Percentage::of(realtime, placed.len())
+}
+
+fn time_source_of(leg: &ingest::Leg) -> TimeSource {
+    if leg.segment.realtime {
+        TimeSource::Realtime
+    } else {
+        TimeSource::Scheduled
     }
 }
 
@@ -229,7 +281,7 @@ fn session_of(
         .zip(speeds)
         .enumerate()
         .map(|(seq, ((sample, geometry), implied_speed_mps))| {
-            let row = TrainSessionSampleRowV2 {
+            let row = TrainSessionSampleRowV3 {
                 session_id: session_id.clone(),
                 source_id: trip.source_id.clone(),
                 trip_id: trip.trip_id.clone(),
@@ -239,6 +291,7 @@ fn session_of(
                 lon: sample.position.x(),
                 implied_speed_mps,
                 geometry_source: sample.geometry_source,
+                realtime: sample.time_source == TimeSource::Realtime,
             };
             Ok(GeometryRow {
                 row,
@@ -251,7 +304,7 @@ fn session_of(
         return Err(no_samples());
     };
     let path = path_through(placed.iter().map(|sample| sample.position));
-    let row = TrainSessionRowV2 {
+    let row = TrainSessionRowV3 {
         session_id,
         source_id: trip.source_id.clone(),
         source_label: trip.source_label.clone(),
@@ -259,6 +312,7 @@ fn session_of(
         started_at: first.t,
         ended_at: last.t,
         sample_count: u32::try_from(placed.len()).map_err(|_| too_many())?,
+        realtime_percentage: realtime_percentage(placed)?,
         bbox: Bbox::of(path.bounding_rect().ok_or_else(no_samples)?),
     };
     Ok(Session { row, path, samples })
@@ -271,7 +325,7 @@ mod tests {
     use chrono::{DateTime, Duration, TimeZone, Utc};
     use medallion::Query;
     use medallion_model::{
-        Feed, MotisSource, Polyline, TRAIN_SESSION_SAMPLE_V2, TRAIN_SESSION_V2, TripId,
+        Feed, MotisSource, Polyline, TRAIN_SESSION_SAMPLE_V3, TRAIN_SESSION_V3, TripId,
         train_session_id,
     };
     use serde::Deserialize;
@@ -279,7 +333,7 @@ mod tests {
     use crate::api::types::TripSegment;
     use crate::segment::SingleTripSegment;
     use crate::testing::CaptureLog;
-    use crate::testing::{self, EastIsGermany, Nowhere, germany, regional_trips};
+    use crate::testing::{self, Nowhere, PretendEastOfGreenwichIsGermany, germany, regional_trips};
 
     use super::*;
 
@@ -326,11 +380,11 @@ mod tests {
     async fn count(root: &Root, sql: &str) -> i64 {
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION_V2)
+            .register_by_name(TRAIN_SESSION_V3)
             .await
             .expect("register sessions");
         query
-            .register_by_name(TRAIN_SESSION_SAMPLE_V2)
+            .register_by_name(TRAIN_SESSION_SAMPLE_V3)
             .await
             .expect("register samples");
         query.count(sql).await.expect("count")
@@ -345,11 +399,11 @@ mod tests {
     async fn sessions_named(root: &Root) -> Vec<Named> {
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION_V2)
+            .register_by_name(TRAIN_SESSION_V3)
             .await
             .expect("register sessions");
         query
-            .rows("SELECT session_id, started_at FROM train_session_v2")
+            .rows("SELECT session_id, started_at FROM train_session_v3")
             .await
             .expect("sessions")
     }
@@ -362,8 +416,14 @@ mod tests {
         let mut onward = segment.clone();
         onward.from = segment.to.clone();
         onward.to = segment.from.clone();
+        let line = Polyline::new(segment.polyline.clone())
+            .expect("a polyline")
+            .line();
+        onward.polyline = Polyline::from_points(line.0.into_iter().rev())
+            .expect("points on the globe")
+            .to_string();
         onward.departure = departure;
-        onward.arrival = departure + Duration::minutes(10);
+        onward.arrival = departure + (segment.arrival - segment.departure);
         onward
     }
 
@@ -377,7 +437,7 @@ mod tests {
 
         assert_eq!((outcome.trips, outcome.sessions), (4, 4));
         assert_eq!(
-            count(&root, "SELECT COUNT(*) AS count FROM train_session_v2").await,
+            count(&root, "SELECT COUNT(*) AS count FROM train_session_v3").await,
             4
         );
     }
@@ -414,11 +474,11 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION_V2)
+            .register_by_name(TRAIN_SESSION_V3)
             .await
             .expect("register sessions");
         let labels: Vec<Option<String>> = query
-            .rows::<Labelled>("SELECT source_label FROM train_session_v2")
+            .rows::<Labelled>("SELECT source_label FROM train_session_v3")
             .await
             .expect("labels")
             .into_iter()
@@ -459,11 +519,11 @@ mod tests {
 
         let query = Query::new(root.clone());
         query
-            .register_by_name(TRAIN_SESSION_SAMPLE_V2)
+            .register_by_name(TRAIN_SESSION_SAMPLE_V3)
             .await
             .expect("register samples");
         let samples: Vec<Numbered> = query
-            .rows("SELECT seq, implied_speed_mps FROM train_session_sample_v2 ORDER BY t")
+            .rows("SELECT seq, implied_speed_mps FROM train_session_sample_v3 ORDER BY t")
             .await
             .expect("samples");
         let seqs: Vec<u32> = samples.iter().map(|sample| sample.seq).collect();
@@ -553,6 +613,83 @@ mod tests {
         assert_eq!(outcome.samples as i64, samples);
     }
 
+    #[derive(Debug, Deserialize)]
+    struct Timed {
+        realtime: bool,
+    }
+
+    async fn realtime_of_samples(root: &Root) -> Vec<bool> {
+        let query = Query::new(root.clone());
+        query
+            .register_by_name(TRAIN_SESSION_SAMPLE_V3)
+            .await
+            .expect("register samples");
+        query
+            .rows::<Timed>("SELECT realtime FROM train_session_sample_v3 ORDER BY t")
+            .await
+            .expect("samples")
+            .into_iter()
+            .map(|sample| sample.realtime)
+            .collect()
+    }
+
+    async fn realtime_percentage_of_sessions(root: &Root) -> Vec<f64> {
+        #[derive(Deserialize)]
+        struct Share {
+            realtime_percentage: f64,
+        }
+        let query = Query::new(root.clone());
+        query
+            .register_by_name(TRAIN_SESSION_V3)
+            .await
+            .expect("register sessions");
+        query
+            .rows::<Share>("SELECT realtime_percentage FROM train_session_v3")
+            .await
+            .expect("sessions")
+            .into_iter()
+            .map(|session| session.realtime_percentage)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_trip_on_realtime_legs_alone_is_wholly_realtime() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let mut segment = regional_trips().remove(0);
+        segment.real_time = true;
+        poll(&root, polled_at(0), std::slice::from_ref(&segment)).await;
+
+        derive(&root, &germany()).await;
+
+        assert!(
+            realtime_of_samples(&root)
+                .await
+                .into_iter()
+                .all(|realtime| realtime)
+        );
+        assert_eq!(realtime_percentage_of_sessions(&root).await, [100.0]);
+    }
+
+    #[tokio::test]
+    async fn a_sessions_realtime_percentage_is_the_share_of_its_samples_on_realtime_legs() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let mut segment = regional_trips().remove(0);
+        segment.real_time = true;
+        let mut onward = onward_from(&segment, segment.arrival + Duration::minutes(2));
+        onward.real_time = false;
+        poll(&root, polled_at(0), &[segment, onward]).await;
+
+        derive(&root, &germany()).await;
+
+        let realtime = realtime_of_samples(&root).await;
+        let on_realtime_legs = realtime.iter().filter(|realtime| **realtime).count();
+        let share = 100.0 * on_realtime_legs as f64 / realtime.len() as f64;
+        assert!(0.0 < share && share < 100.0, "{share}");
+        assert_eq!(realtime_percentage_of_sessions(&root).await, [share]);
+    }
+
     #[tokio::test]
     async fn a_trip_with_a_shapeless_leg_is_left_out_and_counted() {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -606,7 +743,7 @@ mod tests {
     async fn trips_sharing_a_polyline_are_placed_once() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
-        let countries = EastIsGermany::default();
+        let countries = PretendEastOfGreenwichIsGermany::default();
         let trips = ["first", "second", "third"].map(|trip_id| {
             let mut segment = regional_trips().remove(0);
             segment.trips[0].trip_id = trip_id.to_string();
@@ -617,7 +754,7 @@ mod tests {
         let outcome = derive(&root, &countries).await;
 
         assert_eq!(outcome.sessions, 3);
-        assert_eq!(countries.lookups(), 1);
+        assert_eq!((countries.lookups(), countries.coverings()), (1, 1));
     }
 
     #[tokio::test]
@@ -636,13 +773,13 @@ mod tests {
         )
         .await;
 
-        let outcome = derive(&root, &EastIsGermany::default()).await;
+        let outcome = derive(&root, &PretendEastOfGreenwichIsGermany::default()).await;
 
         assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (0, 1));
     }
 
     #[tokio::test]
-    async fn a_trip_leaving_every_known_country_is_written_under_the_one_it_starts_in() {
+    async fn a_trip_leaving_its_country_is_left_out_and_counted() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = Root::new(tmp.path());
         let segment = regional_trips().remove(0);
@@ -657,9 +794,72 @@ mod tests {
         )
         .await;
 
-        let outcome = derive(&root, &EastIsGermany::default()).await;
+        let outcome = derive(&root, &PretendEastOfGreenwichIsGermany::default()).await;
 
-        assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (1, 0));
+        assert_eq!(outcome.sessions, 0);
+        assert_eq!(
+            outcome.dropped,
+            DroppedTrips {
+                leaves_its_country: 1,
+                ..DroppedTrips::default()
+            }
+        );
+    }
+
+    fn running_east_from(mut segment: TripSegment, longitude: f64) -> TripSegment {
+        segment.polyline = Polyline::from_points([(longitude, 50.0), (longitude + 0.01, 50.0)])
+            .expect("points on the globe")
+            .to_string();
+        segment
+    }
+
+    #[tokio::test]
+    async fn a_trip_jumping_faster_than_a_train_runs_is_left_out_and_counted() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        let onward = onward_from(&segment, segment.arrival + Duration::seconds(10));
+        poll(
+            &root,
+            polled_at(0),
+            &[
+                running_east_from(segment, 8.0),
+                running_east_from(onward, 9.0),
+            ],
+        )
+        .await;
+
+        let outcome = derive(&root, &PretendEastOfGreenwichIsGermany::default()).await;
+
+        assert_eq!(outcome.sessions, 0);
+        assert_eq!(
+            outcome.dropped,
+            DroppedTrips {
+                too_fast: 1,
+                ..DroppedTrips::default()
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn a_trip_running_at_a_trains_speed_is_kept() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = Root::new(tmp.path());
+        let segment = regional_trips().remove(0);
+        let onward = onward_from(&segment, segment.arrival + Duration::seconds(10));
+        poll(
+            &root,
+            polled_at(0),
+            &[
+                running_east_from(segment, 8.0),
+                running_east_from(onward, 8.01),
+            ],
+        )
+        .await;
+
+        let outcome = derive(&root, &PretendEastOfGreenwichIsGermany::default()).await;
+
+        assert_eq!((outcome.sessions, outcome.dropped.total()), (1, 0));
     }
 
     #[tokio::test]
@@ -679,7 +879,7 @@ mod tests {
         )
         .await;
 
-        let outcome = derive(&root, &EastIsGermany::default()).await;
+        let outcome = derive(&root, &PretendEastOfGreenwichIsGermany::default()).await;
 
         assert_eq!((outcome.sessions, outcome.dropped.unplaceable), (0, 1));
     }
@@ -693,7 +893,7 @@ mod tests {
         derive(&root, &germany()).await;
 
         let countries: Vec<String> =
-            std::fs::read_dir(root.path().join("silver/train_session_sample_v2"))
+            std::fs::read_dir(root.path().join("silver/train_session_sample_v3"))
                 .expect("dataset dir")
                 .map(|entry| {
                     entry
@@ -714,7 +914,7 @@ mod tests {
         let first = derive(&root, &germany()).await;
         let samples_before = count(
             &root,
-            "SELECT COUNT(*) AS count FROM train_session_sample_v2",
+            "SELECT COUNT(*) AS count FROM train_session_sample_v3",
         )
         .await;
 
@@ -724,7 +924,7 @@ mod tests {
         assert_eq!(
             count(
                 &root,
-                "SELECT COUNT(*) AS count FROM train_session_sample_v2"
+                "SELECT COUNT(*) AS count FROM train_session_sample_v3"
             )
             .await,
             samples_before

@@ -1,0 +1,28 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: gold
+partition_key: run_date
+unique: []
+columns:
+  - name: session_index
+    data_type: UInt32
+    nullable: false
+  - name: session_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "domain::name::checked": adb6eaead74b5eb27fb75d5e90a525ccbef775a2d60f35da16ebefe5f88d8829
+  - name: started_at
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true
+  - name: ended_at
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true
+  - name: duration
+    data_type: Duration(ms)
+    nullable: true
+  - name: scored_duration
+    data_type: Duration(ms)
+    nullable: true

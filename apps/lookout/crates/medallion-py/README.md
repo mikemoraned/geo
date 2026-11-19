@@ -20,6 +20,26 @@ table = lookout_medallion.query_silver(
 )
 ```
 
+## Gold datasets of rows
+
+`write_gold` writes a table as one run of a gold dataset of rows, under the run's date and id, and
+`query_gold` queries the gold datasets. [Gold datasets of rows](../../docs/medallion.md#gold-datasets-of-rows)
+sets out how they are laid out.
+
+```python
+written = lookout_medallion.write_gold(
+    "evaluation_run_v6", table, run_date="2026-11-06", run_id="abc"
+)
+
+run = lookout_medallion.query_gold(
+    "SELECT run_date, predictor FROM evaluation_run_v6 WHERE run_id = $run_id",
+    params={"run_id": "abc"},
+)
+```
+
+A run is written once. Writing a run id that the dataset already holds raises a `ValueError`,
+under any date, and the rows already written stay.
+
 ## Handing a table over
 
 A table crossing either way is anything exposing the Arrow PyCapsule interface — a pyarrow table,
@@ -29,7 +49,7 @@ Geometry goes in as WKB or as any GeoArrow encoding, whichever the library at ha
 Projecting is the caller's work: a notebook projects the coordinates itself and asks
 `projected_crs(country)` for the zone, rather than naming one of its own.
 
-Both calls release the interpreter while they run, since the work is filesystem work that calls
+Every call that reads or writes the store releases the interpreter while it runs, since the work is filesystem work that calls
 back into nothing python owns.
 
 ## What is raised

@@ -1,30 +1,33 @@
-use std::fmt::{self, Display};
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+use nutype::nutype;
+
+#[nutype(
+    validate(with = from_zero_upwards, error = NotAZoom),
+    default = 8.0,
+    derive(Debug, Clone, Copy, PartialEq, PartialOrd, Display, Default)
+)]
 pub struct Zoom(f64);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("`{0}` is not a zoom level, a number from 0 upwards")]
 pub struct NotAZoom(String);
 
-impl Zoom {
-    pub fn new(level: f64) -> Result<Self, NotAZoom> {
-        if level.is_finite() && level >= 0.0 {
-            Ok(Self(level))
-        } else {
-            Err(NotAZoom(level.to_string()))
-        }
-    }
-
-    pub fn level(self) -> f64 {
-        self.0
+fn from_zero_upwards(level: &f64) -> Result<(), NotAZoom> {
+    if level.is_finite() && *level >= 0.0 {
+        Ok(())
+    } else {
+        Err(NotAZoom(level.to_string()))
     }
 }
 
-impl Default for Zoom {
-    fn default() -> Self {
-        Self(8.0)
+impl Zoom {
+    pub fn new(level: f64) -> Result<Self, NotAZoom> {
+        Self::try_new(level)
+    }
+
+    pub fn level(self) -> f64 {
+        self.into_inner()
     }
 }
 
@@ -37,12 +40,6 @@ impl FromStr for Zoom {
     }
 }
 
-impl Display for Zoom {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use proptest::prelude::*;
@@ -51,8 +48,8 @@ mod tests {
 
     #[test]
     fn a_level_reads_from_text() {
-        assert_eq!("8".parse(), Ok(Zoom(8.0)));
-        assert_eq!("10.5".parse(), Ok(Zoom(10.5)));
+        assert_eq!("8".parse(), Zoom::new(8.0));
+        assert_eq!("10.5".parse(), Zoom::new(10.5));
     }
 
     #[test]

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use arrow::array::RecordBatch;
 use datafusion::error::DataFusionError;
 use datafusion::execution::SendableRecordBatchStream;
-use medallion_model::OvertureRelease;
+use medallion_model::{OvertureRelease, OvertureType};
 use object_store::{ObjectStore, aws::AmazonS3Builder, path::Path as ObjectPath};
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
@@ -12,24 +12,6 @@ use sedona_geoparquet::provider::GeoParquetReadOptions;
 const S3_REGION: &str = "us-west-2";
 
 const RELEASE_PREFIX: &str = "release";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OvertureType {
-    pub theme: &'static str,
-    pub name: &'static str,
-}
-
-impl OvertureType {
-    const fn new(theme: &'static str, name: &'static str) -> Self {
-        Self { theme, name }
-    }
-
-    pub const SEGMENT: Self = Self::new("transportation", "segment");
-    pub const CONNECTOR: Self = Self::new("transportation", "connector");
-    pub const WATER: Self = Self::new("base", "water");
-    pub const DIVISION_AREA: Self = Self::new("divisions", "division_area");
-    pub const DIVISION: Self = Self::new("divisions", "division");
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum OvertureError {

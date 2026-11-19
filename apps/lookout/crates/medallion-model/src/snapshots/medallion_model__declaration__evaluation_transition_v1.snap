@@ -1,0 +1,37 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: gold
+partition_key: run_date
+unique: []
+columns:
+  - name: session_id
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      "domain::name::checked": adb6eaead74b5eb27fb75d5e90a525ccbef775a2d60f35da16ebefe5f88d8829
+  - name: crossing_compact_id
+    data_type: UInt32
+    nullable: false
+    checks:
+      "CrossingCompactId::new": 4b1a073ff7e10b6dd1538de05974cc89937eee19797ab18eb7e8b69cce4f68f0
+  - name: at
+    data_type: "Timestamp(ms, \"UTC\")"
+    nullable: true
+  - name: from
+    data_type: LargeUtf8
+    nullable: false
+    variants:
+      - out_of_reach
+      - candidate_pass
+      - alerted_pass
+      - actual_pass
+  - name: to
+    data_type: LargeUtf8
+    nullable: false
+    variants:
+      - out_of_reach
+      - candidate_pass
+      - alerted_pass
+      - actual_pass

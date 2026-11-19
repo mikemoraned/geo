@@ -1,6 +1,9 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use domain::{CrossingCompact, Radius, Sample};
-use predictor::{CrowFlies as CrowFliesPredictor, DEFAULT_RADIUS, Event, ObserveError, Predict};
+use predictor::{
+    CrowFlies as CrowFliesPredictor, DEFAULT_ALERTING, DEFAULT_STILL_WITHIN, DEFAULT_WATCHING,
+    Event, LastMove, OutOfOrder, Predict, Watching, nearest_first,
+};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -52,7 +55,7 @@ impl CrowFlies {
     /// Raises where a crossing is not on the globe, or where `radius_metres` is not a positive,
     /// finite number.
     #[new]
-    #[pyo3(signature = (crossings, *, radius_metres=DEFAULT_RADIUS.as_metres()))]
+    #[pyo3(signature = (crossings, *, radius_metres=DEFAULT_WATCHING.radius.as_metres()))]
     fn new(crossings: Vec<(u32, f64, f64)>, radius_metres: f64) -> PyResult<Self> {
         let crossings = crossings
             .into_iter()
@@ -65,7 +68,13 @@ impl CrowFlies {
             Radius::new(radius_metres).map_err(|err| PyValueError::new_err(err.to_string()))?;
 
         Ok(Self {
-            inner: CrowFliesPredictor::new(crossings, radius),
+            inner: CrowFliesPredictor::new(
+                crossings,
+                Watching { radius },
+                DEFAULT_ALERTING,
+                LastMove::new(DEFAULT_STILL_WITHIN),
+            )
+            .map_err(|err| PyValueError::new_err(err.to_string()))?,
         })
     }
 
@@ -74,10 +83,10 @@ impl CrowFlies {
     /// `t` is an aware datetime in any timezone, since a store hands one back in whichever
     /// its engine holds. A naive one is refused: it names no instant.
     ///
-    /// Everything past the position is what the source happened to know. A field left out
-    /// stays unknown rather than being invented: with no speed reported, the step from the
-    /// previous fix says how fast we are going, and with no previous fix there is no time to
-    /// give.
+    /// Everything past the position is what the source happened to know, and a field left out
+    /// stays unknown rather than being invented. The predictor estimates speed from the fixes
+    /// alone, so a reported speed changes no prediction, and until the train has moved there is
+    /// no time to give.
     ///
     /// # Errors
     ///
@@ -123,11 +132,10 @@ impl CrowFlies {
 
     /// The crossings it predicts we reach, nearest first.
     fn predictions(&self) -> Vec<Prediction> {
-        self.inner
-            .predictions()
-            .iter()
-            .map(|prediction| Prediction {
-                crossing_compact_id: prediction.crossing_compact_id.get(),
+        nearest_first(self.inner.predictions())
+            .into_iter()
+            .map(|(crossing_compact_id, prediction)| Prediction {
+                crossing_compact_id: crossing_compact_id.get(),
                 metres: prediction.metres,
                 at: prediction.at,
             })
@@ -139,7 +147,7 @@ impl CrowFlies {
     fn observe(&mut self, event: Event<f64>) -> PyResult<()> {
         self.inner
             .observe(event)
-            .map_err(|err: ObserveError| PyValueError::new_err(err.to_string()))
+            .map_err(|err: OutOfOrder| PyValueError::new_err(err.to_string()))
     }
 }
 
@@ -160,6 +168,6 @@ fn lookout_predictor(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<CrowFlies>()?;
     module.add_class::<Prediction>()?;
     module.add_function(wrap_pyfunction!(radius_metres, module)?)?;
-    module.add("DEFAULT_RADIUS_METRES", DEFAULT_RADIUS.as_metres())?;
+    module.add("DEFAULT_RADIUS_METRES", DEFAULT_WATCHING.radius.as_metres())?;
     Ok(())
 }

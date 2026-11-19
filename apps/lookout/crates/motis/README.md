@@ -46,6 +46,14 @@ A sample falling on a departure or an arrival is one sample, a `Stop`. Each leg'
 newest capture's, realtime where Motis had it. Motis gives them to the whole minute, which bounds
 how closely any sample places the train.
 
+Each sample's `realtime` says whether its time came from realtime data. It takes the `realTime` flag
+of the trip segment the sample lies on, from the `/api/v6/map/trips` endpoint of
+[Motis's API](https://github.com/motis-project/motis/blob/v2.11.3/openapi.yaml). Where the flag is
+false, the time is the timetable's. A session's `realtime_percentage` is the share of its samples
+that are realtime, from 0 to 100. A sample placed by the timetable shows where the train was
+planned to be, not where it was. A consumer that takes a session's positions as ground truth
+therefore keeps only the sessions whose share reaches a threshold.
+
 A trip's legs are collapsed by the stop each leaves from, the newest capture winning, since a
 changed delay moves a leg's departure. The ingest drops a trip it cannot replay, and logs how
 many it dropped for each reason:

@@ -3,41 +3,85 @@ use std::num::NonZeroU32;
 use chrono::{DateTime, TimeDelta, Utc};
 use geo::{Distance, Haversine};
 
-use domain::{CrossingCompact, Precision, Radius, Sample};
+use domain::{CrossingCompact, Precision, Radius, Sample, Span};
 
+use crate::clock::{Clock, OutOfOrder};
 use crate::crossings::Crossings;
-use crate::predict::{Event, ObserveError, Predict, Prediction};
+use crate::predict::{Confidence, Event, Predict, Prediction, Predictions};
+use crate::velocity::{LastMove, Velocity, VelocityEstimator};
 
-pub const DEFAULT_RADIUS: Radius =
-    Radius::metres(NonZeroU32::new(5_000).expect("five thousand is not zero"));
+pub const DEFAULT_WATCHING: Watching = Watching {
+    radius: Radius::metres(NonZeroU32::new(5_000).expect("five thousand is not zero")),
+};
 
-#[derive(Debug, Clone)]
-pub struct CrowFlies<P: Precision, C: Crossings<P> = Vec<CrossingCompact<P>>> {
-    crossings: C,
-    radius_metres: P,
-    now: Option<DateTime<Utc>>,
-    latest: Option<Sample<P>>,
-    speed_mps: Option<P>,
-    predictions: Vec<Prediction<P>>,
+pub const DEFAULT_ALERTING: Alerting = Alerting {
+    radius: Radius::metres(NonZeroU32::new(1_000).expect("one thousand is not zero")),
+    horizon: Span::minutes(NonZeroU32::new(5).expect("five is not zero")),
+};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Watching {
+    pub radius: Radius,
 }
 
-impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
-    pub fn new(crossings: C, radius: Radius) -> Self {
-        // Infallible: `from_f64` only declines a value the target cannot represent, and a
-        // radius in metres is an ordinary magnitude in any float.
-        let radius_metres = P::from_f64(radius.as_metres()).expect("a radius fits in any float");
-        Self {
-            crossings,
-            radius_metres,
-            now: None,
-            latest: None,
-            speed_mps: None,
-            predictions: Vec::new(),
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Alerting {
+    pub radius: Radius,
+    pub horizon: Span,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
+#[error(
+    "an alerting radius of {} m reaches beyond the watching radius of {} m",
+    .alerting.as_metres(),
+    .watching.as_metres()
+)]
+pub struct AlertingBeyondWatching {
+    pub watching: Radius,
+    pub alerting: Radius,
+}
+
+#[derive(Debug, Clone)]
+pub struct CrowFlies<
+    P: Precision,
+    C: Crossings<P> = Vec<CrossingCompact<P>>,
+    V: VelocityEstimator<P> = LastMove<P>,
+> {
+    crossings: C,
+    watching: Watching,
+    alerting: Alerting,
+    clock: Clock,
+    latest: Option<Sample<P>>,
+    velocity: V,
+    predictions: Predictions<P>,
+}
+
+impl<P: Precision, C: Crossings<P>, V: VelocityEstimator<P>> CrowFlies<P, C, V> {
+    pub fn new(
+        crossings: C,
+        watching: Watching,
+        alerting: Alerting,
+        velocity: V,
+    ) -> Result<Self, AlertingBeyondWatching> {
+        if alerting.radius.as_metres() > watching.radius.as_metres() {
+            return Err(AlertingBeyondWatching {
+                watching: watching.radius,
+                alerting: alerting.radius,
+            });
         }
+        Ok(Self {
+            crossings,
+            watching,
+            alerting,
+            clock: Clock::default(),
+            latest: None,
+            velocity,
+            predictions: Predictions::new(),
+        })
     }
 
     pub fn now(&self) -> Option<DateTime<Utc>> {
-        self.now
+        self.clock.now()
     }
 
     pub fn latest(&self) -> Option<&Sample<P>> {
@@ -45,78 +89,76 @@ impl<P: Precision, C: Crossings<P>> CrowFlies<P, C> {
     }
 
     pub fn speed_mps(&self) -> Option<P> {
-        self.speed_mps
+        self.velocity().map(|velocity| velocity.speed_mps)
     }
 
-    pub fn radius_metres(&self) -> P {
-        self.radius_metres
+    pub fn velocity(&self) -> Option<Velocity<P>> {
+        self.velocity.velocity()
+    }
+
+    pub fn watching_radius_metres(&self) -> P {
+        metres(self.watching.radius)
     }
 
     pub fn crossings(&self) -> &C {
         &self.crossings
     }
 
-    fn advance(&mut self, to: DateTime<Utc>) -> Result<(), ObserveError> {
-        match self.now {
-            Some(now) if to < now => Err(ObserveError::OutOfOrder { now, at: to }),
-            _ => {
-                self.now = Some(to);
-                Ok(())
-            }
-        }
-    }
-
-    fn reached(&mut self, at: DateTime<Utc>) {
-        if self.now.is_none_or(|now| at > now) {
-            self.now = Some(at);
-        }
-    }
-
     fn predict(&mut self, sample: Sample<P>) {
-        let speed = speed_mps(&sample, self.latest.as_ref());
+        self.velocity.observe(sample);
+        let speed = self.speed_mps();
         let from = sample.gps.position;
-        let radius_metres = self.radius_metres;
+        let watching_metres: P = metres(self.watching.radius);
+        let alerting_metres: P = metres(self.alerting.radius);
+        let horizon = self.alerting.horizon.time_delta();
 
-        let mut predicted: Vec<Prediction<P>> = self
+        self.predictions = self
             .crossings
             .all()
             .filter_map(|crossing| {
                 let metres = Haversine.distance(from, crossing.position);
-                (metres <= radius_metres).then(|| Prediction {
-                    crossing_compact_id: crossing.id,
-                    metres,
-                    at: speed.and_then(|speed| arrival(sample.t, metres, speed)),
+                (metres <= watching_metres).then(|| {
+                    let at = speed.and_then(|speed| arrival(sample.t, metres, speed));
+                    let alerted =
+                        metres <= alerting_metres && arrives_within(sample.t, at, horizon);
+                    (
+                        crossing.id,
+                        Prediction {
+                            metres,
+                            at,
+                            confidence: if alerted {
+                                Confidence::High
+                            } else {
+                                Confidence::Low
+                            },
+                        },
+                    )
                 })
             })
             .collect();
-        // Infallible: a haversine over two checked coordinates is a finite number, so no
-        // distance here is NaN and every pair of them orders.
-        predicted.sort_by(|one, other| {
-            one.metres
-                .partial_cmp(&other.metres)
-                .expect("a distance is never NaN")
-        });
-
-        self.predictions = predicted;
-        self.speed_mps = speed;
         self.latest = Some(sample);
     }
 }
 
-fn speed_mps<P: Precision>(sample: &Sample<P>, previous: Option<&Sample<P>>) -> Option<P> {
-    sample
-        .gps
-        .speed_mps
-        .or_else(|| implied_speed_mps(sample, previous?))
+pub(crate) fn metres<P: Precision>(radius: Radius) -> P {
+    // Infallible: `from_f64` only declines a value the target cannot represent, and a radius in
+    // metres is an ordinary magnitude in any float.
+    P::from_f64(radius.as_metres()).expect("a radius fits in any float")
 }
 
-fn implied_speed_mps<P: Precision>(sample: &Sample<P>, previous: &Sample<P>) -> Option<P> {
-    let seconds = P::from_f64((sample.t - previous.t).as_seconds_f64())?;
-    (seconds > P::zero())
-        .then(|| Haversine.distance(previous.gps.position, sample.gps.position) / seconds)
+pub(crate) fn arrives_within(
+    now: DateTime<Utc>,
+    at: Option<DateTime<Utc>>,
+    horizon: TimeDelta,
+) -> bool {
+    at.is_some_and(|at| at - now <= horizon)
 }
 
-fn arrival<P: Precision>(at: DateTime<Utc>, metres: P, speed_mps: P) -> Option<DateTime<Utc>> {
+pub(crate) fn arrival<P: Precision>(
+    at: DateTime<Utc>,
+    metres: P,
+    speed_mps: P,
+) -> Option<DateTime<Utc>> {
     if speed_mps <= P::zero() {
         return None;
     }
@@ -124,33 +166,27 @@ fn arrival<P: Precision>(at: DateTime<Utc>, metres: P, speed_mps: P) -> Option<D
     at.checked_add_signed(TimeDelta::try_milliseconds(milliseconds as i64)?)
 }
 
-impl<P: Precision, C: Crossings<P>> Predict<P> for CrowFlies<P, C> {
-    fn observe(&mut self, event: Event<P>) -> Result<(), ObserveError> {
-        match event {
-            Event::Sampled(sample) => {
-                if let Some(latest) = &self.latest
-                    && sample.t < latest.t
-                {
-                    return Err(ObserveError::OutOfOrder {
-                        now: latest.t,
-                        at: sample.t,
-                    });
-                }
-                self.reached(sample.t);
-                self.predict(sample);
-            }
-            Event::Elapsed(t) => self.advance(t)?,
+impl<P: Precision, C: Crossings<P>, V: VelocityEstimator<P>> Predict<P> for CrowFlies<P, C, V> {
+    fn observe(&mut self, event: Event<P>) -> Result<(), OutOfOrder> {
+        self.clock.observe(&event)?;
+        if let Event::Sampled(sample) = event {
+            self.predict(sample);
         }
         Ok(())
     }
 
-    fn predictions(&self) -> &[Prediction<P>] {
+    fn predictions(&self) -> &Predictions<P> {
         &self.predictions
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use num_traits::float::TotalOrder;
+
+    use crate::predict::nearest_first;
+    use crate::velocity::DEFAULT_STILL_WITHIN;
+
     use super::*;
 
     const DEGREE_OF_LATITUDE_M: f64 = 111_195.0;
@@ -169,8 +205,63 @@ mod tests {
         ]
     }
 
+    fn radius(metres: f64) -> Radius {
+        Radius::new(metres).expect("a radius")
+    }
+
+    fn watching(radius_metres: f64) -> Watching {
+        Watching {
+            radius: radius(radius_metres),
+        }
+    }
+
+    fn alerting(radius_metres: f64, horizon: &str) -> Alerting {
+        Alerting {
+            radius: radius(radius_metres),
+            horizon: Span::new(horizon).expect("a span"),
+        }
+    }
+
     fn predictor() -> CrowFlies<f64> {
-        CrowFlies::new(crossings(), DEFAULT_RADIUS)
+        CrowFlies::new(
+            crossings(),
+            watching(5_000.0),
+            alerting(5_000.0, "5m"),
+            LastMove::new(DEFAULT_STILL_WITHIN),
+        )
+        .expect("alerting within what it watches")
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct Steady<P: Precision>(Velocity<P>);
+
+    impl<P: Precision> VelocityEstimator<P> for Steady<P> {
+        fn observe(&mut self, _sample: Sample<P>) {}
+
+        fn velocity(&self) -> Option<Velocity<P>> {
+            Some(self.0)
+        }
+    }
+
+    fn steady<P: Precision>(speed_mps: P) -> Steady<P> {
+        Steady(Velocity {
+            speed_mps,
+            heading_degrees: P::zero(),
+        })
+    }
+
+    fn at_speed(
+        speed_mps: f64,
+        alerting_radius_metres: f64,
+        horizon: &str,
+    ) -> CrowFlies<f64, Vec<CrossingCompact<f64>>, Steady<f64>> {
+        CrowFlies::new(
+            crossings(),
+            watching(5_000.0),
+            alerting(alerting_radius_metres, horizon),
+            steady(speed_mps),
+        )
+        .expect("alerting within what it watches")
     }
 
     fn fix_at(latitude: f64, after: i64) -> Sample<f64> {
@@ -185,11 +276,28 @@ mod tests {
         assert!((got - want).abs() < TOLERANCE_M, "{got} is not near {want}");
     }
 
-    fn ids<P: Precision>(predictor: &CrowFlies<P>) -> Vec<u32> {
-        predictor
-            .predictions()
-            .iter()
-            .map(|prediction| prediction.crossing_compact_id.get())
+    fn ids<P: Precision + TotalOrder>(predictor: &impl Predict<P>) -> Vec<u32> {
+        nearest_first(predictor.predictions())
+            .into_iter()
+            .map(|(crossing_compact_id, _)| crossing_compact_id.get())
+            .collect()
+    }
+
+    fn nearest<P: Precision + TotalOrder>(
+        predictor: &impl Predict<P>,
+        rank: usize,
+    ) -> Prediction<P> {
+        *nearest_first(predictor.predictions())[rank].1
+    }
+
+    fn confidences<P: Precision + TotalOrder>(
+        predictor: &impl Predict<P>,
+    ) -> Vec<(u32, Confidence)> {
+        nearest_first(predictor.predictions())
+            .into_iter()
+            .map(|(crossing_compact_id, prediction)| {
+                (crossing_compact_id.get(), prediction.confidence)
+            })
             .collect()
     }
 
@@ -211,7 +319,13 @@ mod tests {
 
     #[test]
     fn a_crossing_outside_the_radius_is_not_predicted() {
-        let mut predictor = CrowFlies::new(crossings(), Radius::new(2_000.0).expect("a radius"));
+        let mut predictor = CrowFlies::new(
+            crossings(),
+            watching(2_000.0),
+            alerting(2_000.0, "5m"),
+            LastMove::new(DEFAULT_STILL_WITHIN),
+        )
+        .expect("alerting within what it watches");
 
         predictor
             .observe(Event::Sampled(fix()))
@@ -228,23 +342,127 @@ mod tests {
             .observe(Event::Sampled(fix()))
             .expect("an event in order");
 
-        assert_near(predictor.predictions()[0].metres, HUNDREDTH_DEGREE_M);
-        assert_near(predictor.predictions()[2].metres, 3.0 * HUNDREDTH_DEGREE_M);
+        assert_near(nearest(&predictor, 0).metres, HUNDREDTH_DEGREE_M);
+        assert_near(nearest(&predictor, 2).metres, 3.0 * HUNDREDTH_DEGREE_M);
     }
 
     #[test]
-    fn the_time_is_the_distance_at_the_reported_speed() {
-        let mut predictor = predictor();
+    fn the_time_is_the_distance_at_the_estimated_speed() {
+        let mut predictor = at_speed(10.0, 5_000.0, "5m");
 
         predictor
-            .observe(Event::Sampled(fix().with_speed_mps(Some(10.0))))
+            .observe(Event::Sampled(fix()))
             .expect("an event in order");
 
-        let predicted = predictor.predictions()[0].at.expect("a time");
+        let predicted = nearest(&predictor, 0).at.expect("a time");
         let seconds = (predicted - instant()).as_seconds_f64();
         assert!(
             (seconds - HUNDREDTH_DEGREE_M / 10.0).abs() < 1.0,
             "{seconds}s is not the time to cover {HUNDREDTH_DEGREE_M}m at 10m/s",
+        );
+    }
+
+    #[test]
+    fn a_crossing_arriving_within_the_horizon_is_predicted_with_high_confidence() {
+        let mut predictor = at_speed(10.0, 5_000.0, "5m");
+
+        predictor
+            .observe(Event::Sampled(fix()))
+            .expect("an event in order");
+
+        assert_eq!(
+            confidences(&predictor),
+            vec![
+                (1, Confidence::High),
+                (2, Confidence::High),
+                (3, Confidence::Low)
+            ],
+            "at 10m/s the crossings arrive in about 111s, 222s, and 334s, against a 5m horizon",
+        );
+    }
+
+    #[test]
+    fn a_shorter_horizon_holds_fewer_crossings_with_high_confidence() {
+        let mut predictor = at_speed(10.0, 5_000.0, "2m");
+
+        predictor
+            .observe(Event::Sampled(fix()))
+            .expect("an event in order");
+
+        assert_eq!(
+            confidences(&predictor),
+            vec![
+                (1, Confidence::High),
+                (2, Confidence::Low),
+                (3, Confidence::Low)
+            ],
+        );
+    }
+
+    #[test]
+    fn a_crossing_beyond_the_alerting_radius_is_predicted_with_low_confidence() {
+        let mut predictor = at_speed(10.0, 2_000.0, "5m");
+
+        predictor
+            .observe(Event::Sampled(fix()))
+            .expect("an event in order");
+
+        assert_eq!(
+            confidences(&predictor),
+            vec![
+                (1, Confidence::High),
+                (2, Confidence::Low),
+                (3, Confidence::Low)
+            ],
+            "every crossing arrives within 5m at 10m/s, but only the first lies within 2km",
+        );
+    }
+
+    #[test]
+    fn an_alerting_radius_beyond_the_watching_radius_is_refused() {
+        let refused = CrowFlies::<f64>::new(
+            crossings(),
+            watching(1_000.0),
+            alerting(2_000.0, "5m"),
+            LastMove::new(DEFAULT_STILL_WITHIN),
+        );
+
+        assert_eq!(
+            refused.err(),
+            Some(AlertingBeyondWatching {
+                watching: radius(1_000.0),
+                alerting: radius(2_000.0),
+            })
+        );
+    }
+
+    #[test]
+    fn an_alerting_radius_equal_to_the_watching_radius_is_accepted() {
+        let accepted = CrowFlies::<f64>::new(
+            crossings(),
+            watching(1_000.0),
+            alerting(1_000.0, "5m"),
+            LastMove::new(DEFAULT_STILL_WITHIN),
+        );
+
+        assert!(accepted.is_ok());
+    }
+
+    #[test]
+    fn a_crossing_with_no_time_of_arrival_is_predicted_with_low_confidence() {
+        let mut predictor = at_speed(0.0, 5_000.0, "5m");
+
+        predictor
+            .observe(Event::Sampled(fix()))
+            .expect("an event in order");
+
+        assert_eq!(
+            confidences(&predictor),
+            vec![
+                (1, Confidence::Low),
+                (2, Confidence::Low),
+                (3, Confidence::Low)
+            ],
         );
     }
 
@@ -256,18 +474,19 @@ mod tests {
     }
 
     #[test]
-    fn the_speed_it_predicted_at_is_the_one_the_receiver_reported() {
+    fn a_speed_the_receiver_reports_is_left_to_the_estimator() {
         let mut predictor = predictor();
 
         predictor
             .observe(Event::Sampled(fix().with_speed_mps(Some(10.0))))
             .expect("an event in order");
 
-        assert_eq!(predictor.speed_mps(), Some(10.0));
+        assert_eq!(predictor.speed_mps(), None);
+        assert_eq!(nearest(&predictor, 0).at, None);
     }
 
     #[test]
-    fn the_speed_it_predicted_at_is_the_derived_one_where_none_was_reported() {
+    fn the_speed_it_predicted_at_is_the_estimated_one() {
         let mut predictor = predictor();
         predictor
             .observe(Event::Sampled(fix_at(49.99, 0)))
@@ -277,10 +496,10 @@ mod tests {
             .observe(Event::Sampled(fix_at(50.0, 100)))
             .expect("an event in order");
 
-        let derived = predictor.speed_mps().expect("a derived speed");
+        let estimated = predictor.speed_mps().expect("an estimated speed");
         assert!(
-            (derived - HUNDREDTH_DEGREE_M / 100.0).abs() < TOLERANCE_M,
-            "{derived}m/s is not a hundredth of a degree in a hundred seconds",
+            (estimated - HUNDREDTH_DEGREE_M / 100.0).abs() < TOLERANCE_M,
+            "{estimated}m/s is not a hundredth of a degree in a hundred seconds",
         );
     }
 
@@ -327,7 +546,7 @@ mod tests {
     }
 
     #[test]
-    fn a_speed_the_receiver_does_not_report_is_derived_from_the_fix_before() {
+    fn the_time_is_the_distance_at_the_speed_estimated_from_the_fixes_before() {
         let mut predictor = predictor();
 
         predictor
@@ -337,7 +556,7 @@ mod tests {
             .observe(Event::Sampled(fix_at(50.0, 100)))
             .expect("an event in order");
 
-        let predicted = predictor.predictions()[0].at.expect("a time");
+        let predicted = nearest(&predictor, 0).at.expect("a time");
         let seconds = (predicted - (instant() + TimeDelta::seconds(100))).as_seconds_f64();
         assert!((seconds - 100.0f64).abs() < 1.0, "{seconds}s is not 100s");
     }
@@ -350,20 +569,20 @@ mod tests {
             .observe(Event::Sampled(fix()))
             .expect("an event in order");
 
-        assert_near(predictor.predictions()[0].metres, HUNDREDTH_DEGREE_M);
-        assert_eq!(predictor.predictions()[0].at, None);
+        assert_near(nearest(&predictor, 0).metres, HUNDREDTH_DEGREE_M);
+        assert_eq!(nearest(&predictor, 0).at, None);
     }
 
     #[test]
-    fn a_stationary_fix_predicts_a_distance_and_no_time() {
-        let mut predictor = predictor();
+    fn a_stationary_train_predicts_a_distance_and_no_time() {
+        let mut predictor = at_speed(0.0, 5_000.0, "5m");
 
         predictor
-            .observe(Event::Sampled(fix().with_speed_mps(Some(0.0))))
+            .observe(Event::Sampled(fix()))
             .expect("an event in order");
 
-        assert_near(predictor.predictions()[0].metres, HUNDREDTH_DEGREE_M);
-        assert_eq!(predictor.predictions()[0].at, None);
+        assert_near(nearest(&predictor, 0).metres, HUNDREDTH_DEGREE_M);
+        assert_eq!(nearest(&predictor, 0).at, None);
     }
 
     #[test]
@@ -377,7 +596,7 @@ mod tests {
             .observe(Event::Sampled(fix_at(50.0, 10)))
             .expect("an event in order");
 
-        assert_eq!(predictor.predictions()[0].at, None);
+        assert_eq!(nearest(&predictor, 0).at, None);
     }
 
     #[test]
@@ -393,18 +612,18 @@ mod tests {
 
     #[test]
     fn time_passing_advances_the_clock_and_leaves_the_prediction_alone() {
-        let mut predictor = predictor();
+        let mut predictor = at_speed(10.0, 5_000.0, "5m");
         predictor
-            .observe(Event::Sampled(fix().with_speed_mps(Some(10.0))))
+            .observe(Event::Sampled(fix()))
             .expect("an event in order");
-        let predicted = predictor.predictions().to_vec();
+        let predicted = predictor.predictions().clone();
 
         predictor
             .observe(Event::Elapsed(instant() + TimeDelta::seconds(60)))
             .expect("an event in order");
 
         assert_eq!(predictor.now(), Some(instant() + TimeDelta::seconds(60)));
-        assert_eq!(predictor.predictions(), predicted, "the same instants");
+        assert_eq!(predictor.predictions(), &predicted, "the same instants");
     }
 
     #[test]
@@ -418,7 +637,7 @@ mod tests {
 
         assert_eq!(
             refused,
-            Err(ObserveError::OutOfOrder {
+            Err(OutOfOrder {
                 now: instant() + TimeDelta::seconds(30),
                 at: instant(),
             })
@@ -432,12 +651,12 @@ mod tests {
         predictor
             .observe(Event::Sampled(fix_at(50.0, 30)))
             .expect("an event in order");
-        let predicted = predictor.predictions().to_vec();
+        let predicted = predictor.predictions().clone();
 
         let refused = predictor.observe(Event::Sampled(fix_at(50.02, 0)));
 
         assert!(refused.is_err());
-        assert_eq!(predictor.predictions(), predicted);
+        assert_eq!(predictor.predictions(), &predicted);
         assert_eq!(predictor.now(), Some(instant() + TimeDelta::seconds(30)));
     }
 
@@ -445,33 +664,34 @@ mod tests {
     fn a_second_event_at_the_same_instant_is_accepted() {
         let mut predictor = predictor();
         predictor
-            .observe(Event::Sampled(fix_at(50.0, 30)))
+            .observe(Event::Sampled(fix_at(49.99, 30)))
             .expect("an event in order");
 
-        let again = predictor.observe(Event::Sampled(fix_at(50.0, 30).with_speed_mps(Some(10.0))));
+        let again = predictor.observe(Event::Sampled(fix_at(50.0, 30)));
 
         assert!(again.is_ok());
-        assert!(predictor.predictions()[0].at.is_some(), "the speed landed");
+        assert_eq!(predictor.latest().expect("a fix").latitude(), 50.0);
     }
 
     #[test]
     fn the_whole_prediction_runs_at_the_precision_the_device_uses() {
-        let mut predictor: CrowFlies<f32> = CrowFlies::new(crossings(), DEFAULT_RADIUS);
-        let fix = Sample::<f32>::at(instant(), 50.0, 0.0)
-            .expect("on the globe")
-            .with_speed_mps(Some(10.0));
+        let mut predictor = CrowFlies::new(
+            crossings::<f32>(),
+            watching(5_000.0),
+            alerting(5_000.0, "5m"),
+            steady(10.0f32),
+        )
+        .expect("alerting within what it watches");
+        let fix = Sample::<f32>::at(instant(), 50.0, 0.0).expect("on the globe");
 
         predictor
             .observe(Event::Sampled(fix))
             .expect("an event in order");
 
         assert_eq!(ids(&predictor), vec![1, 2, 3]);
-        assert_near(
-            f64::from(predictor.predictions()[0].metres),
-            HUNDREDTH_DEGREE_M,
-        );
+        assert_near(f64::from(nearest(&predictor, 0).metres), HUNDREDTH_DEGREE_M);
 
-        let predicted = predictor.predictions()[0].at.expect("a time");
+        let predicted = nearest(&predictor, 0).at.expect("a time");
         let seconds = (predicted - instant()).as_seconds_f64();
         assert!(
             (seconds - HUNDREDTH_DEGREE_M / 10.0).abs() < 1.0,
@@ -481,7 +701,13 @@ mod tests {
 
     #[test]
     fn an_empty_set_of_crossings_predicts_nothing() {
-        let mut predictor = CrowFlies::new(Vec::new(), DEFAULT_RADIUS);
+        let mut predictor = CrowFlies::new(
+            Vec::new(),
+            watching(5_000.0),
+            alerting(5_000.0, "5m"),
+            LastMove::<f64>::new(DEFAULT_STILL_WITHIN),
+        )
+        .expect("alerting within what it watches");
 
         predictor
             .observe(Event::Sampled(fix()))

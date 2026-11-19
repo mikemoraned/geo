@@ -1,6 +1,9 @@
+use std::fmt::Display;
+
 use chrono::{DateTime, Utc};
 use geo_types::{Coord, Rect};
-use medallion::{Country, DatasetSpec, Row, layers};
+use medallion::{Country, Dataset, DatasetSpec, PartitionValue, PathError, Root, Row, layers};
+use nutype::nutype;
 use serde::{Deserialize, Serialize};
 
 use crate::gers::GersId;
@@ -13,6 +16,60 @@ pub const OVERTURE_EXTRACT: DatasetSpec<layers::Bronze> =
 
 pub const EXTRACT_MANIFEST_V3: DatasetSpec<layers::Bronze> =
     DatasetSpec::unpartitioned("extract_manifest_v3");
+
+const COMPACT_UTC: &str = "%Y%m%dT%H%M%SZ";
+
+pub const RECORDED: &str = "SELECT * FROM extract_manifest_v3 ORDER BY extracted_at DESC";
+
+#[nutype(
+    validate(with = partition_value, error = medallion::PathError),
+    derive(Debug, Clone, PartialEq, Eq, Hash, Display, FromStr)
+)]
+pub struct ExtractId(String);
+
+fn partition_value(id: &str) -> Result<(), medallion::PathError> {
+    PartitionValue::new(id).map(|_| ())
+}
+
+impl ExtractId {
+    pub fn at(at: DateTime<Utc>) -> Self {
+        Self::new(at.format(COMPACT_UTC).to_string())
+            .expect("a compact UTC instant holds only digits and letters")
+    }
+
+    pub fn new(id: impl Into<String>) -> Result<Self, medallion::PathError> {
+        Self::try_new(id)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OvertureType {
+    pub theme: &'static str,
+    pub name: &'static str,
+}
+
+impl OvertureType {
+    const fn new(theme: &'static str, name: &'static str) -> Self {
+        Self { theme, name }
+    }
+
+    pub const SEGMENT: Self = Self::new("transportation", "segment");
+    pub const CONNECTOR: Self = Self::new("transportation", "connector");
+    pub const WATER: Self = Self::new("base", "water");
+    pub const DIVISION_AREA: Self = Self::new("divisions", "division_area");
+    pub const DIVISION: Self = Self::new("divisions", "division");
+
+    pub fn in_extract(
+        self,
+        root: &Root,
+        extract_id: impl Display,
+    ) -> Result<Dataset<layers::Bronze>, PathError> {
+        root.dataset(OVERTURE_EXTRACT)
+            .for_id(extract_id)?
+            .partition("theme", self.theme)?
+            .partition("type", self.name)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OvertureRegion {

@@ -120,6 +120,10 @@ kiosk-map:
     cp "data/medallion/gold/artifact=map/version={{map_version}}/map.pmtiles" \
         crates/server/static/map.pmtiles
 
+# Evaluate a predictor into gold from a clean tree; `just evaluate run --help` lists the settings.
+evaluate *args:
+    cargo run --release -p evaluation --features cli --bin evaluate -- {{args}}
+
 # Serve on http://localhost:3000 with the wasm and the data freshly copied.
 serve-web: wasm crossings kiosk-map serve
 
@@ -147,6 +151,7 @@ test-python:
     uv run --directory crates/medallion-py pytest -q
     uv run --directory crates/platform/rerun-py pytest -q
     uv run --directory crates/session-crossings-py pytest -q
+    uv run --directory crates/evaluation-py pytest -q
     uv run --directory notebooks/water_crossings pytest -q
 
 # Check every crate in Cargo.lock against the RustSec advisory database.
@@ -204,19 +209,19 @@ bronze-record *args:
 
 # Poll Motis for trips near recent GPS into landing for a duration such as 1h, redis URL from 1Password.
 landing-poll-motis duration *args:
-    BUILD_GIT_HASH={{git_hash}} op run --env-file=deploy/lookout.env -- cargo run --release -p motis --bin motis_follow_gps -- --feed local --poll-duration {{duration}} {{args}}
+    op run --env-file=deploy/lookout.env -- cargo run --release -p motis --bin motis_follow_gps -- --feed local --poll-duration {{duration}} {{args}}
 
 # Capture every train in Thuringia from Transitous into landing, every 10 minutes for a duration such as 1h.
 landing-poll-transitous duration *args:
-    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --motis-url https://api.transitous.org --feed transitous --country DE --region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
+    cargo run --release -p motis --bin motis_track_area -- --motis-url https://api.transitous.org --feed transitous --country DE --region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
 
 # Capture every train in Thuringia from the local Motis server into landing, every 10 minutes for a duration such as 2h. The label names the DELFI build and the setup, such as delfi-2026-10-12.plain.
 landing-poll-local-area label duration *args:
-    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --country DE --region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
+    cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --country DE --region DE-TH --poll-interval 10m --poll-duration {{duration}} {{args}}
 
 # Capture every train in Germany from the local Motis server into landing, every 10 minutes for a duration such as 1d. The label names the DELFI build and the setup, such as delfi-2026-10-10.route-shapes.within.
 landing-poll-local-de label duration *args:
-    BUILD_GIT_HASH={{git_hash}} cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --country DE --poll-interval 10m --poll-duration {{duration}} {{args}}
+    cargo run --release -p motis --bin motis_track_area -- --feed local --label {{label}} --country DE --poll-interval 10m --poll-duration {{duration}} {{args}}
 
 # Move Motis polls from landing into bronze.
 bronze-promote-motis-landing *args:
@@ -236,7 +241,7 @@ silver-init *args:
     just silver-motis-ingest {{args}}
     just silver-crossings {{args}}
 
-# Derive silver `train_segment_v4` from the bronze motis capture log.
+# Derive silver `train_segment_v4`, `train_session_v3`, and `train_session_sample_v3` from the bronze motis capture log.
 silver-motis-ingest *args:
     cargo run --release -p motis --bin motis_ingest -- {{args}}
 
@@ -253,7 +258,7 @@ silver-crossings *args:
 silver-water-crossings:
     uv run --no-project notebooks/water_crossings/v10.py
 
-# Derive silver `session_crossing_v3`: the crossings each recorded session passed.
+# Derive silver `session_crossing_v3` and `train_session_crossing_v1`: the crossings each recorded and each train session passed.
 silver-session-crossings *args:
     cargo run --release -p session_crossings --bin match_crossings -- {{args}}
 

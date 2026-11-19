@@ -1,17 +1,23 @@
+#![cfg(test)]
+
 use std::collections::BTreeMap;
 
 use arrow::datatypes::{Field, SchemaRef};
-use domain::{CrossingCompactId, CrossingId, DeviceType, SessionId, StartedBy, TrainNumber};
+use domain::{CrossingCompactId, DeviceType, StartedBy, StateKind, TrainNumber};
 use medallion::{Country, DatasetInfo, Row, file_schema};
 use serde::{Deserialize, Serialize};
 use serde_reflection::{ContainerFormat, Format, Registry, Samples, Tracer, TracerConfig};
 
 use crate::{
-    ALL, AccelReadingRowV2, DeviceSessionRowV2, ExtractManifestRowV3, Feed, GeometrySource, GersId,
-    GpsReadingRowV2, Label, MotisBaseUrl, MotisPollRowV2, MotisPolylineRowV2, MotisSegmentRowV3,
-    MotisSourceId, MotisSourceRowV4, MotisVersion, OVERTURE_EXTRACT, OverlapKind, OvertureRelease,
+    ALL, AccelReadingRowV2, DeviceSessionRowV2, EvaluationEpisodeRowV1, EvaluationOutcomeRowV2,
+    EvaluationOutcomeRowV3, EvaluationRunRowV6, EvaluationSessionRowV3, EvaluationSkewRowV2,
+    EvaluationSplitRowV1, EvaluationSummaryRowV3, EvaluationTransitionRowV1, ExtractManifestRowV3,
+    Feed, FloatType, GeometrySource, GersId, GpsReadingRowV2, MotisBaseUrl, MotisPollRowV2,
+    MotisPolylineRowV2, MotisSegmentRowV3, MotisSourceId, MotisSourceRowV4, MotisVersion,
+    NotificationClass, OVERTURE_EXTRACT, OutcomeKind, OverlapKind, OvertureRelease, PredictorName,
     RailMode, RawSampleRow, SessionCrossingRowV3, SessionRowV3, SessionSampleRowV3,
-    TrainSegmentRowV4, TrainSessionRowV2, TrainSessionSampleRowV2, WaterCrossingRowV2,
+    TrainSegmentRowV4, TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3,
+    WaterCrossingRowV2,
 };
 
 const EXTENSION_NAME: &str = "ARROW:extension:name";
@@ -204,10 +210,15 @@ fn enums() -> BTreeMap<String, Vec<String>> {
     BTreeMap::from([
         variants::<DeviceType>(),
         variants::<Feed>(),
+        variants::<FloatType>(),
         variants::<GeometrySource>(),
+        variants::<NotificationClass>(),
+        variants::<OutcomeKind>(),
         variants::<OverlapKind>(),
+        variants::<PredictorName>(),
         variants::<RailMode>(),
         variants::<StartedBy>(),
+        variants::<StateKind>(),
     ])
 }
 
@@ -222,16 +233,23 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
             "CrossingCompactId",
             Checks::from([("CrossingCompactId::new", CrossingCompactId::NEW_HASH)]),
         ),
-        (
-            "CrossingId",
-            Checks::from([("CrossingId::new", CrossingId::NEW_HASH), name]),
-        ),
+        ("CrossingId", Checks::from([name])),
         (
             "DeviceId",
             Checks::from([("device_id_present", domain::device::DEVICE_ID_PRESENT_HASH)]),
         ),
+        (
+            "EpisodePath",
+            Checks::from([("path_is_legal", crate::episode::PATH_IS_LEGAL_HASH)]),
+        ),
         ("GersId", Checks::from([("GersId::new", GersId::NEW_HASH)])),
-        ("Label", Checks::from([("Label::new", Label::NEW_HASH)])),
+        (
+            "Label",
+            Checks::from([(
+                "label_is_well_formed",
+                crate::motis_source::LABEL_IS_WELL_FORMED_HASH,
+            )]),
+        ),
         (
             "MotisBaseUrl",
             Checks::from([("MotisBaseUrl::new", MotisBaseUrl::NEW_HASH)]),
@@ -249,6 +267,13 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
             Checks::from([("OvertureRelease::new", OvertureRelease::NEW_HASH)]),
         ),
         (
+            "Percentage",
+            Checks::from([(
+                "percentage_in_range",
+                domain::percentage::PERCENTAGE_IN_RANGE_HASH,
+            )]),
+        ),
+        (
             "Polyline",
             Checks::from([("polyline_is_valid", crate::motis::POLYLINE_IS_VALID_HASH)]),
         ),
@@ -259,10 +284,7 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
                 crate::motis::POLYLINE_ID_IS_A_UUID_HASH,
             )]),
         ),
-        (
-            "SessionId",
-            Checks::from([("SessionId::new", SessionId::NEW_HASH), name]),
-        ),
+        ("SessionId", Checks::from([name])),
         (
             "StopId",
             Checks::from([("stop_id_present", crate::motis::STOP_ID_PRESENT_HASH)]),
@@ -296,11 +318,21 @@ fn every_dataset_keeps_its_recorded_declaration() {
         declaration::<TrainSegmentRowV4>(&known),
         declaration::<SessionRowV3>(&known),
         declaration::<SessionSampleRowV3>(&known),
-        declaration::<TrainSessionRowV2>(&known),
-        declaration::<TrainSessionSampleRowV2>(&known),
+        declaration::<TrainSessionRowV3>(&known),
+        declaration::<TrainSessionSampleRowV3>(&known),
         declaration::<WaterCrossingRowV2>(&known),
         declaration::<SessionCrossingRowV3>(&known),
+        declaration::<TrainSessionCrossingRowV1>(&known),
         declaration::<ExtractManifestRowV3>(&known),
+        declaration::<EvaluationTransitionRowV1>(&known),
+        declaration::<EvaluationRunRowV6>(&known),
+        declaration::<EvaluationSessionRowV3>(&known),
+        declaration::<EvaluationEpisodeRowV1>(&known),
+        declaration::<EvaluationOutcomeRowV2>(&known),
+        declaration::<EvaluationOutcomeRowV3>(&known),
+        declaration::<EvaluationSummaryRowV3>(&known),
+        declaration::<EvaluationSkewRowV2>(&known),
+        declaration::<EvaluationSplitRowV1>(&known),
         rowless(OVERTURE_EXTRACT.info()),
     ];
 

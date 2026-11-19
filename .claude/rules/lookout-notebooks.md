@@ -18,6 +18,11 @@ A notebook is written so the user can check it for correctness, in two ways:
   steps. Each cell adds one step to the steps before it and shows a small result, such as a count,
   a before-and-after, or a check that a join key is unique. A long chain of steps in one cell
   can't be checked one step at a time.
+- **Each step stated as a dataframe operation.** A step is written in `polars`, whose named
+  operations, such as `shift().over(...)`, `join_where`, and `group_by`, say what the step does. A
+  step is never a numpy idiom whose meaning has to be worked out, such as a prefix sum indexed by
+  offsets or a composite sort key. A calculation no dataframe operation states, such as a
+  geodesic distance, sits in a small named function the step calls.
 - **Geographic work shown on a map.** Wherever a join or a measure involves shapes, examples are
   drawn: the whole dataset on a map, chosen cases such as the smallest, median, and largest, and a
   table whose selected rows draw on a map. A wrong shape is easier to spot drawn than as a number.
@@ -25,4 +30,4 @@ A notebook is written so the user can check it for correctness, in two ways:
 Datasets load through the medallion library's Python binding, in a cell and while exploring alike,
 never through duckdb.
 Joins stay in SQL, run by the binding on Sedona and DataFusion, and results stay in Arrow until a
-step needs pandas or geopandas.
+step needs a dataframe, which is `polars`, or geopandas.

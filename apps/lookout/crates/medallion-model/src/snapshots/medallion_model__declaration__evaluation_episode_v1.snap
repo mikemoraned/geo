@@ -1,0 +1,27 @@
+---
+source: crates/medallion-model/src/declaration.rs
+expression: declaration
+---
+layer: gold
+partition_key: run_date
+unique: []
+columns:
+  - name: session_index
+    data_type: UInt32
+    nullable: false
+  - name: crossing_compact_id
+    data_type: UInt32
+    nullable: false
+    checks:
+      "CrossingCompactId::new": 4b1a073ff7e10b6dd1538de05974cc89937eee19797ab18eb7e8b69cce4f68f0
+  - name: start_offset_ms
+    data_type: UInt32
+    nullable: false
+  - name: path
+    data_type: LargeUtf8
+    nullable: false
+    checks:
+      path_is_legal: cdccf1ef73c9c52097b372eab7359651f5b37367e31b965b3cc941012586c549
+  - name: gaps_ms
+    data_type: "LargeList(non-null UInt32, field: 'element')"
+    nullable: false

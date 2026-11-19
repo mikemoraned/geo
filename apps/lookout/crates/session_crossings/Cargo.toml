@@ -7,10 +7,11 @@ edition.workspace = true
 chrono = { workspace = true }
 clap = { workspace = true }
 domain = { workspace = true }
-geo = { workspace = true }
+futures = { workspace = true }
 geo-types = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }
+rstar = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
@@ -18,8 +19,12 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
+# The same crate again, for the places its tests are set in. A dev-dependency, so the feature
+# is off in anything else that builds this crate.
+domain = { workspace = true, features = ["fixtures"] }
 geojson = { workspace = true }
 libtest-mimic = { workspace = true }
+proptest = { workspace = true }
 recorder = { workspace = true }
 serde_json = { workspace = true }
 shared = { workspace = true }

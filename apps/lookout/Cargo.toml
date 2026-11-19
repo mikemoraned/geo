@@ -26,6 +26,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+statrs = "0.19"
 strum = { version = "0.28", features = ["derive"] }
 thiserror = "2"
 hashfn = "0.2"
@@ -71,8 +72,12 @@ duckdb = "1.105"
 dirs = "6"
 futures = "0.3"
 md5 = "0.7"
+sha2 = "0.11"
 tempfile = "3"
 proptest = "1"
+rand = "0.10"
+rand_chacha = "0.10"
+rayon = "1.12"
 polyline = "0.11"
 wkb = "0.9"
 geo-types = "0.7"
@@ -80,19 +85,26 @@ geo-types = "0.7"
 # 0.33 needs. The lock carries 0.31 and 0.32 until SedonaDB 0.5.0.
 geo = "0.32"
 geo-traits = "0.3"
+a5 = "=1.0.0"
+itertools = "0.15"
+rstar = "0.13"
 wkt = "0.14"
 chrono = { version = "0.4", features = ["serde"] }
 pyo3 = "0.28"
 # 0.16 is the pyo3-arrow release built against arrow 57, so the tables it hands over from
 # python are our `RecordBatch`.
 pyo3-arrow = "0.16"
+code_version = { path = "crates/code_version" }
+countries = { path = "crates/countries" }
 crossings = { path = "crates/crossings" }
 platform-core = { path = "crates/platform-core" }
 m5-core = { path = "crates/platform/m5/core" }
 map = { path = "crates/map" }
 medallion = { path = "crates/medallion" }
 medallion-model = { path = "crates/medallion-model" }
+py-common = { path = "crates/py-common" }
 domain = { path = "crates/domain" }
+evaluation = { path = "crates/evaluation" }
 predictor = { path = "crates/predictor" }
 recorder = { path = "crates/recorder" }
 session_crossings = { path = "crates/session_crossings" }
