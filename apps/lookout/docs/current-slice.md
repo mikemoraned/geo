@@ -148,7 +148,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 2026
 - [x] Read the realtime share by mode, and the route types ScotRail and the unscripted operators
       take. Choose the floor for the week-long capture. ScotRail's routes take regional rail. The
       trial held no unscripted operator.
-- [ ] Drain the trial's landing into bronze with `just bronze-promote-motis-landing`, once its four
+- [x] Drain the trial's landing into bronze with `just bronze-promote-motis-landing`, once its four
       hours end and before the side-by-side starts. Rerun `notebooks/realtime_share/trial.py` on
       all four hours first, since it reads landing only. Commit the bronze it writes.
 - [ ] Capture Scotland from the local server and Transitous together, and compare shapes and
