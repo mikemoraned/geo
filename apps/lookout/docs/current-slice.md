@@ -111,7 +111,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       use it to `crates/countries/tests/`. Point `transport` and `evaluation` at the new crate.
       The unit tests stayed: `test-countries` does not depend on `countries`, so no second copy
       compiles.
-- [ ] Move `predictor::fixtures` to a `test-predictor` crate, and the `predictor` unit tests that
+- [x] Move `predictor::fixtures` to a `test-predictor` crate, and the `predictor` unit tests that
       use it to `crates/predictor/tests/`. Point `platform-core` and `m5-core` at the new crate.
 - [ ] `domain` (9) and `recorder` (7).
 - [ ] `predictor` (1, once its fixtures move), `motis` (4), and `crossings` (3).

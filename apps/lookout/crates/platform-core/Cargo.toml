@@ -33,9 +33,7 @@ typegen = ["crux_core/typegen"]
 # The same crate again, for the places its tests are set in. A dev-dependency, so the feature
 # is off in anything built for the device.
 domain = { workspace = true, features = ["fixtures"] }
-# The same crate again, for the captured sentences its tests drive the core with. A
-# dev-dependency, so the feature is off in anything built for the device.
-predictor = { workspace = true, features = ["fixtures"] }
+test-predictor = { workspace = true }
 geo = { workspace = true }
 serde_json = { workspace = true }
 

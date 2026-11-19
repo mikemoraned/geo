@@ -324,7 +324,7 @@ mod tests {
     use domain::places::DRESDEN_HBF;
     use geo::{Distance, Haversine};
     use geo_types::Point;
-    use predictor::fixtures::{Fix, captured};
+    use test_predictor::{Fix, captured};
 
     use super::*;
 

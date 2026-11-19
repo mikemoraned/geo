@@ -2,7 +2,6 @@ pub mod clock;
 pub mod crossings;
 pub mod crow_flies;
 pub mod detect;
-pub mod fixtures;
 pub mod light_cone;
 pub mod online;
 pub mod parser;

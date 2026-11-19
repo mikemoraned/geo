@@ -5127,6 +5127,7 @@ dependencies = [
  "medallion",
  "platform-core",
  "predictor",
+ "test-predictor",
 ]
 
 [[package]]
@@ -6189,6 +6190,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "test-predictor",
  "thiserror 2.0.18",
  "uuid",
  "wkb",
@@ -6256,6 +6258,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "test-predictor",
  "thiserror 2.0.18",
 ]
 
@@ -8616,6 +8619,14 @@ dependencies = [
  "serde",
  "serde_json",
  "webauthn-rs",
+]
+
+[[package]]
+name = "test-predictor"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "predictor",
 ]
 
 [[package]]

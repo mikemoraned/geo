@@ -77,4 +77,4 @@ feature. `--help` describes each setting.
 ## Testing
 
 `just test-no-docker` (from `apps/lookout`) runs the crate's tests, which run each step over a
-store the fixtures write. The `fixtures` feature lends those fixtures to another crate's tests.
+store the fixtures write.

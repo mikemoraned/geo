@@ -70,7 +70,7 @@ mod tests {
     use chrono::{DateTime, TimeDelta, Utc};
     use crux_core::Core;
     use domain::places::DRESDEN_HBF;
-    use predictor::fixtures::{Fix, RMC_VOID, captured};
+    use test_predictor::{Fix, RMC_VOID, captured};
 
     use super::*;
     use crate::panel::{CHARACTERS_PER_LINE, NEAREST_ON_SCREEN, NO_ARRIVAL};

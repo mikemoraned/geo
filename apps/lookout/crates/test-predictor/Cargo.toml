@@ -1,0 +1,11 @@
+[package]
+name = "test-predictor"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+predictor = { workspace = true }
+
+[lints]
+workspace = true
