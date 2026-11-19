@@ -53,7 +53,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       the last group.
 - [x] Add the root-level allow to each of the 17 `tests/` crate roots.
 - [x] Add the root-level allow to `crates/test-redis` and `crates/test-passkeys`.
-- [ ] Add the file-level allow to `crates/motis/build.rs` and `crates/platform/m5/core/build.rs`.
+- [x] Add the file-level allow to `crates/motis/build.rs` and `crates/platform/m5/core/build.rs`.
 
 #### Library code, 87 calls
 

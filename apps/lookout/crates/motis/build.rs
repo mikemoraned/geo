@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "a build script reports failure by panicking"
+)]
+
 use std::path::PathBuf;
 use std::{env, fs};
 
