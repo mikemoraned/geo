@@ -117,3 +117,5 @@ transport = { path = "crates/transport" }
 
 [workspace.lints.clippy]
 all = "warn"
+expect_used = "warn"
+unwrap_used = "warn"
