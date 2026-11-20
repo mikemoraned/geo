@@ -21,7 +21,7 @@ def transition_table(session_ids):
     )
 
 
-def write(store, session_ids, run_id="abc", run_date="2026-11-06"):
+def write(store, session_ids, run_id="00000000-0000-0000-0000-000000000001", run_date="2026-11-06"):
     return lookout_medallion.write_gold(
         "evaluation_transition_v1",
         transition_table(session_ids),
@@ -40,22 +40,22 @@ def test_a_written_run_is_read_back_with_its_date_and_id(store):
 
     assert (written.rows, written.partitions_written, written.partitions_removed) == (2, 1, 0)
     assert (
-        store / "gold/evaluation_transition_v1/run_date=2026-11-06/run_id=abc/part-0.parquet"
+        store / "gold/evaluation_transition_v1/run_date=2026-11-06/run_id=00000000-0000-0000-0000-000000000001/part-0.parquet"
     ).exists()
     assert query(
         store,
         "SELECT run_date, run_id, session_id FROM evaluation_transition_v1 ORDER BY session_id",
     ).to_pylist() == [
-        {"run_date": "2026-11-06", "run_id": "abc", "session_id": "session-a"},
-        {"run_date": "2026-11-06", "run_id": "abc", "session_id": "session-b"},
+        {"run_date": "2026-11-06", "run_id": "00000000-0000-0000-0000-000000000001", "session_id": "session-a"},
+        {"run_date": "2026-11-06", "run_id": "00000000-0000-0000-0000-000000000001", "session_id": "session-b"},
     ]
 
 
 def test_a_query_picks_one_run_by_its_id(store):
-    write(store, ["session-a"], run_id="abc")
-    write(store, ["session-b", "session-c"], run_id="def", run_date="2026-11-07")
+    write(store, ["session-a"], run_id="00000000-0000-0000-0000-000000000001")
+    write(store, ["session-b", "session-c"], run_id="00000000-0000-0000-0000-000000000002", run_date="2026-11-07")
 
-    picked = query(store, "SELECT session_id FROM evaluation_transition_v1 WHERE run_id = 'def'")
+    picked = query(store, "SELECT session_id FROM evaluation_transition_v1 WHERE run_id = '00000000-0000-0000-0000-000000000002'")
 
     assert sorted(picked.column("session_id").to_pylist()) == ["session-b", "session-c"]
 
@@ -63,7 +63,7 @@ def test_a_query_picks_one_run_by_its_id(store):
 def test_a_run_written_again_is_refused(store):
     write(store, ["session-a"])
 
-    with pytest.raises(ValueError, match="already holds run abc"):
+    with pytest.raises(ValueError, match="already holds run 00000000-0000-0000-0000-000000000001"):
         write(store, ["session-b"], run_date="2026-11-07")
 
 
@@ -73,7 +73,7 @@ def test_a_dataset_gold_does_not_hold_is_refused(store):
             "train_session_v3",
             transition_table(["session-a"]),
             run_date="2026-11-06",
-            run_id="abc",
+            run_id="00000000-0000-0000-0000-000000000001",
             root=str(store),
         )
 
@@ -89,7 +89,7 @@ def test_a_table_lacking_a_column_of_the_dataset_is_refused(store):
             "evaluation_transition_v1",
             transition_table(["session-a"]).drop_columns(["to"]),
             run_date="2026-11-06",
-            run_id="abc",
+            run_id="00000000-0000-0000-0000-000000000001",
             root=str(store),
         )
 
@@ -101,7 +101,7 @@ def test_a_table_holding_a_column_the_dataset_does_not_define_is_refused(store):
             "evaluation_transition_v1",
             table.append_column("run_id", pa.array(["abc"] * table.num_rows, pa.string())),
             run_date="2026-11-06",
-            run_id="abc",
+            run_id="00000000-0000-0000-0000-000000000001",
             root=str(store),
         )
 
@@ -135,7 +135,7 @@ def test_a_duration_is_read_back_as_a_millisecond_duration(store):
             }
         ),
         run_date="2026-11-06",
-        run_id="abc",
+        run_id="00000000-0000-0000-0000-000000000001",
         root=str(store),
     )
 

@@ -47,7 +47,7 @@ pub(crate) struct PollsWritten {
 type Poll = (MotisSourceId, DateTime<Utc>);
 
 fn poll_of(row: &MotisPollRowV2) -> Poll {
-    (row.source_id.clone(), row.captured_at)
+    (row.source_id, row.captured_at)
 }
 
 pub async fn promote(root: &Root, at: DateTime<Utc>) -> Result<Promoted, PromotionError> {
@@ -158,7 +158,7 @@ async fn append_polylines(
         .iter()
         .map(|row| MotisPolylineRowV2::of(row.polyline.clone()))
         .filter(|row| !held.contains(&row.polyline_id))
-        .map(|row| (row.polyline_id.clone(), row))
+        .map(|row| (row.polyline_id, row))
         .collect();
     let rows: Vec<MotisPolylineRowV2> = lacking.into_values().collect();
     Ok(root
@@ -218,7 +218,7 @@ async fn check_bronze_holds(root: &Root, landed: &[MotisPollRowV2]) -> Result<()
     }
     for ((source_id, captured_at), landed) in landed_counts {
         let held = held
-            .get(&(source_id.clone(), captured_at))
+            .get(&(source_id, captured_at))
             .copied()
             .unwrap_or_default();
         if held < landed {

@@ -21,7 +21,7 @@ fn session_of(named: &str, place: Point<f64>) -> (SessionRowV3, Point<f64>) {
     let (lon, lat) = place.x_y();
     let session = SessionRowV3 {
         session_id: SessionId::new(named).expect("a session id"),
-        device_id: DeviceId::new(format!("device-{named}")).expect("a device id"),
+        device_id: DeviceId::from(uuid::Uuid::new_v5(&uuid::Uuid::nil(), named.as_bytes())),
         started_at: at(0),
         ended_at: at(30),
         sample_count: 1,
@@ -53,7 +53,7 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
         for (named, crossings) in *sessions {
             let (session, point) = session_of(named, *place);
             let session_id = session.session_id.clone();
-            let device_id = session.device_id.clone();
+            let device_id = session.device_id;
             session_rows.push(GeographyRow {
                 row: session,
                 geography: LineString::from(vec![(point.x(), point.y()), (point.x(), point.y())]),
@@ -62,7 +62,7 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
             sample_rows.push(GeographyRow {
                 row: SessionSampleRowV3 {
                     session_id: session_id.clone(),
-                    device_id: device_id.clone(),
+                    device_id,
                     t: at(1),
                     seq: 0,
                     lat: point.y(),
@@ -81,7 +81,7 @@ async fn store_with(root: &Root, recorded: &[Recorded<'_>]) {
                     session_id: session_id.clone(),
                     crossing_id: CrossingId::new(format!("water:track:rail@{named}-{n}"))
                         .expect("a crossing id"),
-                    device_id: device_id.clone(),
+                    device_id,
                     crossed_at: at(2 + n as u32),
                     distance_m: 10.0,
                     samples_within: 1,

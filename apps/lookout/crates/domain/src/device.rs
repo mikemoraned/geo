@@ -1,16 +1,13 @@
+use std::fmt::{self, Display};
+use std::str::FromStr;
+
 use hashfn::hashfn;
-use nutype::nutype;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use uuid::Uuid;
 
-#[nutype(
-    validate(with = device_id_present, error = EmptyDeviceId),
-    derive(
-        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into,
-        Serialize, Deserialize
-    )
-)]
-pub struct DeviceId(String);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
+#[serde(try_from = "String")]
+pub struct DeviceId(Uuid);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -31,28 +28,62 @@ pub struct DeviceInfo {
     pub os_version: Option<String>,
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("a device id cannot be empty")]
-pub struct EmptyDeviceId;
-
-#[hashfn]
-pub fn device_id_present(id: &str) -> Result<(), EmptyDeviceId> {
-    if id.is_empty() {
-        Err(EmptyDeviceId)
-    } else {
-        Ok(())
-    }
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("`{id}` is not a device id: {source}")]
+pub struct NotADeviceId {
+    id: String,
+    #[source]
+    source: uuid::Error,
 }
 
 impl DeviceId {
-    pub fn new(id: impl Into<String>) -> Result<Self, EmptyDeviceId> {
-        Self::try_new(id)
+    #[hashfn]
+    pub fn new(id: impl Into<String>) -> Result<Self, NotADeviceId> {
+        let id = id.into();
+        match Uuid::parse_str(&id) {
+            Ok(uuid) => Ok(Self(uuid)),
+            Err(source) => Err(NotADeviceId { id, source }),
+        }
+    }
+}
+
+impl FromStr for DeviceId {
+    type Err = NotADeviceId;
+
+    fn from_str(id: &str) -> Result<Self, Self::Err> {
+        Self::new(id)
+    }
+}
+
+impl TryFrom<String> for DeviceId {
+    type Error = NotADeviceId;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Self::new(id)
     }
 }
 
 impl From<Uuid> for DeviceId {
     fn from(id: Uuid) -> Self {
-        Self::new(id.to_string()).expect("a UUID's text is never empty")
+        Self(id)
+    }
+}
+
+impl From<DeviceId> for String {
+    fn from(id: DeviceId) -> Self {
+        id.to_string()
+    }
+}
+
+impl Serialize for DeviceId {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_newtype_struct("DeviceId", &self.to_string())
+    }
+}
+
+impl Display for DeviceId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -64,8 +95,8 @@ mod tests {
 
     proptest! {
         #[test]
-        fn an_id_is_accepted_exactly_when_it_is_not_empty(text in ".{0,8}") {
-            prop_assert_eq!(DeviceId::new(text.clone()).is_ok(), !text.is_empty());
+        fn text_that_is_not_a_uuid_is_rejected(text in "[^0-9a-fA-F-]{0,8}") {
+            prop_assert!(DeviceId::new(text).is_err());
         }
     }
 
@@ -73,7 +104,20 @@ mod tests {
     fn an_id_reads_back_as_what_it_was_made_from() {
         let id = Uuid::from_u128(1);
 
-        assert_eq!(DeviceId::from(id).to_string(), id.to_string());
+        assert_eq!(
+            DeviceId::from(id).to_string(),
+            "00000000-0000-0000-0000-000000000001"
+        );
+    }
+
+    #[test]
+    fn an_id_is_parsed_from_a_uuids_text() {
+        assert_eq!(
+            "cdf2ab5a-0157-4dbe-8406-27a7d4c4970d"
+                .parse::<DeviceId>()
+                .unwrap(),
+            DeviceId::from(Uuid::from_u128(0xcdf2ab5a_0157_4dbe_8406_27a7d4c4970d))
+        );
     }
 
     #[test]
@@ -84,7 +128,17 @@ mod tests {
 
     #[test]
     fn an_id_is_checked_when_it_is_read_back() {
-        assert!(serde_json::from_str::<DeviceId>(r#""device-a""#).is_ok());
-        assert!(serde_json::from_str::<DeviceId>(r#""""#).is_err());
+        assert!(
+            serde_json::from_str::<DeviceId>(r#""cdf2ab5a-0157-4dbe-8406-27a7d4c4970d""#).is_ok()
+        );
+        assert!(serde_json::from_str::<DeviceId>(r#""device-a""#).is_err());
+    }
+
+    #[test]
+    fn an_id_is_written_as_a_uuids_text() {
+        assert_eq!(
+            serde_json::to_string(&DeviceId::from(Uuid::from_u128(1))).unwrap(),
+            r#""00000000-0000-0000-0000-000000000001""#
+        );
     }
 }

@@ -15,9 +15,7 @@ pub async fn read_run_row(root: &Root, run_id: &RunId) -> Result<EvaluationRunRo
         .await?
         .into_iter()
         .next()
-        .ok_or_else(|| RunsError::NoSuchRun {
-            run_id: run_id.clone(),
-        })
+        .ok_or_else(|| RunsError::NoSuchRun { run_id: *run_id })
 }
 
 pub async fn read_run_rows<T: Row<Layer = layers::Gold>>(
@@ -78,7 +76,10 @@ mod tests {
 
     async fn two_runs(dir: &Path) -> Root {
         let root = Root::new(dir);
-        for (id, code, name) in [("abc", "code-a", "a"), ("def", "code-d", "d")] {
+        for (id, code, name) in [
+            ("00000000-0000-0000-0000-000000000001", "code-a", "a"),
+            ("00000000-0000-0000-0000-000000000002", "code-d", "d"),
+        ] {
             write_run(&root, day(), &run(id), &[run_row(code)])
                 .await
                 .expect("a written run");
@@ -94,7 +95,9 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = two_runs(tmp.path()).await;
 
-        let row = read_run_row(&root, &run("def")).await.expect("the run");
+        let row = read_run_row(&root, &run("00000000-0000-0000-0000-000000000002"))
+            .await
+            .expect("the run");
 
         assert_eq!(row, run_row("code-d"));
     }
@@ -105,7 +108,13 @@ mod tests {
         let root = two_runs(tmp.path()).await;
         let empty = tempfile::tempdir().expect("a temporary directory");
 
-        for (root, id) in [(&root, "xyz"), (&Root::new(empty.path()), "abc")] {
+        for (root, id) in [
+            (&root, "00000000-0000-0000-0000-000000000003"),
+            (
+                &Root::new(empty.path()),
+                "00000000-0000-0000-0000-000000000001",
+            ),
+        ] {
             let refused = read_run_row(root, &run(id)).await;
 
             assert!(
@@ -120,9 +129,12 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = two_runs(tmp.path()).await;
 
-        let transitions = read_run_rows::<EvaluationTransitionRowV1>(&root, &run("abc"))
-            .await
-            .expect("the run's transitions");
+        let transitions = read_run_rows::<EvaluationTransitionRowV1>(
+            &root,
+            &run("00000000-0000-0000-0000-000000000001"),
+        )
+        .await
+        .expect("the run's transitions");
 
         assert_eq!(transitions, [transition("a")]);
     }

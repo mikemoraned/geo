@@ -1,12 +1,13 @@
+use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 
 use arrow::array::RecordBatch;
 use chrono::NaiveDate;
-use nutype::nutype;
+use uuid::Uuid;
 
 use crate::dataset::DatasetSpec;
 use crate::layer::layers;
-use crate::partition::{Partition, PartitionValue, PathError};
+use crate::partition::{Partition, PathError};
 use crate::path::{Replaced, Root};
 use crate::rows::{Geometry, Row, RowError, batch};
 use crate::table::{GoldTarget, TableError, TableWritten};
@@ -17,19 +18,36 @@ pub const RUN_ID: &str = "run_id";
 
 const BY_RUN: [&str; 2] = [RUN_DATE, RUN_ID];
 
-#[nutype(
-    validate(with = partition_value, error = PathError),
-    derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display)
-)]
-pub struct RunId(String);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct RunId(Uuid);
 
-fn partition_value(id: &str) -> Result<(), PathError> {
-    PartitionValue::new(id).map(|_| ())
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("`{id}` is not a run id: {source}")]
+pub struct NotARunId {
+    id: String,
+    #[source]
+    source: uuid::Error,
 }
 
 impl RunId {
-    pub fn new(id: impl Into<String>) -> Result<Self, PathError> {
-        Self::try_new(id)
+    pub fn new(id: impl Into<String>) -> Result<Self, NotARunId> {
+        let id = id.into();
+        match Uuid::parse_str(&id) {
+            Ok(uuid) => Ok(Self(uuid)),
+            Err(source) => Err(NotARunId { id, source }),
+        }
+    }
+}
+
+impl From<Uuid> for RunId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl Display for RunId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -115,7 +133,7 @@ pub(crate) async fn write_run_batch(
     if let Some(written_on) = written_on(&runs.dir(), run_id) {
         return Err(RunError::Written {
             dataset: dataset.name,
-            run_id: run_id.clone(),
+            run_id: *run_id,
             written_on,
         });
     }
@@ -254,9 +272,15 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = Root::new(tmp.path());
 
-        let written = write_run_table(&root, &target(), day(6), &run("abc"), &[scored_table(3)])
-            .await
-            .expect("a written run");
+        let written = write_run_table(
+            &root,
+            &target(),
+            day(6),
+            &run("00000000-0000-0000-0000-000000000001"),
+            &[scored_table(3)],
+        )
+        .await
+        .expect("a written run");
 
         assert_eq!(
             written,
@@ -282,7 +306,7 @@ mod tests {
             &root,
             &target(),
             day(6),
-            &run("abc"),
+            &run("00000000-0000-0000-0000-000000000001"),
             &[table.project(&reversed).expect("the columns reversed")],
         )
         .await
@@ -300,7 +324,7 @@ mod tests {
             &Root::new(tmp.path()),
             &target(),
             day(6),
-            &run("abc"),
+            &run("00000000-0000-0000-0000-000000000001"),
             &[lacking],
         )
         .await;
@@ -320,14 +344,17 @@ mod tests {
         let extra = with_column(
             &scored_table(3),
             RUN_ID,
-            Arc::new(StringArray::from(vec!["abc"; 3])),
+            Arc::new(StringArray::from(vec![
+                "00000000-0000-0000-0000-000000000001";
+                3
+            ])),
         );
 
         let refused = write_run_table(
             &Root::new(tmp.path()),
             &target(),
             day(6),
-            &run("abc"),
+            &run("00000000-0000-0000-0000-000000000001"),
             &[extra],
         )
         .await;
@@ -368,9 +395,14 @@ mod tests {
                 lead: None,
             },
         ];
-        write_run(&root, day(6), &run("abc"), &led)
-            .await
-            .expect("a written run");
+        write_run(
+            &root,
+            day(6),
+            &run("00000000-0000-0000-0000-000000000001"),
+            &led,
+        )
+        .await
+        .expect("a written run");
         let query = Query::new(root.clone());
         query.register_gold(Led::DATASET).await.expect("the runs");
 
@@ -395,18 +427,28 @@ mod tests {
     async fn a_read_filtered_on_one_run_returns_that_runs_rows_alone() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = Root::new(tmp.path());
-        write_run(&root, day(6), &run("abc"), &scored(3))
-            .await
-            .expect("a written run");
-        write_run(&root, day(7), &run("def"), &scored(2))
-            .await
-            .expect("another written run");
+        write_run(
+            &root,
+            day(6),
+            &run("00000000-0000-0000-0000-000000000001"),
+            &scored(3),
+        )
+        .await
+        .expect("a written run");
+        write_run(
+            &root,
+            day(7),
+            &run("00000000-0000-0000-0000-000000000002"),
+            &scored(2),
+        )
+        .await
+        .expect("another written run");
 
         let mut rows = Query::new(root)
             .read::<Scored>()
             .await
             .expect("a read of the runs")
-            .filter(col(RUN_ID).eq(lit("abc")))
+            .filter(col(RUN_ID).eq(lit("00000000-0000-0000-0000-000000000001")))
             .expect("a filter")
             .rows()
             .await
@@ -421,15 +463,19 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = Root::new(tmp.path());
 
-        let path = write_run(&root, day(6), &run("abc"), &scored(3))
-            .await
-            .expect("a written run");
+        let path = write_run(
+            &root,
+            day(6),
+            &run("00000000-0000-0000-0000-000000000001"),
+            &scored(3),
+        )
+        .await
+        .expect("a written run");
 
         assert!(
-            path.starts_with(
-                tmp.path()
-                    .join("gold/scored/run_date=2026-11-06/run_id=abc")
-            ),
+            path.starts_with(tmp.path().join(
+                "gold/scored/run_date=2026-11-06/run_id=00000000-0000-0000-0000-000000000001"
+            )),
             "{}",
             path.display()
         );
@@ -441,12 +487,22 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = Root::new(tmp.path());
 
-        write_run(&root, day(6), &run("abc"), &scored(1))
-            .await
-            .expect("a written run");
-        write_run(&root, day(6), &run("def"), &scored(2))
-            .await
-            .expect("a written run");
+        write_run(
+            &root,
+            day(6),
+            &run("00000000-0000-0000-0000-000000000001"),
+            &scored(1),
+        )
+        .await
+        .expect("a written run");
+        write_run(
+            &root,
+            day(6),
+            &run("00000000-0000-0000-0000-000000000002"),
+            &scored(2),
+        )
+        .await
+        .expect("a written run");
 
         assert_eq!(read_back(tmp.path()).await.len(), 3);
     }
@@ -455,17 +511,28 @@ mod tests {
     async fn a_run_written_again_is_refused_and_its_rows_are_kept() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = Root::new(tmp.path());
-        write_run(&root, day(6), &run("abc"), &scored(2))
-            .await
-            .expect("a written run");
+        write_run(
+            &root,
+            day(6),
+            &run("00000000-0000-0000-0000-000000000001"),
+            &scored(2),
+        )
+        .await
+        .expect("a written run");
 
-        let refused = write_run(&root, day(6), &run("abc"), &scored(5)).await;
+        let refused = write_run(
+            &root,
+            day(6),
+            &run("00000000-0000-0000-0000-000000000001"),
+            &scored(5),
+        )
+        .await;
 
         assert!(
             matches!(
                 &refused,
                 Err(RunError::Written { run_id, written_on, .. })
-                    if *run_id == run("abc") && written_on == "2026-11-06"
+                    if *run_id == run("00000000-0000-0000-0000-000000000001") && written_on == "2026-11-06"
             ),
             "{refused:?}"
         );
@@ -476,11 +543,22 @@ mod tests {
     async fn a_run_written_again_on_another_date_is_refused() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = Root::new(tmp.path());
-        write_run(&root, day(6), &run("abc"), &scored(2))
-            .await
-            .expect("a written run");
+        write_run(
+            &root,
+            day(6),
+            &run("00000000-0000-0000-0000-000000000001"),
+            &scored(2),
+        )
+        .await
+        .expect("a written run");
 
-        let refused = write_run(&root, day(7), &run("abc"), &scored(2)).await;
+        let refused = write_run(
+            &root,
+            day(7),
+            &run("00000000-0000-0000-0000-000000000001"),
+            &scored(2),
+        )
+        .await;
 
         assert!(
             matches!(
@@ -496,9 +574,14 @@ mod tests {
         let tmp = tempfile::tempdir().expect("a temporary directory");
         let root = Root::new(tmp.path());
 
-        let path = write_run(&root, day(6), &run("abc"), &Vec::<Scored>::new())
-            .await
-            .expect("a written run");
+        let path = write_run(
+            &root,
+            day(6),
+            &run("00000000-0000-0000-0000-000000000001"),
+            &Vec::<Scored>::new(),
+        )
+        .await
+        .expect("a written run");
 
         assert!(path.is_file(), "{}", path.display());
         assert!(read_back(tmp.path()).await.is_empty());
@@ -511,7 +594,7 @@ mod tests {
         let refused = write_run(
             &Root::new(tmp.path()),
             day(6),
-            &run("abc"),
+            &run("00000000-0000-0000-0000-000000000001"),
             &[Exported::example()],
         )
         .await;
@@ -529,10 +612,18 @@ mod tests {
     }
 
     #[test]
-    fn a_run_id_that_cannot_name_a_partition_is_refused() {
+    fn a_run_id_that_is_not_a_uuid_is_refused() {
         assert!(RunId::new("a/b").is_err());
         assert!(RunId::new("").is_err());
-        assert!(RunId::new("a=b").is_err());
+        assert!(RunId::new("abc").is_err());
+    }
+
+    #[test]
+    fn a_run_id_reads_as_its_uuids_text() {
+        assert_eq!(
+            run("00000000-0000-0000-0000-000000000001").to_string(),
+            "00000000-0000-0000-0000-000000000001"
+        );
     }
 
     #[derive(Debug, PartialEq, Deserialize)]
@@ -544,12 +635,22 @@ mod tests {
 
     async fn two_runs(dir: &Path) -> Root {
         let root = Root::new(dir);
-        write_run(&root, day(6), &run("abc"), &scored(2))
-            .await
-            .expect("a written run");
-        write_run(&root, day(7), &run("def"), &scored(1))
-            .await
-            .expect("a written run");
+        write_run(
+            &root,
+            day(6),
+            &run("00000000-0000-0000-0000-000000000001"),
+            &scored(2),
+        )
+        .await
+        .expect("a written run");
+        write_run(
+            &root,
+            day(7),
+            &run("00000000-0000-0000-0000-000000000002"),
+            &scored(1),
+        )
+        .await
+        .expect("a written run");
         root
     }
 
@@ -575,12 +676,12 @@ mod tests {
             [
                 RunCount {
                     run_date: "2026-11-06".to_string(),
-                    run_id: "abc".to_string(),
+                    run_id: "00000000-0000-0000-0000-000000000001".to_string(),
                     rows: 2
                 },
                 RunCount {
                     run_date: "2026-11-07".to_string(),
-                    run_id: "def".to_string(),
+                    run_id: "00000000-0000-0000-0000-000000000002".to_string(),
                     rows: 1
                 },
             ]
@@ -597,7 +698,7 @@ mod tests {
             .expect("a registered dataset");
 
         let picked: Vec<Scored> = query
-            .rows("SELECT notification_id, score FROM scored WHERE run_id = 'def'")
+            .rows("SELECT notification_id, score FROM scored WHERE run_id = '00000000-0000-0000-0000-000000000002'")
             .await
             .expect("the run's rows");
 

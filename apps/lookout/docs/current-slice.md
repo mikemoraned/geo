@@ -38,6 +38,12 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
   call becomes `?` into its boxed error. An allow with a reason remains only for a call that
   cannot fail. Library code follows the Target: a `thiserror` variant where the failure can
   happen, an allow with a reason where it cannot.
+- **A call that cannot fail is an `unwrap` under an allow whose reason says why.** Confirmed
+  19 November 2026. `#[allow(clippy::unwrap_used, reason = "...")]` states the reason once. An
+  `expect` under an allow states it twice, once in the reason and once in the message. Allowing
+  `expect_used` everywhere, so that a message justifies the call, loses: Clippy would stop
+  flagging a fallible `expect`. The cost is a panic without a message if the reason ever turns
+  out wrong, and its file and line lead to the reason.
 - **A value built from an input already typed comes through `From`.** Confirmed 19 November 2026.
   The signature then states that the call cannot fail, and the one `expect` left sits inside the
   impl, with its allow. `domain` already does this in `From<Uuid> for DeviceId` and
@@ -46,6 +52,28 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
   A `From` impl also compiles on `esp-1.98.1.0`. `PolylineId::of` and `ExtractId::at` already
   return `Self`, so `Uuid` to `GersId` is the one conversion to add. A constant, such as a value
   in `Row::example`, keeps its allow.
+- **A device id holds a UUID.** Confirmed 20 November 2026. The browser mints each id as a UUID,
+  and the M5 board sends none, so `DeviceId` holds a `Uuid`, as `GersId` does, and `From<Uuid>`
+  cannot fail. The narrower check changes the declarations of `gps_reading_v2`,
+  `accel_reading_v2`, `device_session_v2`, `session_v3`, `session_sample_v3`, and
+  `session_crossing_v3`, and keeps their versions under the narrowing case
+  [medallion.md](medallion.md#dataset-versions) adds. On 20 November 2026 the store held five
+  distinct device ids across those datasets, every one a UUID. Keeping a string id with an
+  unchecked `From<Uuid>` would have kept the declarations unchanged, but left the id wider than
+  what a device sends.
+- **A polyline id holds a UUID.** Confirmed 20 November 2026. `PolylineId` already accepted only
+  a UUID's text, so holding a `Uuid` accepts the same values, and `PolylineId::of` cannot fail.
+  The declarations of `motis_polyline_v2` and `motis_segment_v3` change only in the check's name,
+  and keep their versions under the first case [medallion.md](medallion.md#dataset-versions)
+  adds. The store's 26,995 polyline ids are all canonical UUID text, so each reads and writes
+  back unchanged.
+- **A Motis source id and a run id hold a UUID.** Confirmed 20 November 2026. Each is minted as a
+  UUID, so `MotisSourceId` and `RunId` hold a `Uuid`, and `From<Uuid>` replaces the `unwrap` in
+  `run_id`. The narrower check changes the declarations of `motis_source_v4`, `motis_segment_v3`,
+  `motis_poll_v2`, `train_segment_v4`, `train_session_v3`, and `train_session_sample_v3`, and keeps
+  their versions under the narrowing case. On 20 November 2026 the store held 8 distinct source
+  ids and 33 run ids, every one a UUID. A run id is a partition value, not a column, so no
+  declaration records it. `write_gold` in `medallion-py` now refuses a run id that is not a UUID.
 - **The shared crates declare `rust-version = "1.98"` until the esp upgrade lands.** `m5plus`
   builds `domain`, `predictor`, `platform-core`, and `m5-core` on `esp-1.98.1.0`, which rejects
   every 1.100 addition. Clippy's `incompatible_msrv`, part of `clippy::all`, then flags a standard
@@ -64,6 +92,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 
 #### Rejected / deferred
 
+- **A session that cannot be empty.** `recorder::Session` holds its samples in a public `Vec`, so
+  `started_at`, `started_from`, and the silver path each allow an `expect` that a session starts
+  from a sample. Only `sessions` builds one, and it always pushes a sample first. A non-empty
+  collection, such as the `nonempty` crate's, would make the type say so. It changes a public
+  type, so it waits for a refactor of its own.
 - **Keeping the checked form.** `EpisodePath` and `Polyline` re-parse text that construction
   already checked, so each carries an allowed `expect`. Holding the parsed states and line instead
   removes the call. It changes the stored type, so it waits for a refactor of its own.
@@ -113,7 +146,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       compiles.
 - [x] Move `predictor::fixtures` to a `test-predictor` crate, and the `predictor` unit tests that
       use it to `crates/predictor/tests/`. Point `platform-core` and `m5-core` at the new crate.
-- [ ] `domain` (9) and `recorder` (7).
+- [x] `domain` (9) and `recorder` (7).
 - [ ] `predictor` (1, once its fixtures move), `motis` (4), and `crossings` (3).
 - [ ] The rest, two or fewer each: `platform/web/core`, `platform/web/bridge`, `platform-core`,
       `medallion-py`, `session_crossings`, `server`, `py-common`, and `platform/m5/core`.

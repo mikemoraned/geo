@@ -48,12 +48,12 @@ impl Row for WaterCrossingRowV2 {
     const UNIQUE: &'static [&'static str] = &["crossing_id", "crossing_compact_id"];
 
     #[allow(
-        clippy::expect_used,
+        clippy::unwrap_used,
         reason = "every value here is a constant its type accepts"
     )]
     fn example() -> Self {
         Self {
-            crossing_id: CrossingId::new("example").expect("a constant crossing id is a name"),
+            crossing_id: CrossingId::new("example").unwrap(),
             crossing_compact_id: CrossingCompactId::new(1),
             overture_water_id: "example".to_string(),
             overture_water_subtype: Some("example".to_string()),

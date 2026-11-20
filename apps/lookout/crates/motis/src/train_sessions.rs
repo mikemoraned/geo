@@ -90,7 +90,7 @@ pub async fn derive_train_sessions(
     let mut by_trip: HashMap<(MotisSourceId, TripId), Vec<ingest::Leg>> = HashMap::new();
     for leg in captured.legs {
         by_trip
-            .entry((leg.segment.source_id.clone(), leg.segment.trip_id.clone()))
+            .entry((leg.segment.source_id, leg.segment.trip_id.clone()))
             .or_default()
             .push(leg);
     }
@@ -103,13 +103,10 @@ pub async fn derive_train_sessions(
     };
     let mut trips = Vec::with_capacity(by_trip.len());
     for ((source_id, trip_id), legs) in by_trip {
-        let source_label =
-            labels
-                .get(&source_id)
-                .cloned()
-                .ok_or_else(|| IngestError::UnregisteredSource {
-                    source_id: source_id.clone(),
-                })?;
+        let source_label = labels
+            .get(&source_id)
+            .cloned()
+            .ok_or_else(|| IngestError::UnregisteredSource { source_id })?;
         match normalised(source_id, source_label, trip_id, &legs, &shapes)? {
             Normalised::Trip(trip) => trips.push(trip),
             Normalised::Dropped(Drop::Shapeless) => outcome.dropped.shapeless += 1,
@@ -283,7 +280,7 @@ fn session_of(
         .map(|(seq, ((sample, geometry), implied_speed_mps))| {
             let row = TrainSessionSampleRowV3 {
                 session_id: session_id.clone(),
-                source_id: trip.source_id.clone(),
+                source_id: trip.source_id,
                 trip_id: trip.trip_id.clone(),
                 t: sample.t,
                 seq: u32::try_from(seq).map_err(|_| too_many())?,
@@ -306,7 +303,7 @@ fn session_of(
     let path = path_through(placed.iter().map(|sample| sample.position));
     let row = TrainSessionRowV3 {
         session_id,
-        source_id: trip.source_id.clone(),
+        source_id: trip.source_id,
         source_label: trip.source_label.clone(),
         trip_id: trip.trip_id.clone(),
         started_at: first.t,

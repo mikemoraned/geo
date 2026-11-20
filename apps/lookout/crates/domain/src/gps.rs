@@ -97,7 +97,7 @@ fn held<P: Precision>(value: Option<f64>) -> Option<P> {
 }
 
 fn reported<P: Precision>(value: P) -> f64 {
-    value.to_f64().expect("a degree is a number")
+    value.into()
 }
 
 #[derive(Serialize, Deserialize)]

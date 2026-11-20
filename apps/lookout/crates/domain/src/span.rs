@@ -50,21 +50,29 @@ impl Span {
     }
 
     pub fn time_delta(self) -> TimeDelta {
-        TimeDelta::from_std(self.0).expect("a span fits in a TimeDelta, as Span::new checked")
+        #[allow(
+            clippy::unwrap_used,
+            reason = "Span::new checked that a span fits in a TimeDelta"
+        )]
+        TimeDelta::from_std(self.0).unwrap()
     }
 
     pub fn age(self) -> Age {
-        Age::new(self.time_delta()).expect("a span is longer than zero, as Span::new checked")
+        #[allow(
+            clippy::unwrap_used,
+            reason = "Span::new checked that a span is longer than zero"
+        )]
+        Age::new(self.time_delta()).unwrap()
     }
 }
 
 impl From<Age> for Span {
+    #[allow(
+        clippy::unwrap_used,
+        reason = "an age is longer than zero, so it is a std duration"
+    )]
     fn from(age: Age) -> Self {
-        Self(
-            age.span()
-                .to_std()
-                .expect("an age is longer than zero, so it is a std duration"),
-        )
+        Self(age.span().to_std().unwrap())
     }
 }
 

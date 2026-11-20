@@ -49,7 +49,7 @@ impl Row for TrainSessionRowV3 {
     const UNIQUE: &'static [&'static str] = &["session_id"];
 
     #[allow(
-        clippy::expect_used,
+        clippy::unwrap_used,
         reason = "every value here is a constant its type accepts"
     )]
     fn example() -> Self {
@@ -63,7 +63,7 @@ impl Row for TrainSessionRowV3 {
             started_at: DateTime::UNIX_EPOCH,
             ended_at: DateTime::UNIX_EPOCH,
             sample_count: 1,
-            realtime_percentage: Percentage::new(100.0).expect("100 is a percentage"),
+            realtime_percentage: Percentage::new(100.0).unwrap(),
             bbox: Bbox::of(Rect::new((0.0, 0.0), (1.0, 1.0))),
         }
     }
@@ -155,8 +155,8 @@ mod tests {
     use crate::testing::{column, column_names};
     use crate::{SessionRowV3, SessionSampleRowV3};
 
-    fn source(id: &str) -> MotisSourceId {
-        serde_json::from_value(serde_json::json!(id)).expect("a source id")
+    fn source(name: &str) -> MotisSourceId {
+        MotisSourceId::from(Uuid::new_v5(&Uuid::nil(), name.as_bytes()))
     }
 
     fn trip(id: &str) -> TripId {
@@ -197,7 +197,7 @@ mod tests {
     fn an_id_never_changes_once_written() {
         assert_eq!(
             train_session_id(&source("source-a"), &trip("trip-a")).to_string(),
-            "8fe37996-52d2-5c19-b91d-dd62f0980498"
+            "1a4c644a-4020-5152-a593-379fc3de0257"
         );
     }
 
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn an_id_cannot_be_mistaken_for_a_recorded_sessions() {
-        let device = domain::DeviceId::new("source-a").expect("a device id");
+        let device = domain::DeviceId::from(Uuid::from_u128(1));
         let started_at = DateTime::from_timestamp_millis(0).expect("an instant");
 
         assert_ne!(

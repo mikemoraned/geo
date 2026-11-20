@@ -20,7 +20,7 @@ columns:
     data_type: LargeUtf8
     nullable: false
     checks:
-      device_id_present: fed047f0f3ef93b493d7b4d19c13ef35ec41e4568eea51aa73cc394a38a655ce
+      "DeviceId::new": 33863387b3e613ce0e53bc4c4e6ee8be2be6cc7c1fe8ec718b09c0c9da2c5337
   - name: crossed_at
     data_type: "Timestamp(ms, \"UTC\")"
     nullable: true

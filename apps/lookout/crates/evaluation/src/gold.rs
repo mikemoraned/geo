@@ -224,7 +224,7 @@ async fn resume(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<Begun
     let row = read_run_row(root, run_id).await?;
     if row.code_version != code.as_str() {
         return Err(GoldError::CodeChanged {
-            run_id: run_id.clone(),
+            run_id: *run_id,
             begun: row.code_version,
             current: code.as_str().to_string(),
         });
@@ -235,7 +235,7 @@ async fn resume(root: &Root, run_id: &RunId, code: &CodeVersion) -> Result<Begun
         .changed_since(&Fingerprints::from(row.fingerprints.clone()));
     if !changed.is_empty() {
         return Err(GoldError::DataChanged {
-            run_id: run_id.clone(),
+            run_id: *run_id,
             datasets: changed,
         });
     }

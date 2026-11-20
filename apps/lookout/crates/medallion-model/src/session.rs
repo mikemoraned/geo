@@ -155,7 +155,7 @@ mod tests {
 
     #[test]
     fn an_id_is_the_same_for_the_same_device_and_start() {
-        let device = DeviceId::new("device-a").expect("device id");
+        let device = DeviceId::from(uuid::Uuid::from_u128(1));
         let started_at = DateTime::from_timestamp_millis(1_700_000_000_000).expect("instant");
 
         assert_eq!(
@@ -166,8 +166,8 @@ mod tests {
 
     #[test]
     fn an_id_differs_by_device_and_by_start() {
-        let a = DeviceId::new("device-a").expect("device id");
-        let b = DeviceId::new("device-b").expect("device id");
+        let a = DeviceId::from(uuid::Uuid::from_u128(1));
+        let b = DeviceId::from(uuid::Uuid::from_u128(2));
         let started_at = DateTime::from_timestamp_millis(1_700_000_000_000).expect("instant");
         let later = started_at + chrono::Duration::milliseconds(1);
 
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn a_derived_id_could_name_a_partition() {
-        let id = SessionId::of(&DeviceId::new("device-a").expect("device id"), Utc::now());
+        let id = SessionId::of(&DeviceId::from(uuid::Uuid::from_u128(1)), Utc::now());
 
         assert_eq!(SessionId::new(id.to_string()).expect("valid id"), id);
     }

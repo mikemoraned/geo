@@ -43,10 +43,12 @@ impl Gap {
         Ok(Self(silence))
     }
 
+    #[allow(
+        clippy::unwrap_used,
+        reason = "Gap::new checked that a gap fits in a u32 of seconds"
+    )]
     pub fn as_seconds(self) -> u32 {
-        self.0
-            .seconds()
-            .expect("a gap fits in a u32 of seconds, as Gap::new checked")
+        self.0.seconds().unwrap()
     }
 
     fn separates(self, interval: Duration) -> bool {
@@ -69,10 +71,12 @@ impl Lead {
         Ok(Self(before))
     }
 
+    #[allow(
+        clippy::unwrap_used,
+        reason = "Lead::new checked that a lead fits in a u32 of seconds"
+    )]
     pub fn as_seconds(self) -> u32 {
-        self.0
-            .seconds()
-            .expect("a lead fits in a u32 of seconds, as Lead::new checked")
+        self.0.seconds().unwrap()
     }
 
     fn reaches(self, announced_at: DateTime<Utc>, started_at: DateTime<Utc>) -> bool {
@@ -116,18 +120,20 @@ pub struct Session {
 }
 
 impl Session {
+    #[allow(
+        clippy::unwrap_used,
+        reason = "a session is built from the sample that starts it"
+    )]
     pub fn started_at(&self) -> DateTime<Utc> {
-        self.samples
-            .first()
-            .expect("a session is built from the sample that starts it")
-            .t
+        self.samples.first().unwrap().t
     }
 
+    #[allow(
+        clippy::unwrap_used,
+        reason = "a session is built from the sample that starts it"
+    )]
     pub fn started_from(&self) -> Point<f64> {
-        let first = self
-            .samples
-            .first()
-            .expect("a session is built from the sample that starts it");
+        let first = self.samples.first().unwrap();
         Point::new(first.lon, first.lat)
     }
 
@@ -205,18 +211,18 @@ fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap, lead: Lead) ->
                     .unwrap_or_default();
                 samples.push(sample.clone());
                 sessions.push(Session {
-                    device_id: sample.device_id.clone(),
+                    device_id: sample.device_id,
                     started_by,
                     gap,
                     lead,
                     samples,
                 });
             }
-            None => sessions
-                .last_mut()
-                .expect("a sample that starts no session continues one")
-                .samples
-                .push(sample.clone()),
+            #[allow(
+                clippy::unwrap_used,
+                reason = "the first sample starts a session, so a later one has a session to continue"
+            )]
+            None => sessions.last_mut().unwrap().samples.push(sample.clone()),
         }
     }
 
@@ -546,7 +552,7 @@ mod tests {
 
         let devices: Vec<(DeviceId, usize)> = sessions
             .iter()
-            .map(|session| (session.device_id.clone(), session.samples.len()))
+            .map(|session| (session.device_id, session.samples.len()))
             .collect();
         assert_eq!(
             devices,

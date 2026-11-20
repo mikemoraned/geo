@@ -32,7 +32,10 @@ async fn a_range_of_tiles_is_served_as_those_bytes() {
 
     assert_eq!(reply.status, StatusCode::PARTIAL_CONTENT);
     assert_eq!(
-        reply.headers.get(header::CONTENT_RANGE).map(|value| value.as_bytes()),
+        reply
+            .headers
+            .get(header::CONTENT_RANGE)
+            .map(|value| value.as_bytes()),
         Some(b"bytes 16-23/4096".as_slice()),
     );
     assert_eq!(reply.body.as_ref(), [16, 17, 18, 19, 20, 21, 22, 23]);

@@ -92,7 +92,7 @@ impl SegmentLog {
     ) -> Result<usize, SegmentLogError> {
         let rows = segments
             .iter()
-            .map(|segment| poll_row(self.source_id.clone(), captured_at, segment, details))
+            .map(|segment| poll_row(self.source_id, captured_at, segment, details))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(self

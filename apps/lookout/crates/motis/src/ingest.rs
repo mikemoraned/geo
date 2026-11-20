@@ -271,7 +271,7 @@ impl<'a, C: Countries> Shapes<'a, C> {
                 let line = projectors
                     .for_country(*country)?
                     .zoned(LineString::clone(line))?;
-                zoned.insert(polyline_id.clone(), line);
+                zoned.insert(*polyline_id, line);
             }
         }
         Ok(zoned)
@@ -282,7 +282,7 @@ impl<'a, C: Countries> Shapes<'a, C> {
             self.by_polyline
                 .get(&leg.polyline_id)
                 .ok_or_else(|| IngestError::PolylineLacking {
-                    polyline_id: leg.polyline_id.clone(),
+                    polyline_id: leg.polyline_id,
                 })?;
         if let Some(placed) = placed {
             return Ok(Shape::Captured(placed.clone()));

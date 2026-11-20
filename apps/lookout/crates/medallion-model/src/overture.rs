@@ -34,11 +34,10 @@ fn partition_value(id: &str) -> Result<(), medallion::PathError> {
 impl ExtractId {
     pub fn at(at: DateTime<Utc>) -> Self {
         #[allow(
-            clippy::expect_used,
+            clippy::unwrap_used,
             reason = "a compact UTC instant holds only digits and letters"
         )]
-        Self::new(at.format(COMPACT_UTC).to_string())
-            .expect("a compact UTC instant holds only digits and letters")
+        Self::new(at.format(COMPACT_UTC).to_string()).unwrap()
     }
 
     pub fn new(id: impl Into<String>) -> Result<Self, medallion::PathError> {
@@ -87,10 +86,10 @@ pub fn division_id(country: Country) -> GersId {
         Country::UnitedKingdom => "ce3429b1-d5c6-4763-91e7-0107e26d613e",
     };
     #[allow(
-        clippy::expect_used,
+        clippy::unwrap_used,
         reason = "each id above is a constant, checked by the tests below"
     )]
-    GersId::new(id).expect("a division id written here is a constant, checked by the tests below")
+    GersId::new(id).unwrap()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -132,15 +131,14 @@ impl Row for ExtractManifestRowV3 {
     const INSTANTS: &'static [&'static str] = &["extracted_at"];
 
     #[allow(
-        clippy::expect_used,
+        clippy::unwrap_used,
         reason = "every value here is a constant its type accepts"
     )]
     fn example() -> Self {
         Self {
             extract_id: "example".to_string(),
             extracted_at: DateTime::UNIX_EPOCH,
-            overture_release: OvertureRelease::new("2026-09-23.1")
-                .expect("a constant release follows Overture's naming"),
+            overture_release: OvertureRelease::new("2026-09-23.1").unwrap(),
             country: "DE".to_string(),
             min_lon: 0.0,
             min_lat: 0.0,

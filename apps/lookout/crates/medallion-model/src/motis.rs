@@ -1,3 +1,6 @@
+use std::fmt::{self, Display};
+use std::str::FromStr;
+
 use chrono::{DateTime, NaiveDate, Utc};
 use domain::TrainNumber;
 use geo_types::{Coord, LineString};
@@ -5,7 +8,7 @@ use hashfn::hashfn;
 use medallion::{DatasetSpec, Dated, Geometry, Row, layers};
 use nutype::nutype;
 use polyline::errors::PolylineError;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use strum::{AsRefStr, EnumIter, EnumString};
 use uuid::Uuid;
 
@@ -162,42 +165,67 @@ impl Polyline {
     pub fn line(&self) -> LineString<f64> {
         let text: &str = self.as_ref();
         #[allow(
-            clippy::expect_used,
+            clippy::unwrap_used,
             reason = "construction and deserialisation both checked that the text decodes"
         )]
-        polyline::decode_polyline(text, POLYLINE_PRECISION).expect("a polyline decodes")
+        polyline::decode_polyline(text, POLYLINE_PRECISION).unwrap()
     }
 }
 
-#[nutype(
-    validate(with = polyline_id_is_a_uuid, error = NotAPolylineId),
-    derive(
-        Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Display, FromStr, TryFrom, Into, AsRef,
-        Serialize, Deserialize
-    )
-)]
-pub struct PolylineId(String);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
+#[serde(try_from = "String")]
+pub struct PolylineId(Uuid);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("a polyline id is a UUID")]
 pub struct NotAPolylineId;
 
-#[hashfn]
-pub fn polyline_id_is_a_uuid(id: &str) -> Result<(), NotAPolylineId> {
-    Uuid::parse_str(id).map(|_| ()).map_err(|_| NotAPolylineId)
-}
-
 impl PolylineId {
+    #[hashfn]
     pub fn new(id: impl Into<String>) -> Result<Self, NotAPolylineId> {
-        Self::try_new(id)
+        Uuid::parse_str(&id.into())
+            .map(Self)
+            .map_err(|_| NotAPolylineId)
     }
 
     pub fn of(polyline: &Polyline) -> Self {
         let namespace = Uuid::new_v5(&Uuid::nil(), b"MOTIS_POLYLINE_NAMESPACE");
         let text: &str = polyline.as_ref();
-        #[allow(clippy::expect_used, reason = "a formatted UUID parses as a UUID")]
-        Self::try_new(Uuid::new_v5(&namespace, text.as_bytes()).to_string())
-            .expect("a formatted UUID parses as a UUID")
+        Self(Uuid::new_v5(&namespace, text.as_bytes()))
+    }
+}
+
+impl FromStr for PolylineId {
+    type Err = NotAPolylineId;
+
+    fn from_str(id: &str) -> Result<Self, Self::Err> {
+        Self::new(id)
+    }
+}
+
+impl TryFrom<String> for PolylineId {
+    type Error = NotAPolylineId;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Self::new(id)
+    }
+}
+
+impl From<PolylineId> for String {
+    fn from(id: PolylineId) -> Self {
+        id.to_string()
+    }
+}
+
+impl Serialize for PolylineId {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_newtype_struct("PolylineId", &self.to_string())
+    }
+}
+
+impl Display for PolylineId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -337,7 +365,7 @@ impl Row for MotisPollRowV2 {
     ];
 
     #[allow(
-        clippy::expect_used,
+        clippy::unwrap_used,
         reason = "every value here is a constant its type accepts"
     )]
     fn example() -> Self {
@@ -362,8 +390,7 @@ impl Row for MotisPollRowV2 {
             scheduled_departure: DateTime::UNIX_EPOCH,
             scheduled_arrival: DateTime::UNIX_EPOCH,
             realtime: false,
-            polyline: Polyline::from_points([(2.0, 1.0)])
-                .expect("a constant point is on the globe"),
+            polyline: Polyline::from_points([(2.0, 1.0)]).unwrap(),
         }
     }
 }
@@ -416,20 +443,20 @@ impl Row for TrainSegmentRowV4 {
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
 
     #[allow(
-        clippy::expect_used,
+        clippy::unwrap_used,
         reason = "every value here is a constant its type accepts"
     )]
     fn example() -> Self {
         Self {
             source_id: MotisSourceRowV4::example().source_id,
-            trip_id: TripId::new("example").expect("a trip id"),
+            trip_id: TripId::new("example").unwrap(),
             route_name: Some("example".to_string()),
             train_number: TrainNumber::from_gtfs("1"),
-            agency_id: Some(AgencyId::new("example").expect("an agency id")),
+            agency_id: Some(AgencyId::new("example").unwrap()),
             agency_name: Some("example".to_string()),
             mode: RailMode::HighspeedRail,
             realtime: false,
-            from_stop_id: Some(StopId::new("example").expect("a stop id")),
+            from_stop_id: Some(StopId::new("example").unwrap()),
             departure: DateTime::UNIX_EPOCH,
             arrival: DateTime::UNIX_EPOCH,
         }

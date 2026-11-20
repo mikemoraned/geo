@@ -237,7 +237,10 @@ mod tests {
             USER_AGENT.contains(env!("CARGO_PKG_VERSION")),
             "{USER_AGENT}"
         );
-        assert!(USER_AGENT.contains(env!("BUILD_CODE_VERSION")), "{USER_AGENT}");
+        assert!(
+            USER_AGENT.contains(env!("BUILD_CODE_VERSION")),
+            "{USER_AGENT}"
+        );
         assert!(
             USER_AGENT.contains("https://github.com/mikemoraned/geo"),
             "{USER_AGENT}"

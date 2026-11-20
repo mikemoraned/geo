@@ -80,10 +80,10 @@ impl EpisodePath {
 
     pub fn states(&self) -> Vec<StateKind> {
         #[allow(
-            clippy::expect_used,
+            clippy::unwrap_used,
             reason = "construction checked that every name parses"
         )]
-        states_named(self.as_ref()).expect("a path names only states")
+        states_named(self.as_ref()).unwrap()
     }
 }
 
@@ -101,7 +101,7 @@ impl Row for EvaluationEpisodeRowV1 {
     const DATASET: DatasetSpec<Self::Layer> = EVALUATION_EPISODE_V1;
 
     #[allow(
-        clippy::expect_used,
+        clippy::unwrap_used,
         reason = "every value here is a constant its type accepts"
     )]
     fn example() -> Self {
@@ -109,8 +109,7 @@ impl Row for EvaluationEpisodeRowV1 {
             session_index: 0,
             crossing_compact_id: CrossingCompactId::new(1),
             start_offset_ms: 0,
-            path: EpisodePath::of(&[StateKind::CandidatePass, StateKind::OutOfReach])
-                .expect("a candidate leaving reach is a path"),
+            path: EpisodePath::of(&[StateKind::CandidatePass, StateKind::OutOfReach]).unwrap(),
             gaps_ms: vec![10_000],
         }
     }

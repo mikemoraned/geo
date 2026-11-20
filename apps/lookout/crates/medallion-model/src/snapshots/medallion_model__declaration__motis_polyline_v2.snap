@@ -10,7 +10,7 @@ columns:
     data_type: LargeUtf8
     nullable: false
     checks:
-      polyline_id_is_a_uuid: a54698f558aca3dd7408db06439061fa629129143e11755f6ce2d68d430ae3c0
+      "PolylineId::new": 51c9d7be3529af1aa541b46b9bbe5e79fbfd5e08283d23366791cd4157a6c7cf
   - name: polyline
     data_type: LargeUtf8
     nullable: false
