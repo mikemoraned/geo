@@ -340,7 +340,7 @@ impl Row for EvaluationRunRowV6 {
 
     #[allow(
         clippy::unwrap_used,
-        reason = "every value here is a constant its type accepts"
+        reason = "each value here is a constant that its type accepts"
     )]
     fn example() -> Self {
         Self {

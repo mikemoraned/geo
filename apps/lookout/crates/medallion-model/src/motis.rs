@@ -166,7 +166,7 @@ impl Polyline {
         let text: &str = self.as_ref();
         #[allow(
             clippy::unwrap_used,
-            reason = "construction and deserialisation both checked that the text decodes"
+            reason = "construction and deserialisation both refuse text that does not decode"
         )]
         polyline::decode_polyline(text, POLYLINE_PRECISION).unwrap()
     }
@@ -366,7 +366,7 @@ impl Row for MotisPollRowV2 {
 
     #[allow(
         clippy::unwrap_used,
-        reason = "every value here is a constant its type accepts"
+        reason = "each value here is a constant that its type accepts"
     )]
     fn example() -> Self {
         Self {
@@ -444,7 +444,7 @@ impl Row for TrainSegmentRowV4 {
 
     #[allow(
         clippy::unwrap_used,
-        reason = "every value here is a constant its type accepts"
+        reason = "each value here is a constant that its type accepts"
     )]
     fn example() -> Self {
         Self {

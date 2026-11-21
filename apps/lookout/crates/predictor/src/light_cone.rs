@@ -75,11 +75,9 @@ fn within_half_width<P: Precision>(
     bearing: P,
     half_width: HalfWidth,
 ) -> bool {
-    let turn = (bearing - velocity.heading_degrees).to_f64().map(|turn| {
-        let turn = turn.rem_euclid(360.0);
-        turn.min(360.0 - turn)
-    });
-    turn.is_some_and(|turn| turn <= half_width.as_degrees())
+    let turn: f64 = (bearing - velocity.heading_degrees).into();
+    let turn = turn.rem_euclid(360.0);
+    turn.min(360.0 - turn) <= half_width.as_degrees()
 }
 
 impl<P: Precision, C: Crossings<P>, V: VelocityEstimator<P>> Predict<P> for LightCone<P, C, V> {

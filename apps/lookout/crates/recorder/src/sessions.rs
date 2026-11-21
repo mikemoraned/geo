@@ -45,7 +45,7 @@ impl Gap {
 
     #[allow(
         clippy::unwrap_used,
-        reason = "Gap::new checked that a gap fits in a u32 of seconds"
+        reason = "Gap::new refuses a gap longer than a u32 of seconds holds"
     )]
     pub fn as_seconds(self) -> u32 {
         self.0.seconds().unwrap()
@@ -73,7 +73,7 @@ impl Lead {
 
     #[allow(
         clippy::unwrap_used,
-        reason = "Lead::new checked that a lead fits in a u32 of seconds"
+        reason = "Lead::new refuses a lead longer than a u32 of seconds holds"
     )]
     pub fn as_seconds(self) -> u32 {
         self.0.seconds().unwrap()
@@ -122,7 +122,7 @@ pub struct Session {
 impl Session {
     #[allow(
         clippy::unwrap_used,
-        reason = "a session is built from the sample that starts it"
+        reason = "a session always holds the sample that starts it"
     )]
     pub fn started_at(&self) -> DateTime<Utc> {
         self.samples.first().unwrap().t
@@ -130,7 +130,7 @@ impl Session {
 
     #[allow(
         clippy::unwrap_used,
-        reason = "a session is built from the sample that starts it"
+        reason = "a session always holds the sample that starts it"
     )]
     pub fn started_from(&self) -> Point<f64> {
         let first = self.samples.first().unwrap();
@@ -220,7 +220,7 @@ fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap, lead: Lead) ->
             }
             #[allow(
                 clippy::unwrap_used,
-                reason = "the first sample starts a session, so a later one has a session to continue"
+                reason = "the first sample starts a session, so every later sample has one to continue"
             )]
             None => sessions.last_mut().unwrap().samples.push(sample.clone()),
         }

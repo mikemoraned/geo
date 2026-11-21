@@ -141,9 +141,7 @@ impl<P: Precision, C: Crossings<P>, V: VelocityEstimator<P>> CrowFlies<P, C, V> 
 }
 
 pub(crate) fn metres<P: Precision>(radius: Radius) -> P {
-    // Infallible: `from_f64` only declines a value the target cannot represent, and a radius in
-    // metres is an ordinary magnitude in any float.
-    P::from_f64(radius.as_metres()).expect("a radius fits in any float")
+    P::from_f64_rounded(radius.as_metres())
 }
 
 pub(crate) fn arrives_within(
@@ -162,7 +160,8 @@ pub(crate) fn arrival<P: Precision>(
     if speed_mps <= P::zero() {
         return None;
     }
-    let milliseconds = (metres / speed_mps).to_f64()? * 1_000.0;
+    let seconds: f64 = (metres / speed_mps).into();
+    let milliseconds = seconds * 1_000.0;
     at.checked_add_signed(TimeDelta::try_milliseconds(milliseconds as i64)?)
 }
 

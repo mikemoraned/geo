@@ -217,8 +217,8 @@ pub(crate) struct PlacedLine {
 }
 
 impl PlacedLine {
-    fn of(line: LineString<f64>, countries: &impl Countries) -> Self {
-        let country = countries.containing(starts_from(&line));
+    fn of(line: LineString<f64>, start: Point<f64>, countries: &impl Countries) -> Self {
+        let country = countries.containing(start);
         let covered_by = countries.covering(&line);
         Self {
             line: Arc::new(line),
@@ -245,8 +245,8 @@ impl<'a, C: Countries> Shapes<'a, C> {
             .into_iter()
             .map(|row| {
                 let line = row.polyline.line();
-                let placed =
-                    has_two_distinct_points(&line).then(|| PlacedLine::of(line, countries));
+                let placed = start_of_a_line_with_two_distinct_points(&line)
+                    .map(|start| PlacedLine::of(line, start, countries));
                 (row.polyline_id, placed)
             })
             .collect();
@@ -298,6 +298,7 @@ impl<'a, C: Countries> Shapes<'a, C> {
         Ok(match from != to {
             true => Shape::Corrected(PlacedLine::of(
                 LineString::new(vec![from, to]),
+                Point::from(from),
                 self.countries,
             )),
             false => Shape::Missing,
@@ -305,16 +306,10 @@ impl<'a, C: Countries> Shapes<'a, C> {
     }
 }
 
-fn has_two_distinct_points(line: &LineString<f64>) -> bool {
-    line.0
-        .first()
-        .is_some_and(|first| line.0.iter().any(|coord| coord != first))
-}
-
-fn starts_from(line: &LineString<f64>) -> Point<f64> {
-    line.points()
-        .next()
-        .expect("a polyline decodes to at least one point")
+fn start_of_a_line_with_two_distinct_points(line: &LineString<f64>) -> Option<Point<f64>> {
+    let start = *line.0.first()?;
+    let has_another_point = line.0.iter().any(|&coord| coord != start);
+    has_another_point.then_some(Point::from(start))
 }
 
 #[cfg(test)]

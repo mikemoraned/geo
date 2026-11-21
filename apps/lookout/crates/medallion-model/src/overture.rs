@@ -87,7 +87,7 @@ pub fn division_id(country: Country) -> GersId {
     };
     #[allow(
         clippy::unwrap_used,
-        reason = "each id above is a constant, checked by the tests below"
+        reason = "the tests below parse each constant id above"
     )]
     GersId::new(id).unwrap()
 }
@@ -132,7 +132,7 @@ impl Row for ExtractManifestRowV3 {
 
     #[allow(
         clippy::unwrap_used,
-        reason = "every value here is a constant its type accepts"
+        reason = "each value here is a constant that its type accepts"
     )]
     fn example() -> Self {
         Self {

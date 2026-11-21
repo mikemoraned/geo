@@ -130,7 +130,7 @@ pub fn run_id(row: &EvaluationRunRowV6) -> RunId {
     };
     #[allow(
         clippy::unwrap_used,
-        reason = "a run row's one map is keyed by text, and serde_json refuses only other keys"
+        reason = "serde_json fails only on a map whose keys are not text, and the run row's only map has text keys"
     )]
     let canonical = serde_json::to_vec(&unstarted).unwrap();
     let id = Uuid::new_v5(&namespace(RUN_NAMESPACE), &canonical);

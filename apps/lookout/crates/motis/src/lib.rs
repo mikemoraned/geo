@@ -1,4 +1,8 @@
-#[allow(clippy::doc_lazy_continuation)]
+#[allow(
+    clippy::doc_lazy_continuation,
+    clippy::unwrap_used,
+    reason = "progenitor generates this module"
+)]
 pub mod api {
     include!(concat!(env!("OUT_DIR"), "/api.rs"));
 }

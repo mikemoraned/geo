@@ -52,7 +52,7 @@ impl Span {
     pub fn time_delta(self) -> TimeDelta {
         #[allow(
             clippy::unwrap_used,
-            reason = "Span::new checked that a span fits in a TimeDelta"
+            reason = "Span::new refuses a span that a TimeDelta cannot hold"
         )]
         TimeDelta::from_std(self.0).unwrap()
     }
@@ -60,7 +60,7 @@ impl Span {
     pub fn age(self) -> Age {
         #[allow(
             clippy::unwrap_used,
-            reason = "Span::new checked that a span is longer than zero"
+            reason = "Span::new refuses a span of zero or less"
         )]
         Age::new(self.time_delta()).unwrap()
     }
@@ -69,7 +69,7 @@ impl Span {
 impl From<Age> for Span {
     #[allow(
         clippy::unwrap_used,
-        reason = "an age is longer than zero, so it is a std duration"
+        reason = "an age is always positive, and a std Duration holds any positive span"
     )]
     fn from(age: Age) -> Self {
         Self(age.span().to_std().unwrap())

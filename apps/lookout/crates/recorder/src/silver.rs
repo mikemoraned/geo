@@ -76,7 +76,7 @@ pub async fn write(
 
 #[allow(
     clippy::unwrap_used,
-    reason = "a session is built from the sample that starts it"
+    reason = "a session always holds the sample that starts it"
 )]
 fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::GeoError> {
     let samples = locate(session, projector)?;
@@ -99,7 +99,7 @@ fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::
 
 #[allow(
     clippy::unwrap_used,
-    reason = "a session's path holds at least the sample that starts it"
+    reason = "a session's path always holds the sample that starts it"
 )]
 fn bbox_of(path: &LineString<f64>) -> Bbox {
     Bbox::of(path.bounding_rect().unwrap())

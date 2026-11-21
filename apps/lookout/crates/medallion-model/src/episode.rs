@@ -81,7 +81,7 @@ impl EpisodePath {
     pub fn states(&self) -> Vec<StateKind> {
         #[allow(
             clippy::unwrap_used,
-            reason = "construction checked that every name parses"
+            reason = "the constructor refuses a name that does not parse"
         )]
         states_named(self.as_ref()).unwrap()
     }
@@ -102,7 +102,7 @@ impl Row for EvaluationEpisodeRowV1 {
 
     #[allow(
         clippy::unwrap_used,
-        reason = "every value here is a constant its type accepts"
+        reason = "each value here is a constant that its type accepts"
     )]
     fn example() -> Self {
         Self {

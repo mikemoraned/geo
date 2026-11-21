@@ -27,7 +27,7 @@ pub fn position<P: Precision>(
 }
 
 pub fn degrees<P: Precision>(value: f64) -> P {
-    P::from_degrees(value)
+    P::from_f64_rounded(value)
 }
 
 #[cfg(test)]

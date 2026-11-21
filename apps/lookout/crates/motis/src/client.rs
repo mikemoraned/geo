@@ -57,7 +57,11 @@ pub struct MotisClient {
 
 impl Default for MotisClient {
     fn default() -> Self {
-        Self::new(&Url::parse(DEFAULT_BASE_URL).expect("the default base URL is a URL"))
+        #[allow(
+            clippy::unwrap_used,
+            reason = "DEFAULT_BASE_URL is a fixed, valid URL, and the tests build a client from it"
+        )]
+        Self::new(&Url::parse(DEFAULT_BASE_URL).unwrap())
     }
 }
 
@@ -67,8 +71,12 @@ impl MotisClient {
             .user_agent(USER_AGENT)
             .connect_timeout(TIMEOUT)
             .timeout(TIMEOUT)
-            .build()
-            .expect("a client with only a user agent and timeouts set builds");
+            .build();
+        #[allow(
+            clippy::unwrap_used,
+            reason = "reqwest fails a build only on a bad TLS, proxy, or header setting, and this client sets only a constant user agent and timeouts"
+        )]
+        let http = http.unwrap();
         Self {
             inner: Client::new_with_client(base_url.as_str().trim_end_matches('/'), http),
         }

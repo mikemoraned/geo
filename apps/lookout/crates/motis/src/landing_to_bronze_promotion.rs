@@ -25,8 +25,8 @@ pub enum PromotionError {
     PollNotHeld {
         source_id: MotisSourceId,
         captured_at: DateTime<Utc>,
-        held: usize,
-        landed: usize,
+        held: u64,
+        landed: u64,
     },
     #[error("bronze lacks the polyline {0}, so landing keeps its files")]
     PolylineNotHeld(PolylineId),
@@ -92,7 +92,7 @@ async fn landed_rows(root: &Root) -> Result<Vec<MotisPollRowV2>, QueryError> {
         .await
 }
 
-async fn polls_held(root: &Root) -> Result<HashMap<Poll, usize>, QueryError> {
+async fn polls_held(root: &Root) -> Result<HashMap<Poll, u64>, QueryError> {
     #[derive(Deserialize)]
     struct Held {
         source_id: MotisSourceId,
@@ -117,12 +117,7 @@ async fn polls_held(root: &Root) -> Result<HashMap<Poll, usize>, QueryError> {
         .await?;
     Ok(held
         .into_iter()
-        .map(|held| {
-            (
-                (held.source_id, held.captured_at),
-                usize::try_from(held.row_count).expect("a row count fits in memory"),
-            )
-        })
+        .map(|held| ((held.source_id, held.captured_at), held.row_count))
         .collect())
 }
 
@@ -212,7 +207,7 @@ fn storage_order(
 
 async fn check_bronze_holds(root: &Root, landed: &[MotisPollRowV2]) -> Result<(), PromotionError> {
     let held = polls_held(root).await?;
-    let mut landed_counts: HashMap<Poll, usize> = HashMap::new();
+    let mut landed_counts: HashMap<Poll, u64> = HashMap::new();
     for row in landed {
         *landed_counts.entry(poll_of(row)).or_default() += 1;
     }

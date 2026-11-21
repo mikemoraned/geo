@@ -74,6 +74,8 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
   their versions under the narrowing case. On 20 November 2026 the store held 8 distinct source
   ids and 33 run ids, every one a UUID. A run id is a partition value, not a column, so no
   declaration records it. `write_gold` in `medallion-py` now refuses a run id that is not a UUID.
+- **Generated code allows `unwrap_used` on the module that includes it.** progenitor's Motis client
+  calls `unwrap`, and a regenerated file would lose any edit, so `motis::api` carries the allow.
 - **The shared crates declare `rust-version = "1.98"` until the esp upgrade lands.** `m5plus`
   builds `domain`, `predictor`, `platform-core`, and `m5-core` on `esp-1.98.1.0`, which rejects
   every 1.100 addition. Clippy's `incompatible_msrv`, part of `clippy::all`, then flags a standard
@@ -147,7 +149,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 - [x] Move `predictor::fixtures` to a `test-predictor` crate, and the `predictor` unit tests that
       use it to `crates/predictor/tests/`. Point `platform-core` and `m5-core` at the new crate.
 - [x] `domain` (9) and `recorder` (7).
-- [ ] `predictor` (1, once its fixtures move), `motis` (4), and `crossings` (3).
+- [x] `predictor` (1, once its fixtures move), `motis` (4), and `crossings` (3).
 - [ ] The rest, two or fewer each: `platform/web/core`, `platform/web/bridge`, `platform-core`,
       `medallion-py`, `session_crossings`, `server`, `py-common`, and `platform/m5/core`.
 
@@ -182,6 +184,6 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 
 - [ ] Raise both lints to `deny`, once clippy flags none, and run `just clippy`. It prints
       Cargo's warnings beside Clippy's, and the run clears both.
-- [ ] Name the lints, and the three root-level allows, in `.claude/rules/rust.md`.
+- [x] Name the lints, and the three root-level allows, in `.claude/rules/rust.md`.
 - [x] Delete `docs/2026-11-19-rust-1.100.md`. Done before its tasks, once each carried what it
       needed from the assessment.
