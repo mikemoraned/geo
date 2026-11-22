@@ -2,7 +2,7 @@
 name = "predictor"
 version = "0.1.0"
 edition.workspace = true
-rust-version = "1.98"
+rust-version = "1.100"
 
 [dependencies]
 # Some entries are written out rather than inherited from the workspace: see docs/device.md.

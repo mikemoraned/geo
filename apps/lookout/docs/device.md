@@ -280,6 +280,7 @@ channels, an `Arc`, and a slab entry.
 | 0.19 | 1.90.0 | no BLE | ran indefinitely |
 | 0.20 | 1.90.0 | no BLE, no radio of any kind | double exception on the first event |
 | 0.20 | 1.98.1.0 | indoors, by a window | four double exceptions in 48 minutes, after 3, 12, 6, and 2 minutes, then 20 minutes clean |
+| 0.20 | 1.100.0.0 | a real fix of 6 to 9 satellites, falling back to estimates in the last 10 minutes | 59 minutes, no reboot |
 
 **BLE is not a precondition.** 0.20 faults with nothing but a UART, a display and an ADC on the
 board.
@@ -295,6 +296,8 @@ core's handling of the sentence and nothing else, so drawing is not part of it.
 | 0.16.2 | 0.31 | 8.3–8.7 ms |
 | 0.16.2 | 0.32 | 119.3–119.7 ms |
 | 0.20 | 0.32 | 262.2–262.8 ms |
+
+Those three were built on 1.98.1.0. On 1.100.0.0, crux 0.20 with geo 0.32 takes 256.7–259.5 ms.
 
 On the host, all three take 120–200 µs, and geo's haversine source is identical in 0.31 and 0.32.
 The cause therefore lies in how the device build compiles or runs that code, and is not yet

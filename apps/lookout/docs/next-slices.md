@@ -347,6 +347,29 @@ become urgent at a size we are not at yet, and both are cheaper to build before 
   them. The definitions are plain data every engine can read; a catalog is one engine's view
   of it, and those traits move between that engine's releases.
 
+## Slice: build the device's bindings with the device toolchain's clang
+
+### Target
+
+The device compiles with `esp-1.100.0.0`, but its bindings come from the clang 21.1.3 of
+`esp-1.98.1.0`. bindgen 0.71.1, which `esp-idf-sys` 0.37.2 uses, writes dozens of C structs as
+empty when it reads clang 22.1.4, the clang that `esp-1.100.0.0` ships.
+[The toolchain notes](device.md#toolchain) set out the failure. At the end, the Justfile's
+`LIBCLANG_PATH` names the clang of the toolchain the device compiles with, and `esp-1.98.1.0` is
+uninstalled.
+
+### Tasks
+
+- [ ] Find the first `esp-idf-sys` release whose bindgen reads clang 22, and the `esp-idf-hal` and
+      `esp-idf-svc` releases that build against it.
+- [ ] Move `m5plus` to those releases, and point `LIBCLANG_PATH` at the clang of the channel in
+      `rust-toolchain.toml`.
+- [ ] Build from `just m5plus-clean`, and confirm that the bindings give `spi_transaction_t` its
+      fields.
+- [ ] Soak the device with a real fix, as for each toolchain upgrade, and add the run to the soak
+      table in `docs/device.md`.
+- [ ] Drop the clang 22 note from `docs/device.md`, and uninstall `esp-1.98.1.0`.
+
 ## Slice: Adding POIs from images taken
 
 ### Idea

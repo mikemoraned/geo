@@ -76,11 +76,12 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
   declaration records it. `write_gold` in `medallion-py` now refuses a run id that is not a UUID.
 - **Generated code allows `unwrap_used` on the module that includes it.** progenitor's Motis client
   calls `unwrap`, and a regenerated file would lose any edit, so `motis::api` carries the allow.
-- **The shared crates declare `rust-version = "1.98"` until the esp upgrade lands.** `m5plus`
-  builds `domain`, `predictor`, `platform-core`, and `m5-core` on `esp-1.98.1.0`, which rejects
-  every 1.100 addition. Clippy's `incompatible_msrv`, part of `clippy::all`, then flags a standard
-  library item newer than 1.98 in those crates. It misses language features such as `!`, so `!`
-  stays out of them by review. The `rust-version` rises with the esp upgrade.
+- **The shared crates declare the `rust-version` of the toolchain `m5plus` builds them with.**
+  `m5plus` builds `domain`, `predictor`, `platform-core`, and `m5-core`, so a standard library item
+  newer than its toolchain breaks the device build. Clippy's `incompatible_msrv`, part of
+  `clippy::all`, flags one in those crates. It misses language features such as `!`, so those stay
+  out of them by review. On 22 November 2026, `esp-1.100.0.0` built and soaked for 59 minutes
+  without a reboot, so the `rust-version` rose from `"1.98"` to `"1.100"`.
 
 #### Consequences elsewhere
 
@@ -112,7 +113,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       then flags there.
 
 - [x] Upgrade the toolchain to 1.100 in `rust-toolchain.toml`, in a commit of its own.
-- [ ] Upgrade `m5plus` to `esp-1.100.0.0` in its `rust-toolchain.toml` and in the Justfile's
+- [x] Upgrade `m5plus` to `esp-1.100.0.0` in its `rust-toolchain.toml` and in the Justfile's
       `LIBCLANG_PATH`, in a commit of its own. Installing it runs outside the sandbox.
       `esp-1.99.0.0` failed to compile `std` for ESP-IDF, so the build decides first. The device
       then soaks as for 1.98.1.0. If both pass, raise the shared crates' `rust-version` to
