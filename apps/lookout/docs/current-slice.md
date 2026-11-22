@@ -229,9 +229,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       `Age::seconds` became a `const fn`, so `Gap::new` and `Lead::new` did too.
       `DEFAULT_GAP` and `DEFAULT_LEAD` now hold a `Gap` and a `Lead`, each built in a `const`
       item. `Result::expect` is not `const`, so each matches and panics with its reason.
-- [ ] Have `Span` in `domain` hold the `Age` its constructor checks, so `time_delta` and `age`
+- [x] Have `Span` in `domain` hold the `Age` its constructor checks, so `time_delta` and `age`
       unwrap nothing, and `Age` the `Duration` that `From<Age> for Span` needs. Lower priority
       than `Gap` and `Lead`: do it only if `Span::minutes` stays a `const fn` without an `unwrap`.
+      `Age::new` converts its span with `to_std`, which serves as its check. `Span::new` and
+      `TryFrom<TimeDelta>` then refuse through `Age::new`.
 
 #### Wrap-up
 

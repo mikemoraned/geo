@@ -5,21 +5,25 @@ use std::time::Duration;
 
 use chrono::TimeDelta;
 
-use crate::age::Age;
+use crate::age::{Age, NotAnAge};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Span(Duration);
+pub struct Span(Age);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NotASpan {
     #[error("`{text}` is not a span of time, such as 30s or 4h: {reason}")]
     Unreadable { text: String, reason: String },
-    #[error("`{text}` is no time at all; a span is longer than zero")]
-    Zero { text: String },
+    #[error("`{text}` is not a span of time: {source}")]
+    NotAnAge {
+        text: String,
+        #[source]
+        source: NotAnAge,
+    },
     #[error("`{text}` is longer than a span can be")]
     TooLong { text: String },
-    #[error("{delta} is no time at all; a span is longer than zero")]
-    NotPositive { delta: TimeDelta },
+    #[error(transparent)]
+    Age(#[from] NotAnAge),
 }
 
 impl Span {
@@ -28,51 +32,36 @@ impl Span {
             text: text.to_string(),
             reason: err.to_string(),
         })?;
-        if duration.is_zero() {
-            return Err(NotASpan::Zero {
-                text: text.to_string(),
-            });
-        }
-        if TimeDelta::from_std(duration).is_err() {
-            return Err(NotASpan::TooLong {
-                text: text.to_string(),
-            });
-        }
-        Ok(Self(duration))
+        let delta = TimeDelta::from_std(duration).map_err(|_| NotASpan::TooLong {
+            text: text.to_string(),
+        })?;
+        let age = Age::new(delta).map_err(|source| NotASpan::NotAnAge {
+            text: text.to_string(),
+            source,
+        })?;
+        Ok(Self(age))
     }
 
     pub const fn minutes(minutes: NonZeroU32) -> Self {
-        Self(Duration::from_secs(minutes.get() as u64 * 60))
+        Self(Age::minutes(minutes))
     }
 
-    pub fn duration(self) -> Duration {
+    pub const fn duration(self) -> Duration {
+        self.0.duration()
+    }
+
+    pub const fn time_delta(self) -> TimeDelta {
+        self.0.span()
+    }
+
+    pub const fn age(self) -> Age {
         self.0
-    }
-
-    pub fn time_delta(self) -> TimeDelta {
-        #[allow(
-            clippy::unwrap_used,
-            reason = "Span::new refuses a span that a TimeDelta cannot hold"
-        )]
-        TimeDelta::from_std(self.0).unwrap()
-    }
-
-    pub fn age(self) -> Age {
-        #[allow(
-            clippy::unwrap_used,
-            reason = "Span::new refuses a span of zero or less"
-        )]
-        Age::new(self.time_delta()).unwrap()
     }
 }
 
 impl From<Age> for Span {
-    #[allow(
-        clippy::unwrap_used,
-        reason = "an age is always positive, and a std Duration holds any positive span"
-    )]
     fn from(age: Age) -> Self {
-        Self(age.span().to_std().unwrap())
+        Self(age)
     }
 }
 
@@ -80,10 +69,7 @@ impl TryFrom<TimeDelta> for Span {
     type Error = NotASpan;
 
     fn try_from(delta: TimeDelta) -> Result<Self, Self::Error> {
-        match delta.to_std() {
-            Ok(duration) if !duration.is_zero() => Ok(Self(duration)),
-            _ => Err(NotASpan::NotPositive { delta }),
-        }
+        Ok(Self(Age::new(delta)?))
     }
 }
 
@@ -97,7 +83,7 @@ impl FromStr for Span {
 
 impl Display for Span {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        humantime::format_duration(self.0).fmt(f)
+        humantime::format_duration(self.duration()).fmt(f)
     }
 }
 
@@ -152,7 +138,7 @@ mod tests {
     fn a_span_of_zero_is_refused() {
         for text in ["0s", "0m", "0h"] {
             assert!(
-                matches!(text.parse::<Span>(), Err(NotASpan::Zero { .. })),
+                matches!(text.parse::<Span>(), Err(NotASpan::NotAnAge { .. })),
                 "{text}"
             );
         }
@@ -177,7 +163,10 @@ mod tests {
     #[test]
     fn a_time_delta_of_zero_or_less_is_refused() {
         for delta in [TimeDelta::zero(), TimeDelta::seconds(-30)] {
-            assert_eq!(Span::try_from(delta), Err(NotASpan::NotPositive { delta }));
+            assert!(
+                matches!(Span::try_from(delta), Err(NotASpan::Age(_))),
+                "{delta}"
+            );
         }
     }
 
