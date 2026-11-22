@@ -527,8 +527,7 @@ mod tests {
 
     fn location_of(tmp: &tempfile::TempDir, path: &Path) -> ObjectPath {
         ObjectPath::from(
-            path.strip_prefix(tmp.path())
-                .unwrap()
+            path.trim_prefix(tmp.path())
                 .to_str()
                 .expect("a path in UTF-8"),
         )

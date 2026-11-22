@@ -117,10 +117,7 @@ fn partitions(root: &Root) -> Vec<(String, u64)> {
         .iter()
         .map(|path| {
             (
-                path.strip_prefix(root.path())
-                    .expect("under the root")
-                    .display()
-                    .to_string(),
+                path.trim_prefix(root.path()).display().to_string(),
                 std::fs::metadata(path).expect("metadata").len(),
             )
         })

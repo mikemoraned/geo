@@ -164,12 +164,12 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 
 #### `m5plus`
 
-- [ ] Add `[lints.clippy]` with both lints to `crates/platform/m5/m5plus/Cargo.toml`, and clear
+- [x] Add `[lints.clippy]` with both lints to `crates/platform/m5/m5plus/Cargo.toml`, and clear
       what it flags. Run clippy outside the sandbox.
 
 #### Opportunities from Rust 1.100
 
-- [ ] Use `Path::trim_prefix` in place of `strip_prefix` and an unwrap, at
+- [x] Use `Path::trim_prefix` in place of `strip_prefix` and an unwrap, at
       `crates/medallion/src/path.rs:523` and `crates/recorder/tests/sessionise.rs:120`.
 - [ ] Use `Vec::from_fn` in place of a `usize` range mapped and collected into a `Vec`, at
       `crates/crossings/src/pointset.rs:98`, `crates/crossings/tests/pack.rs:202`,
