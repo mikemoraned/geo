@@ -44,7 +44,7 @@ impl Sentence {
     }
 
     pub fn body(&self) -> &str {
-        let body = self.as_str().strip_prefix('$').unwrap_or(self.as_str());
+        let body = self.as_str().trim_prefix('$');
 
         body.rsplit_once('*').map_or(body, |(body, _)| body)
     }
