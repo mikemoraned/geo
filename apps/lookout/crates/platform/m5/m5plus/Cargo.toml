@@ -38,3 +38,7 @@ predictor = { path = "../../../predictor" }
 
 [build-dependencies]
 embuild = "0.33"
+
+[lints.clippy]
+expect_used = "warn"
+unwrap_used = "warn"

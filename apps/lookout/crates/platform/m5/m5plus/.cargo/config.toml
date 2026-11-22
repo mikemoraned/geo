@@ -22,3 +22,5 @@ ESP_IDF_VERSION = "v5.5.3"
 # sandbox confined to this repo can build against an install it cannot write. Only those builds
 # have to run outside it.
 ESP_IDF_TOOLS_INSTALL_DIR = "global"
+# Keeps the recipe's LIBCLANG_PATH rather than espup's symlink. See docs/device.md.
+ESP_IDF_ESPUP_CLANG_SYMLINK = "ignore"

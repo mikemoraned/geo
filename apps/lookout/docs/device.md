@@ -37,8 +37,9 @@ The toolchain is pinned by name. espup installs a release under a name of its ow
 
     espup install --toolchain-version <version> --name esp-<version> --targets esp32
 
-The channel in the device crate's `rust-toolchain.toml` names that toolchain, and so does the
-`LIBCLANG_PATH` glob in the recipe that builds.
+The channel in the device crate's `rust-toolchain.toml` names that toolchain. The
+`LIBCLANG_PATH` glob in the recipe that builds names the toolchain whose clang bindgen reads,
+which can be an older one.
 
 - **Release 1.99.0.0 does not compile `std`.** Its `std` calls `libc::AT_FDCWD` on ESP-IDF, and
   the `libc` 0.2.189 it builds against has no such constant for that target. 1.98.1.0 builds.
@@ -48,6 +49,17 @@ The channel in the device crate's `rust-toolchain.toml` names that toolchain, an
   fails with `unknown target triple 'xtensa'` *after* a full ESP-IDF build of around ten
   minutes, so the cause sits far above the error in the log. Glob the path in the recipe that
   builds rather than relying on a sourced shell profile.
+- **`esp-idf-sys` replaces `LIBCLANG_PATH` with espup's symlink unless told not to.** Where
+  ESP-IDF's own clang ships no `libclang`, the build script sets `LIBCLANG_PATH` to the target of
+  `~/.espup/esp-clang`, and each `espup install` points that symlink at the toolchain it
+  installed. `ESP_IDF_ESPUP_CLANG_SYMLINK=ignore` in the device crate's `.cargo/config.toml`
+  keeps the recipe's `LIBCLANG_PATH`, so installing a toolchain changes nothing a build reads.
+- **bindgen 0.71.1 cannot read clang 22.** Release 1.100.0.0 ships clang 22.1.4. Through it,
+  `esp-idf-sys` 0.37.2's bindgen writes dozens of C structs as empty, among them `timeval`,
+  `spi_transaction_t`, and `rmt_encoder_t`, and `esp-idf-hal` then fails on their missing
+  fields. libclang 22 itself parses each struct whole, at the size clang 21 gives. Release
+  1.100.0.0 builds with the clang 21.1.3 of release 1.98.1.0, so that clang stays installed until
+  `esp-idf-sys` takes a newer bindgen.
 - **The Xtensa backend crashes at random; build again.** `rustc` occasionally dies with
   `SIGSEGV` inside LLVM's Xtensa backend, seen as deeply repeated
   `XtensaSizeReduce::ReduceMBB` frames — the compiler exhausting its own stack, not a fault

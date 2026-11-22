@@ -59,9 +59,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .invert_colors(ColorInversion::Inverted)
         .orientation(Orientation::new().rotate(Rotation::Deg0))
         .init(&mut Ets)
-        .expect("the display initialises, or there is nothing to report a failure on");
+        .map_err(|err| format!("the display did not initialise: {err:?}"))?;
     let mut panel: Panel<_> = Panel::new(display);
-    panel.clear().expect("a cleared display");
+    panel
+        .clear()
+        .map_err(|err| format!("the display did not clear: {err:?}"))?;
 
     let mut backlight = PinDriver::output(peripherals.pins.gpio27)?;
     backlight.set_high()?;
@@ -146,7 +148,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         for effect in effects {
             match effect {
-                Effect::Render(_) => panel.show(core.view()).expect("draw the panel"),
+                Effect::Render(_) => {
+                    if let Err(err) = panel.show(core.view()) {
+                        log::error!("could not draw the panel: {err:?}");
+                    }
+                }
                 Effect::Crossings(_) => {
                     core.process_event(Event::Crossings(Vec::new()));
                 }

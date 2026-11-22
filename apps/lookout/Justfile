@@ -278,6 +278,14 @@ m5plus_dir := "crates/platform/m5/m5plus"
 m5plus-build:
     cd {{m5plus_dir}} && cargo build
 
+# Remove the device shell's build, ESP-IDF's included. The next build takes around ten minutes.
+m5plus-clean:
+    cd {{m5plus_dir}} && cargo clean
+
+# Clippy over the device shell.
+m5plus-clippy:
+    cd {{m5plus_dir}} && cargo clippy
+
 # The same, in release: 1.7x faster over the crossing scan.
 m5plus-build-release:
     cd {{m5plus_dir}} && cargo build --release
