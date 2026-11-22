@@ -113,6 +113,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut battery_read = Instant::now();
     let mut reported = Instant::now();
     let mut longest_sentence = Duration::ZERO;
+    let mut listened = Instant::now();
+    let mut drawn = 0;
+    let mut undrawn = 0;
 
     loop {
         let mut effects = Vec::new();
@@ -146,13 +149,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        if listened.elapsed().as_secs() >= REPORT_INTERVAL_S {
+            listened = Instant::now();
+            let heard = gnss.heard();
+            log::info!(
+                "GNSS sent {} bytes in the last {REPORT_INTERVAL_S}s: {} sentences, \
+                 {} lines dropped as malformed, {} reads failed",
+                heard.bytes,
+                heard.sentences,
+                heard.dropped,
+                heard.failed_reads,
+            );
+            for sentence in heard.latest.values() {
+                log::info!("latest {sentence}");
+            }
+            let view = core.view();
+            log::info!(
+                "the core holds {} {}, quality {}; the panel drew {drawn} times and failed {undrawn}",
+                view.latitude,
+                view.longitude,
+                view.quality,
+            );
+            drawn = 0;
+            undrawn = 0;
+        }
+
         for effect in effects {
             match effect {
-                Effect::Render(_) => {
-                    if let Err(err) = panel.show(core.view()) {
+                Effect::Render(_) => match panel.show(core.view()) {
+                    Ok(()) => drawn += 1,
+                    Err(err) => {
+                        undrawn += 1;
                         log::error!("could not draw the panel: {err:?}");
                     }
-                }
+                },
                 Effect::Crossings(_) => {
                     core.process_event(Event::Crossings(Vec::new()));
                 }

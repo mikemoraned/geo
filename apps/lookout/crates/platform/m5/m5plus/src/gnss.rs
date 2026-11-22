@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use esp_idf_svc::hal::{
     delay::TickType,
     uart::{UartRxDriver, config::Config},
@@ -26,6 +28,16 @@ pub struct Gnss<'d> {
     pin: i32,
     pending: String,
     bytes: [u8; CHUNK],
+    heard: Heard,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Heard {
+    pub bytes: usize,
+    pub failed_reads: usize,
+    pub sentences: usize,
+    pub dropped: usize,
+    pub latest: BTreeMap<String, String>,
 }
 
 impl<'d> Gnss<'d> {
@@ -35,6 +47,7 @@ impl<'d> Gnss<'d> {
             pin,
             pending: String::new(),
             bytes: [0; CHUNK],
+            heard: Heard::default(),
         }
     }
 
@@ -53,8 +66,22 @@ impl<'d> Gnss<'d> {
         self.pin
     }
 
+    pub fn heard(&mut self) -> Heard {
+        let heard = self.heard.clone();
+        self.heard = Heard::default();
+        heard
+    }
+
     pub fn sentences(&mut self) -> Vec<Sentence> {
-        let read = self.uart.read(&mut self.bytes, READ.ticks()).unwrap_or(0);
+        let read = match self.uart.read(&mut self.bytes, READ.ticks()) {
+            Ok(read) => read,
+            Err(unread) => {
+                log::debug!("a GNSS read failed: {unread}");
+                self.heard.failed_reads += 1;
+                0
+            }
+        };
+        self.heard.bytes += read;
         self.pending
             .push_str(&String::from_utf8_lossy(&self.bytes[..read]));
 
@@ -62,8 +89,19 @@ impl<'d> Gnss<'d> {
         while let Some(end) = self.pending.find('\n') {
             let line: String = self.pending.drain(..=end).collect();
             match Sentence::new(line) {
-                Ok(sentence) => sentences.push(sentence),
-                Err(malformed) => log::debug!("dropped a line: {malformed}"),
+                Ok(sentence) => {
+                    self.heard.sentences += 1;
+                    if let Some(kind) = sentence.body().get(2..5) {
+                        self.heard
+                            .latest
+                            .insert(kind.to_string(), sentence.as_str().trim().to_string());
+                    }
+                    sentences.push(sentence);
+                }
+                Err(malformed) => {
+                    self.heard.dropped += 1;
+                    log::debug!("dropped a line: {malformed}");
+                }
             }
         }
         sentences
