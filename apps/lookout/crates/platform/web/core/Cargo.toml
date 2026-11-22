@@ -14,6 +14,7 @@ geo-types = { workspace = true, features = ["serde"] }
 platform-core = { workspace = true }
 predictor = { workspace = true }
 serde = { workspace = true }
+wkb = { workspace = true }
 
 [features]
 # Declared so the generator `#[effect(typegen)]` emits behind it compiles when asked for.

@@ -2,6 +2,7 @@
 name = "predictor"
 version = "0.1.0"
 edition.workspace = true
+rust-version = "1.100"
 
 [dependencies]
 # Some entries are written out rather than inherited from the workspace: see docs/device.md.
@@ -15,12 +16,10 @@ num-traits = { version = "0.2", default-features = false }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 
-[features]
-fixtures = []
-
 [dev-dependencies]
 proptest = { workspace = true }
 serde_json = "1"
+test-predictor = { workspace = true }
 
 [lints]
 workspace = true

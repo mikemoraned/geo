@@ -397,6 +397,15 @@ part of the declaration. The rule covers an added optional column, which breaks 
 finds columns by name, and a widened type. A version's files therefore share one declaration. A
 test records every declaration, and fails on any change to one.
 
+A change to a checked newtype alone keeps the version in two cases:
+
+- **The new check accepts every value the old one did.** A renamed check, or a type that accepts
+  the same values or more, leaves every written file readable.
+- **The new check narrows by design, and every stored value passes it.** The person making the
+  change queries each store for values the new check refuses, and finds none.
+
+In either case, the person accepts the test's new record of the declaration.
+
 A change of meaning leaves the declaration as it was. Such changes include a new unit, another
 value standing for "none applies", a new grain, a row identity that varies between runs, and a new
 spelling of a partition value. The declaration test cannot find one. Where a person judges one
@@ -674,8 +683,8 @@ reader on old data, or an old reader on new data. Avro, Confluent Schema Registr
 Delta Lake allow the changes that avoid a chosen direction, such as an added optional column or a
 widened type. Where a version's declaration can change, its files span every declaration it has had,
 and a reader meets them all. A change then has to keep every earlier declaration's files readable,
-not only the last one's. Not adopted: with every change making a new version, the test needs no
-rules, and no such chain forms. Revisit when new versions for changes no reader can notice cost more
+not only the last one's. Not adopted: outside the two cases for a checked newtype, every change
+makes a new version, so the test needs no rules, and no such chain forms. Revisit when new versions for changes no reader can notice cost more
 than those rules would.
 
 **A marker for a change of meaning**, a string in the declaration that a person sets to force a new

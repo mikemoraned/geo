@@ -22,7 +22,7 @@ columns:
     data_type: Float64
     nullable: false
     checks:
-      percentage_in_range: 2d4bd207af6efb196d867a15be10414989ddfc21ed931f46b365df563be7bdfc
+      percentage_in_range: f37e26a3e92fb9f6ec3b93de2a6b3024489e12472759a60b7bcbc17f06111aff
   - name: sessions
     data_type: UInt64
     nullable: false

@@ -24,6 +24,13 @@ and never learns how the core chose them.
 The rail comes first and the trace last, so a page drawing them in order lays the trace over the
 rail. The trace is one line, oldest fix first, and needs two fixes before there is a line to draw.
 
+## A paint draws what it can
+
+A part of the view that fails to write leaves the rest intact. The view hands over every part it
+wrote, and names the failure in a field of its own: `trace_unwritten` for a trace that fails to
+write as WKB. A page paints what it received and logs the failure with `console.error`, so one
+failed part never blanks the canvas.
+
 ## The tests are the JSON contract
 
 Nothing checks the shapes across the bridge, so the tests do. They assert the exact JSON of an

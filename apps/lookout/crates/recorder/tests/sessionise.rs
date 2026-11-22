@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "a test reports failure by panicking"
+)]
+
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use domain::Gps;
 use domain::{DeviceId, SessionId};
@@ -111,10 +117,7 @@ fn partitions(root: &Root) -> Vec<(String, u64)> {
         .iter()
         .map(|path| {
             (
-                path.strip_prefix(root.path())
-                    .expect("under the root")
-                    .display()
-                    .to_string(),
+                path.trim_prefix(root.path()).display().to_string(),
                 std::fs::metadata(path).expect("metadata").len(),
             )
         })

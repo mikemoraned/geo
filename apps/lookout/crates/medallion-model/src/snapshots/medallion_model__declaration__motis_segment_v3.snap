@@ -10,7 +10,7 @@ columns:
     data_type: LargeUtf8
     nullable: false
     checks:
-      "MotisSourceId::new": 487c612645cbd6b576fd3f275f26a73e7ca182bfc6899825ba42fae32b8d846b
+      "MotisSourceId::new": 212cc854a1999efd92bcc14b8743bea1cc2034c0a561a63e39c1dbbbe17c8679
   - name: captured_at
     data_type: "Timestamp(ms, \"UTC\")"
     nullable: true
@@ -74,4 +74,4 @@ columns:
     data_type: LargeUtf8
     nullable: false
     checks:
-      polyline_id_is_a_uuid: a54698f558aca3dd7408db06439061fa629129143e11755f6ce2d68d430ae3c0
+      "PolylineId::new": 51c9d7be3529af1aa541b46b9bbe5e79fbfd5e08283d23366791cd4157a6c7cf

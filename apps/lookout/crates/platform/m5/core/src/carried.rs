@@ -1,14 +1,18 @@
-use platform_core::pointset::{Aligned, PointSet, holds_points};
+use platform_core::pointset::{self, Aligned, PointSet};
 
 include!(concat!(env!("OUT_DIR"), "/carried.rs"));
 
 const _: () = assert!(
-    holds_points(&PACKED.0),
+    pointset::check(&PACKED.0).is_ok(),
     "the carried crossings are not a point set this reader understands — repack them",
 );
 
 pub fn crossings() -> PointSet<'static> {
-    PointSet::new(&PACKED.0).expect("a set checked where it is built into the binary")
+    #[expect(
+        clippy::unwrap_used,
+        reason = "the build runs every check on the carried set, and `Aligned` aligns it to 4 bytes"
+    )]
+    PointSet::new(&PACKED.0).unwrap()
 }
 
 #[cfg(test)]
@@ -20,8 +24,7 @@ mod tests {
     use geo_types::Point;
     use medallion::Country;
     use predictor::{
-        CrowFlies, DEFAULT_ALERTING, DEFAULT_STILL_WITHIN, DEFAULT_WATCHING, Event, LastMove,
-        Predict, nearest_first,
+        CrowFlies, DEFAULT_RADII, DEFAULT_STILL_WITHIN, Event, LastMove, Predict, nearest_first,
     };
 
     use super::*;
@@ -64,11 +67,9 @@ mod tests {
     fn at_dresden() -> CrowFlies<f32, PointSet<'static>> {
         let mut predictor = CrowFlies::new(
             crossings(),
-            DEFAULT_WATCHING,
-            DEFAULT_ALERTING,
+            DEFAULT_RADII,
             LastMove::new(DEFAULT_STILL_WITHIN),
-        )
-        .expect("the defaults alert within what they watch");
+        );
         let t = DateTime::<Utc>::from_timestamp_millis(1_785_098_609_000).expect("an instant");
         predictor
             .observe(Event::Sampled(

@@ -39,13 +39,13 @@ for working practice and for the limits of this environment. Current notes:
 - [`.claude/memory/testing-limits.md`](.claude/memory/testing-limits.md) — Docker tests
   don't run in the sandbox, so binaries need running directly
 - [`.claude/memory/working-with-claude.md`](.claude/memory/working-with-claude.md) —
-  committing only on explicit instruction, recording each step as a tree until it is
+  committing only on explicit instruction, staging only the files the work changed, recording each step as a tree until it is
   committed, keeping a slice's decomposition to a plan the user can check, keeping formatting
   out of feature commits, tracing a repeat to its source before
   memoising it, keeping an optimisation only once a measurement justifies it, writing a store
   migration through the row types and medallion's interfaces, why Claude cannot flash the device,
-  keeping shell plain, fitting a workspace build into the free disk, what `cargo remove` prunes,
-  and clearing prose that states a rejected design
+  keeping shell plain, fitting a workspace build into the free disk, and clearing prose that
+  states a rejected design
 
 Lookout's own facts are in [`apps/lookout/docs/`](apps/lookout/docs/): `medallion.md` (the
 store), `architecture.md` (the pipeline), `telemetry.md` (the wire a device sends),
@@ -64,8 +64,10 @@ release, since that script upgrades pip in ESP-IDF's Python environment.
 
 ## Prose: invoke the two writing skills before drafting
 
-Any turn that will write or edit prose a human reads — `docs/`, READMEs, slice docs, commit
-messages, comments, error messages — starts by invoking both skills with the Skill tool:
+Any turn that will write or edit prose a human reads starts by invoking both skills with the Skill
+tool. Prose covers `docs/`, READMEs, slice docs, commit messages, and comments. It also covers every
+string in code that a person reads: an `allow`'s `reason`, an `expect` or `panic!` message, an
+error's `#[error]` text, a log line, a CLI argument's help, and an assertion's message. The skills:
 
 - `softaworks-agent-toolkit-writing-clearly-and-concisely`
 - `technical-writing:technical-writing`
@@ -125,8 +127,8 @@ When doing TDD, always keep the code compiling at every step:
 
 - **Write all prose through the two writing skills**, invoked as
   [Prose](#prose-invoke-the-two-writing-skills-before-drafting) requires. They apply to edits of
-  existing prose as much as to new prose: documentation, READMEs, commit messages, error
-  messages, comments, and anything else a human reads.
+  existing prose as much as to new prose: documentation, READMEs, commit messages, comments, and
+  each string in code that [Prose](#prose-invoke-the-two-writing-skills-before-drafting) lists.
   - `softaworks-agent-toolkit-writing-clearly-and-concisely` carries the general principles —
     active voice, positive form, concrete language, no needless words, and none of the puffery
     it lists.

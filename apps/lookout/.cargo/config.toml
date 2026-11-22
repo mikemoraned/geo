@@ -5,3 +5,6 @@
 [env]
 DUCKDB_LIB_DIR = { value = "/opt/homebrew/lib", force = false }
 DUCKDB_INCLUDE_DIR = { value = "/opt/homebrew/include", force = false }
+
+[registry]
+global-min-publish-age = "7 days"

@@ -344,7 +344,7 @@ impl Row for EvaluationRunRowV6 {
             evaluation_version: "replay-v1".to_string(),
             code_version: "0000000000000000000000000000000000000000".to_string(),
             country: "DE".to_string(),
-            realtime_at_least: Percentage::new(90.0).expect("90 is a percentage"),
+            realtime_at_least: const { Percentage::checked(90.0).expect("90 lies from 0 to 100") },
             sessions: 1000,
             pick_seed: 1,
             predictor: PredictorName::Oracle,

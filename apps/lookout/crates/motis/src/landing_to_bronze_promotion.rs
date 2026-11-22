@@ -25,8 +25,8 @@ pub enum PromotionError {
     PollNotHeld {
         source_id: MotisSourceId,
         captured_at: DateTime<Utc>,
-        held: usize,
-        landed: usize,
+        held: u64,
+        landed: u64,
     },
     #[error("bronze lacks the polyline {0}, so landing keeps its files")]
     PolylineNotHeld(PolylineId),
@@ -47,7 +47,7 @@ pub(crate) struct PollsWritten {
 type Poll = (MotisSourceId, DateTime<Utc>);
 
 fn poll_of(row: &MotisPollRowV2) -> Poll {
-    (row.source_id.clone(), row.captured_at)
+    (row.source_id, row.captured_at)
 }
 
 pub async fn promote(root: &Root, at: DateTime<Utc>) -> Result<Promoted, PromotionError> {
@@ -92,7 +92,7 @@ async fn landed_rows(root: &Root) -> Result<Vec<MotisPollRowV2>, QueryError> {
         .await
 }
 
-async fn polls_held(root: &Root) -> Result<HashMap<Poll, usize>, QueryError> {
+async fn polls_held(root: &Root) -> Result<HashMap<Poll, u64>, QueryError> {
     #[derive(Deserialize)]
     struct Held {
         source_id: MotisSourceId,
@@ -117,12 +117,7 @@ async fn polls_held(root: &Root) -> Result<HashMap<Poll, usize>, QueryError> {
         .await?;
     Ok(held
         .into_iter()
-        .map(|held| {
-            (
-                (held.source_id, held.captured_at),
-                usize::try_from(held.row_count).expect("a row count fits in memory"),
-            )
-        })
+        .map(|held| ((held.source_id, held.captured_at), held.row_count))
         .collect())
 }
 
@@ -158,7 +153,7 @@ async fn append_polylines(
         .iter()
         .map(|row| MotisPolylineRowV2::of(row.polyline.clone()))
         .filter(|row| !held.contains(&row.polyline_id))
-        .map(|row| (row.polyline_id.clone(), row))
+        .map(|row| (row.polyline_id, row))
         .collect();
     let rows: Vec<MotisPolylineRowV2> = lacking.into_values().collect();
     Ok(root
@@ -212,13 +207,13 @@ fn storage_order(
 
 async fn check_bronze_holds(root: &Root, landed: &[MotisPollRowV2]) -> Result<(), PromotionError> {
     let held = polls_held(root).await?;
-    let mut landed_counts: HashMap<Poll, usize> = HashMap::new();
+    let mut landed_counts: HashMap<Poll, u64> = HashMap::new();
     for row in landed {
         *landed_counts.entry(poll_of(row)).or_default() += 1;
     }
     for ((source_id, captured_at), landed) in landed_counts {
         let held = held
-            .get(&(source_id.clone(), captured_at))
+            .get(&(source_id, captured_at))
             .copied()
             .unwrap_or_default();
         if held < landed {

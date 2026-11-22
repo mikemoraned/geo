@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "a test reports failure by panicking"
+)]
+
 mod common;
 
 use chrono::Utc;
@@ -5,11 +11,12 @@ use common::{RAIL_MODES, captured_segments, gps, lpush};
 use domain::Span;
 use medallion::Root;
 use motis::capture::{Capture, Coverage};
-use motis::client::MotisClient;
+use motis::client::{DEFAULT_BASE_URL, MotisClient};
 use motis::landing::SegmentLog;
 use motis::near_gps::NearGps;
 use motis::zoom::Zoom;
 use test_redis::TestRedis;
+use url::Url;
 
 #[tokio::test]
 async fn recent_gps_near_frankfurt_captures_rail_from_local_motis_end_to_end() {
@@ -33,7 +40,7 @@ async fn recent_gps_near_frankfurt_captures_rail_from_local_motis_end_to_end() {
         "5m".parse::<Span>().expect("a span").age(),
     );
     let mut capture = Capture::new(
-        MotisClient::default(),
+        MotisClient::new(&Url::parse(DEFAULT_BASE_URL).expect("a URL")),
         SegmentLog::new(Root::new(store.path()), common::local_source().id()),
         Zoom::default(),
         "10m".parse().expect("a span"),

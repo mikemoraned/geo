@@ -1,8 +1,12 @@
-#![cfg(any(test, feature = "fixtures"))]
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "only tests call this crate, and a test reports failure by panicking"
+)]
 
 use chrono::{DateTime, TimeZone, Utc};
 
-use crate::sentence::Sentence;
+use predictor::sentence::Sentence;
 
 // Captured indoors, before the receiver had a fix. RMC_VOID ends with the NMEA 4.1
 // navigational-status field — the trailing `,V` — that a hand-written 0183 RMC lacks.

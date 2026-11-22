@@ -19,3 +19,7 @@ advisory database. Run it when a slice is chosen, beside `just outdated`. If it 
 crate to its newest compatible release, whether or not the slice touches it, and then audits again.
 A crate the second audit still flags needs a major version or a dependent's upgrade, so it waits
 for an upgrades slice.
+
+The resolver skips a release less than seven days old, unless `Cargo.lock` already holds it, through
+`global-min-publish-age` in `apps/lookout/.cargo/config.toml`. `just audit-update` lifts that age
+for its own update, so a security fix lands the day it is published.

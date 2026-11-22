@@ -66,19 +66,19 @@ pub fn pack(points: &[CrossingCompact<f32>]) -> Result<Vec<u8>, TooManyPoints> {
 }
 
 pub fn unpack(packed: &[u8]) -> Result<Vec<CrossingCompact<f32>>, FormatError> {
-    let header = packed
-        .get(..HEADER_LEN)
+    let [m0, m1, m2, m3, v0, v1, v2, v3, c0, c1, c2, c3] = *packed
+        .first_chunk::<HEADER_LEN>()
         .ok_or(FormatError::NoHeader(packed.len()))?;
 
-    if header[..4] != MAGIC {
+    if [m0, m1, m2, m3] != MAGIC {
         return Err(FormatError::NotAPointSet);
     }
-    let version = u32::from_le_bytes(header[4..8].try_into().expect("4 bytes of header"));
+    let version = u32::from_le_bytes([v0, v1, v2, v3]);
     if version != VERSION {
         return Err(FormatError::UnsupportedVersion { found: version });
     }
 
-    let count = u32::from_le_bytes(header[8..12].try_into().expect("4 bytes of header"));
+    let count = u32::from_le_bytes([c0, c1, c2, c3]);
     let points = count as usize;
     let needed = HEADER_LEN + points * BYTES_PER_POINT;
     if packed.len() != needed {
@@ -89,23 +89,22 @@ pub fn unpack(packed: &[u8]) -> Result<Vec<CrossingCompact<f32>>, FormatError> {
         });
     }
 
-    let column = |index: usize| &packed[HEADER_LEN + index * points * 4..][..points * 4];
-    let (latitudes, longitudes, ids) = (column(0), column(1), column(2));
-    let word = |column: &[u8], row: usize| {
-        <[u8; 4]>::try_from(&column[row * 4..][..4]).expect("a column holds 4 bytes per point")
+    let column = |index: usize| {
+        packed[HEADER_LEN + index * points * 4..][..points * 4]
+            .as_chunks::<4>()
+            .0
     };
+    let (latitudes, longitudes, ids) = (column(0), column(1), column(2));
 
-    Ok((0..points)
-        .map(|row| {
-            CrossingCompact::new(
-                CrossingCompactId::new(u32::from_le_bytes(word(ids, row))),
-                geo_types::Point::new(
-                    f32::from_le_bytes(word(longitudes, row)),
-                    f32::from_le_bytes(word(latitudes, row)),
-                ),
-            )
-        })
-        .collect())
+    Ok(Vec::from_fn(points, |row| {
+        CrossingCompact::new(
+            CrossingCompactId::new(u32::from_le_bytes(ids[row])),
+            geo_types::Point::new(
+                f32::from_le_bytes(longitudes[row]),
+                f32::from_le_bytes(latitudes[row]),
+            ),
+        )
+    }))
 }
 
 #[cfg(test)]

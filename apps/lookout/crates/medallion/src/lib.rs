@@ -83,6 +83,6 @@ pub use rows::{
     Dated, Geometry, Projection, Row, RowError, batch, fields, fields_of, from_batches,
     projected_columns,
 };
-pub use run::{RUN_DATE, RUN_ID, RunError, RunId, write_run, write_run_table};
+pub use run::{NotARunId, RUN_DATE, RUN_ID, RunError, RunId, write_run, write_run_table};
 pub use table::{GoldTarget, SilverTarget, TableError, TableWritten, write_table};
 pub use write::WriteError;

@@ -75,11 +75,9 @@ fn within_half_width<P: Precision>(
     bearing: P,
     half_width: HalfWidth,
 ) -> bool {
-    let turn = (bearing - velocity.heading_degrees).to_f64().map(|turn| {
-        let turn = turn.rem_euclid(360.0);
-        turn.min(360.0 - turn)
-    });
-    turn.is_some_and(|turn| turn <= half_width.as_degrees())
+    let turn: f64 = (bearing - velocity.heading_degrees).into();
+    let turn = turn.rem_euclid(360.0);
+    turn.min(360.0 - turn) <= half_width.as_degrees()
 }
 
 impl<P: Precision, C: Crossings<P>, V: VelocityEstimator<P>> Predict<P> for LightCone<P, C, V> {
@@ -102,7 +100,7 @@ mod tests {
     use domain::{Radius, Span};
     use proptest::prelude::*;
 
-    use crate::crow_flies::{Alerting, Watching};
+    use crate::radii::{Alerting, Radii, Watching};
 
     use super::*;
 
@@ -134,16 +132,18 @@ mod tests {
     ) -> CrowFlies<f64> {
         CrowFlies::new(
             crossings,
-            Watching {
-                radius: Radius::new(5_000.0).expect("a radius"),
-            },
-            Alerting {
-                radius: Radius::new(alerting_radius_metres).expect("a radius"),
-                horizon: Span::new("5m").expect("a span"),
-            },
+            Radii::new(
+                Watching {
+                    radius: Radius::new(5_000.0).expect("a radius"),
+                },
+                Alerting {
+                    radius: Radius::new(alerting_radius_metres).expect("a radius"),
+                    horizon: Span::new("5m").expect("a span"),
+                },
+            )
+            .expect("alerting within what it watches"),
             LastMove::new(Radius::new(20.0).expect("a radius")),
         )
-        .expect("alerting within what it watches")
     }
 
     fn predictor(half_width_degrees: f64) -> LightCone<f64> {

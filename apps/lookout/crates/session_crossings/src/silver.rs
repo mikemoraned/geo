@@ -325,7 +325,7 @@ fn device_row(pass: &Pass, device: &DeviceId, radius: Radius) -> SessionCrossing
     SessionCrossingRowV3 {
         session_id: pass.session_id.clone(),
         crossing_id: pass.crossing_id.clone(),
-        device_id: device.clone(),
+        device_id: *device,
         crossed_at: pass.crossed_at,
         distance_m: pass.distance_metres,
         samples_within: pass.samples_within,
@@ -363,7 +363,7 @@ mod tests {
 
     #[test]
     fn a_row_records_the_radius_it_was_matched_under() {
-        let device = DeviceId::new("device-a").expect("an id");
+        let device = DeviceId::from(uuid::Uuid::from_u128(1));
 
         let row = device_row(&pass(), &device, Radius::new(150.0).expect("a radius"));
 
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn a_row_names_the_device_the_session_ran_on() {
-        let device = DeviceId::new("device-a").expect("an id");
+        let device = DeviceId::from(uuid::Uuid::from_u128(1));
 
         let row = device_row(&pass(), &device, Radius::new(150.0).expect("a radius"));
 

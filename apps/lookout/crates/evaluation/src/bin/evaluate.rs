@@ -254,19 +254,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
             println!("run {run_id}");
         }
         Command::Replay(begun) => {
-            print_skew(gold::replay(&root, &begun.run_id()?, &code).await?.as_ref())
+            print_skew(gold::replay(&root, &begun.run_id(), &code).await?.as_ref())
         }
-        Command::Score(begun) => gold::score(&root, &begun.run_id()?, &code).await?,
+        Command::Score(begun) => gold::score(&root, &begun.run_id(), &code).await?,
         Command::Summarise(begun) => {
-            print_summary(&gold::summarise(&root, &begun.run_id()?, &code).await?);
+            print_summary(&gold::summarise(&root, &begun.run_id(), &code).await?);
         }
     }
     Ok(())
 }
 
 impl Begun {
-    fn run_id(&self) -> Result<RunId, medallion::PathError> {
-        RunId::new(self.run_id.to_string())
+    fn run_id(&self) -> RunId {
+        RunId::from(self.run_id)
     }
 }
 

@@ -6,12 +6,12 @@ git_hash := `printf '%s%s' "$(git rev-parse --short HEAD 2>/dev/null)" "$(git di
 # Install the tools every other recipe needs. See README.md for what each is for.
 prerequisites:
     cd {{ justfile_directory() }}/../.. && just prerequisites
-    cargo install rerun-cli --locked
-    cargo install wasm-pack --locked
-    cargo install cargo-insta --locked
-    cargo install cargo-mutants --locked
-    cargo install cargo-audit --locked
-    cargo install --git https://github.com/maplibre/maplibre-tile-spec mlt --locked
+    cargo install rerun-cli
+    cargo install wasm-pack
+    cargo install cargo-insta
+    cargo install cargo-mutants
+    cargo install cargo-audit
+    cargo install --git https://github.com/maplibre/maplibre-tile-spec mlt
     rustup target add wasm32-unknown-unknown
     brew install duckdb proj jq tippecanoe
 
@@ -138,6 +138,10 @@ test-rust: test-doc
 test-no-docker: test-python test-doc
     INSTA_UPDATE=unseen cargo nextest run --workspace --profile no-docker
 
+# Clippy over every crate and target, tests included.
+clippy:
+    cargo clippy --workspace --all-targets --all-features
+
 # The geo tests: the crossings the store holds, against the bbox test cases. Needs a filled store.
 test-geo:
     cargo nextest run --profile geo
@@ -169,7 +173,7 @@ flagged_update_args := '''
 
 # Update each crate the audit flags to its newest compatible release, then list what still needs a bigger move.
 audit-update:
-    cargo update $(cargo audit --json | jq -r '{{ flagged_update_args }}')
+    CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update $(cargo audit --json | jq -r '{{ flagged_update_args }}')
     cargo audit
 
 # Mutation-test the Rust this branch changes from origin/main. Extra arguments go to cargo-mutants.
@@ -273,6 +277,14 @@ m5plus_dir := "crates/platform/m5/m5plus"
 # Build the device shell. The first run installs ESP-IDF, which takes hours.
 m5plus-build:
     cd {{m5plus_dir}} && cargo build
+
+# Remove the device shell's build, ESP-IDF's included. The next build takes around ten minutes.
+m5plus-clean:
+    cd {{m5plus_dir}} && cargo clean
+
+# Clippy over the device shell.
+m5plus-clippy:
+    cd {{m5plus_dir}} && cargo clippy
 
 # The same, in release: 1.7x faster over the crossing scan.
 m5plus-build-release:

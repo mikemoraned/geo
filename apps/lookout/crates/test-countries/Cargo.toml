@@ -1,0 +1,15 @@
+[package]
+name = "test-countries"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+arrow = { workspace = true }
+chrono = { workspace = true }
+datafusion = { workspace = true }
+geo-types = { workspace = true }
+medallion = { workspace = true }
+medallion-model = { workspace = true }
+
+[lints]
+workspace = true

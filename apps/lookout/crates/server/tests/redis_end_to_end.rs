@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "a test reports failure by panicking"
+)]
+
 use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use server::queue::{QUEUE_KEY, RedisSink, SampleSink};

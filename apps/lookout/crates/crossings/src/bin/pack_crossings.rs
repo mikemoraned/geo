@@ -47,11 +47,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let run = Utc::now();
     let output = match args.output {
         Some(path) => path,
-        None => root
-            .gold_artefact(ARTIFACT, run, PACKED)?
-            .parent()
-            .expect("an artefact sits in a directory")
-            .to_path_buf(),
+        None => root.gold_artefact_dir(ARTIFACT, run)?,
     };
 
     tracing::info!(

@@ -130,9 +130,9 @@ fields, and checking it in both places would put one rule in two, to disagree in
 matters in practice: a captured overrun spliced two sentences into one well-formed sentence whose
 checksum belonged to neither half.
 
-Sentences in the shape the receiver emits them sit behind the `fixtures` feature, so none reaches
-a device binary; a crate wanting them puts `predictor` in its `[dev-dependencies]` with the
-feature on. One place knows what a sentence off this receiver looks like — the field count, the
+Sentences in the shape the receiver emits them sit in [`test-predictor`](../test-predictor/README.md),
+so none reaches a device binary. A crate that wants them takes `test-predictor` as a
+dev-dependency. One place knows what a sentence off this receiver looks like — the field count, the
 trailing pair NMEA 4.1 adds, the empty course a stationary receiver reports — so a test needing a
 fix somewhere else asks for one there rather than writing another sentence out. The constants are
 [captures with the position replaced](../../docs/device.md#the-gnss-receiver), and tests hold the

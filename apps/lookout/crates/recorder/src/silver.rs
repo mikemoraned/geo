@@ -74,19 +74,19 @@ pub async fn write(
     Ok(outcome)
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "a session always holds the sample that starts it"
+)]
 fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::GeoError> {
     let samples = locate(session, projector)?;
     let path = path_through(samples.iter().map(|sample| sample.point));
 
     let row = SessionRowV3 {
         session_id: session.id(),
-        device_id: session.device_id.clone(),
+        device_id: session.device_id,
         started_at: session.started_at(),
-        ended_at: samples
-            .last()
-            .expect("a session is built from the sample that starts it")
-            .row
-            .t,
+        ended_at: samples.last().unwrap().row.t,
         sample_count: samples.len().try_into().unwrap_or(u32::MAX),
         started_by: session.started_by,
         gap_seconds: session.gap.as_seconds(),
@@ -97,11 +97,12 @@ fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::
     Ok(Placed { row, path, samples })
 }
 
+#[expect(
+    clippy::unwrap_used,
+    reason = "a session's path always holds the sample that starts it"
+)]
 fn bbox_of(path: &LineString<f64>) -> Bbox {
-    Bbox::of(
-        path.bounding_rect()
-            .expect("a path holds at least one coordinate"),
-    )
+    Bbox::of(path.bounding_rect().unwrap())
 }
 
 fn locate(session: &Session, projector: &Projector) -> Result<Vec<Located>, medallion::GeoError> {
@@ -114,7 +115,7 @@ fn locate(session: &Session, projector: &Projector) -> Result<Vec<Located>, meda
         let projected = projector.project(&point)?;
         let row = SessionSampleRowV3 {
             session_id: session_id.clone(),
-            device_id: session.device_id.clone(),
+            device_id: session.device_id,
             t: sample.t,
             seq: seq.try_into().unwrap_or(u32::MAX),
             lat: sample.lat,

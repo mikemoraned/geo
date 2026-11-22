@@ -26,13 +26,15 @@ fn dispatch(event: &str) -> Result<String, String> {
     BRIDGE
         .update(event.as_bytes(), &mut requests)
         .map_err(|err| err.to_string())?;
-    Ok(String::from_utf8(requests).expect("JSON is utf-8"))
+    #[expect(clippy::unwrap_used, reason = "the bridge writes JSON, which is UTF-8")]
+    Ok(String::from_utf8(requests).unwrap())
 }
 
 fn projection() -> Result<String, String> {
     let mut view = Vec::new();
     BRIDGE.view(&mut view).map_err(|err| err.to_string())?;
-    Ok(String::from_utf8(view).expect("JSON is utf-8"))
+    #[expect(clippy::unwrap_used, reason = "the bridge writes JSON, which is UTF-8")]
+    Ok(String::from_utf8(view).unwrap())
 }
 
 #[cfg(test)]
@@ -55,7 +57,7 @@ mod tests {
     fn a_page_is_asked_for_crossings_and_lines_and_answers_with_them() {
         assert_eq!(
             projection().unwrap(),
-            r#"{"now":null,"crossings":0,"radius_metres":0.0,"pass_radius_metres":0.0,"here":null,"predicted":[],"lines":[]}"#
+            r#"{"now":null,"crossings":0,"radius_metres":0.0,"pass_radius_metres":0.0,"here":null,"predicted":[],"lines":[],"trace_unwritten":null}"#
         );
 
         let requests = dispatch(r#""Reset""#).unwrap();
@@ -69,7 +71,7 @@ mod tests {
         assert_eq!(answered.unwrap(), r#"[{"id":2,"effect":{"Render":null}}]"#);
         assert_eq!(
             projection().unwrap(),
-            r#"{"now":null,"crossings":2,"radius_metres":5000.0,"pass_radius_metres":250.0,"here":null,"predicted":[],"lines":[]}"#
+            r#"{"now":null,"crossings":2,"radius_metres":5000.0,"pass_radius_metres":250.0,"here":null,"predicted":[],"lines":[],"trace_unwritten":null}"#
         );
 
         assert!(
@@ -80,7 +82,7 @@ mod tests {
         );
         assert_eq!(
             projection().unwrap(),
-            r#"{"now":null,"crossings":0,"radius_metres":0.0,"pass_radius_metres":0.0,"here":null,"predicted":[],"lines":[]}"#
+            r#"{"now":null,"crossings":0,"radius_metres":0.0,"pass_radius_metres":0.0,"here":null,"predicted":[],"lines":[],"trace_unwritten":null}"#
         );
 
         dispatch(r#"{"Crossings":[[7,51.0403,13.7322]]}"#).unwrap();
@@ -107,7 +109,7 @@ mod tests {
         assert!(answered.unwrap().contains(r#"{"Render":null}"#));
         assert!(
             projection().unwrap().ends_with(&format!(
-                r#""lines":[{{"category":"rail","wkb":"{RAIL}"}}]}}"#
+                r#""lines":[{{"category":"rail","wkb":"{RAIL}"}}],"trace_unwritten":null}}"#
             )),
             "the rail answering the request is drawn"
         );

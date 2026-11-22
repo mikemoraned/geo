@@ -1,9 +1,13 @@
 use core::num::NonZeroU32;
+use core::time::Duration;
 
 use chrono::{DateTime, TimeDelta, TimeZone};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Age(TimeDelta);
+pub struct Age {
+    span: TimeDelta,
+    duration: Duration,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("an age is longer than zero, and {0} is not")]
@@ -15,30 +19,38 @@ pub struct TooManySeconds(TimeDelta);
 
 impl Age {
     pub fn new(span: TimeDelta) -> Result<Self, NotAnAge> {
-        if span > TimeDelta::zero() {
-            Ok(Self(span))
-        } else {
-            Err(NotAnAge(span))
+        match span.to_std() {
+            Ok(duration) if !duration.is_zero() => Ok(Self { span, duration }),
+            _ => Err(NotAnAge(span)),
         }
     }
 
     pub const fn minutes(minutes: NonZeroU32) -> Self {
-        Self(TimeDelta::minutes(minutes.get() as i64))
+        Self {
+            span: TimeDelta::minutes(minutes.get() as i64),
+            duration: Duration::from_secs(minutes.get() as u64 * 60),
+        }
     }
 
-    pub fn span(self) -> TimeDelta {
-        self.0
+    pub const fn span(self) -> TimeDelta {
+        self.span
     }
 
-    pub fn seconds(self) -> Result<u32, TooManySeconds> {
-        self.0
-            .num_seconds()
-            .try_into()
-            .map_err(|_| TooManySeconds(self.0))
+    pub const fn duration(self) -> Duration {
+        self.duration
+    }
+
+    pub const fn seconds(self) -> Result<u32, TooManySeconds> {
+        let seconds = self.span.num_seconds();
+        if seconds <= u32::MAX as i64 {
+            Ok(seconds as u32)
+        } else {
+            Err(TooManySeconds(self.span))
+        }
     }
 
     pub fn before<Tz: TimeZone>(self, now: DateTime<Tz>) -> DateTime<Tz> {
-        now - self.0
+        now - self.span
     }
 }
 
@@ -72,6 +84,18 @@ mod tests {
     #[test]
     fn an_age_in_minutes_spans_that_many_minutes() {
         assert_eq!(Age::minutes(minutes(30)).span(), TimeDelta::minutes(30));
+        assert_eq!(
+            Age::minutes(minutes(30)).duration(),
+            Duration::from_secs(1_800)
+        );
+    }
+
+    #[test]
+    fn an_age_lasts_as_long_as_its_span() {
+        assert_eq!(
+            Age::new(TimeDelta::milliseconds(1_500)).map(Age::duration),
+            Ok(Duration::from_millis(1_500))
+        );
     }
 
     #[test]

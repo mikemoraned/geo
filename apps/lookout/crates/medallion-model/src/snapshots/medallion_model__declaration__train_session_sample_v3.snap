@@ -29,7 +29,7 @@ columns:
     data_type: LargeUtf8
     nullable: false
     checks:
-      "MotisSourceId::new": 487c612645cbd6b576fd3f275f26a73e7ca182bfc6899825ba42fae32b8d846b
+      "MotisSourceId::new": 212cc854a1999efd92bcc14b8743bea1cc2034c0a561a63e39c1dbbbe17c8679
   - name: trip_id
     data_type: LargeUtf8
     nullable: false

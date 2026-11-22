@@ -152,7 +152,7 @@ mod tests {
     use chrono::{DateTime, TimeZone, Utc};
 
     use super::*;
-    use countries::fixtures::{record_extract, square_from};
+    use test_countries::{record_extract, square_from};
 
     const THURINGIA: &str = "e0ff5492-5758-4335-aabd-af1747925cd1";
     const SAXONY: &str = "3e1aa55a-1b9b-4d9b-8072-38ba413f6d2b";

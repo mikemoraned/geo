@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use domain::SessionId;
+use domain::{CoordinateError, SessionId};
 use domain::{Gps, Sample};
 use medallion::{Country, Query, Root};
 use serde::Deserialize;
@@ -28,6 +28,11 @@ pub enum ChooseError {
     Query(#[from] medallion::QueryError),
     #[error("{0} has not been derived yet, so there is nothing to choose from")]
     Missing(&'static str),
+    #[error("a stored sample of session {session} lies off the globe: {source}")]
+    OffTheGlobe {
+        session: SessionId,
+        source: CoordinateError,
+    },
 }
 
 pub async fn choose(root: &Root, choosing: Choosing) -> Result<Vec<Replay>, ChooseError> {
@@ -95,20 +100,24 @@ async fn chosen_in(
 
     let mut by_session: HashMap<SessionId, Vec<Sample<f64>>> = HashMap::new();
     for sample in samples {
+        let gps = Gps::at(
+            round(sample.lat, COORDINATE_PLACES),
+            round(sample.lon, COORDINATE_PLACES),
+        )
+        .map_err(|source| ChooseError::OffTheGlobe {
+            session: sample.session_id.clone(),
+            source,
+        })?;
         by_session
             .entry(sample.session_id.clone())
             .or_default()
             .push(Sample {
                 t: sample.t,
-                gps: Gps::at(
-                    round(sample.lat, COORDINATE_PLACES),
-                    round(sample.lon, COORDINATE_PLACES),
-                )
-                .expect("on the globe")
-                .with_altitude_metres(sample.alt.map(|alt| round(alt, READING_PLACES)))
-                .with_accuracy_metres(Some(round(sample.acc, READING_PLACES)))
-                .with_speed_mps(sample.speed.map(|speed| round(speed, READING_PLACES)))
-                .with_heading_degrees(sample.heading.map(|to| round(to, READING_PLACES))),
+                gps: gps
+                    .with_altitude_metres(sample.alt.map(|alt| round(alt, READING_PLACES)))
+                    .with_accuracy_metres(Some(round(sample.acc, READING_PLACES)))
+                    .with_speed_mps(sample.speed.map(|speed| round(speed, READING_PLACES)))
+                    .with_heading_degrees(sample.heading.map(|to| round(to, READING_PLACES))),
             });
     }
 

@@ -181,7 +181,7 @@ mod tests {
     use geo_types::{Geometry, line_string, polygon};
 
     use super::*;
-    use crate::fixtures::{division_area, record_extract, square_from};
+    use test_countries::{division_area, record_extract, square_from};
 
     fn square(size: f64) -> Geometry<f64> {
         square_from(0.0, size)

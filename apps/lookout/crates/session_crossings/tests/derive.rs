@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "a test reports failure by panicking"
+)]
+
 use chrono::{DateTime, TimeZone, Utc};
 use domain::places::BERLIN;
 use domain::{CrossingCompactId, CrossingId, Gps};
@@ -75,15 +81,13 @@ fn gps(id: Uuid, t: DateTime<Utc>, lon: f64) -> Message {
 
 async fn store_with_a_session(root: &Root, samples: usize) {
     let device = Uuid::new_v4();
-    let messages: Vec<Message> = (0..samples)
-        .map(|step| {
-            gps(
-                device,
-                at(step as u32),
-                east_of_berlin(step as f64 * SAMPLE_SPACING_M),
-            )
-        })
-        .collect();
+    let messages: Vec<Message> = Vec::from_fn(samples, |step| {
+        gps(
+            device,
+            at(step as u32),
+            east_of_berlin(step as f64 * SAMPLE_SPACING_M),
+        )
+    });
     let json: Vec<String> = messages
         .iter()
         .map(|message| serde_json::to_string(message).expect("serialize"))
@@ -358,7 +362,7 @@ async fn a_country_holding_only_some_of_the_datasets_is_left_out_rather_than_fai
 }
 
 async fn store_with_a_train_session(root: &Root, samples: usize) {
-    let steps: Vec<f64> = (0..samples).map(|step| step as f64).collect();
+    let steps: Vec<f64> = Vec::from_fn(samples, |step| step as f64);
     store_with_a_train_session_along(root, &steps).await;
 }
 

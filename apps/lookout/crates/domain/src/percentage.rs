@@ -2,6 +2,7 @@ use hashfn::hashfn;
 use nutype::nutype;
 
 #[nutype(
+    const_fn,
     validate(with = percentage_in_range, error = NotAPercentage),
     derive(
         Debug, Clone, Copy, PartialEq, PartialOrd, Display, FromStr, TryFrom, Into, Serialize,
@@ -15,8 +16,8 @@ pub struct Percentage(f64);
 pub struct NotAPercentage(pub f64);
 
 #[hashfn]
-pub fn percentage_in_range(value: &f64) -> Result<(), NotAPercentage> {
-    if (0.0..=100.0).contains(value) {
+pub const fn percentage_in_range(value: &f64) -> Result<(), NotAPercentage> {
+    if *value >= 0.0 && *value <= 100.0 {
         Ok(())
     } else {
         Err(NotAPercentage(*value))
@@ -26,6 +27,13 @@ pub fn percentage_in_range(value: &f64) -> Result<(), NotAPercentage> {
 impl Percentage {
     pub fn new(value: f64) -> Result<Self, NotAPercentage> {
         Self::try_new(value)
+    }
+
+    pub const fn checked(value: f64) -> Option<Self> {
+        match Self::try_new(value) {
+            Ok(percentage) => Some(percentage),
+            Err(_) => None,
+        }
     }
 
     pub fn of(part: usize, whole: usize) -> Result<Self, NotAPercentage> {
@@ -68,6 +76,24 @@ mod tests {
     #[test]
     fn not_a_number_is_not_a_percentage() {
         assert!(Percentage::new(f64::NAN).is_err());
+    }
+
+    #[test]
+    fn a_value_checked_from_0_to_100_is_a_percentage() {
+        for value in [0.0, 12.5, 100.0] {
+            assert_eq!(
+                Percentage::checked(value).map(f64::from),
+                Some(value),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_value_checked_outside_0_to_100_is_none() {
+        for value in [-0.5, 100.5, f64::INFINITY, f64::NAN] {
+            assert_eq!(Percentage::checked(value), None, "{value}");
+        }
     }
 
     #[test]

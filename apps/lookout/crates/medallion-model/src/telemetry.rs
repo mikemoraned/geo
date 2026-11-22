@@ -55,7 +55,7 @@ impl Row for GpsReadingRowV2 {
 
     fn example() -> Self {
         Self {
-            device_id: DeviceId::new("example").expect("a constant device id is not empty"),
+            device_id: DeviceId::from(uuid::Uuid::from_u128(1)),
             t: 0,
             lat: 0.0,
             lon: 0.0,

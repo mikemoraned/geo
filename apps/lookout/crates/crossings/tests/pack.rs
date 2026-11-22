@@ -1,3 +1,9 @@
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "a test reports failure by panicking"
+)]
+
 use std::collections::HashMap;
 
 use crossings::{pointset, silver};
@@ -193,9 +199,8 @@ async fn what_the_store_holds_survives_being_packed_and_read_back() {
 async fn every_packed_id_maps_back_to_exactly_one_crossing_the_store_named() {
     let tmp = tempfile::tempdir().unwrap();
     let root = Root::new(tmp.path());
-    let positions: Vec<(f64, f64)> = (0..50)
-        .map(|n| (LON + n as f64 * 0.001, LAT + n as f64 * 0.001))
-        .collect();
+    let positions: Vec<(f64, f64)> =
+        Vec::from_fn(50, |n| (LON + n as f64 * 0.001, LAT + n as f64 * 0.001));
     store_with_crossings(&root, Country::Germany, &positions).await;
 
     let crossings = silver::read(&root).await.unwrap();

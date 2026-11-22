@@ -14,6 +14,11 @@ none was shown, show what the commit holds and wait. If a commit has already bee
 review was wanted, `git reset --soft HEAD~1` puts it back as staged changes rather than
 discarding it.
 
+Stage by path, naming each file the work changed, and never with `git add -A` or `git add .`.
+The working tree can hold files the user is writing, such as an untracked dated doc, and a
+blanket add commits them. Before committing, compare `git status --short` with the files the
+work touched.
+
 Keep mechanical churn out of feature commits. When `cargo fmt` would touch files a change
 never went near, stash the work, commit the formatting on its own, then restore and
 continue.
@@ -153,12 +158,6 @@ Any other build of a python extension's crates slows the next uv build of that e
 after `cargo clippy` ran on the extension's crate, and 7 minutes after a marimo sandbox installed
 the extension. Run cargo on an extension's crate after its python tests, not between two of their
 builds, and expect the first test build after a notebook session to take minutes.
-
-## Cargo
-
-`cargo remove` also deletes every `[workspace.dependencies]` entry that no member of the
-workspace uses, and the lookout workspace keeps some of those on purpose. After running it, check
-`git diff Cargo.toml` at the workspace root, and restore any entry it pruned.
 
 ## Rejected designs
 

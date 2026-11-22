@@ -1,10 +1,7 @@
-#![cfg(any(test, feature = "fixtures"))]
-
 use std::num::NonZeroUsize;
 use std::path::Path;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use countries::fixtures::{division_area, record_extract};
 use domain::places::DRESDEN_HBF;
 use domain::{CrossingCompactId, CrossingId, Percentage, SessionId, Span};
 use geo_types::{Geometry, LineString, Point, polygon};
@@ -16,6 +13,7 @@ use medallion_model::{
     FloatType, TrainSessionCrossingRowV1, TrainSessionRowV3, TrainSessionSampleRowV3,
     WaterCrossingRowV2,
 };
+use test_countries::{division_area, record_extract};
 
 use crate::pick::{Pick, Seed};
 use crate::score::{Score, Scoring};
@@ -58,8 +56,8 @@ pub async fn store(dir: &Path, sessions: usize) -> Root {
     let root = Root::new(dir);
     let (lon, lat) = DRESDEN_HBF.x_y();
     let line = LineString::from(vec![(lon, lat), (lon, lat + 0.01)]);
-    let session_rows: Vec<GeographyRow<TrainSessionRowV3, LineString<f64>>> = (0..sessions)
-        .map(|n| GeographyRow {
+    let session_rows: Vec<GeographyRow<TrainSessionRowV3, LineString<f64>>> =
+        Vec::from_fn(sessions, |n| GeographyRow {
             row: TrainSessionRowV3 {
                 session_id: session(n),
                 started_at: instant(0),
@@ -69,8 +67,7 @@ pub async fn store(dir: &Path, sessions: usize) -> Root {
             },
             geography: line.clone(),
             country: Country::Germany,
-        })
-        .collect();
+        });
     write_geography_rows(&root, &session_rows)
         .await
         .expect("write the sessions");

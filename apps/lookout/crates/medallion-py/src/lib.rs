@@ -2,8 +2,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use arrow::array::RecordBatch;
+use arrow::datatypes::SchemaRef;
 use chrono::NaiveDate;
-use medallion::{Country, DatasetSpec, Query, Root, RunId, ScalarValue, UnknownCountry, layers};
+use futures::TryStreamExt;
+use medallion::{
+    Country, DatasetSpec, Query, QueryError, Root, RunId, ScalarValue, UnknownCountry, layers,
+};
 use py_common::{
     gold_target_error, query_error, root_or_default, run_error, runtime, runtime_error,
     table_error, target_error, value_error,
@@ -104,19 +108,19 @@ fn query_silver(
     let root = root_or_default(root)?;
     let params = scalars(params);
 
-    let batches = py
+    let (schema, batches) = py
         .detach(|| {
             runtime().block_on(async {
                 let query = Query::new(root);
                 for target in &targets {
                     query.register_silver(target, country).await?;
                 }
-                query.sql_with_params(sql, params).await
+                answered(&query, sql, params).await
             })
         })
         .map_err(query_error)?;
 
-    table_of(batches)
+    table_of(schema, batches)
 }
 
 /// Write `table` as one run of the gold dataset `dataset`, under `run_date` and `run_id`.
@@ -179,19 +183,19 @@ fn query_gold(
     let root = root_or_default(root)?;
     let params = scalars(params);
 
-    let batches = py
+    let (schema, batches) = py
         .detach(|| {
             runtime().block_on(async {
                 let query = Query::new(root);
                 for target in &targets {
                     query.register_gold(target.spec()).await?;
                 }
-                query.sql_with_params(sql, params).await
+                answered(&query, sql, params).await
             })
         })
         .map_err(query_error)?;
 
-    table_of(batches)
+    table_of(schema, batches)
 }
 
 fn scalars(params: Option<HashMap<String, Param>>) -> HashMap<String, ScalarValue> {
@@ -202,13 +206,18 @@ fn scalars(params: Option<HashMap<String, Param>>) -> HashMap<String, ScalarValu
         .collect()
 }
 
-fn table_of(batches: Vec<RecordBatch>) -> PyResult<PyTable> {
-    // Infallible: a query answers with at least one batch, so the columns are always there.
-    let schema = batches
-        .first()
-        .map(|batch| batch.schema())
-        .expect("a query answers with at least one batch");
+async fn answered(
+    query: &Query,
+    sql: &str,
+    params: HashMap<String, ScalarValue>,
+) -> Result<(SchemaRef, Vec<RecordBatch>), QueryError> {
+    let stream = query.stream_with_params(sql, params).await?;
+    let schema = stream.schema();
+    let batches = stream.try_collect().await?;
+    Ok((schema, batches))
+}
 
+fn table_of(schema: SchemaRef, batches: Vec<RecordBatch>) -> PyResult<PyTable> {
     PyTable::try_new(batches, schema).map_err(runtime_error)
 }
 
@@ -274,7 +283,7 @@ fn query_bronze(
         .map(|(name, param)| (name, ScalarValue::from(param)))
         .collect();
 
-    let batches = py
+    let (schema, batches) = py
         .detach(|| {
             runtime().block_on(async {
                 let query = Query::new(root);
@@ -294,17 +303,12 @@ fn query_bronze(
                         }
                     }
                 }
-                query.sql_with_params(sql, params).await
+                answered(&query, sql, params).await
             })
         })
         .map_err(query_error)?;
 
-    let schema = batches
-        .first()
-        .map(|batch| batch.schema())
-        .expect("a query answers with at least one batch");
-
-    PyTable::try_new(batches, schema).map_err(runtime_error)
+    table_of(schema, batches)
 }
 
 /// The countries a silver dataset holds a partition for, as the codes a read of it names.

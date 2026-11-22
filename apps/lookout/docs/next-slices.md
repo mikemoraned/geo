@@ -44,6 +44,146 @@ Germany alone.
 - [ ] If the warning fires during a capture, investigate the cause before the capture ends. Compare
       the realtime feed's trip ids with the imported timetable's.
 
+## Slice: SedonaDB 0.5.0 and the arrow generation
+
+### Target
+
+SedonaDB 0.5.0 moves arrow and parquet to 58.3, datafusion to 54.1, and object_store to 0.13.
+Every crate the store shares a `RecordBatch` with moves with them. The move fixes nothing known:
+0.5.0-rc0 still has the panic in
+[2026-10-03-sedona-nested-column-panic.md](2026-10-03-sedona-nested-column-panic.md). It keeps the
+pins current, and gets the arrow generation off 57 before more code depends on it.
+
+### Decisions
+
+- **The move waits for a release.** 0.5.0-rc0 was tagged on 2026-10-02. A pin to a release
+  candidate gives up the reproducibility the pin exists for.
+- **arrow 58 moves the geo crates with it.** geoparquet, geoarrow-schema, and geoarrow-array go
+  to 0.8, pyo3-arrow to 0.17, and serde_arrow to 0.14 with its `arrow-58` feature. None of them
+  builds against arrow 58 alone, so they share one commit. serde_arrow 0.13 has no `arrow-58`
+  feature. The workspace comment in `Cargo.toml` is wrong that geoparquet 0.8 moved to arrow 59:
+  0.8 builds on 58.
+- **geo moves to 0.33, the version `sedona-geo` resolves at 0.5.0-rc0.** `crates/domain` and
+  `crates/predictor` pin `geo` themselves, at 0.32, the newest beside SedonaDB 0.4.1. Until they
+  move too, the lock fails. The device build depends on both, so the move needs a device build.
+
+### Tasks
+
+- [ ] Move `sedona` and `sedona-geoparquet` to the 0.5.0 tag, `arrow` and `parquet` to 58.3,
+      `datafusion` to 54.1, and `object_store` to 0.13.
+- [ ] In the same commit, move `geoparquet`, `geoarrow-schema`, and `geoarrow-array` to 0.8,
+      `pyo3-arrow` to 0.17, and `serde_arrow` to 0.14 with its `arrow-58` feature.
+- [ ] Move `geo` to 0.33 in the workspace, in `crates/domain`, and in `crates/predictor`.
+- [ ] Rewrite the arrow comment in `Cargo.toml` for arrow 58, dropping its claim about
+      geoparquet 0.8.
+- [ ] Build with `just m5plus-build-release`, since the device shares `domain` and `predictor`.
+- [ ] Run `just test-no-docker` and `just test-geo`.
+
+### Observations
+
+- 2026-10-03: a scratch copy of the app built against 0.5.0-rc0 and the versions above with no
+  source change. 490 non-Docker tests and the geo tests passed. The device build was not tried.
+- 2026-10-19: silver `train_session` hits the same panic, since its `bbox` struct comes before
+  its geometry. A filter on `session_id` panics at `spatial_filter.rs:526`.
+- 2026-10-24: silver's writers now put the geometry columns first, and `Query::register_silver`
+  reads every silver dataset through SedonaDB. Only bronze still meets the panic, since its
+  Overture `segment` files keep the release's column order.
+
+## Slice: Rationalise Medallion Types
+
+### Target
+
+Make every reader of the store see each column as the type its row type declares.
+
+Silver's files say what its two geometry columns hold. The column named `geometry` holds the
+geography, in lat/lon, and `geometry_projected` holds the geometry, in a country's metres. The code
+measures the first on the round Earth and the second on a plane, but a file declares both as planar.
+[2026-11-02-geography-and-geometry-columns.md](2026-11-02-geography-and-geometry-columns.md) holds
+the assessment.
+
+DuckDB reads each dataset through a view that medallion generates from the dataset's row type. The
+view converts what DuckDB's Parquet reader drops, such as a duration, which it reads as an integer
+of milliseconds. [2026-11-15-duckdb-types.md](2026-11-15-duckdb-types.md) holds the assessment and
+the alternatives.
+
+### Tasks
+
+- [ ] Check each reader of the lat/lon column against a file with spherical edges. SedonaDB treats
+      such a column as a separate type, with its own set of functions.
+- [ ] If the readers allow it, declare the lat/lon column's edges as spherical. Compare every
+      derived dataset before and after.
+- [ ] Rename the columns to `geography` and `geometry`, as new versions of the six datasets that
+      hold them.
+- [ ] Measure a dictionary over the WKB, then GeoArrow-native encoding once SedonaDB reads it.
+- [ ] Answer the DuckDB doc's open questions: a CRS on `GEOMETRY`, partition pruning through a
+      view, and where the views live.
+- [ ] Generate a DuckDB view per dataset from its row type, converting each duration with
+      `to_milliseconds`, and each geometry as the first answer allows.
+- [ ] Read the views in `/choose-predictor`'s `runs.sql`, in place of its own conversions.
+
+## Slice: Demonstrable Behaviour
+
+### Target
+
+Some of the algorithms / processing we are doing here is getting quite complex, and I am likely to not remember / understand after some time, particularly if I go away and work on something else. So, we should produce a small "book", expressed in notebooks, and some associated blogposts on how this works, following the principles of [our research](2026-10-18-demonstrable-behaviour.md).
+
+Some of the key areas to cover:
+* deriving water crossings
+* [session crossings and matching](../crates/session_crossings/README.md)
+* [predictor](../crates/predictor/README.md)
+* evaluation
+  * The measure: a notification earns credit by its lead time to the next pass of its crossing,
+    with a ramp past N rather than a step. Repeats, false alarms, and misses score 0.
+  * The tracker's states, and how a prediction's confidence maps to them.
+  * The online and offline pass detectors, and the skew between them: seen, unmatched, and offset.
+  * The oracle, which checks the skeleton by scoring perfectly except where passes of a crossing
+    fall close together.
+  * Intervals from a bootstrap over sessions.
+  * The tune/test split by A5 cell:
+    * Why a cell rather than a line: `route_name` names a train.
+    * Why A5 rather than H3, and how a salt and buckets assign each cell a split.
+    * The resolution chosen, and why no resolution steadies the heading angle's p99 between the
+      splits.
+    * The invariants of the split, and the three plausible errors that only an invariant caught.
+  * Scoring each unit by its crossing's cell:
+    * A run replays each session whole. Cutting sessions at a cell's edge starts some mid-approach,
+      so more passes fall under N after a start, and CrowFlies' precision drops from 0.328 to
+      0.299.
+    * Each notification, pass, repeat, false alarm, and miss takes the split of its crossing's
+      cell. A run without a split scores every unit.
+    * False alarms per hour divide by the hours in the split's cells. Each step between two
+      samples counts towards the split of its first sample's cell.
+    * The skew counts only passes and visits whose crossing lies in the split's cells, so every
+      measure a run reports covers one split.
+  * Tuning reads only windows that lie wholly in tune cells.
+  * LightCone, the predictor the apps run:
+    * CrowFlies with a cone around the heading on top, which only lowers a confidence, so it
+      alerts on a subset of what CrowFlies alerts on.
+    * The heading and speed from the train's last move beyond a radius of stillness, so a
+      receiver wandering at rest gives neither.
+    * How far trains turn within N, measured over windows, bounds the sweep of the cone's angle.
+      The extremes differ between the splits, since a few places hold most reversals.
+  * F0.5: why the measure weighs precision above recall, and how β ranks the runs.
+  * Choosing settings: a sweep over the tune split, then each predictor's chosen settings run once
+    over the test split, and the apps' predictor chosen from those runs alone.
+  * How a run is stored:
+    * A crossing's transitions within one stay in reach become one episode, holding its path of
+      states and the gaps between them.
+    * Outcomes drop what other columns give, and sessions sort in route order, so similar rows
+      share a page.
+    * A migration refuses a run whose new rows do not rebuild its old ones exactly.
+
+### Starting points
+
+- **The evaluation's exploration notebooks.** `notebooks/evaluation/explore1.py` to `explore9.py`
+  each answered one question while the evaluation was built, and several explain a step as they go.
+  `explore8.py`, for example, sets out what each of a run's choices guards against. Fold them into
+  one or more notebooks that demonstrate the evaluation's behaviours or steps, then remove them,
+  with their answers in the removing commit. `explore3.py`, `explore4.py`, `explore8.py`, and
+  `explore9.py` read gold datasets that runs no longer write, `evaluation_transition_v1`,
+  `evaluation_outcome_v2`, and `evaluation_session_v2` among them. Each needs moving to the
+  datasets that replace them before it runs.
+
 # Milestone: V2
 
 ## Target
@@ -109,37 +249,6 @@ study this shape, and derives a bound on it from the physics of a train in a cur
 - [ ] Build the trumpet from that relationship, as a filter on CrowFlies' alerts in place of the
       cone.
 - [ ] Run it over the sessions LightCone's runs used, and compare it with the chosen predictor.
-
-# Unassigned
-
-Anything that doesn't clearly fit in V1 or V2.
-
-## Slice: make the store operable at size
-
-### Target
-
-The store's layout is settled; what it lacks is the ability to be *worked* — to re-derive
-part of history rather than all of it, and to stop accumulating files without bound. Both
-become urgent at a size we are not at yet, and both are cheaper to build before then.
-
-### Refactors / extensions
-
-- **Give the derivation CLIs a date-range argument**, so a run can ask for less than
-  everything. They currently read every partition and filter on data columns, which means
-  the partition pruning the layout provides is never exercised: re-deriving one day's output
-  costs a full scan. This is also the prerequisite for handing the work to an orchestrator
-  later, since a range is what a backfill is expressed in.
-- **Write down a compaction plan for the append-shaped layers**, before the small-file
-  problem is real rather than after. One file per ingestion is deliberate and correct at the
-  point of writing, but a dataset polled on an interval accumulates a file per poll
-  indefinitely (the sqlite backfill alone produced 1,307 in one dataset). The standard answer
-  is periodic compaction into fewer, larger files per partition; the thing to decide is what
-  triggers it and how it preserves immutability, since rewriting files is what that layer
-  forbids.
-- **Leave the engine catalog traits alone** until registering datasets by hand is genuinely
-  annoying, then add a schema provider *over* the dataset definitions rather than replacing
-  them. The definitions are plain data every engine can read; a catalog is one engine's view
-  of it, and those traits move between that engine's releases.
 
 ## Slice: replay the trains whose legs overlap
 
@@ -207,6 +316,60 @@ crossings they check came from whichever extract built them.
 
 Enrich the water crossings dataset with an angle relative to the train line and travel direction. That allows a recommendation about which direction to look from the train seat.
 
+# Unassigned
+
+Anything that doesn't clearly fit in V1 or V2.
+
+## Slice: make the store operable at size
+
+### Target
+
+The store's layout is settled; what it lacks is the ability to be *worked* — to re-derive
+part of history rather than all of it, and to stop accumulating files without bound. Both
+become urgent at a size we are not at yet, and both are cheaper to build before then.
+
+### Refactors / extensions
+
+- **Give the derivation CLIs a date-range argument**, so a run can ask for less than
+  everything. They currently read every partition and filter on data columns, which means
+  the partition pruning the layout provides is never exercised: re-deriving one day's output
+  costs a full scan. This is also the prerequisite for handing the work to an orchestrator
+  later, since a range is what a backfill is expressed in.
+- **Write down a compaction plan for the append-shaped layers**, before the small-file
+  problem is real rather than after. One file per ingestion is deliberate and correct at the
+  point of writing, but a dataset polled on an interval accumulates a file per poll
+  indefinitely (the sqlite backfill alone produced 1,307 in one dataset). The standard answer
+  is periodic compaction into fewer, larger files per partition; the thing to decide is what
+  triggers it and how it preserves immutability, since rewriting files is what that layer
+  forbids.
+- **Leave the engine catalog traits alone** until registering datasets by hand is genuinely
+  annoying, then add a schema provider *over* the dataset definitions rather than replacing
+  them. The definitions are plain data every engine can read; a catalog is one engine's view
+  of it, and those traits move between that engine's releases.
+
+## Slice: build the device's bindings with the device toolchain's clang
+
+### Target
+
+The device compiles with `esp-1.100.0.0`, but its bindings come from the clang 21.1.3 of
+`esp-1.98.1.0`. bindgen 0.71.1, which `esp-idf-sys` 0.37.2 uses, writes dozens of C structs as
+empty when it reads clang 22.1.4, the clang that `esp-1.100.0.0` ships.
+[The toolchain notes](device.md#toolchain) set out the failure. At the end, the Justfile's
+`LIBCLANG_PATH` names the clang of the toolchain the device compiles with, and `esp-1.98.1.0` is
+uninstalled.
+
+### Tasks
+
+- [ ] Find the first `esp-idf-sys` release whose bindgen reads clang 22, and the `esp-idf-hal` and
+      `esp-idf-svc` releases that build against it.
+- [ ] Move `m5plus` to those releases, and point `LIBCLANG_PATH` at the clang of the channel in
+      `rust-toolchain.toml`.
+- [ ] Build from `just m5plus-clean`, and confirm that the bindings give `spi_transaction_t` its
+      fields.
+- [ ] Soak the device with a real fix, as for each toolchain upgrade, and add the run to the soak
+      table in `docs/device.md`.
+- [ ] Drop the clang 22 note from `docs/device.md`, and uninstall `esp-1.98.1.0`.
+
 ## Slice: Adding POIs from images taken
 
 ### Idea
@@ -216,51 +379,6 @@ Assuming we have an iOS App, and it is running whilst people are taking pictures
 An onboard model could perhaps be used to do rough interpretation of kind of POI e.g. is it a building or a river or what.
 
 We probably don't want to go down the lines of storing the image, but perhaps there is some on-device or privacy-preserving way to identify exactly what the POI is based on the image.
-
-## Slice: SedonaDB 0.5.0 and the arrow generation
-
-### Target
-
-SedonaDB 0.5.0 moves arrow and parquet to 58.3, datafusion to 54.1, and object_store to 0.13.
-Every crate the store shares a `RecordBatch` with moves with them. The move fixes nothing known:
-0.5.0-rc0 still has the panic in
-[2026-10-03-sedona-nested-column-panic.md](2026-10-03-sedona-nested-column-panic.md). It keeps the
-pins current, and gets the arrow generation off 57 before more code depends on it.
-
-### Decisions
-
-- **The move waits for a release.** 0.5.0-rc0 was tagged on 2026-10-02. A pin to a release
-  candidate gives up the reproducibility the pin exists for.
-- **arrow 58 moves the geo crates with it.** geoparquet, geoarrow-schema, and geoarrow-array go
-  to 0.8, pyo3-arrow to 0.17, and serde_arrow to 0.14 with its `arrow-58` feature. None of them
-  builds against arrow 58 alone, so they share one commit. serde_arrow 0.13 has no `arrow-58`
-  feature. The workspace comment in `Cargo.toml` is wrong that geoparquet 0.8 moved to arrow 59:
-  0.8 builds on 58.
-- **geo moves to 0.33, the version `sedona-geo` resolves at 0.5.0-rc0.** `crates/domain` and
-  `crates/predictor` pin `geo` themselves, at 0.32, the newest beside SedonaDB 0.4.1. Until they
-  move too, the lock fails. The device build depends on both, so the move needs a device build.
-
-### Tasks
-
-- [ ] Move `sedona` and `sedona-geoparquet` to the 0.5.0 tag, `arrow` and `parquet` to 58.3,
-      `datafusion` to 54.1, and `object_store` to 0.13.
-- [ ] In the same commit, move `geoparquet`, `geoarrow-schema`, and `geoarrow-array` to 0.8,
-      `pyo3-arrow` to 0.17, and `serde_arrow` to 0.14 with its `arrow-58` feature.
-- [ ] Move `geo` to 0.33 in the workspace, in `crates/domain`, and in `crates/predictor`.
-- [ ] Rewrite the arrow comment in `Cargo.toml` for arrow 58, dropping its claim about
-      geoparquet 0.8.
-- [ ] Build with `just m5plus-build-release`, since the device shares `domain` and `predictor`.
-- [ ] Run `just test-no-docker` and `just test-geo`.
-
-### Observations
-
-- 2026-10-03: a scratch copy of the app built against 0.5.0-rc0 and the versions above with no
-  source change. 490 non-Docker tests and the geo tests passed. The device build was not tried.
-- 2026-10-19: silver `train_session` hits the same panic, since its `bbox` struct comes before
-  its geometry. A filter on `session_id` panics at `spatial_filter.rs:526`.
-- 2026-10-24: silver's writers now put the geometry columns first, and `Query::register_silver`
-  reads every silver dataset through SedonaDB. Only bronze still meets the panic, since its
-  Overture `segment` files keep the release's column order.
 
 ## Slice: the writing rules applied at the edit, not at the stop
 
@@ -341,119 +459,3 @@ tool, puts the self-check in front of Claude before its next step.
       refused.
 - [ ] Invoke both skills, edit the file, and confirm the self-check arrives before the next step.
 - [ ] Change the file through Bash, and confirm the self-check arrives there as well.
-
-## Slice: Rationalise Medallion Types
-
-### Target
-
-Make every reader of the store see each column as the type its row type declares.
-
-Silver's files say what its two geometry columns hold. The column named `geometry` holds the
-geography, in lat/lon, and `geometry_projected` holds the geometry, in a country's metres. The code
-measures the first on the round Earth and the second on a plane, but a file declares both as planar.
-[2026-11-02-geography-and-geometry-columns.md](2026-11-02-geography-and-geometry-columns.md) holds
-the assessment.
-
-DuckDB reads each dataset through a view that medallion generates from the dataset's row type. The
-view converts what DuckDB's Parquet reader drops, such as a duration, which it reads as an integer
-of milliseconds. [2026-11-15-duckdb-types.md](2026-11-15-duckdb-types.md) holds the assessment and
-the alternatives.
-
-### Tasks
-
-- [ ] Check each reader of the lat/lon column against a file with spherical edges. SedonaDB treats
-      such a column as a separate type, with its own set of functions.
-- [ ] If the readers allow it, declare the lat/lon column's edges as spherical. Compare every
-      derived dataset before and after.
-- [ ] Rename the columns to `geography` and `geometry`, as new versions of the six datasets that
-      hold them.
-- [ ] Measure a dictionary over the WKB, then GeoArrow-native encoding once SedonaDB reads it.
-- [ ] Answer the DuckDB doc's open questions: a CRS on `GEOMETRY`, partition pruning through a
-      view, and where the views live.
-- [ ] Generate a DuckDB view per dataset from its row type, converting each duration with
-      `to_milliseconds`, and each geometry as the first answer allows.
-- [ ] Read the views in `/choose-predictor`'s `runs.sql`, in place of its own conversions.
-
-## Slice: refuse `expect` and `unwrap` outside tests
-
-### Target
-
-Make clippy refuse `expect` and `unwrap` outside tests, so that each one left in the code states why
-it is there. `.claude/rules/rust.md` asks for this in prose, and no lint enforces it. A text count on
-2 November 2026 found about 114 `expect` and 2 `unwrap` calls outside test modules, across 41 files.
-37 of them are in `src/bin/`.
-
-### Tasks
-
-- [ ] Set `expect_used` and `unwrap_used` to `deny` in `[workspace.lints.clippy]`, and allow both in
-      tests through a `clippy.toml`. Check which test helpers outside `#[test]` and `#[cfg(test)]`
-      the lints still flag.
-- [ ] Go through each flagged call in library code. Return an error where the failure can happen.
-      Otherwise, add `#[allow(clippy::expect_used, reason = "...")]`, whose reason says why it
-      cannot fail. This covers `Row::example`, which runs on the write path.
-- [ ] Go through each flagged call in `src/bin/` by the same test.
-- [ ] Apply the same lints to the `m5plus` workspace.
-- [ ] Name the lints in `.claude/rules/rust.md`.
-
-## Slice: Demonstrable Behaviour
-
-### Target
-
-Some of the algorithms / processing we are doing here is getting quite complex, and I am likely to not remember / understand after some time, particularly if I go away and work on something else. So, we should produce a small "book", expressed in notebooks, and some associated blogposts on how this works, following the principles of [our research](2026-10-18-demonstrable-behaviour.md).
-
-Some of the key areas to cover:
-* deriving water crossings
-* [session crossings and matching](../crates/session_crossings/README.md)
-* [predictor](../crates/predictor/README.md)
-* evaluation
-  * The measure: a notification earns credit by its lead time to the next pass of its crossing,
-    with a ramp past N rather than a step. Repeats, false alarms, and misses score 0.
-  * The tracker's states, and how a prediction's confidence maps to them.
-  * The online and offline pass detectors, and the skew between them: seen, unmatched, and offset.
-  * The oracle, which checks the skeleton by scoring perfectly except where passes of a crossing
-    fall close together.
-  * Intervals from a bootstrap over sessions.
-  * The tune/test split by A5 cell:
-    * Why a cell rather than a line: `route_name` names a train.
-    * Why A5 rather than H3, and how a salt and buckets assign each cell a split.
-    * The resolution chosen, and why no resolution steadies the heading angle's p99 between the
-      splits.
-    * The invariants of the split, and the three plausible errors that only an invariant caught.
-  * Scoring each unit by its crossing's cell:
-    * A run replays each session whole. Cutting sessions at a cell's edge starts some mid-approach,
-      so more passes fall under N after a start, and CrowFlies' precision drops from 0.328 to
-      0.299.
-    * Each notification, pass, repeat, false alarm, and miss takes the split of its crossing's
-      cell. A run without a split scores every unit.
-    * False alarms per hour divide by the hours in the split's cells. Each step between two
-      samples counts towards the split of its first sample's cell.
-    * The skew counts only passes and visits whose crossing lies in the split's cells, so every
-      measure a run reports covers one split.
-  * Tuning reads only windows that lie wholly in tune cells.
-  * LightCone, the predictor the apps run:
-    * CrowFlies with a cone around the heading on top, which only lowers a confidence, so it
-      alerts on a subset of what CrowFlies alerts on.
-    * The heading and speed from the train's last move beyond a radius of stillness, so a
-      receiver wandering at rest gives neither.
-    * How far trains turn within N, measured over windows, bounds the sweep of the cone's angle.
-      The extremes differ between the splits, since a few places hold most reversals.
-  * F0.5: why the measure weighs precision above recall, and how β ranks the runs.
-  * Choosing settings: a sweep over the tune split, then each predictor's chosen settings run once
-    over the test split, and the apps' predictor chosen from those runs alone.
-  * How a run is stored:
-    * A crossing's transitions within one stay in reach become one episode, holding its path of
-      states and the gaps between them.
-    * Outcomes drop what other columns give, and sessions sort in route order, so similar rows
-      share a page.
-    * A migration refuses a run whose new rows do not rebuild its old ones exactly.
-
-### Starting points
-
-- **The evaluation's exploration notebooks.** `notebooks/evaluation/explore1.py` to `explore9.py`
-  each answered one question while the evaluation was built, and several explain a step as they go.
-  `explore8.py`, for example, sets out what each of a run's choices guards against. Fold them into
-  one or more notebooks that demonstrate the evaluation's behaviours or steps, then remove them,
-  with their answers in the removing commit. `explore3.py`, `explore4.py`, `explore8.py`, and
-  `explore9.py` read gold datasets that runs no longer write, `evaluation_transition_v1`,
-  `evaluation_outcome_v2`, and `evaluation_session_v2` among them. Each needs moving to the
-  datasets that replace them before it runs.

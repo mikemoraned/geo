@@ -22,20 +22,46 @@ fn motis_source_namespace() -> Uuid {
 pub const MOTIS_SOURCE_V4: DatasetSpec<layers::Bronze> =
     DatasetSpec::unpartitioned("motis_source_v4");
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(from = "String")]
-pub struct MotisSourceId(String);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
+#[serde(try_from = "String")]
+pub struct MotisSourceId(Uuid);
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("`{id}` is not a Motis source id: {source}")]
+pub struct NotAMotisSourceId {
+    id: String,
+    #[source]
+    source: uuid::Error,
+}
 
 impl MotisSourceId {
     #[hashfn]
-    pub(crate) fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
+    pub fn new(id: impl Into<String>) -> Result<Self, NotAMotisSourceId> {
+        let id = id.into();
+        match Uuid::parse_str(&id) {
+            Ok(uuid) => Ok(Self(uuid)),
+            Err(source) => Err(NotAMotisSourceId { id, source }),
+        }
     }
 }
 
-impl From<String> for MotisSourceId {
-    fn from(id: String) -> Self {
+impl TryFrom<String> for MotisSourceId {
+    type Error = NotAMotisSourceId;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
         Self::new(id)
+    }
+}
+
+impl From<Uuid> for MotisSourceId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl Serialize for MotisSourceId {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_newtype_struct("MotisSourceId", &self.to_string())
     }
 }
 
@@ -278,7 +304,7 @@ impl MotisSource {
         .chain(self.label.as_ref().map(Label::as_str))
         .collect::<Vec<_>>()
         .join("\n");
-        MotisSourceId::new(Uuid::new_v5(&motis_source_namespace(), name.as_bytes()).to_string())
+        MotisSourceId::from(Uuid::new_v5(&motis_source_namespace(), name.as_bytes()))
     }
 
     pub fn row(&self, registered_at: DateTime<Utc>) -> MotisSourceRowV4 {
@@ -328,22 +354,21 @@ impl Row for MotisSourceRowV4 {
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_SOURCE_V4;
     const INSTANTS: &'static [&'static str] = &["registered_at"];
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "each value here is a constant that its type accepts"
+    )]
     fn example() -> Self {
         Self {
-            source_id: MotisSourceId::new(Uuid::nil().to_string()),
-            base_url: MotisBaseUrl::new("https://api.transitous.org/")
-                .expect("a constant URL parses"),
+            source_id: MotisSourceId::from(Uuid::nil()),
+            base_url: MotisBaseUrl::new("https://api.transitous.org/").unwrap(),
             motis_version: MotisVersion(Version::new(2, 11, 3)),
             feed: Feed::Transitous,
             country: Some("DE".to_string()),
-            overture_region_id: Some(
-                GersId::new(Uuid::nil().to_string()).expect("a constant UUID is a GERS id"),
-            ),
+            overture_region_id: Some(GersId::from(Uuid::nil())),
             overture_region_name: Some("Thüringen".to_string()),
-            overture_release: Some(
-                OvertureRelease::new("2026-09-23.1").expect("a constant Overture release parses"),
-            ),
-            label: Some(Label::new("example").expect("a label")),
+            overture_release: Some(OvertureRelease::new("2026-09-23.1").unwrap()),
+            label: Some(Label::new("example").unwrap()),
             registered_at: DateTime::UNIX_EPOCH,
         }
     }

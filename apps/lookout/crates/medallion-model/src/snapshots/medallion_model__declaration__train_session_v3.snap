@@ -30,7 +30,7 @@ columns:
     data_type: LargeUtf8
     nullable: false
     checks:
-      "MotisSourceId::new": 487c612645cbd6b576fd3f275f26a73e7ca182bfc6899825ba42fae32b8d846b
+      "MotisSourceId::new": 212cc854a1999efd92bcc14b8743bea1cc2034c0a561a63e39c1dbbbe17c8679
   - name: source_label
     data_type: LargeUtf8
     nullable: true
@@ -54,7 +54,7 @@ columns:
     data_type: Float64
     nullable: false
     checks:
-      percentage_in_range: 2d4bd207af6efb196d867a15be10414989ddfc21ed931f46b365df563be7bdfc
+      percentage_in_range: f37e26a3e92fb9f6ec3b93de2a6b3024489e12472759a60b7bcbc17f06111aff
   - name: bbox
     data_type: "Struct(\"xmin\": non-null Float64, \"ymin\": non-null Float64, \"xmax\": non-null Float64, \"ymax\": non-null Float64)"
     nullable: false

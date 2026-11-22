@@ -10,9 +10,9 @@ use crux_core::{
 use domain::{Bbox, CrossingCompact, CrossingCompactId, Sample, StateKind};
 use geo_types::Point;
 use predictor::{
-    Crossings, CrowFlies, DEFAULT_ALERTING, DEFAULT_HALF_WIDTH, DEFAULT_PASS_RADIUS,
-    DEFAULT_STILL_WITHIN, DEFAULT_WATCHING, DetectPasses, Event as Observed, LastMove, LightCone,
-    OnlineDetector, OutOfOrder, Parser, Predict, Predictions, Sentence, Tracker,
+    Crossings, CrowFlies, DEFAULT_HALF_WIDTH, DEFAULT_PASS_RADIUS, DEFAULT_RADII,
+    DEFAULT_STILL_WITHIN, DetectPasses, Event as Observed, LastMove, LightCone, OnlineDetector,
+    OutOfOrder, Parser, Predict, Predictions, Sentence, Tracker,
 };
 use serde::{Deserialize, Serialize};
 
@@ -62,11 +62,9 @@ impl<C: Crossings<Float> + Clone> Tracking<C> {
             predictor: LightCone::new(
                 CrowFlies::new(
                     crossings.clone(),
-                    DEFAULT_WATCHING,
-                    DEFAULT_ALERTING,
+                    DEFAULT_RADII,
                     LastMove::new(DEFAULT_STILL_WITHIN),
-                )
-                .expect("the default alerting radius lies within the default watching radius"),
+                ),
                 DEFAULT_HALF_WIDTH,
             ),
             detector: OnlineDetector::new(crossings, DEFAULT_PASS_RADIUS),
@@ -324,7 +322,7 @@ mod tests {
     use domain::places::DRESDEN_HBF;
     use geo::{Distance, Haversine};
     use geo_types::Point;
-    use predictor::fixtures::{Fix, captured};
+    use test_predictor::{Fix, captured};
 
     use super::*;
 

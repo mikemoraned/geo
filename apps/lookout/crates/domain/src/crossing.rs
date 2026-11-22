@@ -136,8 +136,8 @@ impl<P: Precision> From<CrossingCompact<P>> for CrossingCompactRow {
     fn from(crossing: CrossingCompact<P>) -> Self {
         Self(
             crossing.id,
-            crossing.latitude().to_f64().expect("a degree is a number"),
-            crossing.longitude().to_f64().expect("a degree is a number"),
+            crossing.latitude().into(),
+            crossing.longitude().into(),
         )
     }
 }

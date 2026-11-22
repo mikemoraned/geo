@@ -55,20 +55,18 @@ pub struct MotisClient {
     inner: Client,
 }
 
-impl Default for MotisClient {
-    fn default() -> Self {
-        Self::new(&Url::parse(DEFAULT_BASE_URL).expect("the default base URL is a URL"))
-    }
-}
-
 impl MotisClient {
     pub fn new(base_url: &Url) -> Self {
         let http = reqwest::ClientBuilder::new()
             .user_agent(USER_AGENT)
             .connect_timeout(TIMEOUT)
             .timeout(TIMEOUT)
-            .build()
-            .expect("a client with only a user agent and timeouts set builds");
+            .build();
+        #[expect(
+            clippy::unwrap_used,
+            reason = "reqwest fails a build only on a bad TLS, proxy, or header setting, and this client sets only a constant user agent and timeouts"
+        )]
+        let http = http.unwrap();
         Self {
             inner: Client::new_with_client(base_url.as_str().trim_end_matches('/'), http),
         }
@@ -178,7 +176,7 @@ mod tests {
 
     #[tokio::test]
     async fn trips_in_bbox_hits_local_server_end_to_end() {
-        let client = MotisClient::default();
+        let client = MotisClient::new(&Url::parse(DEFAULT_BASE_URL).expect("a URL"));
         let over_frankfurt = Rect::new(Coord { x: 8.4, y: 49.9 }, Coord { x: 9.0, y: 50.3 });
         let now = Utc::now();
         let window = now - chrono::Duration::minutes(5)..now + chrono::Duration::minutes(5);
@@ -237,7 +235,10 @@ mod tests {
             USER_AGENT.contains(env!("CARGO_PKG_VERSION")),
             "{USER_AGENT}"
         );
-        assert!(USER_AGENT.contains(env!("BUILD_CODE_VERSION")), "{USER_AGENT}");
+        assert!(
+            USER_AGENT.contains(env!("BUILD_CODE_VERSION")),
+            "{USER_AGENT}"
+        );
         assert!(
             USER_AGENT.contains("https://github.com/mikemoraned/geo"),
             "{USER_AGENT}"
@@ -246,7 +247,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_local_server_reports_its_version_end_to_end() {
-        let version = MotisClient::default()
+        let version = MotisClient::new(&Url::parse(DEFAULT_BASE_URL).expect("a URL"))
             .motis_version()
             .await
             .expect("ask the local Motis server for its version");

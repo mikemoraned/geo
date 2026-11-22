@@ -236,7 +236,7 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
         ("CrossingId", Checks::from([name])),
         (
             "DeviceId",
-            Checks::from([("device_id_present", domain::device::DEVICE_ID_PRESENT_HASH)]),
+            Checks::from([("DeviceId::new", domain::DeviceId::NEW_HASH)]),
         ),
         (
             "EpisodePath",
@@ -279,10 +279,7 @@ fn newtypes() -> BTreeMap<&'static str, Checks> {
         ),
         (
             "PolylineId",
-            Checks::from([(
-                "polyline_id_is_a_uuid",
-                crate::motis::POLYLINE_ID_IS_A_UUID_HASH,
-            )]),
+            Checks::from([("PolylineId::new", crate::motis::PolylineId::NEW_HASH)]),
         ),
         ("SessionId", Checks::from([name])),
         (

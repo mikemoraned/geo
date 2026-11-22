@@ -1988,14 +1988,13 @@ dependencies = [
 name = "countries"
 version = "0.1.0"
 dependencies = [
- "arrow 57.3.1",
  "chrono",
- "datafusion",
  "geo 0.32.0",
  "geo-types",
  "medallion",
  "medallion-model",
  "tempfile",
+ "test-countries",
  "thiserror 2.0.18",
  "tokio",
 ]
@@ -3424,6 +3423,7 @@ dependencies = [
  "statrs",
  "strum 0.28.0",
  "tempfile",
+ "test-countries",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -5127,6 +5127,7 @@ dependencies = [
  "medallion",
  "platform-core",
  "predictor",
+ "test-predictor",
 ]
 
 [[package]]
@@ -5273,6 +5274,7 @@ version = "0.1.0"
 dependencies = [
  "arrow 57.3.1",
  "chrono",
+ "futures",
  "medallion",
  "medallion-model",
  "py-common",
@@ -6189,6 +6191,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "test-predictor",
  "thiserror 2.0.18",
  "uuid",
  "wkb",
@@ -6256,6 +6259,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "test-predictor",
  "thiserror 2.0.18",
 ]
 
@@ -6884,7 +6888,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "transport",
  "uuid",
 ]
 
@@ -8597,6 +8600,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-countries"
+version = "0.1.0"
+dependencies = [
+ "arrow 57.3.1",
+ "chrono",
+ "datafusion",
+ "geo-types",
+ "medallion",
+ "medallion-model",
+]
+
+[[package]]
 name = "test-passkeys"
 version = "0.1.0"
 dependencies = [
@@ -8605,6 +8620,14 @@ dependencies = [
  "serde",
  "serde_json",
  "webauthn-rs",
+]
+
+[[package]]
+name = "test-predictor"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "predictor",
 ]
 
 [[package]]
@@ -9159,7 +9182,6 @@ dependencies = [
  "arrow 57.3.1",
  "chrono",
  "clap",
- "countries",
  "datafusion",
  "geo 0.32.0",
  "geo-types",
@@ -9171,6 +9193,7 @@ dependencies = [
  "sedona-geoparquet",
  "serde",
  "tempfile",
+ "test-countries",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -9582,6 +9605,7 @@ dependencies = [
  "platform-core",
  "predictor",
  "serde",
+ "wkb",
 ]
 
 [[package]]

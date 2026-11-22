@@ -35,7 +35,7 @@ enum Command {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -44,24 +44,22 @@ async fn main() {
         .init();
 
     let args = Args::parse();
-    let root = args.medallion.root().expect("locate the medallion store");
+    let root = args.medallion.root()?;
     let command = args.command.unwrap_or(Command::PeekLatest {
         limit: DEFAULT_LIMIT,
     });
 
     rustls::crypto::ring::default_provider()
         .install_default()
-        .expect("install rustls crypto provider");
+        .map_err(|_| "a rustls crypto provider was already installed")?;
 
     let archive = Archive::new(root.clone());
 
-    let url = std::env::var("LOOKOUT_REDIS_URL").expect("LOOKOUT_REDIS_URL must be set");
-    let mut conn = telemetry::connect(&url)
-        .await
-        .expect("connect to telemetry redis");
+    let url = std::env::var("LOOKOUT_REDIS_URL").map_err(|_| "LOOKOUT_REDIS_URL must be set")?;
+    let mut conn = telemetry::connect(&url).await?;
 
     let written = match &command {
-        Command::PeekLatest { limit } => peek_latest(&archive, &mut conn, *limit).await,
+        Command::PeekLatest { limit } => peek_latest(&archive, &mut conn, *limit).await?,
         Command::Drain => drain(&archive, &mut conn).await,
     };
 
@@ -74,17 +72,16 @@ async fn main() {
         medallion_root = %root.path().display(),
         "wrote telemetry"
     );
+    Ok(())
 }
 
 async fn peek_latest(
     archive: &Archive,
     conn: &mut redis::aio::MultiplexedConnection,
     limit: usize,
-) -> Written {
+) -> Result<Written, telemetry::QueueError> {
     tracing::info!(limit, "peeking at the latest samples; nothing is removed");
-    let samples = telemetry::peek_newest_samples(conn, limit)
-        .await
-        .expect("read latest samples");
+    let samples = telemetry::peek_newest_samples(conn, limit).await?;
 
     let mut total = Written::default();
     for batch in samples.chunks(BATCH_SIZE) {
@@ -93,7 +90,7 @@ async fn peek_latest(
             None => break,
         }
     }
-    total
+    Ok(total)
 }
 
 async fn drain(archive: &Archive, conn: &mut redis::aio::MultiplexedConnection) -> Written {

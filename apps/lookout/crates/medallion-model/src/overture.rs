@@ -5,6 +5,7 @@ use geo_types::{Coord, Rect};
 use medallion::{Country, Dataset, DatasetSpec, PartitionValue, PathError, Root, Row, layers};
 use nutype::nutype;
 use serde::{Deserialize, Serialize};
+use uuid::uuid;
 
 use crate::gers::GersId;
 use crate::overture_release::OvertureRelease;
@@ -33,8 +34,11 @@ fn partition_value(id: &str) -> Result<(), medallion::PathError> {
 
 impl ExtractId {
     pub fn at(at: DateTime<Utc>) -> Self {
-        Self::new(at.format(COMPACT_UTC).to_string())
-            .expect("a compact UTC instant holds only digits and letters")
+        #[expect(
+            clippy::unwrap_used,
+            reason = "a compact UTC instant holds only digits and letters"
+        )]
+        Self::new(at.format(COMPACT_UTC).to_string()).unwrap()
     }
 
     pub fn new(id: impl Into<String>) -> Result<Self, medallion::PathError> {
@@ -78,11 +82,10 @@ pub struct OvertureRegion {
 }
 
 pub fn division_id(country: Country) -> GersId {
-    let id = match country {
-        Country::Germany => "567d1698-7209-4b94-b7b8-0bc71bde0104",
-        Country::UnitedKingdom => "ce3429b1-d5c6-4763-91e7-0107e26d613e",
-    };
-    GersId::new(id).expect("a division id written here is a constant, checked by the tests below")
+    GersId::from(match country {
+        Country::Germany => uuid!("567d1698-7209-4b94-b7b8-0bc71bde0104"),
+        Country::UnitedKingdom => uuid!("ce3429b1-d5c6-4763-91e7-0107e26d613e"),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -123,12 +126,15 @@ impl Row for ExtractManifestRowV3 {
     const DATASET: DatasetSpec<Self::Layer> = EXTRACT_MANIFEST_V3;
     const INSTANTS: &'static [&'static str] = &["extracted_at"];
 
+    #[expect(
+        clippy::unwrap_used,
+        reason = "each value here is a constant that its type accepts"
+    )]
     fn example() -> Self {
         Self {
             extract_id: "example".to_string(),
             extracted_at: DateTime::UNIX_EPOCH,
-            overture_release: OvertureRelease::new("2026-09-23.1")
-                .expect("a constant release follows Overture's naming"),
+            overture_release: OvertureRelease::new("2026-09-23.1").unwrap(),
             country: "DE".to_string(),
             min_lon: 0.0,
             min_lat: 0.0,
@@ -141,15 +147,6 @@ impl Row for ExtractManifestRowV3 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn every_country_names_a_division_that_parses_as_a_gers_id() {
-        for country in Country::ALL {
-            let id = division_id(country);
-
-            assert_eq!(id.to_string().parse(), Ok(id), "{country}");
-        }
-    }
 
     #[test]
     fn no_two_countries_name_the_same_division() {

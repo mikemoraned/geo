@@ -49,14 +49,44 @@ These rules **extend** the [Rust API Guidelines](https://rust-lang.github.io/api
   - Specify version in `rust-toolchain.toml` and edition in `Cargo.toml`
 
 - Always remove dead code — never suppress warnings with `#[allow(dead_code)]` to keep code "for later". Git history is the archive; the working tree should only contain what's currently used.
-- Prefer an explicit `Result` with a `thiserror` error over a panic. Reserve `unwrap()`/`expect()` for cases that are genuinely infallible by construction (a compile-time constant, a just-checked invariant) or where panicking is the intended behaviour (build scripts, a once-per-process startup install); annotate those with a justification of why it can't fail. When replacing an `expect()` whose message explained *why* it failed, carry that reason into a `thiserror` variant rather than dropping it into a bare `?` or a stringly error. `unwrap()` and `expect()` are fine in tests.
-- **Refuse invalid input where it enters, then treat any later inconsistency as an error.** A
-  constructor checks what the rest of the code relies on, such as an interval that ends after it
-  starts or a line of at least two points, and returns an `Err` for input that breaks it. Code
-  downstream relies on that check rather than repeating it. Where a library call still returns an
-  `Option` or a `Result` that the check has made impossible to fail, map that failure to an error
-  naming the inconsistency and return it. Never drop it silently with `filter_map`, and never
-  replace it with a default.
+- Prefer an explicit `Result` with a `thiserror` error over a panic. Reserve `unwrap()`/`expect()` for cases that are genuinely infallible by construction (a compile-time constant, a just-checked invariant) or where panicking is the intended behaviour (build scripts, a once-per-process startup install); mark each as the next rule describes. When replacing an `expect()` whose message explained *why* it failed, carry that reason into a `thiserror` variant rather than dropping it into a bare `?` or a stringly error. `unwrap()` and `expect()` are fine in tests.
+- **A call that cannot fail is an `unwrap()` under an `#[expect]` that gives the reason.** The
+  workspace lints `clippy::unwrap_used` and `clippy::expect_used` flag every call outside a test.
+  Put `#[expect(clippy::unwrap_used, reason = "...")]` on the narrowest item that holds the call: a
+  statement, a match arm, or a function. An `#[expect]` warns once the call it covers has gone. The
+  lints `allow_attributes` and `allow_attributes_without_reason` refuse an outer `#[allow]` and an
+  allowance with no reason.
+  - The reason is one plain sentence stating the fact that stops the call failing, such as
+    "`Span::new` refuses a span of zero or less". It states neither the call nor what the code
+    checked.
+  - An integration-test crate, a crate that only tests use, and a build script allow both lints
+    once at their root, since each reports failure by panicking.
+  - Code a generator writes keeps an `#[allow]` on the module that includes it, since what it
+    suppresses changes with the generator's output. That `#[allow]` names `allow_attributes` and
+    `allow_attributes_without_reason` too.
+- **The build checks a constant.** A constant built through a check that the compiler evaluates
+  needs no `unwrap()` and no allowance.
+  - A type with constants gains a `const fn checked` that returns `Option<Self>` beside its `new`.
+    Each constant is `checked(..).expect("...")` in a `const` item. A wrong constant fails the
+    build, with the reason as its message. Clippy skips an `expect` that the compiler evaluates.
+  - Two values that a rule relates become one type with the same pair of constructors.
+  - Prefer a `const` item to a `const { }` block. `cargo check` and Clippy evaluate a `const` item,
+    and only `cargo build` evaluates a block.
+  - `Result::expect` does not run in a `const` item. Match a constructor's `Result` instead, and
+    `panic!` with the reason in the `Err` arm.
+  - A UUID constant is a `uuid!` literal, which the compiler parses.
+  - A rule between constants that builds no value is a `const _: () = assert!(..)`.
+- **Refuse invalid input where it enters, then rely on the check.** A constructor checks what the
+  rest of the code relies on, such as an interval that ends after it starts or a line of at least
+  two points, and returns an `Err` for input that breaks it. Code downstream relies on that check
+  rather than repeating it.
+  - A constructor that converts, decodes, or measures its input keeps the result, so a later
+    method has nothing to unwrap.
+  - Where a library call still returns an `Option` or a `Result` that the check has made
+    impossible to fail, `unwrap()` it under a reason, as the rule above describes.
+  - Where no constructor holds the invariant, such as one that spans rows read from a store, map
+    a failure to an error naming the inconsistency and return it.
+  - Never drop a failure silently with `filter_map`, and never replace it with a default.
 - Follow the [NewType](https://doc.rust-lang.org/rust-by-example/generics/new_types.html) idiom — avoid bare Strings or f32s
   - When creating a NewType in Rust that is parsed from a `String`, implement the `FromStr` trait, which returns `Result<Self, Self::Err>` where Err is an associated error type you define. 
   - Additionally, provide a `pub fn new(s: impl Into<String>) -> Result<Self, YourError>` constructor for ergonomic direct construction, and have your `FromStr` implementation delegate to `new()`.

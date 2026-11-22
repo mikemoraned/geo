@@ -44,6 +44,12 @@ impl TryFrom<String> for GersId {
     }
 }
 
+impl From<Uuid> for GersId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
 impl Serialize for GersId {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_newtype_struct("GersId", &self.to_string())
@@ -75,6 +81,13 @@ mod tests {
 
         assert_eq!(shouted, GersId::new(GERMANY).expect("a GERS id"));
         assert_eq!(shouted.to_string(), GERMANY);
+    }
+
+    #[test]
+    fn an_id_from_a_uuid_is_written_as_that_uuid() {
+        let uuid = Uuid::parse_str(GERMANY).expect("a UUID");
+
+        assert_eq!(GersId::from(uuid).to_string(), GERMANY);
     }
 
     #[test]

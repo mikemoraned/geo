@@ -39,7 +39,7 @@ impl CaptureLog {
         let polls: Vec<MotisPollRowV2> = segments
             .iter()
             .map(|segment| {
-                poll_row(self.source_id.clone(), captured_at, segment, details)
+                poll_row(self.source_id, captured_at, segment, details)
                     .expect("a fixture's polyline is valid")
             })
             .collect();
