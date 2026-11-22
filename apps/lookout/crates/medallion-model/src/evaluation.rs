@@ -338,17 +338,13 @@ impl Row for EvaluationRunRowV6 {
     const INSTANTS: &'static [&'static str] = &["started_at"];
     const DURATIONS: &'static [&'static str] = &["horizon", "last_moment", "ramp", "warm_up"];
 
-    #[allow(
-        clippy::unwrap_used,
-        reason = "each value here is a constant that its type accepts"
-    )]
     fn example() -> Self {
         Self {
             started_at: DateTime::UNIX_EPOCH,
             evaluation_version: "replay-v1".to_string(),
             code_version: "0000000000000000000000000000000000000000".to_string(),
             country: "DE".to_string(),
-            realtime_at_least: Percentage::new(90.0).unwrap(),
+            realtime_at_least: const { Percentage::checked(90.0).expect("90 lies from 0 to 100") },
             sessions: 1000,
             pick_seed: 1,
             predictor: PredictorName::Oracle,

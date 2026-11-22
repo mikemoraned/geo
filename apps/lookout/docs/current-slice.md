@@ -201,8 +201,13 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       as `HalfWidth` has. Build `DEFAULT_RADII` in a `const` item with an `expect` stating the
       relation. `CrowFlies::new` then takes a `Radii` and cannot fail, and `platform-core`'s
       allowance goes. The refusal's tests move from `CrowFlies` to `Radii`.
-- [ ] Give `Percentage` a `const fn checked` too, and build the constant percentages in
+- [x] Give `Percentage` a `const fn checked` too, and build the constant percentages in
       `EvaluationRunRowV6::example` and `TrainSessionRowV3::example` through it.
+      nutype's `const_fn` makes `try_new` a `const fn`, so `percentage_in_range` became one.
+      It accepts the same values, so the declarations keep their versions and record the new
+      hash. Each percentage sits in a `const { }` block, which `cargo build` evaluates and
+      `cargo check` and `cargo clippy` skip. A `const` item, such as `DEFAULT_RADII`, fails all
+      three.
 - [ ] Replace `holds_points` with a `const fn` in `platform-core`'s `pointset` that makes every
       check `PointSet::new` makes, the coordinates included, reading each with `from_le_bytes`.
       `PointSet::new` calls it before casting, and `m5-core`'s carried set asserts it at build

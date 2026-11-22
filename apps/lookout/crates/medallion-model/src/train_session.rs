@@ -48,10 +48,6 @@ impl Row for TrainSessionRowV3 {
     const INSTANTS: &'static [&'static str] = &["started_at", "ended_at"];
     const UNIQUE: &'static [&'static str] = &["session_id"];
 
-    #[allow(
-        clippy::unwrap_used,
-        reason = "each value here is a constant that its type accepts"
-    )]
     fn example() -> Self {
         let source = MotisSourceRowV4::example();
         let trip_id = TrainSegmentRowV4::example().trip_id;
@@ -63,7 +59,7 @@ impl Row for TrainSessionRowV3 {
             started_at: DateTime::UNIX_EPOCH,
             ended_at: DateTime::UNIX_EPOCH,
             sample_count: 1,
-            realtime_percentage: Percentage::new(100.0).unwrap(),
+            realtime_percentage: const { Percentage::checked(100.0).expect("100 lies from 0 to 100") },
             bbox: Bbox::of(Rect::new((0.0, 0.0), (1.0, 1.0))),
         }
     }
