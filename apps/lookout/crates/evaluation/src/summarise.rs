@@ -424,7 +424,7 @@ mod tests {
             })
             .collect();
         let sessions: Vec<EvaluationSessionRowV3> =
-            (0..20).map(|n| lasting(&n.to_string(), 3_600)).collect();
+            Vec::from_fn(20, |n| lasting(&n.to_string(), 3_600));
 
         let once = summarise(&sessions, &scored, &bootstrap(7)).expect("a summary");
         let again = summarise(&sessions, &scored, &bootstrap(7)).expect("a summary");

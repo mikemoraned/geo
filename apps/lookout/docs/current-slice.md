@@ -171,7 +171,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 
 - [x] Use `Path::trim_prefix` in place of `strip_prefix` and an unwrap, at
       `crates/medallion/src/path.rs:523` and `crates/recorder/tests/sessionise.rs:120`.
-- [ ] Use `Vec::from_fn` in place of a `usize` range mapped and collected into a `Vec`, at
+- [x] Use `Vec::from_fn` in place of a `usize` range mapped and collected into a `Vec`, at
       `crates/crossings/src/pointset.rs:98`, `crates/crossings/tests/pack.rs:202`,
       `crates/evaluation/src/cone.rs:325`, `crates/evaluation/src/fixtures.rs:59`,
       `crates/evaluation/src/pick.rs` lines 146, 202, 220, and 340,

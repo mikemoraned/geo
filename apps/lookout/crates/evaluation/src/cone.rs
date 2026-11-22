@@ -322,9 +322,7 @@ mod tests {
     }
 
     fn east(steps: usize) -> Vec<(f64, f64)> {
-        (0..steps)
-            .map(|n| (TUNE_LON + EAST_110_METRES * n as f64, TUNE_LAT))
-            .collect()
+        Vec::from_fn(steps, |n| (TUNE_LON + EAST_110_METRES * n as f64, TUNE_LAT))
     }
 
     fn east_then_north(east_steps: usize, north_steps: usize) -> Vec<(f64, f64)> {

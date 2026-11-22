@@ -143,7 +143,7 @@ mod tests {
     }
 
     fn sessions(count: usize) -> Vec<TrainSessionRowV3> {
-        (0..count).map(|n| session(n, 100.0, 0)).collect()
+        Vec::from_fn(count, |n| session(n, 100.0, 0))
     }
 
     async fn stored(dir: &Path, sessions: Vec<TrainSessionRowV3>) -> Root {
@@ -199,9 +199,7 @@ mod tests {
     #[tokio::test]
     async fn it_picks_only_sessions_at_or_above_the_realtime_percentage() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
-        let candidates = (0..100)
-            .map(|n| session(n, if n % 2 == 0 { 90.0 } else { 89.9 }, 0))
-            .collect();
+        let candidates = Vec::from_fn(100, |n| session(n, if n % 2 == 0 { 90.0 } else { 89.9 }, 0));
         let root = stored(tmp.path(), candidates).await;
 
         let picked = pick(&root, &pick_of(50, 1)).await.expect("enough sessions");
@@ -217,9 +215,7 @@ mod tests {
     #[tokio::test]
     async fn it_refuses_a_pick_larger_than_the_sessions_that_pass_the_filter() {
         let tmp = tempfile::tempdir().expect("a temporary directory");
-        let candidates = (0..10)
-            .map(|n| session(n, if n < 3 { 100.0 } else { 0.0 }, 0))
-            .collect();
+        let candidates = Vec::from_fn(10, |n| session(n, if n < 3 { 100.0 } else { 0.0 }, 0));
         let root = stored(tmp.path(), candidates).await;
 
         let refused = pick(&root, &pick_of(4, 1)).await;
@@ -337,9 +333,7 @@ mod tests {
         let one_day = stored(on_one_day.path(), sessions(200)).await;
         let week = stored(
             over_a_week.path(),
-            (0..200)
-                .map(|n| session(n, 100.0, (n % 7) as i64))
-                .collect(),
+            Vec::from_fn(200, |n| session(n, 100.0, (n % 7) as i64)),
         )
         .await;
 

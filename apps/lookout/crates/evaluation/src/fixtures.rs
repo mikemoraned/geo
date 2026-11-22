@@ -56,8 +56,8 @@ pub async fn store(dir: &Path, sessions: usize) -> Root {
     let root = Root::new(dir);
     let (lon, lat) = DRESDEN_HBF.x_y();
     let line = LineString::from(vec![(lon, lat), (lon, lat + 0.01)]);
-    let session_rows: Vec<GeographyRow<TrainSessionRowV3, LineString<f64>>> = (0..sessions)
-        .map(|n| GeographyRow {
+    let session_rows: Vec<GeographyRow<TrainSessionRowV3, LineString<f64>>> =
+        Vec::from_fn(sessions, |n| GeographyRow {
             row: TrainSessionRowV3 {
                 session_id: session(n),
                 started_at: instant(0),
@@ -67,8 +67,7 @@ pub async fn store(dir: &Path, sessions: usize) -> Root {
             },
             geography: line.clone(),
             country: Country::Germany,
-        })
-        .collect();
+        });
     write_geography_rows(&root, &session_rows)
         .await
         .expect("write the sessions");

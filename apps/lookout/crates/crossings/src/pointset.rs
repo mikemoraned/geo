@@ -96,17 +96,15 @@ pub fn unpack(packed: &[u8]) -> Result<Vec<CrossingCompact<f32>>, FormatError> {
     };
     let (latitudes, longitudes, ids) = (column(0), column(1), column(2));
 
-    Ok((0..points)
-        .map(|row| {
-            CrossingCompact::new(
-                CrossingCompactId::new(u32::from_le_bytes(ids[row])),
-                geo_types::Point::new(
-                    f32::from_le_bytes(longitudes[row]),
-                    f32::from_le_bytes(latitudes[row]),
-                ),
-            )
-        })
-        .collect())
+    Ok(Vec::from_fn(points, |row| {
+        CrossingCompact::new(
+            CrossingCompactId::new(u32::from_le_bytes(ids[row])),
+            geo_types::Point::new(
+                f32::from_le_bytes(longitudes[row]),
+                f32::from_le_bytes(latitudes[row]),
+            ),
+        )
+    }))
 }
 
 #[cfg(test)]
