@@ -245,7 +245,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       progenitor's output carries `#[allow]`s of its own, so `motis::api`'s `#[allow]` names both
       new lints too. Every other `#[expect]` suppresses a warning, so no other allowance had gone
       stale. The new lints flag nothing in `m5plus`.
-- [ ] Fold what holds from `docs/2026-11-22-infallible-calls.md` into `.claude/rules/rust.md`: a
+- [x] Fold what holds from `docs/2026-11-22-infallible-calls.md` into `.claude/rules/rust.md`: a
       constant's `expect` in a `const` item or block, `#[expect]` in place of `#[allow]`, and a
       constructor that keeps what it computed. Then delete the doc.
 - [ ] Raise both lints to `deny`, once clippy flags none, and run `just clippy`. It prints
