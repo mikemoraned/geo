@@ -159,7 +159,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 
 - [x] `motis` (17).
 - [x] `recorder` (11).
-- [ ] `session_crossings` (3), `server` (2), `crossings` (1), and `map` (1).
+- [x] `session_crossings` (3), `server` (2), `crossings` (1), and `map` (1).
 
 #### `m5plus`
 

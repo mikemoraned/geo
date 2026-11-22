@@ -164,19 +164,26 @@ impl Root {
         Ok(self.object_store()?)
     }
 
-    pub fn gold_artefact(
+    pub fn gold_artefact_dir(
         &self,
         artifact: &str,
         run: DateTime<Utc>,
-        name: &str,
     ) -> Result<PathBuf, PathError> {
         let version = gold_version(run);
         Ok(self
             .0
             .join(Layer::Gold.as_str())
             .join(Partition::new(ARTIFACT, artifact)?.to_string())
-            .join(Partition::new(VERSION, version)?.to_string())
-            .join(name))
+            .join(Partition::new(VERSION, version)?.to_string()))
+    }
+
+    pub fn gold_artefact(
+        &self,
+        artifact: &str,
+        run: DateTime<Utc>,
+        name: &str,
+    ) -> Result<PathBuf, PathError> {
+        Ok(self.gold_artefact_dir(artifact, run)?.join(name))
     }
 }
 
@@ -688,6 +695,20 @@ mod tests {
             "/store/gold/artifact=crossings/version=20260801T194857000Z/crossings.pointset"
         );
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn a_gold_artefact_sits_in_a_directory_for_its_run() {
+        let root = Root::new("/store");
+        let run = Utc.with_ymd_and_hms(2026, 8, 1, 19, 48, 57).unwrap();
+
+        assert_eq!(
+            root.gold_artefact_dir("crossings", run)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "/store/gold/artifact=crossings/version=20260801T194857000Z"
+        );
     }
 
     #[test]

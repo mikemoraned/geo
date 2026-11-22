@@ -17,7 +17,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| "match_crossings=info".into()),
@@ -25,11 +25,9 @@ async fn main() {
         .init();
 
     let args = Args::parse();
-    let root = args.medallion.root().expect("locate the medallion store");
+    let root = args.medallion.root()?;
 
-    let outcome = silver::derive_device(&root, args.match_radius_m)
-        .await
-        .expect("derive the crossings each device session passed");
+    let outcome = silver::derive_device(&root, args.match_radius_m).await?;
 
     tracing::info!(
         sessions = outcome.sessions,
@@ -43,9 +41,7 @@ async fn main() {
         "derived the crossings each device session passed"
     );
 
-    let outcome = silver::derive_train(&root, args.match_radius_m)
-        .await
-        .expect("derive the crossings each train session passed");
+    let outcome = silver::derive_train(&root, args.match_radius_m).await?;
 
     tracing::info!(
         sessions = outcome.sessions,
@@ -58,6 +54,7 @@ async fn main() {
         medallion_root = %root.path().display(),
         "derived the crossings each train session passed"
     );
+    Ok(())
 }
 
 #[cfg(test)]

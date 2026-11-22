@@ -55,11 +55,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let run = Utc::now();
     let output = match args.output {
         Some(path) => path,
-        None => root
-            .gold_artefact(ARTIFACT, run, FILE)?
-            .parent()
-            .expect("an artefact sits in a directory")
-            .to_path_buf(),
+        None => root.gold_artefact_dir(ARTIFACT, run)?,
     };
     let choosing = Choosing {
         min_crossings: args.min_crossings,
