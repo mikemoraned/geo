@@ -39,7 +39,7 @@ for working practice and for the limits of this environment. Current notes:
 - [`.claude/memory/testing-limits.md`](.claude/memory/testing-limits.md) — Docker tests
   don't run in the sandbox, so binaries need running directly
 - [`.claude/memory/working-with-claude.md`](.claude/memory/working-with-claude.md) —
-  committing only on explicit instruction, recording each step as a tree until it is
+  committing only on explicit instruction, staging only the files the work changed, recording each step as a tree until it is
   committed, keeping a slice's decomposition to a plan the user can check, keeping formatting
   out of feature commits, tracing a repeat to its source before
   memoising it, keeping an optimisation only once a measurement justifies it, writing a store

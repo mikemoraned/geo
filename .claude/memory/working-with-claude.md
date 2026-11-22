@@ -14,6 +14,11 @@ none was shown, show what the commit holds and wait. If a commit has already bee
 review was wanted, `git reset --soft HEAD~1` puts it back as staged changes rather than
 discarding it.
 
+Stage by path, naming each file the work changed, and never with `git add -A` or `git add .`.
+The working tree can hold files the user is writing, such as an untracked dated doc, and a
+blanket add commits them. Before committing, compare `git status --short` with the files the
+work touched.
+
 Keep mechanical churn out of feature commits. When `cargo fmt` would touch files a change
 never went near, stash the work, commit the formatting on its own, then restore and
 continue.
