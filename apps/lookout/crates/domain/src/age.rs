@@ -30,11 +30,13 @@ impl Age {
         self.0
     }
 
-    pub fn seconds(self) -> Result<u32, TooManySeconds> {
-        self.0
-            .num_seconds()
-            .try_into()
-            .map_err(|_| TooManySeconds(self.0))
+    pub const fn seconds(self) -> Result<u32, TooManySeconds> {
+        let seconds = self.0.num_seconds();
+        if seconds <= u32::MAX as i64 {
+            Ok(seconds as u32)
+        } else {
+            Err(TooManySeconds(self.0))
+        }
     }
 
     pub fn before<Tz: TimeZone>(self, now: DateTime<Tz>) -> DateTime<Tz> {

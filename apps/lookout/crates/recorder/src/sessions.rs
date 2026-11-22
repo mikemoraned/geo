@@ -24,9 +24,17 @@ const DISTINCT_SESSION_STARTS: &str = "
     SELECT DISTINCT device_id, t FROM device_session_v2 ORDER BY device_id, t
 ";
 
-pub const DEFAULT_GAP: Age = Age::minutes(NonZeroU32::new(10).expect("ten is not zero"));
+pub const DEFAULT_GAP: Gap =
+    match Gap::new(Age::minutes(NonZeroU32::new(10).expect("ten is not zero"))) {
+        Ok(gap) => gap,
+        Err(_) => panic!("ten minutes is fewer seconds than a u32 counts"),
+    };
 
-pub const DEFAULT_LEAD: Age = Age::minutes(NonZeroU32::new(1).expect("one is not zero"));
+pub const DEFAULT_LEAD: Lead =
+    match Lead::new(Age::minutes(NonZeroU32::new(1).expect("one is not zero"))) {
+        Ok(lead) => lead,
+        Err(_) => panic!("one minute is fewer seconds than a u32 counts"),
+    };
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
@@ -35,58 +43,68 @@ pub enum SessionError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Gap(Age);
+pub struct Gap {
+    silence: Age,
+    seconds: u32,
+}
 
 impl Gap {
-    pub fn new(silence: Age) -> Result<Self, TooManySeconds> {
-        silence.seconds()?;
-        Ok(Self(silence))
+    pub const fn new(silence: Age) -> Result<Self, TooManySeconds> {
+        match silence.seconds() {
+            Ok(seconds) => Ok(Self { silence, seconds }),
+            Err(too_many) => Err(too_many),
+        }
     }
 
-    #[allow(
-        clippy::unwrap_used,
-        reason = "Gap::new refuses a gap longer than a u32 of seconds holds"
-    )]
-    pub fn as_seconds(self) -> u32 {
-        self.0.seconds().unwrap()
+    pub const fn age(self) -> Age {
+        self.silence
+    }
+
+    pub const fn as_seconds(self) -> u32 {
+        self.seconds
     }
 
     fn separates(self, interval: Duration) -> bool {
-        interval > self.0.span()
+        interval > self.silence.span()
     }
 }
 
 impl Default for Gap {
     fn default() -> Self {
-        Self(DEFAULT_GAP)
+        DEFAULT_GAP
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Lead(Age);
+pub struct Lead {
+    before: Age,
+    seconds: u32,
+}
 
 impl Lead {
-    pub fn new(before: Age) -> Result<Self, TooManySeconds> {
-        before.seconds()?;
-        Ok(Self(before))
+    pub const fn new(before: Age) -> Result<Self, TooManySeconds> {
+        match before.seconds() {
+            Ok(seconds) => Ok(Self { before, seconds }),
+            Err(too_many) => Err(too_many),
+        }
     }
 
-    #[allow(
-        clippy::unwrap_used,
-        reason = "Lead::new refuses a lead longer than a u32 of seconds holds"
-    )]
-    pub fn as_seconds(self) -> u32 {
-        self.0.seconds().unwrap()
+    pub const fn age(self) -> Age {
+        self.before
+    }
+
+    pub const fn as_seconds(self) -> u32 {
+        self.seconds
     }
 
     fn reaches(self, announced_at: DateTime<Utc>, started_at: DateTime<Utc>) -> bool {
-        started_at >= self.0.before(announced_at)
+        started_at >= self.before.before(announced_at)
     }
 }
 
 impl Default for Lead {
     fn default() -> Self {
-        Self(DEFAULT_LEAD)
+        DEFAULT_LEAD
     }
 }
 

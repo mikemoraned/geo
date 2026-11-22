@@ -11,11 +11,11 @@ use recorder::silver;
 #[command(about = "Derive the silver session datasets from the bronze telemetry")]
 struct Args {
     /// How long a device may go unheard before the silence separates two sessions, such as 10m.
-    #[arg(long, default_value_t = Span::from(DEFAULT_GAP))]
+    #[arg(long, default_value_t = Span::from(DEFAULT_GAP.age()))]
     gap: Span,
     /// How long before reporting a session a device may already have been fixing its
     /// position, such as 1m. Samples this close ahead of a report open the session it reports.
-    #[arg(long, default_value_t = Span::from(DEFAULT_LEAD))]
+    #[arg(long, default_value_t = Span::from(DEFAULT_LEAD.age()))]
     lead: Span,
     #[command(flatten)]
     medallion: MedallionArgs,
