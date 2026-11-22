@@ -9604,6 +9604,7 @@ dependencies = [
  "platform-core",
  "predictor",
  "serde",
+ "wkb",
 ]
 
 [[package]]

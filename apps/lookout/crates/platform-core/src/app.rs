@@ -60,13 +60,17 @@ impl<C: Crossings<Float> + Clone> Tracking<C> {
     fn new(crossings: C) -> Self {
         Self {
             predictor: LightCone::new(
+                #[allow(
+                    clippy::unwrap_used,
+                    reason = "the default alerting radius lies within the default watching radius"
+                )]
                 CrowFlies::new(
                     crossings.clone(),
                     DEFAULT_WATCHING,
                     DEFAULT_ALERTING,
                     LastMove::new(DEFAULT_STILL_WITHIN),
                 )
-                .expect("the default alerting radius lies within the default watching radius"),
+                .unwrap(),
                 DEFAULT_HALF_WIDTH,
             ),
             detector: OnlineDetector::new(crossings, DEFAULT_PASS_RADIUS),

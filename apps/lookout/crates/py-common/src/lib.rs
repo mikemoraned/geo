@@ -18,9 +18,11 @@ pub fn runtime_error(err: impl std::fmt::Display) -> PyErr {
 
 pub fn runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-    // Infallible in practice: building a multi-threaded runtime fails only when the process
-    // cannot create threads, and then no store call could run.
-    RUNTIME.get_or_init(|| tokio::runtime::Runtime::new().expect("a tokio runtime for the store"))
+    #[allow(
+        clippy::unwrap_used,
+        reason = "a runtime fails to build only when the process cannot start threads, and then no store call can run"
+    )]
+    RUNTIME.get_or_init(|| tokio::runtime::Runtime::new().unwrap())
 }
 
 pub fn root_or_default(root: Option<PathBuf>) -> Result<Root, PyErr> {

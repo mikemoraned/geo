@@ -8,7 +8,11 @@ const _: () = assert!(
 );
 
 pub fn crossings() -> PointSet<'static> {
-    PointSet::new(&PACKED.0).expect("a set checked where it is built into the binary")
+    #[allow(
+        clippy::unwrap_used,
+        reason = "the build fails on a carried set that holds_points rejects"
+    )]
+    PointSet::new(&PACKED.0).unwrap()
 }
 
 #[cfg(test)]

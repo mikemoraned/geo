@@ -5,6 +5,7 @@ use platform_core::lines::Wkb;
 use platform_core::{Float, Model, Shell};
 use predictor::{Crossings, Predictions};
 use serde::{Deserialize, Serialize};
+use wkb::error::WkbError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Here {
@@ -42,6 +43,7 @@ pub struct ViewModel {
     pub here: Option<Here>,
     pub predicted: Vec<Predicted>,
     pub lines: Vec<Line>,
+    pub trace_unwritten: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -71,6 +73,7 @@ impl Shell for Browser {
     }
 
     fn project(model: &Model<Self>) -> ViewModel {
+        let trace = traced(model);
         ViewModel {
             now: model.now(),
             crossings: model.crossings().map_or(0, Vec::len),
@@ -84,25 +87,33 @@ impl Shell for Browser {
                 .crossings()
                 .map(|crossings| located(crossings, model.predictions(), |id| model.state(id)))
                 .unwrap_or_default(),
-            lines: drawn(model),
+            lines: model
+                .lines()
+                .iter()
+                .map(|wkb| Line {
+                    category: Category::Rail,
+                    wkb: wkb.clone(),
+                })
+                .chain(trace.as_ref().ok().cloned().flatten())
+                .collect(),
+            trace_unwritten: trace.err().map(|err| err.to_string()),
         }
     }
 }
 
-fn drawn(model: &Model<Browser>) -> Vec<Line> {
-    let rail = model.lines().iter().map(|wkb| Line {
-        category: Category::Rail,
-        wkb: wkb.clone(),
-    });
+fn traced(model: &Model<Browser>) -> Result<Option<Line>, WkbError> {
     let trace: LineString<f64> = model
         .trace()
         .map(|at| (f64::from(at.x()), f64::from(at.y())))
         .collect();
-    let traced = (trace.0.len() > 1).then(|| Line {
-        category: Category::Trace,
-        wkb: Wkb::of_line(&trace).expect("a line writes into a Vec, which cannot fail"),
-    });
-    rail.chain(traced).collect()
+    (trace.0.len() > 1)
+        .then(|| {
+            Ok(Line {
+                category: Category::Trace,
+                wkb: Wkb::of_line(&trace)?,
+            })
+        })
+        .transpose()
 }
 
 fn located(
@@ -122,11 +133,7 @@ fn located(
             })
         })
         .collect();
-    located.sort_by(|one, other| {
-        one.metres
-            .partial_cmp(&other.metres)
-            .expect("a distance is never NaN")
-    });
+    located.sort_by(|one, other| one.metres.total_cmp(&other.metres));
     located
 }
 

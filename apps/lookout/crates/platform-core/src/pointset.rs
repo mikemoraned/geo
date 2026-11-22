@@ -49,7 +49,11 @@ impl PointSet<'static> {
             MAGIC[0], MAGIC[1], MAGIC[2], MAGIC[3], 1, 0, 0, 0, 0, 0, 0, 0,
         ]);
 
-        Self::new(&EMPTY.0).expect("a header this module wrote")
+        #[allow(
+            clippy::unwrap_used,
+            reason = "the header holds the magic, version 1, and a count of zero"
+        )]
+        Self::new(&EMPTY.0).unwrap()
     }
 }
 

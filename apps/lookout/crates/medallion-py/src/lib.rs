@@ -203,11 +203,11 @@ fn scalars(params: Option<HashMap<String, Param>>) -> HashMap<String, ScalarValu
 }
 
 fn table_of(batches: Vec<RecordBatch>) -> PyResult<PyTable> {
-    // Infallible: a query answers with at least one batch, so the columns are always there.
-    let schema = batches
-        .first()
-        .map(|batch| batch.schema())
-        .expect("a query answers with at least one batch");
+    #[allow(
+        clippy::unwrap_used,
+        reason = "a query answers an empty result with one empty batch"
+    )]
+    let schema = batches.first().map(|batch| batch.schema()).unwrap();
 
     PyTable::try_new(batches, schema).map_err(runtime_error)
 }
@@ -299,10 +299,11 @@ fn query_bronze(
         })
         .map_err(query_error)?;
 
-    let schema = batches
-        .first()
-        .map(|batch| batch.schema())
-        .expect("a query answers with at least one batch");
+    #[allow(
+        clippy::unwrap_used,
+        reason = "a query answers an empty result with one empty batch"
+    )]
+    let schema = batches.first().map(|batch| batch.schema()).unwrap();
 
     PyTable::try_new(batches, schema).map_err(runtime_error)
 }

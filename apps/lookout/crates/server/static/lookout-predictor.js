@@ -108,9 +108,11 @@ class LookoutPredictor extends HTMLElement {
   }
 
   #paint() {
-    const { now, crossings, radius_metres, pass_radius_metres, here, predicted, lines } =
-      JSON.parse(view());
+    const {
+      now, crossings, radius_metres, pass_radius_metres, here, predicted, lines, trace_unwritten,
+    } = JSON.parse(view());
     this.#draw(here, predicted, lines, radius_metres, pass_radius_metres);
+    if (trace_unwritten) console.error(`could not draw the trace: ${trace_unwritten}`);
     this.#screen.textContent = [
       now ? new Date(now).toLocaleTimeString() : "no time yet",
       here ? speed(here.speed_mps) : "no position yet",

@@ -16,9 +16,12 @@ pub fn fatal(reason: &dyn fmt::Display) -> ! {
 }
 
 pub async fn connect_or_exit(url: &str) -> MultiplexedConnection {
-    rustls::crypto::ring::default_provider()
+    if rustls::crypto::ring::default_provider()
         .install_default()
-        .expect("install rustls crypto provider");
+        .is_err()
+    {
+        fatal(&"a rustls crypto provider was already installed");
+    }
     telemetry::connect(url)
         .await
         .unwrap_or_else(|err| fatal(&format!("redis connect failed: {err}")))
