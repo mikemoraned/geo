@@ -115,8 +115,8 @@ web-core = { path = "crates/platform/web/core" }
 transport = { path = "crates/transport" }
 
 [workspace.lints.clippy]
-all = "warn"
+all = { level = "warn", priority = -1 }
 allow_attributes = "warn"
 allow_attributes_without_reason = "warn"
-expect_used = "warn"
-unwrap_used = "warn"
+expect_used = "deny"
+unwrap_used = "deny"

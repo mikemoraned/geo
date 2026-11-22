@@ -248,8 +248,10 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 - [x] Fold what holds from `docs/2026-11-22-infallible-calls.md` into `.claude/rules/rust.md`: a
       constant's `expect` in a `const` item or block, `#[expect]` in place of `#[allow]`, and a
       constructor that keeps what it computed. Then delete the doc.
-- [ ] Raise both lints to `deny`, once clippy flags none, and run `just clippy`. It prints
+- [x] Raise both lints to `deny`, once clippy flags none, and run `just clippy`. It prints
       Cargo's warnings beside Clippy's, and the run clears both.
+      With the two lints at `deny`, `clippy::all` at `warn` shared their priority, so Clippy's
+      `lint_groups_priority` warned. `all` now takes priority `-1`.
 - [x] Name the lints, and the three root-level allows, in `.claude/rules/rust.md`.
 - [x] Delete `docs/2026-11-19-rust-1.100.md`. Done before its tasks, once each carried what it
       needed from the assessment.
