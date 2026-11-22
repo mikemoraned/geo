@@ -100,6 +100,17 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
   from a sample. Only `sessions` builds one, and it always pushes a sample first. A non-empty
   collection, such as the `nonempty` crate's, would make the type say so. It changes a public
   type, so it waits for a refactor of its own.
+- **Proving a call free of panics with Kani.** A harness under `cfg(kani)` would give a function
+  every input its constructor admits, and Kani would report any input that reaches a panic. It
+  adds a tool with a nightly compiler of its own, run apart from `cargo nextest`, and its time on
+  the float and geometry code is unmeasured. It returns for a call that neither the build nor
+  keeping the checked form can cover, and that a test samples poorly.
+- **A `const fn` check for each string newtype.** A newtype's constants, written as text, could
+  be checked at build time by a `const fn` taking a `&'static str`, then converted at run time
+  without a fallible call. Each type would carry a second validator, written as a byte loop beside
+  its real one, and the two can drift apart. URLs and encoded polylines have no reasonable `const`
+  validator. Most such constants sit in `example()` functions, which the tests run. It returns for
+  a newtype whose constants matter outside tests.
 - **Keeping the checked form.** `EpisodePath` and `Polyline` re-parse text that construction
   already checked, so each carries an allowed `expect`. Holding the parsed states and line instead
   removes the call. It changes the stored type, so it waits for a refactor of its own.
@@ -183,8 +194,45 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 - [x] Use `str::trim_prefix` at `crates/predictor/src/sentence.rs:47`. Only after the esp upgrade
       passes.
 
+#### Constants checked by the build
+
+- [ ] Add a `Radii` type to `predictor`, holding the watching and alerting radii, with a
+      `const fn checked` returning `Option<Self>` and a `new` returning `AlertingBeyondWatching`,
+      as `HalfWidth` has. Build `DEFAULT_RADII` in a `const` item with an `expect` stating the
+      relation. `CrowFlies::new` then takes a `Radii` and cannot fail, and `platform-core`'s
+      allowance goes. The refusal's tests move from `CrowFlies` to `Radii`.
+- [ ] Give `Percentage` a `const fn checked` too, and build the constant percentages in
+      `EvaluationRunRowV6::example` and `TrainSessionRowV3::example` through it.
+- [ ] Replace `holds_points` with a `const fn` in `platform-core`'s `pointset` that makes every
+      check `PointSet::new` makes, the coordinates included, reading each with `from_le_bytes`.
+      `PointSet::new` calls it before casting, and `m5-core`'s carried set asserts it at build
+      time. The `unwrap` in `carried::crossings` then states that the build runs those checks.
+- [ ] Build the GERS division ids in `medallion-model`'s `overture::division_id` with `uuid!`,
+      which parses a literal at build time, and convert them through `GersId::from`. Do the same
+      for any other constant that holds a UUID.
+- [ ] Remove `impl Default for MotisClient`, whose allowance claims a check that only the
+      end-to-end profile runs. Only tests call it, and each builds its client through
+      `MotisClient::new` from `DEFAULT_BASE_URL` instead.
+
+#### Keeping what a constructor checked
+
+- [ ] Have `Gap` and `Lead` in `recorder` hold the `u32` of seconds their constructors compute,
+      so `as_seconds` returns it rather than unwrapping a second computation. Build the defaults
+      from `DEFAULT_GAP` and `DEFAULT_LEAD` without an `unwrap`.
+- [ ] Have `Span` in `domain` hold the `Age` its constructor checks, so `time_delta` and `age`
+      unwrap nothing, and `Age` the `Duration` that `From<Age> for Span` needs. Lower priority
+      than `Gap` and `Lead`: do it only if `Span::minutes` stays a `const fn` without an `unwrap`.
+
 #### Wrap-up
 
+- [ ] Add `allow_attributes` and `allow_attributes_without_reason` to `[workspace.lints.clippy]`
+      and to `m5plus`'s `[lints.clippy]`, and turn each outer `#[allow]` into an `#[expect]`.
+      Delete the allowance on `GpsReadingRowV2::example`, which covers nothing since `DeviceId`
+      holds a `Uuid`. `motis::api` keeps its `#[allow]`, since what it suppresses depends on what
+      progenitor generates. Do this before raising the lints to `deny`.
+- [ ] Fold what holds from `docs/2026-11-22-infallible-calls.md` into `.claude/rules/rust.md`: a
+      constant's `expect` in a `const` item or block, `#[expect]` in place of `#[allow]`, and a
+      constructor that keeps what it computed. Then delete the doc.
 - [ ] Raise both lints to `deny`, once clippy flags none, and run `just clippy`. It prints
       Cargo's warnings beside Clippy's, and the run clears both.
 - [x] Name the lints, and the three root-level allows, in `.claude/rules/rust.md`.
