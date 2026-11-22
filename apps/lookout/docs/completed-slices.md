@@ -712,3 +712,45 @@ of that evaluation. New crates: `evaluation`, `evaluation-py`, `countries`, `py-
 - **`docs/evaluation.md` describes the evaluation**, `medallion.md` how a committed dataset is laid
   out, and a notebooks README holds advice on drawing A5 cells. The exploration notebooks stay, as
   a starting point for the Demonstrable Behaviour slice.
+
+## Slice: refuse `expect` and `unwrap` outside tests
+
+Clippy now refuses `unwrap` and `expect` outside tests across both cargo workspaces, the device's
+included. Each call that remains cannot fail, and states why under an `#[expect]` that warns once
+it suppresses nothing. New crates: `test-countries` and `test-predictor`.
+
+### Where a panic is the report
+
+- **Tests, test-only crates, and build scripts allow both lints at their root**, since each reports
+  failure by panicking. Fixtures that only one crate's tests use moved into its test module, and
+  fixtures shared across crates moved into crates of their own.
+- **A binary returns an error through `?`** wherever its `main` can, rather than panicking.
+
+### Library code
+
+- **A fallible call became an error the caller handles**, and the rest became calls that cannot
+  fail.
+- **Ids minted as UUIDs hold a UUID**, so a conversion from one cannot fail. Device, polyline, Motis
+  source, and run ids changed this way, and the Python store binding now refuses a run id that is
+  not a UUID.
+- **A narrower check can keep a dataset's version.** `medallion.md` gained the rule: a change to a
+  checked type alone keeps the version where the new check accepts every value the old one did, or
+  where it narrows by design and a query of each store finds no value it refuses. Every stored id
+  passed, so each dataset kept its version.
+- **A constructor keeps what its check computed**, such as a span its age, so later methods have
+  nothing to unwrap.
+- **The build checks constants.** Types with constants gained a `const fn` check, and each constant
+  is built at compile time, so a wrong one stops the build with its reason. Two related radii
+  became one type, and the device's carried crossings are checked in full at build time.
+
+### Allowances
+
+- **Every allowance is an `#[expect]` with a reason**, enforced by lint, so a stale one warns.
+  Generated code keeps an `#[allow]`, since its output decides what it suppresses.
+- **The Rust rules now describe all of this**, and absorbed the investigation behind it.
+
+### Toolchain
+
+- **Rust and the ESP toolchain both moved to 1.100**, after the device built and soaked without a
+  reboot. The crates the device shares declare that version, so Clippy flags a newer library item.
+- **The resolver skips a release under seven days old**, except when patching an advisory.
