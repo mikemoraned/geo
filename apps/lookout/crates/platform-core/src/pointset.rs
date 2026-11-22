@@ -49,7 +49,7 @@ impl PointSet<'static> {
             MAGIC[0], MAGIC[1], MAGIC[2], MAGIC[3], 1, 0, 0, 0, 0, 0, 0, 0,
         ]);
 
-        #[allow(
+        #[expect(
             clippy::unwrap_used,
             reason = "the header holds the magic, version 1, and a count of zero"
         )]

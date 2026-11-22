@@ -53,10 +53,6 @@ impl Row for GpsReadingRowV2 {
     const DATASET: DatasetSpec<Self::Layer> = GPS_READING_V2;
     const INSTANTS: &'static [&'static str] = &["t"];
 
-    #[allow(
-        clippy::unwrap_used,
-        reason = "each value here is a constant that its type accepts"
-    )]
     fn example() -> Self {
         Self {
             device_id: DeviceId::from(uuid::Uuid::from_u128(1)),

@@ -164,7 +164,7 @@ impl Polyline {
 
     pub fn line(&self) -> LineString<f64> {
         let text: &str = self.as_ref();
-        #[allow(
+        #[expect(
             clippy::unwrap_used,
             reason = "construction and deserialisation both refuse text that does not decode"
         )]
@@ -364,7 +364,7 @@ impl Row for MotisPollRowV2 {
         "scheduled_arrival",
     ];
 
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "each value here is a constant that its type accepts"
     )]
@@ -442,7 +442,7 @@ impl Row for TrainSegmentRowV4 {
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const INSTANTS: &'static [&'static str] = &["departure", "arrival"];
 
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "each value here is a constant that its type accepts"
     )]

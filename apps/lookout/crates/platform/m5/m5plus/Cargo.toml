@@ -40,5 +40,7 @@ predictor = { path = "../../../predictor" }
 embuild = "0.33"
 
 [lints.clippy]
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
 expect_used = "warn"
 unwrap_used = "warn"

@@ -237,11 +237,14 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 
 #### Wrap-up
 
-- [ ] Add `allow_attributes` and `allow_attributes_without_reason` to `[workspace.lints.clippy]`
+- [x] Add `allow_attributes` and `allow_attributes_without_reason` to `[workspace.lints.clippy]`
       and to `m5plus`'s `[lints.clippy]`, and turn each outer `#[allow]` into an `#[expect]`.
       Delete the allowance on `GpsReadingRowV2::example`, which covers nothing since `DeviceId`
       holds a `Uuid`. `motis::api` keeps its `#[allow]`, since what it suppresses depends on what
       progenitor generates. Do this before raising the lints to `deny`.
+      progenitor's output carries `#[allow]`s of its own, so `motis::api`'s `#[allow]` names both
+      new lints too. Every other `#[expect]` suppresses a warning, so no other allowance had gone
+      stale. The new lints flag nothing in `m5plus`.
 - [ ] Fold what holds from `docs/2026-11-22-infallible-calls.md` into `.claude/rules/rust.md`: a
       constant's `expect` in a `const` item or block, `#[expect]` in place of `#[allow]`, and a
       constructor that keeps what it computed. Then delete the doc.

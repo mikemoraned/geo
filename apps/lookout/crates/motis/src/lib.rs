@@ -1,4 +1,6 @@
 #[allow(
+    clippy::allow_attributes,
+    clippy::allow_attributes_without_reason,
     clippy::doc_lazy_continuation,
     clippy::unwrap_used,
     reason = "progenitor generates this module"

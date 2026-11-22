@@ -354,7 +354,7 @@ impl Row for MotisSourceRowV4 {
     const DATASET: DatasetSpec<Self::Layer> = MOTIS_SOURCE_V4;
     const INSTANTS: &'static [&'static str] = &["registered_at"];
 
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "each value here is a constant that its type accepts"
     )]

@@ -34,7 +34,7 @@ fn partition_value(id: &str) -> Result<(), medallion::PathError> {
 
 impl ExtractId {
     pub fn at(at: DateTime<Utc>) -> Self {
-        #[allow(
+        #[expect(
             clippy::unwrap_used,
             reason = "a compact UTC instant holds only digits and letters"
         )]
@@ -126,7 +126,7 @@ impl Row for ExtractManifestRowV3 {
     const DATASET: DatasetSpec<Self::Layer> = EXTRACT_MANIFEST_V3;
     const INSTANTS: &'static [&'static str] = &["extracted_at"];
 
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "each value here is a constant that its type accepts"
     )]

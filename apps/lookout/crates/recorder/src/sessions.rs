@@ -138,7 +138,7 @@ pub struct Session {
 }
 
 impl Session {
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "a session always holds the sample that starts it"
     )]
@@ -146,7 +146,7 @@ impl Session {
         self.samples.first().unwrap().t
     }
 
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "a session always holds the sample that starts it"
     )]
@@ -236,7 +236,7 @@ fn split(samples: &[Sample], started: &[DateTime<Utc>], gap: Gap, lead: Lead) ->
                     samples,
                 });
             }
-            #[allow(
+            #[expect(
                 clippy::unwrap_used,
                 reason = "the first sample starts a session, so every later sample has one to continue"
             )]

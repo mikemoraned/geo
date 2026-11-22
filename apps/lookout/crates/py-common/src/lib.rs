@@ -18,7 +18,7 @@ pub fn runtime_error(err: impl std::fmt::Display) -> PyErr {
 
 pub fn runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "a runtime fails to build only when the process cannot start threads, and then no store call can run"
     )]

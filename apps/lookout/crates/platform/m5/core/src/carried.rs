@@ -8,7 +8,7 @@ const _: () = assert!(
 );
 
 pub fn crossings() -> PointSet<'static> {
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "the build runs every check on the carried set, and `Aligned` aligns it to 4 bytes"
     )]

@@ -37,7 +37,7 @@ impl SessionId {
 
 impl From<Uuid> for SessionId {
     fn from(id: Uuid) -> Self {
-        #[allow(
+        #[expect(
             clippy::unwrap_used,
             reason = "a UUID's text holds no reserved character"
         )]

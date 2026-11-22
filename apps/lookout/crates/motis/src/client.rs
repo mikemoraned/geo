@@ -62,7 +62,7 @@ impl MotisClient {
             .connect_timeout(TIMEOUT)
             .timeout(TIMEOUT)
             .build();
-        #[allow(
+        #[expect(
             clippy::unwrap_used,
             reason = "reqwest fails a build only on a bad TLS, proxy, or header setting, and this client sets only a constant user agent and timeouts"
         )]

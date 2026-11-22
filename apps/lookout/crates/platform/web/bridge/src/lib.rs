@@ -26,14 +26,14 @@ fn dispatch(event: &str) -> Result<String, String> {
     BRIDGE
         .update(event.as_bytes(), &mut requests)
         .map_err(|err| err.to_string())?;
-    #[allow(clippy::unwrap_used, reason = "the bridge writes JSON, which is UTF-8")]
+    #[expect(clippy::unwrap_used, reason = "the bridge writes JSON, which is UTF-8")]
     Ok(String::from_utf8(requests).unwrap())
 }
 
 fn projection() -> Result<String, String> {
     let mut view = Vec::new();
     BRIDGE.view(&mut view).map_err(|err| err.to_string())?;
-    #[allow(clippy::unwrap_used, reason = "the bridge writes JSON, which is UTF-8")]
+    #[expect(clippy::unwrap_used, reason = "the bridge writes JSON, which is UTF-8")]
     Ok(String::from_utf8(view).unwrap())
 }
 

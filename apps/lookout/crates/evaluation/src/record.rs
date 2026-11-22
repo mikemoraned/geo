@@ -128,7 +128,7 @@ pub fn run_id(row: &EvaluationRunRowV6) -> RunId {
         started_at: DateTime::UNIX_EPOCH,
         ..row.clone()
     };
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "serde_json fails only on a map whose keys are not text, and the run row's only map has text keys"
     )]

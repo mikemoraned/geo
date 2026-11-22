@@ -79,7 +79,7 @@ impl EpisodePath {
     }
 
     pub fn states(&self) -> Vec<StateKind> {
-        #[allow(
+        #[expect(
             clippy::unwrap_used,
             reason = "the constructor refuses a name that does not parse"
         )]
@@ -100,7 +100,7 @@ impl Row for EvaluationEpisodeRowV1 {
     type Layer = layers::Gold;
     const DATASET: DatasetSpec<Self::Layer> = EVALUATION_EPISODE_V1;
 
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "each value here is a constant that its type accepts"
     )]

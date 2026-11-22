@@ -47,7 +47,7 @@ impl Row for WaterCrossingRowV2 {
     const GEOMETRY: Geometry = Geometry::LatLonAndProjected;
     const UNIQUE: &'static [&'static str] = &["crossing_id", "crossing_compact_id"];
 
-    #[allow(
+    #[expect(
         clippy::unwrap_used,
         reason = "each value here is a constant that its type accepts"
     )]

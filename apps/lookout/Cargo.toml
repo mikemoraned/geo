@@ -116,5 +116,7 @@ transport = { path = "crates/transport" }
 
 [workspace.lints.clippy]
 all = "warn"
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
 expect_used = "warn"
 unwrap_used = "warn"

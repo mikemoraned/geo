@@ -74,7 +74,7 @@ pub async fn write(
     Ok(outcome)
 }
 
-#[allow(
+#[expect(
     clippy::unwrap_used,
     reason = "a session always holds the sample that starts it"
 )]
@@ -97,7 +97,7 @@ fn place(session: &Session, projector: &Projector) -> Result<Placed, medallion::
     Ok(Placed { row, path, samples })
 }
 
-#[allow(
+#[expect(
     clippy::unwrap_used,
     reason = "a session's path always holds the sample that starts it"
 )]

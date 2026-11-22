@@ -104,7 +104,10 @@ impl CrowFlies {
         satellites=None,
         hdop=None,
     ))]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "pyo3 takes each Python keyword argument as a parameter of its own"
+    )]
     fn observe_sample(
         &mut self,
         t: DateTime<FixedOffset>,

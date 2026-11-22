@@ -535,7 +535,10 @@ fn outcomes_of(sessions: PyTable, outcomes: PyTable) -> PyResult<PyTable> {
     *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap,
     online_detector=None, float_type="f32", split=None, root=None
 ))]
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "pyo3 takes each Python keyword argument as a parameter of its own"
+)]
 fn run<'py>(
     py: Python<'py>,
     country: &str,
@@ -592,7 +595,10 @@ fn run<'py>(
     *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap,
     online_detector=None, float_type="f32", split=None, root=None
 ))]
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "pyo3 takes each Python keyword argument as a parameter of its own"
+)]
 fn evaluate<'py>(
     py: Python<'py>,
     country: &str,
@@ -651,7 +657,10 @@ fn evaluate<'py>(
     *, country, realtime_at_least, sessions, seed, predictor, scoring, bootstrap, picked,
     online_detector=None, float_type="f32", split=None, root=None
 ))]
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "pyo3 takes each Python keyword argument as a parameter of its own"
+)]
 fn record<'py>(
     py: Python<'py>,
     country: &str,
