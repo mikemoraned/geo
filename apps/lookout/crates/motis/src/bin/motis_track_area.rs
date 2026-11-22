@@ -24,7 +24,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env()
@@ -33,63 +33,60 @@ async fn main() {
         .init();
 
     let args = Args::parse();
-    let root = args
-        .poll
-        .medallion
-        .root()
-        .expect("locate the medallion store");
+    let root = args.poll.medallion.root()?;
 
     rustls::crypto::ring::default_provider()
         .install_default()
-        .expect("install rustls crypto provider");
+        .map_err(|_| "a rustls crypto provider was already installed")?;
 
-    let (area, mut coverage) = fixed_area(&root, args.country, args.region.as_ref()).await;
+    let (area, mut coverage) = fixed_area(&root, args.country, args.region.as_ref()).await?;
     Poller::start(&args.poll, &root, Some(area))
-        .await
-        .expect("start polling Motis")
+        .await?
         .run(&mut coverage)
         .await;
+    Ok(())
 }
 
 async fn fixed_area(
     root: &Root,
     country: Country,
     region: Option<&RegionCode>,
-) -> (Area, Coverage) {
-    let areas = CountryAreas::newest_per_country(root)
-        .await
-        .expect("read the country areas from the Overture extracts");
+) -> Result<(Area, Coverage), Box<dyn std::error::Error>> {
+    let areas = CountryAreas::newest_per_country(root).await?;
     let extract = areas
         .newest_extract(country)
-        .expect("the store holds an Overture extract of the country to capture");
+        .ok_or_else(|| format!("the store holds no Overture extract of {}", country.code()))?;
     let release = extract.release;
     let outline = areas
         .outline(country)
-        .expect("the newest Overture extract holds a shape for the country to capture")
+        .ok_or_else(|| {
+            format!(
+                "the newest Overture extract holds no shape for {}",
+                country.code()
+            )
+        })?
         .clone();
     let (region, area_shapes) = match region {
         Some(code) => {
-            let found = region_area(root, &extract.id, country, code)
-                .await
-                .expect("find the region in the country's newest Overture extract");
+            let found = region_area(root, &extract.id, country, code).await?;
             (Some(found.region), found.shapes)
         }
         None => (None, areas.shapes_of(country)),
     };
     let coverage = Coverage::area(area_shapes, outline)
-        .expect("the newest Overture extract holds a shape for the area to capture");
+        .ok_or("the newest Overture extract holds no shape for the area to capture")?;
     tracing::info!(
         country = country.code(),
         region = region.as_ref().map(|region| region.name.as_str()),
         %release,
         "capturing a fixed area"
     );
-    (
+    Ok((
         Area {
             country,
             overture_region: region,
             overture_release: release,
         },
         coverage,
-    )
+    ))
 }

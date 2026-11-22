@@ -20,7 +20,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| "motis_ingest=info".into()),
@@ -28,14 +28,10 @@ async fn main() {
         .init();
 
     let args = Args::parse();
-    let root = args.medallion.root().expect("locate the medallion store");
+    let root = args.medallion.root()?;
 
-    let countries = CountryAreas::newest_per_country(&root)
-        .await
-        .expect("read the country areas of the newest extract");
-    let outcome = ingest(&root, &countries)
-        .await
-        .expect("derive train segments");
+    let countries = CountryAreas::newest_per_country(&root).await?;
+    let outcome = ingest(&root, &countries).await?;
 
     tracing::info!(
         read = outcome.read,
@@ -49,9 +45,7 @@ async fn main() {
         "derived train segments"
     );
 
-    let sessions = derive_train_sessions(&root, &countries, args.sample_interval)
-        .await
-        .expect("derive train sessions");
+    let sessions = derive_train_sessions(&root, &countries, args.sample_interval).await?;
 
     tracing::info!(
         trips = sessions.trips,
@@ -71,4 +65,5 @@ async fn main() {
         too_fast = sessions.dropped.too_fast,
         "dropped trips"
     );
+    Ok(())
 }
