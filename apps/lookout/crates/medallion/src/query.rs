@@ -4,12 +4,13 @@ use datafusion::arrow::array::RecordBatch;
 use datafusion::arrow::datatypes::DataType;
 use datafusion::common::ParamValues;
 use datafusion::dataframe::DataFrame;
+use datafusion::execution::SendableRecordBatchStream;
 use datafusion::prelude::ParquetReadOptions;
 use datafusion::scalar::ScalarValue;
 use datafusion::sql::TableReference;
 use datafusion::sql::parser::DFParser;
 use datafusion::sql::resolve::resolve_table_references;
-use futures::{Stream, StreamExt};
+use futures::{Stream, StreamExt, TryStreamExt};
 use sedona::context::SedonaContext;
 use sedona_geoparquet::provider::GeoParquetReadOptions;
 
@@ -420,23 +421,30 @@ impl Query {
         }
     }
 
+    pub async fn stream_with_params(
+        &self,
+        sql: &str,
+        params: HashMap<String, ScalarValue>,
+    ) -> Result<SendableRecordBatchStream, QueryError> {
+        Ok(self
+            .ctx
+            .sql(sql)
+            .await?
+            .with_param_values(ParamValues::from(params))?
+            .execute_stream()
+            .await?)
+    }
+
     pub async fn sql_with_params(
         &self,
         sql: &str,
         params: HashMap<String, ScalarValue>,
     ) -> Result<Vec<RecordBatch>, QueryError> {
-        let df = self
-            .ctx
-            .sql(sql)
+        Ok(self
+            .stream_with_params(sql, params)
             .await?
-            .with_param_values(ParamValues::from(params))?;
-        let schema = df.schema().inner().clone();
-        let batches = df.collect().await?;
-
-        Ok(match batches.is_empty() {
-            true => vec![RecordBatch::new_empty(schema)],
-            false => batches,
-        })
+            .try_collect()
+            .await?)
     }
 
     pub async fn sql(&self, sql: &str) -> Result<Vec<RecordBatch>, QueryError> {
@@ -1090,15 +1098,15 @@ mod tests {
         let query = Query::new(root);
         query.register(THING, "thing").await.unwrap();
 
-        let batches = query
-            .sql("SELECT id, name FROM thing WHERE id < 0")
+        let stream = query
+            .stream_with_params("SELECT id, name FROM thing WHERE id < 0", HashMap::new())
             .await
             .unwrap();
+        let schema = stream.schema();
+        let batches: Vec<RecordBatch> = stream.try_collect().await.unwrap();
 
-        assert_eq!(batches.len(), 1);
-        assert_eq!(batches[0].num_rows(), 0);
-        let columns: Vec<&str> = batches[0]
-            .schema_ref()
+        assert_eq!(batches.iter().map(RecordBatch::num_rows).sum::<usize>(), 0);
+        let columns: Vec<&str> = schema
             .fields()
             .iter()
             .map(|field| field.name().as_str())

@@ -16,6 +16,7 @@ doctest = false
 
 [dependencies]
 arrow = { workspace = true }
+futures = { workspace = true }
 chrono = { workspace = true }
 medallion = { workspace = true }
 medallion-model = { workspace = true }

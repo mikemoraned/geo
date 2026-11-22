@@ -152,7 +152,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 - [x] `predictor` (1, once its fixtures move), `motis` (4), and `crossings` (3).
 - [x] The rest, two or fewer each: `platform/web/core`, `platform/web/bridge`, `platform-core`,
       `medallion-py`, `session_crossings`, `server`, `py-common`, and `platform/m5/core`.
-- [ ] Have `Query::sql_with_params` answer with its schema beside its batches, so `medallion-py`
+- [x] Have `Query::sql_with_params` answer with its schema beside its batches, so `medallion-py`
       reads the schema without an `unwrap`. Drop the empty batch it adds to an empty result.
 
 #### Binaries, 35 calls

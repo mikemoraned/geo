@@ -5274,6 +5274,7 @@ version = "0.1.0"
 dependencies = [
  "arrow 57.3.1",
  "chrono",
+ "futures",
  "medallion",
  "medallion-model",
  "py-common",
