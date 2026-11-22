@@ -217,7 +217,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       for any other constant that holds a UUID.
       Every other UUID literal sits in a test module. The test that parsed each division id
       went, since the build now parses them.
-- [ ] Remove `impl Default for MotisClient`, whose allowance claims a check that only the
+- [x] Remove `impl Default for MotisClient`, whose allowance claims a check that only the
       end-to-end profile runs. Only tests call it, and each builds its client through
       `MotisClient::new` from `DEFAULT_BASE_URL` instead.
 

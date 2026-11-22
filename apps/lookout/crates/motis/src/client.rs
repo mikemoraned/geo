@@ -55,16 +55,6 @@ pub struct MotisClient {
     inner: Client,
 }
 
-impl Default for MotisClient {
-    fn default() -> Self {
-        #[allow(
-            clippy::unwrap_used,
-            reason = "DEFAULT_BASE_URL is a fixed, valid URL, and the tests build a client from it"
-        )]
-        Self::new(&Url::parse(DEFAULT_BASE_URL).unwrap())
-    }
-}
-
 impl MotisClient {
     pub fn new(base_url: &Url) -> Self {
         let http = reqwest::ClientBuilder::new()
@@ -186,7 +176,7 @@ mod tests {
 
     #[tokio::test]
     async fn trips_in_bbox_hits_local_server_end_to_end() {
-        let client = MotisClient::default();
+        let client = MotisClient::new(&Url::parse(DEFAULT_BASE_URL).expect("a URL"));
         let over_frankfurt = Rect::new(Coord { x: 8.4, y: 49.9 }, Coord { x: 9.0, y: 50.3 });
         let now = Utc::now();
         let window = now - chrono::Duration::minutes(5)..now + chrono::Duration::minutes(5);
@@ -257,7 +247,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_local_server_reports_its_version_end_to_end() {
-        let version = MotisClient::default()
+        let version = MotisClient::new(&Url::parse(DEFAULT_BASE_URL).expect("a URL"))
             .motis_version()
             .await
             .expect("ask the local Motis server for its version");
