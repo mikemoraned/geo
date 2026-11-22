@@ -5,6 +5,7 @@ use geo_types::{Coord, Rect};
 use medallion::{Country, Dataset, DatasetSpec, PartitionValue, PathError, Root, Row, layers};
 use nutype::nutype;
 use serde::{Deserialize, Serialize};
+use uuid::uuid;
 
 use crate::gers::GersId;
 use crate::overture_release::OvertureRelease;
@@ -81,15 +82,10 @@ pub struct OvertureRegion {
 }
 
 pub fn division_id(country: Country) -> GersId {
-    let id = match country {
-        Country::Germany => "567d1698-7209-4b94-b7b8-0bc71bde0104",
-        Country::UnitedKingdom => "ce3429b1-d5c6-4763-91e7-0107e26d613e",
-    };
-    #[allow(
-        clippy::unwrap_used,
-        reason = "the tests below parse each constant id above"
-    )]
-    GersId::new(id).unwrap()
+    GersId::from(match country {
+        Country::Germany => uuid!("567d1698-7209-4b94-b7b8-0bc71bde0104"),
+        Country::UnitedKingdom => uuid!("ce3429b1-d5c6-4763-91e7-0107e26d613e"),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -151,15 +147,6 @@ impl Row for ExtractManifestRowV3 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn every_country_names_a_division_that_parses_as_a_gers_id() {
-        for country in Country::ALL {
-            let id = division_id(country);
-
-            assert_eq!(id.to_string().parse(), Ok(id), "{country}");
-        }
-    }
 
     #[test]
     fn no_two_countries_name_the_same_division() {

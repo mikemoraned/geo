@@ -212,9 +212,11 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       check `PointSet::new` makes, the coordinates included, reading each with `from_le_bytes`.
       `PointSet::new` calls it before casting, and `m5-core`'s carried set asserts it at build
       time. The `unwrap` in `carried::crossings` then states that the build runs those checks.
-- [ ] Build the GERS division ids in `medallion-model`'s `overture::division_id` with `uuid!`,
+- [x] Build the GERS division ids in `medallion-model`'s `overture::division_id` with `uuid!`,
       which parses a literal at build time, and convert them through `GersId::from`. Do the same
       for any other constant that holds a UUID.
+      Every other UUID literal sits in a test module. The test that parsed each division id
+      went, since the build now parses them.
 - [ ] Remove `impl Default for MotisClient`, whose allowance claims a check that only the
       end-to-end profile runs. Only tests call it, and each builds its client through
       `MotisClient::new` from `DEFAULT_BASE_URL` instead.
