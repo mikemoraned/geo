@@ -76,7 +76,7 @@ impl<'d> Gnss<'d> {
     pub fn sentences(&mut self) -> Vec<Sentence> {
         let read = match self.uart.read(&mut self.bytes, READ.ticks()) {
             Ok(read) => read,
-            Err(quiet) if quiet.code() == ESP_ERR_TIMEOUT as i32 => 0,
+            Err(quiet) if quiet.code() == ESP_ERR_TIMEOUT => 0,
             Err(unread) => {
                 log::debug!("a GNSS read failed: {unread}");
                 self.heard.failed_reads += 1;
