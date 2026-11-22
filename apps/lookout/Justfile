@@ -173,7 +173,7 @@ flagged_update_args := '''
 
 # Update each crate the audit flags to its newest compatible release, then list what still needs a bigger move.
 audit-update:
-    cargo update $(cargo audit --json | jq -r '{{ flagged_update_args }}')
+    CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update $(cargo audit --json | jq -r '{{ flagged_update_args }}')
     cargo audit
 
 # Mutation-test the Rust this branch changes from origin/main. Extra arguments go to cargo-mutants.

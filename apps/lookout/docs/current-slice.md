@@ -177,7 +177,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       `crates/evaluation/src/pick.rs` lines 146, 202, 220, and 340,
       `crates/evaluation/src/summarise.rs:427`, and `crates/session_crossings/tests/derive.rs`
       lines 84 and 367. Line numbers hold at 6a8e701c.
-- [ ] Set `global-min-publish-age = "7 days"` in `apps/lookout/.cargo/config.toml`, and lift it
+- [x] Set `global-min-publish-age = "7 days"` in `apps/lookout/.cargo/config.toml`, and lift it
       in `just audit-update` with `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow`.
 - [x] Drop the six `--locked` options from the `prerequisites` recipe.
 - [ ] Use `str::trim_prefix` at `crates/predictor/src/sentence.rs:47`. Only after the esp upgrade
