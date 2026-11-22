@@ -1,16 +1,16 @@
-use platform_core::pointset::{Aligned, PointSet, holds_points};
+use platform_core::pointset::{self, Aligned, PointSet};
 
 include!(concat!(env!("OUT_DIR"), "/carried.rs"));
 
 const _: () = assert!(
-    holds_points(&PACKED.0),
+    pointset::check(&PACKED.0).is_ok(),
     "the carried crossings are not a point set this reader understands — repack them",
 );
 
 pub fn crossings() -> PointSet<'static> {
     #[allow(
         clippy::unwrap_used,
-        reason = "the build fails on a carried set that holds_points rejects"
+        reason = "the build runs every check on the carried set, and `Aligned` aligns it to 4 bytes"
     )]
     PointSet::new(&PACKED.0).unwrap()
 }

@@ -65,52 +65,16 @@ impl Default for PointSet<'static> {
 
 impl<'a> PointSet<'a> {
     pub fn new(packed: &'a [u8]) -> Result<Self, FormatError> {
-        let header = packed
-            .get(..HEADER_LEN)
-            .ok_or(FormatError::NoHeader(packed.len()))?;
+        check(packed)?;
 
-        if header[..4] != MAGIC {
-            return Err(FormatError::NotAPointSet);
-        }
-        let version = word(header, 4);
-        if version != VERSION {
-            return Err(FormatError::UnsupportedVersion { found: version });
-        }
-
-        let count = word(header, 8);
-        let points = count as usize;
-        let column_len = points * 4;
-        let needed = HEADER_LEN + column_len * 3;
-        if packed.len() != needed {
-            return Err(FormatError::Truncated {
-                points: count,
-                needed,
-                got: packed.len(),
-            });
-        }
-
+        let column_len = column_len(packed);
         let column = |index: usize| &packed[HEADER_LEN + index * column_len..][..column_len];
 
-        let set = Self {
+        Ok(Self {
             latitudes: floats(column(0))?,
             longitudes: floats(column(1))?,
             ids: words(column(2))?,
-        };
-        set.on_the_globe()?;
-        Ok(set)
-    }
-
-    fn on_the_globe(&self) -> Result<(), FormatError> {
-        self.positions()
-            .find(|(latitude, longitude)| {
-                !(-90.0..=90.0).contains(latitude) || !(-180.0..=180.0).contains(longitude)
-            })
-            .map_or(Ok(()), |(latitude, longitude)| {
-                Err(FormatError::OffTheGlobe {
-                    latitude,
-                    longitude,
-                })
-            })
+        })
     }
 
     pub fn len(&self) -> usize {
@@ -139,27 +103,59 @@ impl<'a> PointSet<'a> {
     }
 }
 
-pub const fn holds_points(packed: &[u8]) -> bool {
+pub const fn check(packed: &[u8]) -> Result<(), FormatError> {
     if packed.len() < HEADER_LEN {
-        return false;
+        return Err(FormatError::NoHeader(packed.len()));
     }
 
     let mut index = 0;
     while index < MAGIC.len() {
         if packed[index] != MAGIC[index] {
-            return false;
+            return Err(FormatError::NotAPointSet);
         }
         index += 1;
     }
 
-    if word(packed, 4) != VERSION {
-        return false;
+    let version = word(packed, 4);
+    if version != VERSION {
+        return Err(FormatError::UnsupportedVersion { found: version });
     }
-    packed.len() == HEADER_LEN + word(packed, 8) as usize * 4 * 3
+
+    let column_len = column_len(packed);
+    let needed = HEADER_LEN + column_len * 3;
+    if packed.len() != needed {
+        return Err(FormatError::Truncated {
+            points: word(packed, 8),
+            needed,
+            got: packed.len(),
+        });
+    }
+
+    let mut at = HEADER_LEN;
+    while at < HEADER_LEN + column_len {
+        let latitude = float(packed, at);
+        let longitude = float(packed, at + column_len);
+        if !(latitude >= -90.0 && latitude <= 90.0 && longitude >= -180.0 && longitude <= 180.0) {
+            return Err(FormatError::OffTheGlobe {
+                latitude,
+                longitude,
+            });
+        }
+        at += 4;
+    }
+    Ok(())
+}
+
+const fn column_len(packed: &[u8]) -> usize {
+    word(packed, 8) as usize * 4
 }
 
 const fn word(packed: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([packed[at], packed[at + 1], packed[at + 2], packed[at + 3]])
+}
+
+const fn float(packed: &[u8], at: usize) -> f32 {
+    f32::from_le_bytes([packed[at], packed[at + 1], packed[at + 2], packed[at + 3]])
 }
 
 impl Crossings<f32> for PointSet<'_> {

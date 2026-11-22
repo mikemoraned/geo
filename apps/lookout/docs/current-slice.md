@@ -208,7 +208,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
       hash. Each percentage sits in a `const { }` block, which `cargo build` evaluates and
       `cargo check` and `cargo clippy` skip. A `const` item, such as `DEFAULT_RADII`, fails all
       three.
-- [ ] Replace `holds_points` with a `const fn` in `platform-core`'s `pointset` that makes every
+- [x] Replace `holds_points` with a `const fn` in `platform-core`'s `pointset` that makes every
       check `PointSet::new` makes, the coordinates included, reading each with `from_le_bytes`.
       `PointSet::new` calls it before casting, and `m5-core`'s carried set asserts it at build
       time. The `unwrap` in `carried::crossings` then states that the build runs those checks.
