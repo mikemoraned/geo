@@ -22,7 +22,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| "sessionise=info".into()),
@@ -30,17 +30,13 @@ async fn main() {
         .init();
 
     let args = Args::parse();
-    let root = args.medallion.root().expect("locate the medallion store");
-    let gap = Gap::new(args.gap.age()).expect("a gap a session can record");
-    let lead = Lead::new(args.lead.age()).expect("a lead a session can record");
+    let root = args.medallion.root()?;
+    let gap = Gap::new(args.gap.age())?;
+    let lead = Lead::new(args.lead.age())?;
 
-    let countries = CountryAreas::newest_per_country(&root)
-        .await
-        .expect("read the country areas of the newest extract");
-    let derived = sessions(&root, gap, lead).await.expect("derive sessions");
-    let outcome = silver::write(&root, &derived, &countries)
-        .await
-        .expect("write sessions");
+    let countries = CountryAreas::newest_per_country(&root).await?;
+    let derived = sessions(&root, gap, lead).await?;
+    let outcome = silver::write(&root, &derived, &countries).await?;
 
     tracing::info!(
         sessions = outcome.sessions,
@@ -55,6 +51,7 @@ async fn main() {
         medallion_root = %root.path().display(),
         "derived sessions"
     );
+    Ok(())
 }
 
 #[cfg(test)]

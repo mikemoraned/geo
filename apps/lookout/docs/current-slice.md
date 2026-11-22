@@ -158,7 +158,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 #### Binaries, 35 calls
 
 - [x] `motis` (17).
-- [ ] `recorder` (11).
+- [x] `recorder` (11).
 - [ ] `session_crossings` (3), `server` (2), `crossings` (1), and `map` (1).
 
 #### `m5plus`
