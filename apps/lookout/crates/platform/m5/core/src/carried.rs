@@ -24,8 +24,7 @@ mod tests {
     use geo_types::Point;
     use medallion::Country;
     use predictor::{
-        CrowFlies, DEFAULT_ALERTING, DEFAULT_STILL_WITHIN, DEFAULT_WATCHING, Event, LastMove,
-        Predict, nearest_first,
+        CrowFlies, DEFAULT_RADII, DEFAULT_STILL_WITHIN, Event, LastMove, Predict, nearest_first,
     };
 
     use super::*;
@@ -68,11 +67,9 @@ mod tests {
     fn at_dresden() -> CrowFlies<f32, PointSet<'static>> {
         let mut predictor = CrowFlies::new(
             crossings(),
-            DEFAULT_WATCHING,
-            DEFAULT_ALERTING,
+            DEFAULT_RADII,
             LastMove::new(DEFAULT_STILL_WITHIN),
-        )
-        .expect("the defaults alert within what they watch");
+        );
         let t = DateTime::<Utc>::from_timestamp_millis(1_785_098_609_000).expect("an instant");
         predictor
             .observe(Event::Sampled(

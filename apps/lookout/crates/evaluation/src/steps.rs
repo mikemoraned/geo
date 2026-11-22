@@ -8,7 +8,8 @@ use medallion_model::{
     EvaluationSummaryRowV3, EvaluationTransitionRowV1, FloatType, TrainSessionRowV3,
 };
 use predictor::{
-    Alerting, AlertingBeyondWatching, CrowFlies, LastMove, LightCone, OnlineDetector, Watching,
+    Alerting, AlertingBeyondWatching, CrowFlies, LastMove, LightCone, OnlineDetector, Radii,
+    Watching,
 };
 
 use crate::a5::NoA5Cell;
@@ -109,7 +110,7 @@ pub enum StepError {
     #[error(transparent)]
     Oracle(#[from] OracleError),
     #[error(transparent)]
-    CrowFlies(#[from] AlertingBeyondWatching),
+    Radii(#[from] AlertingBeyondWatching),
     #[error(transparent)]
     Replay(#[from] ReplayError),
     #[error(transparent)]
@@ -315,10 +316,9 @@ async fn replayed<F: Precision + Send + Sync>(
         }) => {
             let crow_flies = CrowFlies::new(
                 compact,
-                Watching { radius },
-                Alerting { radius, horizon },
+                Radii::new(Watching { radius }, Alerting { radius, horizon })?,
                 LastMove::new(still_within),
-            )?;
+            );
             crate::replay::replay(
                 root,
                 country,
@@ -338,10 +338,9 @@ async fn replayed<F: Precision + Send + Sync>(
             let light_cone = LightCone::new(
                 CrowFlies::new(
                     compact,
-                    Watching { radius },
-                    Alerting { radius, horizon },
+                    Radii::new(Watching { radius }, Alerting { radius, horizon })?,
                     LastMove::new(still_within),
-                )?,
+                ),
                 half_width,
             );
             crate::replay::replay(

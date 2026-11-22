@@ -196,7 +196,7 @@ Decisions taken before starting, as each changes what gets built. Confirmed 19 N
 
 #### Constants checked by the build
 
-- [ ] Add a `Radii` type to `predictor`, holding the watching and alerting radii, with a
+- [x] Add a `Radii` type to `predictor`, holding the watching and alerting radii, with a
       `const fn checked` returning `Option<Self>` and a `new` returning `AlertingBeyondWatching`,
       as `HalfWidth` has. Build `DEFAULT_RADII` in a `const` item with an `expect` stating the
       relation. `CrowFlies::new` then takes a `Radii` and cannot fail, and `platform-core`'s

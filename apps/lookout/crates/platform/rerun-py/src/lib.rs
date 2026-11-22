@@ -2,7 +2,7 @@ use chrono::{DateTime, FixedOffset, Utc};
 use domain::{CrossingCompact, Radius, Sample};
 use predictor::{
     CrowFlies as CrowFliesPredictor, DEFAULT_ALERTING, DEFAULT_STILL_WITHIN, DEFAULT_WATCHING,
-    Event, LastMove, OutOfOrder, Predict, Watching, nearest_first,
+    Event, LastMove, OutOfOrder, Predict, Radii, Watching, nearest_first,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -70,11 +70,10 @@ impl CrowFlies {
         Ok(Self {
             inner: CrowFliesPredictor::new(
                 crossings,
-                Watching { radius },
-                DEFAULT_ALERTING,
+                Radii::new(Watching { radius }, DEFAULT_ALERTING)
+                    .map_err(|err| PyValueError::new_err(err.to_string()))?,
                 LastMove::new(DEFAULT_STILL_WITHIN),
-            )
-            .map_err(|err| PyValueError::new_err(err.to_string()))?,
+            ),
         })
     }
 

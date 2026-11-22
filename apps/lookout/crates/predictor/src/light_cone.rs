@@ -100,7 +100,7 @@ mod tests {
     use domain::{Radius, Span};
     use proptest::prelude::*;
 
-    use crate::crow_flies::{Alerting, Watching};
+    use crate::radii::{Alerting, Radii, Watching};
 
     use super::*;
 
@@ -132,16 +132,18 @@ mod tests {
     ) -> CrowFlies<f64> {
         CrowFlies::new(
             crossings,
-            Watching {
-                radius: Radius::new(5_000.0).expect("a radius"),
-            },
-            Alerting {
-                radius: Radius::new(alerting_radius_metres).expect("a radius"),
-                horizon: Span::new("5m").expect("a span"),
-            },
+            Radii::new(
+                Watching {
+                    radius: Radius::new(5_000.0).expect("a radius"),
+                },
+                Alerting {
+                    radius: Radius::new(alerting_radius_metres).expect("a radius"),
+                    horizon: Span::new("5m").expect("a span"),
+                },
+            )
+            .expect("alerting within what it watches"),
             LastMove::new(Radius::new(20.0).expect("a radius")),
         )
-        .expect("alerting within what it watches")
     }
 
     fn predictor(half_width_degrees: f64) -> LightCone<f64> {
