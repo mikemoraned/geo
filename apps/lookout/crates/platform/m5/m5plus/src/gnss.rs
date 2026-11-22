@@ -5,6 +5,7 @@ use esp_idf_svc::hal::{
     uart::{UartRxDriver, config::Config},
     units::FromValueType,
 };
+use esp_idf_svc::sys::ESP_ERR_TIMEOUT;
 use predictor::Sentence;
 
 pub const BAUDRATE: u32 = 115_200;
@@ -75,6 +76,7 @@ impl<'d> Gnss<'d> {
     pub fn sentences(&mut self) -> Vec<Sentence> {
         let read = match self.uart.read(&mut self.bytes, READ.ticks()) {
             Ok(read) => read,
+            Err(quiet) if quiet.code() == ESP_ERR_TIMEOUT as i32 => 0,
             Err(unread) => {
                 log::debug!("a GNSS read failed: {unread}");
                 self.heard.failed_reads += 1;
@@ -91,10 +93,10 @@ impl<'d> Gnss<'d> {
             match Sentence::new(line) {
                 Ok(sentence) => {
                     self.heard.sentences += 1;
-                    if let Some(kind) = sentence.body().get(2..5) {
+                    if let Some(address) = sentence.body().get(..5) {
                         self.heard
                             .latest
-                            .insert(kind.to_string(), sentence.as_str().trim().to_string());
+                            .insert(address.to_string(), sentence.as_str().trim().to_string());
                     }
                     sentences.push(sentence);
                 }
