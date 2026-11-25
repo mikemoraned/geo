@@ -1,3 +1,6 @@
+{% set path = src | trim_start_matches(pat="/") %}
+{% set original = get_image_metadata(path=path) %}
+{% set img = resize_image(path=path, width=[original.width, 1200] | sort | first, op="fit_width", format="jpg", quality=80) %}
 <figure class="image">
-    <img src="{{ src }}" />
+    <img src="{{ img.url }}" width="{{ img.width }}" height="{{ img.height }}" alt="{{ alt | default(value="") }}" />
 </figure>

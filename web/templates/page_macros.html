@@ -31,10 +31,13 @@
     </div>
     {% endif %}
     {% if page.extra.header_image_url %}
+    {% set header_path = page.extra.header_image_url | trim_start_matches(pat="/") %}
+    {% set header_original = get_image_metadata(path=header_path) %}
+    {% set header_image = resize_image(path=header_path, width=[header_original.width, 1200] | sort | first, op="fit_width", format="jpg", quality=80) %}
     <div class="card-image">
       <figure class="image">
         <a href="{{ page.path }}">
-          <img src="{{ page.extra.header_image_url }}" alt="{{ page.extra.header_image_description}}" />
+          <img src="{{ header_image.url }}" width="{{ header_image.width }}" height="{{ header_image.height }}" alt="{{ page.extra.header_image_description}}" />
         </a>
       </figure>
     </div>
