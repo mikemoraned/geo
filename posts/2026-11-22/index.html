@@ -1,0 +1,190 @@
+
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- HTML Meta Tags -->
+    <title>Geo projects of Mike Moran</title>
+    <meta
+      name="description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Facebook Meta Tags -->
+    <meta property="og:url" content="https://geo.houseofmoran.io" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Geo projects of Mike Moran" />
+    <meta
+      property="og:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="twitter:domain" content="geo.houseofmoran.io" />
+    <meta property="twitter:url" content="https://geo.houseofmoran.io" />
+    <meta name="twitter:title" content="Geo projects of Mike Moran" />
+    <meta
+      name="twitter:description"
+      content="Geo projects of Mike Moran"
+    />
+
+    
+      <link rel="alternate" type="application/atom+xml" title="Atom" href="https://geo.houseofmoran.io/atom.xml">
+    
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
+    >
+    <script src="https://kit.fontawesome.com/d6b9545e6b.js" crossorigin="anonymous"></script>
+    <script defer data-domain="geo.houseofmoran.io" src="https://plausible.io/js/script.file-downloads.hash.outbound-links.js"></script>
+    <style>
+      aside {
+        font-size: smaller;
+        border: 1px solid lightgray;
+        border-radius: 5px;
+        padding: 0.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="columns">
+        <div class="column">
+          
+<nav class="navbar is-info" role="navigation" aria-label="main navigation">
+    <div class="navbar-brand">
+        <a class="navbar-item" href="/">
+            <i class="fa-solid fa-globe"></i> Geo Projects
+        </a>
+
+        <a class="navbar-item" href="https://www.houseofmoran.com">
+            by Mike Moran
+        </a>
+    </div>
+</nav>
+
+<section class="section">
+    <article>
+    
+<div class="block">
+  <div class="card">
+    <header class="card-header">
+      <a href="&#x2F;posts&#x2F;2026-11-22&#x2F;">
+        <p class="card-header-title">Catch-up to Lookout V1 alpha1: running on real devices</p>
+      </a>
+    </header>
+    
+    
+    
+    
+    
+    <div class="card-image">
+      <figure class="image">
+        <a href="&#x2F;posts&#x2F;2026-11-22&#x2F;">
+          <img src="https:&#x2F;&#x2F;geo.houseofmoran.io&#x2F;processed_images&#x2F;ipad-on-train.24131a05dcffa1b7.jpg" width="1200" height="900" alt="Recording real GPS data from an iPad on a train" />
+        </a>
+      </figure>
+    </div>
+    
+    <div class="card-content">
+      <div class="content">
+        
+        <p>See the <a href="/posts/2026-11-21/">announcement</a> for context, but TLDR: this is a catch-up devblog-style post on where I am with Lookout, which is currently at <code>V1 alpha1</code>. Today we'll focus on how I got real GPS samples from a train.</p>
+<span id="continue-reading"></span>
+<p>I go to Germany every year, and had been planning to visit a few places in the area around Mannheim, so this was a good opportunity to get a sense of what real experience on a train would look like. <a href="https://github.com/mikemoraned/geo/blob/main/apps/lookout/docs/completed-slices.md#mike-is-on-a-train-getting-data">One of the very first things</a> I did was to start recording real GPS traces. This was done via a website running on iPad/iPhone using local sensors → saving to an online Redis queue (<code>landing</code>) → draining into <code>bronze</code> for later analysis (note, see further below for <code>landing</code>/<code>bronze</code> explanation).</p>
+
+
+
+<figure class="image">
+    <img src="https:&#x2F;&#x2F;geo.houseofmoran.io&#x2F;processed_images&#x2F;laptop-ipad-on-train.c5a913796d205971.jpg" width="1200" height="900" alt="initial version of Lookout being developed on train, and recording GPS data" />
+</figure>
+<p>The GPS data from my phone wasn't too surprising: I know from using other Apps that it can vary a lot in accuracy. However, I know an iPhone does some fairly clever stuff behind the scenes, so what would it be like on other types of devices?</p>
+<p>I'd already <a href="https://github.com/mikemoraned/blescan/tree/m5/m5">been playing around</a> with some <a href="https://m5stack.com">M5 devices</a>, and so had some to develop on. As a way to keep this real, and not coupled to Apple devices, I adopted a requirement that anything I build must be able to run on an <a href="https://shop.m5stack.com/products/m5stickc-plus2-esp32-mini-iot-development-kit?variant=44269818216705">M5 device</a> with an <a href="https://shop.m5stack.com/products/gps-bds-unit-v1-1-at6668?variant=45727253692673">attached GPS sensor</a>, as well as on a website on an iPhone.</p>
+
+
+
+<figure class="image">
+    <img src="https:&#x2F;&#x2F;geo.houseofmoran.io&#x2F;processed_images&#x2F;m5-gps-on-bag.9b8170f8c0f99bb5.jpg" width="1200" height="1600" alt="M5 and GPS device sitting on bag" />
+</figure>
+<p>The ultimate V1 App should still be able to do "opportunistic enrichment", if extra capabilities are available, but the core features should always work on an M5 device where the only connectivity it has is passive GPS.</p>
+<p>It is totally ok, however, to do a bunch of processing offline ahead of time. This is where I adopted the <a href="https://github.com/mikemoraned/geo/blob/main/apps/lookout/docs/medallion.md">"Medallion Pattern"</a>, instantiated here roughly as:</p>
+<ul>
+<li><code>landing</code>: device recordings, and other raw data, typically in a non-parquet native format, focussed on being easy to capture and not kept long-term,</li>
+<li>→ <code>bronze</code>: similar data as landing, but in parquet format and persisted + also snapshots of external datasets,</li>
+<li>→ <code>silver</code>: normalised and processed derived data, based on what's in bronze,</li>
+<li>→ <code>gold</code>: distilled and minimised versions of silver data, targeted for deployment on the devices themselves.</li>
+</ul>
+<p>(We'll return to this processing pipeline in future posts.)</p>
+<p>Getting things working on the M5 wasn't simple, as there is a lot to discover about device setup. This was actually where using Claude was super-useful as I am <em>far</em> less of an expert in ESP32 device stuff than in everything else I've mentioned so far. The user-friendliness of the M5 stack also came in handy: it was super-easy to get it powered-up and talking serial over the USB cable. So, this made for quite a fruitful and tight dev loop, particularly when I could test the GPS whilst on a live train.</p>
+<p>Having to test outside in my garden was somewhat colder and less comfortable.</p>
+
+
+
+<figure class="image">
+    <img src="https:&#x2F;&#x2F;geo.houseofmoran.io&#x2F;processed_images&#x2F;testing-in-garden-in-ed.8dbfa77c0a9ea394.jpg" width="1200" height="900" alt="Testing in Garden, outside in Edinburgh" />
+</figure>
+<aside class="notification">
+<p>Btw, for the rest of this devblog, I will refer to Claude in the same way as above, i.e., when it made a significant difference, I'll mention it. I've used Claude for the vast majority of the work here, but I've made a point of only committing things I personally understand or at least have driven very deliberately.</p>
+<p>I know that, given my personal time constraints, this project wouldn't be where it is without using it, but that's more of a credit to the many billions of lines of text that went into Claude's training datasets. Similarly, I would still be grovelling around for clean data if I hadn't started using <a href="/posts/2025-06-17/">Overture Maps last year</a>!</p>
+<p>I don't wanna hide that I've used it extensively, but I also don't wanna start treating this as a "we did this" project; "I" did this on the shoulders of many other <em>people</em>.</p>
+
+</aside>
+<p>Where does this get us? It gets us to a dataset which I've subsequently used repeatedly to ground various decisions in actual recorded data, and proof that the GPS data can be gotten on multiple device types.</p>
+<p>Next up: <em>Water Crossings</em></p>
+<p>Related development detail if interested:</p>
+<ul>
+<li><a href="https://github.com/mikemoraned/geo/blob/main/apps/lookout/docs/completed-slices.md#mike-is-on-a-train-getting-data">mike is on a train getting data</a></li>
+<li><a href="https://github.com/mikemoraned/geo/blob/main/apps/lookout/docs/completed-slices.md#improve-train-based-recording-accuracy--reliability.">improve train-based recording accuracy / reliability</a></li>
+<li><a href="https://github.com/mikemoraned/geo/blob/main/apps/lookout/docs/completed-slices.md#spikes-on-device-support">Spikes on Device Support</a></li>
+<li><a href="https://github.com/mikemoraned/geo/blob/main/apps/lookout/docs/device.md">Device</a></li>
+<li><a href="https://github.com/mikemoraned/geo/blob/main/apps/lookout/docs/telemetry.md">Telemetry</a></li>
+<li><a href="https://github.com/mikemoraned/geo/blob/main/apps/lookout/docs/medallion.md">Medallion</a></li>
+</ul>
+
+        
+        <a href="&#x2F;posts&#x2F;2026-11-22&#x2F;">
+          <time datetime="2026-11-22">
+            <i class="fa-solid fa-calendar-day"></i> 22 November 2026
+          </time>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+    </article>
+</section>
+
+        </div>
+      </div>
+    </div>
+    <footer class="footer">
+      <div class="content has-text-centered">
+        <p>
+          Last updated on 28 November 2026 at  5:56am
+        </p>
+      </div>
+    </footer>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/+esm';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script defer>
+      const youtube_iframes = Array.from(
+        document.getElementsByClassName("youtube")
+      );
+      youtube_iframes.forEach((youtube_iframe) => {
+        const data_src = youtube_iframe.getAttribute("data-src");
+        if (data_src) {
+          youtube_iframe.setAttribute("src", data_src);
+        }
+      });
+    </script>
+  </body>
+</html>
